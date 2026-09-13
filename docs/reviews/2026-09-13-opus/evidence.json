@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-13",
+  "client": "2.1.270 (Claude Code)",
+  "requestedModel": "opus",
+  "rounds": [
+    {
+      "round": 1,
+      "exitCode": 0,
+      "outcome": "success",
+      "principalModel": "claude-opus-5",
+      "modelsRecordedByCLI": [
+        "claude-haiku-4-5-20251001",
+        "claude-opus-5"
+      ],
+      "durationMs": 204215,
+      "permissionDenials": [],
+      "resultSha256": "b94a93f7aea636776512c77f9eb18598df3349d9ec312f57f03abb33b9bb693a",
+      "promptSha256": "8ec3085b0a47880f92e851c91daebe9dfe927e3b4b5882f89b56a544ec136331"
+    },
+    {
+      "round": 2,
+      "exitCode": 0,
+      "outcome": "success",
+      "principalModel": "claude-opus-5",
+      "modelsRecordedByCLI": [
+        "claude-opus-5"
+      ],
+      "durationMs": 81574,
+      "permissionDenials": [],
+      "resultSha256": "cb8524cca49d052400242f3746bbdc42adc24428deb8a694b5aec6c69126a405",
+      "promptSha256": "a270dc5a670f36af4ccb71f67ffd87c262265355da18ea69fbd44e0cc9fab8b1"
+    }
+  ],
+  "sourceCommit": "ad07b2af7dd017869c95427bdf66301235069ac9",
+  "sourceDocumentCount": 10,
+  "sourceHashesMatchCommit": true,
+  "toolsAvailableToReviewer": [],
+  "scope": "Document discussion only. No app execution, browser testing, user interviews or independent security certification.",
+  "canonicalPlansChanged": false,
+  "repositoryChanges": "Review documents, evidence and README link only; first-round prompt snapshot remains local and git-ignored."
+}

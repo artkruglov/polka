@@ -13,3 +13,4 @@ uploads/
 *.log
 *.pem
 *.key
+docs/reviews/**/round-1-prompt.txt
