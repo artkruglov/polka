@@ -1,0 +1,30 @@
+name: polka-local
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3
+    environment:
+      POSTGRES_USER: polka
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run local:setup}
+      POSTGRES_DB: polka
+    ports: ["127.0.0.1:54388:5432"]
+    volumes: ["metadata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polka -d polka"]
+      interval: 2s
+      retries: 30
+  # Development compatibility fixture, not the supported production distribution.
+  objects:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: polka-local
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?Run npm run local:setup}
+    ports: ["127.0.0.1:9038:9000"]
+    volumes: ["objects:/data"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      retries: 30
+volumes:
+  metadata:
+  objects:
