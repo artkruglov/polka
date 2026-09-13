@@ -360,7 +360,7 @@
       "file": "shelf-mobile.png",
       "widthPx": 65536,
       "heightPx": 4292542531,
-      "sha256": "cb761573bee2044a9361ad6bfc52b229ad6f52c05745ae9c12a03b9677e670ae"
+      "sha256": "05e52cc5a3f6f5470ca41216c5d1f26d2c6513c49ca67bfa78b8638053fd78a1"
     },
     {
       "file": "upload-desktop.png",
@@ -388,5 +388,6 @@
     "Some supporting snapshots were taken at earlier moments and do not constitute pixel baselines for all final source files.",
     "No real user interviews, uploads, invitations, storage, sharing links, expiry enforcement or enterprise installation.",
     "Demo model is synchronous and in memory. Final API and authorization are not implemented."
-  ]
+  ],
+  "captureNote": "Final shelf-mobile screenshot was retaken and visually inspected after viewport settled at 390x844, DPR=1. Temporary viewport override was cleared at completion."
 }
