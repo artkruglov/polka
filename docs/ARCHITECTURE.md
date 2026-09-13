@@ -1,6 +1,6 @@
 # Архитектура: хранение и доставка отдельно от исполнения
 
-Решение для новой реализации, 13 сентября 2026. Код ещё не написан. Дизайн опирается на [F01–F24](REQUIREMENTS.md), исходные PRD и проверку зависимостей Lanka. Выбор S3 API ниже не означает выбор AWS как облака или разрешение отправлять туда данные компании.
+Решение для новой реализации, 13 сентября 2026. Есть отдельный UX-прототип; приложение и сервер ещё не реализованы. Дизайн опирается на [F01–F24](REQUIREMENTS.md), исходные PRD и проверку зависимостей Lanka. Выбор S3 API ниже не означает выбор AWS как облака или разрешение отправлять туда данные компании.
 
 ## 1. Состав системы
 
@@ -37,7 +37,7 @@ Hosted и self-hosted используют одну реализацию с ра
 | Revision / BundleMember | immutable parent/base, media/profile, manifest и file refs, hash, author, origin, pinned dependency IDs |
 | Blob | tenant-scoped immutable object key/version, checksum, bytes, content type, scan/validation state; не публичный URL |
 | UploadSession | owner/tenant/destination, quota reservation, staging keys/parts, expected size/hash, expiry, state, request receipt |
-| ShareLink / Grant | digest непрогнозируемого token, exact revision, audience, allowed operations, expiry, revokedAt, policy version |
+| ShareLink / Grant | digest token, artifact, live/pinned mode, published/pinned revision, generation, audience, discovery, operations, expiry/revoke; каждый viewer grant закреплён на одной revision |
 | Draft / Receipt / Outbox | guest proof server-side, generation/digest/expiry; idempotency fingerprint и атомарный результат/событие |
 | Job / Run / Event | actor/scope, version/policy input, lease/fencing, quota, status, correlation, cancelledAt; bounded traces |
 | AuditEvent | actor/delegation/run, action, target/version, outcome/time; отдельная политика хранения от analytics |
@@ -48,6 +48,8 @@ Hosted и self-hosted используют одну реализацию с ра
 Новая БД не требует старых таблиц Lanka. Новые writers не пишут в legacy; старые writers не знают о новой DB. При явном импорте назначаются новые права и provenance. Сохранность прежней системы проверяется отдельно.
 
 ## 3. Загрузка и неизменяемость
+
+Первый срез использует ограниченную одиночную загрузку. Части и возобновление ниже описывают расширение после измерений; интерфейс не обещает их до отдельной приёмки.
 
 1. `beginUpload`: сервер проверяет identity, назначение, тип/размер, policy и резервирует квоту. Создаёт staging session и ограниченные upload grants. Байты не передаются в JSON base64 через основной API.
 2. Клиент передаёт файл или части прямо в разрешённое хранилище. Перезапуск страницы восстанавливает upload ID/статус, но не обещает сохранить File handle без доступной поддержки браузера; при необходимости человек повторно выбирает тот же файл, совпадение проверяется.
@@ -61,7 +63,9 @@ Multipart позволяет повторять отдельные части и
 
 ## 4. Быстрые ссылки и выдача данных
 
-Постоянная ссылка вида `/s/<непрогнозируемый token>` принадлежит Полке и не является сырым S3 URL. Минимум 128 бит случайности; удобство не достигается угадываемым счётчиком. Resolver проверяет audience/expiry/revocation/policy, затем выдаёт короткий grant конкретному revision/profile. Ссылка переживает перезапуск worker и смену места хранения.
+Постоянная ссылка вида `/s/<непрогнозируемый token>` принадлежит Полке и не является сырым S3 URL. Минимум 128 бит случайности. В live-режиме автор явно переключает published revision; обычный save этого не делает. Pinned/official link закреплён на снимке. Resolver проверяет audience/expiry/revocation/policy и выдаёт короткий grant одной revision/profile; текущая сессия не смешивает версии. Адрес переживает перезапуск worker и смену места хранения.
+
+[SHARING_AND_DISCOVERY](SHARING_AND_DISCOVERY.md) задаёт режимы private/invited/unlisted/company/public, noindex, OG и проверки S01–S12. App/private bytes защищены ACL; запрос поисковика не обходит авторизацию. Неиндексируемые reader/asset ответы задают серверный X-Robots-Tag; user HTML не может включить индексацию. Логи, referrer и сторонняя аналитика не получают token/grant. Для HTML bundle до реализации проверить относительные пути, origin/cookie/path grants и их отзыв; app session никогда не передаётся в пакет.
 
 Файл или обложка выдаются delivery layer/object storage с Range, ETag/conditional requests и авторизацией. Внутренние bytes не проходят через общий application server, если политика не требует строгого streaming gateway. Доступ к bucket закрыт, обход delivery layer не разрешён. CDN для закрытых данных должен проверять grant и на cache hit; кеширование разрешённых байтов не кеширует разрешение пользователя. [CloudFront signed URLs](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html).
 

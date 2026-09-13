@@ -1,0 +1,117 @@
+{
+  "recorded_at": "2026-09-13T17:33:40.522484+00:00",
+  "scope": "Manual browser interaction with a standalone synthetic UX prototype; not production acceptance or a security test.",
+  "baseline_commit": "58cf9c72a1a8d0da1a3fcff5dfdfc66add624d16",
+  "prototype": "../polka-interface.html",
+  "prototype_sha256": "fd283f6c554ae165b5166cad4423cb19f4086cb8bbdfb9982c0fe77319f7993e",
+  "browser": "Codex in-app browser, CUA tab 23; served on loopback port 4388",
+  "observed_passes": [
+    "Shelf opens three sample works; title search filters and clearing restores results.",
+    "Team folder shows its report; opening the report shows saved v3 and linked v2.",
+    "Sharing panel switches audience; invited recipient without access sees a neutral page without work title.",
+    "Explicit update changes the linked version to v3; recipient sees the updated demo values.",
+    "History opens version 2 with a persistent notice and a return to current version control.",
+    "Revoking the demo link displays the unavailable-link recipient state.",
+    "Mobile shelf, work and sharing panel render at 390 CSS px without page overflow.",
+    "At 320 x 740 the panel fits within the viewport and its action footer remains visible.",
+    "Escape closes the share dialog and returns focus to the Share control.",
+    "At 768 CSS px shelf and long-title demo have no horizontal page overflow.",
+    "Adding a named example from the HTML dialog produces a private v1 demo without executing supplied HTML.",
+    "Final 1280 x 900 shelf has matching viewport and document widths of 1280.",
+    "Browser error log query after final version/revoke interactions returned no entries."
+  ],
+  "viewport_observations": [
+    {
+      "width": 320,
+      "height": 740,
+      "document_width": 320,
+      "dialog_left": 14,
+      "dialog_right": 306,
+      "footer_bottom": 721.5
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "document_width": 390
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "document_width": 768
+    },
+    {
+      "width": 1280,
+      "height": 900,
+      "document_width": 1280
+    }
+  ],
+  "limitations": [
+    "All state is synthetic and in memory; reload resets it.",
+    "No real upload, invitation, authorization, public link, TTL enforcement, search crawler or server was tested.",
+    "Not a full accessibility audit or a test with real users.",
+    "Viewport overrides were reset after testing.",
+    "Screenshots reflect their recorded moments; they are not production render baselines."
+  ],
+  "screenshots": [
+    {
+      "file": "folder-desktop.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "391c29f3b40c7344f79d5087eeb23b3afd9ce0741b68da17fcf785d1e9bd9405"
+    },
+    {
+      "file": "recipient-no-access.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "6c123194915330ee4c92e7cc1e8f18a5adcabc3802a7fd597890111d01da24ea"
+    },
+    {
+      "file": "recipient-revoked.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "acd07d1a8d550630e4b70f62cb55fe90ad0ac6ff39863f7eaf756bda0a5466b9"
+    },
+    {
+      "file": "sharing-desktop.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "4a5975b9cf101163cd0ea4bd7638d9c1d2b6b0ee6c019b09c40e49cf5c96d319"
+    },
+    {
+      "file": "sharing-mobile.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "b5704b2bd2f9ded66a34078854c1e565671ff6befff40aa3a1ca9fa4bb32b0f2"
+    },
+    {
+      "file": "shelf-desktop.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "bd05555020deafff425164983e503ee489311c17430e27eadd1f2e41f3d8e947"
+    },
+    {
+      "file": "shelf-mobile.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "2afb690e1a3629a75c19ce51424ccb0e872a6e4fb833675a2884feb91783a9f5"
+    },
+    {
+      "file": "versions-desktop.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "02ff49099cee224289c7ea8a16054029258b1f64ef26d3783d80eed5334f6c4b"
+    },
+    {
+      "file": "work-desktop.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "7ad744db84f323e289665901cd9223be684317d8f3ea258847db2da2904775c4"
+    },
+    {
+      "file": "work-mobile.png",
+      "width_px": 65536,
+      "height_px": 4292542531,
+      "sha256": "ec0e3a50fae969f2c959b06a103c6508d6da46ca0b562739a500eb77e5fa35ee"
+    }
+  ]
+}
