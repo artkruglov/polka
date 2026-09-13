@@ -1,0 +1,15 @@
+CREATE TABLE accounts (id uuid PRIMARY KEY, name text UNIQUE NOT NULL, password_hash text NOT NULL, disabled boolean NOT NULL DEFAULT false);
+CREATE TABLE tenants (id uuid PRIMARY KEY, owner_id uuid NOT NULL UNIQUE REFERENCES accounts, used_bytes bigint NOT NULL DEFAULT 0 CHECK(used_bytes >= 0), quota_bytes bigint NOT NULL DEFAULT 104857600);
+CREATE TABLE sessions (hash text PRIMARY KEY, account_id uuid NOT NULL REFERENCES accounts, expires_at timestamptz NOT NULL);
+CREATE TABLE login_limits (key text PRIMARY KEY, attempts integer NOT NULL, reset_at timestamptz NOT NULL);
+CREATE TABLE folders (id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants, name text NOT NULL, UNIQUE(tenant_id,id), UNIQUE(tenant_id,name));
+CREATE TABLE artifacts (id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants, created_by uuid NOT NULL REFERENCES accounts, folder_id uuid, title text NOT NULL, latest_revision_id uuid, updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id), FOREIGN KEY(tenant_id,folder_id) REFERENCES folders(tenant_id,id));
+CREATE INDEX shelf_page ON artifacts(tenant_id,updated_at DESC,id DESC);
+CREATE TABLE revisions (id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants, artifact_id uuid NOT NULL, number integer NOT NULL, created_by uuid NOT NULL REFERENCES accounts, filename text NOT NULL, mime text NOT NULL, size integer NOT NULL, sha256 text NOT NULL, object_key text NOT NULL UNIQUE, object_version text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,artifact_id,id), UNIQUE(artifact_id,number), FOREIGN KEY(tenant_id,artifact_id) REFERENCES artifacts(tenant_id,id));
+ALTER TABLE artifacts ADD CONSTRAINT latest_revision_scope FOREIGN KEY(tenant_id,id,latest_revision_id) REFERENCES revisions(tenant_id,artifact_id,id);
+CREATE TABLE uploads (id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants, account_id uuid NOT NULL REFERENCES accounts, idempotency_key uuid NOT NULL, request jsonb NOT NULL, object_version text, receipt jsonb, aborted boolean NOT NULL DEFAULT false, expires_at timestamptz NOT NULL DEFAULT now()+interval '30 minutes', UNIQUE(tenant_id,idempotency_key));
+CREATE INDEX pending_uploads ON uploads(tenant_id) WHERE receipt IS NULL AND NOT aborted;
+CREATE TABLE shares (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, artifact_id uuid NOT NULL, revision_id uuid NOT NULL, token_hash text UNIQUE NOT NULL, revoked boolean NOT NULL DEFAULT false, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), FOREIGN KEY(tenant_id,artifact_id,revision_id) REFERENCES revisions(tenant_id,artifact_id,id));
+CREATE UNIQUE INDEX one_current_share ON shares(artifact_id) WHERE NOT revoked;
+CREATE TABLE grants (hash text PRIMARY KEY, share_id uuid NOT NULL REFERENCES shares, revision_id uuid NOT NULL REFERENCES revisions, expires_at timestamptz NOT NULL);
+CREATE TABLE audit_outbox (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants, actor_id uuid NOT NULL REFERENCES accounts, action text NOT NULL, target_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now());

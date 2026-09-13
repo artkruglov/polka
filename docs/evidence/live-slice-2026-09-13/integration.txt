@@ -1,0 +1,27 @@
+
+> polka@0.1.0-dev.1 test
+> tsx --env-file=.env --test tests/integration.test.ts
+
+✔ Real S3: conditional writes refuse replacement and version-pinned reads retain exact bytes (211.712833ms)
+✔ Private upload persists with receipt; duplicate begin/finalize creates one revision and audit event (46.590916ms)
+✔ Two accounts and anonymous clients cannot obtain private title, revision, receipt or foreign folder (33.128708ms)
+✔ Checksum, real media type, UTF-8 and unsupported HTML are enforced on server (24.764833ms)
+✔ Abort and expiry prevent finalize; concurrent finalize returns one receipt (37.214583ms)
+✔ Share recipient pins v1; saving v2 does not publish; explicit CAS update gives new readers v2 (62.123041ms)
+✔ Revocation closes resolver and issued grants; a new link never resurrects the old one (39.903459ms)
+✔ Expired shares and expired grants deny bytes and disclose no title (27.608708ms)
+✔ Stale upload cannot overwrite a concurrently saved version (52.872792ms)
+✔ Logout invalidates the server session; mutation origin and noindex headers apply (33.715042ms)
+✔ Quota reservations serialize concurrent requests (4.736417ms)
+✔ Valid raster upload returns exact bytes; direct anonymous S3 cannot bypass the app (29.168625ms)
+✔ Shelf is paginated, stable and tenant-scoped; malformed cursor is a client error (395.924041ms)
+✔ Recovery after storage-before-DB failure reuses exact bytes; cleanup removes abandoned bytes but preserves receipts (269.33475ms)
+✔ Frontend rebuild serves newly created assets; missing assets never return the HTML shell (7.443209ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1674.874459
