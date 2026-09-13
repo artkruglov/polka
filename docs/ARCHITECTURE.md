@@ -118,3 +118,7 @@ Tenant boundary, ownership, audit envelope, immutable revisions, actor types, cl
 Базовая поставка: app/API, PostgreSQL, object storage adapter, worker и reverse proxy; runtime отделён от app и его секретов. Нужны backup/restore для DB+objects, retention/GC, совместимые image digests, миграции и операционные инструкции. CDN не обязателен для внутренней сети. Контроль RPO/RTO и места данных — у оператора конкретной установки.
 
 До допуска выбрать: реальный S3-compatible backend с versioning/checksum/conditional semantics, провайдер личного входа, адреса app/delivery/runtime, регион/сети пользователей, лимиты, бюджет и сроки хранения. Это параметры deployment, не жёсткая зависимость архитектуры от одной компании. Не покупать домен/инфраструктуру и не заявлять доступность в России без проверки целевых маршрутов.
+
+## Ранний модуль авторских публикаций
+
+[Контракт M1.1](COMMUNITY_PUBLICATION.md): immutable submission → автоматическая проверка → модератор → отдельная public projection. Не использовать owner DTO или приватный share как публичную карточку. Decision pin-ит revision/manifest/metadata и сверяется через CAS; withdrawal/hide инвалидируют reader, выдачу, профиль и закладки. Модератор ограничен поданным snapshot. Публичная проекция не меняет владельца исходника; классификация/внешняя публикация проверяются отдельно. Очередь/аудит используют PostgreSQL и outbox, проверенный P08 остаётся обязательным для HTML.
