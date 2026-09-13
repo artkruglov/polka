@@ -1,0 +1,392 @@
+{
+  "recordedAt": "2026-09-13T18:45:47.438491+00:00",
+  "scope": "D0 synthetic UX prototype. No backend/auth/runtime isolation/production load testing.",
+  "sourceFiles": [
+    {
+      "file": "docs/design/polka-interface.html",
+      "sha256": "6fb20ff7ed1ffa33021c93f810aecd73215f9a1265ac0fda1e847b1a91296ed7"
+    },
+    {
+      "file": "docs/design/ui/app.mjs",
+      "sha256": "6c63122e719d1fafca0b9fffe919d412b11caa3a9650cbb54293a3a52d21e6b3"
+    },
+    {
+      "file": "docs/design/ui/common.mjs",
+      "sha256": "e16ebd9d3774bc5623164c79d83ac0ebcaf47c5f804e2db2f3af375aa0223a4a"
+    },
+    {
+      "file": "docs/design/ui/interface.css",
+      "sha256": "d69f1949013c10e2c89ba86c0032de9e7bbbd434bf6d197f3730113b4f1fe3eb"
+    },
+    {
+      "file": "docs/design/ui/model.mjs",
+      "sha256": "cfd7e669fcf4edc8888affa081e35d3bb9d562ed9cd45efade4995246eac557c"
+    },
+    {
+      "file": "docs/design/ui/model.test.mjs",
+      "sha256": "b873a2d8b2df41dba9eb4874244befea32c55eafe1e846c4f9149998c86ab76b"
+    },
+    {
+      "file": "docs/design/ui/previews.mjs",
+      "sha256": "dd8f1cd56052514da3702d4131e23a295a30959c1dd10cf1a0db2e791cdbea49"
+    },
+    {
+      "file": "docs/design/ui/tokens.css",
+      "sha256": "065693c6643eff1eb43ff9845bddb883f66d8487b824c4f9857a0d3ab5cefd1b"
+    }
+  ],
+  "browserObservations": {
+    "checks": [
+      {
+        "name": "search",
+        "count": 1
+      },
+      {
+        "name": "list-sort",
+        "names": [
+          "Города, которые нас изменили",
+          "Запуск нового сервиса",
+          "Идеи для следующего запуска",
+          "Как мы работаем",
+          "Пульс команды · сентябрь"
+        ]
+      },
+      {
+        "name": "favorite",
+        "rows": 3
+      },
+      {
+        "name": "recent",
+        "rows": 3
+      },
+      {
+        "name": "revoked-options",
+        "status": 2,
+        "urlFields": 0
+      },
+      {
+        "name": "explicit-reactivation-rotates",
+        "old": "https://polka.example/s/demo-pulse-1",
+        "new": "https://polka.example/s/demo-pulse-2"
+      },
+      {
+        "name": "escape-focus",
+        "focus": "Поделиться"
+      },
+      {
+        "name": "save-keeps-link",
+        "text": " По ссылке — v2. На полке есть новая v4.\nОбновить по ссылке"
+      },
+      {
+        "name": "recipient-updated",
+        "text": "Читатель видит только выбранную работу\nПример · версия 4"
+      },
+      {
+        "name": "mobile-shelf",
+        "documentWidth": 429,
+        "dpr": 1,
+        "height": 928,
+        "width": 429
+      },
+      {
+        "name": "mobile-navigation",
+        "title": "Избранное",
+        "modals": 0
+      },
+      {
+        "name": "narrow-share",
+        "dialogLeft": 0,
+        "dialogRight": 320,
+        "documentWidth": 320,
+        "dpr": 1,
+        "footerBottom": 740,
+        "height": 740,
+        "width": 320
+      },
+      {
+        "name": "slide-navigation",
+        "text": "Слайд 2 из 3"
+      },
+      {
+        "name": "upload-tabs-preserve",
+        "values": {
+          "folder": "Проекты",
+          "html": "<h1>Данные примера</h1>",
+          "title": "Отчёт с сохранённым названием"
+        }
+      },
+      {
+        "name": "pending-access-no-link",
+        "copyButtons": 0,
+        "urlFields": 0
+      },
+      {
+        "name": "active-link-after-enable",
+        "urlFields": 1
+      },
+      {
+        "name": "private-confirmation",
+        "heading": "Оставить доступ только вам?"
+      },
+      {
+        "name": "private-label",
+        "status": "Только я"
+      },
+      {
+        "name": "focus-exit",
+        "focus": "Режим фокуса"
+      },
+      {
+        "name": "private-reader",
+        "heading": "Ссылка больше не работает",
+        "leaksTitle": 0
+      },
+      {
+        "name": "slide-keyboard",
+        "clickFocus": "Следующий слайд",
+        "page": "Слайд 3 из 3",
+        "focus": "Предыдущий слайд"
+      },
+      {
+        "name": "old-version",
+        "notice": "Вы смотрите версию 1. Последняя сохранённая — 2.\nК текущей версии"
+      },
+      {
+        "name": "invite-cancel",
+        "unsavedAddressCount": 0
+      },
+      {
+        "name": "tablet",
+        "documentWidth": 777,
+        "dpr": 1,
+        "height": 1024,
+        "width": 768
+      },
+      {
+        "name": "tablet-after-fix",
+        "documentWidth": 768,
+        "dpr": 1,
+        "height": 1024,
+        "width": 768
+      },
+      {
+        "name": "narrow-shelf-final",
+        "documentWidth": 320,
+        "dpr": 1,
+        "height": 740,
+        "width": 320
+      },
+      {
+        "name": "share-inline-publish",
+        "status": "По ссылке показывается версия 3",
+        "focus": "Скопировать ссылку"
+      },
+      {
+        "name": "revoke-dialog-focus-final",
+        "focus": "Закрыть окно",
+        "urlFields": 0
+      },
+      {
+        "name": "desktop-slide-ratio",
+        "ratio": 1.7777777777777777
+      },
+      {
+        "name": "empty-state",
+        "heading": "Положите первую работу"
+      }
+    ],
+    "captures": [
+      {
+        "file": "shelf-mobile.png",
+        "documentWidth": 390,
+        "dpr": 1,
+        "height": 844,
+        "width": 390
+      },
+      {
+        "file": "work-mobile.png",
+        "documentWidth": 390,
+        "dpr": 1,
+        "height": 844,
+        "width": 390
+      },
+      {
+        "file": "share-mobile.png",
+        "documentWidth": 390,
+        "dpr": 1,
+        "height": 844,
+        "width": 390
+      },
+      {
+        "file": "shelf-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "list-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "folder-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "work-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "share-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "share-revoked.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "presentation-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "prototype-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      },
+      {
+        "file": "empty-desktop.png",
+        "documentWidth": 1280,
+        "dpr": 1,
+        "height": 900,
+        "width": 1280
+      }
+    ],
+    "consoleErrors": []
+  },
+  "modelTests": {
+    "file": "model-tests.tap",
+    "passed": 7,
+    "failed": 0,
+    "sha256": "ad54a027b889bf4355ee08e1a77dc4d2cfb75caaf56392da7ba4cd2930acc16b"
+  },
+  "screenshots": [
+    {
+      "file": "before-work.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "e03cc4f99a9d6d285799ad32c0a0aa7a7d38a1c82188bffe61760b0b27456e39"
+    },
+    {
+      "file": "empty-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "539afead2aa02758917a2fdb66f4e102f40a3f76d70a159a6b66789549691b6c"
+    },
+    {
+      "file": "folder-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "a6a7a739a691c8d005d6094c090daff47e0b19194f373c4d18a1c2dbce838139"
+    },
+    {
+      "file": "list-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "5da367e3e360a9fb4fd46b30e4c5e85f5a20957153138911e8121295a8320620"
+    },
+    {
+      "file": "presentation-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "586a67b8b9a4bb22b1bba47fab6c1524c8a210cc96c6621df65117f36256d073"
+    },
+    {
+      "file": "prototype-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "4163b474ade17cafe84fcd4850b69fe91e8dd15a1c4be5709fcaa9603b87cc2a"
+    },
+    {
+      "file": "recipient-no-access.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "dfa801774ae44f191ed6a4b352a10eabe7c449273b1b1f42974483748c93184d"
+    },
+    {
+      "file": "share-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "5790b6b3a4ed793e055348648ee3010c125f7dd5d7cf9e3375e027a24d7c29b5"
+    },
+    {
+      "file": "share-mobile.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "55fbe91df90866d42808f88a8fc0678483ca5c93842676d6a76bdfbc4e8342cf"
+    },
+    {
+      "file": "share-revoked.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "6b5fb48e53680cadf78035e134fc511f8c2bb50f150f48e81a0a4ea5be0f23e1"
+    },
+    {
+      "file": "shelf-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "1ffe6e9fca1ffe23d1d30140bbb792bde58c00aec37c4b1064e195155b858b87"
+    },
+    {
+      "file": "shelf-mobile.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "cb761573bee2044a9361ad6bfc52b229ad6f52c05745ae9c12a03b9677e670ae"
+    },
+    {
+      "file": "upload-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "f9d621bd9f10c0c95fb84540c2a13fe8db2d11a24288fcbc48d0f3d44df05fde"
+    },
+    {
+      "file": "work-desktop.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "b8ff7615c9726d06c200853a055095a4a65bdaec6697db262e92821e8ee39f71"
+    },
+    {
+      "file": "work-mobile.png",
+      "widthPx": 65536,
+      "heightPx": 4292542531,
+      "sha256": "b157383ad5015043938d8af6ca3cecda0598cb7900c934f2b52988275ec60609"
+    }
+  ],
+  "knownResolvedFailure": "At 768 CSS px add-card initially caused document width 777; explicit min-width/width fixed it to 768. Both observations are retained.",
+  "limitations": [
+    "Manual browser checks, not a comprehensive accessibility audit.",
+    "Early captures had DPR 1.1; main final captures record 1280x900/DPR 1 and mobile 390x844/DPR 1.",
+    "Some supporting snapshots were taken at earlier moments and do not constitute pixel baselines for all final source files.",
+    "No real user interviews, uploads, invitations, storage, sharing links, expiry enforcement or enterprise installation.",
+    "Demo model is synchronous and in memory. Final API and authorization are not implemented."
+  ]
+}

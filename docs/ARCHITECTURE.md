@@ -4,6 +4,8 @@
 
 ## 1. Состав системы
 
+Граница текущего макета и будущего приложения, компоненты, клиентский договор и порядок hosted/self-hosted поставки — [PROTOTYPE_TO_PRODUCT](PROTOTYPE_TO_PRODUCT.md). Макет с демонстрационным repository не является сервером или реализацией ACL.
+
 ```mermaid
 flowchart LR
   UI[Web: полка, папки, работа] --> API[API: identity, права, метаданные]

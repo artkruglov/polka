@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: new work starts private; draft changes do not grant access
+ok 1 - new work starts private; draft changes do not grant access
+  ---
+  duration_ms: 1.245292
+  type: 'test'
+  ...
+# Subtest: copy address exists only after explicit activation
+ok 2 - copy address exists only after explicit activation
+  ---
+  duration_ms: 0.112209
+  type: 'test'
+  ...
+# Subtest: saving a new version keeps published revision and address
+ok 3 - saving a new version keeps published revision and address
+  ---
+  duration_ms: 0.11825
+  type: 'test'
+  ...
+# Subtest: stale publish is rejected and cannot overwrite the linked revision
+ok 4 - stale publish is rejected and cannot overwrite the linked revision
+  ---
+  duration_ms: 0.3105
+  type: 'test'
+  ...
+# Subtest: revoked link stays revoked after saving options; explicit reactivation rotates address
+ok 5 - revoked link stays revoked after saving options; explicit reactivation rotates address
+  ---
+  duration_ms: 0.139875
+  type: 'test'
+  ...
+# Subtest: private transition invalidates the old address and pinned link cannot publish
+ok 6 - private transition invalidates the old address and pinned link cannot publish
+  ---
+  duration_ms: 0.067292
+  type: 'test'
+  ...
+# Subtest: recent, favorite, folder and type filters have observable results
+ok 7 - recent, favorite, folder and type filters have observable results
+  ---
+  duration_ms: 0.783334
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 46.046333

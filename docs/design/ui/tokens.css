@@ -1,0 +1,24 @@
+:root {
+  color-scheme: light;
+  --canvas: #f7f7f5;
+  --surface: #ffffff;
+  --sidebar: #efefec;
+  --ink: #22251f;
+  --muted: #696d65;
+  --line: #e4e5df;
+  --line-strong: #c7cbbf;
+  --accent: #254b35;
+  --accent-soft: #e4ecdc;
+  --lime: #d8edaa;
+  --danger: #a43e31;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow: 0 16px 50px #20281c12;
+  --sidebar-width: 216px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--canvas);
+}
