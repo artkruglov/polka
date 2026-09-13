@@ -12,7 +12,7 @@ Recipe guide содержит задачу, подходящие входы, ж�
 |---|---|---|
 | `workspace.list`, `workspace.get_context` | Разрешённые пространства, возможности, политика и guides | Не раскрывать названия чужих tenants; выбор workspace не даёт membership |
 | `folder.list/create/rename/move/trash/restore` | Организация работ с cursor и ожидаемой версией дерева | Проверка effective permissions; cross-tenant move запрещён |
-| `artifact.list/search/get` | Метаданные/версия/статус/доступный preview | Search и count проходят те же права; короткие bounded ответы |
+| `artifact.list/search/get` | Метаданные/версия/статус/preview и owner-only адрес сохранённого candidate | Search/count проходят те же права; этот адрес не создаёт публичный share |
 | `artifact.get_manifest`, `file.read` | Точная revision, пути, hashes и разрешённые excerpts | Не раскрывать private sources по праву на viewer; оригинальные файлы — недоверенные данные |
 | `upload.begin/status/finalize/abort` | Ограниченные grants, загрузка/продолжение и immutable receipt | Сервер назначает ownership/quota; повтор finalize не создаёт новую работу |
 | `artifact.create_draft`, `proposal.submit` | Новый draft/candidate с проверенными файлами и base revision | Agent не переписывает main/approved/released; новый материал агента виден как candidate |
@@ -22,7 +22,7 @@ Recipe guide содержит задачу, подходящие входы, ж�
 | `comment.list/add/resolve` | Замечание к revision/route/anchor, контекст и статус | Право комментировать не даёт source-copy; agent reply не закрывает thread автоматически |
 | `run.start/get/cancel/answer` | Реальный scoped adapter, события и ответ на вопрос | Capabilities, бюджет, срок, отмена и needs_input enforced server-side |
 | `share.inspect` | Уже разрешённая аудитория/ссылка и доступные человеку действия | Агент не получает закрытый token/grant без необходимого scope |
-| Human-only: `share.create/revoke`, `release.approve/publish`, `design.certify` | Осознанное распространение, официальный выпуск, сертификация | Не экспортировать как agent tools; сервер отклоняет agent actor и эквивалентный обход |
+| Human-only: `share.create/update_target/revoke`, `share.set_discovery`, `release.approve/publish`, `design.certify` | Аудитория, обновление по ссылке, индексируемая публикация, официальный выпуск | Не экспортировать как agent tools; сервер отклоняет agent actor и обход; discovery возможен только для public по policy |
 
 Внешний агент может предложить распространение в результате, но не самовольно включить публичную ссылку. Не каждый инструмент общего API доступен в MCP. CLI с человеческой identity и agent checkout имеют различимые actor types; происхождение действия не определяется словом в payload.
 
@@ -38,6 +38,8 @@ Recipe guide содержит задачу, подходящие входы, ж�
 Пагинация стабильна при добавлении новых работ; event stream сообщает, что список изменился, а клиент перечитывает нужный диапазон. Большие binary downloads не проходят через текст MCP; выдаётся разрешённая передача файла с проверкой hash/размера. Grant сам является секретом доступа и не попадает в публичный результат чата.
 
 ## Чат в Полке с агентом пользователя
+
+Порядок: сначала file/revision API и внешний MCP-клиент save/read/proposal с приватной ссылкой владельцу; затем описанные ниже runner/connector. [Контракт распространения](SHARING_AND_DISCOVERY.md) общий для UI/API/MCP. Remote MCP не требует, чтобы Полка сама умела запускать модель.
 
 **MCP предоставляет инструменты и контекст, а не универсальное зеркалирование чужого чата.** Для каждого продукта агента нужен документированный adapter. Он отдельно подтверждает запуск/отмену/вопросы/события и права на историю; общий «OpenAI-compatible» endpoint сам не доказывает поддержку agent workflow.
 
