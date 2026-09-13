@@ -1,0 +1,53 @@
+{
+  "status": "documentation-only; no application acceptance claimed",
+  "source_versions": {
+    "v1.2": 103,
+    "v2.0": 92
+  },
+  "rows": 195,
+  "decisions": {
+    "preserved": 99,
+    "adapted": 74,
+    "retired": 3,
+    "deferred": 19
+  },
+  "requirements": 24,
+  "delivery_tasks": 24,
+  "user_jobs": 19,
+  "relative_links": "passed",
+  "mapping_references": "passed",
+  "source_hashes": "matched local source bytes",
+  "crosswalk_rebuild": "byte-identical",
+  "license_copy": "byte-identical Apache-2.0",
+  "prior_dependency_review": [
+    {
+      "root": "components/project-workbench.tsx",
+      "modules": 146
+    },
+    {
+      "root": "components/material-workspace.tsx",
+      "modules": 46
+    },
+    {
+      "root": "lib/adapters/postgres/material-sources.ts",
+      "modules": 42
+    },
+    {
+      "root": "lib/materials/package.ts",
+      "modules": 2
+    },
+    {
+      "root": "lib/materials/runtime-sessions.ts",
+      "modules": 5
+    },
+    {
+      "root": "lib/materials/build-runner.ts",
+      "modules": 5
+    }
+  ],
+  "application_tests": "not run: no Polka application yet",
+  "trace_hashes": {
+    "docs/reference/lanka-requirements.json": "dfccabe976b333814639956cfa8e7bf27f8123f1c67986b6fec956875480afed",
+    "docs/REQUIREMENTS_TRACE.csv": "5243d4a6e1b70527920ac1ab44674fe19b06ba7cae8e45c20ea7c309efe14524"
+  }
+}
