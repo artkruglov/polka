@@ -7,16 +7,16 @@ import {
   ChevronRight,
   CircleAlert,
   ExternalLink,
-  FileCode2,
   Globe2,
   Link2,
   LockKeyhole,
   ShieldCheck,
+  Upload as UploadIcon,
 } from "lucide-react";
 import { Brand } from "./ui.tsx";
 
 type CaptureState = "idle" | "checking" | "ready" | "saved" | "unsupported" | "private";
-type InputMode = "link" | "code";
+type InputMode = "link" | "file";
 
 const examples = {
   public: "https://claude.ai/artifacts/quarterly-report",
@@ -79,20 +79,20 @@ export function ArtifactCaptureDemo() {
             </div>
             <div className="capture-tabs" role="tablist">
               <button className={mode === "link" ? "active" : ""} onClick={() => { setMode("link"); reset(); }} role="tab" aria-selected={mode === "link"}><Link2 /> Вставить ссылку</button>
-              <button className={mode === "code" ? "active" : ""} onClick={() => { setMode("code"); reset(); }} role="tab" aria-selected={mode === "code"}><FileCode2 /> Вставить код</button>
+              <button className={mode === "file" ? "active" : ""} onClick={() => { setMode("file"); reset(); }} role="tab" aria-selected={mode === "file"}><UploadIcon /> Загрузить файл</button>
             </div>
             {mode === "link" ? (
               <label className="capture-input-label">Публичная ссылка на работу<input value={value} onChange={(e) => { setValue(e.target.value); reset(); }} onKeyDown={(e) => e.key === "Enter" && inspect()} placeholder="https://claude.ai/artifacts/..." autoFocus /></label>
             ) : (
-              <label className="capture-input-label">Код или HTML артефакта<textarea value={value} onChange={(e) => { setValue(e.target.value); reset(); }} placeholder="Вставьте код, который дал агент…" rows={5} autoFocus /></label>
+              <label className="capture-file-drop"><UploadIcon /><strong>{value || "Перетащите файл сюда"}</strong><small>HTML, ZIP, PDF, PPTX, изображение или TXT</small><input type="file" accept=".html,.zip,.pdf,.pptx,image/png,image/jpeg,image/webp,text/plain" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setValue(file.name); setState("ready"); } }} /></label>
             )}
             <div className="capture-examples"><span>Попробовать:</span><button onClick={() => { setValue(examples.public); setMode("link"); reset(); }}>публичный Claude</button><button onClick={() => { setValue(examples.unsupported); setMode("link"); reset(); }}>сборка на JS</button><button onClick={() => { setValue(examples.private); setMode("link"); reset(); }}>закрытая ссылка</button></div>
             {state === "idle" && <button className="primary capture-cta" onClick={inspect} disabled={!value.trim()}>Проверить и показать копию <ArrowUpRight /></button>}
             {state === "checking" && <div className="capture-status capture-checking" role="status"><span className="spinner" /> Проверяем, что можно сохранить…</div>}
-            {state === "ready" && <ReadyState sourceLabel="Claude" onSave={save} onReset={reset} />}
+            {state === "ready" && <ReadyState sourceLabel={mode === "file" ? "загруженный файл" : "Claude"} onSave={save} onReset={reset} />}
             {state === "saved" && <SavedState onReset={reset} showReceiver={showReceiver} onReceiver={() => setShowReceiver(true)} />}
-            {state === "unsupported" && <UnsupportedState onReset={reset} onCode={() => { setMode("code"); setValue(""); setState("idle"); }} />}
-            {state === "private" && <PrivateState onReset={reset} onCode={() => { setMode("code"); setValue(""); setState("idle"); }} />}
+            {state === "unsupported" && <UnsupportedState onReset={reset} onFile={() => { setMode("file"); setValue(""); setState("idle"); }} />}
+            {state === "private" && <PrivateState onReset={reset} onFile={() => { setMode("file"); setValue(""); setState("idle"); }} />}
             <p className="capture-note"><Globe2 /> Интерфейсный прототип · ссылка сохраняется как копия, а не как прокси на исходный сервис.</p>
           </section>
         </section>
@@ -104,7 +104,7 @@ export function ArtifactCaptureDemo() {
         </section>
 
         <section className="capture-steps" aria-label="Как это работает">
-          <div><span>01</span><strong>Вставьте ссылку или код</strong><p>Без выбора формата и папки на первом шаге.</p></div>
+          <div><span>01</span><strong>Вставьте ссылку или файл</strong><p>Без выбора формата и папки на первом шаге.</p></div>
           <div><span>02</span><strong>Получите свою копию</strong><p>Мы показываем источник, дату и ограничения до сохранения.</p></div>
           <div><span>03</span><strong>Поделитесь, когда готовы</strong><p>«Только я» и «По ссылке» видны рядом с каждой версией.</p></div>
         </section>
@@ -122,10 +122,10 @@ function SavedState({ onReset, onReceiver, showReceiver }: { onReset: () => void
   return <div className="capture-result capture-saved"><div className="saved-head"><span className="saved-check"><Check /></span><div><span className="result-kicker">СНИМОК СОХРАНЁН</span><h3>Квартальный отчёт · версия 1</h3><p>Источник: Claude · 14 сентября 2026, 12:40</p></div></div><div className="saved-link"><span><LockKeyhole /> Сейчас видите только вы</span><code>polka.local/w/quarterly-report</code></div><div className="saved-actions"><button className="primary" onClick={onReceiver}><Globe2 /> Посмотреть глазами получателя</button><button onClick={onReset}>Начать ещё раз</button></div>{showReceiver && <div className="receiver-preview"><div><span className="eyebrow">ЭКРАН ПОЛУЧАТЕЛЯ</span><strong>Квартальный отчёт</strong><small>Копия на Полке · без входа</small></div><span className="receiver-open"><Check /> Открывается</span></div>}</div>;
 }
 
-function UnsupportedState({ onReset, onCode }: { onReset: () => void; onCode: () => void }) {
-  return <div className="capture-result capture-warning"><div className="warning-title"><CircleAlert /> Страница собирается в браузере</div><p>Полка не будет запускать чужой код и не сможет забрать содержимое автоматически. Вставьте код артефакта из Claude — так копия будет самостоятельной.</p><div className="result-actions"><button onClick={onReset}>Другая ссылка</button><button className="primary" onClick={onCode}><FileCode2 /> Вставить код</button></div></div>;
+function UnsupportedState({ onReset, onFile }: { onReset: () => void; onFile: () => void }) {
+  return <div className="capture-result capture-warning"><div className="warning-title"><CircleAlert /> Страница собирается в браузере</div><p>Полка не запускает чужой код и не сможет забрать содержимое автоматически. Скачайте артефакт из Claude и загрузите файл — так копия будет самостоятельной.</p><div className="result-actions"><button onClick={onReset}>Другая ссылка</button><button className="primary" onClick={onFile}><UploadIcon /> Загрузить файл</button></div></div>;
 }
 
-function PrivateState({ onReset, onCode }: { onReset: () => void; onCode: () => void }) {
-  return <div className="capture-result capture-warning"><div className="warning-title"><LockKeyhole /> Эта ссылка доступна только после входа</div><p>Мы не просим логин или cookies от Claude и не обходим права рабочего пространства. Скачайте файл вручную или попросите своего агента сохранить его.</p><div className="result-actions"><button onClick={onReset}>Другая ссылка</button><button className="primary" onClick={onCode}><FileCode2 /> Вставить код вместо ссылки</button></div></div>;
+function PrivateState({ onReset, onFile }: { onReset: () => void; onFile: () => void }) {
+  return <div className="capture-result capture-warning"><div className="warning-title"><LockKeyhole /> Эта ссылка доступна только после входа</div><p>Мы не просим логин или cookies от Claude и не обходим права рабочего пространства. Скачайте файл вручную или попросите своего агента сохранить его.</p><div className="result-actions"><button onClick={onReset}>Другая ссылка</button><button className="primary" onClick={onFile}><UploadIcon /> Загрузить файл</button></div></div>;
 }
