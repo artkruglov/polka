@@ -29,7 +29,7 @@
 | F23 | Open source, воспроизводимая установка/обновление/restore, совместимые версии компонентов, минимум 2 профиля cloud/internal. Настоящий SSO/SCIM, компания-владелец и операторские SLA проверяются перед обещанием enterprise-ready | M1 baseline, M4 / P23 |
 | F24 | Ссылка/HTML/file original первичны; формат доступного экспорта назван честно. Хранение PPTX не означает редактируемый round-trip; старые работы остаются в Lanka, перенос явный и приватный | M1/M2 / P24 |
 | F25 | Артефакт разрешённого агента сохраняется одной идемпотентной командой `artifact.capture`: private по умолчанию, immutable receipt/revision, provenance, folder/title hints; actor не может сам включить share/public/release | M1.2 / P25 |
-| F26 | Поддержанная публичная ссылка импортируется через preview → явный commit в private snapshot; provider allowlist, SSRF/redirect/size/time/content policy, без cookies/credentials; unsupported/private source честно отклоняется или сохраняется как external link | M1.2 / P25,P26 |
+| F26 | Поддержанная публичная ссылка импортируется через preview → явный commit в private snapshot; provider allowlist, SSRF/redirect/size/time/content policy, без cookies/credentials; после receipt читатель открывает Polka snapshot без обращения к провайдеру. Unsupported/private source честно отклоняется или сохраняется как external link | M1.2 / P25,P26 |
 | F27 | Быстрые входы не ломают обычный fallback: ручной файл/текст доступен без агента; UI различает fetching/checking/receipt/preview и не обещает сохранение до committed результата | M1/M1.2 / P18,P25 |
 | F28 | Origin/provider/version/hash и достоверное авторство сохраняются как provenance без private prompts/secrets; изменённый внешний источник не подменяет immutable revision | M1.2 / P26 |
 
