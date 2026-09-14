@@ -1478,6 +1478,12 @@ textarea {
 .capture-input-label input,.capture-input-label textarea { width:100%; margin-top:7px; border:1px solid #dce2d8; border-radius:9px; background:#fbfcfa; padding:11px 12px; color:#283128; outline:none; font-size:12px; }
 .capture-input-label input:focus,.capture-input-label textarea:focus { border-color:#88a58d; box-shadow:0 0 0 3px #dfece0; }
 .capture-input-label textarea { min-height:106px; resize:vertical; line-height:1.55; }
+.capture-file-drop { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; min-height:126px; padding:18px; border:1px dashed #cbd8c8; border-radius:10px; background:#f8fbf7; color:#5f7161; text-align:center; cursor:pointer; }
+.capture-file-drop:hover { border-color:#88a58d; background:#f2f8f1; }
+.capture-file-drop > svg { width:22px; height:22px; color:#66856b; }
+.capture-file-drop strong { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:600; }
+.capture-file-drop small { color:#8b958a; font-size:10px; }
+.capture-file-drop input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .capture-examples { display:flex; flex-wrap:wrap; align-items:center; gap:5px 7px; margin:10px 0 15px; color:#92998f; font-size:10px; }
 .capture-examples button { min-height:25px; padding:3px 7px; border-color:#e0e6de; border-radius:5px; color:#667368; background:#fafbf9; font-size:10px; }
 .capture-examples button:hover { border-color:#b7cbb8; background:#f1f6ef; }
