@@ -432,7 +432,7 @@ export function App() {
                 <div className="shelf-actions">
                   <button className="primary" onClick={() => location.assign("/bring")}>
                     <LinkIcon />
-                    Ссылка или код
+                    Ссылка или файл
                   </button>
                   <button onClick={() => setPanel("upload")}>
                     <Plus />
