@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowUpRight, FileText } from "lucide-react";
+import { ArrowUpRight, FileText, Link2 as LinkIcon } from "lucide-react";
 import type { Account } from "../../../packages/contracts/index.ts";
 import { client } from "./client.ts";
 import { Brand, ErrorNotice } from "./ui.tsx";
@@ -80,6 +80,10 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
           {busy ? "Входим…" : "Открыть полку"}
           <ArrowUpRight />
         </button>
+        <a className="login-capture" href="/bring">
+          <span><LinkIcon /> Принести артефакт из агента</span>
+          <ArrowUpRight />
+        </a>
         <a className="login-explore" href="/discover">
           Посмотреть примеры без входа <ArrowUpRight />
         </a>

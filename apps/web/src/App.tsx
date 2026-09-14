@@ -429,10 +429,16 @@ export function App() {
                     Сохраняйте хорошие работы. Возвращайтесь к ним. Делитесь.
                   </p>
                 </div>
-                <button className="primary" onClick={() => setPanel("upload")}>
-                  <Plus />
-                  Добавить работу
-                </button>
+                <div className="shelf-actions">
+                  <button className="primary" onClick={() => location.assign("/bring")}>
+                    <LinkIcon />
+                    Ссылка или код
+                  </button>
+                  <button onClick={() => setPanel("upload")}>
+                    <Plus />
+                    Файл
+                  </button>
+                </div>
               </div>
               <div className="shelf-tools">
                 <label className="search">
@@ -534,8 +540,8 @@ export function App() {
                         <span>
                           <Plus />
                         </span>
-                        <strong>Ещё одна хорошая работа</strong>
-                        <small>Добавьте файл или текст</small>
+                        <strong>Принести работу агента</strong>
+                        <small>Ссылка, код или файл</small>
                       </button>
                     )}
                   </div>
@@ -581,20 +587,20 @@ export function App() {
                   <h2>
                     {query
                       ? "Пока ничего не нашли"
-                      : "Здесь будут ваши хорошие работы"}
+                      : "Здесь будут ваши работы"}
                   </h2>
                   <p>
                     {query
                       ? "Попробуйте другое название."
-                      : "Добавьте первый материал — он останется на полке после закрытия вкладки."}
+                      : "Начните со ссылки или кода от агента. Файл остаётся запасным входом."}
                   </p>
                   {!query && (
                     <button
                       className="primary"
-                      onClick={() => setPanel("upload")}
+                      onClick={() => location.assign("/bring")}
                     >
-                      <Plus />
-                      Добавить первую работу
+                      <LinkIcon />
+                      Принести артефакт
                     </button>
                   )}
                 </div>
