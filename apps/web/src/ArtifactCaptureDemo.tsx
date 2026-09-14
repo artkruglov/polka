@@ -70,7 +70,7 @@ export function ArtifactCaptureDemo() {
             <h1>Ссылка из Claude.<br /><em>Своя копия на Полке.</em></h1>
             <p>Сохраните работу, созданную агентом, и отправьте ссылку, которая откроется у получателя без исходного сервиса и его логина.</p>
             <div className="capture-proof-list">
-              <div><span className="proof-icon"><ShieldCheck /></span><span><strong>Получатель открывает копию</strong><small>Без VPN и обращения к Claude</small></span></div>
+              <div><span className="proof-icon"><ShieldCheck /></span><span><strong>Получатель открывает копию</strong><small>Без обращения к исходному сервису</small></span></div>
               <div><span className="proof-icon"><LockKeyhole /></span><span><strong>Сначала только вы</strong><small>Публикуете и отключаете доступ сами</small></span></div>
               <div><span className="proof-icon"><Bot /></span><span><strong>Можно попросить агента</strong><small>«Положи этот отчёт на Полку» через MCP</small></span></div>
             </div>
