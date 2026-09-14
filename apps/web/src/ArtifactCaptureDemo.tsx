@@ -29,6 +29,7 @@ export function ArtifactCaptureDemo() {
   const [value, setValue] = useState("");
   const [state, setState] = useState<CaptureState>("idle");
   const [showReceiver, setShowReceiver] = useState(false);
+  const [shareEnabled, setShareEnabled] = useState(false);
 
   const inspect = () => {
     if (!value.trim()) return;
@@ -44,11 +45,13 @@ export function ArtifactCaptureDemo() {
   const save = () => {
     setState("saved");
     setShowReceiver(false);
+    setShareEnabled(false);
   };
 
   const reset = () => {
     setState("idle");
     setShowReceiver(false);
+    setShareEnabled(false);
   };
 
   return (
@@ -90,7 +93,7 @@ export function ArtifactCaptureDemo() {
             {state === "idle" && <button className="primary capture-cta" onClick={inspect} disabled={!value.trim()}>Проверить и показать копию <ArrowUpRight /></button>}
             {state === "checking" && <div className="capture-status capture-checking" role="status"><span className="spinner" /> Проверяем, что можно сохранить…</div>}
             {state === "ready" && <ReadyState sourceLabel={mode === "file" ? "загруженный файл" : "Claude"} onSave={save} onReset={reset} />}
-            {state === "saved" && <SavedState onReset={reset} showReceiver={showReceiver} onReceiver={() => setShowReceiver(true)} />}
+            {state === "saved" && <SavedState onReset={reset} shareEnabled={shareEnabled} onShare={() => setShareEnabled(true)} showReceiver={showReceiver} onReceiver={() => setShowReceiver(true)} />}
             {state === "unsupported" && <UnsupportedState onReset={reset} onFile={() => { setMode("file"); setValue(""); setState("idle"); }} />}
             {state === "private" && <PrivateState onReset={reset} onFile={() => { setMode("file"); setValue(""); setState("idle"); }} />}
             <p className="capture-note"><Globe2 /> Интерфейсный прототип · ссылка сохраняется как копия, а не как прокси на исходный сервис.</p>
@@ -118,8 +121,8 @@ function ReadyState({ sourceLabel, onSave, onReset }: { sourceLabel: string; onS
   return <div className="capture-result capture-ready"><div className="result-kicker"><Check /> КОПИЮ МОЖНО СОХРАНИТЬ</div><div className="result-preview"><div className="result-art"><span>Q3 / 2026</span><strong>Квартальный<br /><em>отчёт</em></strong><small>полка / снимок из {sourceLabel.toLowerCase()}</small></div><div><h3>Квартальный отчёт</h3><p>Публичный артефакт · {sourceLabel}</p><span className="result-meta"><LockKeyhole /> После сохранения увидите только вы</span></div></div><div className="result-actions"><button onClick={onReset}>Изменить</button><button className="primary" onClick={onSave}>Сохранить копию <ArrowUpRight /></button></div></div>;
 }
 
-function SavedState({ onReset, onReceiver, showReceiver }: { onReset: () => void; onReceiver: () => void; showReceiver: boolean }) {
-  return <div className="capture-result capture-saved"><div className="saved-head"><span className="saved-check"><Check /></span><div><span className="result-kicker">СНИМОК СОХРАНЁН</span><h3>Квартальный отчёт · версия 1</h3><p>Источник: Claude · 14 сентября 2026, 12:40</p></div></div><div className="saved-link"><span><LockKeyhole /> Сейчас видите только вы</span><code>polka.local/w/quarterly-report</code></div><div className="saved-actions"><button className="primary" onClick={onReceiver}><Globe2 /> Посмотреть глазами получателя</button><button onClick={onReset}>Начать ещё раз</button></div>{showReceiver && <div className="receiver-preview"><div><span className="eyebrow">ЭКРАН ПОЛУЧАТЕЛЯ</span><strong>Квартальный отчёт</strong><small>Копия на Полке · без входа</small></div><span className="receiver-open"><Check /> Открывается</span></div>}</div>;
+function SavedState({ onReset, onShare, onReceiver, shareEnabled, showReceiver }: { onReset: () => void; onShare: () => void; onReceiver: () => void; shareEnabled: boolean; showReceiver: boolean }) {
+  return <div className="capture-result capture-saved"><div className="saved-head"><span className="saved-check"><Check /></span><div><span className="result-kicker">СНИМОК СОХРАНЁН</span><h3>Квартальный отчёт · версия 1</h3><p>Источник: Claude · 14 сентября 2026, 12:40</p></div></div><div className="saved-link"><span><LockKeyhole /> {shareEnabled ? "Доступ по ссылке включён" : "Сейчас видите только вы"}</span>{shareEnabled && <code>polka.local/w/quarterly-report</code>}</div><div className="saved-actions"><button className="primary" onClick={shareEnabled ? onReceiver : onShare}>{shareEnabled ? <Globe2 /> : <Link2 />} {shareEnabled ? "Посмотреть глазами получателя" : "Открыть доступ по ссылке"}</button><button onClick={onReset}>Начать ещё раз</button></div>{shareEnabled && <p className="capture-share-note">Любой, у кого есть ссылка, сможет открыть эту версию. Отозвать доступ можно в любой момент.</p>}{showReceiver && <div className="receiver-preview"><div><span className="eyebrow">ЭКРАН ПОЛУЧАТЕЛЯ</span><strong>Квартальный отчёт</strong><small>Копия на Полке · без входа</small></div><span className="receiver-open"><Check /> Открывается</span></div>}</div>;
 }
 
 function UnsupportedState({ onReset, onFile }: { onReset: () => void; onFile: () => void }) {
