@@ -18,6 +18,8 @@ Recipe guide содержит задачу, подходящие входы, ж�
 | `artifact.create_draft`, `proposal.submit` | Новый draft/candidate с проверенными файлами и base revision | Agent не переписывает main/approved/released; новый материал агента виден как candidate |
 | `artifact.edit`, `proposal.accept/reject` | Поддержанная ручная правка или решение по candidate | CAS; accept требует human principal и текущие права, история сохраняется |
 | `preview.request/status/get` | Подготовленный результат и issues/ссылки | Тип preview назван точно; request не может обходить runtime quota |
+| `artifact.capture` | Одним вызовом сохранить inline/package/поддержанный URL результат агента в private revision | Внутри может использовать upload flow; idempotency/receipt обязательны; агент не публикует |
+| `import.preview/commit/status` | Проверить и сохранить поддержанную публичную ссылку отдельным snapshot | Allowlist/SSRF/лимиты/явный commit; cookies, app session и private provider data запрещены |
 | `recipe.list/get_contract` | Разрешённые версионные recipes и условия применения | Certified/trusted статус берётся из registry, не из содержимого архива |
 | `comment.list/add/resolve` | Замечание к revision/route/anchor, контекст и статус | Право комментировать не даёт source-copy; agent reply не закрывает thread автоматически |
 | `run.start/get/cancel/answer` | Реальный scoped adapter, события и ответ на вопрос | Capabilities, бюджет, срок, отмена и needs_input enforced server-side |
@@ -55,6 +57,10 @@ Recipe guide содержит задачу, подходящие входы, ж�
 ## Минимальная сквозная приёмка M3
 
 Человек через интерфейс подключает реального разрешённого агента, выбирает папку/работу, просит исправить текст/визуал. Агент получает актуальный context/recipe, при необходимости задаёт вопрос, загружает candidate и показывает изменение. Между запросом и ответом человек делает ручную правку; старый candidate не перезаписывает её. Отключение connector, повтор доставки, отмена, смена аккаунта и отзыв прав проверяются отдельными шагами. После перезапуска Полки сохраняются поручение, выбранные файлы, история и результат, а не только финальное сообщение.
+
+## Быстрые входы M1.2
+
+[Контракт capture/import](AGENT_CAPTURE_AND_IMPORT.md) делает агентский сценарий первым классом. `artifact.capture` принимает результат агента или provider URL, но не получает capability публикации. Для ссылок сначала возвращается безопасный preview; только явный пользовательский commit создаёт private snapshot. Повтор по `requestId` возвращает прежний receipt. Импорт не является универсальным URL-прокси и не исполняет HTML в origin Полки.
 
 ## Подготовка публикации M1.1
 

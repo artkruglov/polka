@@ -2,7 +2,7 @@
 
 **Реализация:** [первый локальный срез](LIVE_SLICE_2026-09-13.md) уже использует React/API/PostgreSQL/S3 и file-v1. Схема ниже — целевая; organization/workspace memberships, HTML runtime, workers, внешняя поставка ещё открыты.
 
-Решение для новой реализации, 13 сентября 2026. Есть отдельный UX-прототип; приложение и сервер ещё не реализованы. Дизайн опирается на [F01–F24](REQUIREMENTS.md), исходные PRD и проверку зависимостей Lanka. Выбор S3 API ниже не означает выбор AWS как облака или разрешение отправлять туда данные компании.
+Решение для новой реализации, 14 сентября 2026. Есть отдельный UX-прототип и первый локальный срез; полный HTML/runtime и агентские входы ещё не реализованы. Дизайн опирается на [F01–F28](REQUIREMENTS.md), исходные PRD и проверку зависимостей Lanka. Выбор S3 API ниже не означает выбор AWS как облака или разрешение отправлять туда данные компании.
 
 ## 1. Состав системы
 
@@ -64,6 +64,14 @@ Hosted и self-hosted используют одну реализацию с ра
 Presigned URL может использоваться повторно и перезаписать тот же ключ до истечения срока. Поэтому схема «проверили staging → сохранили ссылку на него» недостаточна. AWS описывает эти свойства и проверку checksums; конкретный S3-compatible поставщик проходит те же contract tests. [S3 presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html).
 
 Multipart позволяет повторять отдельные части и продолжать загрузку. Finalize и abort остаются серверными действиями; ETag multipart не приравниваем к полному SHA-256. Для одиночного PUT нужен version-pinned либо conditional promotion, исключающий гонку перезаписи; выбранный provider обязан подтвердить поддержку. [S3 multipart](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html).
+
+## 3.5. Агентский capture и импорт по ссылке
+
+M1.2 добавляет два входа поверх общего upload/application layer. `artifact.capture` — высокоуровневая идемпотентная команда MCP: она создаёт private draft, проводит внутренний begin/upload/finalize и возвращает receipt после immutable commit. Агент получает подсказки destination/title/folder, но не может менять effective audience или публиковать работу. Pairing выдаёт scoped delegation с tenant/workspace и сроком; токен не вставляется в содержимое артефакта и не возвращается читателю.
+
+`import.preview` не является универсальным URL proxy. Provider adapter по allowlist сначала получает только безопасные metadata/preview; `import.commit` после явного подтверждения владельца фиксирует snapshot, origin URL, provider/version, fetchedAt, hash и ограничения. Fetch выполняется отдельным bounded worker без cookies, Authorization, Referer и app session. Каждый redirect заново проверяет HTTPS, DNS/IP и запрет loopback/private/link-local/metadata адресов; ограничиваются тело, распаковка, время и число ресурсов. HTML не запускается для извлечения в origin Полки. Для JS-only или закрытой ссылки сохраняется external-link record либо возвращается unsupported, а не фальшивый импорт.
+
+Для Team/Enterprise артефактов провайдера доступ проверяется его организацией/connector; Полка не обходит вход и не пытается получить чужие cookies. Исходная внешняя страница не может подменить уже сохранённую revision: новый snapshot создаётся отдельным commit и проходит P08/policy. Обычная ручная загрузка продолжает работать, даже если provider adapter выключен.
 
 ## 4. Быстрые ссылки и выдача данных
 
