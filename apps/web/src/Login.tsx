@@ -80,6 +80,9 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
           {busy ? "Входим…" : "Открыть полку"}
           <ArrowUpRight />
         </button>
+        <a className="login-explore" href="/discover">
+          Посмотреть примеры без входа <ArrowUpRight />
+        </a>
         <small>
           Локальная сборка. Аккаунт создаёт владелец установки; внешняя
           регистрация не нужна.
