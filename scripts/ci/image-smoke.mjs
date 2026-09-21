@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 
 const image = process.argv[2];
 if (!image) throw new Error("Usage: image-smoke.mjs <image>");
+// Provisions the fixed polka-local bucket, so only run on disposable CI infra.
+if (process.env.CI !== "true") throw new Error("Image smoke runs only in CI");
 const env = Object.fromEntries(
   readFileSync(".env", "utf8")
     .split("\n")
@@ -16,7 +18,7 @@ const env = Object.fromEntries(
 const suffix = randomBytes(6).toString("hex");
 const database = new URL(env.DATABASE_URL);
 database.pathname = `/polka_smoke_${suffix}`;
-const bucket = `polka-smoke-${suffix}`;
+const bucket = "polka-local";
 const runtime = {
   DATABASE_URL: database.href,
   S3_ENDPOINT: env.S3_ENDPOINT,
