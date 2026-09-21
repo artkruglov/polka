@@ -1,0 +1,16 @@
+{
+  "sessionId": 51436,
+  "exitCode": 0,
+  "schemaVersion": 18,
+  "testsPassed": 13,
+  "partialDeleteFailureObserved": true,
+  "actualDeletesBeforeFailure": 1,
+  "sameRunResumeRemainingDeletes": 2,
+  "completedRerunDeletes": 0,
+  "completedRerunMetadataPurges": 0,
+  "invalidLedgerPreloadNoRegistration": true,
+  "journalAndNeighborPreserved": true,
+  "syntheticResidueRemoved": true,
+  "workingResourcesUsed": false,
+  "fullBackupRestoreProven": false
+}

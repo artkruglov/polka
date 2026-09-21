@@ -1,0 +1,52 @@
+[
+  {
+    "slug": "probability-lab",
+    "receipt": {
+      "uploadId": "9555d601-3f5b-4ce3-a545-4fe1a0477df8",
+      "artifactId": "0909477b-e690-4306-b78c-a1b6382e8012",
+      "revisionId": "cbf4cfba-8824-4401-912a-ed8a202bcfa1",
+      "number": 1,
+      "sha256": "1f643c2461bf783c9bf68d7756e90bd546bed337e7e60d61d8a908de85c64085",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "e289d179d523db74486fccd74736b7679608459e9c2a2521a7ea7801c2823861",
+      "storageKind": "bundle",
+      "totalSize": 7873
+    },
+    "preview": {
+      "uploadId": "9555d601-3f5b-4ce3-a545-4fe1a0477df8",
+      "revisionId": "cbf4cfba-8824-4401-912a-ed8a202bcfa1",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "shareId": "c1903a47-e8e1-4afc-90ae-30119ceb5114",
+    "derivativeId": "f7fbc75b-e409-4147-ac90-c1831290bb23"
+  },
+  {
+    "slug": "decision-matrix",
+    "receipt": {
+      "uploadId": "55dbc341-3e4d-4851-9b0f-bb5aaf3fef67",
+      "artifactId": "bb782bd8-03c8-4f7e-a49e-17e8f31d7699",
+      "revisionId": "afc821d9-174d-4dc4-9296-224ff7c5b7ff",
+      "number": 2,
+      "sha256": "6e3c97657b745c69fa73be67ff934526420e7476de6911e49edb97861eec13a3",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "4aeb22f7c76fd6cad42a9c8ae9198227d3b10a20f4e49939ef5ea35b7907e172",
+      "storageKind": "bundle",
+      "totalSize": 7502
+    },
+    "preview": {
+      "uploadId": "55dbc341-3e4d-4851-9b0f-bb5aaf3fef67",
+      "revisionId": "afc821d9-174d-4dc4-9296-224ff7c5b7ff",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "shareId": "02fd94da-17b8-4f1e-a835-103909c5b75a",
+    "derivativeId": "49f53cf0-9b98-437d-a21f-23d78b19f51c"
+  }
+]

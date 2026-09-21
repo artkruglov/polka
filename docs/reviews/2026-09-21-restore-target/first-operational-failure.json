@@ -1,0 +1,12 @@
+{
+  "session": 79056,
+  "schemaVersion": 18,
+  "passedBeforeOperational": 12,
+  "operationalPassed": false,
+  "failure": "unversioned ledger GetObject unexpectedly permitted",
+  "putDenied": true,
+  "deleteVersionDenied": true,
+  "ledgerReaderResidueRemoved": true,
+  "syntheticResidueRemoved": true,
+  "workingResourcesUsed": false
+}

@@ -1,0 +1,11 @@
+{
+  "sessionId": 26512,
+  "exitCode": 1,
+  "schemaVersion": 18,
+  "failureStage": "purge-restore-s3",
+  "error": "guard_lost during restore reconciliation",
+  "ordinaryPurgeAssertionsPassed": true,
+  "realS3TestPassed": false,
+  "syntheticResidueRemoved": true,
+  "workingResourcesUsed": false
+}

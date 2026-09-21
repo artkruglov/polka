@@ -1,0 +1,362 @@
+import { useFolders } from "../../entities/folder/useFolders.ts";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ArrowUpRight,
+  Check,
+  CircleAlert,
+  Copy,
+  FileUp,
+  Link2,
+  LockKeyhole,
+  LogIn,
+} from "lucide-react";
+import type {
+  Account,
+  Artifact,
+  Receipt,
+  Revision,
+} from "../../../../../packages/contracts/index.ts";
+import { MAX_BYTES, MIME } from "../../../../../packages/contracts/index.ts";
+import {
+  client,
+  fileMime,
+  saveUpload,
+  type PendingUpload,
+} from "../../shared/api/client.ts";
+import { date, profileView, size } from "../../entities/artifact/format.ts";
+import { Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
+import { ErrorNotice } from "../../shared/ui/index.tsx";
+import { Status } from "../../shared/ui/Status.tsx";
+
+/** Where login returns the guest: back to this card. */
+export const FILE_SAVE_LOGIN = `/signup?next=${encodeURIComponent("/bring#file")}`;
+
+/**
+ * The real file path of /bring: begin → bytes → finalize through the existing API,
+ * then an optional link. Nothing here is a fixture: title, receipt, profile and URL come from the server.
+ * A guest can pick a file, but it never leaves the page before login; the browser cannot carry it across the redirect.
+ */
+export function FileSave({
+  account,
+  initialFolderId = "",
+  renderPreview,
+}: {
+  account: Account | null | undefined;
+  initialFolderId?: string;
+  renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
+}) {
+  const folders = useFolders(account?.id);
+  const [folderId, setFolderId] = useState(initialFolderId);
+  const [file, setFile] = useState<File | null>(null),
+    [title, setTitle] = useState(""),
+    [stage, setStage] = useState(""),
+    [error, setError] = useState(""),
+    [receipt, setReceipt] = useState<Receipt | null>(null),
+    [work, setWork] = useState<Artifact | null>(null),
+    [sharing, setSharing] = useState(false),
+    [copied, setCopied] = useState(false),
+    [dragging, setDragging] = useState(false);
+  const operation = useRef<PendingUpload | null>(null),
+    card = useRef<HTMLElement>(null),
+    busy = !!stage || sharing;
+
+  useEffect(() => {
+    if (location.hash === "#file") card.current?.scrollIntoView();
+  }, []);
+
+  const pick = (f: File | undefined) => {
+    if (!f) return;
+    operation.current = null;
+    setError("");
+    setFile(f);
+    setTitle(f.name.replace(/\.[^.]+$/, "") || f.name);
+    const mime = fileMime(f);
+    if (!(MIME as readonly string[]).includes(mime))
+      setError(
+        "Этот тип файла не поддерживается. Подойдут HTML, TXT, PNG, JPEG или WebP. ZIP и PDF эта сборка не принимает.",
+      );
+    else if (f.size > MAX_BYTES) setError("Файл больше 5 МБ.");
+  };
+
+  const save = async () => {
+    if (!file || !title.trim())
+      return setError("Выберите файл и укажите название.");
+    const blob = new Blob([file], { type: fileMime(file) });
+    if (
+      !(MIME as readonly string[]).includes(blob.type) ||
+      blob.size > MAX_BYTES
+    )
+      return setError("Подойдут HTML, TXT, PNG, JPEG или WebP до 5 МБ.");
+    setError("");
+    operation.current ??= { file: blob, key: crypto.randomUUID() };
+    try {
+      const saved = await saveUpload(
+        operation.current,
+        { title: title.trim(), filename: file.name, folderId: folderId || null },
+        setStage,
+      );
+      setReceipt(saved);
+      setWork(await client.artifact(saved.artifactId));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStage("");
+    }
+  };
+
+  const share = async () => {
+    if (!work) return;
+    setSharing(true);
+    setError("");
+    try {
+      setWork(await client.enable(work, 30));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const restart = () => {
+    operation.current = null;
+    setFile(null);
+    setTitle("");
+    setReceipt(null);
+    setWork(null);
+    setError("");
+    setCopied(false);
+  };
+
+  const guest = account === null;
+  const view = work ? profileView(work.revision) : null;
+  const link =
+    work?.share && work.share.status === "active" ? work.share : null;
+
+  return (
+    <section
+      className="bring-card file-save"
+      id="file"
+      ref={card}
+      aria-labelledby="file-save-title"
+    >
+      {receipt && work && view ? (
+        <div className="bring-result">
+          <span className="result-kicker ok">
+            <LockKeyhole /> СОХРАНЕНО НА ПОЛКЕ · ВЕРСИЯ {receipt.number}
+          </span>
+          <h2 id="file-save-title" tabIndex={-1}>
+            {work.title}
+          </h2>
+          <dl className="import-facts">
+            <div>
+              <dt>Файл</dt>
+              <dd>
+                {work.revision.filename} · {size(work.revision.size)}
+              </dd>
+            </div>
+            <div>
+              <dt>Доступ</dt>
+              <dd>
+                {link ? (
+                  <>
+                    <Link2 /> По ссылке до {date(link.expiresAt)}
+                  </>
+                ) : (
+                  <>
+                    <LockKeyhole /> Только вы
+                  </>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Как откроется</dt>
+              <dd data-profile={work.revision.htmlProfile ?? "file"}>
+                {view.label}
+              </dd>
+            </div>
+          </dl>
+          <p
+            className={view.linkable ? "next-note" : "next-note warn"}
+            role="note"
+          >
+            {view.linkable ? <Check /> : <CircleAlert />} {view.text}
+          </p>
+          <ul
+            className="profile-now-plan"
+            aria-label="Как откроется у получателя"
+          >
+            <li>
+              <Status is={view.linkable ? "real" : "unsupported"} />{" "}
+              <strong>Сейчас:</strong> {view.now}
+            </li>
+            {view.plan && (
+              <li>
+                <Status is="plan" /> <strong>В плане:</strong> {view.plan}
+              </li>
+            )}
+          </ul>
+          <div className="file-save-preview">
+            {renderPreview(work.revision, !view.linkable)}
+          </div>
+          {link ? (
+            <div className="share-ready" role="status">
+              <div>
+                <Link2 />
+                <code>{link.url}</code>
+              </div>
+              <a
+                className="button"
+                href={link.url!}
+                target="_blank"
+                rel="noopener"
+              >
+                Открыть как получатель <ArrowUpRight />
+              </a>
+              <Button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(link.url!);
+                    setCopied(true);
+                  } catch {
+                    setError("Не удалось скопировать. Выделите адрес выше.");
+                  }
+                }}
+              >
+                {copied ? <Check /> : <Copy />}{" "}
+                {copied ? "Скопировано" : "Скопировать"}
+              </Button>
+            </div>
+          ) : null}
+          <ErrorNotice error={error} />
+          <div className="bring-actions">
+            <Button type="button" onClick={restart} disabled={busy}>
+              Сохранить другой файл
+            </Button>
+            <a className="button" href={`/works/${work.id}`}>
+              Открыть в Моей Полке <ArrowUpRight />
+            </a>
+            {view.linkable && !link && (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={share}
+                disabled={busy}
+              >
+                <Link2 />{" "}
+                {sharing ? "Создаём ссылку…" : "Создать ссылку на 30 дней"}
+              </Button>
+            )}
+          </div>
+          <p className="bring-hint">
+            {link
+              ? "Ссылка открывает версию " +
+                link.number +
+                ". Отозвать её или обновить до новой версии можно в Моей Полке."
+              : view.linkable
+                ? "Ссылка — отдельное действие. Её можно отозвать в Моей Полке."
+                : "Сохраните версию без скриптов и внешних ресурсов, чтобы отправить её ссылкой."}
+          </p>
+        </div>
+      ) : (
+        <div className="bring-entry">
+          <span className="result-kicker ok">
+            <FileUp /> ФАЙЛОМ <Status is="real" />
+          </span>
+          <h2 id="file-save-title">Выберите файл</h2>
+          <p className="bring-hint">
+            Загрузите HTML из чата, заметку или изображение. Сначала откроется
+            сохранённый вид. Если для страницы доступен интерактивный просмотр,
+            его можно запустить отдельно.
+          </p>
+          <label
+            className={dragging ? "file-field dragging" : "file-field"}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              if (!busy) pick(e.dataTransfer.files[0]);
+            }}
+          >
+            <FileUp />
+            <span>
+              <strong>
+                {file ? file.name : "Выбрать HTML, TXT или изображение"}
+              </strong>
+              <small>
+                {file
+                  ? `${size(file.size)} · ещё не сохранено`
+                  : "PNG, JPEG, WebP · до 5 МБ"}
+              </small>
+            </span>
+            <input
+              type="file"
+              accept="text/html,.html,.htm,text/plain,.txt,image/png,image/jpeg,image/webp"
+              disabled={busy}
+              onChange={(e) => {
+                pick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {account && <SelectField label="Куда сохранить" value={folderId} disabled={busy || folders.loading} error={folders.error} onChange={e => {setFolderId(e.target.value); operation.current = null;}}>
+            <option value="">Моя Полка — без папки</option>
+            {folderId && !folders.items.some(f => f.id === folderId) && <option value={folderId}>{folders.loading ? "Проверяем выбранную папку…" : "Выбранная папка недоступна"}</option>}
+            {folders.items.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </SelectField>}
+          {folders.error && <Button onClick={folders.retry}>Загрузить папки снова</Button>}
+          {file && account && (
+            <label className="file-save-title">
+              Название
+              <input
+                value={title}
+                maxLength={160}
+                disabled={busy}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </label>
+          )}
+          <ErrorNotice error={error} />
+          {guest ? (
+            <div className="file-save-login" role="note">
+              <p>
+                {file
+                  ? "Файл ещё не сохранён и не отправлен на сервер. Сохранять можно только на свою Полку — войдите. После входа вернём сюда; файл нужно будет выбрать ещё раз."
+                  : "Сохранение идёт на вашу Полку, поэтому сначала нужен вход. После входа вернём сюда."}
+              </p>
+              <div className="bring-actions">
+                <a className="button primary" href={initialFolderId ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}` : FILE_SAVE_LOGIN}>
+                  <LogIn />{" "}
+                  {file ? "Войти, чтобы продолжить" : "Войти, чтобы сохранить"}
+                </a>
+              </div>
+            </div>
+          ) : account === undefined ? (
+            <p className="bring-hint" role="status">
+              Проверяем вход…
+            </p>
+          ) : (
+            <div className="bring-actions">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={save}
+                disabled={!file || busy}
+              >
+                <LockKeyhole />{" "}
+                {stage ||
+                  (error && operation.current
+                    ? "Повторить сохранение"
+                    : "Сохранить на Полку")}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

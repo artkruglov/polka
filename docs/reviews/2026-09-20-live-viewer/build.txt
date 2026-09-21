@@ -1,0 +1,15 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> polka@0.1.0-dev.1 build
+> vite build --config apps/web/vite.config.ts
+
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 1989 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.72 kB │ gzip:   0.45 kB
+dist/assets/index-CjczK6At.css  132.29 kB │ gzip:  26.99 kB
+dist/assets/index-Da41RA0N.js   491.80 kB │ gzip: 146.86 kB
+
+✓ built in 128ms

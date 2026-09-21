@@ -34,54 +34,78 @@ export async function createAccount(name: string, password: string) {
     return { id, name, tenant };
   });
 }
-export async function signIn(name: string, password: string, ip: string) {
-  for (const [key, max] of [
-    [sha256(`name:${name}`), 12],
-    [sha256(`ip:${ip}`), 100],
-  ] as const) {
-    const {
-      rows: [limit],
-    } = await db.query(
-      `INSERT INTO login_limits VALUES($1,1,now()+interval '10 minutes') ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END, reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+interval '10 minutes' ELSE login_limits.reset_at END RETURNING attempts`,
-      [key],
-    );
-    if (limit.attempts > max)
-      throw new Problem(
-        429,
-        "quota",
-        "Слишком много попыток. Попробуйте через 10 минут.",
-      );
-  }
+// Fixed 10-minute window per hashed key; shared by login and anonymous actions.
+export async function limitAttempts(
+  key: string,
+  max: number,
+  window: "10 minutes" | "24 hours" = "10 minutes",
+) {
   const {
-    rows: [account],
+    rows: [limit],
+  } = await db.query(
+    `INSERT INTO login_limits VALUES($1,1,now()+$2::interval) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END, reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+$2::interval ELSE login_limits.reset_at END RETURNING attempts`,
+    [sha256(key), window],
+  );
+  if (limit.attempts > max)
+    throw new Problem(
+      429,
+      "quota",
+      "Слишком много попыток. Попробуйте через 10 минут.",
+    );
+}
+export async function signIn(name: string, password: string, ip: string) {
+  await limitAttempts(`name:${name}`, 12);
+  await limitAttempts(`ip:${ip}`, 100);
+  const {
+    rows: [candidate],
   } = await db.query("SELECT * FROM accounts WHERE name=$1", [name]);
   const [salt, hex] = (
-    account?.password_hash ??
+    candidate?.password_hash ??
     "00000000000000000000000000000000:" + "00".repeat(64)
   ).split(":");
   const actual = (await derive(password, salt, 64)) as Buffer;
-  if (
-    !timingSafeEqual(actual, Buffer.from(hex, "hex")) ||
-    !account ||
-    account.disabled
-  )
+  if (!timingSafeEqual(actual, Buffer.from(hex, "hex")) || !candidate)
     throw new Problem(
       401,
       "unauthorized",
       "Не удалось войти. Проверьте логин и пароль.",
     );
   const token = randomBytes(32).toString("base64url");
-  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')", [
-    sha256(token),
-    account.id,
-  ]);
+  await transaction(async (c) => {
+    const tenant = (
+      await c.query("SELECT * FROM tenants WHERE owner_id=$1 FOR UPDATE", [
+        candidate.id,
+      ])
+    ).rows[0];
+    const account = (
+      await c.query(
+        `SELECT * FROM accounts WHERE id=$1 AND name=$2
+           AND NOT disabled AND deletion_requested_at IS NULL FOR UPDATE`,
+        [candidate.id, name],
+      )
+    ).rows[0];
+    if (
+      !tenant ||
+      !account ||
+      account.password_hash !== candidate.password_hash
+    )
+      throw new Problem(
+        401,
+        "unauthorized",
+        "Не удалось войти. Проверьте логин и пароль.",
+      );
+    await c.query(
+      "INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",
+      [sha256(token), account.id],
+    );
+  });
   return token;
 }
 export async function identity(req: FastifyRequest) {
   const {
     rows: [actor],
   } = await db.query(
-    `SELECT a.id,a.name,t.id AS tenant FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled`,
+    `SELECT a.id,COALESCE(a.display_name,a.name) AS name,t.id AS tenant FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
     [sha256(req.cookies.polka_session ?? "")],
   );
   if (!actor)

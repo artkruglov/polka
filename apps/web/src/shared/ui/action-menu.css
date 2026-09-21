@@ -1,0 +1,48 @@
+.ui-action-menu {
+  position: relative;
+  display: inline-flex;
+}
+.ui-action-menu-items {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  top: calc(100% + 8px);
+  width: max-content;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e3e7ed;
+  border-radius: 14px;
+  box-shadow: 0 12px 36px #17243a24;
+}
+.ui-action-menu-items > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #28354a;
+  font: 500 14px/1.4 var(--font-sans);
+  cursor: pointer;
+}
+.ui-action-menu-items > button:hover,
+.ui-action-menu-items > button:focus-visible {
+  background: #f0f5ff;
+  outline: 2px solid #0755ff;
+  outline-offset: -2px;
+}
+.ui-action-menu-items > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ui-action-menu-items svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}

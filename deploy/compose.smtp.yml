@@ -1,0 +1,10 @@
+# Optional operator overlay. Merge after compose.base.yml; only the app sends mail.
+services:
+  app:
+    environment:
+      MAIL_MODE: "smtp"
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST for the SMTP overlay}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:?Set MAIL_FROM for the SMTP overlay}

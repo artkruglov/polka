@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-21",
+  "scope": "controlled staging runtime candidate; local verification only",
+  "checks": {
+    "default": {
+      "passed": 193,
+      "failed": 0,
+      "session": 21037
+    },
+    "live": {
+      "passed": 9,
+      "failed": 0,
+      "session": 67757
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "session": 30353
+    },
+    "buildBeforeUiWordingFix": {
+      "exitCode": 0,
+      "session": 30353
+    }
+  },
+  "filesSha256": {
+    "apps/server/viewer-config.ts": "f1d112a15a273d14ace3ef6e4fbc30675bbbb52d25248979e42bce9b999c1f0c",
+    "apps/server/config.ts": "b395244d01b8e3427936f5f77a4d2ba8286eab04d7b9ca0ed93f3fe7277b568b",
+    "apps/server/live-viewer.ts": "e56d446b17c254b045eb1b99f56479f0d85d4deb4f87d51ef1efa675f1c265e5",
+    "apps/server/app.ts": "2a127f2f266b36ab21b03675fe7daa71be45f5e82a04a6fd7fa64e53915dd7cf",
+    "apps/server/mcp-readonly.ts": "d64ae6536e5e554c02b31cbb43ae0b439c34c32fb0ac4f007ff5f6ae217946fa",
+    "tests/viewer-config.test.ts": "291468a7069d63b022f3d6e9ad7ccd68d40e803560a3bbd72e13fc018d33f9ab",
+    "tests/live-viewer.test.ts": "a50a1a4c7e492145f16236bdd5299e48e536d30d842e513c865bcc0d087db7cb",
+    "package.json": "ecde9a548accc572a469442dd6f3bfd0055f69a2e93a3a2e12557fdc8e797a88"
+  },
+  "serverRestarted": false,
+  "workingDatabaseMigrated": false,
+  "publicTlsVerified": false,
+  "browserEgressAccepted": false,
+  "cloudBetaAccepted": false,
+  "uiFollowup": {
+    "file": "apps/web/src/LivePreview.tsx",
+    "sha256": "e1df391c5dbbe2831d2a248588a254a603670bc9f02a7eab3c3c307128ea2abb",
+    "typecheckExitCode": 0,
+    "buildExitCode": 0,
+    "verificationBy": "Sol; root source review",
+    "legacyMissingMode": "local when liveExperimental=true",
+    "stagingLabel": "Тестовый просмотр",
+    "browserVerified": false
+  }
+}

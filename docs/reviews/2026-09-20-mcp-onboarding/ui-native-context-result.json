@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-21",
+  "client": "codex-cli 0.153.4",
+  "model": "gpt-5.6-luna",
+  "connectionCreatedThroughUi": true,
+  "scopes": [
+    "context"
+  ],
+  "ttlDays": 1,
+  "nativeTool": "polka_context",
+  "nativeToolSucceeded": true,
+  "uiStateAfterRequest": "Получен запрос с этим токеном",
+  "revokedThroughUi": true,
+  "uiStateAfterRevoke": "Доступ отозван",
+  "nativeReconnectExitCode": 1,
+  "nativeReconnectError": "Bearer invalid_token / Auth required during initialize",
+  "httpAfterRevoke": 401,
+  "secretFileRemoved": true,
+  "globalConfigChanged": false,
+  "captureTested": false,
+  "secondClientTested": false,
+  "cloudTested": false,
+  "modelSummaryMismatch": "Model final answer reported empty scopes; acceptance uses actual MCP structured result [context]."
+}

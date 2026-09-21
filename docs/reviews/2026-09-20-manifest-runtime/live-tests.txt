@@ -1,0 +1,19 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> polka@0.1.0-dev.1 test:live
+> HTML_LIVE_ENABLED=true VIEWER_ORIGIN=http://localhost:4391 VIEWER_HOST=localhost VIEWER_PORT=4391 tsx --env-file=.env --test tests/live-viewer.test.ts
+
+✔ live viewer configuration rejects hosted, same-host and same-port layouts (424.280333ms)
+✔ owner capabilities are tenant-scoped, HTML-only and run unsupported saved HTML (74.456458ms)
+✔ owner capability is revoked by logout, account disable and expiry (85.654875ms)
+✔ recipient capability stays pinned and cannot outlive, revoke or lose its source grant (52.606958ms)
+✔ app capabilities and frame policy expose only the enabled local experiment (0.28575ms)
+✔ live document refuses top-level and metadata-free loads with a valid capability (16.682459ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 914.459416

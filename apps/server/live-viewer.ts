@@ -1,0 +1,275 @@
+import { randomBytes } from "node:crypto";
+import Fastify from "fastify";
+import type { Actor } from "./artifacts.ts";
+import { config } from "./config.ts";
+import { db, transaction } from "./db.ts";
+import { Problem, missing } from "./errors.ts";
+import { readBlob, sha256 } from "./storage.ts";
+import {
+  BUNDLE_BUILDER_VERSION,
+  BUNDLE_RUNTIME_PROFILE,
+} from "./bundle-runtime-contract.ts";
+import { assertEditorialShareAccessible } from "./editorial.ts";
+import { isLiveRevisionEligible } from "./viewer-config.ts";
+import { readLibraryLiveDocument } from "./template-library-viewer.ts";
+
+export const LIVE_HTML_PROFILE = "inline-live-experimental-v1" as const;
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+const liveViewResult = (token: string, expiresAt: Date, profile: string) => ({
+  url: `${config.VIEWER_ORIGIN}/document/${token}`,
+  expiresAt: expiresAt.toISOString(),
+  profile,
+});
+
+export async function issueOwnerLiveView(
+  actor: Actor,
+  sessionToken: string,
+  revisionId: string,
+) {
+  if (!isLiveRevisionEligible(config, revisionId)) throw missing();
+  const token = randomBytes(32).toString("base64url");
+  const sessionHash = sha256(sessionToken);
+  const grant = await transaction(async (c) => {
+    const owner = await c.query(
+      `SELECT 1 FROM tenants tenant
+       JOIN accounts account ON account.id=tenant.owner_id
+       JOIN sessions session ON session.account_id=account.id
+       WHERE tenant.id=$1 AND account.id=$2 AND session.hash=$3
+         AND session.expires_at>now() AND NOT account.disabled
+         AND account.deletion_requested_at IS NULL
+       FOR UPDATE OF tenant`,
+      [actor.tenant, actor.id, sessionHash],
+    );
+    if (!owner.rowCount) throw missing();
+    const revision = (
+      await c.query(
+        "SELECT artifact_id FROM revisions WHERE id=$1 AND tenant_id=$2",
+        [revisionId, actor.tenant],
+      )
+    ).rows[0];
+    if (!revision) throw missing();
+    const artifact = await c.query(
+      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+      [revision.artifact_id, actor.tenant],
+    );
+    if (!artifact.rowCount) throw missing();
+    return (
+      await c.query(
+        `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at)
+         SELECT $1,r.id,$2,d.id,LEAST(now()+interval '60 seconds',session.expires_at)
+         FROM revisions r
+         JOIN sessions session ON session.hash=$2 AND session.account_id=$3
+         JOIN accounts account ON account.id=session.account_id
+         LEFT JOIN revision_derivatives d
+           ON d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
+          AND d.builder_version=$6 AND d.runtime_profile=$7 AND d.state='ready'
+         WHERE r.id=$4 AND r.tenant_id=$5 AND r.mime='text/html'
+           AND (r.storage_kind='single' OR (r.storage_kind='bundle' AND d.id IS NOT NULL))
+           AND session.expires_at>now() AND NOT account.disabled
+           AND account.deletion_requested_at IS NULL
+         RETURNING expires_at,derivative_id`,
+        [
+          sha256(token),
+          sessionHash,
+          actor.id,
+          revisionId,
+          actor.tenant,
+          BUNDLE_BUILDER_VERSION,
+          BUNDLE_RUNTIME_PROFILE,
+        ],
+      )
+    ).rows[0];
+  });
+  if (!grant) throw missing();
+  return liveViewResult(
+    token,
+    grant.expires_at,
+    grant.derivative_id ? BUNDLE_RUNTIME_PROFILE : LIVE_HTML_PROFILE,
+  );
+}
+
+export async function issueRecipientLiveView(sourceGrant: string) {
+  if (!config.HTML_LIVE_ENABLED || !TOKEN.test(sourceGrant)) throw missing();
+  const token = randomBytes(32).toString("base64url");
+  const sourceGrantHash = sha256(sourceGrant);
+  const grant = await transaction(async (c) => {
+    const candidate = (
+      await c.query(
+        `SELECT s.id AS share_id,s.tenant_id,s.artifact_id,g.revision_id
+         FROM grants g JOIN shares s ON s.id=g.share_id
+         WHERE g.hash=$1`,
+        [sourceGrantHash],
+      )
+    ).rows[0];
+    if (!candidate) throw missing();
+    if (!isLiveRevisionEligible(config, candidate.revision_id)) throw missing();
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
+      candidate.tenant_id,
+    ]);
+    const artifact = await c.query(
+      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+      [candidate.artifact_id, candidate.tenant_id],
+    );
+    if (!artifact.rowCount) throw missing();
+    await c.query(
+      "SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+      [candidate.share_id, candidate.tenant_id],
+    );
+    await assertEditorialShareAccessible(c, candidate.share_id);
+    return (
+      await c.query(
+        `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at)
+         SELECT $1,r.id,s.id,g.hash,g.derivative_id,LEAST(now()+interval '60 seconds',g.expires_at)
+         FROM grants g
+         JOIN shares s ON s.id=g.share_id
+         JOIN revisions r ON r.id=g.revision_id
+         JOIN tenants tenant ON tenant.id=s.tenant_id
+         JOIN accounts account ON account.id=tenant.owner_id
+         LEFT JOIN revision_derivatives d ON d.id=g.derivative_id AND d.revision_id=g.revision_id
+         WHERE g.hash=$2 AND g.expires_at>now()
+           AND NOT s.revoked AND s.expires_at>now() AND r.mime='text/html'
+           AND NOT account.disabled AND account.deletion_requested_at IS NULL
+           AND ((r.storage_kind='single' AND g.derivative_id IS NULL)
+             OR (r.storage_kind='bundle' AND d.state='ready'
+               AND d.source_manifest_sha256=r.manifest_sha256
+               AND d.builder_version=$3 AND d.runtime_profile=$4))
+         RETURNING expires_at,derivative_id`,
+        [
+          sha256(token),
+          sourceGrantHash,
+          BUNDLE_BUILDER_VERSION,
+          BUNDLE_RUNTIME_PROFILE,
+        ],
+      )
+    ).rows[0];
+  });
+  if (!grant) throw missing();
+  return liveViewResult(
+    token,
+    grant.expires_at,
+    grant.derivative_id ? BUNDLE_RUNTIME_PROFILE : LIVE_HTML_PROFILE,
+  );
+}
+
+async function authorizedRevision(token: string) {
+  if (!config.HTML_LIVE_ENABLED || !TOKEN.test(token)) return null;
+  const {
+    rows: [revision],
+  } = await db.query(
+    `SELECT r.*,
+       vg.share_id AS authorized_share_id,
+       COALESCE(d.object_key,r.object_key) AS served_object_key,
+       COALESCE(d.object_version,r.object_version) AS served_object_version
+     FROM viewer_grants vg
+     JOIN revisions r ON r.id=vg.revision_id
+     JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
+     LEFT JOIN revision_derivatives d ON d.id=vg.derivative_id AND d.revision_id=vg.revision_id
+     WHERE vg.hash=$1 AND vg.expires_at>now() AND r.mime='text/html'
+       AND ((r.storage_kind='single' AND vg.derivative_id IS NULL)
+         OR (r.storage_kind='bundle' AND d.state='ready'
+           AND d.source_manifest_sha256=r.manifest_sha256
+           AND d.builder_version=$2 AND d.runtime_profile=$3))
+       AND (
+         (
+           vg.owner_session_hash IS NOT NULL
+           AND EXISTS (
+             SELECT 1
+             FROM sessions session
+             JOIN accounts account ON account.id=session.account_id
+             JOIN tenants tenant ON tenant.owner_id=account.id
+             WHERE session.hash=vg.owner_session_hash
+               AND session.expires_at>now() AND NOT account.disabled
+               AND account.deletion_requested_at IS NULL
+               AND tenant.id=r.tenant_id
+           )
+         )
+         OR
+         (
+           vg.share_id IS NOT NULL AND vg.source_grant_hash IS NOT NULL
+           AND EXISTS (
+             SELECT 1
+             FROM grants g
+             JOIN shares s ON s.id=g.share_id
+             JOIN tenants tenant ON tenant.id=s.tenant_id
+             JOIN accounts account ON account.id=tenant.owner_id
+             WHERE g.hash=vg.source_grant_hash
+               AND g.share_id=vg.share_id AND g.revision_id=vg.revision_id
+               AND g.derivative_id IS NOT DISTINCT FROM vg.derivative_id
+               AND g.expires_at>now()
+               AND NOT s.revoked AND s.expires_at>now()
+               AND NOT account.disabled AND account.deletion_requested_at IS NULL
+           )
+         )
+       )`,
+    [sha256(token), BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE],
+  );
+  if (revision && !isLiveRevisionEligible(config, revision.id)) return null;
+  if (revision?.authorized_share_id)
+    await assertEditorialShareAccessible(db, revision.authorized_share_id);
+  return revision ?? null;
+}
+
+export async function createLiveViewerApp() {
+  const viewer = Fastify({
+    logger: false,
+    requestTimeout: 30000,
+    connectionTimeout: 30000,
+  });
+  viewer.addHook("onRequest", async (req, reply) => {
+    reply.headers({
+      "cache-control": "no-store",
+      "content-security-policy": `sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${config.APP_ORIGIN}`,
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow, noarchive",
+    });
+    // The reverse proxy must replace Host with this fixed upstream authority.
+    // Forwarded authority is deliberately ignored.
+    if (req.headers.host !== config.VIEWER_UPSTREAM_HOST) throw missing();
+  });
+  viewer.setErrorHandler((error: any, _req, reply) => {
+    if (error instanceof Problem)
+      return reply
+        .code(error.status)
+        .send({ code: error.code, message: error.message });
+    // Capability paths and stored HTML are intentionally absent from logs.
+    console.error(
+      JSON.stringify({
+        event: "viewer.request.failed",
+        code: typeof error.code === "string" ? error.code : "internal",
+      }),
+    );
+    return reply.code(500).send({
+      code: "internal",
+      message: "Не удалось открыть сохранённую версию.",
+    });
+  });
+  viewer.get("/document/:token", async (req, reply) => {
+    // Browser-only embedding keeps the parent frame-src policy in force.
+    // Fetch Metadata is not authentication: non-browser clients can forge it.
+    if (
+      req.headers["sec-fetch-dest"] !== "iframe" ||
+      req.headers["sec-fetch-mode"] !== "navigate"
+    )
+      throw missing();
+    const token = (req.params as { token?: string }).token ?? "";
+    const revision = await authorizedRevision(token);
+    if (!revision) throw missing();
+    reply.type("text/html; charset=utf-8");
+    // Return only the pinned blob: never inject capabilities, sessions or API data.
+    return readBlob(revision.served_object_key, revision.served_object_version);
+  });
+  viewer.get("/library-document/:token", async (req, reply) => {
+    if (
+      req.headers["sec-fetch-dest"] !== "iframe" ||
+      req.headers["sec-fetch-mode"] !== "navigate"
+    )
+      throw missing();
+    const token = (req.params as { token?: string }).token ?? "";
+    const bytes = await readLibraryLiveDocument(token);
+    reply.type("text/html; charset=utf-8");
+    return bytes;
+  });
+  return viewer;
+}

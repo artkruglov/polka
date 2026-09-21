@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Observable runtime probes</title>
+<h1>Observable runtime probes</h1><p>Original synthetic Polka test. No confidential data is read or sent. Results below distinguish browser policy violations from generic network failures. This fixture does not prove complete isolation or cover all browser APIs.</p>
+<button id="run">Run bounded probes</button><pre id="results">not started</pre>
+<script>
+const results=document.getElementById('results');
+function record(name,value){results.textContent+='\n'+name+': '+value;}
+document.addEventListener('securitypolicyviolation',e=>record('CSP',e.effectiveDirective));
+document.getElementById('run').onclick=()=>{
+ results.textContent='probes started';
+ try { void parent.document.title; record('parent','accessible'); } catch(e){ record('parent',e.name); }
+ try { localStorage.getItem('polka-synthetic'); record('storage','accessible'); } catch(e){ record('storage',e.name); }
+ fetch('https://fetch-probe.invalid/synthetic').then(()=>record('fetch','resolved')).catch(e=>record('fetch',e.name));
+ const img=document.createElement('img'); img.setAttribute('src','https://image-probe.invalid/synthetic');document.body.appendChild(img);
+ const script=document.createElement('script');script.setAttribute('src','https://script-probe.invalid/synthetic');document.body.appendChild(script);
+ const form=document.createElement('form');form.setAttribute('action','https://form-probe.invalid/synthetic');form.setAttribute('method','post');document.body.appendChild(form);form.submit();
+ const popup=window.open('https://popup-probe.invalid/synthetic');record('popup',popup===null?'denied':'opened');if(popup)popup.close();
+};
+</script></html>

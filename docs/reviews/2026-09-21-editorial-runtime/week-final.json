@@ -1,0 +1,33 @@
+{
+  "slug": "week-allocation",
+  "receipt": {
+    "uploadId": "54ac4885-1211-459a-90f6-0a674f250a45",
+    "artifactId": "19ecbfca-d407-405d-9948-da237c452b7f",
+    "revisionId": "06302c5e-ed68-44b6-aa9f-0bba9c7fd7bf",
+    "number": 2,
+    "sha256": "2e43065b2ccc4e2f2d91b69d23f31fd7e5b82452694172f46d277240dd62531d",
+    "htmlProfile": "unsupported",
+    "manifestSha256": "89709253f6e3552b0d162fd4e6fc5fd0ff158dce13a443186989a2b73ba881fe",
+    "storageKind": "bundle",
+    "totalSize": 10175
+  },
+  "preview": {
+    "uploadId": "54ac4885-1211-459a-90f6-0a674f250a45",
+    "revisionId": "06302c5e-ed68-44b6-aa9f-0bba9c7fd7bf",
+    "concurrent": false,
+    "state": "ready",
+    "runtimeProfile": "bundle-inline-experimental-v1",
+    "reason": null,
+    "path": null
+  },
+  "share": {
+    "shareId": "32a5cbe2-e252-41ce-b5cc-21d98fc6eb7d",
+    "artifactId": "19ecbfca-d407-405d-9948-da237c452b7f",
+    "revisionId": "06302c5e-ed68-44b6-aa9f-0bba9c7fd7bf",
+    "derivativeId": "62fc3f9a-31ed-46ab-8328-d38fd000cfe9",
+    "expiresAt": "2026-09-21T21:24:13.063Z",
+    "state": "active"
+  },
+  "exactExport": true,
+  "sourceHash": "2e43065b2ccc4e2f2d91b69d23f31fd7e5b82452694172f46d277240dd62531d"
+}

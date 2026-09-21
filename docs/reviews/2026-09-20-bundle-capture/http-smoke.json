@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-09-20T19:25:59.275Z",
+  "origin": "http://127.0.0.1:4390",
+  "receipt": {
+    "uploadId": "715f6c97-b26c-4145-9a4a-ce4e056a6757",
+    "artifactId": "912c0dcc-3f83-4375-8f5f-d70fe6e3e436",
+    "revisionId": "e3f22d29-cb1d-4e1e-b02d-6b46f11daff7",
+    "number": 1,
+    "sha256": "511c1539428bae4a9da97335c73dd0cf206e0e0c7533ee0247a301af6899b99f",
+    "htmlProfile": "unsupported",
+    "manifestSha256": "a47af77fd6824aa81640bb05cdae370b9d53fa1ba5c08c18949df0e0c195cdbf",
+    "storageKind": "bundle",
+    "totalSize": 2880
+  },
+  "files": [
+    {
+      "path": "assets/mark.svg",
+      "size": 188,
+      "sha256": "4478f01ca9aeb371ec88db9ed3a54b0460736baefe0a3b41d771065e1f8003bc"
+    },
+    {
+      "path": "assets/report.css",
+      "size": 914,
+      "sha256": "c8a865dcbe696d29325cee5acf0e57cde59ceb2fb9f3be0d8733e3ba1ce7da1d"
+    },
+    {
+      "path": "assets/report.js",
+      "size": 625,
+      "sha256": "de651cf49cbaf3f0ba7ee869a521669c7fc8e08de0bcc381cbb54e76607dadbe"
+    },
+    {
+      "path": "index.html",
+      "size": 1153,
+      "sha256": "511c1539428bae4a9da97335c73dd0cf206e0e0c7533ee0247a301af6899b99f"
+    }
+  ],
+  "exportExact": true,
+  "retryExact": true
+}

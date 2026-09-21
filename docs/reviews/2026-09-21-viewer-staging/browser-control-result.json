@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-21",
+  "server": "synthetic loopback4392",
+  "serverSession": 79502,
+  "serverStarted": true,
+  "browser": "Codex in-app browser",
+  "controlUrl": "http://127.0.0.1:4392/control",
+  "browserResult": "ERR_BLOCKED_BY_CLIENT",
+  "positiveControlPassed": false,
+  "egressAcceptance": false,
+  "negativeProbesRun": false,
+  "serverStoppedExitCode": 130,
+  "securitySettingsChanged": false
+}

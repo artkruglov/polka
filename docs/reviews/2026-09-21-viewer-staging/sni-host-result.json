@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-21",
+  "configSha256": "949bf592c84b3d0b7c455b6701b27485eb0f92a8f2dd1db28ebac3b251f29cb8",
+  "beforeFixCrossedStatuses": [
+    502,
+    502
+  ],
+  "afterFix": [
+    {
+      "sni": "app.example-a.invalid",
+      "host": "app.example-a.invalid",
+      "status": 502,
+      "expected": 502
+    },
+    {
+      "sni": "viewer.example-b.invalid",
+      "host": "viewer.example-b.invalid",
+      "status": 502,
+      "expected": 502
+    },
+    {
+      "sni": "app.example-a.invalid",
+      "host": "viewer.example-b.invalid",
+      "status": 421,
+      "expected": 421
+    },
+    {
+      "sni": "viewer.example-b.invalid",
+      "host": "app.example-a.invalid",
+      "status": 421,
+      "expected": 421
+    }
+  ],
+  "syntaxPassed": true,
+  "network": "none",
+  "publishedPorts": false,
+  "trustStoreChanged": false,
+  "upstreams": "intentionally absent; positive control502 demonstrates routing only",
+  "browserVerified": false,
+  "cloudVerified": false,
+  "containerRemoved": true
+}

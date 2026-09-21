@@ -7,6 +7,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { createHash } from "node:crypto";
 export const sha256 = (bytes: Uint8Array | string) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -24,6 +25,11 @@ export function createS3Store(config: {
       accessKeyId: config.accessKey,
       secretAccessKey: config.secretKey,
     },
+    // Some calls run while row locks are held; a stalled S3 must not hold them.
+    requestHandler: new NodeHttpHandler({
+      connectionTimeout: 5_000,
+      requestTimeout: 30_000,
+    }),
   });
   const bucket = config.bucket;
   async function prepareBucket() {

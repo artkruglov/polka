@@ -1,0 +1,10 @@
+{
+  "nginxVersion": "1.27.5",
+  "configSha256": "983056f407ad75e57801038317b2b54925b3ac7b7623b43239053b21d26e412b",
+  "syntaxPassed": true,
+  "network": "none",
+  "temporaryCertificates": true,
+  "listenersStarted": false,
+  "trustStoreChanged": false,
+  "appBodyLimit": "8m"
+}

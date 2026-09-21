@@ -5,8 +5,78 @@ export const MIME = [
   "image/jpeg",
   "image/webp",
   "text/plain",
+  "text/html",
+] as const;
+// How a saved HTML page may be shown. "static" and "limited" render in a
+// scriptless, networkless sandbox; "unsupported" needs a runtime profile that
+// this build does not have, so it gets no link.
+export const HTML_PROFILES = ["static", "limited", "unsupported"] as const;
+export type HtmlProfile = (typeof HTML_PROFILES)[number];
+export type InlineBuildStatus = {
+  state: "pending" | "ready" | "unsupported" | "failed";
+  runtimeProfile: string | null;
+  reason: string | null;
+  path: string | null;
+};
+export const REPORT_REASONS = [
+  "phishing",
+  "malware",
+  "personal_data",
+  "illegal",
+  "other",
 ] as const;
 export const uuid = z.string().uuid();
+export const AGENT_SCOPES = [
+  "context",
+  "read",
+  "source:read",
+  "capture",
+  "revise",
+  "share",
+  "manage",
+] as const;
+export const agentScopeSchema = z.enum(AGENT_SCOPES);
+export type AgentScope = z.infer<typeof agentScopeSchema>;
+export const updateArtifactMetadataFields = {
+  title: z.string().trim().min(1).max(160).optional(),
+  folderId: uuid.nullable().optional(),
+  expectedTitle: z.string().max(200),
+  expectedFolderId: uuid.nullable(),
+} as const;
+export const updateArtifactMetadataSchema = z
+  .object(updateArtifactMetadataFields)
+  .strict()
+  .refine(
+    (value) => value.title !== undefined || value.folderId !== undefined,
+    {
+      message: "At least one metadata field must be changed",
+    },
+  );
+export type UpdateArtifactMetadata = z.infer<
+  typeof updateArtifactMetadataSchema
+>;
+export const issueAgentConnectionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    scopes: z.array(agentScopeSchema).min(1).max(AGENT_SCOPES.length),
+    audience: z.string().url().max(2048),
+    ttlDays: z.number().int().min(1).max(30).default(7),
+  })
+  .strict()
+  .transform((value) => ({
+    ...value,
+    scopes: [...new Set(value.scopes)].sort() as AgentScope[],
+  }));
+export type AgentConnection = {
+  id: string;
+  name: string;
+  scopes: AgentScope[];
+  audience: string;
+  status: "issued" | "seen" | "expired" | "revoked";
+  createdAt: string;
+  expiresAt: string;
+  lastSeenAt: string | null;
+};
 export const beginUploadSchema = z
   .object({
     key: uuid,
@@ -34,13 +104,39 @@ export const shareSchema = z
 export const publishSchema = z
   .object({ revisionId: uuid, expectedPublishedRevisionId: uuid })
   .strict();
+export const artifactLifecycleSchema = z
+  .object({
+    expectedLifecycleVersion: z.number().int().min(0),
+    expectedRevisionId: uuid,
+  })
+  .strict();
+export type ArtifactLifecycleInput = z.infer<typeof artifactLifecycleSchema>;
+export type ArtifactLifecycleSnapshot = {
+  id: string;
+  trashedAt: string | null;
+  lifecycleVersion: number;
+};
+export const reportSchema = z
+  .object({
+    key: uuid,
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    reason: z.enum(REPORT_REASONS),
+    comment: z.string().trim().max(1000).optional(),
+  })
+  .strict();
 export interface Revision {
+  manifest?: import("./bundle.ts").BundleManifest | null;
+  manifestSha256?: string | null;
   id: string;
   number: number;
   filename: string;
   mime: string;
   size: number;
   sha256: string;
+  storageKind: "single" | "bundle";
+  totalSize: number;
+  htmlProfile: HtmlProfile | null;
+  inlineBuild: InlineBuildStatus | null;
   createdAt: string;
 }
 export interface Share {
@@ -56,6 +152,8 @@ export interface Artifact {
   title: string;
   folderId: string | null;
   updatedAt: string;
+  trashedAt: string | null;
+  lifecycleVersion: number;
   revision: Revision;
   share: Share | null;
 }
@@ -64,11 +162,32 @@ export interface Folder {
   name: string;
 }
 export interface Receipt {
+  // Absent on older receipts and non-HTML uploads.
+  manifestSha256?: string | null;
   uploadId: string;
   artifactId: string;
   revisionId: string;
   number: number;
   sha256: string;
+  storageKind?: "single" | "bundle";
+  totalSize?: number;
+  // Absent on receipts saved before HTML support.
+  htmlProfile?: HtmlProfile | null;
+}
+// Legacy browser-only URL classification shapes. These are NOT the durable
+// /api/imports job contract implemented in server/url-import; no receipt here.
+export type ImportStatus =
+  "not_https" | "closed" | "unsupported_host" | "ready";
+export interface ImportProvenance {
+  sourceUrl: string;
+  sourceHost: string;
+  fetchedAt: string;
+}
+export interface ImportPreview {
+  status: ImportStatus;
+  title: string | null;
+  htmlProfile: HtmlProfile | null;
+  provenance: ImportProvenance | null;
 }
 export interface Viewer {
   title: string;
@@ -88,4 +207,5 @@ export type ErrorCode =
   | "expired"
   | "quota"
   | "forbidden"
+  | "unsupported"
   | "internal";

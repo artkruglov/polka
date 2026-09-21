@@ -1,0 +1,51 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> polka@0.1.0-dev.1 test
+> tsx --env-file=.env --test tests/unit.test.ts tests/html-negative-corpus.test.ts tests/integration.test.ts
+
+✔ negative corpus manifest has nine unique bounded cases (0.523709ms)
+✔ negative corpus fixtures match manifest integrity and safety constraints (1.409167ms)
+✔ Real S3: conditional writes refuse replacement and version-pinned reads retain exact bytes (191.42775ms)
+✔ Private upload persists with receipt; duplicate begin/finalize creates one revision and audit event (47.683208ms)
+✔ Two accounts and anonymous clients cannot obtain private title, revision, receipt or foreign folder (25.896083ms)
+✔ Checksum, real media type, UTF-8 and unsupported HTML are enforced on server (20.452458ms)
+✔ Static HTML is served in a sandbox, while unsupported HTML cannot be shared; recipient can report (52.8295ms)
+✔ Abort and expiry prevent finalize; concurrent finalize returns one receipt (28.12725ms)
+✔ Share recipient pins v1; saving v2 does not publish; explicit CAS update gives new readers v2 (46.084791ms)
+✔ Revocation closes resolver and issued grants; a new link never resurrects the old one (29.478125ms)
+✔ Expired shares and expired grants deny bytes and disclose no title (21.046917ms)
+✔ Stale upload cannot overwrite a concurrently saved version (35.714916ms)
+✔ Logout invalidates the server session; mutation origin and noindex headers apply (32.521208ms)
+✔ Quota reservations serialize concurrent requests (3.705833ms)
+✔ Valid raster upload returns exact bytes; direct anonymous S3 cannot bypass the app (19.477875ms)
+✔ Shelf is paginated, stable and tenant-scoped; malformed cursor is a client error (319.195333ms)
+✔ Recovery after storage-before-DB failure reuses exact bytes; cleanup removes abandoned bytes but preserves receipts (230.759458ms)
+✔ Capabilities state that URL import and HTML runtime are not implemented (0.641ms)
+✔ Frontend rebuild serves newly created assets; missing assets never return the HTML shell (7.736208ms)
+✔ Email identity: browser binding, one-use code, stable tenant, expiry and attempt limit (347.554ms)
+✔ Email challenge resumes only in bound browser; cleanup removes spent codes and keeps active codes (46.637292ms)
+✔ live experiment disabled refuses owner and recipient issuance for existing HTML (29.90475ms)
+✔ HTML profile fixture static-report is static (0.606167ms)
+✔ HTML profile fixture inline-calculator is limited (0.401417ms)
+✔ HTML profile fixture inline-chart is limited (0.039334ms)
+✔ HTML profile fixture checkbox-planner is limited (0.039625ms)
+✔ HTML profile fixture fetch-weather is limited (0.085208ms)
+✔ HTML profile fixture cdn-dashboard is unsupported (0.038334ms)
+✔ HTML profile fixture form-feedback is unsupported (0.028ms)
+✔ HTML profile fixture password-login is unsupported (0.026958ms)
+✔ HTML profile fixture meta-refresh is unsupported (0.030084ms)
+✔ HTML profile fixture script-only is unsupported (0.315833ms)
+✔ Static CSP stays scriptless and networkless (0.471708ms)
+✔ importMock classifies links without issuing ids or receipts (0.466ms)
+✔ User-facing profile strings do not promise universal VPN-free availability (0.093792ms)
+✔ User-facing TSX does not claim universal VPN-free availability (1.497958ms)
+✔ Auth return destination rejects cross-origin and browser-normalized redirects (4.277042ms)
+✔ HTML acceptance corpus has intact standalone fixtures and honest static profiles (3.389917ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1860.116583

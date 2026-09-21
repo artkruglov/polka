@@ -1,0 +1,44 @@
+npm warn Unknown user config "python". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> polka@0.1.0-dev.1 test
+> tsx --env-file=.env --test tests/unit.test.ts tests/integration.test.ts
+
+✔ Real S3: conditional writes refuse replacement and version-pinned reads retain exact bytes (198.47975ms)
+✔ Private upload persists with receipt; duplicate begin/finalize creates one revision and audit event (67.969ms)
+✔ Two accounts and anonymous clients cannot obtain private title, revision, receipt or foreign folder (29.928292ms)
+✔ Checksum, real media type, UTF-8 and unsupported HTML are enforced on server (20.904041ms)
+✔ Static HTML is served in a sandbox, while unsupported HTML cannot be shared; recipient can report (45.597292ms)
+✔ Abort and expiry prevent finalize; concurrent finalize returns one receipt (22.598375ms)
+✔ Share recipient pins v1; saving v2 does not publish; explicit CAS update gives new readers v2 (38.130834ms)
+✔ Revocation closes resolver and issued grants; a new link never resurrects the old one (24.040375ms)
+✔ Expired shares and expired grants deny bytes and disclose no title (20.155542ms)
+✔ Stale upload cannot overwrite a concurrently saved version (31.743917ms)
+✔ Logout invalidates the server session; mutation origin and noindex headers apply (35.417291ms)
+✔ Quota reservations serialize concurrent requests (3.780125ms)
+✔ Valid raster upload returns exact bytes; direct anonymous S3 cannot bypass the app (23.984292ms)
+✔ Shelf is paginated, stable and tenant-scoped; malformed cursor is a client error (278.125875ms)
+✔ Recovery after storage-before-DB failure reuses exact bytes; cleanup removes abandoned bytes but preserves receipts (398.748333ms)
+✔ Capabilities state that URL import and HTML runtime are not implemented (0.796458ms)
+✔ Frontend rebuild serves newly created assets; missing assets never return the HTML shell (8.6945ms)
+✔ HTML profile fixture static-report is static (0.583333ms)
+✔ HTML profile fixture inline-calculator is limited (0.361167ms)
+✔ HTML profile fixture inline-chart is limited (0.03375ms)
+✔ HTML profile fixture checkbox-planner is limited (0.028ms)
+✔ HTML profile fixture fetch-weather is limited (0.032792ms)
+✔ HTML profile fixture cdn-dashboard is unsupported (0.020125ms)
+✔ HTML profile fixture form-feedback is unsupported (0.021ms)
+✔ HTML profile fixture password-login is unsupported (0.024084ms)
+✔ HTML profile fixture meta-refresh is unsupported (0.028834ms)
+✔ HTML profile fixture script-only is unsupported (0.595125ms)
+✔ Static CSP stays scriptless and networkless (0.056792ms)
+✔ importMock classifies links without issuing ids or receipts (0.398958ms)
+✔ User-facing profile strings do not promise universal VPN-free availability (0.0745ms)
+✔ User-facing TSX does not claim universal VPN-free availability (4.84775ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1542.416459

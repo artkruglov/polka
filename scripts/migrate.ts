@@ -1,38 +1,33 @@
 import { readFile } from "node:fs/promises";
-import { db, transaction } from "../apps/server/db.ts";
-import { prepareBucket, s3 } from "../apps/server/storage.ts";
+import pg from "pg";
+import { migrationFileUrl, SCHEMA_MIGRATIONS } from "../packages/migrations.ts";
+import { closeMigrationClient, runMigrations } from "./migration-runner.ts";
+
+// This job receives only schema-owner DB credentials, never app/S3 secrets.
+let client: pg.Client | undefined;
 try {
-  await transaction(async (c) => {
-    await c.query("SELECT pg_advisory_xact_lock(4388001)");
-    await c.query(
-      "CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
-    );
-    for (const [version, file] of [
-      [1, "001_foundation.sql"],
-      [2, "002_upload_reconciliation.sql"],
-    ] as const) {
-      if (
-        (
-          await c.query("SELECT 1 FROM schema_migrations WHERE version=$1", [
-            version,
-          ])
-        ).rowCount
-      )
-        continue;
-      await c.query(
-        await readFile(
-          new URL(`../deploy/migrations/${file}`, import.meta.url),
-          "utf8",
-        ),
-      );
-      await c.query("INSERT INTO schema_migrations(version) VALUES($1)", [
-        version,
-      ]);
-    }
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString || !["postgres:", "postgresql:"].includes(new URL(connectionString).protocol))
+    throw new Error("DATABASE_URL is required");
+  client = new pg.Client({
+    connectionString,
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 15000,
+    query_timeout: 15000,
   });
-  await prepareBucket();
-  console.log("Metadata schema and versioned private bucket ready.");
+  client.on("error", () => {}); // Query/connect rejects; never print raw provider diagnostics.
+  await client.connect();
+  await runMigrations(client, SCHEMA_MIGRATIONS, (file) =>
+    readFile(migrationFileUrl(file), "utf8"),
+  );
+} catch {
+  console.error("Metadata migration failed. Check database access and the migration files.");
+  process.exitCode = 1;
 } finally {
-  await db.end();
-  s3.destroy();
+  if (client && !(await closeMigrationClient(client))) {
+    console.error("Metadata migration database cleanup failed.");
+    process.exit(1); // Dedicated one-shot job: close any remaining socket handles.
+  }
 }
+
+if (!process.exitCode) console.log("Metadata schema ready.");

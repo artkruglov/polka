@@ -1,0 +1,8 @@
+{
+  "composeConfig": "passed",
+  "services": 5,
+  "orderedRestore": true,
+  "appHasNoRestoreOrLedgerCredentials": true,
+  "receiptJobWritableAppReadonly": true,
+  "servicesStarted": false
+}

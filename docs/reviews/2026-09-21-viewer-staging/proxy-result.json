@@ -1,0 +1,72 @@
+{
+  "configSha256": "2863aebcd509a966492f06916e69587acf84710a5688b1f34a04990ffc6b8ef4",
+  "image": "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+  "cases": [
+    {
+      "case": "app routing and credentials preserved",
+      "passed": true
+    },
+    {
+      "case": "viewer routing strips credentials and preserves fetch metadata",
+      "passed": true
+    },
+    {
+      "case": "viewer CSP cache nosniff and cookie response",
+      "passed": true
+    },
+    {
+      "case": "reject Host viewer.example-b.invalid with SNI app.example-a.invalid",
+      "passed": true
+    },
+    {
+      "case": "reject Host app.example-a.invalid with SNI viewer.example-b.invalid",
+      "passed": true
+    },
+    {
+      "case": "reject Host unknown.invalid with SNI viewer.example-b.invalid",
+      "passed": true
+    },
+    {
+      "case": "unknown SNI handshake rejected",
+      "passed": true
+    },
+    {
+      "case": "HTTP viewer rejected without redirect",
+      "passed": true
+    },
+    {
+      "case": "app permits 2MiB body",
+      "passed": true
+    },
+    {
+      "case": "app rejects body above8MiB",
+      "passed": true
+    },
+    {
+      "case": "viewer oversized body rejected",
+      "passed": true
+    },
+    {
+      "case": "malformed Host rejected",
+      "passed": true
+    },
+    {
+      "case": "viewer upstream failure no cache",
+      "passed": true
+    },
+    {
+      "case": "all proxy logs exclude capability marker",
+      "passed": true
+    }
+  ],
+  "failure": null,
+  "containerRemoved": true,
+  "network": "none",
+  "hostPorts": false,
+  "trustStoreChanged": false,
+  "browserAcceptance": false,
+  "productionAcceptance": false,
+  "session": 95254,
+  "scriptSha256AfterSignalCleanup": "e13d6bae9bd73782ec827c002dd5baaac6bab46187a7314d15ea75a61797ebd2",
+  "signalCleanupTested": false
+}

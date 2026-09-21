@@ -1,0 +1,278 @@
+.agent-connections-page {
+  background: #fff;
+  color: #151922;
+  min-height: 100vh;
+}
+
+.agent-connections-page .agent-connections {
+  max-width: 1240px;
+  padding: 48px 40px 88px;
+}
+
+.agent-connections-page .agent-page-heading {
+  max-width: 760px;
+  margin-bottom: 32px;
+}
+
+.agent-connections-page .agent-page-heading h1 {
+  margin: 12px 0 14px;
+  font-size: clamp(34px, 4.5vw, 54px);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.agent-connections-page .agent-lead {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.agent-connections-page .agent-boundary {
+  margin: 18px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  align-items: flex-start;
+}
+
+.agent-connections-page .agent-boundary svg {
+  flex: 0 0 17px;
+  margin-top: 1px;
+}
+
+.agent-connections-page .agent-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.agent-connections-page .agent-setup-column {
+  min-width: 0;
+  display: grid;
+  gap: 24px;
+}
+.agent-connections-page .agent-card {
+  min-width: 0;
+  margin: 0;
+  padding: 28px;
+  border: 1px solid #e2e7ef;
+  border-radius: 9px;
+  background: #fff;
+}
+.agent-connections-page .agent-card h2 {
+  font-size: 22px;
+  line-height: 1.25;
+}
+.agent-connections-page .agent-card p {
+  line-height: 1.5;
+}
+.agent-connections-page .agent-field,
+.agent-connections-page .agent-card fieldset {
+  margin: 24px 0;
+  min-width: 0;
+}
+.agent-connections-page .agent-field > span,
+.agent-connections-page .agent-card legend {
+  font-size: 14px;
+  font-weight: 650;
+}
+.agent-connections-page .agent-field input,
+.agent-connections-page .agent-field select {
+  max-width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border-color: #d8dfe9;
+  border-radius: 7px;
+}
+.agent-connections-page .agent-ttl select {
+  max-width: 180px;
+}
+
+.agent-connections-page .agent-choice-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.agent-connections-page .agent-connections .agent-choice {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  justify-content: start;
+  gap: 9px;
+  width: auto;
+  min-height: 48px;
+  margin: 0;
+  padding: 10px;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.agent-connections-page .agent-choice[data-selected="true"] {
+  background: #f3f7ff;
+  border-color: #7b9ff7;
+}
+.agent-connections-page .agent-connections .agent-choice > input[type="radio"],
+.agent-connections-page
+  .agent-connections
+  .agent-scope
+  > input[type="checkbox"] {
+  appearance: auto;
+  width: 16px;
+  min-width: 16px;
+  max-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 16px;
+  accent-color: #1257f5;
+}
+.agent-connections-page .agent-scopes {
+  gap: 0;
+}
+.agent-connections-page .agent-connections .agent-scope {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  justify-content: start;
+  gap: 12px;
+  padding: 14px 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #edf0f5;
+  border-radius: 0;
+  cursor: pointer;
+}
+.agent-connections-page
+  .agent-connections
+  .agent-scope
+  > input[type="checkbox"] {
+  margin-top: 3px;
+}
+.agent-connections-page .agent-scope strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.agent-connections-page .agent-scope small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.agent-connections-page .agent-help {
+  line-height: 1.55;
+}
+.agent-connections-page .agent-card button:focus-visible,
+.agent-connections-page .agent-card input:focus-visible,
+.agent-connections-page .agent-card select:focus-visible {
+  outline: 2px solid #1257f5;
+  outline-offset: 3px;
+}
+.agent-connections-page .agent-card button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.agent-connections-page .agent-existing {
+  background: #f8faff;
+}
+.agent-connections-page .agent-existing .agent-card-heading {
+  flex-direction: column;
+  gap: 12px;
+}
+.agent-connections-page .agent-existing .agent-card-heading p {
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+.agent-connections-page .agent-existing .agent-card-heading button {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.agent-connections-page .agent-existing .agent-list {
+  margin-top: 20px;
+}
+.agent-connections-page .agent-existing .agent-list-item {
+  align-items: start;
+  flex-direction: column;
+  gap: 12px;
+}
+.agent-connections-page .agent-list-item > div {
+  min-width: 0;
+  width: 100%;
+}
+.agent-connections-page .agent-list-item h3 {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+.agent-connections-page .agent-status {
+  font-size: 12px;
+}
+.agent-connections-page .agent-meta {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.agent-connections-page .agent-secret {
+  border-color: #b8ccfa;
+  background: #f8faff;
+}
+.agent-connections-page .agent-secret .agent-card-heading > div {
+  min-width: 0;
+}
+.agent-connections-page .agent-secret .agent-card-heading .icon {
+  flex: 0 0 40px;
+  padding: 8px;
+}
+.agent-connections-page .agent-secret-row {
+  align-items: stretch;
+}
+.agent-connections-page .agent-secret-row button {
+  flex-shrink: 0;
+}
+.agent-connections-page .agent-instruction-block pre {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.agent-connections-page .agent-details {
+  font-size: 13px;
+}
+
+@media (max-width: 940px) {
+  .agent-connections-page .agent-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .agent-connections-page .agent-connections {
+    max-width: 760px;
+    padding: 36px 28px 88px;
+  }
+}
+
+@media (max-width: 520px) {
+  .agent-connections-page .agent-connections {
+    padding: 30px 18px 88px;
+  }
+  .agent-connections-page .agent-page-heading {
+    margin-bottom: 24px;
+  }
+  .agent-connections-page .agent-lead {
+    font-size: 16px;
+  }
+  .agent-connections-page .agent-card {
+    padding: 20px 18px;
+  }
+  .agent-connections-page .agent-choice-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-connections-page .agent-connections .agent-choice {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .agent-connections-page .agent-secret .agent-card-heading {
+    flex-direction: row;
+    gap: 10px;
+  }
+  .agent-connections-page .agent-details div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}

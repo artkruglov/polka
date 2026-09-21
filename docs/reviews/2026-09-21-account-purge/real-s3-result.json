@@ -1,0 +1,17 @@
+{
+  "sessionId": 50104,
+  "exitCode": 0,
+  "schemaVersion": 18,
+  "testsPassed": 13,
+  "ordinaryExactVersionsDeleted": 4,
+  "restoredExactVersionsDeleted": 3,
+  "journalVersionsPreserved": true,
+  "neighborExactVersionPreserved": true,
+  "alreadyPurgedJobStaleBytesSuppressed": true,
+  "revokedOnlySnapshotSuppressed": true,
+  "absentMetadataOrphanSuppressed": true,
+  "syntheticResidueRemoved": true,
+  "workingResourcesUsed": false,
+  "productionIamProven": false,
+  "fullBackupRestoreProven": false
+}

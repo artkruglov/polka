@@ -1,0 +1,16 @@
+[
+  {
+    "slug": "meal-plan",
+    "revisionId": "3c2c3b3f-9104-444f-b34b-9ca54081814b",
+    "exact": true,
+    "bytes": 5537,
+    "sha256": "903ea4f1e6fccc9ff502f41f1f340af60a97bdbd6d9f2392c017d8eab49d28d0"
+  },
+  {
+    "slug": "sorting-explainer",
+    "revisionId": "dfce0e2d-d672-4335-a29e-3173fd059fa2",
+    "exact": true,
+    "bytes": 6403,
+    "sha256": "df89214cb06f0371e3e55fcff95c732421c6f0ff2ea5797202965993ccaf0c1e"
+  }
+]

@@ -1,0 +1,28 @@
+.agent-context-panel {
+  display: grid;
+  gap: 16px;
+}
+.agent-context-panel h3,
+.agent-context-panel p {
+  margin: 0;
+}
+.agent-context-panel section,
+.agent-context-panel form {
+  display: grid;
+  gap: 12px;
+}
+.agent-context-panel details {
+  padding: 12px;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 12px;
+}
+.agent-context-panel summary {
+  cursor: pointer;
+}
+.agent-context-panel li {
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.agent-context-panel .context-pre {
+  white-space: pre-wrap;
+}

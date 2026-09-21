@@ -1,0 +1,75 @@
+/* Viewer layout. Imported after legacy base styles, before route overrides. */
+.html-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  height: min(72vh, 760px);
+  background: #f4f5f1;
+}
+.html-preview-expanded {
+  position: fixed;
+  inset: 16px;
+  z-index: 100; /* Above the application rail (50) and mobile tabs (60). */
+  height: auto;
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 20px 70px #18213533;
+}
+.html-preview-expanded .work-html {
+  min-height: 0;
+}
+.work-html {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
+}
+.html-preview-note {
+  margin: 0;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: #fafbf8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.html-preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.html-preview-toolbar > span {
+  flex: 1 1 100%;
+}
+.html-preview-toolbar > .ui-button {
+  min-height: 44px;
+  padding: 8px 10px;
+}
+@media (max-width: 720px) {
+  .html-preview-expanded {
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .html-preview-expanded .html-preview-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 10px;
+  }
+  .html-preview-expanded .html-preview-note > span {
+    flex: 1 1 100%;
+  }
+  .html-preview-expanded .html-preview-note .ui-button {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+}

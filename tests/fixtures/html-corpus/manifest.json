@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Runtime acceptance corpus; synthetic fixtures, not third-party import evidence",
+  "items": [
+    {
+      "id": "report-1",
+      "file": "report-1.html",
+      "kind": "report",
+      "sha256": "daa78f388a35e4daf0794cbc6072f4ff38b7d796e92e77e335f9becbbd950aa1",
+      "bytes": 1276,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "static",
+      "action": "Открыть отчёт; заголовок, таблица и весь текст видны на 390 и 1440 px.",
+      "expected": null,
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "calculator-1",
+      "file": "calculator-1.html",
+      "kind": "calculator",
+      "sha256": "49621409412af657f57d067e5a7e88d0682770f0f8ef1152e55c781ff1f0580a",
+      "bytes": 1449,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Установить количество 3, цену 100, нажать Посчитать; результат 300.",
+      "expected": {
+        "selector": "#result",
+        "text": "300"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "chart-1",
+      "file": "chart-1.html",
+      "kind": "chart",
+      "sha256": "d0417f8dce4b0b78b468955eafd8c06071b1173e0b45999fd6ebc3bf2a4fb972",
+      "bytes": 1377,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать переключатель: ширина столбца и значение становятся 60.",
+      "expected": {
+        "selector": "#value",
+        "text": "60"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "slides-1",
+      "file": "slides-1.html",
+      "kind": "slides",
+      "sha256": "8f65ae89d7a9d39dd7003040d81a97e8794c9a1fc37725dcd9f4acf2266e88b8",
+      "bytes": 1395,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать Следующий слайд; счётчик 2 / 3, заголовок Гипотеза. После третьего вернуться к первому.",
+      "expected": {
+        "selector": "#page",
+        "text": "2 / 3"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "planner-1",
+      "file": "planner-1.html",
+      "kind": "planner",
+      "sha256": "612786458f43b2d8825d1eb19ff4db3f81620d3a50c9fe24807ff5ab7bbc82c9",
+      "bytes": 1245,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Отметить задачу: 1 / 1; снять отметку: 0 / 1. После перезагрузки 0 / 1, долговременное хранение не обещано.",
+      "expected": {
+        "selector": "#progress",
+        "text": "1 / 1"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "report-2",
+      "file": "report-2.html",
+      "kind": "report",
+      "sha256": "1c8281caa5c4f8fb28e8e6041f8dc37c46e55a4267c5ffdacde70c6a4280bfe7",
+      "bytes": 1278,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "static",
+      "action": "Открыть отчёт; заголовок, таблица и весь текст видны на 390 и 1440 px.",
+      "expected": null,
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "calculator-2",
+      "file": "calculator-2.html",
+      "kind": "calculator",
+      "sha256": "00143eb44140cef13309fc93e489b0d1655f01ba969e5f0e439e88890245e78e",
+      "bytes": 1449,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Установить количество 3, цену 100, нажать Посчитать; результат 300.",
+      "expected": {
+        "selector": "#result",
+        "text": "300"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "chart-2",
+      "file": "chart-2.html",
+      "kind": "chart",
+      "sha256": "c4e70224a59596662f18e8c5c64b1a20d2adf61410ac2cfb78770e95ed5f5679",
+      "bytes": 1379,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать переключатель: ширина столбца и значение становятся 120.",
+      "expected": {
+        "selector": "#value",
+        "text": "120"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "slides-2",
+      "file": "slides-2.html",
+      "kind": "slides",
+      "sha256": "1afeeb2c45ecdab0b99f3cfca9a7f4e09c128fae5e6d5d00e92e4012bf62194c",
+      "bytes": 1395,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать Следующий слайд; счётчик 2 / 3, заголовок Гипотеза. После третьего вернуться к первому.",
+      "expected": {
+        "selector": "#page",
+        "text": "2 / 3"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "planner-2",
+      "file": "planner-2.html",
+      "kind": "planner",
+      "sha256": "e074722359361943db95465d45880e0645f43b9b95a01362a519ac66d5799268",
+      "bytes": 1245,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Отметить задачу: 1 / 1; снять отметку: 0 / 1. После перезагрузки 0 / 1, долговременное хранение не обещано.",
+      "expected": {
+        "selector": "#progress",
+        "text": "1 / 1"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "report-3",
+      "file": "report-3.html",
+      "kind": "report",
+      "sha256": "18b7f13317ac7f3371476e06046735a89a3e97cb34aaec28dd11ef18ad4475d5",
+      "bytes": 1278,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "static",
+      "action": "Открыть отчёт; заголовок, таблица и весь текст видны на 390 и 1440 px.",
+      "expected": null,
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "calculator-3",
+      "file": "calculator-3.html",
+      "kind": "calculator",
+      "sha256": "88f78442bda58b0322fd91388a48177b2b1517dfcf81245451ad98dff6721a3e",
+      "bytes": 1449,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Установить количество 3, цену 100, нажать Посчитать; результат 300.",
+      "expected": {
+        "selector": "#result",
+        "text": "300"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "chart-3",
+      "file": "chart-3.html",
+      "kind": "chart",
+      "sha256": "d42f9f17d7286d8904ff8e14be84aedbbb872258a74297bbc3c6ef0c2ac5eaa1",
+      "bytes": 1379,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать переключатель: ширина столбца и значение становятся 180.",
+      "expected": {
+        "selector": "#value",
+        "text": "180"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "slides-3",
+      "file": "slides-3.html",
+      "kind": "slides",
+      "sha256": "21dfa6b4181aa6e86892349c1a314dee6b573b94388edcdfaab8a42a5bf78a78",
+      "bytes": 1395,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать Следующий слайд; счётчик 2 / 3, заголовок Гипотеза. После третьего вернуться к первому.",
+      "expected": {
+        "selector": "#page",
+        "text": "2 / 3"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "planner-3",
+      "file": "planner-3.html",
+      "kind": "planner",
+      "sha256": "117607c5de3dd02cb43cf9d581563eb2909949ccd4497df1befd837f6245350a",
+      "bytes": 1245,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Отметить задачу: 1 / 1; снять отметку: 0 / 1. После перезагрузки 0 / 1, долговременное хранение не обещано.",
+      "expected": {
+        "selector": "#progress",
+        "text": "1 / 1"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "report-4",
+      "file": "report-4.html",
+      "kind": "report",
+      "sha256": "012a255670f46394ebadd6b69336a710d95730a1e4ffae625780278687f10540",
+      "bytes": 1278,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "static",
+      "action": "Открыть отчёт; заголовок, таблица и весь текст видны на 390 и 1440 px.",
+      "expected": null,
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "calculator-4",
+      "file": "calculator-4.html",
+      "kind": "calculator",
+      "sha256": "9e778924ac2f6a765c99fd2ea0051ceb02d8d5d7c31070167f9ff77acd4a5952",
+      "bytes": 1449,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Установить количество 3, цену 100, нажать Посчитать; результат 300.",
+      "expected": {
+        "selector": "#result",
+        "text": "300"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "chart-4",
+      "file": "chart-4.html",
+      "kind": "chart",
+      "sha256": "7828916fbc8caef9ffb4a71695db0b707439dd5b1b7692af1197891d1c657c66",
+      "bytes": 1381,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать переключатель: ширина столбца и значение становятся 240.",
+      "expected": {
+        "selector": "#value",
+        "text": "240"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "slides-4",
+      "file": "slides-4.html",
+      "kind": "slides",
+      "sha256": "66673205887ff58fd004078574915853e03cc83f9d00bec1996f7ac78231cf7e",
+      "bytes": 1395,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Нажать Следующий слайд; счётчик 2 / 3, заголовок Гипотеза. После третьего вернуться к первому.",
+      "expected": {
+        "selector": "#page",
+        "text": "2 / 3"
+      },
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "planner-4",
+      "file": "planner-4.html",
+      "kind": "planner",
+      "sha256": "620461505a3e9094e6b24f961d4f90edf8c9770848e46d6f4ce7eb787be9ee8b",
+      "bytes": 1245,
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "currentStaticProfile": "limited",
+      "action": "Отметить задачу: 1 / 1; снять отметку: 0 / 1. После перезагрузки 0 / 1, долговременное хранение не обещано.",
+      "expected": {
+        "selector": "#progress",
+        "text": "1 / 1"
+      },
+      "liveAcceptance": "not-tested"
+    }
+  ]
+}

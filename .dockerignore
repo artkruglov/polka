@@ -1,0 +1,30 @@
+.git
+.local
+.env
+.env.*
+!.env.example
+dist
+node_modules
+tests
+docs
+*.md
+*.log
+Dockerfile*
+
+# Include provenance alongside the bundled original editorial materials.
+!content/editorial/**/README.md
+
+# Never send deployment credentials to the Docker daemon/build cache.
+deploy/base.env
+deploy/smtp.env
+
+# Keys, local data and caches never belong in the build context.
+*.pem
+*.key
+data
+uploads
+coverage
+test-results
+playwright-report
+**/__pycache__
+.github
