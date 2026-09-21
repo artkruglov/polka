@@ -44,7 +44,7 @@ jobs:
           fetch-depth: 0
       - name: Scan history for secrets
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 git /repo --redact --no-banner
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
   image:
     runs-on: ubuntu-24.04
