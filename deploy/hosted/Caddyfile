@@ -1,0 +1,14 @@
+{
+	# No access log: share tokens live in URL fragments, but viewer grants and
+	# other capabilities can appear in paths.
+}
+
+{$APP_HOST} {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy app:4390 {
+		# Caddy replaces client-supplied X-Forwarded-For unless the client is a
+		# trusted proxy; the app trusts only this Docker network (TRUST_PROXY).
+		header_up X-Forwarded-Proto https
+	}
+}
