@@ -1,0 +1,8 @@
+# Default rules plus reviewed false positives.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed test fixtures: UUID idempotency keys and S3 object names"
+regexes = ['''\.polka-r17-test''', '''abcdefghijklmnopqrstuvwxyzABCDEFG0123456789_-''']
+paths = ['''docs/reviews/2026-09-20-cli-capture/results\.json''']
