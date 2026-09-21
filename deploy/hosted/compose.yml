@@ -1,0 +1,170 @@
+# Single-VM hosted pilot: bundled PostgreSQL, external versioned S3, Caddy TLS.
+# Static HTML only (HTML_LIVE_MODE=disabled) until a separate viewer domain exists.
+# Not HA: one VM, nightly logical DB backups. See deploy/hosted/README.md.
+name: polka-hosted
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "5"}
+
+x-runtime-env: &runtime-env
+  DATABASE_URL: postgres://polka_runtime:${POLKA_RUNTIME_PASSWORD:?}@postgres:5432/polka
+  S3_ENDPOINT: ${S3_ENDPOINT:?}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+  S3_BUCKET: ${S3_BUCKET:?}
+  LINK_KEY: ${LINK_KEY:?}
+  APP_ORIGIN: https://${APP_HOST:?}
+  HOST: 0.0.0.0
+  PORT: "4390"
+  TRUST_PROXY: 172.28.0.0/24
+  COOKIE_SECURE: "true"
+  HTML_LIVE_MODE: disabled
+  ACCOUNT_DELETION_ENABLED: "false"
+  URL_IMPORT_ENABLED: "false"
+  MAIL_MODE: ${MAIL_MODE:-disabled}
+
+networks:
+  polka:
+    ipam:
+      config: [{subnet: 172.28.0.0/24}]
+
+volumes:
+  pgdata:
+  caddy-data:
+  caddy-config:
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: polka_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?}
+      POLKA_SCHEMA_PASSWORD: ${POLKA_SCHEMA_PASSWORD:?}
+      POLKA_RUNTIME_PASSWORD: ${POLKA_RUNTIME_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    networks: [polka]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polka_admin -d polka"]
+      interval: 5s
+      retries: 30
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+  migrate:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    user: node
+    environment:
+      DATABASE_URL: postgres://polka_schema:${POLKA_SCHEMA_PASSWORD:?}@postgres:5432/polka
+    command: ["node", "--import", "tsx", "scripts/migrate.ts"]
+    networks: [polka]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  grants:
+    image: postgres:16-alpine@sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3
+    environment:
+      PGHOST: postgres
+      PGDATABASE: polka
+      PGUSER: polka_schema
+      PGPASSWORD: ${POLKA_SCHEMA_PASSWORD:?}
+    volumes: ["../runtime-grants.sql:/grants/runtime-grants.sql:ro"]
+    command: ["psql", "-X", "--set=ON_ERROR_STOP=1", "--set=schema_owner=polka_schema",
+              "--set=runtime_role=polka_runtime", "--file=/grants/runtime-grants.sql"]
+    networks: [polka]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: "no"
+
+  storage-check:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    user: node
+    environment: *runtime-env
+    command: ["node", "--import", "tsx", "scripts/storage-check.ts", "--confirm-bootstrap"]
+    networks: [polka]
+    depends_on:
+      grants: {condition: service_completed_successfully}
+    restart: "no"
+
+  app:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    user: node
+    environment: *runtime-env
+    command: ["node", "--import", "tsx", "apps/server/main.ts"]
+    networks: [polka]
+    restart: unless-stopped
+    depends_on:
+      storage-check: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4390/readyz',{signal:AbortSignal.timeout(1500)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 2s
+      retries: 6
+      start_period: 10s
+    deploy:
+      resources:
+        limits: {cpus: "1.5", memory: 1536M}
+
+  maintenance:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    user: node
+    environment:
+      <<: *runtime-env
+      HOST: 127.0.0.1
+    command: ["node", "--import", "tsx", "scripts/maintenance-runner.ts"]
+    networks: [polka]
+    restart: unless-stopped
+    depends_on:
+      app: {condition: service_healthy}
+    deploy:
+      resources:
+        limits: {cpus: "0.5", memory: 768M}
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      APP_HOST: ${APP_HOST:?}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [polka]
+    depends_on:
+      app: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+
+  backup:
+    image: alpine:3.22
+    restart: unless-stopped
+    environment:
+      BACKUP_DATABASE_URL: postgres://polka_schema:${POLKA_SCHEMA_PASSWORD:?}@postgres:5432/polka
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+      BACKUP_BUCKET: ${BACKUP_BUCKET:?}
+    volumes: ["./backup.sh:/backup.sh:ro"]
+    command: ["/bin/sh", "/backup.sh"]
+    networks: [polka]
+    depends_on:
+      postgres: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "3"}

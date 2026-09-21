@@ -20,3 +20,4 @@ docs/reviews/**/round-1-prompt.txt
 deploy/base.env
 deploy/smtp.env
 __pycache__/
+deploy/hosted/hosted.env
