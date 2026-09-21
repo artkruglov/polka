@@ -10,7 +10,7 @@ if (!image) throw new Error("Usage: image-smoke.mjs <image>");
 const env = Object.fromEntries(
   readFileSync(".env", "utf8")
     .split("\n")
-    .filter((line) => /^[A-Z_]+=/.test(line))
+    .filter((line) => /^[A-Z0-9_]+=/.test(line))
     .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
 );
 const suffix = randomBytes(6).toString("hex");
