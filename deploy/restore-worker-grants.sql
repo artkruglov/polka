@@ -77,10 +77,10 @@ BEGIN
     RAISE EXCEPTION 'Require a dedicated public schema and objects owned by schema_owner';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>26
+     OR (SELECT count(*) FROM public.schema_migrations)<>27
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>26 THEN
-    RAISE EXCEPTION 'Restore grants require exactly migrations 001 through 026';
+     OR (SELECT max(version) FROM public.schema_migrations)<>27 THEN
+    RAISE EXCEPTION 'Restore grants require exactly migrations 001 through 027';
   END IF;
 END $$;
 
@@ -116,4 +116,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner"
 ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner" IN SCHEMA public
   REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC, :"restore_role";
 COMMIT;
-\echo Restore worker grants installed for reviewed schema through migration 026
+\echo Restore worker grants installed for reviewed schema through migration 027
