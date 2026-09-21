@@ -1,0 +1,4 @@
+ALTER TABLE revisions ADD COLUMN html_profile text CHECK (html_profile IN ('static','limited','unsupported'));
+ALTER TABLE revisions ADD CONSTRAINT html_profile_only_for_html CHECK ((mime = 'text/html') = (html_profile IS NOT NULL));
+CREATE TABLE share_reports (id uuid PRIMARY KEY, idempotency_key uuid NOT NULL UNIQUE, tenant_id uuid NOT NULL REFERENCES tenants, share_id uuid NOT NULL REFERENCES shares, revision_id uuid NOT NULL REFERENCES revisions, reason text NOT NULL CHECK (reason IN ('phishing','malware','personal_data','illegal','other')), comment text CHECK (char_length(comment) <= 1000), status text NOT NULL DEFAULT 'new' CHECK (status IN ('new','dismissed','actioned')), created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX share_reports_queue ON share_reports(tenant_id, created_at) WHERE status = 'new';

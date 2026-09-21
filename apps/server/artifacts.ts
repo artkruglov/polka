@@ -2,15 +2,29 @@ import { randomUUID, createHmac } from "node:crypto";
 import type { PoolClient } from "pg";
 import {
   beginUploadSchema,
+  MAX_BYTES,
   type Revision,
   type Share,
   type Artifact,
 } from "../../packages/contracts/index.ts";
+import {
+  beginBundleUploadSchema,
+  canonicalizeManifest,
+  type BundleExport,
+  type BundleManifest,
+} from "../../packages/contracts/bundle.ts";
 import { db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-export type Actor = { id: string; tenant: string };
+import { classifyHtml, looksLikeHtml } from "./html.ts";
+import { createSingleHtmlRevisionManifest } from "./revision-manifest.ts";
+import {
+  BUNDLE_BUILDER_VERSION,
+  BUNDLE_RUNTIME_PROFILE,
+} from "./bundle-runtime-contract.ts";
+import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+export type Actor = { id: string; tenant: string; connectionId?: string };
 export const audit = (
   c: PoolClient,
   actor: Actor,
@@ -18,20 +32,41 @@ export const audit = (
   target: string,
 ) =>
   c.query(
-    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
-    [actor.tenant, actor.id, action, target],
+    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,connection_id) VALUES($1,$2,$3,$4,$5,$6)",
+    [
+      actor.tenant,
+      actor.id,
+      action,
+      target,
+      actor.connectionId ? "agent" : "human",
+      actor.connectionId ?? null,
+    ],
   );
 export const tokenFor = (id: string) =>
   createHmac("sha256", config.LINK_KEY)
     .update(`share:${id}`)
     .digest("base64url");
 export const revisionDTO = (r: any): Revision => ({
+  manifest: r.manifest ?? null,
+  manifestSha256: r.manifest_sha256 ?? null,
   id: r.id,
   number: r.number,
   filename: r.filename,
   mime: r.mime,
   size: r.size,
   sha256: r.sha256,
+  storageKind: r.storage_kind ?? "single",
+  totalSize: Number(r.total_size ?? r.size),
+  htmlProfile: r.html_profile ?? null,
+  inlineBuild:
+    config.HTML_LIVE_ENABLED && r.inline_build
+      ? {
+          state: r.inline_build.state,
+          runtimeProfile: r.inline_build.runtimeProfile ?? null,
+          reason: r.inline_build.reason ?? null,
+          path: r.inline_build.path ?? null,
+        }
+      : null,
   createdAt: new Date(r.created_at).toISOString(),
 });
 export function shareDTO(s: any, latest: string): Share | null {
@@ -55,6 +90,7 @@ export function shareDTO(s: any, latest: string): Share | null {
   };
 }
 export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
+  await assertActiveOwner(db, actor);
   const {
     rows: [a],
   } = await db.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2", [
@@ -64,9 +100,17 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
   if (!a) throw missing();
   const {
     rows: [r],
-  } = await db.query("SELECT * FROM revisions WHERE id=$1", [
-    a.latest_revision_id,
-  ]);
+  } = await db.query(
+    `SELECT r.*,
+       (SELECT jsonb_build_object(
+          'state',d.state,'runtimeProfile',CASE WHEN d.state='ready' THEN d.runtime_profile ELSE NULL END,
+          'reason',d.reason,'path',d.error_path
+        ) FROM revision_derivatives d
+        WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
+          AND d.builder_version=$2 LIMIT 1) AS inline_build
+     FROM revisions r WHERE r.id=$1`,
+    [a.latest_revision_id, BUNDLE_BUILDER_VERSION],
+  );
   const {
     rows: [s],
   } = await db.query(
@@ -78,92 +122,107 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
     title: a.title,
     folderId: a.folder_id,
     updatedAt: a.updated_at.toISOString(),
+    trashedAt: a.trashed_at ? a.trashed_at.toISOString() : null,
+    lifecycleVersion: Number(a.lifecycle_version),
     revision: revisionDTO(r),
     share: shareDTO(s, r.id),
   };
 }
 export async function beginUpload(actor: Actor, body: unknown) {
   const input = beginUploadSchema.parse(body);
-  return transaction(async (c) => {
-    const {
-      rows: [tenant],
-    } = await c.query("SELECT * FROM tenants WHERE id=$1 FOR UPDATE", [
-      actor.tenant,
-    ]);
-    const {
-      rows: [old],
-    } = await c.query(
-      "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-      [actor.tenant, input.key],
-    );
-    if (old) {
-      if (
-        JSON.stringify(beginUploadSchema.parse(old.request)) !==
-        JSON.stringify(input)
-      )
-        throw new Problem(
-          409,
-          "conflict",
-          "Этот повтор относится к другому файлу. Начните новую загрузку.",
-        );
-      if (
-        old.aborted ||
-        (!old.receipt && new Date(old.expires_at).getTime() <= Date.now())
-      )
-        throw new Problem(
-          410,
-          "expired",
-          "Время загрузки истекло. Выберите файл снова.",
-        );
-      return { uploadId: old.id, receipt: old.receipt };
-    }
-    if (
-      input.folderId &&
-      !(
-        await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [
-          input.folderId,
-          actor.tenant,
-        ])
-      ).rowCount
-    )
-      throw missing();
-    if (input.artifactId) {
-      const {
-        rows: [a],
-      } = await c.query(
-        "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2",
-        [input.artifactId, actor.tenant],
+  return transaction((c) => beginUploadInTransaction(c, actor, input));
+}
+export async function beginUploadInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  input: ReturnType<typeof beginUploadSchema.parse>,
+) {
+  const tenant = await lockActiveOwnerTenant(c, actor);
+  const {
+    rows: [old],
+  } = await c.query(
+    "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
+    [actor.tenant, input.key],
+  );
+  if (old) {
+    if (old.kind !== "single")
+      throw new Problem(
+        409,
+        "conflict",
+        "Этот ключ уже относится к пакетной загрузке.",
       );
-      if (!a) throw missing();
-      if (a.latest_revision_id !== input.baseRevisionId)
-        throw new Problem(
-          409,
-          "conflict",
-          "Работа уже изменилась. Откройте текущую версию.",
-        );
-    }
-    const {
-      rows: [pending],
-    } = await c.query(
-      "SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()",
-      [actor.tenant],
-    );
     if (
-      +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
-      +pending.count >= 8
+      JSON.stringify(beginUploadSchema.parse(old.request)) !==
+      JSON.stringify(input)
     )
       throw new Problem(
-        413,
-        "quota",
-        "Достигнут лимит хранения или одновременных загрузок.",
+        409,
+        "conflict",
+        "Этот повтор относится к другому файлу. Начните новую загрузку.",
       );
-    const id = randomUUID();
-    await c.query(
-      "INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request) VALUES($1,$2,$3,$4,$5)",
-      [id, actor.tenant, actor.id, input.key, input],
+    if (
+      old.aborted ||
+      (!old.receipt && new Date(old.expires_at).getTime() <= Date.now())
+    )
+      throw new Problem(
+        410,
+        "expired",
+        "Время загрузки истекло. Выберите файл снова.",
+      );
+    if (!old.receipt)
+      await validateUploadTarget(
+        c,
+        actor,
+        beginUploadSchema.parse(old.request),
+      );
+    return { uploadId: old.id, receipt: old.receipt };
+  }
+  if (
+    input.folderId &&
+    !(
+      await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [
+        input.folderId,
+        actor.tenant,
+      ])
+    ).rowCount
+  )
+    throw missing();
+  if (input.artifactId) {
+    const {
+      rows: [a],
+    } = await c.query(
+      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
+      [input.artifactId, actor.tenant],
     );
-    return { uploadId: id, receipt: null };
-  });
+    if (!a) throw missing();
+    if (a.latest_revision_id !== input.baseRevisionId)
+      throw new Problem(
+        409,
+        "conflict",
+        "Работа уже изменилась. Откройте текущую версию.",
+      );
+  }
+  const {
+    rows: [pending],
+  } = await c.query(
+    "SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()",
+    [actor.tenant],
+  );
+  if (
+    +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
+    +pending.count >= 8
+  )
+    throw new Problem(
+      413,
+      "quota",
+      "Достигнут лимит хранения или одновременных загрузок.",
+    );
+  const id = randomUUID();
+  await c.query(
+    "INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,kind) VALUES($1,$2,$3,$4,$5,'single')",
+    [id, actor.tenant, actor.id, input.key, input],
+  );
+  return { uploadId: id, receipt: null };
 }
 function validateBytes(
   bytes: Buffer,
@@ -190,18 +249,62 @@ function validateBytes(
       "invalid",
       "Содержимое файла не соответствует выбранному формату.",
     );
-  if (input.mime === "text/plain") {
+  if (input.mime === "text/plain" || input.mime === "text/html") {
+    let source: string;
     try {
-      new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       if (bytes.includes(0)) throw new Error();
     } catch {
       throw new Problem(
         422,
         "invalid",
-        "Для текста поддерживается кодировка UTF-8.",
+        input.mime === "text/html"
+          ? "Для HTML-страницы поддерживается кодировка UTF-8."
+          : "Для текста поддерживается кодировка UTF-8.",
       );
     }
+    if (input.mime === "text/html") {
+      if (!looksLikeHtml(source))
+        throw new Problem(
+          422,
+          "invalid",
+          "Это не похоже на HTML-страницу. Сохраните её как текст или выберите файл .html.",
+        );
+      return classifyHtml(source);
+    }
   }
+  return null;
+}
+// Links are never issued for a page that cannot be shown without a runtime.
+export async function assertLinkable(c: PoolClient, revisionId: string) {
+  const {
+    rows: [r],
+  } = await c.query(
+    `SELECT r.html_profile,r.storage_kind,d.id AS derivative_id
+     FROM revisions r
+     LEFT JOIN revision_derivatives d
+       ON d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
+      AND d.builder_version=$2 AND d.runtime_profile=$3 AND d.state='ready'
+     WHERE r.id=$1`,
+    [revisionId, BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE],
+  );
+  if (!r) throw missing();
+  if (r.storage_kind === "bundle") {
+    if (!config.HTML_LIVE_ENABLED || !r.derivative_id)
+      throw new Problem(
+        422,
+        "unsupported",
+        "Сначала подготовьте локальную интерактивную версию этой страницы.",
+      );
+    return r.derivative_id as string;
+  }
+  if (r.html_profile === "unsupported")
+    throw new Problem(
+      422,
+      "unsupported",
+      "Эта страница собирается скриптами, а интерактивный просмотр в этой сборке ещё не включён. Ссылку на неё не выпускаем.",
+    );
+  return null;
 }
 async function lockUpload(c: PoolClient, actor: Actor, id: string) {
   const {
@@ -223,115 +326,683 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
   return u;
 }
 export async function uploadBytes(actor: Actor, id: string, bytes: Buffer) {
-  return transaction(async (c) => {
-    const u = await lockUpload(c, actor, id);
-    const input = beginUploadSchema.parse(u.request);
-    validateBytes(bytes, input);
-    if (u.receipt) return { stored: true };
-    const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
-    await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [
-      id,
-      version,
-    ]);
-    return { stored: true };
-  });
+  return transaction((c) => uploadBytesInTransaction(c, actor, id, bytes));
+}
+export async function uploadBytesInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  id: string,
+  bytes: Buffer,
+) {
+  await lockActiveOwnerTenant(c, actor);
+  const u = await lockUpload(c, actor, id);
+  if (u.kind !== "single") throw missing();
+  const input = beginUploadSchema.parse(u.request);
+  validateBytes(bytes, input);
+  if (u.receipt) return { stored: true };
+  await validateUploadTarget(c, actor, input);
+  const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
+  await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [
+    id,
+    version,
+  ]);
+  return { stored: true };
 }
 export async function finalizeUpload(actor: Actor, id: string) {
-  return transaction(async (c) => {
-    // All quota changes take the same tenant lock before upload/artifact locks.
-    const {
-      rows: [tenant],
-    } = await c.query("SELECT * FROM tenants WHERE id=$1 FOR UPDATE", [
-      actor.tenant,
-    ]);
-    const u = await lockUpload(c, actor, id);
-    if (u.receipt) return u.receipt;
-    if (!u.object_version)
-      throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
-    const input = beginUploadSchema.parse(u.request);
-    validateBytes(
-      await readBlob(`${actor.tenant}/${id}`, u.object_version),
-      input,
-    );
-    if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
-      throw new Problem(413, "quota", "Недостаточно места для этой версии.");
-    if (
-      !(
-        await c.query("SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled", [
-          actor.id,
-        ])
-      ).rowCount
-    )
-      throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
-    let artifactId = input.artifactId,
-      number = 1;
-    if (artifactId) {
-      const {
-        rows: [a],
-      } = await c.query(
-        "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-        [artifactId, actor.tenant],
-      );
-      if (!a) throw missing();
-      if (a.latest_revision_id !== input.baseRevisionId)
-        throw new Problem(
-          409,
-          "conflict",
-          "Появилась другая версия. Сохранённый файл не заменил её; откройте работу заново.",
-        );
-      const {
-        rows: [last],
-      } = await c.query("SELECT number FROM revisions WHERE id=$1", [
-        a.latest_revision_id,
-      ]);
-      number = last.number + 1;
-    } else {
-      artifactId = randomUUID();
+  return transaction((c) => finalizeUploadInTransaction(c, actor, id));
+}
+export async function finalizeUploadInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  id: string,
+) {
+  // All quota changes take the same tenant lock before upload/artifact locks.
+  const tenant = await lockActiveOwnerTenant(c, actor);
+  const u = await lockUpload(c, actor, id);
+  if (u.kind !== "single") throw missing();
+  if (u.receipt) return u.receipt;
+  if (!u.object_version)
+    throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
+  const input = beginUploadSchema.parse(u.request);
+  await validateUploadTarget(c, actor, input);
+  const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
+  const htmlProfile = validateBytes(bytes, input);
+  let revisionManifest: ReturnType<
+    typeof createSingleHtmlRevisionManifest
+  > | null = null;
+  if (input.mime === "text/html") {
+    if (!htmlProfile) throw new Error("HTML profile invariant failed");
+    revisionManifest = createSingleHtmlRevisionManifest(bytes, htmlProfile);
+  }
+  if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
+    throw new Problem(413, "quota", "Недостаточно места для этой версии.");
+  if (
+    !(
       await c.query(
-        "INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)",
-        [
-          artifactId,
-          actor.tenant,
-          actor.id,
-          input.folderId ?? null,
-          input.title,
-        ],
+        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
+        [actor.id],
+      )
+    ).rowCount
+  )
+    throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
+  let artifactId = input.artifactId,
+    number = 1;
+  if (artifactId) {
+    const {
+      rows: [a],
+    } = await c.query(
+      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+      [artifactId, actor.tenant],
+    );
+    if (!a) throw missing();
+    if (a.latest_revision_id !== input.baseRevisionId)
+      throw new Problem(
+        409,
+        "conflict",
+        "Появилась другая версия. Сохранённый файл не заменил её; откройте работу заново.",
+      );
+    const {
+      rows: [last],
+    } = await c.query("SELECT number FROM revisions WHERE id=$1", [
+      a.latest_revision_id,
+    ]);
+    number = last.number + 1;
+  } else {
+    artifactId = randomUUID();
+    await c.query(
+      "INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)",
+      [artifactId, actor.tenant, actor.id, input.folderId ?? null, input.title],
+    );
+  }
+  const revisionId = randomUUID();
+  await c.query(
+    "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'single',$15)",
+    [
+      revisionId,
+      actor.tenant,
+      artifactId,
+      number,
+      actor.id,
+      input.filename,
+      input.mime,
+      input.size,
+      input.sha256,
+      `${actor.tenant}/${id}`,
+      u.object_version,
+      htmlProfile,
+      revisionManifest?.manifest ?? null,
+      revisionManifest?.manifestSha256 ?? null,
+      input.size,
+    ],
+  );
+  await c.query(
+    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
+    [artifactId, revisionId],
+  );
+  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
+    actor.tenant,
+    input.size,
+  ]);
+  const receipt = {
+    uploadId: id,
+    artifactId,
+    revisionId,
+    number,
+    sha256: input.sha256,
+    htmlProfile,
+    ...(revisionManifest
+      ? { manifestSha256: revisionManifest.manifestSha256 }
+      : {}),
+  };
+  await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
+  await audit(c, actor, "revision.saved", revisionId);
+  return receipt;
+}
+
+type NormalizedBundleRequest = {
+  key: string;
+  title: string;
+  manifest: BundleManifest;
+  artifactId?: string;
+  baseRevisionId?: string;
+  folderId?: string | null;
+  size: number;
+};
+
+export function normalizeBundleRequest(
+  body: unknown,
+  stored = false,
+): NormalizedBundleRequest {
+  const source =
+    body && typeof body === "object"
+      ? (body as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
+  const parsedBody = stored
+    ? Object.fromEntries(
+        Object.entries(source).filter(([key]) => key !== "size"),
+      )
+    : body;
+  const input = beginBundleUploadSchema.parse(parsedBody);
+  const manifest = canonicalizeManifest(input.manifest);
+  const normalized = {
+    key: input.key,
+    title: input.title,
+    manifest,
+    ...(input.artifactId ? { artifactId: input.artifactId } : {}),
+    ...(input.baseRevisionId ? { baseRevisionId: input.baseRevisionId } : {}),
+    ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+    size: manifest.files.reduce((total, file) => total + file.size, 0),
+  };
+  if (stored && source.size !== normalized.size)
+    throw new Error("Stored bundle size mismatch");
+  return normalized;
+}
+
+async function validateUploadTarget(
+  c: PoolClient,
+  actor: Actor,
+  input: {
+    folderId?: string | null;
+    artifactId?: string;
+    baseRevisionId?: string;
+  },
+) {
+  if (
+    input.folderId &&
+    !(
+      await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [
+        input.folderId,
+        actor.tenant,
+      ])
+    ).rowCount
+  )
+    throw missing();
+  if (input.artifactId) {
+    const {
+      rows: [artifact],
+    } = await c.query(
+      "SELECT latest_revision_id FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
+      [input.artifactId, actor.tenant],
+    );
+    if (!artifact) throw missing();
+    if (artifact.latest_revision_id !== input.baseRevisionId)
+      throw new Problem(
+        409,
+        "conflict",
+        "Работа уже изменилась. Откройте текущую версию.",
+      );
+  }
+}
+
+export async function beginBundleUpload(actor: Actor, body: unknown) {
+  const input = normalizeBundleRequest(body);
+  return transaction((c) => beginBundleUploadInTransaction(c, actor, input));
+}
+export async function beginBundleUploadInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  input: NormalizedBundleRequest,
+) {
+  const tenant = await lockActiveOwnerTenant(c, actor);
+  const {
+    rows: [old],
+  } = await c.query(
+    "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
+    [actor.tenant, input.key],
+  );
+  if (old) {
+    if (
+      old.kind !== "bundle" ||
+      JSON.stringify(normalizeBundleRequest(old.request, true)) !==
+        JSON.stringify(input)
+    )
+      throw new Problem(
+        409,
+        "conflict",
+        "Этот ключ уже относится к другой загрузке.",
+      );
+    if (
+      old.aborted ||
+      (!old.receipt && new Date(old.expires_at).getTime() <= Date.now())
+    )
+      throw new Problem(
+        410,
+        "expired",
+        "Время загрузки истекло. Начните пакетную загрузку снова.",
+      );
+    if (!old.receipt)
+      await validateUploadTarget(
+        c,
+        actor,
+        normalizeBundleRequest(old.request, true),
+      );
+    return {
+      uploadId: old.id,
+      receipt: old.receipt,
+      manifest: input.manifest,
+    };
+  }
+  await validateUploadTarget(c, actor, input);
+  const {
+    rows: [pending],
+  } = await c.query(
+    "SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()",
+    [actor.tenant],
+  );
+  if (
+    +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
+    +pending.count >= 8
+  )
+    throw new Problem(
+      413,
+      "quota",
+      "Достигнут лимит хранения или одновременных загрузок.",
+    );
+  const uploadId = randomUUID();
+  await c.query(
+    "INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,kind) VALUES($1,$2,$3,$4,$5,'bundle')",
+    [uploadId, actor.tenant, actor.id, input.key, input],
+  );
+  return { uploadId, receipt: null, manifest: input.manifest };
+}
+
+const bundleFileKey = (
+  tenant: string,
+  uploadId: string,
+  manifest: BundleManifest,
+  index: number,
+) =>
+  manifest.files[index].path === manifest.entrypoint
+    ? `${tenant}/${uploadId}`
+    : `${tenant}/${uploadId}/files/${index}`;
+
+export function validateBundleFileBytes(
+  file: BundleManifest["files"][number],
+  bytes: Buffer,
+) {
+  if (bytes.length !== file.size || sha256(bytes) !== file.sha256)
+    throw new Problem(
+      422,
+      "invalid",
+      "Файл пакета передан не полностью или изменился.",
+    );
+  const binaryValid =
+    file.mime === "image/png"
+      ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))
+      : file.mime === "image/jpeg"
+        ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+        : file.mime === "image/webp"
+          ? bytes.toString("ascii", 0, 4) === "RIFF" &&
+            bytes.toString("ascii", 8, 12) === "WEBP"
+          : file.mime === "font/woff2"
+            ? bytes.toString("ascii", 0, 4) === "wOF2"
+            : true;
+  if (!binaryValid)
+    throw new Problem(
+      422,
+      "invalid",
+      "Содержимое файла пакета не соответствует заявленному формату.",
+    );
+  if (
+    file.mime.startsWith("text/") ||
+    file.mime === "application/json" ||
+    file.mime === "image/svg+xml"
+  ) {
+    let source: string;
+    try {
+      source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      if (bytes.includes(0)) throw new Error();
+    } catch {
+      throw new Problem(
+        422,
+        "invalid",
+        "Текстовый файл пакета должен быть в UTF-8.",
       );
     }
-    const revisionId = randomUUID();
+    if (file.mime === "text/html" && !looksLikeHtml(source))
+      throw new Problem(422, "invalid", "HTML-файл пакета не похож на HTML.");
+    if (file.mime === "image/svg+xml" && !/<svg\b/i.test(source))
+      throw new Problem(422, "invalid", "SVG-файл пакета не похож на SVG.");
+    if (file.mime === "application/json")
+      try {
+        JSON.parse(source);
+      } catch {
+        throw new Problem(422, "invalid", "JSON-файл пакета некорректен.");
+      }
+  }
+}
+
+export async function uploadBundleFile(
+  actor: Actor,
+  id: string,
+  index: number,
+  bytes: Buffer,
+) {
+  return transaction((c) =>
+    uploadBundleFileInTransaction(c, actor, id, index, bytes),
+  );
+}
+export async function uploadBundleFileInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  id: string,
+  index: number,
+  bytes: Buffer,
+) {
+  await lockActiveOwnerTenant(c, actor);
+  const upload = await lockUpload(c, actor, id);
+  if (upload.kind !== "bundle") throw missing();
+  const input = normalizeBundleRequest(upload.request, true);
+  const expected = input.manifest.files[index];
+  if (!expected) throw missing();
+  validateBundleFileBytes(expected, bytes);
+  if (upload.receipt) return { stored: true, index };
+  await validateUploadTarget(c, actor, input);
+  const existing = (
     await c.query(
-      "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+      "SELECT object_version FROM upload_files WHERE upload_id=$1 AND file_index=$2",
+      [id, index],
+    )
+  ).rows[0];
+  if (existing) return { stored: true, index };
+  const objectKey = bundleFileKey(actor.tenant, id, input.manifest, index);
+  const objectVersion = await putImmutable(objectKey, bytes);
+  await c.query(
+    "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
+    [id, index, objectKey, objectVersion],
+  );
+  return { stored: true, index };
+}
+
+async function lockBundleArtifact(
+  c: PoolClient,
+  actor: Actor,
+  input: NormalizedBundleRequest,
+) {
+  let artifactId = input.artifactId;
+  let number = 1;
+  if (artifactId) {
+    const {
+      rows: [artifact],
+    } = await c.query(
+      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+      [artifactId, actor.tenant],
+    );
+    if (!artifact) throw missing();
+    if (artifact.latest_revision_id !== input.baseRevisionId)
+      throw new Problem(
+        409,
+        "conflict",
+        "Появилась другая версия. Текущая версия не заменена; откройте её заново.",
+      );
+    const {
+      rows: [last],
+    } = await c.query("SELECT number FROM revisions WHERE id=$1", [
+      artifact.latest_revision_id,
+    ]);
+    number = last.number + 1;
+  } else {
+    artifactId = randomUUID();
+    await c.query(
+      "INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)",
+      [artifactId, actor.tenant, actor.id, input.folderId ?? null, input.title],
+    );
+  }
+  return { artifactId, number };
+}
+
+export async function finalizeBundleUpload(actor: Actor, id: string) {
+  return transaction((c) => finalizeBundleUploadInTransaction(c, actor, id));
+}
+export async function finalizeBundleUploadInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  id: string,
+) {
+  const tenant = await lockActiveOwnerTenant(c, actor);
+  const upload = await lockUpload(c, actor, id);
+  if (upload.kind !== "bundle") throw missing();
+  if (upload.receipt) return upload.receipt;
+  const input = normalizeBundleRequest(upload.request, true);
+  await validateUploadTarget(c, actor, input);
+  const staged = (
+    await c.query(
+      "SELECT * FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
+      [id],
+    )
+  ).rows;
+  if (staged.length !== input.manifest.files.length)
+    throw new Problem(409, "conflict", "Переданы не все файлы пакета.");
+  const verified: Array<{
+    file: BundleManifest["files"][number];
+    object_key: string;
+    object_version: string;
+  }> = [];
+  for (const [index, file] of input.manifest.files.entries()) {
+    const stored = staged.find((row) => row.file_index === index);
+    if (
+      !stored ||
+      stored.object_key !==
+        bundleFileKey(actor.tenant, id, input.manifest, index)
+    )
+      throw new Error("Bundle staging invariant failed");
+    const bytes = await readBlob(stored.object_key, stored.object_version);
+    validateBundleFileBytes(file, bytes);
+    verified.push({ file, ...stored });
+  }
+  const entryIndex = input.manifest.files.findIndex(
+    (file) => file.path === input.manifest.entrypoint,
+  );
+  const entry = verified[entryIndex];
+  if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
+    throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
+  if (
+    !(
+      await c.query(
+        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
+        [actor.id],
+      )
+    ).rowCount
+  )
+    throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
+  const { artifactId, number } = await lockBundleArtifact(c, actor, input);
+  const revisionId = randomUUID();
+  const manifestSha256 = sha256(JSON.stringify(input.manifest));
+  await c.query(
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
+       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,'unsupported',$11,$12,'bundle',$13)`,
+    [
+      revisionId,
+      actor.tenant,
+      artifactId,
+      number,
+      actor.id,
+      input.manifest.entrypoint,
+      entry.file.size,
+      entry.file.sha256,
+      entry.object_key,
+      entry.object_version,
+      input.manifest,
+      manifestSha256,
+      input.size,
+    ],
+  );
+  for (const [index, stored] of verified.entries())
+    await c.query(
+      `INSERT INTO revision_files(revision_id,file_index,path,mime,size,sha256,object_key,object_version)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
       [
         revisionId,
-        actor.tenant,
-        artifactId,
-        number,
-        actor.id,
-        input.filename,
-        input.mime,
-        input.size,
-        input.sha256,
-        `${actor.tenant}/${id}`,
-        u.object_version,
+        index,
+        stored.file.path,
+        stored.file.mime,
+        stored.file.size,
+        stored.file.sha256,
+        stored.object_key,
+        stored.object_version,
       ],
     );
-    await c.query(
-      "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-      [artifactId, revisionId],
+  await c.query(
+    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
+    [artifactId, revisionId],
+  );
+  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
+    actor.tenant,
+    input.size,
+  ]);
+  const receipt = {
+    uploadId: id,
+    artifactId,
+    revisionId,
+    number,
+    sha256: entry.file.sha256,
+    htmlProfile: "unsupported" as const,
+    manifestSha256,
+    storageKind: "bundle" as const,
+    totalSize: input.size,
+  };
+  await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
+  await audit(c, actor, "revision.saved", revisionId);
+  return receipt;
+}
+
+export async function uploadStatus(
+  actor: Actor,
+  id: string,
+  kind: "single" | "bundle",
+) {
+  await assertActiveOwner(db, actor);
+  const {
+    rows: [upload],
+  } = await db.query(
+    "SELECT id,kind,request,receipt,aborted,expires_at FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3",
+    [id, actor.tenant, kind],
+  );
+  if (!upload) throw missing();
+  if (kind === "bundle")
+    Object.assign(upload, {
+      manifest: normalizeBundleRequest(upload.request, true).manifest,
+      uploaded: (
+        await db.query(
+          "SELECT file_index FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
+          [id],
+        )
+      ).rows.map((row) => row.file_index),
+    });
+  delete upload.kind;
+  delete upload.request;
+  return upload;
+}
+
+export async function abortUpload(
+  actor: Actor,
+  id: string,
+  kind: "single" | "bundle",
+) {
+  return transaction(async (c) => {
+    await lockActiveOwnerTenant(c, actor);
+    const result = await c.query(
+      "UPDATE uploads SET aborted=true WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND receipt IS NULL",
+      [id, actor.tenant, kind],
     );
-    await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
-      actor.tenant,
-      input.size,
-    ]);
-    const receipt = {
-      uploadId: id,
-      artifactId,
-      revisionId,
-      number,
-      sha256: input.sha256,
-    };
-    await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
-    await audit(c, actor, "revision.saved", revisionId);
-    return receipt;
+    if (!result.rowCount) {
+      const exists = await c.query(
+        "SELECT 1 FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3",
+        [id, actor.tenant, kind],
+      );
+      if (!exists.rowCount) throw missing();
+    }
+    return { ok: true };
   });
+}
+
+export async function readAuthorizedRevisionSource(
+  c: Pick<PoolClient, "query">,
+  revision: any,
+) {
+  if (!revision?.manifest || !revision.manifest_sha256) throw missing();
+  const manifest = canonicalizeManifest(revision.manifest);
+  if (sha256(JSON.stringify(manifest)) !== revision.manifest_sha256)
+    throw new Error("Revision manifest checksum mismatch");
+  const storedFiles =
+    revision.storage_kind === "bundle"
+      ? (
+          await c.query(
+            "SELECT * FROM revision_files WHERE revision_id=$1 ORDER BY file_index",
+            [revision.id],
+          )
+        ).rows
+      : [
+          {
+            file_index: 0,
+            path: manifest.entrypoint,
+            mime: revision.mime,
+            size: revision.size,
+            sha256: revision.sha256,
+            object_key: revision.object_key,
+            object_version: revision.object_version,
+          },
+        ];
+  if (storedFiles.length !== manifest.files.length)
+    throw new Error("Revision file count mismatch");
+  const files: Array<{
+    path: string;
+    mime: string;
+    size: number;
+    sha256: string;
+    bytes: Buffer;
+  }> = [];
+  let totalSize = 0;
+  for (const [index, expected] of manifest.files.entries()) {
+    const stored = storedFiles[index];
+    if (
+      !stored ||
+      stored.file_index !== index ||
+      stored.path !== expected.path ||
+      stored.mime !== expected.mime ||
+      Number(stored.size) !== expected.size ||
+      stored.sha256 !== expected.sha256
+    )
+      throw new Error("Revision file metadata mismatch");
+    const bytes = await readBlob(stored.object_key, stored.object_version);
+    if (bytes.length !== expected.size || sha256(bytes) !== expected.sha256)
+      throw new Error("Revision file checksum mismatch");
+    totalSize += bytes.length;
+    files.push({ ...expected, bytes });
+  }
+  if (totalSize !== Number(revision.total_size) || totalSize > MAX_BYTES)
+    throw new Error("Revision total size mismatch");
+  return {
+    revision,
+    manifest,
+    manifestSha256: revision.manifest_sha256 as string,
+    files,
+  };
+}
+
+export async function readRevisionSource(actor: Actor, revisionId: string) {
+  await assertActiveOwner(db, actor);
+  const {
+    rows: [revision],
+  } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
+    revisionId,
+    actor.tenant,
+  ]);
+  return readAuthorizedRevisionSource(db, revision);
+}
+
+export async function exportRevision(
+  actor: Actor,
+  revisionId: string,
+): Promise<BundleExport> {
+  const source = await readRevisionSource(actor, revisionId);
+  return {
+    manifest: source.manifest,
+    manifestSha256: source.manifestSha256,
+    files: source.files.map(({ bytes, ...file }) => ({
+      ...file,
+      encoding: "base64" as const,
+      data: bytes.toString("base64"),
+    })),
+  };
 }

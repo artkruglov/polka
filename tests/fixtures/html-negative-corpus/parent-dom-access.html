@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Parent DOM probe</title>
+<h1>Parent DOM probe</h1>
+<p>The script attempts to inspect the embedding document and handles denial.</p>
+<script>
+  try {
+    document.title = parent.document.title;
+  } catch {
+    document.title = "Parent DOM denied";
+  }
+</script>

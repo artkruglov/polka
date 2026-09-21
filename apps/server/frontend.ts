@@ -8,7 +8,15 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
     if (
       path === "/" ||
       path === "/s" ||
+      path === "/signup" ||
+      path === "/start" ||
+      path === "/settings/agents" ||
       path === "/bring" ||
+      path === "/landing" ||
+      path === "/connections" ||
+      path === "/trash" ||
+      path === "/templates" ||
+      path === "/library-invite" ||
       /^\/works\/[a-f0-9-]{36}$/.test(path) ||
       /^\/discover(?:\/[a-z0-9-]+)?$/.test(path)
     )

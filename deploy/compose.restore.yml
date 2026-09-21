@@ -1,0 +1,66 @@
+# Optional restore barrier overlay for an already restored, CLOSED target.
+# The operator must use a fresh RESTORE_RUN_ID for every restore generation and
+# keep app/maintenance/purge stopped through the job-to-app handoff. This base
+# overlay accepts only backups whose hashed descriptor declares
+# localMailSpool="absent"; it does not reconcile a host local-mail spool.
+services:
+  restore-reconcile:
+    image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
+    user: node
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
+      RESTORE_DATABASE_URL: ${RESTORE_DATABASE_URL:?Set restore-only DATABASE_URL}
+      RESTORE_RUN_ID: ${RESTORE_RUN_ID:?Set a fresh restore generation UUID}
+      RESTORE_BACKUP_SHA256: ${RESTORE_BACKUP_SHA256:?Set exact backup descriptor SHA-256}
+      RESTORE_LEDGER_MANIFEST_SHA256: ${RESTORE_LEDGER_MANIFEST_SHA256:?Set exact full ledger manifest SHA-256}
+      RESTORE_BACKUP_DESCRIPTOR: /restore-input/backup.json
+      RESTORE_RECEIPT_PATH: /restore-receipt/${RESTORE_RUN_ID}.json
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set content storage access key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set content storage secret}
+      S3_BUCKET: ${S3_BUCKET:?Set content bucket}
+      ERASURE_LEDGER_ID: ${ERASURE_LEDGER_ID:?Set erasure ledger UUID}
+      ERASURE_LEDGER_ENDPOINT: ${ERASURE_LEDGER_ENDPOINT:?Set ledger endpoint}
+      ERASURE_LEDGER_ACCESS_KEY: ${ERASURE_LEDGER_ACCESS_KEY:?Set read-only ledger access key}
+      ERASURE_LEDGER_SECRET_KEY: ${ERASURE_LEDGER_SECRET_KEY:?Set read-only ledger secret}
+      ERASURE_LEDGER_BUCKET: ${ERASURE_LEDGER_BUCKET:?Set ledger bucket}
+    volumes:
+      - ${RESTORE_BACKUP_DESCRIPTOR_HOST:?Set absolute backup descriptor path}:/restore-input/backup.json:ro
+      # Create this host directory for the image's node uid before compose up.
+      - ${RESTORE_RECEIPT_DIRECTORY_HOST:?Set node-writable receipt directory}:/restore-receipt:rw
+    command:
+      [
+        "node",
+        "--import",
+        "tsx",
+        "scripts/restore-target.ts",
+        "--confirm-closed-target",
+      ]
+    restart: "no"
+    depends_on:
+      storage-check:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  app:
+    environment:
+      RESTORE_MODE: required
+      RESTORE_RECEIPT_PATH: /restore-receipt/${RESTORE_RUN_ID}.json
+      RESTORE_RUN_ID: ${RESTORE_RUN_ID:?Set restore generation UUID}
+      RESTORE_BACKUP_SHA256: ${RESTORE_BACKUP_SHA256:?Set exact backup descriptor SHA-256}
+      RESTORE_LEDGER_ID: ${ERASURE_LEDGER_ID:?Set erasure ledger UUID}
+      RESTORE_LEDGER_MANIFEST_SHA256: ${RESTORE_LEDGER_MANIFEST_SHA256:?Set exact full ledger manifest SHA-256}
+    volumes:
+      - ${RESTORE_RECEIPT_DIRECTORY_HOST:?Set receipt directory}:/restore-receipt:ro
+    depends_on:
+      restore-reconcile:
+        condition: service_completed_successfully

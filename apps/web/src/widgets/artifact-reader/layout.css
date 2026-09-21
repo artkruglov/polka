@@ -1,0 +1,147 @@
+/* Saved material reader: image concept 20 September 2026. */
+.reader-layout {
+  background: #fff;
+}
+.reader-layout .topbar {
+  height: 68px;
+  border-bottom: 1px solid #e9edf4;
+  background: #fff;
+}
+.reader-layout .brand-mark,
+.reader-layout .brand small {
+  display: none;
+}
+.reader-layout main {
+  max-width: 1320px;
+  padding: 22px 40px 70px;
+}
+.reader-layout .work-heading {
+  align-items: center;
+  margin-bottom: 0;
+  gap: 18px;
+}
+.reader-layout .work-heading > .button-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.reader-layout .work-heading button {
+  border-radius: 6px;
+  font-weight: 500;
+  padding: 10px 14px;
+}
+.reader-layout .breadcrumb {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.reader-layout .pill {
+  background: #f0f4fb;
+  color: #3b506d;
+  font-size: 12px;
+}
+.reader-layout .meta {
+  gap: 12px;
+  display: flex;
+  align-items: center;
+}
+.reader-layout .stage {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 0;
+}
+.reader-layout .work-text {
+  max-width: 960px;
+  padding: 56px 40px 22px;
+}
+.reading-article h1 {
+  font-size: clamp(34px, 5vw, 66px);
+  line-height: 1.06;
+  letter-spacing: -0.055em;
+  margin: 24px 0;
+  color: #111724;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.reading-eyebrow {
+  color: #1257f5;
+  font-weight: 650;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.reading-lead {
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.5;
+  color: #748096;
+  white-space: pre-wrap;
+  margin: 0;
+}
+.reading-wave {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 20px 0 28px;
+}
+.reading-body p {
+  font-size: 19px;
+  line-height: 1.85;
+  color: #344057;
+  white-space: pre-wrap;
+  margin: 0 0 24px;
+  overflow-wrap: anywhere;
+}
+.reader-layout .work-foot {
+  max-width: 880px;
+  margin: 16px auto;
+  border-top: 1px solid #e7ecf3;
+  padding: 20px 0;
+  font-size: 12px;
+}
+.reader-layout .work-foot > span {
+  overflow-wrap: anywhere;
+}
+.reader-layout .history-note {
+  margin: 16px 0;
+}
+@media (max-width: 650px) {
+  .reader-layout main {
+    padding: 18px 20px 50px;
+  }
+  .reader-layout .work-heading {
+    display: block;
+  }
+  .reader-layout .work-heading > .button-row {
+    justify-content: flex-start;
+    margin-top: 16px;
+    gap: 6px;
+  }
+  .reader-layout .work-heading button {
+    font-size: 12px;
+    padding: 9px 11px;
+  }
+  .reader-layout .work-text {
+    padding: 32px 0 12px;
+  }
+  .reading-body p {
+    font-size: 17px;
+  }
+  .reader-layout .work-foot {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .reading-wave {
+    margin: 20px 0;
+  }
+  .reader-layout .topbar {
+    padding: 0 20px;
+  }
+}
+
+/* Secondary owner actions stay available without crowding the artifact. */
+.reader-layout .work-foot { flex-wrap:wrap; gap:12px; }
+@media (max-width:650px) {
+  .reader-layout .work-heading > .button-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; align-items:stretch; }
+  .reader-layout .work-heading > .button-row .ui-button { width:100%; min-width:0; min-height:48px; padding:10px 12px; font-size:14px; }
+  .reader-layout .work-heading > .button-row > .ui-action-menu { width:100%; }
+  .reader-layout .work-heading > .button-row > .ui-action-menu > span { width:100%; }
+}

@@ -15,3 +15,8 @@ uploads/
 *.pem
 *.key
 docs/reviews/**/round-1-prompt.txt
+
+# Operator credentials for the base deployment.
+deploy/base.env
+deploy/smtp.env
+__pycache__/

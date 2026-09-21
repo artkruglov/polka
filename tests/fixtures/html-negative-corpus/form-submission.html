@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Form submission probe</title>
+<h1>Form submission probe</h1>
+<p>The form points at a reserved invalid host and submits only after a user click.</p>
+<form action="https://form-submission.invalid/submit" method="post">
+  <label>Probe value <input name="probe" value="synthetic"></label>
+  <button type="submit">Attempt submission</button>
+</form>

@@ -1,0 +1,397 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
+import {
+  issueAgentConnectionSchema,
+  type AgentConnection,
+  type AgentScope,
+} from "../../packages/contracts/index.ts";
+import type { Actor } from "./artifacts.ts";
+import { config } from "./config.ts";
+import { db, transaction } from "./db.ts";
+import { Problem, missing } from "./errors.ts";
+import { sha256 } from "./storage.ts";
+import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const MAX_ACTIVE_CONNECTIONS = 20;
+
+export const MCP_AUDIENCE = new URL("/mcp", config.APP_ORIGIN).toString();
+
+export type ServiceActor = {
+  accountId: string;
+  tenantId: string;
+  connectionId: string;
+  scopes: AgentScope[];
+  audience: string;
+  expiresAt: number;
+};
+
+const unauthorized = () =>
+  new Problem(401, "unauthorized", "Подключение агента недействительно.");
+
+const requireScope = (scopes: readonly AgentScope[], scope: AgentScope) => {
+  if (!scopes.includes(scope))
+    throw new Problem(
+      403,
+      "forbidden",
+      "У подключения нет разрешения для этого действия.",
+    );
+};
+
+const connectionDTO = (row: any): AgentConnection => ({
+  id: row.id,
+  name: row.name,
+  scopes: row.scopes,
+  audience: row.audience,
+  status: row.revoked_at
+    ? "revoked"
+    : new Date(row.expires_at).getTime() <= Date.now()
+      ? "expired"
+      : row.last_seen_at
+        ? "seen"
+        : "issued",
+  createdAt: new Date(row.created_at).toISOString(),
+  expiresAt: new Date(row.expires_at).toISOString(),
+  lastSeenAt: row.last_seen_at
+    ? new Date(row.last_seen_at).toISOString()
+    : null,
+});
+
+async function lockOwner(
+  c: PoolClient,
+  actor: Actor,
+  sessionToken: string,
+  csrfToken: string,
+) {
+  await lockActiveOwnerTenant(c, actor, unauthorized);
+  if (!TOKEN.test(sessionToken) || !TOKEN.test(csrfToken))
+    throw new Problem(403, "forbidden", "Проверка запроса истекла.");
+  const valid = await c.query(
+    `SELECT 1
+     FROM sessions s
+     JOIN agent_connection_csrf csrf ON csrf.session_hash=s.hash
+     WHERE s.hash=$1 AND s.account_id=$2 AND s.expires_at>now()
+       AND csrf.token_hash=$3 AND csrf.expires_at>now()`,
+    [sha256(sessionToken), actor.id, sha256(csrfToken)],
+  );
+  if (!valid.rowCount)
+    throw new Problem(403, "forbidden", "Проверка запроса истекла.");
+}
+
+export async function issueConnectionCsrf(actor: Actor, sessionToken: string) {
+  if (!TOKEN.test(sessionToken)) throw unauthorized();
+  const token = randomBytes(32).toString("base64url");
+  const {
+    rows: [row],
+  } = await db.query(
+    `INSERT INTO agent_connection_csrf(session_hash,token_hash,expires_at)
+     SELECT s.hash,$3,now()+interval '10 minutes'
+     FROM sessions s
+     JOIN accounts a ON a.id=s.account_id
+     JOIN tenants t ON t.owner_id=a.id
+     WHERE s.hash=$1 AND s.account_id=$2 AND t.id=$4
+       AND s.expires_at>now() AND NOT a.disabled
+       AND a.deletion_requested_at IS NULL
+     ON CONFLICT(session_hash) DO UPDATE
+       SET token_hash=excluded.token_hash,expires_at=excluded.expires_at,created_at=now()
+     RETURNING expires_at`,
+    [sha256(sessionToken), actor.id, sha256(token), actor.tenant],
+  );
+  if (!row) throw unauthorized();
+  return { csrfToken: token, expiresAt: row.expires_at.toISOString() };
+}
+
+export async function issueAgentConnection(
+  actor: Actor,
+  sessionToken: string,
+  csrfToken: string,
+  body: unknown,
+) {
+  const input = issueAgentConnectionSchema.parse(body);
+  if (input.audience !== MCP_AUDIENCE)
+    throw new Problem(
+      400,
+      "invalid",
+      "Endpoint подключения не поддерживается.",
+    );
+  const token = randomBytes(32).toString("base64url");
+  const connection = await transaction(async (c) => {
+    await lockOwner(c, actor, sessionToken, csrfToken);
+    const {
+      rows: [active],
+    } = await c.query(
+      `SELECT count(*) AS count FROM agent_connections
+       WHERE tenant_id=$1 AND revoked_at IS NULL AND expires_at>now()`,
+      [actor.tenant],
+    );
+    if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
+      throw new Problem(
+        413,
+        "quota",
+        "Достигнут лимит активных подключений агента.",
+      );
+    const id = randomUUID();
+    const {
+      rows: [row],
+    } = await c.query(
+      `INSERT INTO agent_connections(
+         id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
+       ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 day')
+       RETURNING *`,
+      [
+        id,
+        actor.tenant,
+        actor.id,
+        sha256(token),
+        input.name,
+        input.scopes,
+        input.audience,
+        input.ttlDays,
+      ],
+    );
+    await c.query(
+      "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.issued',$3)",
+      [actor.tenant, actor.id, id],
+    );
+    return row;
+  });
+  return { connection: connectionDTO(connection), token };
+}
+
+export async function listAgentConnections(actor: Actor) {
+  await assertActiveOwner(db, actor);
+  const { rows } = await db.query(
+    `SELECT * FROM (
+       SELECT * FROM agent_connections
+       WHERE tenant_id=$1 AND account_id=$2
+         AND revoked_at IS NULL AND expires_at>now()
+       UNION ALL
+       (
+         SELECT * FROM agent_connections
+         WHERE tenant_id=$1 AND account_id=$2
+           AND (revoked_at IS NOT NULL OR expires_at<=now())
+         ORDER BY created_at DESC,id DESC LIMIT 100
+       )
+     ) listed
+     ORDER BY (revoked_at IS NULL AND expires_at>now()) DESC,created_at DESC,id DESC`,
+    [actor.tenant, actor.id],
+  );
+  return rows.map(connectionDTO);
+}
+
+export async function revokeAgentConnection(
+  actor: Actor,
+  sessionToken: string,
+  csrfToken: string,
+  connectionId: string,
+) {
+  return transaction(async (c) => {
+    await lockOwner(c, actor, sessionToken, csrfToken);
+    const {
+      rows: [connection],
+    } = await c.query(
+      `SELECT * FROM agent_connections
+       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`,
+      [connectionId, actor.tenant, actor.id],
+    );
+    if (!connection) throw missing();
+    if (!connection.revoked_at) {
+      await c.query(
+        "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1",
+        [connectionId],
+      );
+      await c.query(
+        "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.revoked',$3)",
+        [actor.tenant, actor.id, connectionId],
+      );
+    }
+    return { ok: true };
+  });
+}
+
+export async function authenticateServiceToken(
+  token: string,
+  audience: string,
+  scope?: AgentScope,
+): Promise<ServiceActor> {
+  if (!TOKEN.test(token) || audience !== MCP_AUDIENCE) throw unauthorized();
+  const tokenHash = sha256(token);
+  const {
+    rows: [row],
+  } = await db.query(
+    `SELECT connection.*
+     FROM agent_connections connection
+     JOIN accounts account ON account.id=connection.account_id
+     JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.owner_id=account.id
+     WHERE connection.token_hash=$1 AND connection.audience=$2
+       AND connection.revoked_at IS NULL AND connection.expires_at>now()
+       AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
+    [tokenHash, audience],
+  );
+  if (!row) throw unauthorized();
+  if (scope) requireScope(row.scopes, scope);
+  const seen = await db.query(
+    `UPDATE agent_connections connection
+     SET last_seen_at=clock_timestamp()
+     FROM accounts account,tenants tenant
+     WHERE connection.token_hash=$1 AND connection.audience=$2
+       AND connection.revoked_at IS NULL AND connection.expires_at>now()
+       AND account.id=connection.account_id AND NOT account.disabled
+       AND account.deletion_requested_at IS NULL
+       AND tenant.id=connection.tenant_id AND tenant.owner_id=account.id`,
+    [tokenHash, audience],
+  );
+  if (!seen.rowCount) throw unauthorized();
+  return {
+    accountId: row.account_id,
+    tenantId: row.tenant_id,
+    connectionId: row.id,
+    scopes: row.scopes,
+    audience: row.audience,
+    expiresAt: Math.floor(new Date(row.expires_at).getTime() / 1000),
+  };
+}
+
+export async function recheckServiceActor(
+  actor: ServiceActor,
+  scope: AgentScope,
+) {
+  const {
+    rows: [connection],
+  } = await db.query(
+    `SELECT connection.*
+     FROM agent_connections connection
+     JOIN accounts account ON account.id=connection.account_id
+     JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.owner_id=account.id
+     WHERE connection.id=$1 AND connection.tenant_id=$2
+       AND connection.account_id=$3 AND connection.audience=$4
+       AND connection.revoked_at IS NULL AND connection.expires_at>now()
+       AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
+    [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+  );
+  if (!connection) throw unauthorized();
+  requireScope(connection.scopes, scope);
+  return {
+    accountId: connection.account_id,
+    tenantId: connection.tenant_id,
+    connectionId: connection.id,
+    scopes: connection.scopes,
+    audience: connection.audience,
+    expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
+  } satisfies ServiceActor;
+}
+
+export async function withServiceActorTransaction<T>(
+  actor: ServiceActor,
+  scope: AgentScope,
+  operation: (c: PoolClient, actor: ServiceActor) => Promise<T>,
+) {
+  return withLockedServiceActor(actor, async (c, verified) => {
+    requireScope(verified.scopes, scope);
+    return operation(c, verified);
+  });
+}
+
+/**
+ * Recheck a service connection without taking owner locks before an operation
+ * that has its own cross-tenant lock order. The operation must validate actor
+ * account/tenant and its resource ACL. Byte readers hold canonical row locks
+ * until reading finishes; catalog readers authorize one SQL snapshot.
+ */
+export async function withFreshServiceActorTransaction<T>(
+  actor: ServiceActor,
+  scope: AgentScope,
+  operation: (c: PoolClient, actor: ServiceActor) => Promise<T>,
+) {
+  return transaction(async (c) => {
+    const {
+      rows: [connection],
+    } = await c.query(
+      `SELECT connection.* FROM agent_connections connection
+       JOIN accounts account ON account.id=connection.account_id
+       JOIN tenants tenant ON tenant.id=connection.tenant_id
+         AND tenant.owner_id=account.id
+       WHERE connection.id=$1 AND connection.tenant_id=$2
+         AND connection.account_id=$3 AND connection.audience=$4
+         AND connection.revoked_at IS NULL AND connection.expires_at>now()
+         AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
+      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+    );
+    if (!connection) throw unauthorized();
+    requireScope(connection.scopes, scope);
+    const verified: ServiceActor = {
+      accountId: connection.account_id,
+      tenantId: connection.tenant_id,
+      connectionId: connection.id,
+      scopes: connection.scopes,
+      audience: connection.audience,
+      expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
+    };
+    const result = await operation(c, verified);
+    const current = await c.query(
+      `SELECT scopes FROM agent_connections
+       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4
+         AND revoked_at IS NULL AND expires_at>now()
+       FOR SHARE`,
+      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+    );
+    if (!current.rowCount) throw unauthorized();
+    requireScope(current.rows[0].scopes, scope);
+    return result;
+  });
+}
+
+async function withLockedServiceActor<T>(
+  actor: ServiceActor,
+  operation: (c: PoolClient, actor: ServiceActor) => Promise<T>,
+) {
+  return transaction(async (c) => {
+    await lockActiveOwnerTenant(
+      c,
+      { id: actor.accountId, tenant: actor.tenantId },
+      unauthorized,
+    );
+    const {
+      rows: [connection],
+    } = await c.query(
+      `SELECT * FROM agent_connections
+       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4
+       FOR UPDATE`,
+      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+    );
+    if (
+      !connection ||
+      connection.revoked_at ||
+      new Date(connection.expires_at).getTime() <= Date.now()
+    )
+      throw unauthorized();
+    const verified: ServiceActor = {
+      accountId: connection.account_id,
+      tenantId: connection.tenant_id,
+      connectionId: connection.id,
+      scopes: connection.scopes,
+      audience: connection.audience,
+      expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
+    };
+    return operation(c, verified);
+  });
+}
+
+export async function withServiceActorDerivedScopeTransaction<Value, Result>(
+  actor: ServiceActor,
+  derive: (
+    c: PoolClient,
+    actor: ServiceActor,
+  ) => Promise<{ scope: AgentScope; value: Value }>,
+  operation: (
+    c: PoolClient,
+    actor: ServiceActor,
+    value: Value,
+  ) => Promise<Result>,
+) {
+  return withLockedServiceActor(actor, async (c, verified) => {
+    const { scope, value } = await derive(c, verified);
+    requireScope(verified.scopes, scope);
+    return operation(c, verified, value);
+  });
+}

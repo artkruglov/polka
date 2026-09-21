@@ -1,0 +1,64 @@
+[
+  {
+    "slug": "packing-checklist",
+    "receipt": {
+      "uploadId": "90f112ac-c52b-4433-b306-a43add13d5c4",
+      "artifactId": "b4c07a9b-7c4d-4d75-af5d-a248015a23df",
+      "revisionId": "bd19b542-621f-4e69-a59f-f6f7208eb96d",
+      "number": 1,
+      "sha256": "3496aa53a946eb72e0d31d4e4aa95918f7f857c704ae246c6599a862a8f5abbf",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "32a4c5aab80bbee8ab5d9238383675100fd093a8533fcb7bb6bf6c8f4c1405bb",
+      "storageKind": "bundle",
+      "totalSize": 7627
+    },
+    "preview": {
+      "uploadId": "90f112ac-c52b-4433-b306-a43add13d5c4",
+      "revisionId": "bd19b542-621f-4e69-a59f-f6f7208eb96d",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "share": {
+      "shareId": "a62004fb-b9bd-4c8f-8697-56e0301c2d91",
+      "artifactId": "b4c07a9b-7c4d-4d75-af5d-a248015a23df",
+      "revisionId": "bd19b542-621f-4e69-a59f-f6f7208eb96d",
+      "derivativeId": "5e479796-dca3-489e-b395-8b798b629d8e",
+      "expiresAt": "2026-09-21T21:55:05.965Z",
+      "state": "active"
+    }
+  },
+  {
+    "slug": "contrast-explorer",
+    "receipt": {
+      "uploadId": "8c36342a-06d8-4480-ab01-5a467cdf063e",
+      "artifactId": "4c4fda5a-c3c7-41b5-8290-32dfdb5f0046",
+      "revisionId": "7da97429-29f1-4b64-9c0f-24c1c1f74993",
+      "number": 1,
+      "sha256": "3c833d581471a7d9321e9ac491c37392706ab03a4cca5b077eb1f96cfb63398e",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "e8c81d0beffa83cc8b9092a2a06a11c248df14712055c90c722cb61e8fe88d9d",
+      "storageKind": "bundle",
+      "totalSize": 7411
+    },
+    "preview": {
+      "uploadId": "8c36342a-06d8-4480-ab01-5a467cdf063e",
+      "revisionId": "7da97429-29f1-4b64-9c0f-24c1c1f74993",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "share": {
+      "shareId": "c32f12f4-4632-4fe1-915d-ee03386dc7f5",
+      "artifactId": "4c4fda5a-c3c7-41b5-8290-32dfdb5f0046",
+      "revisionId": "7da97429-29f1-4b64-9c0f-24c1c1f74993",
+      "derivativeId": "feb811bb-0f75-4d56-acca-20db013a34ad",
+      "expiresAt": "2026-09-21T21:55:06.138Z",
+      "state": "active"
+    }
+  }
+]

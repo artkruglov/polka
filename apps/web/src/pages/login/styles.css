@@ -1,0 +1,20 @@
+/* Local login layout inside the same navigation shell as every product page. */
+#root .login-shell .login-page { min-height: calc(100dvh - 48px); max-width: 1180px; padding: 48px; align-items:center; gap:48px; }
+#root .login-shell .login-intro { padding:0; }
+#root .login-shell .login-intro h1 { font-size:clamp(32px,3.4vw,48px); line-height:1.12; letter-spacing:-1.6px; }
+#root .login-shell .login-intro em { font:inherit; color:var(--p-accent,#2855ef); }
+#root .login-shell .login-form { width:100%; min-width:0; }
+#root .login-shell .login-form .ui-field { width:100%; }
+@media(max-width:1000px) {
+ #root .login-shell .login-page { grid-template-columns:1fr; max-width:600px; gap:24px; padding:32px; }
+ #root .login-shell .intro-stack { display:none; }
+}
+@media(max-width:760px) {
+ #root .login-shell .login-page { min-height:auto; padding:24px 20px 32px; gap:20px; }
+ #root .login-shell .login-intro h1 { font-size:30px; letter-spacing:-.9px; }
+ #root .login-shell .login-form { padding:0; }
+}
+#root .login-shell .intro-stack { display:grid; gap:8px; }
+#root .login-shell .intro-stack > div { background:#f5f6fa; color:#202735; transform:none; border:1px solid #e5e8ef; box-shadow:none; border-radius:8px; margin:0; width:100%; }
+#root .login-shell .login-capture { background:#fff; color:#263247; border-color:#e1e5ed; }
+@media(max-width:1000px) { #root .login-shell .intro-stack { display:none; } }

@@ -1,0 +1,33 @@
+{
+  "slug": "fractions",
+  "receipt": {
+    "uploadId": "c61aedee-dd1e-456c-93a5-55f8cb01188b",
+    "artifactId": "f5cd367c-6180-4e4d-bef3-cdebafe76b46",
+    "revisionId": "285e1991-6f99-4f3f-8efe-5c2f8b42f9ee",
+    "number": 2,
+    "sha256": "bdcf96707d4167a630f0afe7d342d7893c04b64eea6c622d4be680056d795867",
+    "htmlProfile": "unsupported",
+    "manifestSha256": "8093daa721d90c7ef660e76d216de2af7b590a11f9aa2e4bbc30a78794fb9823",
+    "storageKind": "bundle",
+    "totalSize": 8665
+  },
+  "preview": {
+    "uploadId": "c61aedee-dd1e-456c-93a5-55f8cb01188b",
+    "revisionId": "285e1991-6f99-4f3f-8efe-5c2f8b42f9ee",
+    "concurrent": false,
+    "state": "ready",
+    "runtimeProfile": "bundle-inline-experimental-v1",
+    "reason": null,
+    "path": null
+  },
+  "share": {
+    "shareId": "7c51eacc-7f53-4d5d-be63-1ae387cc738e",
+    "artifactId": "f5cd367c-6180-4e4d-bef3-cdebafe76b46",
+    "revisionId": "285e1991-6f99-4f3f-8efe-5c2f8b42f9ee",
+    "derivativeId": "8b0d83bb-872c-4c6c-846c-32082aec2d3f",
+    "expiresAt": "2026-09-21T21:16:45.798Z",
+    "state": "active"
+  },
+  "exactExport": true,
+  "sourceHash": "bdcf96707d4167a630f0afe7d342d7893c04b64eea6c622d4be680056d795867"
+}

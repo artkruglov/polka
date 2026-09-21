@@ -1,0 +1,105 @@
+{
+  "localOnly": true,
+  "publications": [
+    {
+      "slug": "fractions",
+      "publicationId": "c92a09e6-4457-4365-983d-9da202227cd9",
+      "revisionId": "285e1991-6f99-4f3f-8efe-5c2f8b42f9ee",
+      "sourceSha256": "bdcf96707d4167a630f0afe7d342d7893c04b64eea6c622d4be680056d795867",
+      "shareId": "b2eade04-7b05-499b-8e2e-1b1a8f8eb8aa",
+      "expiresAt": "2026-09-27T22:45:40.704Z"
+    },
+    {
+      "slug": "city-observation",
+      "publicationId": "9cc569a5-21c0-4229-a218-dcbb9dbea92f",
+      "revisionId": "04f35f4c-66d5-4e0b-9a96-665f6b2136fe",
+      "sourceSha256": "d24709d460ac05005dc0ebf386a548b2df553441b78d1de1c8601780e20439a9",
+      "shareId": "9aad2cff-1c26-4a94-ab05-5a91f817a992",
+      "expiresAt": "2026-09-27T22:45:40.911Z"
+    },
+    {
+      "slug": "week-allocation",
+      "publicationId": "1104ca6b-5b3d-400d-80d9-fd187f20b336",
+      "revisionId": "06302c5e-ed68-44b6-aa9f-0bba9c7fd7bf",
+      "sourceSha256": "2e43065b2ccc4e2f2d91b69d23f31fd7e5b82452694172f46d277240dd62531d",
+      "shareId": "aca55196-0d83-4231-b03d-aa6a6f72bfdd",
+      "expiresAt": "2026-09-27T22:45:41.105Z"
+    },
+    {
+      "slug": "data-literacy",
+      "publicationId": "3b7a2281-458e-4f1e-940a-c09ebb9004ae",
+      "revisionId": "e06bc357-d9db-4373-a4be-dcd711688983",
+      "sourceSha256": "ec984aac758aa73f618bc44c26b002ec579679f4a22ad7fd1912cca0841acd17",
+      "shareId": "5dd02fd2-f25d-453c-8ade-3db3acdaa6f1",
+      "expiresAt": "2026-09-27T22:45:41.292Z"
+    },
+    {
+      "slug": "packing-checklist",
+      "publicationId": "442f5ada-c06b-44a2-81fc-db6263a81aa4",
+      "revisionId": "bd19b542-621f-4e69-a59f-f6f7208eb96d",
+      "sourceSha256": "3496aa53a946eb72e0d31d4e4aa95918f7f857c704ae246c6599a862a8f5abbf",
+      "shareId": "b97d9e06-476b-4efc-a2dc-ef1ca99d2c0f",
+      "expiresAt": "2026-09-27T22:45:41.473Z"
+    },
+    {
+      "slug": "contrast-explorer",
+      "publicationId": "deebf5b8-a56b-4fc2-95ce-f20bbe96c9d1",
+      "revisionId": "7da97429-29f1-4b64-9c0f-24c1c1f74993",
+      "sourceSha256": "3c833d581471a7d9321e9ac491c37392706ab03a4cca5b077eb1f96cfb63398e",
+      "shareId": "034efec7-48d8-46b3-a74a-16868cc4510d",
+      "expiresAt": "2026-09-27T22:45:41.659Z"
+    },
+    {
+      "slug": "meal-plan",
+      "publicationId": "359e1784-a06b-4d72-abab-4d81eb640ac6",
+      "revisionId": "3c2c3b3f-9104-444f-b34b-9ca54081814b",
+      "sourceSha256": "903ea4f1e6fccc9ff502f41f1f340af60a97bdbd6d9f2392c017d8eab49d28d0",
+      "shareId": "898e9480-ce3c-4469-887d-f39bf9ec9bf4",
+      "expiresAt": "2026-09-27T22:45:41.846Z"
+    },
+    {
+      "slug": "sorting-explainer",
+      "publicationId": "42304c18-bc6f-4911-a719-a47ac70fda5a",
+      "revisionId": "dfce0e2d-d672-4335-a29e-3173fd059fa2",
+      "sourceSha256": "df89214cb06f0371e3e55fcff95c732421c6f0ff2ea5797202965993ccaf0c1e",
+      "shareId": "97842583-9afe-45b3-9709-41e151e312e0",
+      "expiresAt": "2026-09-27T22:45:42.036Z"
+    },
+    {
+      "slug": "reading-session",
+      "publicationId": "cb8e4eaf-7d88-4615-b16f-fdd6720f1076",
+      "revisionId": "c6b6b0fb-611a-4bcb-98f2-5083fb72eff8",
+      "sourceSha256": "6d5e0857e0944847a99622202ec73f4c8b555ccb18a83c8a281d99b21034c12c",
+      "shareId": "870dccb6-74b1-4578-8ef2-249d9dc0df36",
+      "expiresAt": "2026-09-27T22:45:42.227Z"
+    },
+    {
+      "slug": "tile-pattern",
+      "publicationId": "27c96e69-b487-4432-8a6a-8d1c86c9f4c0",
+      "revisionId": "3f3d28fa-9f59-43f8-962e-5deb05e6ad5f",
+      "sourceSha256": "f607e3613d3440026e4425da28228ccf46b9ed3380baa1caa645b77dd614b22c",
+      "shareId": "7aa0af71-1259-4c38-920d-601c73092b50",
+      "expiresAt": "2026-09-27T22:45:42.417Z"
+    },
+    {
+      "slug": "probability-lab",
+      "publicationId": "a3b9939a-2f63-4c33-a8e4-394bced644e3",
+      "revisionId": "cbf4cfba-8824-4401-912a-ed8a202bcfa1",
+      "sourceSha256": "1f643c2461bf783c9bf68d7756e90bd546bed337e7e60d61d8a908de85c64085",
+      "shareId": "18d59e3b-dbc8-4bdc-83fa-73f0e61e70b8",
+      "expiresAt": "2026-09-27T22:45:42.602Z"
+    },
+    {
+      "slug": "decision-matrix",
+      "publicationId": "360339c0-8082-43d0-9758-d2a98469a787",
+      "revisionId": "afc821d9-174d-4dc4-9296-224ff7c5b7ff",
+      "sourceSha256": "6e3c97657b745c69fa73be67ff934526420e7476de6911e49edb97861eec13a3",
+      "shareId": "2368ca64-c047-46c4-bde2-63bb31205f59",
+      "expiresAt": "2026-09-27T22:45:42.790Z"
+    }
+  ],
+  "apiCount": 12,
+  "allDetailsMatch": true,
+  "dedicatedShareIds": true,
+  "oldExampleResolveStatus": 404
+}

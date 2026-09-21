@@ -1,0 +1,8 @@
+.component-catalog { max-width:1040px; margin:0 auto; padding:40px 24px 80px; color:#101318; font-family:var(--font-sans); }
+.component-catalog h1 { font-size:36px; letter-spacing:-.04em; }
+.component-catalog h2 { font-size:22px; margin:0 0 20px; }
+.component-catalog > section { padding:28px 0; border-top:1px solid #e7ebf1; }
+.component-samples { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
+.component-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:24px; }
+.component-catalog .ui-status-panel { margin-bottom:16px; }
+@media(max-width:600px){ .component-catalog {padding:24px 20px;} .component-catalog h1 {font-size:30px;} }

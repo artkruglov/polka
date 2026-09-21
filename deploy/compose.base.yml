@@ -1,0 +1,133 @@
+# Self-host base candidate. Requires an operator-provided base.env and one
+# immutable POLKA_IMAGE digest. DB and S3 are external and are never published here.
+name: polka-base
+services:
+  migrate:
+    image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
+    user: node
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    environment:
+      DATABASE_URL: ${SCHEMA_DATABASE_URL:?Set SCHEMA_DATABASE_URL for the migration owner}
+    command: ["node", "--import", "tsx", "scripts/migrate.ts"]
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  storage-check:
+    image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
+    user: node
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+      HOST: 127.0.0.1
+      PORT: "4390"
+      HTML_LIVE_ENABLED: "false"
+      ACCOUNT_DELETION_ENABLED: "false"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    command: ["node", "--import", "tsx", "scripts/storage-check.ts", "--confirm-bootstrap"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  app:
+    image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
+    user: node
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+      HOST: 0.0.0.0
+      PORT: "4390"
+      HTML_LIVE_ENABLED: "false"
+      ACCOUNT_DELETION_ENABLED: "false"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      MAIL_MODE: "disabled"
+    ports:
+      - "127.0.0.1:${APP_PORT:-4390}:4390"
+    command: ["node", "--import", "tsx", "apps/server/main.ts"]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+    depends_on:
+      storage-check:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4390/readyz',{signal:AbortSignal.timeout(1500)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 2s
+      retries: 6
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  maintenance:
+    image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
+    user: node
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 65s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+      HOST: 127.0.0.1
+      PORT: "4390"
+      HTML_LIVE_ENABLED: "false"
+      ACCOUNT_DELETION_ENABLED: "false"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      MAIL_MODE: "disabled"
+    command: ["node", "--import", "tsx", "scripts/maintenance-runner.ts"]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+    depends_on:
+      app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M

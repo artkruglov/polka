@@ -1,0 +1,243 @@
+import { transaction } from "./db.ts";
+import { lockActiveOwnerTenant } from "./owner-state.ts";
+import type { PoolClient } from "pg";
+import type { Actor } from "./artifacts.ts";
+import { z } from "zod";
+import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
+import { uuid } from "../../packages/contracts/index.ts";
+import { Problem, missing } from "./errors.ts";
+import {
+  withServiceActorTransaction,
+  type ServiceActor,
+} from "./service-auth.ts";
+import {
+  beginBundleUploadInTransaction,
+  uploadBundleFileInTransaction,
+  finalizeBundleUploadInTransaction,
+  normalizeBundleRequest,
+  validateBundleFileBytes,
+} from "./artifacts.ts";
+import { previewStatusInTransaction } from "./agent-preview.ts";
+
+export const captureSchema = z
+  .object({
+    key: uuid,
+    title: z.string().trim().min(1).max(200),
+    folderId: uuid.optional(),
+    artifactId: uuid.optional(),
+    baseRevisionId: uuid.optional(),
+    manifest: z.unknown(),
+    files: z
+      .array(
+        z
+          .object({
+            path: z.string().max(200),
+            encoding: z.enum(["base64", "utf8"]),
+            data: z.string().max(7_000_000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(64),
+  })
+  .strict();
+
+export function validateAgentCapture(
+  body: unknown,
+  mode: "capture" | "revise",
+) {
+  const input = captureSchema.parse(body);
+  if (
+    mode === "capture"
+      ? !!(input.artifactId || input.baseRevisionId)
+      : !(input.artifactId && input.baseRevisionId)
+  )
+    throw new Problem(400, "invalid", "Укажите корректную область сохранения.");
+  const manifest = canonicalizeManifest(input.manifest);
+  if (
+    input.files.reduce((sum, file) => sum + Buffer.byteLength(file.data), 0) >
+    8 * 1024 * 1024
+  )
+    throw new Problem(413, "quota", "Пакет превышает лимит передачи.");
+  const source = new Map<string, Buffer>();
+  for (const file of input.files) {
+    if (source.has(file.path))
+      throw new Problem(400, "invalid", "Файл указан повторно.");
+    const bytes = Buffer.from(
+      file.data,
+      file.encoding === "utf8" ? "utf8" : "base64",
+    );
+    if (file.encoding === "utf8" && bytes.toString("utf8") !== file.data)
+      throw new Problem(400, "invalid", "Некорректный UTF-8.");
+    if (file.encoding === "base64" && bytes.toString("base64") !== file.data)
+      throw new Problem(400, "invalid", "Некорректный base64.");
+    source.set(file.path, bytes);
+  }
+  if (source.size !== manifest.files.length)
+    throw new Problem(400, "invalid", "Состав пакета не совпадает с manifest.");
+  for (const file of manifest.files) {
+    const bytes = source.get(file.path);
+    if (!bytes) throw new Problem(400, "invalid", "Не передан файл manifest.");
+    validateBundleFileBytes(file, bytes);
+  }
+  return { input, manifest, source };
+}
+
+export type CaptureHooks = { beforeStep?: (c:PoolClient)=>Promise<void>; afterSave?: (c:PoolClient,receipt:unknown)=>Promise<void> };
+
+/** Each durable upload step rechecks current scope/revocation; no nested transaction. */
+async function capturePrepared(
+  actor: ServiceActor | Actor,
+  body: unknown,
+  mode: "capture" | "revise",
+  hooks: CaptureHooks = {},
+) {
+  const { input, manifest, source } = validateAgentCapture(body, mode);
+  const service = "accountId" in actor ? actor : null;
+  const owner: Actor = service ? {id:service.accountId,tenant:service.tenantId,connectionId:service.connectionId} : actor as Actor;
+  // Browser actors must never impersonate a service connection.
+  if (!service && owner.connectionId) throw new Problem(403,"forbidden","Некорректная область сохранения.");
+  const run = <T>(operation:(c:PoolClient)=>Promise<T>) => {
+    const guarded = async(c:PoolClient) => {await hooks.beforeStep?.(c);return operation(c);};
+    return service ? withServiceActorTransaction(service,mode,guarded)
+      : transaction(async c=>{await lockActiveOwnerTenant(c,owner);return guarded(c);});
+  };
+  const begun = await run(async (c) => {
+    const old = (
+      await c.query(
+        "SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
+        [owner.tenant, input.key],
+      )
+    ).rows[0];
+    if (old && old.connection_id !== (owner.connectionId ?? null))
+      throw new Problem(
+        409,
+        "conflict",
+        "Ключ уже относится к другой операции.",
+      );
+    const result = await beginBundleUploadInTransaction(
+      c,
+      owner,
+      normalizeBundleRequest({
+        key: input.key,
+        title: input.title,
+        manifest,
+        ...(input.folderId ? { folderId: input.folderId } : {}),
+        ...(mode === "revise"
+          ? {
+              artifactId: input.artifactId,
+              baseRevisionId: input.baseRevisionId,
+            }
+          : {}),
+      }),
+    );
+    await c.query(
+      "UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3",
+      [result.uploadId, (owner.connectionId ?? null), owner.tenant],
+    );
+    return result;
+  });
+  for (const [index, file] of manifest.files.entries()) {
+    await run(async (c) => {
+      const row = (
+        await c.query(
+          "SELECT request FROM uploads WHERE id=$1 AND tenant_id=$2 AND connection_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
+          [begun.uploadId, owner.tenant, (owner.connectionId ?? null)],
+        )
+      ).rows[0];
+      if (!row) throw missing();
+      if (!!row.request.artifactId !== (mode === "revise"))
+        throw new Problem(
+          403,
+          "forbidden",
+          "Неверное разрешение для операции.",
+        );
+      await uploadBundleFileInTransaction(
+        c,
+        owner,
+        begun.uploadId,
+        index,
+        source.get(file.path)!,
+      );
+    });
+  }
+  return run(async (c) => {
+    const row = (
+      await c.query(
+        "SELECT request FROM uploads WHERE id=$1 AND tenant_id=$2 AND connection_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
+        [begun.uploadId, owner.tenant, (owner.connectionId ?? null)],
+      )
+    ).rows[0];
+    if (!row) throw missing();
+    if (!!row.request.artifactId !== (mode === "revise"))
+      throw new Problem(403, "forbidden", "Неверное разрешение для операции.");
+    const receipt = await finalizeBundleUploadInTransaction(c, owner, begun.uploadId);
+    await hooks.afterSave?.(c,receipt);
+    return receipt;
+  });
+}
+
+export function captureFromAgent(actor:ServiceActor,body:unknown,mode:"capture"|"revise",hooks:CaptureHooks={}) {
+  return capturePrepared(actor,body,mode,hooks);
+}
+
+/** Shared persistence for browser URL jobs; auth is rechecked at every step. */
+export function captureForOwner(actor:Actor,body:unknown,hooks:CaptureHooks={}) {
+  return capturePrepared(actor,body,"capture",hooks);
+}
+
+export async function statusForAgent(
+  actor: ServiceActor,
+  query: { uploadId?: string; key?: string },
+) {
+  const input = z
+    .object({ uploadId: uuid.optional(), key: uuid.optional() })
+    .strict()
+    .refine((v) => !!v.uploadId !== !!v.key)
+    .parse(query);
+  return withServiceActorTransaction(actor, "context", async (c) => {
+    const row = (
+      await c.query(
+        `SELECT upload.id,upload.receipt,upload.aborted,upload.expires_at,
+                CASE WHEN artifact.id IS NULL THEN NULL
+                     WHEN artifact.trashed_at IS NULL THEN 'active'
+                     ELSE 'trashed' END AS artifact_state
+         FROM uploads upload
+         LEFT JOIN revisions revision
+           ON revision.id=(upload.receipt->>'revisionId')::uuid
+         LEFT JOIN artifacts artifact ON artifact.id=revision.artifact_id
+         WHERE upload.tenant_id=$1 AND upload.connection_id=$2
+           AND ($3::uuid IS NULL OR upload.id=$3)
+           AND ($4::uuid IS NULL OR upload.idempotency_key=$4)`,
+        [
+          actor.tenantId,
+          actor.connectionId,
+          input.uploadId ?? null,
+          input.key ?? null,
+        ],
+      )
+    ).rows[0];
+    if (!row) throw missing();
+    const preview =
+      row.receipt?.revisionId && row.artifact_state === "active"
+        ? await previewStatusInTransaction(
+            c,
+            actor.tenantId,
+            uuid.parse(row.receipt.revisionId),
+          )
+        : null;
+    return {
+      uploadId: row.id,
+      receipt: row.receipt,
+      preview,
+      artifactState: row.receipt ? row.artifact_state : null,
+      state: row.receipt
+        ? "saved"
+        : row.aborted
+          ? "aborted"
+          : new Date(row.expires_at).getTime() <= Date.now()
+            ? "expired"
+            : "pending",
+    };
+  });
+}

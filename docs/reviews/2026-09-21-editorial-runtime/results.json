@@ -1,0 +1,64 @@
+[
+  {
+    "slug": "fractions",
+    "receipt": {
+      "uploadId": "a47a249f-75ce-4989-b008-ee02b00fc678",
+      "artifactId": "f5cd367c-6180-4e4d-bef3-cdebafe76b46",
+      "revisionId": "458ccb25-4eea-498b-b0b6-8318c897c3ad",
+      "number": 1,
+      "sha256": "b3284d7f908f545b5868e0255a5419c29402a62c8c1ccdb470f4cf0af522f66f",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "54273b2681ecd78fdad16b2eb57e56e535e38c6db132600abca7e97f4553972a",
+      "storageKind": "bundle",
+      "totalSize": 8625
+    },
+    "preview": {
+      "uploadId": "a47a249f-75ce-4989-b008-ee02b00fc678",
+      "revisionId": "458ccb25-4eea-498b-b0b6-8318c897c3ad",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "share": {
+      "shareId": "07939f43-4668-43e2-ae46-6546f8f4fb20",
+      "artifactId": "f5cd367c-6180-4e4d-bef3-cdebafe76b46",
+      "revisionId": "458ccb25-4eea-498b-b0b6-8318c897c3ad",
+      "derivativeId": "53aca506-fa02-46e7-b360-426f5d96bd7e",
+      "expiresAt": "2026-09-21T21:00:46.996Z",
+      "state": "active"
+    }
+  },
+  {
+    "slug": "city-observation",
+    "receipt": {
+      "uploadId": "3cca31d3-afba-4326-a969-a6b2e8324766",
+      "artifactId": "d24c07e6-21dd-4a06-b593-13af8ff5950d",
+      "revisionId": "04f35f4c-66d5-4e0b-9a96-665f6b2136fe",
+      "number": 1,
+      "sha256": "d24709d460ac05005dc0ebf386a548b2df553441b78d1de1c8601780e20439a9",
+      "htmlProfile": "unsupported",
+      "manifestSha256": "8e101b8f9536245cd704eb5caf1eb8fe25b6f7732c27f9a0f190d2b767a14021",
+      "storageKind": "bundle",
+      "totalSize": 10677
+    },
+    "preview": {
+      "uploadId": "3cca31d3-afba-4326-a969-a6b2e8324766",
+      "revisionId": "04f35f4c-66d5-4e0b-9a96-665f6b2136fe",
+      "concurrent": false,
+      "state": "ready",
+      "runtimeProfile": "bundle-inline-experimental-v1",
+      "reason": null,
+      "path": null
+    },
+    "share": {
+      "shareId": "8a2d86ef-6547-4dd2-884c-9d4564cf9a04",
+      "artifactId": "d24c07e6-21dd-4a06-b593-13af8ff5950d",
+      "revisionId": "04f35f4c-66d5-4e0b-9a96-665f6b2136fe",
+      "derivativeId": "f9ca538c-bd8f-46c8-914d-ad8c7ebaf082",
+      "expiresAt": "2026-09-21T21:00:47.160Z",
+      "state": "active"
+    }
+  }
+]

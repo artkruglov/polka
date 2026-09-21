@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Storage access probe</title>
+<h1>Storage access probe</h1>
+<p>The script attempts local, session, and cookie reads without sending their values anywhere.</p>
+<script>
+  const reads = [
+    () => localStorage.getItem("synthetic-secret"),
+    () => sessionStorage.getItem("synthetic-secret"),
+    () => document.cookie,
+  ];
+  for (const read of reads) {
+    try { read(); } catch {}
+  }
+</script>

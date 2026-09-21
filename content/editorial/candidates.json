@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "status": "local-acceptance-only",
+  "publication": "requires-explicit-registration",
+  "items": [
+    {
+      "slug": "fractions",
+      "title": "Доли без зубрёжки",
+      "topic": "Обучение",
+      "task": "Понять дроби на простых примерах",
+      "action": "Ответить на пять вопросов и проверить результат",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/fractions/index.html",
+      "sourceSha256": "bdcf96707d4167a630f0afe7d342d7893c04b64eea6c622d4be680056d795867",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "city-observation",
+      "title": "Город глазами наблюдателя",
+      "topic": "Исследования",
+      "task": "Посмотреть, как устроен короткий городской разбор",
+      "action": "Листать шесть слайдов и сравнивать наблюдения",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/city-observation/index.html",
+      "sourceSha256": "d24709d460ac05005dc0ebf386a548b2df553441b78d1de1c8601780e20439a9",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "week-allocation",
+      "title": "Куда уходит неделя",
+      "topic": "Планирование",
+      "task": "Разложить 168 часов недели по занятиям",
+      "action": "Изменить часы и увидеть остаток или превышение",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/week-allocation/index.html",
+      "sourceSha256": "2e43065b2ccc4e2f2d91b69d23f31fd7e5b82452694172f46d277240dd62531d",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "data-literacy",
+      "title": "Среднее не всегда рассказывает всё",
+      "topic": "Данные",
+      "task": "Понять влияние выброса на среднее и медиану",
+      "action": "Изменить одно значение и сравнить показатели",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/data-literacy/index.html",
+      "sourceSha256": "ec984aac758aa73f618bc44c26b002ec579679f4a22ad7fd1912cca0841acd17",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "packing-checklist",
+      "title": "Рюкзак на день",
+      "topic": "Повседневное",
+      "task": "Подготовить список вещей для прогулки",
+      "action": "Отмечать пункты и проверять прогресс",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/packing-checklist/index.html",
+      "sourceSha256": "3496aa53a946eb72e0d31d4e4aa95918f7f857c704ae246c6599a862a8f5abbf",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "contrast-explorer",
+      "title": "Контраст в руках",
+      "topic": "Дизайн",
+      "task": "Сравнить яркость двух цветов",
+      "action": "Выбрать цвета и увидеть живой образец и расчёт",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/contrast-explorer/index.html",
+      "sourceSha256": "3c833d581471a7d9321e9ac491c37392706ab03a4cca5b077eb1f96cfb63398e",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "meal-plan",
+      "title": "Неделя на столе",
+      "topic": "Планирование",
+      "task": "Собрать идеи блюд по дням",
+      "action": "Редактировать поля недели и очистить черновик",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/meal-plan/index.html",
+      "sourceSha256": "903ea4f1e6fccc9ff502f41f1f340af60a97bdbd6d9f2392c017d8eab49d28d0",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "sorting-explainer",
+      "title": "Как числа находят порядок",
+      "topic": "Обучение",
+      "task": "Разобраться в соседних сравнениях сортировки",
+      "action": "Пройти шаги вручную или запустить анимацию",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/sorting-explainer/index.html",
+      "sourceSha256": "df89214cb06f0371e3e55fcff95c732421c6f0ff2ea5797202965993ccaf0c1e",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "reading-session",
+      "title": "Читательская сессия",
+      "topic": "Обучение",
+      "task": "Прочитать фрагмент с ясным вопросом",
+      "action": "Пройти четыре шага и сформулировать итог",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/reading-session/index.html",
+      "sourceSha256": "6d5e0857e0944847a99622202ec73f4c8b555ccb18a83c8a281d99b21034c12c",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "tile-pattern",
+      "title": "Мастерская узоров",
+      "topic": "Дизайн",
+      "task": "Посмотреть, как повторение плиток создаёт рисунок",
+      "action": "Изменить seed, плотность и цвета",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/tile-pattern/index.html",
+      "sourceSha256": "f607e3613d3440026e4425da28228ccf46b9ed3380baa1caa645b77dd614b22c",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "probability-lab",
+      "title": "Лаборатория вероятностей",
+      "topic": "Обучение",
+      "task": "Сравнить наблюдаемую частоту с ожидаемой долей",
+      "action": "Запустить монету или кубик и изменить длину серии",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/probability-lab/index.html",
+      "sourceSha256": "1f643c2461bf783c9bf68d7756e90bd546bed337e7e60d61d8a908de85c64085",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    },
+    {
+      "slug": "decision-matrix",
+      "title": "Матрица решений",
+      "topic": "Планирование",
+      "task": "Сравнить варианты выходного дня по своим критериям",
+      "action": "Изменить веса и оценки, увидеть расчёт",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/decision-matrix/index.html",
+      "sourceSha256": "6e3c97657b745c69fa73be67ff934526420e7476de6911e49edb97861eec13a3",
+      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
+    }
+  ]
+}

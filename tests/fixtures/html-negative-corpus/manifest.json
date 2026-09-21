@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Bounded adversarial HTML corpus for future sandbox acceptance; fixtures are synthetic and must not be treated as proof of isolation",
+  "items": [
+    {
+      "id": "fetch-egress",
+      "file": "fetch-egress.html",
+      "sha256": "2a564721e621502b4cee48185773b7f48faebea1661c9015fd2668e395f4f32a",
+      "bytes": 326,
+      "threat": "fetch egress",
+      "expectedSandboxResult": "The fetch is blocked or contained; no request reaches the reserved invalid host and the viewer remains usable.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "image-beacon",
+      "file": "image-beacon.html",
+      "sha256": "fbeb1e35e86404470ef1aaa5ff0cdc392ed6ba1e4505f09fbf5479fb447887dc",
+      "bytes": 257,
+      "threat": "image beacon",
+      "expectedSandboxResult": "The image request is blocked or contained; no request reaches the reserved invalid host.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "parent-dom-access",
+      "file": "parent-dom-access.html",
+      "sha256": "ad12dbf9f7d9c2b21407fed2b802c8aeb16cf2c1ce8bef4296c692b9e414e474",
+      "bytes": 307,
+      "threat": "parent DOM access",
+      "expectedSandboxResult": "The embedded document cannot inspect or mutate the parent DOM; the viewer remains usable.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "top-navigation",
+      "file": "top-navigation.html",
+      "sha256": "4378d4554d46b8295c039af9f8455a40b6fe9db39aa234f268235acbff6c900d",
+      "bytes": 311,
+      "threat": "top navigation",
+      "expectedSandboxResult": "The click cannot navigate the top-level viewer away from the current page.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "popup",
+      "file": "popup.html",
+      "sha256": "e0a40ae20b9b27ae1682eb01cce1a1b992bf26fceed444916de7a3baba55b6bd",
+      "bytes": 288,
+      "threat": "popup",
+      "expectedSandboxResult": "The click cannot open a new window or tab; the viewer remains in its current context.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "storage-access",
+      "file": "storage-access.html",
+      "sha256": "d6911d957c26c64eac1635dc60ac3ae326c59ace67148a570b84ca1a72bd60f3",
+      "bytes": 442,
+      "threat": "storage access",
+      "expectedSandboxResult": "Local storage, session storage, and cookies are unavailable or isolated from the parent context.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "external-script",
+      "file": "external-script.html",
+      "sha256": "fdbf07120b7f0311f54f91369d0ff17dddd806a2918c469352e0327bcc36a730",
+      "bytes": 249,
+      "threat": "external script",
+      "expectedSandboxResult": "The external script is blocked; no code from the reserved invalid host executes.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "form-submission",
+      "file": "form-submission.html",
+      "sha256": "4a15ecc5bcbbf2c14cb127715d0c0cd6afa42975a12afb6962e0528ac4e9e749",
+      "bytes": 391,
+      "threat": "form submission",
+      "expectedSandboxResult": "The submission is blocked or contained; no request reaches the reserved invalid host.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    },
+    {
+      "id": "self-navigation",
+      "file": "self-navigation.html",
+      "sha256": "444c0f661aa91128fd303757c6a32b8c23eac4005797b1f5e8b92a70eb993de6",
+      "bytes": 323,
+      "threat": "self navigation",
+      "expectedSandboxResult": "Observe whether the browser attempts navigation of this frame. A DNS failure is not an egress denial. Any allowed attempt blocks a networkless acceptance claim.",
+      "origin": "Original Polka synthetic test fixture",
+      "license": "Apache-2.0",
+      "dependencies": [],
+      "liveAcceptance": "not-tested"
+    }
+  ]
+}

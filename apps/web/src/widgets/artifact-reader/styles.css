@@ -1,0 +1,5 @@
+.reader-versions { display:flex; gap:10px; overflow:auto; padding:16px 0; }
+.reader-versions .ui-button { flex-shrink:0; min-width:160px; justify-content:space-between; text-align:left; font-size:14px; }
+.reader-versions .ui-button > span { display:flex; flex-direction:column; }
+.reader-versions .ui-button small { font-size:12px; font-weight:400; }
+.reader-versions .ui-button[aria-pressed=true] { border-color:#b8caff; background:#edf2ff; color:#0755ff; }
