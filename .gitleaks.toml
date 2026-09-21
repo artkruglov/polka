@@ -4,5 +4,5 @@ useDefault = true
 
 [allowlist]
 description = "Reviewed test fixtures: UUID idempotency keys and S3 object names"
-regexes = ['''\.polka-r17-test''', '''abcdefghijklmnopqrstuvwxyzABCDEFG0123456789_-''']
+regexes = ['''\.polka-r17-test''', '''abcdefghijklmnopqrstuvwxyzABCDEFG0123456789_-''', '''0b6f3d2e-6a4c-4f7e-9d1a-2c5b8e7f4a10''']
 paths = ['''docs/reviews/2026-09-20-cli-capture/results\.json''']
