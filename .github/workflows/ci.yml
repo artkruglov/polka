@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+# Pull requests (including forks) get read-only access and no secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16"
+          cache: npm
+      - run: npm ci
+      # Disposable PostgreSQL and MinIO; the suite creates its own DB and bucket.
+      - run: npm run local:setup
+      - run: npm run infra:up
+      - run: npm run check
+      - run: npm run build
+      - run: npm test
+      - name: Licenses of production dependencies
+        run: >
+          npx --yes license-checker-rseidelsohn@4 --production --excludePrivatePackages
+          --onlyAllow "MIT;MIT-0;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;BlueOak-1.0.0"
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan history for secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 git /repo --redact --no-banner
+
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.16"
+      - run: docker build -t polka:ci .
+      - run: npm run local:setup
+      - run: npm run infra:up
+      - name: Smoke test the image
+        run: node scripts/ci/image-smoke.mjs polka:ci
