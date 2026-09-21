@@ -30,6 +30,7 @@ const catalog = [
   { version: 24, file: "024_template_library_invitations.sql" },
   { version: 25, file: "025_template_library_viewer_grants.sql" },
   { version: 26, file: "026_template_library_events.sql" },
+  { version: 27, file: "027_single_file_bundle_profile.sql" },
 ] as const satisfies readonly SchemaMigration[];
 
 export const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = Object.freeze(

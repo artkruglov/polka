@@ -15,6 +15,13 @@ export const status = (a: Artifact) =>
     ? `По ссылке · v${a.share.number}`
     : "Только вы";
 export const isImage = (r: Revision) => r.mime.startsWith("image/");
+/** Mirrors the server: a lone static HTML entrypoint needs no runtime. */
+export const isStaticSingleFileBundle = (r: Revision) =>
+  r.storageKind === "bundle" &&
+  r.mime === "text/html" &&
+  (r.htmlProfile === "static" || r.htmlProfile === "limited") &&
+  r.manifest?.files.length === 1 &&
+  r.manifest.files[0].path === r.manifest.entrypoint;
 export const kindOf = (r: Pick<Revision, "mime">) =>
   r.mime === "text/html"
     ? "Страница"

@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
 import { bytes } from "../../shared/api/client.ts";
-import { isImage, size } from "../../entities/artifact/format.ts";
+import {
+  isImage,
+  isStaticSingleFileBundle,
+  size,
+} from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
 export function Preview({
@@ -51,7 +55,11 @@ export function Preview({
     };
   }, [revision.id, grant]);
   if (error) return <div className="preview-error">{error}</div>;
-  if (revision.storageKind === "bundle") {
+  // A lone static page saved as a bundle is shown like a single HTML upload.
+  if (
+    revision.storageKind === "bundle" &&
+    !isStaticSingleFileBundle(revision)
+  ) {
     const fallback = (
       <StatusPanel
         title="Копия сохранена"
@@ -140,7 +148,7 @@ export function Preview({
         key={`${revision.id}:${grant ?? ""}`}
         revision={revision}
         grant={grant}
-        requiresBuild={false}
+        requiresBuild={revision.storageKind === "bundle"}
         onInlineBuildChange={onInlineBuildChange}
       >
         {fallback}

@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import {
   beginUploadSchema,
   MAX_BYTES,
+  type HtmlProfile,
   type Revision,
   type Share,
   type Artifact,
@@ -18,7 +19,10 @@ import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
 import { classifyHtml, looksLikeHtml } from "./html.ts";
-import { createSingleHtmlRevisionManifest } from "./revision-manifest.ts";
+import {
+  createSingleHtmlRevisionManifest,
+  isStaticSingleFileBundle,
+} from "./revision-manifest.ts";
 import {
   BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
@@ -280,7 +284,7 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
   const {
     rows: [r],
   } = await c.query(
-    `SELECT r.html_profile,r.storage_kind,d.id AS derivative_id
+    `SELECT r.html_profile,r.storage_kind,r.mime,r.manifest,d.id AS derivative_id
      FROM revisions r
      LEFT JOIN revision_derivatives d
        ON d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
@@ -290,13 +294,22 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
   );
   if (!r) throw missing();
   if (r.storage_kind === "bundle") {
-    if (!config.HTML_LIVE_ENABLED || !r.derivative_id)
-      throw new Problem(
-        422,
-        "unsupported",
-        "Сначала подготовьте локальную интерактивную версию этой страницы.",
-      );
-    return r.derivative_id as string;
+    if (config.HTML_LIVE_ENABLED && r.derivative_id)
+      return r.derivative_id as string;
+    // A lone static page is linked like a single upload: static sandbox only.
+    if (isStaticSingleFileBundle(r)) return null;
+    const single = r.manifest?.files?.length === 1;
+    throw new Problem(
+      422,
+      "unsupported",
+      single
+        ? config.HTML_LIVE_ENABLED
+          ? "Статичный просмотр не покажет эту страницу: ей нужны скрипты, формы или внешние ресурсы. Подготовьте интерактивную версию (polka_prepare_preview) и повторите, либо сохраните страницу без скриптов и внешних ссылок."
+          : "Статичный просмотр не покажет эту страницу: ей нужны скрипты, формы или внешние ресурсы, а интерактивный просмотр на этой установке выключен. Ссылку не выпускаем; сохраните страницу одним HTML-файлом без скриптов, форм и внешних ссылок."
+        : config.HTML_LIVE_ENABLED
+          ? "Пакет из нескольких файлов открывается только в интерактивной версии, а она ещё не подготовлена. Подготовьте её (polka_prepare_preview) и повторите."
+          : "Пакет из нескольких файлов открывается только в интерактивной версии, а интерактивный просмотр на этой установке выключен. Ссылку не выпускаем; сохраните страницу одним самодостаточным HTML-файлом (стили и картинки встроены) без скриптов.",
+    );
   }
   if (r.html_profile === "unsupported")
     throw new Problem(
@@ -778,6 +791,7 @@ export async function finalizeBundleUploadInTransaction(
     object_key: string;
     object_version: string;
   }> = [];
+  let entryBytes: Buffer | null = null;
   for (const [index, file] of input.manifest.files.entries()) {
     const stored = staged.find((row) => row.file_index === index);
     if (
@@ -788,12 +802,19 @@ export async function finalizeBundleUploadInTransaction(
       throw new Error("Bundle staging invariant failed");
     const bytes = await readBlob(stored.object_key, stored.object_version);
     validateBundleFileBytes(file, bytes);
+    if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     verified.push({ file, ...stored });
   }
   const entryIndex = input.manifest.files.findIndex(
     (file) => file.path === input.manifest.entrypoint,
   );
   const entry = verified[entryIndex];
+  // A lone HTML entrypoint is classified exactly like a single upload; every
+  // multi-file bundle stays runtime-only until a derivative is prepared.
+  const htmlProfile: HtmlProfile =
+    input.manifest.files.length === 1 && entryBytes
+      ? classifyHtml(entryBytes.toString("utf8"))
+      : "unsupported";
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
   if (
@@ -810,7 +831,7 @@ export async function finalizeBundleUploadInTransaction(
   const manifestSha256 = sha256(JSON.stringify(input.manifest));
   await c.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
-       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,'unsupported',$11,$12,'bundle',$13)`,
+       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13)`,
     [
       revisionId,
       actor.tenant,
@@ -825,6 +846,7 @@ export async function finalizeBundleUploadInTransaction(
       input.manifest,
       manifestSha256,
       input.size,
+      htmlProfile,
     ],
   );
   for (const [index, stored] of verified.entries())
@@ -856,7 +878,7 @@ export async function finalizeBundleUploadInTransaction(
     revisionId,
     number,
     sha256: entry.file.sha256,
-    htmlProfile: "unsupported" as const,
+    htmlProfile,
     manifestSha256,
     storageKind: "bundle" as const,
     totalSize: input.size,

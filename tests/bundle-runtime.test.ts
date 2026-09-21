@@ -511,3 +511,78 @@ test("a stored attempt resumes immutably and expired cleanup deletes its exact o
   assert.equal(failed.state, "failed");
   assert.equal(failed.attempt_expires_at, null);
 });
+
+test("a static single-file bundle links statically until a ready derivative exists", async () => {
+  const page = Buffer.from(
+    "<!doctype html><html><body><h1>Lone page</h1><p>Static text.</p></body></html>",
+  );
+  const saved = await saveBundle(new Map([["index.html", page]]));
+  assert.equal(saved.htmlProfile, "static");
+  const shareOnce = async () => {
+    const response = await call(
+      "POST",
+      `/api/artifacts/${saved.artifactId}/share`,
+      { expectedRevisionId: saved.revisionId, expiresInDays: 1 },
+    );
+    assert.equal(response.statusCode, 200, response.body);
+    const share = response.json().share;
+    const resolved = await call(
+      "POST",
+      "/api/resolve",
+      { token: new URL(share.url).hash.slice(1) },
+      "",
+    );
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    const row = (
+      await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])
+    ).rows[0];
+    return { share, grant: resolved.json().grant, derivativeId: row.derivative_id };
+  };
+
+  // No derivative yet: the static sandbox serves the page, as with live off.
+  const before = await shareOnce();
+  assert.equal(before.derivativeId, null);
+  const document = await call(
+    "GET",
+    `/api/view/${before.grant}/document`,
+    undefined,
+    "",
+  );
+  assert.equal(document.statusCode, 200, document.body);
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox;/);
+  assert.equal(document.body, page.toString());
+  assert.equal(
+    (await call("POST", `/api/shares/${before.share.id}/revoke`, {})).statusCode,
+    200,
+  );
+
+  // A ready derivative keeps the existing live-mode binding.
+  const build = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/build-inline`,
+    {},
+  );
+  assert.ok([200, 202].includes(build.statusCode), build.body);
+  assert.equal(
+    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json()
+      .state,
+    "ready",
+  );
+  const after = await shareOnce();
+  const derivative = (
+    await db.query(
+      "SELECT id FROM revision_derivatives WHERE revision_id=$1 AND state='ready'",
+      [saved.revisionId],
+    )
+  ).rows[0];
+  assert.equal(after.derivativeId, derivative.id);
+  const live = await call(
+    "POST",
+    "/api/view/live-view",
+    undefined,
+    "",
+    after.grant,
+  );
+  assert.equal(live.statusCode, 200, live.body);
+  assert.equal(live.json().profile, BUNDLE_RUNTIME_PROFILE);
+});
