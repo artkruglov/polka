@@ -13,6 +13,10 @@ import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { STATIC_HTML_CSP } from "./html.ts";
 import {
+  isStaticSingleFileBundle,
+  staticSingleFileBundleSql,
+} from "./revision-manifest.ts";
+import {
   issueOwnerLiveView,
   issueRecipientLiveView,
   LIVE_HTML_PROFILE,
@@ -620,7 +624,7 @@ export async function createApp() {
       !r ||
       r.mime !== "text/html" ||
       r.html_profile === "unsupported" ||
-      r.storage_kind === "bundle"
+      (r.storage_kind === "bundle" && !isStaticSingleFileBundle(r))
     )
       throw missing();
     reply
@@ -721,6 +725,7 @@ export async function createApp() {
       if (
         !r ||
         (r.storage_kind === "bundle" &&
+          !(isStaticSingleFileBundle(r) && !s.derivative_id) &&
           (!config.HTML_LIVE_ENABLED ||
             !s.derivative_id ||
             r.derivative_state !== "ready" ||
@@ -763,7 +768,8 @@ export async function createApp() {
            AND a.trashed_at IS NULL
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
            AND (
-             (r.storage_kind='single' AND g.derivative_id IS NULL)
+             ((r.storage_kind='single' OR ${staticSingleFileBundleSql("r")})
+               AND g.derivative_id IS NULL)
              OR
              ($2::boolean AND r.storage_kind='bundle' AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256

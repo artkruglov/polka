@@ -12,7 +12,9 @@ import {
 import { db } from "./db.ts";
 import { config } from "./config.ts";
 import { uuid } from "../../packages/contracts/index.ts";
+import { readFileSync } from "node:fs";
 import {
+  CAPTURE_EXAMPLE,
   captureFromAgent,
   captureSchema,
   statusForAgent,
@@ -42,6 +44,10 @@ import {
 import { listTemplateLibrariesInTransaction } from "./template-libraries.ts";
 
 const API_VERSION = "mcp-capture-v1";
+// serverInfo reports the release the operator deployed, not a separate label.
+export const POLKA_VERSION: string = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
 const GUIDE_CAPTURE = "polka://guides/capture-v1";
 const GUIDE_HTML = "polka://guides/html-inline-v1";
 const GUIDE_SHARING = "polka://guides/sharing-v1";
@@ -59,6 +65,15 @@ const guides = (actor: ServiceActor) => ({
     "Use polka_capture to save a new private artifact, polka_revise to add an immutable revision with artifactId and baseRevisionId, and polka_status to recover an operation by key or uploadId.",
     "Do not send a local path to the server. The local helper scripts/prepare-capture.ts prepares {manifest, files:[{path,encoding,data}]} locally; only an explicit tool call uploads those selected bytes.",
     "A successful capture or revise result contains the durable server receipt. Preparation alone is not a save, and preview readiness is a separate state.",
+    [
+      "Arguments (no other fields are accepted): key = a fresh UUID for each new save, reused only to retry the same save; title = 1-200 characters; optional folderId; manifest; files = [{path, encoding:\"utf8\"|\"base64\", data}], each manifest file exactly once with its exact bytes.",
+      "manifest (strict, no extra fields): version = 1; entrypoint = path of the HTML file; runtime = \"static-sandbox-v1\", \"inline-live-experimental-v1\" or \"preserved-only-v1\" (recorded intent; the server classifies the HTML itself); files = 1-64 entries {path (relative, ASCII segments), mime, size (byte length), sha256 (lowercase hex of the exact bytes)}; the entrypoint must be text/html and non-empty.",
+      "Allowed file mime values: text/html, text/plain, text/css, text/javascript, application/json, image/png, image/jpeg, image/webp, image/svg+xml, font/woff2. Text files must be UTF-8.",
+      "provenance: kind = \"mcp\" (or \"file\"/\"url\"); sourceUrl = null, or an https:// URL without credentials, query or fragment (http, file and local paths are rejected); capturedAt = RFC3339 with timezone, e.g. 2026-09-21T12:00:00Z; attribution and license = non-empty strings (use \"unknown\" if unknown).",
+      "dependencies: {status:\"self-contained\", unresolved:[]} when every asset is inside the files; {status:\"incomplete\", unresolved:[...at least one...]} when something is missing; or {status:\"unknown\", unresolved:[]}.",
+    ].join("\n"),
+    "Sharing rule: a manifest with exactly one self-contained HTML file (inline styles, data: images, no scripts, forms or external URLs) is saved with receipt.htmlProfile=static (limited if it has scripts but readable text) and polka_share can link it on every installation. htmlProfile=unsupported and multi-file bundles need an interactive version, which exists only where polka_prepare_preview is advertised.",
+    `Minimal valid polka_capture arguments (use your own fresh key):\n${JSON.stringify(CAPTURE_EXAMPLE)}`,
   ].join("\n\n"),
   [GUIDE_HTML]: [
     "Saved source bytes and bundle exports are immutable. MCP capture preserves the bundle and does not build or execute HTML during the save.",
@@ -164,7 +179,7 @@ const statusInput = z
 
 export function createReadonlyMcpServer(actor: ServiceActor) {
   const server = new McpServer(
-    { name: "polka", version: "0.1.0-dev.1" },
+    { name: "polka", version: POLKA_VERSION },
     {
       instructions:
         "Tenant-scoped Polka access. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
@@ -321,7 +336,7 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
       {
         title: "Save a new private artifact",
         description:
-          "Save a validated manifest and its selected source bytes as a new private artifact. Returns a durable receipt; it does not build or share the artifact.",
+          "Save a validated manifest and its selected source bytes as a new private artifact. Returns a durable receipt; it does not build or share the artifact. Read polka://guides/capture-v1 for the exact manifest fields and a complete valid example. For a shareable page, send one self-contained HTML file without scripts.",
         inputSchema: newCaptureInput,
         annotations: {
           readOnlyHint: false,
@@ -378,7 +393,7 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
       {
         title: "Create an unlisted revision link",
         description:
-          "Create or recover one explicit revision-bound share. A changed idempotency request or an active share for another revision is a conflict.",
+          "Create or recover one explicit revision-bound share. A changed idempotency request or an active share for another revision is a conflict. A refusal (code unsupported) states why the revision cannot be shown to a recipient on this installation and what to change.",
         inputSchema: agentShareSchema,
         annotations: {
           readOnlyHint: false,

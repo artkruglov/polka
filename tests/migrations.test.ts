@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 26 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 26);
+test("migration catalog is the complete contiguous schema 27 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 27);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -33,6 +33,17 @@ test("migration catalog is the complete contiguous schema 26 set", async () => {
       assert.ok((await readFile(migrationFileUrl(file), "utf8")).trim());
     }),
   );
+});
+
+test("only a single-file HTML bundle may carry a static profile", async () => {
+  const sql = await readFile(
+    migrationFileUrl("027_single_file_bundle_profile.sql"),
+    "utf8",
+  );
+  assert.match(sql, /DROP CONSTRAINT bundle_revision_shape/);
+  assert.match(sql, /html_profile='unsupported'/);
+  assert.match(sql, /jsonb_array_length\(manifest->'files'\)=1/);
+  assert.match(sql, /manifest->'files'->0->>'path'=manifest->>'entrypoint'/);
 });
 
 test("library event journal is typed, append-only, and terminal-purge redacted", async () => {

@@ -42,3 +42,20 @@ export function createSingleHtmlRevisionManifest(
     manifestSha256: digest(JSON.stringify(manifest)),
   };
 }
+
+// A bundle holding only its HTML entrypoint is the page a single upload would
+// be. When classified static or limited, it uses the same sandboxed static
+// view and links without a runtime derivative; the schema enforces the shape.
+export const isStaticSingleFileBundle = (revision: any) =>
+  revision?.storage_kind === "bundle" &&
+  revision.mime === "text/html" &&
+  (revision.html_profile === "static" || revision.html_profile === "limited") &&
+  Array.isArray(revision.manifest?.files) &&
+  revision.manifest.files.length === 1 &&
+  revision.manifest.files[0].path === revision.manifest.entrypoint;
+
+/** SQL twin of isStaticSingleFileBundle for the revision alias `r`. */
+export const staticSingleFileBundleSql = (r: string) =>
+  `(${r}.storage_kind='bundle' AND ${r}.mime='text/html'
+    AND ${r}.html_profile IN ('static','limited')
+    AND jsonb_array_length(${r}.manifest->'files')=1)`;

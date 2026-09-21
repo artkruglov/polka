@@ -2,6 +2,7 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -240,6 +241,17 @@ test("official client negotiates HTTP and reads honest context, resources, and t
   assert.match(
     (guide.contents[0] as any).text,
     /Preparation alone is not a save/,
+  );
+  const guideText = (guide.contents[0] as any).text as string;
+  assert.match(guideText, /sourceUrl = null, or an https:\/\/ URL/);
+  const example = JSON.parse(
+    guideText.slice(guideText.indexOf("{", guideText.indexOf("Minimal valid"))),
+  );
+  assert.equal(example.manifest.files.length, 1);
+  assert.equal(example.manifest.provenance.sourceUrl, null);
+  assert.equal(
+    client.getServerVersion()?.version,
+    JSON.parse(readFileSync("package.json", "utf8")).version,
   );
 
   const first = await client.callTool({
