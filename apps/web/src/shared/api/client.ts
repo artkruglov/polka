@@ -160,9 +160,14 @@ export const client = {
       expectedPublishedRevisionId: a.share!.revisionId,
     }),
   resolve: (token: string) => request<Viewer>("/resolve", { token }),
-  report: (token: string, reason: ReportReason, comment?: string) =>
+  report: (
+    token: string,
+    reason: ReportReason,
+    comment?: string,
+    key: string = crypto.randomUUID(),
+  ) =>
     request<{ ok: true }>("/reports", {
-      key: crypto.randomUUID(),
+      key,
       token,
       reason,
       ...(comment?.trim() ? { comment: comment.trim() } : {}),
