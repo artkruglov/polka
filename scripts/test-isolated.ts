@@ -82,22 +82,41 @@ try {
     files.some((file) => !/^tests\/[a-z0-9-]+\.test\.ts$/.test(file))
   )
     throw Error("Invalid test suite manifest");
-  const requestedFiles = process.argv.slice(2);
+  // --live runs the named files (default: tests/live-suite.json) with the
+  // local interactive viewer enabled, the way the npm test:<live> scripts do.
+  const live = process.argv.includes("--live");
+  const requestedFiles = process.argv
+    .slice(2)
+    .filter((argument) => argument !== "--live");
+  if (live) {
+    const liveFiles: string[] = JSON.parse(
+      await readFile(
+        new URL("../tests/live-suite.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    if (liveFiles.some((file) => !/^tests\/[a-z0-9-]+\.test\.ts$/.test(file)))
+      throw Error("Invalid live test suite manifest");
+    files = [...new Set([...files, ...liveFiles])];
+    if (!requestedFiles.length) requestedFiles.push(...liveFiles);
+  }
   if (requestedFiles.length) {
     if (requestedFiles.some(file => !files.includes(file)))
-      throw Error("Select only test files registered in tests/default-suite.json");
+      throw Error("Select only test files registered in tests/default-suite.json or tests/live-suite.json");
     files = [...new Set(requestedFiles)];
   }
   const liveLibraryViewerFile = "tests/template-library-viewer.test.ts";
-  const batches = [
-    {
-      files: files.filter((file) => file !== liveLibraryViewerFile),
-      liveLibraryViewer: false,
-    },
-    ...(files.includes(liveLibraryViewerFile)
-      ? [{ files: [liveLibraryViewerFile], liveLibraryViewer: true }]
-      : []),
-  ].filter((batch) => batch.files.length);
+  const batches = live
+    ? [{ files, liveLibraryViewer: true }]
+    : [
+        {
+          files: files.filter((file) => file !== liveLibraryViewerFile),
+          liveLibraryViewer: false,
+        },
+        ...(files.includes(liveLibraryViewerFile)
+          ? [{ files: [liveLibraryViewerFile], liveLibraryViewer: true }]
+          : []),
+      ].filter((batch) => batch.files.length);
   console.log(
     JSON.stringify({
       event: "test-suite.selection",

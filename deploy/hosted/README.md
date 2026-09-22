@@ -39,7 +39,14 @@ printf '%s' "$PASSWORD" | docker compose --env-file hosted.env run --rm -T --no-
 
 ## Редакционный каталог («Интересное»)
 
-Пока интерактивный HTML выключен, каталог наполняется статичными версиями редакционных материалов (`content/editorial/<slug>/static/index.html`, [evidence](../../docs/reviews/2026-09-22-editorial-static/README.md)). Нужен образ, содержащий `content/editorial/static-candidates.json`. Один раз создать редакционный аккаунт (пароль генерируется на VM и хранится только у оператора):
+Каталог наполняет `scripts/editorial-seed-hosted.ts` из `content/editorial/static-candidates.json` (в образе). Версию он выбирает по `HTML_LIVE_MODE` контейнера, то есть так же, как app:
+
+- `production`: оригинал `content/editorial/<slug>/index.html` сохраняется однофайловым пакетом, собирается live-builder'ом (bundle-inline v4; принимаются готовые v4/v3), share и публикация привязываются к готовой производной. Получатель и карточки `/discover` открывают интерактивную версию сразу. [Evidence](../../docs/reviews/2026-09-22-editorial-live/README.md).
+- `disabled` (или флаг `--static-only`): статичный снимок `content/editorial/<slug>/static/index.html` ([evidence](../../docs/reviews/2026-09-22-editorial-static/README.md)).
+
+Замена одной версии на другую идёт одной транзакцией (`replaced`), каталог не пустеет. Если производную собрать нельзя, у slug остаётся (или публикуется) статичный снимок: строка `"version":"static"` в stdout, причина в stderr (`"fallback":"static"`).
+
+Один раз создать редакционный аккаунт (пароль генерируется на VM и хранится только у оператора):
 
 ```sh
 cd /opt/polka/deploy/hosted
@@ -48,15 +55,21 @@ docker compose --env-file hosted.env run --rm -T --no-deps app \
   node --import tsx scripts/account.ts redakciya < /root/polka-redakciya.pw
 ```
 
-Опубликовать (и раз в неделю продлевать: share живёт 30 дней, публикация с share, истекающей в ближайшие 7 дней, заменяется свежей без перерыва):
+Перевести каталог на интерактивные версии: сначала развернуть образ с этим коммитом (раздел «Обновление»), убедиться, что включён viewer (`curl -s https://polochka.app/api/capabilities` → `"liveMode":"production"`), затем:
 
 ```sh
+cd /opt/polka/deploy/hosted
 docker compose --env-file hosted.env run --rm -T --no-deps app \
   node --import tsx scripts/editorial-seed-hosted.ts --confirm-publication --login redakciya
 curl -s https://polochka.app/api/editorial | grep -o '"slug"' | wc -l   # 12
+docker compose --env-file hosted.env exec -T postgres psql -U polka_admin -d polka -Atc \
+  "SELECT slug, derivative_id IS NOT NULL, builder_version FROM editorial_publications WHERE withdrawn_at IS NULL ORDER BY slug"
+# 12 строк вида fractions|t|bundle-inline-v4
 ```
 
-Вывод — по строке `{"slug":…,"status":…}`: `published`, `unchanged`, `replaced`, `renewed`; `blocked` (slug занят другим tenant) и `failed` дают exit 1. Снять материал: `scripts/editorial-publish.ts withdraw --confirm-publication --tenant … --owner … --publication …`.
+Первый запуск печатает 12 строк `{"slug":…,"status":"replaced","version":"interactive"}`. Затем открыть в браузере любую карточку `https://polochka.app/discover`: над работой «Интерактивная версия», iframe с `https://polochka.page`, материал реагирует (например, выбор ответа в «Доли без зубрёжки»).
+
+Раз в неделю запускать ту же команду (share живёт 30 дней, публикация с share, истекающей в ближайшие 7 дней, заменяется свежей копией без перерыва). Вывод — по строке `{"slug":…,"status":…,"version":"interactive"|"static"}`: `published`, `unchanged`, `replaced`, `renewed`; `blocked` (slug занят другим tenant) и `failed` дают exit 1. Откат viewer'а (`HTML_LIVE_MODE=disabled`) сразу скрывает интерактивные публикации; после него запустите ту же команду, и она вернёт статичные снимки (`replaced`, `"version":"static"`). Снять материал: `scripts/editorial-publish.ts withdraw --confirm-publication --tenant … --owner … --publication …`.
 
 ## Интерактивный viewer (`polochka.page`)
 
