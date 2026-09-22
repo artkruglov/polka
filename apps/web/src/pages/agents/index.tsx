@@ -19,58 +19,18 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-
-const scopeOptions: Array<{
-  id: AgentScope;
-  label: string;
-  description: string;
-  defaultOn: boolean;
-}> = [
-  {
-    id: "context",
-    label: "Сведения и статус",
-    description:
-      "Сведения о подключении, лимиты и статус собственных сохранений.",
-    defaultOn: true,
-  },
-  {
-    id: "capture",
-    label: "Сохранять новые работы",
-    description: "Сохранять файлы через MCP и импортировать поддерживаемые ссылки, если импорт включён.",
-    defaultOn: true,
-  },
-  {
-    id: "read",
-    label: "Читать список",
-    description: "Показывать агенту список сохранённых работ.",
-    defaultOn: false,
-  },
-  {id:"source:read",label:"Читать исходники и шаблоны",description:"Получать содержимое выбранных версий всей вашей Полки. Это отдельное право, шире чтения списка.",defaultOn:false},
-  {
-    id: "revise",
-    label: "Создавать версии",
-    description: "Добавлять версии существующих работ.",
-    defaultOn: false,
-  },
-  {
-    id: "share",
-    label: "Управлять ссылками",
-    description: "Выдавать и отзывать ссылки для всей Полки.",
-    defaultOn: false,
-  },
-  {
-    id: "manage",
-    label: "Управлять названиями, папками и корзиной",
-    description:
-      "Переименовывать, перемещать, отправлять в корзину и восстанавливать работы.",
-    defaultOn: false,
-  },
-];
+import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 
 const statusText: Record<AgentConnection["status"], string> = {
   issued: "Токен выдан; запросов пока нет",
   seen: "Получен запрос с этим токеном",
   expired: "Срок истёк",
+  revoked: "Доступ отозван",
+};
+const oauthStatusText: Record<AgentConnection["status"], string> = {
+  issued: "Доступ разрешён; запросов пока нет",
+  seen: "Коннектор обращался к Полке",
+  expired: "Не использовался 30 дней — подключите заново",
   revoked: "Доступ отозван",
 };
 const clientDefaults = {
@@ -96,6 +56,7 @@ const agentConnectionSchema = z.object({
     .url()
     .refine((value) => ["http:", "https:"].includes(new URL(value).protocol)),
   status: z.enum(["issued", "seen", "expired", "revoked"]),
+  kind: z.enum(["token", "oauth"]).default("token"),
   createdAt: z.string().refine((value) => Number.isFinite(Date.parse(value))),
   expiresAt: z.string().refine((value) => Number.isFinite(Date.parse(value))),
   lastSeenAt: z
@@ -356,8 +317,10 @@ export function AgentConnections() {
             прямо на вашу Полку — и только то, что вы разрешили.
           </p>
           <p className="agent-boundary">
-            <ShieldCheck size={17} /> Настройка через токен. Вход через OAuth
-            здесь не используется.
+            <ShieldCheck size={17} /> Здесь выдаётся токен для CLI-клиентов.
+            Claude.ai и ChatGPT подключаются иначе: добавьте в них коннектор{" "}
+            {new URL("/mcp", location.origin).href} и подтвердите доступ на
+            Полке — такие подключения тоже появятся в списке.
           </p>
         </header>
         <ol className="agent-steps" aria-label="Как подключить">
@@ -646,7 +609,9 @@ export function AgentConnections() {
                     <div>
                       <h3>{connection.name}</h3>
                       <p className="agent-status">
-                        {statusText[connection.status]}
+                        {connection.kind === "oauth"
+                          ? oauthStatusText[connection.status]
+                          : statusText[connection.status]}
                       </p>
                       <p className="agent-meta">
                         {connection.scopes
@@ -655,8 +620,14 @@ export function AgentConnections() {
                               scopeOptions.find((scope) => scope.id === id)
                                 ?.label ?? id,
                           )
-                          .join(" · ")}{" "}
-                        · истекает {formatDate(connection.expiresAt)}
+                          .join(" · ")}
+                        {connection.kind === "oauth"
+                          ? " · коннектор чата · действует до "
+                          : " · истекает "}
+                        {formatDate(connection.expiresAt)}
+                        {connection.kind === "oauth"
+                          ? " и продлевается при использовании"
+                          : ""}
                         {connection.lastSeenAt
                           ? ` · последний запрос ${formatDate(connection.lastSeenAt)}`
                           : ""}

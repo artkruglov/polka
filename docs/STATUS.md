@@ -9,7 +9,7 @@
 | Operator accounts + email-code registration, tenant-scoped DB/S3 | SMTP delivery не проверена; local mail только для .test |
 | Single-file и multi-file bundle capture/export, SHA-256, idempotency receipts, quota | URL source capture не подтверждён; ZIP import отсутствует |
 | Immutable versions, CAS, личные папки/поиск, rename/move, корзина и восстановление | MCP management проверен на сервере и частично в native-клиенте; revoke schema16 принят локально; SQL18/ACL, реальный локальный S3 purge и полный backup→purge→restore приняты изолированно; рабочая БД16, удаление выключено |
-| Scoped token auth, Streamable HTTP MCP, context/list/capture/status/revise/prepare/share/revoke | UI-issued context token→Codex→seen→revoke принят21.09; второй native клиент и UI-issued capture не приняты; OAuth отсутствует |
+| Scoped token auth, Streamable HTTP MCP, context/list/capture/status/revise/prepare/share/revoke | UI-issued context token→Codex→seen→revoke принят21.09; второй native клиент и UI-issued capture не приняты. OAuth 2.1 коннектор для Claude.ai/ChatGPT и `polka_publish` реализованы 22.09 и проверены интеграционными тестами; ручная приёмка с настоящими клиентами открыта ([MCP_CONNECTOR](MCP_CONNECTOR.md)) |
 | Codex CLI→helper→MCP→готовый preview→share→recipient | Claude Code остановился на provider 429; hosted цепочка не проверена |
 | Unlisted link, TTL, revoke, pinned grants; static HTML, TXT, изображения | Team membership/SSO/offboarding отсутствуют |
 | Отдельный local viewer, bundle inline derivative, интерактивные примеры; controlled staging config/HTTP и synthetic HTTPS proxy14/14 приняты локально: [193+9 тестов](reviews/2026-09-21-viewer-staging/README.md) | Hosted viewer, полный browser/egress acceptance остаются открыты |

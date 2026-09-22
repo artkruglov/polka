@@ -39,6 +39,10 @@ const owner = new pg.Client(options(ownerUrl.toString()));
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const ids = {
+  oauthClient: `pc_${runId.padEnd(22, "0").slice(0, 22)}`,
+  oauthConnection: randomUUID(),
+  oauthApproved: randomUUID(),
+  oauthConsumed: randomUUID(),
   account: randomUUID(),
   tenant: randomUUID(),
   deletion: randomUUID(),
@@ -247,6 +251,45 @@ before(async () => {
        VALUES($1,$2,$3,$4,'{"url":"https://example.test/private-report"}',$5,'prepared','{"html":"private report bytes"}')`,
       [randomUUID(), ids.tenant, ids.account, randomUUID(), "a".repeat(64)],
     );
+    // A chat connector grant: connection, rotating refresh token, an unused
+    // approved code and a consumed code that produced the connection.
+    await owner.query(
+      `INSERT INTO oauth_clients(client_id,auth_method,client_name,redirect_uris,grant_types)
+       VALUES($1,'none','Synthetic chat',ARRAY['https://chat.example/callback'],
+              ARRAY['authorization_code','refresh_token'])`,
+      [ids.oauthClient],
+    );
+    await owner.query(
+      `INSERT INTO agent_connections(
+         id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,
+         oauth_client_id,access_expires_at
+       ) VALUES($1,$2,$3,$4,'Synthetic chat',ARRAY['context','capture'],
+         'https://polka.invalid/mcp',now()+interval '30 days',$5,now()+interval '1 hour')`,
+      [ids.oauthConnection, ids.tenant, ids.account, "b".repeat(64), ids.oauthClient],
+    );
+    await owner.query(
+      `INSERT INTO oauth_refresh_tokens(
+         id,connection_id,tenant_id,account_id,client_id,token_hash,expires_at
+       ) VALUES($1,$2,$3,$4,$5,$6,now()+interval '30 days')`,
+      [randomUUID(), ids.oauthConnection, ids.tenant, ids.account, ids.oauthClient, "c".repeat(64)],
+    );
+    for (const [id, status, codeHash] of [
+      [ids.oauthApproved, "approved", "d".repeat(64)],
+      [ids.oauthConsumed, "consumed", "e".repeat(64)],
+    ] as const)
+      await owner.query(
+        `INSERT INTO oauth_authorizations(
+           id,client_id,browser_hash,redirect_uri,code_challenge,requested_scopes,
+           resource,status,expires_at,tenant_id,account_id,granted_scopes,
+           code_hash,code_expires_at,consumed_at,connection_id
+         ) VALUES($1,$2,$3,'https://chat.example/callback',$4,ARRAY['context'],
+           'https://polka.invalid/mcp',$5,now()+interval '10 minutes',$6,$7,
+           ARRAY['context'],$8,now()+interval '60 seconds',
+           CASE WHEN $5='consumed' THEN now() END,
+           CASE WHEN $5='consumed' THEN $9::uuid END)`,
+        [id, ids.oauthClient, "f".repeat(64), "A".repeat(43), status,
+         ids.tenant, ids.account, codeHash, ids.oauthConnection],
+      );
     await owner.query(
       "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
       [ids.account],
@@ -546,6 +589,23 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
     ),
     0,
   );
+  const oauthLeft = (
+    await owner.query(
+      `SELECT
+         (SELECT count(*)::int FROM oauth_authorizations WHERE tenant_id=$1) AS authorizations,
+         (SELECT count(*)::int FROM oauth_refresh_tokens WHERE tenant_id=$1) AS refresh_tokens,
+         (SELECT count(*)::int FROM agent_connections WHERE tenant_id=$1) AS connections,
+         (SELECT count(*)::int FROM oauth_clients WHERE client_id=$2) AS clients`,
+      [ids.tenant, ids.oauthClient],
+    )
+  ).rows[0];
+  // Grants are account data and go; the registered client is not.
+  assert.deepEqual(oauthLeft, {
+    authorizations: 0,
+    refresh_tokens: 0,
+    connections: 0,
+    clients: 1,
+  });
   await worker.query(
     "SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)",
     [

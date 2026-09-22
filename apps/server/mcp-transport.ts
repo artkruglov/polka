@@ -12,9 +12,13 @@ import {
   type ServiceActor,
 } from "./service-auth.ts";
 import { createReadonlyMcpServer } from "./mcp-readonly.ts";
+import { PROTECTED_RESOURCE_METADATA_URL } from "./oauth.ts";
 
 const endpoint = new URL(MCP_AUDIENCE);
 const MCP_BODY_LIMIT = 8 * 1024 * 1024;
+// RFC 9728 §5.1: point OAuth clients at the protected resource metadata.
+const challenge = (error?: string) =>
+  `Bearer ${error ? `error="${error}", ` : ""}resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}"`;
 
 function actorFromAuth(authInfo?: AuthInfo) {
   const actor = authInfo?.extra?.serviceActor as ServiceActor | undefined;
@@ -57,7 +61,7 @@ export async function registerMcpTransport(app: FastifyInstance) {
       const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
       if (!match)
         return reply
-          .header("www-authenticate", "Bearer")
+          .header("www-authenticate", challenge())
           .code(401)
           .send({ code: "unauthorized" });
       let actor: ServiceActor;
@@ -65,7 +69,7 @@ export async function registerMcpTransport(app: FastifyInstance) {
         actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
       } catch {
         return reply
-          .header("www-authenticate", 'Bearer error="invalid_token"')
+          .header("www-authenticate", challenge("invalid_token"))
           .code(401)
           .send({ code: "unauthorized" });
       }

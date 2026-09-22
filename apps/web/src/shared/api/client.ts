@@ -8,6 +8,7 @@ import type {
   Viewer,
   AgentConnection,
   AgentScope,
+  OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
 import type { REPORT_REASONS } from "../../../../../packages/contracts/index.ts";
 export class ApiError extends Error {
@@ -146,14 +147,49 @@ export const client = {
   },
 };
 
-export async function agentRequest<T>(
+/** Connector consent lives under /oauth, next to the authorization endpoint. */
+export const oauthConsent = {
+  details: (requestId: string, signal?: AbortSignal) =>
+    jsonRequest<OAuthConsentDetails>(
+      `/oauth/authorize/details?${new URLSearchParams({ request: requestId })}`,
+      undefined,
+      "GET",
+      signal,
+    ),
+  decide: (
+    input:
+      | { request: string; decision: "approve"; scopes: AgentScope[] }
+      | { request: string; decision: "deny" },
+    csrfToken: string,
+    signal?: AbortSignal,
+  ) =>
+    jsonRequest<{ redirectTo: string }>(
+      "/oauth/authorize/decision",
+      input,
+      "POST",
+      signal,
+      csrfToken,
+    ),
+};
+
+export function agentRequest<T>(
   path: string,
   body: unknown,
   method: "GET" | "POST",
   signal?: AbortSignal,
   csrfToken?: string,
 ): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  return jsonRequest<T>(`/api${path}`, body, method, signal, csrfToken);
+}
+
+async function jsonRequest<T>(
+  url: string,
+  body: unknown,
+  method: "GET" | "POST",
+  signal?: AbortSignal,
+  csrfToken?: string,
+): Promise<T> {
+  const res = await fetch(url, {
     method,
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),

@@ -17,6 +17,7 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       path === "/trash" ||
       path === "/templates" ||
       path === "/library-invite" ||
+      path === "/oauth/consent" ||
       /^\/works\/[a-f0-9-]{36}$/.test(path) ||
       /^\/discover(?:\/[a-z0-9-]+)?$/.test(path)
     )

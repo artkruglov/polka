@@ -39,6 +39,7 @@
   "tests/agent-management.test.ts",
   "tests/agent-capture.test.ts",
   "tests/single-file-bundle-share.test.ts",
+  "tests/mcp-oauth.test.ts",
   "tests/integration.test.ts",
   "tests/url-import-fetch.test.ts",
   "tests/url-import-html.test.ts",

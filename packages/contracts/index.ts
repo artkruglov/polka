@@ -73,9 +73,23 @@ export type AgentConnection = {
   scopes: AgentScope[];
   audience: string;
   status: "issued" | "seen" | "expired" | "revoked";
+  /** token: issued on the agents page; oauth: granted to a chat connector. */
+  kind: "token" | "oauth";
   createdAt: string;
   expiresAt: string;
   lastSeenAt: string | null;
+};
+/** What the consent page shows for one pending connector authorization. */
+export type OAuthConsentDetails = {
+  requestId: string;
+  client: { name: string; redirectHost: string };
+  scopes: AgentScope[];
+  defaultScopes: AgentScope[];
+  accessMinutes: number;
+  refreshDays: number;
+  maxDays: number;
+  replaces: boolean;
+  expiresAt: string;
 };
 export const beginUploadSchema = z
   .object({

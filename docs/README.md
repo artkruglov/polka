@@ -38,6 +38,7 @@
 - [Производное для просмотра bundle](BUNDLE_INLINE_SPEC.md) — сборщик, локальная интеграция и оставшаяся приёмка.
 - [MCP_IMPLEMENTATION_SPEC](MCP_IMPLEMENTATION_SPEC.md) — контракт реализованного локального сервера; незавершённые приёмки перечислены в STATUS.
 - [MCP_ONBOARDING_SPEC](MCP_ONBOARDING_SPEC.md) — контракт настоящего подключения в интерфейсе; заменяет MCP-демо старого ONBOARDING_SPEC.
+- [MCP_CONNECTOR](MCP_CONNECTOR.md) — Полка как коннектор Claude.ai и ChatGPT: OAuth 2.1, согласие, `polka_publish`, отзыв и ограничения.
 
 - [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md) — переход от локального runtime к HTTPS staging и ещё не пройденные проверки.
 

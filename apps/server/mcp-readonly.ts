@@ -42,6 +42,11 @@ import {
   updateArtifactFromAgent,
 } from "./agent-management.ts";
 import { listTemplateLibrariesInTransaction } from "./template-libraries.ts";
+import {
+  agentPublishInputSchema,
+  publishFromAgent,
+  publishToolDescription,
+} from "./agent-publish.ts";
 
 const API_VERSION = "mcp-capture-v1";
 // serverInfo reports the release the operator deployed, not a separate label.
@@ -182,7 +187,7 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
     { name: "polka", version: POLKA_VERSION },
     {
       instructions:
-        "Tenant-scoped Polka access. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
+        "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one standalone HTML file in, a private save and (with link permission) an unlisted link out. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
     },
   );
   if (actor.scopes.includes("context")) {
@@ -347,6 +352,22 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
       },
       async (input) =>
         asToolResult(await captureFromAgent(actor, input, "capture")),
+    );
+  if (actor.scopes.includes("capture"))
+    server.registerTool(
+      "polka_publish",
+      {
+        title: "Save an artifact to Polka and get a link",
+        description: publishToolDescription(),
+        inputSchema: agentPublishInputSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => asToolResult(await publishFromAgent(actor, input)),
     );
   if (actor.scopes.includes("revise"))
     server.registerTool(
