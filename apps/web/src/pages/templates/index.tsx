@@ -189,7 +189,7 @@ export function Templates() {
         />}
         {account && selectedLibrary && personalError && <div><ErrorNotice error={personalError} /><Button onClick={() => setPersonalAttempt((value) => value + 1)}>Повторить загрузку личных выпусков</Button></div>}
         {account === null ? (
-          <EmptyState title="Шаблоны живут на вашей полке" action={<LinkButton variant="primary" href="/?login=1&next=%2Ftemplates">Войти в свою Полку</LinkButton>}>
+          <EmptyState title="Шаблоны живут на вашей полке" action={<LinkButton variant="primary" href="/?login=1&next=%2Ftemplates">Войти в Полку</LinkButton>}>
             Оформление, структура и правила — для следующей задачи в вашем агенте.
           </EmptyState>
         ) : libraryError ? (
@@ -209,7 +209,7 @@ export function Templates() {
           <EmptyState title="Подходящих шаблонов не найдено" action={<Button onClick={() => {
             setDraftQuery(""); setQuery("");
           }}>Сбросить поиск</Button>}>
-            Попробуйте название материала или его назначение. Для старых выпусков включите показ предыдущих версий.
+            Попробуйте название работы или её назначение. Для старых выпусков включите показ предыдущих версий.
           </EmptyState>
         ) : items.length === 0 && libraryId ? (
           <EmptyState title="В библиотеке пока нет опубликованных шаблонов">
@@ -218,9 +218,9 @@ export function Templates() {
         ) : items.length === 0 ? (
           <EmptyState
             title="Сохраните первый шаблон"
-            action={<LinkButton variant="primary" href="/"><Sparkles /> Открыть Мою полку</LinkButton>}
+            action={<LinkButton variant="primary" href="/"><Sparkles /> Открыть мою полку</LinkButton>}
           >
-            Откройте материал → «Скопировать для агента» → «Сохранить эту версию
+            Откройте работу → «Скопировать для агента» → «Сохранить эту версию
             как шаблон». Исходники и правила останутся вместе.
           </EmptyState>
         ) : (
@@ -243,7 +243,7 @@ export function Templates() {
                     <Sparkles /> Для агента
                   </Button>
                   {isHtmlTemplate(t) && libraryId && t.publicationId ? <Button variant="quiet" onClick={() => openPreview(t)}><Eye /> Предпросмотр</Button> :
-                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={`/works/${t.artifactId}?revision=${t.revisionId}`}>Материал <ArrowUpRight /></LinkButton> :
+                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={`/works/${t.artifactId}?revision=${t.revisionId}`}>Работа <ArrowUpRight /></LinkButton> :
                       <Button variant="quiet" onClick={() => setSelected(t)}><FileCode2 /> Исходники</Button>}
                 </div>
               </article>

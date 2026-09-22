@@ -1,37 +1,39 @@
 import "./styles.css";
 import { useFolders } from "../../entities/folder/useFolders.ts";
+import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Check,
   CircleAlert,
-  Copy,
   FileUp,
   Link2,
   LockKeyhole,
   LogIn,
 } from "lucide-react";
 import type {
-  Account,
   Artifact,
   Receipt,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
-import { MAX_BYTES, MIME } from "../../../../../packages/contracts/index.ts";
-import {
-  client,
-  fileMime,
-  saveUpload,
-  type PendingUpload,
-} from "../../shared/api/client.ts";
+import { client } from "../../shared/api/client.ts";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { date, profileView, size } from "../../entities/artifact/format.ts";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
-import { Button, LinkButton, SelectField, TextField } from "../../shared/ui/controls.tsx";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS,
+  uploadBlob,
+  uploadProblem,
+} from "../../entities/artifact/upload.ts";
+import { useSaveUpload } from "../../entities/artifact/useSaveUpload.ts";
+import { SavedReceipt } from "../../entities/artifact/SavedReceipt.tsx";
+import { Button, LinkButton, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
-import { Status } from "../../shared/ui/Status.tsx";
+import { CopyButton } from "../../shared/ui/CopyText.tsx";
 
 /** Where login returns the guest: back to this card. */
-export const FILE_SAVE_LOGIN = `/signup?next=${encodeURIComponent("/bring#file")}`;
+const FILE_SAVE_LOGIN = `/signup?next=${encodeURIComponent("/bring#file")}`;
 
 /**
  * The real file path of /bring: begin → bytes → finalize through the existing API,
@@ -39,13 +41,11 @@ export const FILE_SAVE_LOGIN = `/signup?next=${encodeURIComponent("/bring#file")
  * A guest can pick a file, but it never leaves the page before login; the browser cannot carry it across the redirect.
  */
 export function FileSave({
-  account,
   initialFolderId = "",
   renderPreview,
   embedded = false,
   titled = true,
 }: {
-  account: Account | null | undefined;
   initialFolderId?: string;
   renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
   /** Rendered inside the link guide: no heading of its own, no page anchor. */
@@ -53,19 +53,16 @@ export function FileSave({
   /** False when a surrounding tab already names the card: the heading stays for screen readers. */
   titled?: boolean;
 }) {
+  const { account, error: accountError, retry: retryAccount } = useAccountState();
   const folders = useFolders(account?.id);
   const [folderId, setFolderId] = useState(initialFolderId);
   const [file, setFile] = useState<File | null>(null),
     [title, setTitle] = useState(""),
-    [stage, setStage] = useState(""),
-    [error, setError] = useState(""),
-    [receipt, setReceipt] = useState<Receipt | null>(null),
-    [work, setWork] = useState<Artifact | null>(null),
     [dragging, setDragging] = useState(false);
-  const operation = useRef<PendingUpload | null>(null),
-    picked = useRef<File | null>(null),
+  const upload = useSaveUpload();
+  const picked = useRef<File | null>(null),
     card = useRef<HTMLElement>(null),
-    busy = !!stage;
+    busy = upload.busy;
 
   useEffect(() => {
     if (!embedded && location.hash === "#file") card.current?.scrollIntoView();
@@ -74,8 +71,7 @@ export function FileSave({
   const pick = (f: File | undefined) => {
     if (!f) return;
     picked.current = f;
-    operation.current = null;
-    setError("");
+    upload.invalidate();
     setFile(f);
     const fallback = fallbackTitle(f);
     setTitle(fallback);
@@ -84,50 +80,31 @@ export function FileSave({
       if (picked.current === f)
         setTitle((current) => (current === fallback ? suggested : current));
     });
-    const mime = fileMime(f);
-    if (!(MIME as readonly string[]).includes(mime))
-      setError(
-        "Этот тип файла не поддерживается. Подойдут HTML, TXT, PNG, JPEG или WebP. ZIP и PDF эта сборка не принимает.",
-      );
-    else if (f.size > MAX_BYTES) setError("Файл больше 5 МБ.");
+    const problem = uploadProblem(uploadBlob(f));
+    if (problem) upload.setError(problem);
   };
 
   const save = async () => {
     if (!file || !title.trim())
-      return setError("Выберите файл и укажите название.");
-    const blob = new Blob([file], { type: fileMime(file) });
-    if (
-      !(MIME as readonly string[]).includes(blob.type) ||
-      blob.size > MAX_BYTES
-    )
-      return setError("Подойдут HTML, TXT, PNG, JPEG или WebP до 5 МБ.");
-    setError("");
-    operation.current ??= { file: blob, key: crypto.randomUUID() };
-    try {
-      const saved = await saveUpload(
-        operation.current,
-        { title: title.trim(), filename: file.name, folderId: folderId || null },
-        setStage,
-      );
-      setReceipt(saved);
-      setWork(await client.artifact(saved.artifactId));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setStage("");
-    }
+      return upload.setError("Выберите файл и укажите название.");
+    const blob = uploadBlob(file);
+    const problem = uploadProblem(blob);
+    if (problem) return upload.setError(problem);
+    await upload.save(blob, {
+      title: title.trim(),
+      filename: file.name,
+      folderId: folderId || null,
+    });
   };
 
   const restart = () => {
-    operation.current = null;
+    upload.reset();
     setFile(null);
     setTitle("");
-    setReceipt(null);
-    setWork(null);
-    setError("");
   };
 
   const guest = account === null;
+  const saved = upload.saved;
 
   return (
     <section
@@ -137,14 +114,23 @@ export function FileSave({
       aria-labelledby={embedded ? undefined : "file-save-title"}
       aria-label={embedded ? "Загрузить скачанный файл" : undefined}
     >
-      {receipt && work ? (
+      {saved?.work ? (
         <SavedWork
-          receipt={receipt}
-          work={work}
+          receipt={saved.receipt}
+          work={saved.work}
           renderPreview={renderPreview}
           onRestart={restart}
           restartLabel="Сохранить другой файл"
           headingId={embedded ? undefined : "file-save-title"}
+        />
+      ) : saved ? (
+        <SavedReceipt
+          receipt={saved.receipt}
+          error={upload.error}
+          busy={busy}
+          onShow={() => void upload.showSaved(saved.receipt)}
+          onRestart={restart}
+          restartLabel="Сохранить другой файл"
         />
       ) : (
         <div className="bring-entry file-save-entry">
@@ -152,7 +138,6 @@ export function FileSave({
             <>
               <div className={titled ? "file-save-head" : "file-save-head sr-only"}>
                 <h2 id="file-save-title">Загрузить файл</h2>
-                <Status is="real" />
               </div>
               <p className="file-save-hint">
                 HTML из чата, заметка или изображение. Сначала откроется
@@ -181,14 +166,12 @@ export function FileSave({
                 {file ? file.name : "Перетащите файл или нажмите, чтобы выбрать"}
               </strong>
               <small>
-                {file
-                  ? `${size(file.size)} · ещё не сохранено`
-                  : "HTML, TXT, PNG, JPEG, WebP · до 5 МБ"}
+                {file ? `${size(file.size)} · ещё не сохранено` : UPLOAD_FORMATS}
               </small>
             </span>
             <input
               type="file"
-              accept="text/html,.html,.htm,text/plain,.txt,image/png,image/jpeg,image/webp"
+              accept={UPLOAD_ACCEPT}
               disabled={busy}
               onChange={(e) => {
                 pick(e.target.files?.[0]);
@@ -196,28 +179,36 @@ export function FileSave({
               }}
             />
           </label>
-          {account && <SelectField label="Куда сохранить" value={folderId} disabled={busy || folders.loading} error={folders.error} onChange={e => {setFolderId(e.target.value); operation.current = null;}}>
-            <option value="">Моя Полка — без папки</option>
-            {folderId && !folders.items.some(f => f.id === folderId) && <option value={folderId}>{folders.loading ? "Проверяем выбранную папку…" : "Выбранная папка недоступна"}</option>}
-            {folders.items.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </SelectField>}
-          {folders.error && <Button onClick={folders.retry}>Загрузить папки снова</Button>}
+          {account && (
+            <FolderSelect
+              folders={folders}
+              value={folderId}
+              disabled={busy}
+              onChange={(next) => {
+                setFolderId(next);
+                upload.invalidate();
+              }}
+            />
+          )}
           {file && account && (
             <TextField
               label="Название"
               value={title}
               maxLength={160}
               disabled={busy}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                upload.invalidate();
+              }}
             />
           )}
-          <ErrorNotice error={error} />
+          <ErrorNotice error={upload.error} />
           {guest ? (
             <div className="file-save-login" role="note">
               <p>
                 {file
-                  ? "Файл ещё не сохранён и не отправлен на сервер. Сохранять можно только на свою Полку — войдите. После входа вернём сюда; файл нужно будет выбрать ещё раз."
-                  : "Сохранение идёт на вашу Полку, поэтому сначала нужен вход. После входа вернём сюда."}
+                  ? "Файл ещё не сохранён и не отправлен на сервер. Сохранять можно только на свою полку — войдите. После входа вернём сюда; файл нужно будет выбрать ещё раз."
+                  : "Сохранение идёт на вашу полку, поэтому сначала нужен вход. После входа вернём сюда."}
               </p>
               <div className="bring-actions">
                 <LinkButton variant="primary" href={initialFolderId ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}` : FILE_SAVE_LOGIN}>
@@ -227,9 +218,16 @@ export function FileSave({
               </div>
             </div>
           ) : account === undefined ? (
-            <p className="file-save-hint" role="status">
-              Проверяем вход…
-            </p>
+            accountError ? (
+              <div className="bring-actions">
+                <ErrorNotice error={`Не удалось проверить вход. ${accountError}`} />
+                <Button onClick={retryAccount}>Проверить снова</Button>
+              </div>
+            ) : (
+              <p className="file-save-hint" role="status">
+                Проверяем вход…
+              </p>
+            )
           ) : (
             <div className="bring-actions">
               <Button
@@ -239,10 +237,8 @@ export function FileSave({
                 disabled={!file || busy}
               >
                 <LockKeyhole />{" "}
-                {stage ||
-                  (error && operation.current
-                    ? "Повторить сохранение"
-                    : "Сохранить на Полку")}
+                {upload.stage ||
+                  (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
               </Button>
             </div>
           )}
@@ -273,7 +269,6 @@ export function SavedWork({
 }) {
   const [work, setWork] = useState(saved),
     [sharing, setSharing] = useState(false),
-    [copied, setCopied] = useState(false),
     [error, setError] = useState("");
   const busy = sharing;
   const view = profileView(work.revision);
@@ -333,46 +328,22 @@ export function SavedWork({
       >
         {view.linkable ? <Check /> : <CircleAlert />} {view.text}
       </p>
-      <ul
-        className="profile-now-plan"
-        aria-label="Как откроется у получателя"
-      >
-        <li>
-          <Status is={view.linkable ? "real" : "unsupported"} />{" "}
-          <strong>Сейчас:</strong> {view.now}
-        </li>
-        {view.plan && (
-          <li>
-            <Status is="plan" /> <strong>В плане:</strong> {view.plan}
-          </li>
-        )}
-      </ul>
       <div className="file-save-preview">
         {renderPreview(work.revision, !view.linkable)}
       </div>
-      {link ? (
+      {link?.url ? (
         <div className="share-ready" role="status">
           <div>
             <Link2 />
             <code>{link.url}</code>
           </div>
           <div className="share-ready-actions">
-            <Button
-              type="button"
+            <CopyButton
+              value={link.url}
               variant="primary"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(link.url!);
-                  setCopied(true);
-                } catch {
-                  setError("Не удалось скопировать. Выделите адрес выше.");
-                }
-              }}
-            >
-              {copied ? <Check /> : <Copy />}{" "}
-              {copied ? "Скопировано" : "Скопировать ссылку"}
-            </Button>
-            <LinkButton href={link.url!} target="_blank" rel="noopener">
+              label="Скопировать ссылку"
+            />
+            <LinkButton href={link.url} target="_blank" rel="noopener">
               Открыть как получатель <ArrowUpRight />
             </LinkButton>
           </div>
@@ -402,9 +373,9 @@ export function SavedWork({
         {link
           ? "Ссылка открывает версию " +
             link.number +
-            ". Отозвать её или обновить до новой версии можно в Моей Полке."
+            ". Отозвать её или обновить до новой версии можно на вашей полке."
           : view.linkable
-            ? "Ссылка — отдельное действие. Её можно отозвать в Моей Полке."
+            ? "Ссылка — отдельное действие. Её можно отозвать на вашей полке."
             : "Сохраните версию без скриптов и внешних ресурсов, чтобы отправить её ссылкой."}
       </p>
     </div>

@@ -1,5 +1,5 @@
 import "./styles.css";
-import { Button, Segmented, TextAreaField, TextField, SelectField } from "../../shared/ui/controls.tsx";
+import { Button, Segmented, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
 import React, { useRef, useState } from "react";
 import { ArrowUpRight, Upload } from "lucide-react";
 import type {
@@ -7,12 +7,14 @@ import type {
   Folder,
   Receipt,
 } from "../../../../../packages/contracts/index.ts";
-import { MAX_BYTES, MIME } from "../../../../../packages/contracts/index.ts";
+import { saveUpload, type PendingUpload } from "../../shared/api/client.ts";
 import {
-  fileMime,
-  saveUpload,
-  type PendingUpload,
-} from "../../shared/api/client.ts";
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS,
+  uploadBlob,
+  uploadProblem,
+} from "../../entities/artifact/upload.ts";
+import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
 export function UploadPanel({
@@ -45,19 +47,15 @@ export function UploadPanel({
     setError("");
     const current =
       mode === "file"
-        ? file && new Blob([file], { type: fileMime(file) })
+        ? file && uploadBlob(file)
         : new Blob([text], { type: "text/plain" });
     if (!current?.size || !title.trim()) {
       setError("Добавьте название и содержимое.");
       return;
     }
-    if (
-      !(MIME as readonly string[]).includes(current.type) ||
-      current.size > MAX_BYTES
-    ) {
-      setError(
-        "Поддерживаются HTML, PNG, JPEG, WebP и текст UTF-8 размером до 5 МБ. ZIP и PDF пока не поддерживаются.",
-      );
+    const problem = uploadProblem(current);
+    if (problem) {
+      setError(problem);
       return;
     }
     operation.current ??= { file: current, key: crypto.randomUUID() };
@@ -112,23 +110,24 @@ export function UploadPanel({
           ]}
           wide
         />
-        <TextField label="Название"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              reset();
-            }}
-            maxLength={160}
-            disabled={busy}
-          />
+        <TextField
+          label="Название"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            reset();
+          }}
+          maxLength={160}
+          disabled={busy}
+        />
         {mode === "file" ? (
           <label className="file-drop">
             <Upload />
             <strong>{file ? file.name : "Выберите файл"}</strong>
-            <span>HTML, PNG, JPEG, WebP или TXT · до 5 МБ</span>
+            <span>{UPLOAD_FORMATS}</span>
             <input
               type="file"
-              accept="text/html,.html,.htm,image/png,image/jpeg,image/webp,text/plain,.txt"
+              accept={UPLOAD_ACCEPT}
               disabled={busy}
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
@@ -146,34 +145,27 @@ export function UploadPanel({
           </label>
         ) : (
           <TextAreaField
- label="Содержимое"
-              rows={8}
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                reset();
-              }}
-              disabled={busy}
-              placeholder="Вставьте текст, который собрал агент…"
-            />
-        )}
-        {!artifact && folders.length > 0 && (
-          <SelectField
-            label="Папка"
-            value={folder}
+            label="Содержимое"
+            rows={8}
+            value={text}
             onChange={(e) => {
-              setFolder(e.target.value);
+              setText(e.target.value);
               reset();
             }}
             disabled={busy}
-          >
-            <option value="">На моей полке</option>
-            {folders.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </SelectField>
+            placeholder="Вставьте текст, который собрал агент…"
+          />
+        )}
+        {!artifact && folders.length > 0 && (
+          <FolderSelect
+            folders={{ items: folders, loading: false, error: "", retry: () => {} }}
+            value={folder}
+            onChange={(next) => {
+              setFolder(next);
+              reset();
+            }}
+            disabled={busy}
+          />
         )}
         <p className="fine">
           Сначала показываем сохранённый вид HTML. Доступность отдельного

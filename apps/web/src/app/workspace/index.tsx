@@ -1,4 +1,4 @@
-import {AgentContextPanel} from "../../features/agent-context/index.tsx";
+import { AgentContextPanel } from "../../features/agent-context/index.tsx";
 import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
 import { Button, IconButton, Notice } from "../../shared/ui/controls.tsx";
 import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
@@ -9,7 +9,6 @@ import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Maximize2, Menu, Share2 } from "lucide-react";
 import type {
-  Account,
   Artifact,
   Folder,
   Revision,
@@ -22,7 +21,11 @@ import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
 import { Login } from "../../pages/login/index.tsx";
-import { NewLanding as Landing } from "../../pages/landing/index.tsx";
+import {
+  rememberAccount,
+  useAccountState,
+} from "../../entities/account/model/useAccount.ts";
+import { LazyLanding } from "../routing/lazy-pages.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { ReworkArtifactPanel } from "../../features/rework-artifact/index.tsx";
 import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
@@ -38,9 +41,8 @@ function resume(next: string) {
   );
 }
 export function App() {
-  const [account, setAccount] = useState<Account | null | undefined>(undefined),
-    [authError, setAuthError] = useState(""),
-    [folders, setFolders] = useState<Folder[]>([]),
+  const { account, error: authError, retry: retryAccount } = useAccountState();
+  const [folders, setFolders] = useState<Folder[]>([]),
     [folderId, setFolderId] = useState<string | null>(null),
     [items, setItems] = useState<Artifact[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
@@ -68,7 +70,7 @@ export function App() {
       | "trash"
       | null
     >(() => {
-      // Deep links (and the shelf card menu) may open a material with its dialog.
+      // Deep links (and the shelf card menu) may open a work with its dialog.
       const requested = params.get("panel");
       return location.pathname.startsWith("/works/") &&
         (requested === "share" || requested === "metadata" || requested === "agent-context")
@@ -98,15 +100,6 @@ export function App() {
     [trashCursor, setTrashCursor] = useState<string | null>(null),
     [trashLoading, setTrashLoading] = useState(false),
     [trashError, setTrashError] = useState("");
-  useEffect(() => {
-    client
-      .me()
-      .then(setAccount)
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 401) setAccount(null);
-        else setAuthError(e.message);
-      });
-  }, []);
   useEffect(() => {
     const pop = () => {
       routeGeneration.current++;
@@ -280,9 +273,13 @@ export function App() {
         ) {
           setWork(a);
           setRevisions(r);
-          const pinned=new URLSearchParams(location.search).get("revision");
-          const exact=pinned?r.find(item=>item.id===pinned):null;
-          if(pinned&&!exact){setWork(null);setError("Эта версия материала недоступна.");return;}
+          const pinned = new URLSearchParams(location.search).get("revision");
+          const exact = pinned ? r.find((item) => item.id === pinned) : null;
+          if (pinned && !exact) {
+            setWork(null);
+            setError("Эта версия работы недоступна.");
+            return;
+          }
           setViewed(exact??null);
           setError("");
         }
@@ -295,13 +292,13 @@ export function App() {
   }, [account, selected, refresh]);
   const guestHome = location.pathname === "/" && !params.has("login");
   // The landing page is static: a guest (or an unreachable API) should still see it.
-  if (guestHome && (account === null || authError)) return <Landing />;
+  if (guestHome && (account === null || authError)) return <LazyLanding />;
   if (authError)
     return (
       <div className="empty">
         <h1>Не удалось соединиться с Полкой</h1>
         <ErrorNotice error={authError} />
-        <Button onClick={() => location.reload()}>Попробовать снова</Button>
+        <Button onClick={retryAccount}>Попробовать снова</Button>
       </div>
     );
   if (account === undefined)
@@ -317,7 +314,7 @@ export function App() {
           const next = safeNext(params.get("next"));
           if (next && next !== "/") return resume(next);
           window.history.replaceState(null, "", location.pathname);
-          setAccount(a);
+          rememberAccount(a);
         }}
       />
     );
@@ -382,7 +379,6 @@ export function App() {
         </IconButton>
       }
       onLoggedOut={() => {
-        setAccount(null);
         setItems([]);
         setFolders([]);
         setFolderId(null);
@@ -399,7 +395,7 @@ export function App() {
                 {folders.find((f) => f.id === work?.folderId)?.name ?? "Моя полка"}
               </a>
               <ChevronRight aria-hidden="true" />
-              <span aria-current="page">{work?.title ?? "Материал"}</span>
+              <span aria-current="page">{work?.title ?? "Работа"}</span>
             </nav>
           </div>
           {work && !work.trashedAt && (
@@ -434,7 +430,7 @@ export function App() {
                 viewed={viewed}
                 folderName={
                   folders.find((f) => f.id === work.folderId)?.name ??
-                  "Моя Полка"
+                  "Моя полка"
                 }
                 history={history}
                 setHistory={setHistory}
@@ -446,7 +442,7 @@ export function App() {
                     setError(
                       e instanceof Error
                         ? e.message
-                        : "Не удалось скачать материал.",
+                        : "Не удалось скачать работу.",
                     ),
                   );
                 }}
@@ -517,7 +513,7 @@ export function App() {
       </div>
       {mobile && (
         <Dialog title="Папки" onClose={() => setMobile(false)}>
-          <nav className="mobile-nav">{nav}</nav>
+          <nav className="mobile-nav" aria-label="Папки и корзина (меню)">{nav}</nav>
         </Dialog>
       )}
       {(panel === "upload" || panel === "version") && (
@@ -544,7 +540,7 @@ export function App() {
             await refreshWork();
           }}
         />
-      )}{" "}
+      )}
       {panel === "metadata" && work && (
         <ArtifactMetadataPanel
           artifact={work}
@@ -617,7 +613,14 @@ export function App() {
           }}
         />
       )}
-      {panel === "agent-context" && work && shown && <AgentContextPanel key={shown.id} artifactId={work.id} revisionId={shown.id} onClose={()=>setPanel(null)}/>}
+      {panel === "agent-context" && work && shown && (
+        <AgentContextPanel
+          key={shown.id}
+          artifactId={work.id}
+          revisionId={shown.id}
+          onClose={() => setPanel(null)}
+        />
+      )}
       {panel === "rework" && work && (
         <ReworkArtifactPanel
           title={work.title}

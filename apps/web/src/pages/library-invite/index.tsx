@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
+import { AppShell } from "../../widgets/navigation/index.tsx";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, LinkButton, Notice } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
@@ -42,7 +43,7 @@ function invitationError(error: unknown) {
 }
 
 export function LibraryInvite() {
-  const account = useAccount();
+  const { account, error: accountError, retry: retryAccount } = useAccountState();
   const [invitation, setInvitation] = useState<LibraryInvitation | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,7 +53,7 @@ export function LibraryInvite() {
     setBusy(true); setError("");
     try {
       await request(`/template-libraries/${invitation.libraryId}/invitations/accept`, { token: invitation.token });
-      sessionStorage.removeItem(STORAGE_KEY);
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* nothing was stored */ }
       location.assign(`/templates?libraryId=${encodeURIComponent(invitation.libraryId)}`);
     } catch (e) {
       setError(invitationError(e));
@@ -62,8 +63,9 @@ export function LibraryInvite() {
     <main className="library-invite-page">
       <span className="eyebrow">Общая библиотека</span>
       <h1>Приглашение в библиотеку</h1>
-      {!invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ?
-        <p role="status">Проверяем аккаунт…</p> : account === null ? <>
+      {!invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ? (accountError ?
+        <><ErrorNotice error={`Не удалось проверить аккаунт. ${accountError}`} /><Button onClick={retryAccount}>Проверить снова</Button></> :
+        <p role="status">Проверяем аккаунт…</p>) : account === null ? <>
           <p>Войдите с адресом, на который отправили приглашение. Ссылка продолжится после входа в текущей вкладке.</p>
           <LinkButton variant="primary" href="/?login=1&next=%2Flibrary-invite">Войти и продолжить</LinkButton>
         </> : <>

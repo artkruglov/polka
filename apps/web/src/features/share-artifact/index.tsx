@@ -15,6 +15,7 @@ import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
 import { dateLong, kindOf, size } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+import { useCopy } from "../../shared/ui/CopyText.tsx";
 
 type Choice = "private" | "link";
 
@@ -32,8 +33,11 @@ export function SharePanel({
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [choice, setChoice] = useState<Choice>(active ? "link" : "private"),
-    [days, setDays] = useState(7),
-    [copied, setCopied] = useState(false);
+    [days, setDays] = useState(7);
+  const url = a.share?.url ?? "";
+  // «Скопировано» belongs to this address; a new link starts uncopied.
+  const clip = useCopy(url);
+  const copied = clip.state === "copied";
   // The radio reflects the saved state; a pending change shows its own confirmation below.
   const wantsLink = choice === "link" && !active;
   const wantsClose = choice === "private" && active;
@@ -50,15 +54,11 @@ export function SharePanel({
     }
   };
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(a.share!.url!);
-      setCopied(true);
-    } catch {
+    if ((await clip.copy()) === "failed")
       setError("Не удалось скопировать. Выделите адрес выше.");
-    }
   };
-  const telegram = a.share?.url
-    ? `https://t.me/share/url?url=${encodeURIComponent(a.share.url)}`
+  const telegram = url
+    ? `https://t.me/share/url?url=${encodeURIComponent(url)}`
     : null;
   return (
     <Dialog title="Поделиться" onClose={onClose} busy={busy}>
@@ -77,7 +77,7 @@ export function SharePanel({
 
         <fieldset className="share-choices">
           <legend>Кто может открыть</legend>
-          <div className="ui-choice-list" role="radiogroup" aria-label="Кто может открыть">
+          <div className="ui-choice-list">
             <ChoiceCard
               name="share-access"
               value="private"
@@ -133,17 +133,26 @@ export function SharePanel({
 
         {active && choice === "link" && (
           <div className="share-step">
-            <span className="share-label">Ссылка на материал</span>
-            <div className="ui-link-field">
-              <code>{a.share!.url}</code>
-              <IconButton label={copied ? "Скопировано" : "Скопировать ссылку"} onClick={copy}>
-                {copied ? <Check /> : <Copy />}
-              </IconButton>
-            </div>
-            <Button variant="primary" className="ui-button--lg share-copy" onClick={copy}>
-              {copied ? <Check /> : <Copy />}
-              {copied ? "Скопировано" : "Скопировать ссылку"}
-            </Button>
+            <span className="share-label">Ссылка на работу</span>
+            {url ? (
+              <>
+                <div className="ui-link-field">
+                  <code>{url}</code>
+                  <IconButton label={copied ? "Скопировано" : "Скопировать ссылку"} onClick={() => void copy()}>
+                    {copied ? <Check /> : <Copy />}
+                  </IconButton>
+                </div>
+                <Button variant="primary" className="ui-button--lg share-copy" onClick={() => void copy()}>
+                  {copied ? <Check /> : <Copy />}
+                  {copied ? "Скопировано" : "Скопировать ссылку"}
+                </Button>
+              </>
+            ) : (
+              <p className="fine" role="note">
+                Адрес ссылки сейчас недоступен. Закройте окно и откройте его
+                снова.
+              </p>
+            )}
             {telegram && (
               <LinkButton href={telegram} target="_blank" rel="noopener" className="ui-button--lg share-telegram">
                 <Send /> Отправить в Telegram

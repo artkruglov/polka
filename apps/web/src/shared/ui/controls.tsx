@@ -275,24 +275,6 @@ export function IconButton({
   );
 }
 
-/** Icon-only link with a required accessible name. */
-export function IconLink({
-  label,
-  className = "",
-  children,
-  ...props
-}: Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "children"> & {
-  href: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a {...props} aria-label={label} title={props.title ?? label} className={`ui-icon-button ${className}`}>
-      {children}
-    </a>
-  );
-}
-
 /** A filter pill; `pressed` marks the active category. */
 export function Chip({
   pressed = false,

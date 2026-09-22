@@ -52,7 +52,6 @@
 .site-login svg { width: 18px; height: 18px; }
 
 .site-tabbar { display: none; }
-.proto-mark { display: inline-block; padding: 2px 6px; border-radius: var(--radius-xs); background: var(--soft-2); color: var(--muted); font-size: var(--text-xs); }
 
 /* Mobile navigation drawer (folders) */
 .mobile-nav { display: grid; gap: 2px; padding: 12px 8px 20px; }

@@ -15,6 +15,10 @@ import { client } from "../../shared/api/client.ts";
 import { Avatar, Button } from "../../shared/ui/controls.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
+import {
+  rememberAccount,
+  useAccountState,
+} from "../../entities/account/model/useAccount.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
 
 export type Section =
@@ -25,7 +29,7 @@ export type Section =
   | "templates"
   | "connections";
 
-export function SiteBrand() {
+function SiteBrand() {
   return (
     <a className="brand site-brand" href="/" aria-label="Полка — главная">
       полка
@@ -62,7 +66,7 @@ function useNarrow(query = "(max-width: 760px)") {
 }
 
 /** Avatar + name at the bottom of the rail; leaving is a separate, confirmed action. */
-export function AccountMenu({
+function AccountMenu({
   account,
   onLoggedOut,
 }: {
@@ -96,7 +100,7 @@ export function AccountMenu({
       {confirm && (
         <Dialog title="Выйти из Полки?" onClose={() => !busy && setConfirm(false)} busy={busy}>
           <div className="dialog-body">
-            <p>Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, понадобятся логин и пароль.</p>
+            <p>Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, войдите снова.</p>
             {error && <p className="ui-field-error" role="alert">{error}</p>}
           </div>
           <div className="dialog-footer">
@@ -109,6 +113,7 @@ export function AccountMenu({
                 setError("");
                 try {
                   await client.logout();
+                  rememberAccount(null);
                   setConfirm(false);
                   if (onLoggedOut) onLoggedOut();
                   else location.assign("/");
@@ -128,7 +133,7 @@ export function AccountMenu({
   );
 }
 
-export function SiteHeader({
+function SiteHeader({
   current,
   account,
   children,
@@ -143,6 +148,8 @@ export function SiteHeader({
 }) {
   const guest = account === null;
   const returnTo = authReturnTo(location);
+  // Shares the cached /me request; shown only when the page has no account yet.
+  const accountCheck = useAccountState();
   const hrefOf = (link: (typeof links)[number]) =>
     link.id === "shelf" && guest
       ? `/?login=1&next=${encodeURIComponent("/")}`
@@ -154,7 +161,7 @@ export function SiteHeader({
           <SiteBrand />
           {actions && <div className="site-rail-actions">{actions}</div>}
         </div>
-        <nav className="site-nav" aria-label="Основная навигация">
+        <nav className="site-nav" aria-label="Разделы">
           {links.map((link) => (
             <a
               key={link.id}
@@ -173,6 +180,10 @@ export function SiteHeader({
         <div className="site-account">
           {account ? (
             <AccountMenu account={account} onLoggedOut={onLoggedOut} />
+          ) : account === undefined && accountCheck.error ? (
+            <Button variant="quiet" onClick={accountCheck.retry}>
+              Нет связи · повторить
+            </Button>
           ) : account === undefined ? (
             <span className="site-account-loading" role="status">
               Загрузка…
@@ -187,7 +198,7 @@ export function SiteHeader({
           )}
         </div>
       </header>
-      <nav className="site-tabbar" aria-label="Основная навигация">
+      <nav className="site-tabbar" aria-label="Разделы (нижняя панель)">
         {links.map((link) => {
           const Icon = link.icon;
           return (
@@ -197,7 +208,7 @@ export function SiteHeader({
               aria-current={current === link.id ? "page" : undefined}
               data-primary={link.id === "bring" || undefined}
             >
-              <Icon />
+              <Icon aria-hidden="true" />
               <span>{link.label}</span>
             </a>
           );
@@ -205,10 +216,6 @@ export function SiteHeader({
       </nav>
     </>
   );
-}
-
-export function PrototypeMark({ children }: { children: React.ReactNode }) {
-  return <span className="proto-mark">{children}</span>;
 }
 
 /** Owns the page inset and navigation. Pages only supply local content. */

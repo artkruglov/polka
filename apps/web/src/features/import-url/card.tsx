@@ -1,14 +1,15 @@
 import { UrlImport } from "./index.tsx";
-import { useImportCapabilities } from "./useImportCapabilities.ts";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { Button, IconButton } from "../../shared/ui/controls.tsx";
 import React, { useEffect, useState } from "react";
 import { FileUp, Link2, X } from "lucide-react";
-import { classify, type ImportClassification } from "./classify-demo.ts";
+import { classify, type ImportClassification } from "./classify-link.ts";
 import { ProviderGuide } from "./provider-guide.tsx";
 
 /**
- * URL demo of /bring. It only recognises the pasted address in the browser: no request, no copy,
- * no receipt and no preview of someone else's page. The single way forward is the real file path.
+ * The link field of /bring. With server import enabled it saves public pages;
+ * otherwise the address is only recognised in the browser (no request, no copy)
+ * and the way forward is the file or pasted code.
  */
 export function UrlImportCard(props: {
   initialFolderId?: string;
@@ -21,7 +22,7 @@ export function UrlImportCard(props: {
   pasteCode?: React.ReactNode;
   onProviderChange?: (active: boolean) => void;
 }) {
-  const state = useImportCapabilities();
+  const state = useCapabilities();
   if (state.status === "failed")
     return (
       <section className="url-import">
@@ -38,14 +39,14 @@ export function UrlImportCard(props: {
         Проверяем доступность импорта…
       </section>
     );
-  return state.capabilities.enabled ? (
+  return state.capabilities.urlImport ? (
     <UrlImport {...props} />
   ) : (
-    <UrlImportDemo {...props} />
+    <UrlRecognizer {...props} />
   );
 }
 
-function UrlImportDemo({
+function UrlRecognizer({
   initial = "",
   onFile,
   fileSave,
@@ -71,7 +72,7 @@ function UrlImportDemo({
       <h2 id="url-import-title" className="sr-only">Сохранить работу по ссылке</h2>
       <p className="url-import-hint">
         Вставьте ссылку на артефакт — подскажем самый быстрый способ перенести
-        его на Полку. Ссылка проверяется в браузере и никуда не отправляется.
+        его на вашу полку. Ссылка проверяется в браузере и никуда не отправляется.
       </p>
       <form
         className="url-import-form"
