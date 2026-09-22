@@ -202,7 +202,10 @@ test("network imports and missing files are refused", async () => {
   if (!missing.ok) assert.match(missing.reason, /"\.\/nowhere" is not a file of this page/);
   const syntax = await compile(`export default function App( { return <div>; }`);
   assert.equal(syntax.ok, false);
-  if (!syntax.ok) assert.match(syntax.reason, /compilation failed: .*\(App\.jsx:1\)/);
+  if (!syntax.ok) {
+    assert.match(syntax.reason, /compilation failed: .*\(line 1\)/);
+    assert.equal(syntax.path, "App.jsx");
+  }
   const cdn = fixture({
     "index.html": `<!doctype html><html><head><script src="https://cdn.example.test/lib.js"></script></head><body><script type="module">console.log(1)</script></body></html>`,
   });
@@ -309,7 +312,7 @@ async function refused(source: string, pattern: RegExp, file = "App.jsx") {
 }
 
 test("computed imports and import attributes are refused before esbuild can glob the disk", async () => {
-  const computed = /must name a module with a plain string/;
+  const computed = /must name a module with a plain string|require must be called directly with one plain string/;
   const attributes = /import attributes/;
   await refused('const n = ""; export default async () => (await import(`../../.env${n}`)).default;', computed);
   await refused('const n = ""; export default async () => (await import(`../../.env${n}`, { with: { type: "text" } })).default;', attributes);
@@ -386,4 +389,76 @@ test("the build service admits a runtime page only when asked to", async () => {
   const result = await buildDerivative(value.manifest, value.bytes, { allowRuntime: false });
   assert.equal(result.ok, false);
   if (!result.ok) assert.match(result.reason, /not admitted/);
+});
+
+test("require is usable only as a direct call with one plain string", async () => {
+  const plain = /require must be called directly with one plain string/;
+  for (const source of [
+    'const x = "a"; export default () => module.require(`../${x}`);',
+    'const x = "a"; export default () => module["require"]("../" + x);',
+    'const x = "a"; export default () => module[`require`](x);',
+    'const x = "a"; const r = require; export default () => r(x);',
+    'const x = "a"; export default () => require.call(null, x);',
+    'const x = "a"; export default () => (0, require)(x);',
+    'const x = "a"; export default () => [require][0](x);',
+    'export default () => typeof require;',
+    'export default () => require("react", "x");',
+  ])
+    await refused(source, plain);
+  // A plain require of an allowlisted library still compiles.
+  const ok = await compile('const React = require("react");\nexport default () => React.version;');
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+  // An object key named require is not a reference.
+  const key = await compile('const o = { require: 1 };\nexport default () => o.require;');
+  assert.equal(key.ok, false);
+  if (!key.ok) assert.match(key.reason, plain); // o.require is a member named require
+  const literal = await compile('const o = { require: 1 };\nexport default () => o.value;');
+  assert.equal(literal.ok, true, literal.ok ? "" : literal.reason);
+});
+
+test("sloppy-mode sources are checked too and unparsable ones are refused", async () => {
+  const sloppy = (legacy: string) =>
+    fixture({
+      "index.html": componentShell("App", "App.jsx"),
+      "App.jsx": 'import "./legacy.js";\nexport default () => <p>{String(globalThis.value)}</p>;',
+      "legacy.js": legacy,
+    });
+  const leak = sloppy('var n = "package"; with (Math) { globalThis.value = require(`./${n}.json`); }');
+  const refusedLeak = await buildDerivative(leak.manifest, leak.bytes);
+  assert.equal(refusedLeak.ok, false);
+  if (!refusedLeak.ok) {
+    assert.match(refusedLeak.reason, /require must be called directly/);
+    assert.equal(refusedLeak.path, "legacy.js");
+  }
+  const clean = sloppy("with (Math) { globalThis.value = max(1, 2); }");
+  const built = await buildDerivative(clean.manifest, clean.bytes);
+  assert.equal(built.ok, true, built.ok ? "" : built.reason);
+  // JSX that only a module could hold, mixed with `with`, cannot be parsed
+  // either way and is refused rather than allowed.
+  await refused("with (Math) { var el = <p>{max(1, 2)}</p>; }", /compilation failed|could not be checked/);
+});
+
+test("keyword, statement and label nesting counts toward the pre-filter", async () => {
+  const deep = /nests too deeply/;
+  await refused(`export default () => ${"typeof ".repeat(1200)}1;`, deep);
+  await refused(`export default () => ${"void ".repeat(1200)}1;`, deep);
+  await refused(`let a; export function f() { ${"if (a) ".repeat(1200)}a++; }\nexport default () => null;`, deep);
+  await refused(`let a; export function f() { ${"while (a) ".repeat(1200)}a++; }\nexport default () => null;`, deep);
+  await refused(`export function f() { ${"x: ".repeat(1200)}return 1; }\nexport default () => null;`, deep);
+  // Prose in JSX mentions these words often; tags keep the count local.
+  const prose = Array.from({ length: 600 }, () => "<p>If you do this for a new user, wait while it loads.</p>").join("");
+  const ok = await compile(`export default () => <main>${prose}</main>;`);
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+});
+
+test("esbuild crash output stays out of the server logs", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const wrapper = path.join(ROOT, "apps/server/esbuild-limited.sh");
+  const run = spawnSync(wrapper, ["-c", "echo traceback >&2; echo protocol"], {
+    env: { PATH: "/usr/bin:/bin", POLKA_ESBUILD_BINARY: "/bin/sh" },
+    encoding: "utf8",
+  });
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "protocol\n");
+  assert.equal(run.stderr, "");
 });

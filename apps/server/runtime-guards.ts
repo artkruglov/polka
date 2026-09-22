@@ -93,24 +93,62 @@ function nextVisible(source: string, from: number) {
   return "";
 }
 
+// Words that make esbuild's parser recurse into what follows them.
+const PREFIX_KEYWORDS = new Set([
+  "typeof",
+  "void",
+  "delete",
+  "new",
+  "await",
+  "yield",
+  "if",
+  "else",
+  "while",
+  "for",
+  "do",
+  "with",
+]);
+
 /**
- * A cheap linear bound on how deeply a source nests before esbuild parses
- * it recursively: brackets and JSX elements, chains of right-nesting
- * operators within one statement, and runs of prefix operators. It cannot
- * see strings or comments, so it is a first filter; the hard memory limit
- * on the esbuild process is what bounds a crafted input.
+ * An advisory, linear pre-filter on how deeply a source nests before
+ * esbuild parses it recursively: brackets and JSX elements, chains of
+ * right-nesting operators, prefix keywords and labels within one statement,
+ * and runs of prefix operators. It cannot see strings or comments and a
+ * crafted input can pass it (an else-if chain closes a block before each
+ * else); the real bound is the hard memory limit of esbuild-limited.sh.
  */
 export function withinNestingLimits(source: string) {
   let brackets = 0;
   let elements = 0;
   let chain = 0;
   let unary = 0;
+  let keywords = 0;
   let previous = "";
   for (let index = 0; index < source.length; index++) {
     const char = source[index];
     if (char === " " || char === "\t" || char === "\n" || char === "\r")
       continue;
     const next = source[index + 1] ?? "";
+    if (/[A-Za-z_$]/.test(char) && !/[\w$]/.test(source[index - 1] ?? "")) {
+      let end = index + 1;
+      while (end < source.length && /[\w$]/.test(source[end])) end++;
+      const word = source.slice(index, end);
+      // Prose in JSX text is split by tags, which reset this count.
+      if (PREFIX_KEYWORDS.has(word) && ++keywords > MAX_CHAIN) return false;
+      // A label (`name:` right after a statement boundary or another label)
+      // nests the next statement; object keys follow "," or "{".
+      if (
+        nextVisible(source, end) === ":" &&
+        (previous === "" || ";}:".includes(previous)) &&
+        ++keywords > MAX_CHAIN
+      )
+        return false;
+      unary = 0;
+      previous = source[end - 1];
+      index = end - 1;
+      continue;
+    }
+    if (";{}<>".includes(char)) keywords = 0;
     if (char === "(" || char === "[" || char === "{") {
       if (++brackets > MAX_NESTING) return false;
       if (char === "{") chain = 0;
@@ -152,17 +190,59 @@ const staticSpecifier = (node: any) =>
   (node?.type === "Literal" && typeof node.value === "string") ||
   (node?.type === "TemplateLiteral" && node.expressions.length === 0);
 
-const isRequire = (callee: any) =>
-  (callee?.type === "Identifier" && callee.name === "require") ||
-  (callee?.type === "MemberExpression" &&
-    callee.object?.type === "Identifier" &&
-    callee.object.name === "require");
+const staticValue = (node: any) =>
+  node?.type === "Literal"
+    ? node.value
+    : node?.type === "TemplateLiteral" && node.expressions.length === 0
+      ? node.quasis[0].value.cooked
+      : undefined;
+
+/** `x.require`, `x["require"]` or `` x[`require`] ``. */
+const namesRequire = (member: any) =>
+  member.type === "MemberExpression" &&
+  (member.computed
+    ? staticValue(member.property) === "require"
+    : member.property.type === "Identifier" &&
+      member.property.name === "require");
+
+/** The call `callee("plain string")` with nothing else. */
+const plainCall = (call: any, callee: any) =>
+  call?.type === "CallExpression" &&
+  call.callee === callee &&
+  call.arguments.length === 1 &&
+  staticSpecifier(call.arguments[0]);
+
+const PLAIN_REQUIRE =
+  "require must be called directly with one plain string";
+
+function parseEither(code: string) {
+  const options = {
+    ecmaVersion: "latest" as const,
+    allowHashBang: true,
+    allowAwaitOutsideFunction: true,
+    allowReturnOutsideFunction: true,
+  };
+  try {
+    return parseJs(code, {
+      ...options,
+      sourceType: "module",
+      allowImportExportEverywhere: true,
+    });
+  } catch {
+    // Sloppy-mode code (e.g. `with`) is valid only as a script; the
+    // bundler compiles such a file as CommonJS, so it is checked too.
+    return parseJs(code, { ...options, sourceType: "script" });
+  }
+}
 
 /**
- * Refuses import attributes and any import()/require() whose specifier is
- * not a plain string. Returns the reason, or null when the module is fine.
- * The source is first reduced to JavaScript by esbuild's transform (which
- * reads no files), then walked iteratively.
+ * Refuses import attributes, any import() whose specifier is not a plain
+ * string, and any use of `require` (or a member named require, such as
+ * `module.require`) other than a direct call with one plain string. The
+ * source is reduced to JavaScript by esbuild's transform with the loader
+ * the bundler uses (it reads no files), parsed as a module or else as a
+ * script, and walked iteratively. A source that cannot be transformed or
+ * parsed is refused.
  */
 export async function staticImportsOnly(source: string, loader: Loader) {
   if (loader === "css" || loader === "json") return null;
@@ -172,32 +252,28 @@ export async function staticImportsOnly(source: string, loader: Loader) {
       await transform(source, {
         loader,
         jsx: "automatic",
-        format: "esm",
         target: "esnext",
         tsconfigRaw: "{}",
         logLevel: "silent",
       })
     ).code;
-  } catch {
-    // The bundle step reports the syntax error with its location.
-    return null;
+  } catch (error) {
+    const first = (error as { errors?: Array<{ text: string; location?: { line: number } | null }> }).errors?.[0];
+    return first
+      ? `compilation failed: ${first.text.slice(0, 200)}${first.location ? ` (line ${first.location.line})` : ""}`
+      : "compilation failed";
   }
   let program: any;
   try {
-    program = parseJs(code, {
-      ecmaVersion: "latest",
-      sourceType: "module",
-      allowHashBang: true,
-      allowAwaitOutsideFunction: true,
-      allowReturnOutsideFunction: true,
-      allowImportExportEverywhere: true,
-    });
+    program = parseEither(code);
   } catch {
     return "source could not be checked for imports";
   }
-  const stack: any[] = [program];
+  const stack: Array<{ node: any; parent: any; key: string }> = [
+    { node: program, parent: null, key: "" },
+  ];
   while (stack.length) {
-    const node = stack.pop();
+    const { node, parent, key } = stack.pop()!;
     switch (node.type) {
       case "ImportExpression":
         if (node.options) return "import attributes (with {...}) are not allowed";
@@ -210,20 +286,33 @@ export async function staticImportsOnly(source: string, loader: Loader) {
         if (node.attributes?.length)
           return "import attributes (with {...}) are not allowed";
         break;
-      case "CallExpression":
-        if (
-          isRequire(node.callee) &&
-          (node.arguments.length !== 1 || !staticSpecifier(node.arguments[0]))
-        )
-          return "require() must name a module with a plain string";
+      case "MemberExpression":
+        if (namesRequire(node) && !(key === "callee" && plainCall(parent, node)))
+          return PLAIN_REQUIRE;
         break;
+      case "Identifier":
+        if (node.name !== "require") break;
+        // The property of `x.require` is judged with its member expression;
+        // a plain object key is not a reference.
+        if (key === "property" && parent.type === "MemberExpression" && !parent.computed)
+          break;
+        if (
+          key === "key" &&
+          ["Property", "PropertyDefinition", "MethodDefinition"].includes(parent.type) &&
+          !parent.computed
+        )
+          break;
+        if (key === "callee" && plainCall(parent, node)) break;
+        return PLAIN_REQUIRE;
     }
-    for (const key of Object.keys(node)) {
-      const value = node[key];
+    for (const child of Object.keys(node)) {
+      const value = node[child];
       if (Array.isArray(value)) {
         for (const item of value)
-          if (item && typeof item.type === "string") stack.push(item);
-      } else if (value && typeof value.type === "string") stack.push(value);
+          if (item && typeof item.type === "string")
+            stack.push({ node: item, parent: node, key: child });
+      } else if (value && typeof value.type === "string")
+        stack.push({ node: value, parent: node, key: child });
     }
   }
   return null;
