@@ -722,6 +722,8 @@ test("official client captures, prepares, shares, revises, isolates connections,
       env: {
         ...process.env,
         HTML_LIVE_ENABLED: "false",
+        // The isolated runner may enable live mode; the child must stay consistent.
+        HTML_LIVE_MODE: "disabled",
         TEST_MCP_TOKEN: issued.token,
         TEST_UPLOAD_KEY: disabledInput.key,
         TEST_REVISION_ID: disabledReceipt.revisionId,
@@ -828,7 +830,8 @@ test("share receipts survive a lost response, reject substitution, and replay cl
     await client.callTool({ name: "polka_share", arguments: shareInput })
   ).structuredContent as any;
   assert.equal(recovered.state, "active");
-  assert.match(recovered.url, /^http:\/\/127\.0\.0\.1:4590\/s#/);
+  // The share URL follows this installation's origin, not a fixed port.
+  assert.ok(recovered.url.startsWith(`${config.APP_ORIGIN}/s#`), recovered.url);
   assert.equal(recovered.artifactId, v1.artifactId);
   assert.equal(recovered.revisionId, v1.revisionId);
   assert.deepEqual(
