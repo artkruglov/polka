@@ -36,6 +36,12 @@ x-runtime-env: &runtime-env
   ACCOUNT_DELETION_ENABLED: "false"
   URL_IMPORT_ENABLED: "false"
   MAIL_MODE: ${MAIL_MODE:-disabled}
+  # Used only with MAIL_MODE=smtp (for example Yandex Cloud Postbox).
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  MAIL_FROM: ${MAIL_FROM:-}
   # Operator status for an external monitor; empty keeps /api/ops/status off.
   # The app key only lists BACKUP_BUCKET to report the newest dump's age.
   OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
