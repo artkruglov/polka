@@ -2,6 +2,17 @@
 
 Все заметные изменения Полки. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [SemVer](https://semver.org/lang/ru/). До `1.0.0` API, схема БД и интерфейс могут меняться между prerelease-версиями.
 
+## [0.1.0-rc.3] — 2026-09-22
+
+### Security
+
+- Классификатор страниц читает атрибуты так же, как браузер: `<meta http-equiv="&#x72;efresh">` и `href="&#x6a;avascript:"` больше не проходят как обычная страница и не получают ссылку.
+- `<base target="_blank">` вставляется в настоящий `<head>`, а не в закомментированный, поэтому ссылки в статичном просмотре всегда открываются в новой вкладке.
+
+### Fixed
+
+- В базовом `compose.base.yml` вернулся проброс `127.0.0.1:${APP_PORT}` — без него обратный прокси не мог достучаться до приложения.
+
 ## [0.1.0-rc.2] — 2026-09-22
 
 ### Added
@@ -50,6 +61,7 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.2...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.3...HEAD
+[0.1.0-rc.3]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.3
 [0.1.0-rc.2]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.2
 [0.1.0-rc.1]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.1

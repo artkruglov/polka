@@ -117,6 +117,8 @@ export async function createApp() {
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow, noarchive",
       "referrer-policy": "no-referrer",
+      // frame-src is load-bearing: it is what keeps a saved page from
+      // navigating the reader's tab to a look-alike site. Do not widen it.
       "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-src 'self'${config.HTML_LIVE_ENABLED ? ` ${config.VIEWER_ORIGIN}` : ""}; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
     });
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;

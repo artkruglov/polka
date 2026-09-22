@@ -16,7 +16,7 @@
 |---|---|---|
 | ![Полка home page](docs/screenshots/landing.png) | ![The «Интересное» catalogue](docs/screenshots/discover.png) | ![An interactive page opened from a link](docs/screenshots/recipient.png) |
 
-> **Status: prerelease.** The latest tag is `v0.1.0-rc.2`. Changes since then are listed in the [CHANGELOG](CHANGELOG.md). A hosted pilot runs at https://polochka.app, and the operator creates the accounts. The API, database schema and UI may still change. What works and what doesn't: [docs/status.md](docs/status.md) (Russian).
+> **Status: prerelease.** The latest tag is `v0.1.0-rc.3`. Changes since then are listed in the [CHANGELOG](CHANGELOG.md). A hosted pilot runs at https://polochka.app, and the operator creates the accounts. The API, database schema and UI may still change. What works and what doesn't: [docs/status.md](docs/status.md) (Russian).
 
 The interface and most documentation are in Russian. Identifiers, commands and API fields are in English.
 

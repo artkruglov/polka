@@ -245,7 +245,9 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   assert.equal(issued.statusCode, 200, issued.body);
   assert.equal(issued.json().status, "ready");
   assert.match(issued.json().url, /\/library-document\//);
-  assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 60_000);
+  // The deadline comes from the database clock, so allow a second of skew
+  // against ours; the point is that the grant is short-lived, not exact.
+  assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 61_000);
   const document = await embedded(tokenPath(issued.json().url));
   assert.equal(document.statusCode, 200, document.body);
   assert.equal(document.body, singleHtml);

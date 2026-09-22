@@ -223,7 +223,9 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
   assert.equal(issued.statusCode, 200, issued.body);
   assert.equal(issued.json().profile, "inline-live-experimental-v1");
   assert.equal(new URL(issued.json().url).origin, config.VIEWER_ORIGIN);
-  assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 60_000);
+  // The deadline comes from the database clock, so allow a second of skew
+  // against ours; the point is that the grant is short-lived, not exact.
+  assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 61_000);
 
   const document = await embeddedDocument(
     `/document/${capabilityToken(issued.json().url)}`,
