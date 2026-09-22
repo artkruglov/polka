@@ -17,7 +17,7 @@
 | React runtime `react-runtime-v1` | работает | 10 библиотек и Tailwind v4, без сети |
 | MCP по токену (Claude Code, Codex) | работает | Проверено на Codex CLI; Claude Code подключается тем же конфигом |
 | Коннектор Claude.ai / ChatGPT (OAuth 2.1, `polka_publish`) | работает | Покрыт интеграционными тестами. Ручная приёмка с настоящими Claude.ai и ChatGPT после выкладки — см. [roadmap](roadmap.md) |
-| HTTP API `POST /api/v1/publish` и CLI | работает | CLI требует `POLKA_ENDPOINT` или `--endpoint` |
+| HTTP API `POST /api/v1/publish` и CLI | работает | Копия CLI из репозитория требует `POLKA_ENDPOINT` или `--endpoint` |
 | Библиотеки шаблонов: роли, приглашения, журнал | работает | Приглашение пересылается вручную (письма нет) |
 | «Интересное»: 12 интерактивных материалов Редакции | работает | Каталог курирует оператор; авторских публикаций нет |
 | Импорт по URL (standalone HTML) | в коде | `URL_IMPORT_ENABLED`, выключен по умолчанию и на polochka.app |
