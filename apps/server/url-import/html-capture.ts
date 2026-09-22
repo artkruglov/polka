@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {parse,serialize,type DefaultTreeAdapterTypes as Tree} from 'parse5';
 import postcss from 'postcss';
 import {canonicalizeManifest} from '../../../packages/contracts/bundle.ts';
-import {MAX_BYTES} from '../../../packages/contracts/index.ts';
+import {MAX_BYTES,MAX_TITLE} from '../../../packages/contracts/index.ts';
 import {checkBuildInWorker} from '../bundle-derivatives.ts';
 import {cdnRole} from '../react-runtime.ts';
 import {fetchPublic,publicUrl,type PublicResponse} from './public-fetch.ts';
@@ -97,6 +97,6 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
  if(!built.ok)warnings.add(built.failed?`Интерактивная сборка не проверена: ${built.reason}`:`Интерактивная сборка недоступна: ${built.reason}`);
  else for(const warning of built.warnings??[])warnings.add(`В интерактивной версии: ${warning}`);
  // Successful localization alone cannot prove arbitrary JavaScript is offline.
- const title=nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,200)||sourceUrl.hostname;
+ const title=nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,MAX_TITLE)||sourceUrl.hostname;
  return {title,manifest,files:[...stored].map(([path,{bytes}])=>({path,encoding:'base64' as const,data:bytes.toString('base64')})),previewReady:built.ok&&warnings.size===0,warnings:[...warnings]};
 }

@@ -154,6 +154,15 @@ export async function createApp() {
         code: "conflict",
         message: "Действие пересеклось с другим. Повторите его.",
       });
+    // A statement cancelled while it waited for a row another request holds
+    // (statement_timeout counts lock waits). Nothing was committed.
+    if (error.code === "57014" || error.code === "55P03") {
+      console.error(JSON.stringify({ event: "request.busy", code: error.code }));
+      return reply.code(503).header("retry-after", "5").send({
+        code: "busy",
+        message: "Полка сейчас занята другим действием с этими работами. Повторите через несколько секунд.",
+      });
+    }
     if (error.code === "23505")
       return reply.code(409).send({
         code: "conflict",

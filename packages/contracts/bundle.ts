@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_BYTES, MIME, uuid } from "./index.ts";
+import { MAX_BYTES, MAX_TITLE, MIME, uuid } from "./index.ts";
 
 const BUNDLE_MIME = [
   ...MIME,
@@ -211,7 +211,7 @@ export function canonicalizeManifest(input: unknown): BundleManifest {
 export const beginBundleUploadSchema = z
   .object({
     key: uuid,
-    title: z.string().trim().min(1).max(160),
+    title: z.string().trim().min(1).max(MAX_TITLE),
     manifest: bundleManifestSchema,
     artifactId: uuid.optional(),
     baseRevisionId: uuid.optional(),

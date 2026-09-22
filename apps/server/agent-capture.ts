@@ -5,7 +5,7 @@ import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { z } from "zod";
 import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
-import { uuid } from "../../packages/contracts/index.ts";
+import { MAX_TITLE, uuid } from "../../packages/contracts/index.ts";
 import { Problem, missing } from "./errors.ts";
 import {
   withServiceActorTransaction,
@@ -23,7 +23,7 @@ import { previewStatusInTransaction } from "./agent-preview.ts";
 export const captureSchema = z
   .object({
     key: uuid,
-    title: z.string().trim().min(1).max(200),
+    title: z.string().trim().min(1).max(MAX_TITLE),
     folderId: uuid.optional(),
     artifactId: uuid.optional(),
     baseRevisionId: uuid.optional(),

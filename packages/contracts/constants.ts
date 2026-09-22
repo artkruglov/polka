@@ -1,6 +1,8 @@
 // Zod-free copies of contract constants for the browser's initial chunk.
 // index.ts pulls in zod; tests/unit.test.ts keeps both definitions equal.
 export const MAX_BYTES = 5 * 1024 * 1024;
+/** Longest stored title; every path that names a work uses this one limit. */
+export const MAX_TITLE = 160;
 export const MIME = [
   "image/png",
   "image/jpeg",

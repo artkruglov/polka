@@ -3,13 +3,14 @@ import { z } from "zod";
 // does not pull in zod; this module re-exports them.
 export {
   MAX_BYTES,
+  MAX_TITLE,
   MIME,
   looksLikeHtml,
   REPORT_REASONS,
   AGENT_SCOPES,
 } from "./constants.ts";
 export type { UploadMime, ReportReason } from "./constants.ts";
-import { MAX_BYTES, MIME, REPORT_REASONS, AGENT_SCOPES } from "./constants.ts";
+import { MAX_BYTES, MAX_TITLE, MIME, REPORT_REASONS, AGENT_SCOPES } from "./constants.ts";
 // How a saved HTML page may be shown. "static" and "limited" render in a
 // scriptless, networkless sandbox; "unsupported" needs a runtime profile that
 // this build does not have, so it gets no link.
@@ -25,7 +26,7 @@ export const uuid = z.string().uuid();
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 export const updateArtifactMetadataFields = {
-  title: z.string().trim().min(1).max(160).optional(),
+  title: z.string().trim().min(1).max(MAX_TITLE).optional(),
   folderId: uuid.nullable().optional(),
   expectedTitle: z.string().max(200),
   expectedFolderId: uuid.nullable(),
@@ -81,7 +82,7 @@ export type OAuthConsentDetails = {
 export const beginUploadSchema = z
   .object({
     key: uuid,
-    title: z.string().trim().min(1).max(160),
+    title: z.string().trim().min(1).max(MAX_TITLE),
     filename: z.string().trim().min(1).max(200),
     mime: z.enum(MIME),
     size: z.number().int().min(1).max(MAX_BYTES),
