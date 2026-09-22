@@ -42,6 +42,9 @@ x-runtime-env: &runtime-env
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASS: ${SMTP_PASS:-}
   MAIL_FROM: ${MAIL_FROM:-}
+  # invite: codes only for existing accounts and EMAIL_SIGNUP_ALLOW entries.
+  EMAIL_SIGNUP: ${EMAIL_SIGNUP:-invite}
+  EMAIL_SIGNUP_ALLOW: ${EMAIL_SIGNUP_ALLOW:-}
   # Operator status for an external monitor; empty keeps /api/ops/status off.
   # The app key only lists BACKUP_BUCKET to report the newest dump's age.
   OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}

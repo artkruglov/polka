@@ -17,6 +17,7 @@ export function Signup() {
     delivery: string;
   } | null>(null);
   const [mode, setMode] = useState("loading");
+  const [inviteOnly, setInviteOnly] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -26,6 +27,7 @@ export function Signup() {
     loadCapabilities()
       .then(async (c) => {
         setMode(c.emailLogin);
+        setInviteOnly(c.emailSignup === "invite");
         if (c.emailLogin === "disabled") return;
         const pending = await request<{
           id: string;
@@ -102,8 +104,12 @@ export function Signup() {
             : challenge
               ? challenge.delivery === "local"
                 ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
-                : `Отправили код на ${email}. Он действует 10 минут.`
-              : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
+                : inviteOnly
+                  ? `Если адрес ${email} приглашён на эту Полку, код придёт в течение минуты. Он действует 10 минут.`
+                  : `Отправили код на ${email}. Он действует 10 минут.`
+              : inviteOnly
+                ? "Вход по приглашению. Введите почту, на которую вас пригласили, — пришлём код."
+                : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
         </p>
         {mode === "loading" && (
           <p className="entry-loading" role="status">

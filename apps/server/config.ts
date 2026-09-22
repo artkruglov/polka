@@ -45,6 +45,24 @@ const env = z
     SMTP_USER: unsetIfEmpty(z.string()),
     SMTP_PASS: unsetIfEmpty(z.string()),
     MAIL_FROM: unsetIfEmpty(z.string().email()),
+    // Who may receive a sign-in code. open: anyone, and a new address gets a
+    // shelf. invite: only addresses that already have an account or match
+    // EMAIL_SIGNUP_ALLOW (addresses and @domains, comma- or space-separated).
+    EMAIL_SIGNUP: z.enum(["open", "invite"]).default("open"),
+    EMAIL_SIGNUP_ALLOW: z
+      .string()
+      .default("")
+      .transform((value) =>
+        value
+          .split(/[\s,]+/)
+          .map((entry) => entry.trim().toLowerCase())
+          .filter(Boolean),
+      )
+      .pipe(
+        z.array(
+          z.string().regex(/^(?:[^@\s]+)?@[^@\s]+\.[^@\s]+$/, "an address or @domain"),
+        ),
+      ),
     COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
     ACCOUNT_DELETION_ENABLED: z
       .enum(["true", "false"])

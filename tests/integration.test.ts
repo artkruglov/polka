@@ -965,6 +965,43 @@ test(
 );
 
 test(
+  "Email identity: an invite-only installation sends codes only to invited addresses",
+  { skip: config.MAIL_MODE !== "local" },
+  async () => {
+    const { access } = await import("node:fs/promises");
+    const mutable = config as { EMAIL_SIGNUP: string; EMAIL_SIGNUP_ALLOW: string[] };
+    const prior = { mode: mutable.EMAIL_SIGNUP, allow: mutable.EMAIL_SIGNUP_ALLOW };
+    const run = randomUUID().slice(0, 8);
+    const team = `team-${run}.test`;
+    mutable.EMAIL_SIGNUP = "invite";
+    mutable.EMAIL_SIGNUP_ALLOW = [`guest-${run}@example.test`, `@${team}`];
+    const mailed = async (email: string) => {
+      const start = await call("POST", "/api/auth/email/start", { email }, "");
+      // Invited or not, the answer looks the same.
+      assert.equal(start.statusCode, 200, start.body);
+      const id = start.json().id as string;
+      const file = await access(`.local/mail/${id}.json`).then(() => true, () => false);
+      const row = (await db.query("SELECT 1 FROM login_challenges WHERE id=$1", [id])).rowCount;
+      assert.equal(!!row, file, email);
+      return file;
+    };
+    try {
+      assert.equal((await call("GET", "/api/capabilities", undefined, "")).json().emailSignup, "invite");
+      assert.equal(await mailed(`stranger-${run}@example.test`), false);
+      assert.equal(await mailed(`guest-${run}@example.test`), true);
+      assert.equal(await mailed(`anyone@${team}`), true);
+      // An existing account keeps signing in without being listed.
+      const member = await createAccount(`member-${run}`, password);
+      await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [member.id, `member-${run}@example.test`]);
+      assert.equal(await mailed(`member-${run}@example.test`), true);
+    } finally {
+      mutable.EMAIL_SIGNUP = prior.mode;
+      mutable.EMAIL_SIGNUP_ALLOW = prior.allow;
+    }
+  },
+);
+
+test(
   "Email identity: a stranger's wrong codes do not lock the owner out",
   { skip: config.MAIL_MODE !== "local" },
   async () => {

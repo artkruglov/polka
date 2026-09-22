@@ -26,6 +26,14 @@ const fingerprint = (id: string, code: string) =>
 // in the owner's inbox.
 const CODE_DIGITS = 8;
 
+/** In invite mode, an address listed exactly or by its @domain. */
+export function emailInvited(email: string) {
+  const domain = email.slice(email.lastIndexOf("@"));
+  return config.EMAIL_SIGNUP_ALLOW.some(
+    (entry) => entry === email || entry === domain,
+  );
+}
+
 type LocalDeliveryClient = {
   query: (
     text: string,
@@ -119,6 +127,15 @@ export async function beginEmailLogin(email: string, ip: string) {
       )
     ).rowCount;
     if (blocked) return false;
+    // Invite-only installations send codes to existing accounts and invited
+    // addresses. The answer is the same either way, so the form does not tell
+    // a stranger which addresses are invited.
+    if (config.EMAIL_SIGNUP === "invite" && !emailInvited(email)) {
+      const known = await c.query("SELECT 1 FROM accounts WHERE email=$1", [
+        email,
+      ]);
+      if (!known.rowCount) return false;
+    }
     await c.query(
       `INSERT INTO login_challenges(id,email,code_hash,browser_hash,delivery,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes')`,
       [id, email, fingerprint(id, code), sha256(browser), config.MAIL_MODE],
