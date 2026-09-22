@@ -80,14 +80,10 @@ export function Signup() {
   }
   const passwordOnly = mode === "disabled";
   return (
-    <AppShell
-      current="shelf"
-      account={account}
-      className="p-modern entry-redesign signup-redesign"
-    >
+    <AppShell current="shelf" account={account}>
       <main className="onboard">
         <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
-        <span className="p-eyebrow">
+        <span className="eyebrow">
           {passwordOnly ? "Вход в Полку" : "Своя полка за пару шагов"}
         </span>
         <h1>

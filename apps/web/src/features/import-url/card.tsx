@@ -1,8 +1,8 @@
 import { UrlImport } from "./index.tsx";
 import { useImportCapabilities } from "./useImportCapabilities.ts";
-import { Button, TextField } from "../../shared/ui/controls.tsx";
-import React, { useState } from "react";
-import { FileUp, Link2 } from "lucide-react";
+import { Button, IconButton } from "../../shared/ui/controls.tsx";
+import React, { useEffect, useState } from "react";
+import { FileUp, Link2, X } from "lucide-react";
 import { classify, type ImportClassification } from "./classify-demo.ts";
 import { ProviderGuide } from "./provider-guide.tsx";
 
@@ -17,12 +17,13 @@ export function UrlImportCard(props: {
   accountId?: string;
   /** File capture rendered inside the card for provider links (composed by the page). */
   fileSave?: React.ReactNode;
+  onProviderChange?: (active: boolean) => void;
 }) {
   const state = useImportCapabilities();
   if (state.status === "failed")
     return (
-      <section className="bring-card">
-        <p role="alert">
+      <section className="url-import">
+        <p className="ui-field-error" role="alert">
           Не удалось проверить доступность импорта. Обновите страницу или
           сохраните файл.
         </p>
@@ -31,7 +32,7 @@ export function UrlImportCard(props: {
     );
   if (state.status === "loading")
     return (
-      <section className="bring-card" role="status">
+      <section className="url-import url-import-hint" role="status">
         Проверяем доступность импорта…
       </section>
     );
@@ -46,26 +47,25 @@ function UrlImportDemo({
   initial = "",
   onFile,
   fileSave,
+  onProviderChange,
 }: {
   initial?: string;
   onFile: () => void;
   fileSave?: React.ReactNode;
+  onProviderChange?: (active: boolean) => void;
 }) {
   const [value, setValue] = useState(initial);
   const [result, setResult] = useState<ImportClassification | null>(() =>
     initial ? classify(initial) : null,
   );
   const provider = result?.status === "provider";
+  useEffect(() => {
+    onProviderChange?.(provider);
+  }, [provider, onProviderChange]);
   return (
-    <section
-      className="bring-card url-import"
-      aria-labelledby="url-import-title"
-    >
-      <span className="result-kicker">
-        <Link2 /> ПО ССЫЛКЕ
-      </span>
-      <h2 id="url-import-title">Сохранить работу по ссылке</h2>
-      <p className="bring-hint">
+    <section className="url-import" aria-labelledby="url-import-title">
+      <h2 id="url-import-title" className="sr-only">Сохранить работу по ссылке</h2>
+      <p className="url-import-hint">
         Вставьте ссылку на артефакт — подскажем самый быстрый способ перенести
         его на Полку. Ссылка проверяется в браузере и никуда не отправляется.
       </p>
@@ -76,15 +76,23 @@ function UrlImportDemo({
           if (value.trim()) setResult(classify(value));
         }}
       >
-        <TextField
-          label="Ссылка на работу"
-          id="url-import-input"
-          inputMode="url"
-          placeholder="https://claude.ai/artifact/…"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        />
-        <Button type="submit">Проверить ссылку</Button>
+        <label className="bring-field">
+          <Link2 aria-hidden="true" />
+          <input
+            id="url-import-input"
+            inputMode="url"
+            aria-label="Ссылка на работу"
+            placeholder="https://claude.ai/artifact/…"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          {value && (
+            <IconButton size="sm" label="Очистить" onClick={() => { setValue(""); setResult(null); }}>
+              <X />
+            </IconButton>
+          )}
+        </label>
+        <Button type="submit" variant="primary">Продолжить</Button>
       </form>
       {result && provider ? (
         <ProviderGuide result={result} fileSave={fileSave} onFile={onFile} />
@@ -101,11 +109,13 @@ function UrlImportDemo({
               <p>{result.explain}</p>
             </div>
           )}
-          <div className="bring-actions">
-            <Button variant="primary" onClick={onFile}>
-              <FileUp /> Сохранить файлом
-            </Button>
-          </div>
+          {result && (
+            <div className="bring-actions">
+              <Button variant="quiet" onClick={onFile}>
+                <FileUp /> Сохранить файлом
+              </Button>
+            </div>
+          )}
         </>
       )}
     </section>

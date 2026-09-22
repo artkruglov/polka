@@ -1,6 +1,6 @@
 # Единая система интерфейса
 
-Статус на 21.09.2026: миграция частичная, 51 модуль проверяется `npm run check:layers`.
+Статус на 22.09.2026: 61 модуль проверяется `npm run check:layers`; корневых legacy-стилей больше нет (см. «Визуальная система»).
 
 ## Правило композиции
 
@@ -10,8 +10,8 @@
 
 | Владелец | Что ему принадлежит | Основные потребители |
 |---|---|---|
-| shared/ui | Button, LinkButton, TextField, SelectField, Tabs, Dialog, Notice, EmptyState, Status | features, widgets, pages |
-| shared/styles | общие визуальные правила и токены | приложение |
+| shared/ui | Button, LinkButton, IconButton, Chip, Segmented, Avatar, ChoiceCard, TextField, SelectField, Tabs, Dialog (center/panel/wide), ActionMenu, CopyText, Notice, EmptyState, Status | features, widgets, pages |
+| shared/styles | tokens.css (единственный набор токенов) и base.css (reset, утилиты) | main.tsx |
 | entities/account, folder, artifact | состояние пользователя, папки, форматирование материала | features и выше |
 | features/import-url | форма, очередь, восстановление задания | bring |
 | features/capture-file, share-artifact, upload-artifact | отдельные пользовательские действия | страницы и reader |
@@ -130,3 +130,15 @@ Bring принимает контекст folder из query и передаёт 
 Вход зависит от возможностей установки: `entities/capabilities/useCapabilities.ts` читает `/capabilities`; `features/password-login` — единая форма логин/пароль, которую используют pages/login и pages/signup. При `emailLogin: disabled` /signup показывает форму пароля сразу, /?login=1 не обещает вход по почте; текст «Аккаунт выдаёт администратор этой Полки» нейтрален для hosted и local. Лендинг при `urlImport: false` ведёт на подключение агента и загрузку файла вместо неработающего поля ссылки; /start не показывает ссылочный путь как действие.
 
 Reader: хлебные крошки остались только в верхней панели workspace (папка → Материал), панель действий и подвал «Тип · размер · файл | Скачать оригинал | Переработать с агентом» по концепту saved-material-reader.png. Preview показывает состояние загрузки sandbox-документа. Название загрузки для HTML берётся из `<title>` (entities/artifact/html-title.ts). Выход из аккаунта подтверждается диалогом. Каталог «Интересное» имеет спроектированное пустое состояние. Проверено браузером на 1440 и 390 (гостевые экраны); авторизованные экраны проверены только тестами и сборкой.
+
+## Визуальная система (22.09.2026)
+
+Один набор токенов — `shared/styles/tokens.css`: цвета (canvas/soft, ink/muted, line, cobalt accent, семантические), радиусы 4–16 (контролы 6–8, обложки 10), шкала отступов 4px, шкала шрифта, тени, длительности и `--rail-width`. `base.css` — reset, типографика по умолчанию, `.eyebrow`, `.empty`, `.placeholder`, словесный знак `.brand`. Токены нигде не переопределяются на обёртках экранов.
+
+Каскад в `main.tsx`: tokens → base → controls (+action-menu) → dialog → navigation → artifact-preview → artifact-reader → editorial-catalog → trash → pages/agents. Эти виджеты и страницу рендерят Node-тесты, поэтому их CSS не импортируется из компонентов. Все остальные страницы и фичи импортируют `./styles.css` сами; порядок между ними не важен, потому что каждый файл стилизует только свои классы.
+
+Удалены root `style.css`, `community.css`, `entry.css`, `modern.css`, `entry-redesign.css`, `visual-system.css` и шимы `trash.css`, `agent-connections.css`, `editorial-catalog.css`, `reader-recipient.css` (≈9 300 строк). Сейчас все стили — ~1 400 строк в файлах владельцев. `widgets/trash/styles.css` теперь действительно подключён.
+
+Экраны по концептам 20–21.09: полка (hero со ссылкой, чипы типов, сетка обложек 16:10, «Открыть ↗» и меню «⋯» на карточке, список), reader (breadcrumbs, «На весь экран» через `requestFullscreen` для stage, «Поделиться» в верхней панели, футер «Сохранённая версия»), диалог «Кто может открыть» (Только я / По ссылке / Опубликовать — после проверки, Telegram-ссылка `t.me/share/url`), шаблоны с правой панелью «Для вашего агента» (Dialog variant="panel"), «Сохранить» одной колонкой, «Интересное» с обложками, страница получателя, лендинг/вход/подключение агента/корзина в той же системе.
+
+Демо-данные для ревью дизайна: `npx tsx --env-file=.env scripts/seed-design-demo.ts` (только локальная БД; создаёт аккаунт `designer`, пароль в `.local/designer-account.txt`).

@@ -1,8 +1,10 @@
+import "./styles.css";
 import { pollImport } from "./polling.ts";
 import { useFolders } from "../../entities/folder/useFolders.ts";
 import React, { useEffect, useRef, useState } from "react";
 import { request, ApiError } from "../../shared/api/client.ts";
-import { Button, LinkButton, TextField, SelectField } from "../../shared/ui/controls.tsx";
+import { Button, IconButton, LinkButton, SelectField } from "../../shared/ui/controls.tsx";
+import { Link2, X } from "lucide-react";
 import { classify, type ImportClassification } from "./classify-demo.ts";
 import { ProviderGuide } from "./provider-guide.tsx";
 
@@ -59,12 +61,15 @@ export function UrlImport({
   onFile,
   accountId,
   fileSave,
+  onProviderChange,
 }: {
   initialFolderId?: string;
   initial?: string;
   onFile: () => void;
   accountId?: string;
   fileSave?: React.ReactNode;
+  /** Tells the page when the Claude/ChatGPT guide (with its own file drop) is showing. */
+  onProviderChange?: (active: boolean) => void;
 }) {
   const [provider, setProvider] = useState<ImportClassification | null>(() => {
     const recognised = initial ? classify(initial) : null;
@@ -87,6 +92,9 @@ export function UrlImport({
   const cancelSending = useRef(false);
   const stopPolling = useRef<() => void>(() => {});
   const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    onProviderChange?.(!!provider);
+  }, [provider, onProviderChange]);
   useEffect(() => {
     if (!jobId) return;
     const stop = pollImport<Job>({
@@ -190,48 +198,33 @@ export function UrlImport({
     setNeedsLogin(false);
   }
   return (
-    <section
-      className="bring-card url-import"
-      aria-labelledby="url-import-title"
-    >
-      <h2 id="url-import-title">Сохранить страницу по ссылке</h2>
-      <p className="bring-hint">
-        Перенесём публичную HTML-страницу с поддерживаемыми ресурсами на вашу
-        личную Полку. Claude и ChatGPT пока требуют экспорта файлом.
-      </p>
-      <details className="bring-hint">
-        <summary>Какие страницы можно перенести</summary>
-        <p>
-          Лучше всего подходят автономные HTML-отчёты, калькуляторы и прототипы.
-          Обычные CSS, изображения, WOFF2-шрифты и скрипты копируются вместе со
-          страницей. Лимит — 5 МиБ и 64 файла, включая HTML.
-        </p>
-        <p>
-          Внешние API, вход на другом сайте и встроенные страницы не работают в
-          изолированном просмотре. Модули JavaScript, CSS @import и адаптивные
-          изображения srcset могут потребовать подготовки файлом. Ограничения
-          показываем в результате импорта.
-        </p>
-        <p>
-          Наличие интерактивного просмотра не гарантирует работу каждой кнопки:
-          проверьте сохранённый материал перед отправкой. Исходную ссылку и
-          доступ к источнику получатель не использует.
-        </p>
-      </details>
+    <section className="url-import" aria-labelledby="url-import-title">
+      <h2 id="url-import-title" className="sr-only">Сохранить страницу по ссылке</h2>
+
       {!jobId && (
         <form className="url-import-form" onSubmit={submit}>
-          <TextField
-            label="Публичная HTTPS-ссылка"
-            type="url"
-            required
-            disabled={busy}
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              key.current = crypto.randomUUID();
-            }}
-            placeholder="https://example.org/report.html"
-          />
+          <label className="bring-field">
+            <Link2 aria-hidden="true" />
+            <input
+              id="url-import-input"
+              type="url"
+              inputMode="url"
+              aria-label="Публичная HTTPS-ссылка"
+              required
+              disabled={busy}
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                key.current = crypto.randomUUID();
+              }}
+              placeholder="https://example.org/report.html"
+            />
+            {url && !busy && (
+              <IconButton size="sm" label="Очистить" onClick={() => setUrl("")}>
+                <X />
+              </IconButton>
+            )}
+          </label>
           {accountId && (
             <>
               <SelectField
@@ -263,15 +256,40 @@ export function UrlImport({
             </>
           )}
           <Button variant="primary" type="submit" busy={busy}>
-            Сохранить копию
+            Сохранить
           </Button>
         </form>
+      )}
+      {!jobId && !provider && (
+      <details className="url-import-hint">
+        <summary>Какие страницы можно перенести</summary>
+        <p>
+          Публичные HTML-страницы с поддерживаемыми ресурсами. Claude и ChatGPT
+          пока требуют экспорта файлом — вставьте такую ссылку, и мы покажем путь.
+        </p>
+        <p>
+          Лучше всего подходят автономные HTML-отчёты, калькуляторы и прототипы.
+          Обычные CSS, изображения, WOFF2-шрифты и скрипты копируются вместе со
+          страницей. Лимит — 5 МиБ и 64 файла, включая HTML.
+        </p>
+        <p>
+          Внешние API, вход на другом сайте и встроенные страницы не работают в
+          изолированном просмотре. Модули JavaScript, CSS @import и адаптивные
+          изображения srcset могут потребовать подготовки файлом. Ограничения
+          показываем в результате импорта.
+        </p>
+        <p>
+          Наличие интерактивного просмотра не гарантирует работу каждой кнопки:
+          проверьте сохранённый материал перед отправкой. Исходную ссылку и
+          доступ к источнику получатель не использует.
+        </p>
+      </details>
       )}
       {jobId && !job && !error && (
         <p role="status">Восстанавливаем состояние импорта…</p>
       )}
       {job && (
-        <div role="status" aria-live="polite">
+        <div className="url-import-status" role="status" aria-live="polite">
           <h3>{labels[job.state] ?? job.state}</h3>
           {job.errorCode && (
             <p>
@@ -327,19 +345,13 @@ export function UrlImport({
         </Button>
       )}
       {jobId && !job && error && !needsLogin && (
-        <p className="bring-hint">
+        <p className="url-import-hint">
           Задание остаётся на сервере. Повторная проверка не создаёт новый
           импорт.
         </p>
       )}
-      {provider ? (
+      {provider && (
         <ProviderGuide result={provider} fileSave={fileSave} onFile={onFile} />
-      ) : (
-        <div className="bring-actions">
-          <Button variant="quiet" onClick={onFile}>
-            Загрузить HTML-файл вместо ссылки
-          </Button>
-        </div>
       )}
     </section>
   );

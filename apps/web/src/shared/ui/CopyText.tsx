@@ -8,6 +8,7 @@ export function CopyText({
   buttonLabel = "Скопировать",
   successText = "Скопировано",
   collapsible = false,
+  buttonVariant,
   writeText = (text: string) => navigator.clipboard.writeText(text),
 }: {
   value: string;
@@ -16,6 +17,7 @@ export function CopyText({
   buttonLabel?: string;
   successText?: string;
   collapsible?: boolean;
+  buttonVariant?: "primary" | "secondary";
   writeText?: (text: string) => Promise<void>;
 }) {
   const [result, setResult] = useState<{value:string;state:"copying"|"copied"|"failed"}|null>(null);
@@ -32,7 +34,7 @@ export function CopyText({
       <div className="copy-row">
         <Button
           type="button"
-          variant={collapsible ? "primary" : "secondary"}
+          variant={buttonVariant ?? (collapsible ? "primary" : "secondary")}
           busy={state === "copying"}
           onClick={async () => {
             const request=++attempt.current;

@@ -25,10 +25,10 @@ export function NewLanding() {
   const livePreview =
     imports.status === "ready" ? imports.capabilities.livePreview : undefined;
   return (
-    <AppShell current="landing" account={account} className="p-modern landing">
-      <main className="p-main landing-main">
-        <section className="p-hero landing-hero">
-          <span className="p-eyebrow">Ваши артефакты. Своя полка.</span>
+    <AppShell current="landing" account={account} className="landing">
+      <main className="landing-main">
+        <section className="landing-hero">
+          <span className="eyebrow">Ваши артефакты. Своя полка.</span>
           <h1>
             Сделали с агентом.
             <br />
@@ -41,7 +41,7 @@ export function NewLanding() {
 
           {canImport ? (
             <>
-              <form action="/bring" className="p-entry landing-entry">
+              <form action="/bring" className="landing-entry">
                 <Link2 aria-hidden="true" />
                 <input
                   type="url"
@@ -130,7 +130,7 @@ export function NewLanding() {
           ))}
         </section>
 
-        <section className="discover-reference landing-catalog">
+        <section className="landing-catalog">
           <EditorialCatalog
             items={catalog.items.slice(0, 6)}
             loading={catalog.state === "loading"}
@@ -144,7 +144,7 @@ export function NewLanding() {
           )}
         </section>
 
-        <section className="p-company landing-company">
+        <section className="landing-company">
           <div>
             <h2>
               Личная полка сегодня.

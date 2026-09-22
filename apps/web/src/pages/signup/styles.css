@@ -1,23 +1,22 @@
 /* Signup / entry: one column, one headline, the real way in. */
-#root .signup-redesign .onboard { max-width:520px; margin:56px auto 0; padding:0 28px 80px; }
-#root .signup-redesign .onboard-icon { display:grid; place-items:center; width:48px; height:48px; margin-bottom:26px; border:1px solid #dfe6fb; border-radius:12px; background:var(--accent-soft,#edf2ff); color:var(--accent,#1f4fff); }
-#root .signup-redesign .onboard-icon svg { width:22px; height:22px; stroke-width:1.7; }
-#root .signup-redesign .onboard h1 { margin:14px 0 16px; font-size:clamp(36px,5vw,48px); line-height:1.06; letter-spacing:-.045em; font-weight:600; }
-#root .signup-redesign .onboard > p { margin:0 0 26px; color:var(--muted,#647087); font-size:16px; line-height:1.6; }
-#root .signup-redesign .onboard > .entry-loading { font-size:13px; color:var(--muted-2,#8a95a8); }
-#root .signup-redesign .onboard-note { margin:0 0 22px; padding:14px 16px; border:1px solid #e3e9f4; border-radius:8px; background:#f8faff; color:#455168; font-size:13px; line-height:1.6; }
-#root .signup-redesign .onboard form { display:grid; gap:18px; }
-#root .signup-redesign .onboard form .ui-field label { margin:0; font-size:14px; }
-#root .signup-redesign .onboard form input[autocomplete="one-time-code"] { font-size:24px; letter-spacing:.25em; font-variant-numeric:tabular-nums; }
-#root .signup-redesign .onboard form > .ui-button--primary { width:100%; min-height:48px; font-size:15px; }
-#root .signup-redesign .onboard form > .ui-notice { margin:0; }
-#root .signup-redesign .onboard-secondary { display:flex; flex-wrap:wrap; gap:10px; }
-#root .signup-redesign .onboard-password { display:grid; gap:20px; }
-#root .signup-redesign .onboard-fine { margin:0; color:var(--muted-2,#8a95a8); font-size:13px; line-height:1.6; }
-#root .signup-redesign .onboard-legacy { display:inline-flex; align-items:center; gap:8px; margin-top:28px; padding-top:22px; border-top:1px solid var(--line,#e7ebf1); width:100%; color:#455168; font-size:14px; }
-#root .signup-redesign .onboard-legacy:hover { color:var(--accent,#1f4fff); }
-@media (max-width:720px) {
- #root .signup-redesign .onboard { margin-top:32px; padding:0 20px 100px; }
- #root .signup-redesign .onboard h1 { font-size:36px; }
- #root .signup-redesign .onboard > p { font-size:15px; }
+.onboard { width: 100%; max-width: 520px; margin: 56px auto 0; padding: 0 28px 80px; }
+.onboard-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 26px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); }
+.onboard-icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
+.onboard h1 { margin: 14px 0 16px; font-size: clamp(36px, 5vw, 48px); line-height: 1.06; letter-spacing: -.045em; }
+.onboard > p { margin-bottom: 26px; color: var(--muted); font-size: var(--text-lg); line-height: 1.6; }
+.onboard > .entry-loading { font-size: var(--text-sm); color: var(--muted-2); }
+.onboard-note { margin-bottom: 22px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft-3); color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; }
+.onboard form { display: grid; gap: 18px; }
+.onboard form input[autocomplete="one-time-code"] { font-size: 24px; letter-spacing: .25em; font-variant-numeric: tabular-nums; }
+.onboard form > .ui-button--primary { width: 100%; min-height: 48px; font-size: var(--text-md); }
+.onboard form > .ui-notice { margin: 0; }
+.onboard-secondary { display: flex; flex-wrap: wrap; gap: 10px; }
+.onboard-password { display: grid; gap: 20px; }
+.onboard-fine { color: var(--muted-2); font-size: var(--text-sm); line-height: 1.6; }
+.onboard-legacy { display: inline-flex; align-items: center; gap: 8px; width: 100%; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: var(--text-base); }
+.onboard-legacy:hover { color: var(--accent); }
+@media (max-width: 720px) {
+  .onboard { margin-top: 32px; padding: 0 var(--gutter-mobile) 48px; }
+  .onboard h1 { font-size: 36px; }
+  .onboard > p { font-size: var(--text-md); }
 }

@@ -243,6 +243,150 @@ export function EmptyState({
   );
 }
 
-export function Badge({tone = "neutral", className = "", ...props}: React.HTMLAttributes<HTMLSpanElement> & {tone?: "neutral" | "success" | "warning" | "danger"}) {
+export function Badge({tone = "neutral", className = "", ...props}: React.HTMLAttributes<HTMLSpanElement> & {tone?: "neutral" | "success" | "warning" | "danger" | "accent"}) {
   return <span {...props} className={`ui-badge ui-badge--${tone} ${className}`} />;
+}
+
+/** Icon-only action with a required accessible name. */
+export function IconButton({
+  label,
+  variant = "quiet",
+  size,
+  className = "",
+  children,
+  ...props
+}: Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children"> &
+  React.RefAttributes<HTMLButtonElement> & {
+    label: string;
+    variant?: "quiet" | "outline";
+    size?: "sm";
+    children: React.ReactNode;
+  }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      aria-label={label}
+      title={props.title ?? label}
+      className={`ui-icon-button${variant === "outline" ? " ui-icon-button--outline" : ""}${size === "sm" ? " ui-icon-button--sm" : ""} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Icon-only link with a required accessible name. */
+export function IconLink({
+  label,
+  className = "",
+  children,
+  ...props
+}: Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "children"> & {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a {...props} aria-label={label} title={props.title ?? label} className={`ui-icon-button ${className}`}>
+      {children}
+    </a>
+  );
+}
+
+/** A filter pill; `pressed` marks the active category. */
+export function Chip({
+  pressed = false,
+  count,
+  className = "",
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  pressed?: boolean;
+  count?: number;
+}) {
+  return (
+    <button type="button" {...props} aria-pressed={pressed} className={`ui-chip ${className}`}>
+      {children}
+      {count !== undefined && <small>{count}</small>}
+    </button>
+  );
+}
+
+/** Exclusive options rendered as one control (grid/list, file/text). */
+export function Segmented<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  wide = false,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: readonly { id: T; label: React.ReactNode; title?: string }[];
+  wide?: boolean;
+}) {
+  return (
+    <div className={`ui-segmented${wide ? " ui-segmented--wide" : ""}`} role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          aria-pressed={value === option.id}
+          aria-label={option.title}
+          title={option.title}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Initials on a soft disc. */
+export function Avatar({ name, size, className = "" }: { name: string; size?: "sm" | "lg"; className?: string }) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("");
+  return (
+    <span className={`ui-avatar${size ? ` ui-avatar--${size}` : ""} ${className}`} aria-hidden="true">
+      {initials || "•"}
+    </span>
+  );
+}
+
+/** A radio option with a title and explanation; the whole card is the target. */
+export function ChoiceCard({
+  name,
+  value,
+  checked,
+  disabled = false,
+  icon,
+  title,
+  description,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="ui-choice" data-selected={checked} data-disabled={disabled || undefined}>
+      <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onChange(value)} />
+      {icon ?? <span />}
+      <span>
+        <strong>{title}</strong>
+        {description && <small>{description}</small>}
+      </span>
+    </label>
+  );
 }

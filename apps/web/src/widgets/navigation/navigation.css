@@ -1,64 +1,84 @@
-/* One navigation component and one breakpoint for every application route.
-   The higher-specificity root scope supersedes legacy per-page navigation. */
-#root .site-header.unified-navigation { position:fixed; inset:0 auto 0 0; z-index:50; display:flex; flex-direction:column; align-items:stretch; justify-content:flex-start; gap:28px; width:208px; height:100dvh; margin:0; padding:26px 20px; background:#f5f7fa; border:0; border-right:1px solid #e7ebf1; border-radius:0; box-shadow:none; }
-#root .unified-navigation .site-brand { display:block; padding:0 7px; margin:0; color:#101318; font:600 32px/1 var(--font-sans); letter-spacing:-.055em; }
-#root .unified-navigation .brand-mark { display:none; }
-#root .unified-navigation .site-nav { height:auto; display:flex; flex-direction:column; align-items:stretch; gap:8px; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; background:transparent; }
-#root .unified-navigation .site-nav a { display:flex; align-items:center; gap:12px; min-height:44px; margin:0; padding:11px 12px; border:0; border-radius:6px; background:transparent; color:#455168; font:400 15px/22px var(--font-sans); text-decoration:none; white-space:nowrap; }
-#root .unified-navigation .site-nav a[aria-current=page] { background:#e8eeff; color:#1f4fff; }
-#root .unified-navigation .site-nav a:hover { background:#eaf0f8; }
-#root .unified-navigation .site-nav svg { display:block; width:20px; height:20px; flex-shrink:0; stroke-width:1.6; }
-#root .unified-navigation .site-account { display:flex; margin: auto 0 0; padding:0; }
-#root .unified-navigation .site-avatar { background:#e8edf5; color:#455168; width:36px; height:36px; }
-#root .navigation-context { overflow:auto; min-height:0; }
-#root .navigation-context .nav-label { padding:0 12px 10px; }
-#root .navigation-context .nav-link { display:flex; gap:12px; align-items:center; padding:10px 12px; border-radius:6px; min-height:44px; font-size:14px; }
-#root .navigation-context .nav-link svg { width:20px; height:20px; }
-#root .site-tabbar, #root .shelf-mobile-tabs { display:none; }
-/* Every route has the same rail inset, including material detail and landing. */
-#root .app-shell { padding-left:208px; }
-#root .app-shell > :is(main,.workspace) { margin-left:0; width:100%; }
-#root .app-shell.app { display:block; }
-#root .app-shell.app > .workspace { min-width:0; }
-#root .reader-layout .topbar { padding:0 36px; }
-#root .recipient-reader > .site-header { max-width:none; }
-#root .shelf-mobile-brand { display:none; }
-#root .unified-navigation a:focus-visible { outline:2px solid #1f4fff; outline-offset:3px; }
-@media(max-width:760px) {
- #root .app-shell { padding-left:0; padding-bottom:76px; }
- #root .site-header.unified-navigation { position:relative; inset:auto; flex-direction:row; align-items:center; justify-content:space-between; gap:16px; width:100%; height:68px; padding:18px 20px; background:#fff; border:0; border-bottom:1px solid #eef1f5; }
- #root .unified-navigation .site-brand { font-size:28px; padding:0; }
- #root .unified-navigation .site-nav, #root .navigation-context { display:none; }
- #root .unified-navigation .site-account { margin:0; }
- #root .site-tabbar { height:auto; position:fixed; inset:auto 0 0; z-index:60; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; padding:8px 10px max(8px,env(safe-area-inset-bottom)); background:#fff; border:0; border-top:1px solid #e7ebf1; border-radius:0; box-shadow:none; }
- #root .site-tabbar a { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-width:0; min-height:48px; padding:4px; border-radius:6px; color:#647087; background:transparent; text-decoration:none; font:400 11px/1.3 var(--font-sans); }
- #root .site-tabbar a[aria-current=page] { color:#1f4fff; background:#edf2ff; }
- #root .site-tabbar svg { width:20px; height:20px; stroke-width:1.6; }
- #root .shelf-layout .top-start .mobile-menu { display:flex; }
- #root .reader-layout .topbar { padding:0 20px; height:52px; }
+/* One navigation for every route: a fixed light rail on desktop, a top bar plus tab bar on phones. */
+.app-shell { min-height: 100dvh; padding-left: var(--rail-width); }
+.app-shell > main, .app-shell > .workspace { min-width: 0; }
+
+.site-rail {
+  position: fixed; inset: 0 auto 0 0; z-index: 50;
+  display: flex; flex-direction: column; gap: var(--space-6);
+  width: var(--rail-width); height: 100dvh; padding: 22px 16px 16px;
+  background: var(--soft); border-right: 1px solid var(--line);
 }
-#root .unified-navigation .site-nav { flex:0 0 auto; }
-#root .navigation-context { flex:1 1 auto; }
+.site-rail-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 8px; }
+.site-rail .site-brand { font-size: 30px; }
+.site-rail .site-brand:hover { color: var(--accent); }
+.site-rail-actions { display: flex; align-items: center; gap: 4px; }
+.site-rail-actions .navigation-mobile-menu { display: none; }
 
-
-#root .navigation-context .nav-link.active, #root .mobile-nav .nav-link.active { background:#edf2ff; color:#1f4fff; }
-
-#root .unified-navigation .site-account { align-items:center; gap:4px; }
-#root .unified-navigation .site-account .ui-button { padding:8px; min-width:44px; }
-#root .unified-navigation .navigation-mobile-menu { display:none; }
-@media(max-width:760px) {
- #root .unified-navigation .navigation-mobile-menu { display:inline-flex; }
+.site-nav { display: flex; flex-direction: column; gap: 2px; }
+.site-nav a {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px;
+  border-radius: var(--radius-sm); color: var(--ink-2); font: 400 var(--text-md) / 1.4 var(--font-sans); white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
+.site-nav a:hover { background: var(--soft-2); color: var(--ink); }
+.site-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.site-nav svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.site-nav a[aria-current="page"] svg { stroke-width: 1.9; }
 
-/* Account area: the avatar is a link home; leaving is a separate, confirmed action. */
-#root .unified-navigation .site-account { gap:10px; }
-#root .unified-navigation .site-avatar { display:grid; place-items:center; width:36px; height:36px; border-radius:50%; font:600 14px/1 var(--font-sans); text-decoration:none; }
-#root .unified-navigation .navigation-logout { color:#647087; margin-left:auto; }
-#root .unified-navigation .navigation-logout:hover { color:#101318; background:#eaf0f8; }
-#root .unified-navigation .site-login { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:8px 14px; border:1px solid #dbe1ea; border-radius:8px; background:#fff; color:#1b2230; font:500 14px/1.4 var(--font-sans); text-decoration:none; }
-#root .unified-navigation .site-login:hover { border-color:#c9d2e0; background:#f5f7fb; }
-#root .unified-navigation .site-login svg { width:18px; height:18px; }
-#root .unified-navigation .site-brand:hover { color:#1f4fff; }
-@media(max-width:760px) {
- #root .unified-navigation .site-account { gap:6px; }
+/* Page-owned context under the main links: folders and trash. */
+.navigation-context { flex: 1 1 auto; min-height: 0; overflow: auto; margin: -8px 0 0; }
+.nav-label { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 4px 0 12px; color: var(--muted-2); font: 600 var(--text-xs) / 1 var(--font-sans); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.nav-link { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--ink-2); font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-link > svg { width: 18px; height: 18px; color: var(--muted); stroke-width: 1.6; }
+.nav-link:hover { background: var(--soft-2); color: var(--ink); }
+.nav-link.active { background: var(--accent-soft); color: var(--accent); }
+.nav-link.active > svg { color: var(--accent); }
+.shelf-nav-hint { padding: 4px 12px 12px; color: var(--muted-2); font-size: var(--text-sm); line-height: 1.55; }
+.shelf-nav-secondary { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+
+/* Account block at the bottom of the rail. */
+.site-account { margin-top: auto; }
+.site-account-menu { width: 100%; }
+.site-account-menu > span { width: 100%; }
+.site-account-menu .ui-action-menu-trigger { width: 100%; justify-content: flex-start; padding: 6px 8px; border-radius: var(--radius); color: var(--ink); min-height: 52px; }
+.site-account-menu .ui-action-menu-trigger:hover { background: var(--soft-2); }
+.site-account-menu .ui-action-menu-items { min-width: 100%; }
+.site-account-trigger { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; text-align: left; }
+.site-account-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--text-base) / 1.3 var(--font-sans); }
+.site-account-trigger > svg { width: 16px; height: 16px; color: var(--muted-2); }
+.site-account-loading { color: var(--muted-2); font-size: var(--text-sm); padding: 8px 12px; }
+.site-login { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); color: var(--ink); font: 500 var(--text-base) / 1.4 var(--font-sans); }
+.site-login:hover { border-color: #c9d2e0; background: var(--soft-3); }
+.site-login svg { width: 18px; height: 18px; }
+
+.site-tabbar { display: none; }
+.proto-mark { display: inline-block; padding: 2px 6px; border-radius: var(--radius-xs); background: var(--soft-2); color: var(--muted); font-size: var(--text-xs); }
+
+/* Mobile navigation drawer (folders) */
+.mobile-nav { display: grid; gap: 2px; padding: 12px 8px 20px; }
+
+@media (max-width: 760px) {
+  .app-shell { padding-left: 0; padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); }
+  .site-rail { position: sticky; top: 0; inset: auto; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; height: 60px; padding: 0 var(--gutter-mobile); background: rgb(255 255 255 / 92%); backdrop-filter: blur(12px); border-right: 0; border-bottom: 1px solid var(--line); }
+  .site-rail-top { flex: 1; padding: 0; }
+  .site-rail .site-brand { font-size: 26px; }
+  .site-rail-actions .navigation-mobile-menu { display: inline-grid; }
+  .site-nav, .navigation-context { display: none; }
+  .site-account { margin: 0; }
+  .site-account-menu { width: auto; }
+  .site-account-menu .ui-action-menu-trigger { min-height: 44px; padding: 4px; }
+  .site-account-name, .site-account-trigger > svg { display: none; }
+  .site-login { width: auto; min-height: 40px; }
+  .site-tabbar {
+    position: fixed; inset: auto 0 0; z-index: 60;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
+    height: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: rgb(255 255 255 / 94%); backdrop-filter: blur(14px); border-top: 1px solid var(--line);
+  }
+  .site-tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 52px; padding: 4px 2px; border-radius: var(--radius-sm); color: var(--muted); font: 500 var(--text-xs) / 1.2 var(--font-sans); }
+  .site-tabbar a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site-tabbar a[aria-current="page"] { color: var(--accent); }
+  .site-tabbar svg { width: 22px; height: 22px; stroke-width: 1.7; }
+  .site-tabbar a[data-primary] svg { width: 30px; height: 30px; padding: 5px; border-radius: 50%; background: var(--accent); color: #fff; stroke-width: 2.2; }
+  .site-tabbar a[data-primary][aria-current="page"] svg { background: var(--accent-strong); }
 }

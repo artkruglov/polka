@@ -1,30 +1,17 @@
-import React, { useEffect, useState, useRef } from "react";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Mail,
-  Bot,
-  Link2,
-  FileUp,
-} from "lucide-react";
-import { request } from "../../shared/api/client.ts";
+import "./styles.css";
+import React from "react";
+import { ArrowUpRight, Bot, Link2, FileUp } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { safeNext } from "../../shared/lib/safe-next.ts";
-import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 import { useImportCapabilities } from "../../features/import-url/useImportCapabilities.ts";
 export function FirstSave() {
   const account = useAccount();
   const imports = useImportCapabilities();
   const canImport = imports.status === "ready" && imports.capabilities.enabled;
   return (
-    <AppShell
-      current="bring"
-      account={account}
-      className="p-modern entry-redesign start-redesign"
-    >
-      <main className="p-main">
-        <header className="entry-heading">
-          <span className="entry-eyebrow">НАЧНИТЕ С ОДНОЙ РАБОТЫ</span>
+    <AppShell current="bring" account={account}>
+      <main className="start-main">
+        <header className="start-heading">
+          <span className="eyebrow">Начните с одной работы</span>
           <h1>
             Хорошим идеям
             <br />

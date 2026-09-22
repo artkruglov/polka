@@ -1,16 +1,24 @@
-import { Button, SelectField } from "../../shared/ui/controls.tsx";
+import "./styles.css";
+import { Button, ChoiceCard, IconButton, LinkButton, SelectField } from "../../shared/ui/controls.tsx";
 import React, { useState } from "react";
 import {
   ArrowUpRight,
   Check,
   Copy,
+  Globe,
   Link as LinkIcon,
   LockKeyhole,
+  Send,
+  ShieldCheck,
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
-import { date } from "../../entities/artifact/format.ts";
+import { dateLong, kindOf, size } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+
+type Choice = "private" | "link";
+
+/** Who can open: private, by link, or published (after review — operator-only today). */
 export function SharePanel({
   artifact: a,
   onClose,
@@ -20,18 +28,20 @@ export function SharePanel({
   onClose: () => void;
   onChange: () => Promise<void>;
 }) {
+  const active = !!a.share && ["active", "behind"].includes(a.share.status);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [confirm, setConfirm] = useState(false),
+    [choice, setChoice] = useState<Choice>(active ? "link" : "private"),
     [days, setDays] = useState(7),
     [copied, setCopied] = useState(false);
-  const active = a.share && ["active", "behind"].includes(a.share.status);
+  // The radio reflects the saved state; a pending change shows its own confirmation below.
+  const wantsLink = choice === "link" && !active;
+  const wantsClose = choice === "private" && active;
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError("");
     try {
       await fn();
-      setConfirm(false);
       await onChange();
     } catch (e) {
       setError((e as Error).message);
@@ -39,133 +49,155 @@ export function SharePanel({
       setBusy(false);
     }
   };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(a.share!.url!);
+      setCopied(true);
+    } catch {
+      setError("Не удалось скопировать. Выделите адрес выше.");
+    }
+  };
+  const telegram = a.share?.url
+    ? `https://t.me/share/url?url=${encodeURIComponent(a.share.url)}`
+    : null;
   return (
-    <Dialog title="Поделиться ссылкой" onClose={onClose} busy={busy}>
-      <div className="dialog-body">
-        <div className="share-summary">
-          <div className="soft-icon">
+    <Dialog title="Поделиться" onClose={onClose} busy={busy}>
+      <div className="dialog-body share-panel">
+        <div className="share-material">
+          <span className="share-material-icon" aria-hidden="true">
             {active ? <LinkIcon /> : <LockKeyhole />}
-          </div>
+          </span>
           <div>
-            <strong>{active ? "Доступ по ссылке" : "Только вы"}</strong>
-            <p>
-              {active
-                ? `Получатель видит версию ${a.share!.number}`
-                : "Работа закрыта для других людей"}
-            </p>
+            <strong>{a.title}</strong>
+            <span>
+              {kindOf(a.revision)} · v{a.revision.number} · {size(a.revision.size)}
+            </span>
           </div>
         </div>
-        {active ? (
-          <>
-            <p>
-              Любой человек с этой ссылкой откроет работу в браузере: вход в
-              Полку и аккаунт в Claude или ChatGPT не нужны. Ссылку можно
-              переслать.
-            </p>
-            <div className="link-address">{a.share!.url}</div>
-            <p className="fine">
-              Действует до {date(a.share!.expiresAt)}. Не добавляется в
-              публичный каталог; поисковикам передаётся запрет индексации.
-            </p>
-            {a.share!.status === "behind" && (
-              <div className="update-note">
-                <strong>На полке уже версия {a.revision.number}</strong>
-                <p>
-                  По отправленной ссылке пока открывается версия{" "}
-                  {a.share!.number}.
-                </p>
-                <Button
-                  onClick={() => run(() => client.publish(a))}
-                  disabled={busy}
-                >
-                  Обновить ссылку до v{a.revision.number}
-                  <ArrowUpRight />
-                </Button>
-              </div>
-            )}
-            {confirm ? (
-              <div className="revoke-confirm">
-                <strong>Закрыть доступ по этой ссылке?</strong>
-                <p>
-                  Следующее открытие будет недоступно. Уже полученную копию
-                  отозвать нельзя.
-                </p>
-                <div className="button-row">
-                  <Button onClick={() => setConfirm(false)} disabled={busy}>
-                    Оставить доступ
-                  </Button>
-                  <Button
-                    className="danger"
-                    onClick={() => run(() => client.revoke(a.share!.id))}
-                    disabled={busy}
-                  >
-                    Закрыть доступ
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                className="text-button danger"
-                onClick={() => setConfirm(true)}
-              >
-                Закрыть доступ по ссылке
-              </Button>
-            )}
-          </>
-        ) : (
-          <>
+
+        <fieldset className="share-choices">
+          <legend>Кто может открыть</legend>
+          <div className="ui-choice-list" role="radiogroup" aria-label="Кто может открыть">
+            <ChoiceCard
+              name="share-access"
+              value="private"
+              checked={choice === "private"}
+              icon={<LockKeyhole />}
+              title="Только я"
+              description="Видно только вам"
+              onChange={() => setChoice("private")}
+            />
+            <ChoiceCard
+              name="share-access"
+              value="link"
+              checked={choice === "link"}
+              icon={<LinkIcon />}
+              title="По ссылке"
+              description="Откроет любой, у кого есть ссылка"
+              onChange={() => setChoice("link")}
+            />
+            <ChoiceCard
+              name="share-access"
+              value="public"
+              checked={false}
+              disabled
+              icon={<Globe />}
+              title={<>Опубликовать <small className="share-soon">после проверки</small></>}
+              description="В «Интересном» после проверки редакцией Полки. Пока публикует оператор."
+              onChange={() => undefined}
+            />
+          </div>
+        </fieldset>
+
+        {wantsLink && (
+          <div className="share-step">
             <p>
               {a.share?.status === "revoked"
-                ? "Старая ссылка закрыта навсегда. При повторном включении создадим новый адрес."
+                ? "Старая ссылка закрыта навсегда. Создадим новый адрес."
                 : a.share?.status === "expired"
-                  ? "Срок ссылки истёк. Можно создать новый адрес."
-                  : "Включите доступ, чтобы отправить эту работу другу или коллеге. Вход в Полку и аккаунт в исходном сервисе получателю не понадобятся."}
+                  ? "Срок прежней ссылки истёк. Создадим новый адрес."
+                  : "Получателю не нужен вход в Полку и аккаунт в Claude или ChatGPT."}
             </p>
             <SelectField
               label="Срок доступа"
               value={days}
               onChange={(e) => setDays(+e.target.value)}
+              hint="Индексация отключена, но это не закрытое приглашение: доступ получит любой, кому передали ссылку."
             >
               <option value={1}>1 день</option>
               <option value={7}>7 дней</option>
               <option value={30}>30 дней</option>
             </SelectField>
-            <p className="fine">
-              Доступ получит любой, кому передали ссылку. Индексация отключена,
-              но это не закрытое приглашение.
-            </p>
-          </>
+          </div>
         )}
+
+        {active && choice === "link" && (
+          <div className="share-step">
+            <span className="share-label">Ссылка на материал</span>
+            <div className="ui-link-field">
+              <code>{a.share!.url}</code>
+              <IconButton label={copied ? "Скопировано" : "Скопировать ссылку"} onClick={copy}>
+                {copied ? <Check /> : <Copy />}
+              </IconButton>
+            </div>
+            <Button variant="primary" className="ui-button--lg share-copy" onClick={copy}>
+              {copied ? <Check /> : <Copy />}
+              {copied ? "Скопировано" : "Скопировать ссылку"}
+            </Button>
+            {telegram && (
+              <LinkButton href={telegram} target="_blank" rel="noopener" className="ui-button--lg share-telegram">
+                <Send /> Отправить в Telegram
+              </LinkButton>
+            )}
+            <p className="fine">
+              Получатель видит версию {a.share!.number}. Действует до {dateLong(a.share!.expiresAt)}. Поисковикам передаётся запрет индексации.
+            </p>
+            {a.share!.status === "behind" && (
+              <div className="share-update">
+                <div>
+                  <strong>На полке уже версия {a.revision.number}</strong>
+                  <p>По отправленной ссылке пока открывается версия {a.share!.number}.</p>
+                </div>
+                <Button onClick={() => run(() => client.publish(a))} disabled={busy}>
+                  Обновить до v{a.revision.number} <ArrowUpRight />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {wantsClose && (
+          <div className="share-step share-step--warn" role="alert">
+            <strong>Закрыть доступ по этой ссылке?</strong>
+            <p>Следующее открытие будет недоступно. Уже полученную копию отозвать нельзя.</p>
+          </div>
+        )}
+
+        <p className="share-review">
+          <ShieldCheck aria-hidden="true" />
+          <span>
+            <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Интересное» сами; по умолчанию их видите только вы.
+          </span>
+        </p>
         <ErrorNotice error={error} />
       </div>
       <div className="dialog-footer">
         <Button onClick={onClose} disabled={busy}>
-          Готово
+          {wantsLink || wantsClose ? "Отмена" : "Готово"}
         </Button>
-        {active ? (
-          <Button
-            variant="primary"
-            disabled={busy}
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(a.share!.url!);
-                setCopied(true);
-              } catch {
-                setError("Не удалось скопировать. Выделите адрес выше.");
-              }
-            }}
-          >
-            {copied ? <Check /> : <Copy />}
-            {copied ? "Скопировано" : "Скопировать ссылку"}
+        {wantsLink && (
+          <Button variant="primary" busy={busy} onClick={() => run(() => client.enable(a, days))}>
+            <LinkIcon /> {a.share ? "Создать новую ссылку" : "Включить доступ по ссылке"}
           </Button>
-        ) : (
+        )}
+        {wantsClose && (
           <Button
             variant="primary"
-            disabled={busy}
-            onClick={() => run(() => client.enable(a, days))}
+            className="share-close"
+            busy={busy}
+            onClick={() => run(() => client.revoke(a.share!.id))}
           >
-            {a.share ? "Создать новую ссылку" : "Включить доступ по ссылке"}
-            <LinkIcon />
+            Закрыть доступ
           </Button>
         )}
       </div>

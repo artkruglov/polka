@@ -1,13 +1,13 @@
 import {AgentContextPanel} from "../../features/agent-context/index.tsx";
 import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
-import { Button, Notice } from "../../shared/ui/controls.tsx";
+import { Button, IconButton, Notice } from "../../shared/ui/controls.tsx";
 import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
-import { ShelfPage } from "../../pages/shelf/index.tsx";
+import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
 import { ArtifactReader } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, LogOut, Menu } from "lucide-react";
+import { ArrowLeft, ChevronRight, Maximize2, Menu, Share2 } from "lucide-react";
 import type {
   Account,
   Artifact,
@@ -16,6 +16,7 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+import { profileView } from "../../entities/artifact/format.ts";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
@@ -43,8 +44,10 @@ export function App() {
     [folderId, setFolderId] = useState<string | null>(null),
     [items, setItems] = useState<Artifact[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
-    [query, setQuery] = useState(""),
+    [query, setQuery] = useState(() => params.get("q") ?? ""),
     [view, setView] = useState<"grid" | "list">("grid"),
+    [sort, setSort] = useState<ShelfSort>("newest"),
+    [focusSearch] = useState(() => params.has("search")),
     [selected, setSelected] = useState<string | null>(
       location.pathname.startsWith("/works/")
         ? location.pathname.split("/")[2]
@@ -64,7 +67,14 @@ export function App() {
       | "metadata"
       | "trash"
       | null
-    >(null),
+    >(() => {
+      // Deep links (and the shelf card menu) may open a material with its dialog.
+      const requested = params.get("panel");
+      return location.pathname.startsWith("/works/") &&
+        (requested === "share" || requested === "metadata" || requested === "agent-context")
+        ? requested
+        : null;
+    }),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(false),
     [loadingMore, setLoadingMore] = useState(false),
@@ -73,9 +83,8 @@ export function App() {
     [history, setHistory] = useState(false),
     [notice, setNotice] = useState(""),
     [trashBusy, setTrashBusy] = useState(false),
-    [trashActionError, setTrashActionError] = useState(""),
-    [confirmLogout, setConfirmLogout] = useState(false),
-    [loggingOut, setLoggingOut] = useState(false);
+    [trashActionError, setTrashActionError] = useState("");
+  const stageRef = useRef<HTMLElement>(null);
   useEffect(() => setTrashActionError(""), [panel, selected]);
   const shelfGeneration = useRef(0);
   const trashGeneration = useRef(0);
@@ -120,7 +129,7 @@ export function App() {
     addEventListener("popstate", pop);
     return () => removeEventListener("popstate", pop);
   }, []);
-  const open = (id: string | null) => {
+  const open = (id: string | null, nextPanel: CardAction | null = null) => {
     shelfGeneration.current++;
     routeGeneration.current++;
     trashGeneration.current++;
@@ -132,7 +141,7 @@ export function App() {
     setViewed(null);
     setError("");
     setHistory(false);
-    setPanel(null);
+    setPanel(nextPanel);
     trashBusyRef.current = false;
     setTrashBusy(false);
     setMobile(false);
@@ -367,26 +376,51 @@ export function App() {
         selected ? "app work-layout reader-layout" : "app shelf-layout"
       }
       navigation={<nav aria-label="Папки и корзина">{nav}</nav>}
-      actions={<>
-        <Button variant="quiet" className="navigation-mobile-menu" aria-label="Открыть папки и корзину" aria-haspopup="dialog" onClick={() => setMobile(true)}><Menu /></Button>
-        <Button variant="quiet" className="navigation-logout" aria-label="Выйти из Полки" title="Выйти из Полки"
-              onClick={() => setConfirmLogout(true)}
-        ><LogOut /></Button>
-      </>}
-
+      actions={
+        <IconButton className="navigation-mobile-menu" label="Папки и корзина" aria-haspopup="dialog" onClick={() => setMobile(true)}>
+          <Menu />
+        </IconButton>
+      }
+      onLoggedOut={() => {
+        setAccount(null);
+        setItems([]);
+        setFolders([]);
+        setFolderId(null);
+        setWork(null);
+        open(null);
+      }}
     >
       <div className="workspace">
         {selected && <header className="topbar">
           <div className="top-start">
-            <Button variant="quiet" className="icon" aria-label="Назад на полку" onClick={() => open(null)}><ArrowLeft /></Button>
-            <nav className="shelf-top-context" aria-label="Путь">
+            <IconButton label="Назад на полку" onClick={() => open(null)}><ArrowLeft /></IconButton>
+            <nav className="topbar-path" aria-label="Путь">
               <a href="/" onClick={(e) => { e.preventDefault(); open(null); }}>
-                {folders.find((f) => f.id === work?.folderId)?.name ?? "Моя Полка"}
+                {folders.find((f) => f.id === work?.folderId)?.name ?? "Моя полка"}
               </a>
               <ChevronRight aria-hidden="true" />
-              <span>Материал</span>
+              <span aria-current="page">{work?.title ?? "Материал"}</span>
             </nav>
           </div>
+          {work && !work.trashedAt && (
+            <div className="topbar-actions">
+              <Button
+                variant="secondary"
+                className="topbar-fullscreen"
+                onClick={() => void stageRef.current?.requestFullscreen?.()}
+              >
+                <Maximize2 /> На весь экран
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setPanel("share")}
+                disabled={!profileView(work.revision).linkable && !work.share}
+                title={profileView(work.revision).linkable ? undefined : profileView(work.revision).text}
+              >
+                <Share2 /> Поделиться
+              </Button>
+            </div>
+          )}
         </header>}
         <main>
           {notice && <Notice onDismiss={() => setNotice("")}>{notice}</Notice>}
@@ -406,6 +440,7 @@ export function App() {
                 setHistory={setHistory}
                 setViewed={setViewed}
                 setPanel={setPanel}
+                stageRef={stageRef}
                 onDownload={() => {
                   void downloadRevision(shown).catch((e) =>
                     setError(
@@ -428,7 +463,7 @@ export function App() {
                 }
               />
             ) : loading ? (
-              <div className="empty">Открываем работу…</div>
+              <div className="empty" role="status">Открываем работу…</div>
             ) : null
           ) : trashView ? (
             <TrashPanel
@@ -462,16 +497,17 @@ export function App() {
             <ShelfPage
               activeFolder={activeFolder}
               folderId={folderId}
-              folders={folders}
               items={items}
               query={query}
               view={view}
+              sort={sort}
               loading={loading}
               loadingMore={loadingMore}
               cursor={cursor}
-              setFolderId={setFolderId}
+              focusSearch={focusSearch}
               setQuery={setQuery}
               setView={setView}
+              setSort={setSort}
               setPanel={setPanel}
               open={open}
               loadMore={() => void loadMore()}
@@ -480,35 +516,8 @@ export function App() {
         </main>
       </div>
       {mobile && (
-        <Dialog title="Моя Полка" onClose={() => setMobile(false)}>
+        <Dialog title="Папки" onClose={() => setMobile(false)}>
           <nav className="mobile-nav">{nav}</nav>
-        </Dialog>
-      )}
-      {confirmLogout && (
-        <Dialog title="Выйти из Полки?" onClose={() => setConfirmLogout(false)} busy={loggingOut}>
-          <div className="dialog-body">
-            <p>Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, понадобятся логин и пароль.</p>
-            <div className="button-row dialog-actions">
-              <Button variant="primary" busy={loggingOut} onClick={async () => {
-                setLoggingOut(true);
-                try {
-                  await client.logout();
-                  setConfirmLogout(false);
-                  setAccount(null);
-                  setItems([]);
-                  setFolders([]);
-                  setFolderId(null);
-                  setWork(null);
-                  open(null);
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setLoggingOut(false);
-                }
-              }}><LogOut /> Выйти</Button>
-              <Button disabled={loggingOut} onClick={() => setConfirmLogout(false)}>Остаться</Button>
-            </div>
-          </div>
         </Dialog>
       )}
       {(panel === "upload" || panel === "version") && (

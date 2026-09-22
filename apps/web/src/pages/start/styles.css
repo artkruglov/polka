@@ -1,0 +1,33 @@
+/* First save: two real paths as cards; the link path only when the installation supports it. */
+.start-main { width: 100%; max-width: 1080px; margin: 0 auto; padding: 56px var(--gutter) 96px; }
+.start-heading { max-width: 760px; margin-bottom: 38px; }
+.start-heading h1 { margin: 14px 0 18px; font-size: clamp(38px, 4.5vw, 60px); line-height: 1.04; letter-spacing: -.05em; }
+.start-heading > p { color: var(--muted); font-size: var(--text-xl); line-height: 1.6; max-width: 590px; }
+.start-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.start-options > a { display: flex; flex-direction: column; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.start-options > a:hover { border-color: var(--accent-ring); box-shadow: var(--shadow-md); }
+.start-options > .start-file-option { background: var(--soft-3); }
+.start-option-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 24px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent); }
+.start-option-icon svg { width: 24px; height: 24px; stroke-width: 1.5; }
+.start-options h2 { margin-bottom: 12px; font-size: var(--text-2xl); letter-spacing: -.03em; }
+.start-options p { margin-bottom: 28px; color: var(--muted); font-size: var(--text-base); line-height: 1.7; }
+.start-option-action { display: flex; align-items: center; gap: 8px; margin-top: auto; color: var(--accent); font-size: var(--text-base); font-weight: 500; }
+.start-option-action svg { width: 16px; }
+.start-link-demo { display: flex; align-items: flex-start; gap: 16px; margin-top: 18px; padding: 24px 2px; border-bottom: 1px solid var(--line); }
+.start-link-demo > svg { flex-shrink: 0; width: 18px; margin-top: 4px; color: var(--muted); }
+.start-link-demo > svg:last-child { margin-left: auto; color: var(--accent); }
+.start-link-demo strong { font-size: var(--text-md); color: var(--ink); font-weight: 500; }
+.start-link-demo p { margin-top: 5px; color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.start-link-note { margin: 18px 2px 0; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); line-height: 1.6; }
+.start-main > .onboard-legacy { display: inline-flex; align-items: center; gap: 7px; margin-top: 24px; color: var(--ink-2); font-size: var(--text-base); }
+.start-main > .onboard-legacy:hover { color: var(--accent); }
+.start-main > .onboard-legacy svg { width: 15px; }
+@media (max-width: 760px) {
+  .start-main { padding: 34px var(--gutter-mobile) 48px; }
+  .start-heading h1 { font-size: 38px; }
+  .start-options { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .start-options > a { padding: 24px; }
+  .start-option-icon { margin-bottom: 18px; }
+  .start-options h2 { font-size: var(--text-xl); }
+  .start-options p { margin-bottom: 22px; }
+}

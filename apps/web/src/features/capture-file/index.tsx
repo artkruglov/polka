@@ -1,3 +1,4 @@
+import "./styles.css";
 import { useFolders } from "../../entities/folder/useFolders.ts";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -25,7 +26,7 @@ import {
 } from "../../shared/api/client.ts";
 import { date, profileView, size } from "../../entities/artifact/format.ts";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
-import { Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
+import { Button, LinkButton, SelectField, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { Status } from "../../shared/ui/Status.tsx";
 
@@ -41,10 +42,13 @@ export function FileSave({
   account,
   initialFolderId = "",
   renderPreview,
+  embedded = false,
 }: {
   account: Account | null | undefined;
   initialFolderId?: string;
   renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
+  /** Rendered inside the link guide: no heading of its own, no page anchor. */
+  embedded?: boolean;
 }) {
   const folders = useFolders(account?.id);
   const [folderId, setFolderId] = useState(initialFolderId);
@@ -63,8 +67,8 @@ export function FileSave({
     busy = !!stage || sharing;
 
   useEffect(() => {
-    if (location.hash === "#file") card.current?.scrollIntoView();
-  }, []);
+    if (!embedded && location.hash === "#file") card.current?.scrollIntoView();
+  }, [embedded]);
 
   const pick = (f: File | undefined) => {
     if (!f) return;
@@ -143,17 +147,18 @@ export function FileSave({
 
   return (
     <section
-      className="bring-card file-save"
-      id="file"
+      className={embedded ? "file-save file-save--embedded" : "file-save"}
+      id={embedded ? undefined : "file"}
       ref={card}
-      aria-labelledby="file-save-title"
+      aria-labelledby={embedded ? undefined : "file-save-title"}
+      aria-label={embedded ? "Загрузить скачанный файл" : undefined}
     >
       {receipt && work && view ? (
         <div className="bring-result">
           <span className="result-kicker ok">
-            <LockKeyhole /> СОХРАНЕНО НА ПОЛКЕ · ВЕРСИЯ {receipt.number}
+            <Check /> Сохранено на полке · версия {receipt.number}
           </span>
-          <h2 id="file-save-title" tabIndex={-1}>
+          <h2 id={embedded ? undefined : "file-save-title"} tabIndex={-1}>
             {work.title}
           </h2>
           <dl className="import-facts">
@@ -213,38 +218,36 @@ export function FileSave({
                 <Link2 />
                 <code>{link.url}</code>
               </div>
-              <a
-                className="button"
-                href={link.url!}
-                target="_blank"
-                rel="noopener"
-              >
-                Открыть как получатель <ArrowUpRight />
-              </a>
-              <Button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(link.url!);
-                    setCopied(true);
-                  } catch {
-                    setError("Не удалось скопировать. Выделите адрес выше.");
-                  }
-                }}
-              >
-                {copied ? <Check /> : <Copy />}{" "}
-                {copied ? "Скопировано" : "Скопировать"}
-              </Button>
+              <div className="share-ready-actions">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(link.url!);
+                      setCopied(true);
+                    } catch {
+                      setError("Не удалось скопировать. Выделите адрес выше.");
+                    }
+                  }}
+                >
+                  {copied ? <Check /> : <Copy />}{" "}
+                  {copied ? "Скопировано" : "Скопировать ссылку"}
+                </Button>
+                <LinkButton href={link.url!} target="_blank" rel="noopener">
+                  Открыть как получатель <ArrowUpRight />
+                </LinkButton>
+              </div>
             </div>
           ) : null}
           <ErrorNotice error={error} />
           <div className="bring-actions">
-            <Button type="button" onClick={restart} disabled={busy}>
+            <LinkButton variant={view.linkable && !link ? "secondary" : "primary"} href={`/works/${work.id}`}>
+              Открыть на полке <ArrowUpRight />
+            </LinkButton>
+            <Button type="button" variant="quiet" onClick={restart} disabled={busy}>
               Сохранить другой файл
             </Button>
-            <a className="button" href={`/works/${work.id}`}>
-              Открыть в Моей Полке <ArrowUpRight />
-            </a>
             {view.linkable && !link && (
               <Button
                 type="button"
@@ -268,18 +271,23 @@ export function FileSave({
           </p>
         </div>
       ) : (
-        <div className="bring-entry">
-          <span className="result-kicker ok">
-            <FileUp /> ФАЙЛОМ <Status is="real" />
-          </span>
-          <h2 id="file-save-title">Выберите файл</h2>
-          <p className="bring-hint">
-            Загрузите HTML из чата, заметку или изображение. Сначала откроется
-            сохранённый вид. Если для страницы доступен интерактивный просмотр,
-            его можно запустить отдельно.
-          </p>
+        <div className="bring-entry file-save-entry">
+          {!embedded && (
+            <>
+              <div className="file-save-head">
+                <h2 id="file-save-title">Загрузить файл</h2>
+                <Status is="real" />
+              </div>
+              <p className="file-save-hint">
+                HTML из чата, заметка или изображение. Сначала откроется
+                сохранённый вид; интерактивный просмотр, если он доступен,
+                запускается отдельно.
+              </p>
+            </>
+          )}
           <label
             className={dragging ? "file-field dragging" : "file-field"}
+            data-picked={!!file}
             onDragOver={(e) => {
               e.preventDefault();
               setDragging(true);
@@ -291,15 +299,15 @@ export function FileSave({
               if (!busy) pick(e.dataTransfer.files[0]);
             }}
           >
-            <FileUp />
+            {file ? <Check /> : <FileUp />}
             <span>
               <strong>
-                {file ? file.name : "Выбрать HTML, TXT или изображение"}
+                {file ? file.name : "Перетащите файл или нажмите, чтобы выбрать"}
               </strong>
               <small>
                 {file
                   ? `${size(file.size)} · ещё не сохранено`
-                  : "PNG, JPEG, WebP · до 5 МБ"}
+                  : "HTML, TXT, PNG, JPEG, WebP · до 5 МБ"}
               </small>
             </span>
             <input
@@ -319,15 +327,13 @@ export function FileSave({
           </SelectField>}
           {folders.error && <Button onClick={folders.retry}>Загрузить папки снова</Button>}
           {file && account && (
-            <label className="file-save-title">
-              Название
-              <input
-                value={title}
-                maxLength={160}
-                disabled={busy}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
+            <TextField
+              label="Название"
+              value={title}
+              maxLength={160}
+              disabled={busy}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           )}
           <ErrorNotice error={error} />
           {guest ? (
@@ -338,14 +344,14 @@ export function FileSave({
                   : "Сохранение идёт на вашу Полку, поэтому сначала нужен вход. После входа вернём сюда."}
               </p>
               <div className="bring-actions">
-                <a className="button primary" href={initialFolderId ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}` : FILE_SAVE_LOGIN}>
+                <LinkButton variant="primary" href={initialFolderId ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}` : FILE_SAVE_LOGIN}>
                   <LogIn />{" "}
                   {file ? "Войти, чтобы продолжить" : "Войти, чтобы сохранить"}
-                </a>
+                </LinkButton>
               </div>
             </div>
           ) : account === undefined ? (
-            <p className="bring-hint" role="status">
+            <p className="file-save-hint" role="status">
               Проверяем вход…
             </p>
           ) : (

@@ -58,9 +58,9 @@ export function LibraryInvite() {
       setError(invitationError(e));
     } finally { setBusy(false); }
   }
-  return <AppShell current="shelf" account={account} className="p-modern">
+  return <AppShell current="templates" account={account}>
     <main className="library-invite-page">
-      <span className="p-eyebrow">ОБЩАЯ БИБЛИОТЕКА</span>
+      <span className="eyebrow">Общая библиотека</span>
       <h1>Приглашение в библиотеку</h1>
       {!invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ?
         <p role="status">Проверяем аккаунт…</p> : account === null ? <>

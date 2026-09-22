@@ -9,6 +9,7 @@ import {
   safeEditorialRecipientUrl,
 } from "../../entities/editorial/api.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
 
 function Detail({
   slug,
@@ -73,6 +74,11 @@ function Detail({
         )}
         {state === "ready" && item && (
           <article className="editorial-catalog-detail-card">
+            <p>
+              <a href="/discover" className="editorial-catalog-back">
+                <ArrowLeft aria-hidden="true" /> Интересное
+              </a>
+            </p>
             <span className="editorial-catalog-eyebrow">
               {item.topic} · {item.license}
             </span>
@@ -86,16 +92,13 @@ function Detail({
             </p>
             {url ? (
               <a className="editorial-catalog-open" href={url}>
-                Открыть материал
+                Открыть материал <ArrowUpRight aria-hidden="true" />
               </a>
             ) : (
               <p className="editorial-catalog-error" role="alert">
                 Ссылка на материал недоступна.
               </p>
             )}
-            <p>
-              <a href="/discover">← Вернуться к подборке</a>
-            </p>
           </article>
         )}
       </main>
@@ -146,11 +149,7 @@ function CatalogRoute({
 }) {
   const list = useEditorialList(retry);
   return (
-    <AppShell
-      current="discover"
-      account={account}
-      className="discover-reference"
-    >
+    <AppShell current="discover" account={account}>
       <main>
         <EditorialCatalog
           headingLevel={1}

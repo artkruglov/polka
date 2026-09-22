@@ -26,7 +26,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
     new URLSearchParams(location.search).get("next"),
   )?.startsWith("/bring#file");
   return (
-    <AppShell current="shelf" account={null} className="login-shell">
+    <AppShell current="shelf" account={null}>
       <main className="login-page">
         <section className="login-intro">
           <span className="eyebrow">Работы из Claude, ChatGPT и других агентов</span>

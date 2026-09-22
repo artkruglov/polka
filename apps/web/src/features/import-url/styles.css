@@ -1,0 +1,30 @@
+/* Link capture: one field, one primary action, honest status below. */
+.url-import { display: grid; gap: 14px; }
+.url-import-hint { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.url-import-hint summary { cursor: pointer; color: var(--accent); font-weight: 500; min-height: 36px; display: flex; align-items: center; }
+.url-import-hint[open] summary { margin-bottom: 6px; }
+.url-import-hint p { margin: 0 0 8px; }
+.url-import-form { display: grid; gap: 12px; }
+.bring-field { position: relative; display: flex; align-items: center; }
+.bring-field > svg:first-child { position: absolute; left: 16px; width: 18px; height: 18px; color: var(--muted-2); pointer-events: none; }
+.bring-field > input { width: 100%; min-height: 56px; padding: 12px 48px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--canvas); color: var(--ink); font: 400 var(--text-lg) / 1.4 var(--font-sans); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.bring-field > input::placeholder { color: var(--muted-2); }
+.bring-field > input:hover { border-color: #c9d2e0; }
+.bring-field > input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.bring-field > .ui-icon-button { position: absolute; right: 6px; }
+.url-import-form > .ui-button--primary { width: 100%; min-height: 56px; font-size: var(--text-lg); border-radius: var(--radius-md); }
+.url-import-form .ui-field { margin-top: 2px; }
+.url-import-status { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.url-import-status h3 { font-size: var(--text-lg); }
+.url-import-status p { color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
+.url-import-status .ui-button { justify-self: start; }
+.url-import-result { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.url-import-result strong { font-size: var(--text-md); }
+.url-import-result small { color: var(--muted-2); font-size: var(--text-sm); }
+.url-import-result p { color: var(--muted); font-size: var(--text-base); line-height: 1.55; margin-top: 4px; }
+.url-import-steps { margin: 10px 0 0; padding-left: 20px; color: var(--ink-2); font-size: var(--text-base); line-height: 1.6; display: grid; gap: 4px; }
+.url-import-file { margin-top: 4px; }
+.url-import-agent { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.url-import-agent a { color: var(--accent); font-weight: 500; }
+.bring-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.url-import > .ui-field-error { margin: 0; }

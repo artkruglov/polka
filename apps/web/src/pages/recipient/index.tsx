@@ -1,11 +1,11 @@
 import "./styles.css";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useState } from "react";
-import { ArrowUpRight, Compass, Flag, LockKeyhole } from "lucide-react";
+import { ArrowUpRight, Compass, Flag, Link as LinkIcon, LockKeyhole } from "lucide-react";
 import type { Viewer } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
-import { date, profileView } from "../../entities/artifact/format.ts";
-import { Button } from "../../shared/ui/controls.tsx";
+import { dateTime, kindOf, profileView } from "../../entities/artifact/format.ts";
+import { Button, Badge } from "../../shared/ui/controls.tsx";
 import { ReportArtifactPanel } from "../../features/report-artifact/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
@@ -48,6 +48,7 @@ export function Recipient() {
   );
 }
 
+/** What a link opens: the fixed version, its provenance, and a way to report it. */
 function RecipientScreen({
   viewer,
   error,
@@ -60,6 +61,7 @@ function RecipientScreen({
   const account = useAccount();
   const [reporting, setReporting] = useState(false);
   const [reported, setReported] = useState(false);
+  const plainText = viewer?.revision.mime === "text/plain";
   return (
     <AppShell
       current="shelf"
@@ -68,7 +70,7 @@ function RecipientScreen({
     >
       {error ? (
         <main className="empty recipient-denied">
-          <LockKeyhole />
+          <div className="empty-icon"><LockKeyhole /></div>
           <h1>{error}</h1>
           <p>
             Владелец мог отозвать ссылку, у неё мог истечь срок, или адрес
@@ -86,19 +88,19 @@ function RecipientScreen({
               rows={3}
             />
           </div>
-          <a className="login-explore" href="/discover">
+          <a className="recipient-explore" href="/discover">
             <Compass /> Посмотреть публичные примеры
           </a>
         </main>
       ) : viewer ? (
-        <main>
-          {viewer.revision.mime !== "text/plain" && (
-            <div className="recipient-heading">
-              <h1>{viewer.title}</h1>
-            </div>
-          )}
-          <div className="recipient-reader-context">
-            <span>{date(viewer.revision.createdAt)}</span>
+        <main className="recipient-main">
+          <div className="recipient-bar">
+            <Badge tone="accent">
+              <LinkIcon /> Открыто по ссылке
+            </Badge>
+            <span>
+              {kindOf(viewer.revision)} · {dateTime(viewer.revision.createdAt)}
+            </span>
             {viewer.revision.mime === "text/html" && (
               <span
                 className="recipient-reader-profile"
@@ -110,19 +112,22 @@ function RecipientScreen({
               </span>
             )}
           </div>
-          <div className="stage">
+          {!plainText && (
+            <header className="recipient-heading">
+              <h1>{viewer.title}</h1>
+            </header>
+          )}
+          <div className="stage" data-kind={plainText ? "text" : viewer.revision.mime.startsWith("image/") ? "image" : "page"}>
             <Preview
               revision={viewer.revision}
               grant={viewer.grant}
-              readingTitle={
-                viewer.revision.mime === "text/plain" ? viewer.title : undefined
-              }
+              readingTitle={plainText ? viewer.title : undefined}
             />
           </div>
           <footer className="recipient-reader-footer">
             <div className="recipient-reader-provenance">
               <p>
-                Открытая версия зафиксирована. Владелец может обновить или
+                Сохранённая версия зафиксирована. Владелец может обновить или
                 отозвать ссылку.
               </p>
               <small>

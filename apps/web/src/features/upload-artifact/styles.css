@@ -1,0 +1,9 @@
+/* Upload dialog: a dashed drop zone and the text alternative. */
+.file-drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 150px; padding: 20px; border: 1.5px dashed #c5cfe3; border-radius: var(--radius-md); background: var(--soft-3); text-align: center; cursor: pointer; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.file-drop svg { width: 26px; height: 26px; margin-bottom: 6px; color: var(--accent); stroke-width: 1.5; }
+.file-drop strong { font-size: var(--text-md); font-weight: 500; overflow-wrap: anywhere; }
+.file-drop span { color: var(--muted); font-size: var(--text-sm); }
+.file-drop input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.file-drop:hover { background: var(--accent-soft); border-color: var(--accent); }
+.file-drop:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.dialog-body > .ui-segmented { align-self: flex-start; }
