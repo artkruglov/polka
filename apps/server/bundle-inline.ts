@@ -14,7 +14,10 @@ import {
   type BundleManifest,
 } from "../../packages/contracts/bundle.ts";
 
-import { BUNDLE_BUILDER_VERSION as BUILDER_VERSION } from "./bundle-runtime-contract.ts";
+import {
+  BUNDLE_BUILDER_VERSION as BUILDER_VERSION,
+  type SERVED_RUNTIME_PROFILES,
+} from "./bundle-runtime-contract.ts";
 const RUNTIME_PROFILE = "bundle-inline-experimental-v1" as const;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_HTML_NODES = 100_000;
@@ -28,7 +31,7 @@ export type BundleInlineResult =
       ok: true;
       sourceManifestSha256: string;
       builderVersion: typeof BUILDER_VERSION;
-      runtimeProfile: typeof RUNTIME_PROFILE;
+      runtimeProfile: (typeof SERVED_RUNTIME_PROFILES)[number];
       html: Buffer;
       sha256: string;
       size: number;
@@ -353,6 +356,24 @@ function inlineCss(source: string, resourcePath: string, localAsset: (reference:
           : "stylesheet is not valid CSS",
     };
   }
+}
+
+/**
+ * Checks a stylesheet the builder generated itself (the runtime's Tailwind
+ * output or compiled CSS imports) with the page CSS rules. It may reference
+ * nothing but allowlisted data: images and fonts.
+ */
+export function checkGeneratedCss(
+  source: string,
+): { css: string; error?: undefined } | { error: string } {
+  const result = inlineCss(source, "generated.css", (reference) => {
+    const data = /^\s*data:/i.test(reference)
+      ? safeDataUri(reference.trim(), [...DATA_IMAGE_MIMES, ...DATA_FONT_MIMES])
+      : null;
+    if (!data) throw Error("generated stylesheet references a resource");
+    return data;
+  });
+  return result.error ? { error: result.error } : { css: result.css! };
 }
 
 function textNode(value: string, parentNode: Node): Node {
