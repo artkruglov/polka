@@ -112,6 +112,7 @@ test("live viewer configuration rejects hosted, same-host and same-port layouts"
         env: {
           ...process.env,
           HTML_LIVE_ENABLED: "true",
+          HTML_LIVE_MODE: undefined,
           MAIL_MODE: "disabled",
           ...environment,
         },
@@ -153,6 +154,27 @@ test("live viewer configuration rejects hosted, same-host and same-port layouts"
     },
     /different ports/,
   );
+  for (const [environment, message] of [
+    [{ VIEWER_ORIGIN: "https://viewer.polochka.app" }, /different registrable domains/],
+    [{ VIEWER_ORIGIN: "http://polochka.page" }, /canonical HTTPS/],
+    [{ COOKIE_SECURE: "false" }, /Insecure cookies|secure cookies/],
+    [{ VIEWER_HOST: "0.0.0.0" }, /bind to loopback/],
+  ] as const)
+    check(
+      {
+        HTML_LIVE_ENABLED: undefined as unknown as string,
+        HTML_LIVE_MODE: "production",
+        APP_ORIGIN: "https://polochka.app",
+        COOKIE_SECURE: "true",
+        HOST: "127.0.0.1",
+        PORT: "4390",
+        VIEWER_ORIGIN: "https://polochka.page",
+        VIEWER_HOST: "127.0.0.1",
+        VIEWER_PORT: "4391",
+        ...environment,
+      },
+      message,
+    );
 });
 
 test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved HTML", async () => {
@@ -365,11 +387,11 @@ test("recipient capability stays pinned and cannot outlive, revoke or lose its s
   );
 });
 
-test("app capabilities and frame policy expose only the enabled local experiment", async () => {
+test("app capabilities and frame policy expose only the enabled experiment mode", async () => {
   const capabilities = await call("GET", "/api/capabilities");
   assert.equal(capabilities.json().htmlRuntime, false);
   assert.equal(capabilities.json().liveExperimental, true);
-  assert.equal(capabilities.json().liveMode, "local");
+  assert.equal(capabilities.json().liveMode, config.HTML_LIVE_MODE);
   assert.equal(capabilities.json().liveProfile, "inline-live-experimental-v1");
   assert.match(
     capabilities.headers["content-security-policy"] as string,
@@ -482,6 +504,86 @@ test("staging allowlist gates owner and recipient issuance and every read", asyn
   } finally {
     mutable.HTML_LIVE_MODE = priorMode;
     mutable.HTML_LIVE_STAGING_REVISION_IDS = priorAllowlist;
+  }
+});
+
+test("production mode serves every eligible revision and reports itself honestly", async () => {
+  const first = await save("<!doctype html><p>Production revision one</p>");
+  const second = await save("<!doctype html><p>Production revision two</p>");
+  const shared = await call("POST", `/api/artifacts/${second.artifactId}/share`, {
+    expectedRevisionId: second.revisionId,
+    expiresInDays: 1,
+  });
+  assert.equal(shared.statusCode, 200, shared.body);
+  const resolved = await call(
+    "POST",
+    "/api/resolve",
+    { token: new URL(shared.json().share.url).hash.slice(1) },
+    "",
+  );
+  assert.equal(resolved.statusCode, 200, resolved.body);
+
+  const mutable = config as any;
+  const prior = {
+    mode: mutable.HTML_LIVE_MODE,
+    allowlist: mutable.HTML_LIVE_STAGING_REVISION_IDS,
+  };
+  mutable.HTML_LIVE_MODE = "production";
+  mutable.HTML_LIVE_STAGING_REVISION_IDS = Object.freeze([]);
+  try {
+    const capabilities = await call("GET", "/api/capabilities");
+    assert.equal(capabilities.json().liveMode, "production");
+    assert.equal(capabilities.json().liveExperimental, true);
+    assert.equal(capabilities.json().htmlRuntime, false);
+
+    const urls = [];
+    for (const saved of [first, second]) {
+      const issued = await call(
+        "POST",
+        `/api/revisions/${saved.revisionId}/live-view`,
+        {},
+      );
+      assert.equal(issued.statusCode, 200, issued.body);
+      urls.push(new URL(issued.json().url).pathname);
+    }
+    const recipient = await call(
+      "POST",
+      "/api/view/live-view",
+      {},
+      "",
+      `Bearer ${resolved.json().grant}`,
+    );
+    assert.equal(recipient.statusCode, 200, recipient.body);
+    urls.push(new URL(recipient.json().url).pathname);
+    for (const path of urls) {
+      const document = await embeddedDocument(path);
+      assert.equal(document.statusCode, 200);
+      assert.equal(document.headers["set-cookie"], undefined);
+      assert.equal(document.headers["cache-control"], "no-store");
+    }
+    assert.equal(
+      (
+        await call(
+          "POST",
+          `/api/revisions/${first.revisionId}/live-view`,
+          {},
+          strangerCookie,
+        )
+      ).statusCode,
+      404,
+    );
+
+    // Rollback to disabled refuses reads of capabilities issued in production.
+    mutable.HTML_LIVE_ENABLED = false;
+    try {
+      for (const path of urls)
+        assert.equal((await embeddedDocument(path)).statusCode, 404);
+    } finally {
+      mutable.HTML_LIVE_ENABLED = true;
+    }
+  } finally {
+    mutable.HTML_LIVE_MODE = prior.mode;
+    mutable.HTML_LIVE_STAGING_REVISION_IDS = prior.allowlist;
   }
 });
 

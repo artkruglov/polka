@@ -174,3 +174,79 @@ test("staging allowlist is required, bounded, unique and revision-specific", () 
   );
   assert.ok(Object.isFrozen(viewer.HTML_LIVE_STAGING_REVISION_IDS));
 });
+
+const production = (patch: Partial<ViewerConfigInput> = {}) =>
+  parseViewerConfig({
+    ...base,
+    HTML_LIVE_MODE: "production",
+    APP_ORIGIN: "https://polochka.app",
+    VIEWER_ORIGIN: "https://polochka.page",
+    HOST: "127.0.0.1",
+    VIEWER_HOST: "127.0.0.1",
+    COOKIE_SECURE: "true",
+    ...patch,
+  });
+
+test("production serves every eligible revision behind the staging delivery checks", () => {
+  const viewer = production();
+  assert.equal(viewer.HTML_LIVE_MODE, "production");
+  assert.equal(viewer.HTML_LIVE_ENABLED, true);
+  assert.equal(viewer.VIEWER_UPSTREAM_HOST, "127.0.0.1:4391");
+  assert.deepEqual(viewer.HTML_LIVE_STAGING_REVISION_IDS, []);
+  assert.equal(isLiveRevisionEligible(viewer, allowed), true);
+  assert.equal(isLiveRevisionEligible(viewer, other.toUpperCase()), true);
+  assert.equal(
+    isLiveRevisionEligible(parseViewerConfig(base), allowed),
+    false,
+  );
+
+  for (const patch of [
+    { APP_ORIGIN: "http://polochka.app" },
+    { VIEWER_ORIGIN: "http://polochka.page" },
+    { VIEWER_ORIGIN: "https://POLOCHKA.page" },
+    { VIEWER_ORIGIN: "https://polochka.page:443" },
+    { APP_ORIGIN: "https://polochka.app/" },
+  ])
+    assert.throws(() => production(patch), /Production live HTML requires canonical HTTPS/);
+  for (const patch of [
+    { VIEWER_ORIGIN: "https://viewer.polochka.app" },
+    { VIEWER_ORIGIN: "https://polochka.app" },
+    {
+      APP_ORIGIN: "https://app.team.github.io",
+      VIEWER_ORIGIN: "https://viewer.team.github.io",
+    },
+  ])
+    assert.throws(() => production(patch), /different registrable domains/);
+  assert.throws(() => production({ COOKIE_SECURE: "false" }), /secure cookies/);
+  for (const patch of [
+    { HOST: "0.0.0.0" },
+    { VIEWER_HOST: "0.0.0.0" },
+    { VIEWER_HOST: "172.28.0.5" },
+    { HOST: "::" },
+  ])
+    assert.throws(() => production(patch), /bind to loopback/);
+  assert.throws(() => production({ VIEWER_PORT: 4390 }), /different ports/);
+});
+
+test("production is explicit and never takes a staging allowlist or legacy flag", () => {
+  assert.throws(
+    () => production({ HTML_LIVE_STAGING_REVISION_IDS: allowed }),
+    /only valid in staging/,
+  );
+  assert.throws(() => production({ HTML_LIVE_ENABLED: "true" }), /conflicts/);
+  assert.throws(() => production({ HTML_LIVE_ENABLED: "false" }), /conflicts/);
+  assert.throws(
+    () => parseViewerConfig({ ...base, HTML_LIVE_MODE: "prod" }),
+    /disabled, local, staging or production/,
+  );
+  // A plain HTTPS deployment without an explicit mode stays static-only.
+  assert.equal(
+    parseViewerConfig({
+      ...base,
+      APP_ORIGIN: "https://polochka.app",
+      VIEWER_ORIGIN: "https://polochka.page",
+      COOKIE_SECURE: "true",
+    }).HTML_LIVE_MODE,
+    "disabled",
+  );
+});

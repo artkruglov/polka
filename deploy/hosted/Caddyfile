@@ -1,14 +1,61 @@
 {
 	# No access log: share tokens live in URL fragments, but viewer grants and
 	# other capabilities can appear in paths.
+	# No admin API: every host-network container could reach it on loopback.
+	# Apply Caddyfile changes with `docker compose restart caddy`.
+	admin off
+	# HTTP is handled per site below: an automatic redirect would carry a
+	# viewer capability path in Location.
+	auto_https disable_redirects
+	servers {
+		# The Host header must match the TLS SNI name (421 otherwise).
+		strict_sni_host on
+	}
+}
+
+http://{$APP_HOST} {
+	redir https://{$APP_HOST}{uri} 308
 }
 
 {$APP_HOST} {
 	encode gzip
 	header Strict-Transport-Security "max-age=31536000"
-	reverse_proxy app:4390 {
+	reverse_proxy 127.0.0.1:4390 {
 		# Caddy replaces client-supplied X-Forwarded-For unless the client is a
-		# trusted proxy; the app trusts only this Docker network (TRUST_PROXY).
+		# trusted proxy; the app trusts only this loopback hop (TRUST_PROXY).
 		header_up X-Forwarded-Proto https
 	}
+}
+
+# Interactive HTML viewer: a separate registrable domain, only this runtime.
+# Plain HTTP is refused without a Location, so no capability is redirected.
+# ACME HTTP-01 challenges are still answered before this route.
+http://{$VIEWER_HOST_NAME} {
+	abort
+}
+
+{$VIEWER_HOST_NAME} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Cache-Control "no-store"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:4391 {
+		# live-viewer.ts only accepts this fixed upstream authority
+		# (VIEWER_HOST:VIEWER_PORT) and ignores forwarded authority.
+		header_up Host 127.0.0.1:4391
+		# The viewer never uses app credentials; do not forward them.
+		header_up -Cookie
+		header_up -Authorization
+		header_down -Set-Cookie
+		header_down -X-Frame-Options
+	}
+}
+
+# Anything else (unknown Host on port 80) is dropped. Over TLS an unknown SNI
+# has no certificate and strict_sni_host rejects a mismatched Host.
+:80 {
+	abort
 }

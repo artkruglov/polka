@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseViewerConfig } from "./viewer-config.ts";
+import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
 const env = z
   .object({
     URL_IMPORT_ENABLED: z.enum(["true","false"]).default("false").transform(value=>value==="true"),
@@ -23,7 +23,7 @@ const env = z
           .map((entry) => entry.trim())
           .filter(Boolean),
       ),
-    HTML_LIVE_MODE: z.enum(["disabled", "local", "staging"]).optional(),
+    HTML_LIVE_MODE: z.enum(HTML_LIVE_MODES).optional(),
     HTML_LIVE_ENABLED: z.enum(["true", "false"]).optional(),
     HTML_LIVE_STAGING_REVISION_IDS: z.string().optional(),
     VIEWER_ORIGIN: z.string().url().default("http://localhost:4391"),

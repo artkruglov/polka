@@ -324,7 +324,9 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
       cwd: process.cwd(),
       env: {
         ...process.env,
-        HTML_LIVE_ENABLED: "false",
+        // Explicit mode so the rollback also holds for staging/production runs.
+        HTML_LIVE_MODE: "disabled",
+        HTML_LIVE_ENABLED: undefined,
         TEST_SHARE_TOKEN: shareToken,
         TEST_ARTIFACT_ID: saved.artifactId,
         TEST_OWNER_COOKIE: ownerCookie,
@@ -550,7 +552,8 @@ test("a static single-file bundle links statically until a ready derivative exis
   );
   assert.equal(document.statusCode, 200, document.body);
   assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/);
-  assert.equal(document.body, page.toString());
+  // The static view (not the download) opens links in a new tab.
+  assert.equal(document.body, `<base target="_blank">${page}`);
   assert.equal(
     (await call("POST", `/api/shares/${before.share.id}/revoke`, {})).statusCode,
     200,
