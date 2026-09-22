@@ -9,6 +9,7 @@ import { Bring } from '../../pages/bring/index.tsx';
 import { NewLanding } from '../../pages/landing/index.tsx';
 import { EditorialPage } from '../../pages/discover/index.tsx';
 import { LibraryInvite } from '../../pages/library-invite/index.tsx';
+import { OAuthConsent } from '../../pages/oauth-consent/index.tsx';
 
 // The development inventory never enters the production bundle.
 const ComponentCatalog = import.meta.env.DEV
@@ -18,6 +19,7 @@ export function AppRoutes({path=location.pathname}:{path?:string}){
  if(path==='/dev/components'&&ComponentCatalog)return <React.Suspense fallback={<p role="status">Загружаем компоненты…</p>}><ComponentCatalog/></React.Suspense>;
  if(path==='/templates')return <Templates/>;
  if(path==='/library-invite')return <LibraryInvite/>;
+ if(path==='/oauth/consent')return <OAuthConsent/>;
  if(path==='/signup')return <Signup/>;
  if(path==='/start')return <FirstSave/>;
  if(path==='/settings/agents'||path==='/connections')return <AgentConnections/>;

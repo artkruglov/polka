@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 027.
+-- Operator-reviewed recipe for the Polka schema through migration 028.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>27
+     OR (SELECT count(*) FROM public.schema_migrations)<>28
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>27 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 027';
+     OR (SELECT max(version) FROM public.schema_migrations)<>28 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 028';
   END IF;
 END $$;
 
@@ -124,5 +124,11 @@ GRANT SELECT, INSERT, UPDATE ON
 -- The application appends and reads the library journal. Redaction is performed
 -- only by the protected terminal-tombstone trigger.
 GRANT SELECT, INSERT ON public.template_library_events TO :"runtime_role";
+-- Remote MCP connector (028). The application registers clients, records
+-- authorization requests and rotates refresh tokens; maintenance removes
+-- expired rows. Terminal purge erases per-account rows in its own function.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  public.oauth_clients, public.oauth_authorizations, public.oauth_refresh_tokens
+TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 027
+\echo Runtime grants installed for the reviewed schema through migration 028

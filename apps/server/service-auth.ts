@@ -13,7 +13,7 @@ import { sha256 } from "./storage.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const MAX_ACTIVE_CONNECTIONS = 20;
+export const MAX_ACTIVE_CONNECTIONS = 20;
 
 export const MCP_AUDIENCE = new URL("/mcp", config.APP_ORIGIN).toString();
 
@@ -26,7 +26,7 @@ export type ServiceActor = {
   expiresAt: number;
 };
 
-const unauthorized = () =>
+export const unauthorized = () =>
   new Problem(401, "unauthorized", "Подключение агента недействительно.");
 
 const requireScope = (scopes: readonly AgentScope[], scope: AgentScope) => {
@@ -50,6 +50,7 @@ const connectionDTO = (row: any): AgentConnection => ({
       : row.last_seen_at
         ? "seen"
         : "issued",
+  kind: row.oauth_client_id ? "oauth" : "token",
   createdAt: new Date(row.created_at).toISOString(),
   expiresAt: new Date(row.expires_at).toISOString(),
   lastSeenAt: row.last_seen_at
@@ -57,7 +58,8 @@ const connectionDTO = (row: any): AgentConnection => ({
     : null,
 });
 
-async function lockOwner(
+/** Lock the active owner and verify the session-bound CSRF token. */
+export async function lockOwner(
   c: PoolClient,
   actor: Actor,
   sessionToken: string,
@@ -201,6 +203,11 @@ export async function revokeAgentConnection(
         [connectionId],
       );
       await c.query(
+        `UPDATE oauth_refresh_tokens SET revoked_at=clock_timestamp()
+         WHERE connection_id=$1 AND revoked_at IS NULL`,
+        [connectionId],
+      );
+      await c.query(
         "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.revoked',$3)",
         [actor.tenant, actor.id, connectionId],
       );
@@ -225,6 +232,8 @@ export async function authenticateServiceToken(
      JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.owner_id=account.id
      WHERE connection.token_hash=$1 AND connection.audience=$2
        AND connection.revoked_at IS NULL AND connection.expires_at>now()
+       AND (connection.access_expires_at IS NULL
+         OR connection.access_expires_at>now())
        AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
     [tokenHash, audience],
   );
@@ -236,6 +245,8 @@ export async function authenticateServiceToken(
      FROM accounts account,tenants tenant
      WHERE connection.token_hash=$1 AND connection.audience=$2
        AND connection.revoked_at IS NULL AND connection.expires_at>now()
+       AND (connection.access_expires_at IS NULL
+         OR connection.access_expires_at>now())
        AND account.id=connection.account_id AND NOT account.disabled
        AND account.deletion_requested_at IS NULL
        AND tenant.id=connection.tenant_id AND tenant.owner_id=account.id`,
@@ -248,7 +259,15 @@ export async function authenticateServiceToken(
     connectionId: row.id,
     scopes: row.scopes,
     audience: row.audience,
-    expiresAt: Math.floor(new Date(row.expires_at).getTime() / 1000),
+    // An OAuth access token lapses before its connection's refresh window.
+    expiresAt: Math.floor(
+      Math.min(
+        new Date(row.expires_at).getTime(),
+        row.access_expires_at
+          ? new Date(row.access_expires_at).getTime()
+          : Infinity,
+      ) / 1000,
+    ),
   };
 }
 

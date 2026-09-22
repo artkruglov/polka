@@ -1,0 +1,25 @@
+/* Connector consent: one focused card, the agents page's hairline scope list. */
+.oauth-consent { width: 100%; max-width: 680px; margin: 0 auto; padding: 56px var(--gutter) 96px; }
+.oauth-card { display: grid; gap: 18px; padding: 32px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+.oauth-card h1 { font-size: clamp(26px, 3vw, 34px); line-height: 1.15; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.oauth-card p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+.oauth-lead strong, .oauth-account strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.oauth-account { padding: 10px 14px; border-radius: var(--radius); background: var(--soft); font-size: var(--text-base); }
+.oauth-scopes { display: grid; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; min-width: 0; }
+.oauth-scopes legend { float: left; width: 100%; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); background: var(--soft-3); font: 500 var(--text-base) / 1.4 var(--font-sans); color: var(--ink-2); }
+.oauth-scope { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
+.oauth-scope:last-child { border-bottom: 0; }
+.oauth-scope[data-selected="true"] { background: var(--soft-3); }
+.oauth-scope > input { margin-top: 3px; }
+.oauth-scope span { display: grid; gap: 2px; }
+.oauth-scope strong { font-size: var(--text-base); font-weight: 500; line-height: 1.4; color: var(--ink); }
+.oauth-scope small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.oauth-card .oauth-terms { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.oauth-terms svg { flex: 0 0 17px; margin-top: 2px; color: var(--accent); }
+.oauth-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.oauth-card > .ui-notice { margin: 0; }
+@media (max-width: 760px) {
+  .oauth-consent { padding: 28px var(--gutter-mobile) 48px; }
+  .oauth-card { padding: 22px 18px; }
+  .oauth-actions > .ui-button { flex: 1 1 140px; }
+}

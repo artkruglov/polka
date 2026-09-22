@@ -216,6 +216,15 @@ export async function runMaintenanceCleanup(
       "DELETE FROM sessions WHERE expires_at<now()",
       "DELETE FROM agent_connection_csrf WHERE expires_at<now()",
       "DELETE FROM login_limits WHERE reset_at<now()",
+      // Consumed codes stay a day so a late replay still revokes its grant.
+      "DELETE FROM oauth_authorizations WHERE expires_at<now()-interval '1 day'",
+      "DELETE FROM oauth_refresh_tokens WHERE expires_at<now()",
+      `DELETE FROM oauth_clients client
+       WHERE client.created_at<now()-interval '30 days'
+         AND NOT EXISTS(SELECT 1 FROM agent_connections connection
+                        WHERE connection.oauth_client_id=client.client_id)
+         AND NOT EXISTS(SELECT 1 FROM oauth_authorizations request
+                        WHERE request.client_id=client.client_id)`,
     ]) {
       assertActive(scope.signal);
       await c.query(sql);

@@ -58,7 +58,7 @@ Targets beta: metadata p95 <500 ms, первый полезный экран <3 
 
 Текущий локальный MCP использует Streamable HTTP и выданный владельцем scoped bearer token: TTL, audience, revoke и отдельная от web session граница. Это реализованный token-based режим, а не OAuth discovery/redirect/PKCE. Версии SDK закреплены в package-lock; фактическая совместимость фиксируется по каждому native клиенту. Codex CLI 0.153.4 прошёл capture через helper с точными bytes и последующий native status/prepare/share; Claude Code 2.1.278 остановился на provider 429 и ещё не принят. Связанный UI→client flow и облачная приёмка остаются открыты. [Протокол CLI](reviews/2026-09-20-cli-capture/README.md), [контракт MCP](MCP_IMPLEMENTATION_SPEC.md).
 
-OAuth остаётся отдельным будущим режимом, если он нужен выбранным клиентам: тогда отдельно проверяются discovery, redirect/PKCE, scopes и отзыв по актуальной официальной спецификации. Наличие bearer token не доказывает эти возможности и не должно рекламироваться как OAuth-совместимость; существующий session Origin-check не отключается.
+Обновление 22.09: OAuth-режим для Claude.ai и ChatGPT реализован ([MCP_CONNECTOR](MCP_CONNECTOR.md)); ручная приёмка с этими клиентами после выкладки ещё открыта. Исходная формулировка: OAuth остаётся отдельным будущим режимом, если он нужен выбранным клиентам: тогда отдельно проверяются discovery, redirect/PKCE, scopes и отзыв по актуальной официальной спецификации. Наличие bearer token не доказывает эти возможности и не должно рекламироваться как OAuth-совместимость; существующий session Origin-check не отключается.
 
 ## URL-импорт: включение пока не принято
 
