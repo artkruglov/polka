@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
+const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
+  z
+    .string()
+    .optional()
+    .transform((value) => value || undefined)
+    .pipe(schema.optional());
 const env = z
   .object({
     URL_IMPORT_ENABLED: z
@@ -33,11 +39,12 @@ const env = z
     VIEWER_HOST: z.string().default("localhost"),
     VIEWER_PORT: z.coerce.number().int().min(1).max(65535).default(4391),
     MAIL_MODE: z.enum(["disabled", "local", "smtp"]).default("disabled"),
-    SMTP_HOST: z.string().optional(),
+    // Compose passes unset SMTP variables as empty strings: empty means unset.
+    SMTP_HOST: unsetIfEmpty(z.string()),
     SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-    SMTP_USER: z.string().optional(),
-    SMTP_PASS: z.string().optional(),
-    MAIL_FROM: z.string().email().optional(),
+    SMTP_USER: unsetIfEmpty(z.string()),
+    SMTP_PASS: unsetIfEmpty(z.string()),
+    MAIL_FROM: unsetIfEmpty(z.string().email()),
     COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
     ACCOUNT_DELETION_ENABLED: z
       .enum(["true", "false"])
@@ -62,15 +69,8 @@ const env = z
     // Operator status for external monitoring (GET /api/ops/status). Unset or
     // empty: the route does not exist. OPS_BACKUP_BUCKET is where the backup
     // job writes dumps; the app only lists it to report the newest dump's age.
-    OPS_STATUS_TOKEN: z
-      .string()
-      .optional()
-      .transform((value) => value || undefined)
-      .pipe(z.string().min(32).optional()),
-    OPS_BACKUP_BUCKET: z
-      .string()
-      .optional()
-      .transform((value) => value || undefined),
+    OPS_STATUS_TOKEN: unsetIfEmpty(z.string().min(32)),
+    OPS_BACKUP_BUCKET: unsetIfEmpty(z.string()),
     RESTORE_MODE: z.enum(["off", "required"]).default("off"),
     RESTORE_RECEIPT_PATH: z.string().optional(),
     RESTORE_RUN_ID: z.string().uuid().optional(),
