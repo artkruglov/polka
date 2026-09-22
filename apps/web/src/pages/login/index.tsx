@@ -22,6 +22,9 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
   const emailLogin =
     capabilities.status === "ready" &&
     capabilities.capabilities.emailLogin !== "disabled";
+  const inviteOnly =
+    capabilities.status === "ready" &&
+    capabilities.capabilities.emailSignup === "invite";
   const toFileSave = safeNext(
     new URLSearchParams(location.search).get("next"),
   )?.startsWith("/bring#file");
@@ -81,7 +84,9 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
               className="login-email"
               href={`/signup?next=${encodeURIComponent(authReturnTo(location))}`}
             >
-              <Mail /> Войти по почте или создать свою полку <ArrowUpRight />
+              <Mail />{" "}
+              {inviteOnly ? "Войти по почте" : "Войти по почте или создать свою полку"}{" "}
+              <ArrowUpRight />
             </a>
           )}
           <div className="login-else">

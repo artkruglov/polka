@@ -4,6 +4,8 @@ import { request } from "../../shared/api/client.ts";
 /** Installation capabilities that change what the interface may promise. */
 export type InstallationCapabilities = {
   emailLogin: "disabled" | "local" | "smtp";
+  /** invite: codes go only to existing accounts and invited addresses. */
+  emailSignup: "open" | "invite";
   /** Server-side import of public HTML pages by URL. */
   urlImport: boolean;
   /** Isolated interactive view of supported pages. */
@@ -27,6 +29,7 @@ export function loadCapabilities() {
           : "disabled";
       return {
         emailLogin,
+        emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
         urlImport: raw.urlImport === true,
         livePreview: raw.liveExperimental === true,
       } satisfies InstallationCapabilities;

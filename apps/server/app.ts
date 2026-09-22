@@ -218,6 +218,7 @@ export async function createApp() {
     htmlView: "static-sandbox",
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,
+    emailSignup: config.EMAIL_SIGNUP,
   }));
   app.get("/api/editorial", listEditorial);
   app.get("/api/editorial/:slug", async (req) => {

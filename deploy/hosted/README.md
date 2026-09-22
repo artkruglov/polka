@@ -166,6 +166,21 @@ rm polka.dump
 - `hosted.env` (в том числе `LINK_KEY` и пароли БД) храните в менеджере секретов или офлайн, **не** в бакете бэкапов и не в другом бакете, куда пишет эта установка: иначе утечка одного ключа раскрывает и данные, и все секреты. Потеря `LINK_KEY` ломает все выданные ссылки.
 - RPO — до одного интервала бэкапа для метаданных; RTO не измерен. Проверьте восстановление на отдельной VM до того, как полагаться на бэкапы.
 
+## Вход по почте
+
+По умолчанию выключен (`MAIL_MODE=disabled`): аккаунты с паролем выдаёт оператор. С `MAIL_MODE=smtp` вход — по восьмизначному коду из письма. В режиме `EMAIL_SIGNUP=invite` (по умолчанию в этой форме установки) код получают только:
+
+- аккаунты, к которым оператор привязал адрес: `docker compose --env-file hosted.env run --rm app node --import tsx scripts/account-email.ts <логин> <почта>` — вход по коду откроет полку этого аккаунта;
+- адреса и домены из `EMAIL_SIGNUP_ALLOW` (`anna@example.com,@team.example.com`) — при первом входе у них появится новая полка.
+
+Остальным форма отвечает так же, но письмо не уходит, поэтому по ней нельзя узнать, кто приглашён. `EMAIL_SIGNUP=open` открывает регистрацию любому адресу.
+
+Отправка через Yandex Cloud Postbox:
+
+1. В консоли Postbox создайте адрес (домен приложения, DKIM «Простой») и добавьте у DNS-провайдера показанные две CNAME-записи DKIM, а также SPF в корне домена (`TXT "v=spf1 include:spf.postbox.yandexcloud.net ~all"`; если SPF уже есть, добавьте `include:spf.postbox.yandexcloud.net` перед `all`) и DMARC (`TXT _dmarc "v=DMARC1;p=none"`). Записи — по [документации Postbox](https://yandex.cloud/ru/docs/postbox/concepts/dns-records). Дождитесь статуса «Success».
+2. Сервисный аккаунт с ролью `postbox.sender` и его API-ключ со scope `yc.postbox.send`.
+3. В `hosted.env`: `MAIL_MODE=smtp`, `SMTP_HOST=postbox.cloud.yandex.net`, `SMTP_PORT=587`, `SMTP_USER=<ID API-ключа>`, `SMTP_PASS=<секрет API-ключа>`, `MAIL_FROM=no-reply@<APP_HOST>`, затем `docker compose --env-file hosted.env up -d`.
+
 ## Мониторинг
 
 Внешняя проверка — workflow [`.github/workflows/uptime.yml`](../../.github/workflows/uptime.yml) в вашем форке или копии репозитория. Раз в 15 минут он проверяет, что приложение отвечает, viewer-домен отвечает по TLS, сертификатам обоих доменов больше 14 дней и статус оператора зелёный. Упавший запуск и есть алерт: GitHub присылает письмо тому, кто последним менял расписание в workflow. Каждую проверку он повторяет трижды с паузой, поэтому один потерянный запрос не будит.

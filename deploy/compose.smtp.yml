@@ -8,3 +8,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       MAIL_FROM: ${MAIL_FROM:?Set MAIL_FROM for the SMTP overlay}
+      # invite: codes only for existing accounts and EMAIL_SIGNUP_ALLOW entries.
+      EMAIL_SIGNUP: ${EMAIL_SIGNUP:-invite}
+      EMAIL_SIGNUP_ALLOW: ${EMAIL_SIGNUP_ALLOW:-}
