@@ -1,7 +1,8 @@
 import React from "react";
 import { Folder as FolderIcon, Plus, Trash2 } from "lucide-react";
 import type { Folder } from "../../../../../packages/contracts/index.ts";
-import { Button } from "../../shared/ui/controls.tsx";
+import { IconButton } from "../../shared/ui/controls.tsx";
+/** Folders and the trash: the page-owned part of the rail. */
 export function ShelfNavigation({
   folders,
   folderId,
@@ -20,17 +21,10 @@ export function ShelfNavigation({
   return (
     <>
       <div className="nav-label">
-        ПАПКИ
-        <Button
-          variant="quiet"
-          className="icon small"
-          aria-label="Создать папку"
-          onClick={() => {
-            onCreateFolder();
-          }}
-        >
+        Папки
+        <IconButton size="sm" label="Создать папку" onClick={onCreateFolder}>
           <Plus />
-        </Button>
+        </IconButton>
       </div>
       {folders.map((f) => (
         <a
@@ -46,14 +40,13 @@ export function ShelfNavigation({
           }}
         >
           <FolderIcon />
-          {f.name}
+          <span>{f.name}</span>
         </a>
       ))}
       {!folders.length && (
         <p className="shelf-nav-hint">Соберите работы по проектам и темам.</p>
       )}
       <div className="shelf-nav-secondary">
-        <a className="nav-link" href="/templates"><FolderIcon />Шаблоны</a>
         <a
           className={trashView ? "nav-link active" : "nav-link"}
           href="/trash"

@@ -69,7 +69,7 @@ export function TrashPanel({
     <section className="trash-panel" aria-labelledby="trash-panel-title">
       <div className="trash-panel-heading">
         <div>
-          <p className="trash-panel-kicker">Архив хранения</p>
+          <p className="trash-panel-kicker eyebrow">Архив хранения</p>
           <h2 id="trash-panel-title">Корзина</h2>
           <p className="trash-panel-muted">
             Работы здесь занимают место. Старые ссылки закрыты и не оживут после

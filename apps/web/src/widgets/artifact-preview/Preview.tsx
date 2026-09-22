@@ -9,6 +9,7 @@ import {
 } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
+import { Wave } from "../../shared/ui/Wave.tsx";
 export function Preview({
   revision,
   grant,
@@ -170,7 +171,7 @@ export function Preview({
       <div className={compact ? "cover-text" : "work-text"}>
         {compact ? (
           <>
-            <span className="eyebrow">ЗАМЕТКИ И ИДЕИ</span>
+            <span className="eyebrow">Заметка</span>
             <p>{content.text.slice(0, 180)}</p>
             <FileText />
           </>
@@ -221,27 +222,10 @@ function ReadingText({ text, title }: { text: string; title: string }) {
     hasHeading && blocks[0]?.length < 120 ? blocks.shift() : undefined;
   return (
     <article className="reading-article">
-      <span className="reading-eyebrow">ЗАМЕТКА</span>
+      <span className="reading-eyebrow">Заметка</span>
       <h1>{heading}</h1>
       {lead && <p className="reading-lead">{lead}</p>}
-      <svg className="reading-wave" viewBox="0 0 900 100" aria-hidden="true">
-        <path
-          d="M0 65 C160 -30 230 130 420 55 S690 5 900 45 L900 70 C680 10 660 125 430 70 S150 5 0 80Z"
-          fill="#edf2ff"
-        />
-        <path
-          d="M0 75 C180 65 220 -10 390 35 S600 130 900 25"
-          fill="none"
-          stroke="#7996ff"
-          strokeWidth="1"
-        />
-        <path
-          d="M0 86 C200 30 280 20 440 60 S720 55 900 10"
-          fill="none"
-          stroke="#c7d4ff"
-          strokeWidth="1"
-        />
-      </svg>
+      <Wave compact className="reading-wave" />
       <div className="reading-body">
         {blocks.map((block, i) => (
           <p key={i}>{block}</p>

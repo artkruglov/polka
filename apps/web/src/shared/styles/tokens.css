@@ -1,0 +1,80 @@
+/* Design tokens — the single source for colour, type, spacing, radii, elevation and motion.
+   White and cool-gray surfaces, ink text, one cobalt accent, 6–8px controls, 10px thumbnails. */
+@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-SemiBold.ttf") format("truetype"); font-weight:500 800; font-style:normal; font-display:swap; }
+
+:root {
+  color-scheme: light;
+  --font-sans: "Polka Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces */
+  --canvas: #fff;
+  --soft: #f5f7fa;          /* rail, quiet panels */
+  --soft-2: #eef1f6;        /* pressed / secondary fills */
+  --soft-3: #fafbfe;        /* very light card fill */
+
+  /* Ink */
+  --ink: #0f1420;
+  --ink-2: #28354a;
+  --muted: #647087;
+  --muted-2: #8a95a8;
+  --muted-3: #aab3c2;
+
+  /* Lines */
+  --line: #e7ebf1;
+  --line-strong: #d9dfe9;
+  --line-soft: #eef1f5;
+
+  /* Accent */
+  --accent: #1f4fff;
+  --accent-strong: #1740e0;
+  --accent-soft: #edf2ff;
+  --accent-soft-2: #dbe5ff;
+  --accent-ink: #1a3fd1;
+  --accent-ring: #b8caff;
+
+  /* Semantic */
+  --success: #1f6b35; --success-soft: #e3f3e6;
+  --warning: #7a5200; --warning-soft: #fff1d6;
+  --danger: #b3261e;  --danger-soft: #fdecec; --danger-line: #f0c6cf;
+
+  /* Radii: controls 6–8, thumbnails 10, panels 12, sheets 16 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-7: 32px; --space-8: 40px; --space-9: 48px; --space-10: 64px;
+
+  /* Type scale */
+  --text-xs: 11px; --text-sm: 12px; --text-base: 14px; --text-md: 15px; --text-lg: 16px;
+  --text-xl: 18px; --text-2xl: 22px; --text-3xl: 28px; --text-4xl: 36px; --text-5xl: 48px;
+  --leading-tight: 1.1; --leading-snug: 1.3; --leading: 1.5; --leading-loose: 1.65;
+  --tracking-tight: -.04em; --tracking-snug: -.02em; --tracking-wide: .12em;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 5%);
+  --shadow-md: 0 8px 22px rgb(22 36 67 / 8%);
+  --shadow-lg: 0 20px 60px rgb(22 36 67 / 16%);
+  --shadow-menu: 0 12px 36px rgb(23 36 58 / 14%);
+
+  /* Motion */
+  --dur-fast: .12s; --dur: .18s; --dur-slow: .28s;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* Layout */
+  --rail-width: 232px;
+  --tabbar-height: 64px;
+  --control-height: 44px;
+  --control-height-sm: 36px;
+  --gutter: 40px;
+  --gutter-mobile: 16px;
+}
+
+@media (max-width: 1200px) { :root { --rail-width: 208px; --gutter: 32px; } }
+@media (prefers-reduced-motion: reduce) { :root { --dur-fast: 0s; --dur: 0s; --dur-slow: 0s; } }

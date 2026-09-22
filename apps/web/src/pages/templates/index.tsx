@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { ArrowUpRight, Eye, FileCode2, Search, Sparkles, Upload } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { request } from "../../shared/api/client.ts";
-import { Button, LinkButton, EmptyState, TextField, Badge, SelectField } from "../../shared/ui/controls.tsx";
+import { Button, LinkButton, EmptyState, Badge, Segmented } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
+import { TextCover } from "../../widgets/artifact-preview/index.ts";
 import { AgentContextPanel } from "../../features/agent-context/index.tsx";
 import { CreateLibrary, TemplateLibraryManagement } from "../../features/template-library-management/index.tsx";
 import { TemplateLibraryPreview } from "../../features/template-library-preview/index.tsx";
@@ -132,29 +134,51 @@ export function Templates() {
       setPreview(template as LibraryPreviewTemplate);
   }
   const selectedLibrary = libraries.find((library) => library.id === libraryId);
+  const scopes = [{ id: "", label: "Мои" }, ...libraries.map((library) => ({ id: library.id, label: library.name }))];
   return (
-    <AppShell current="shelf" account={account} className="p-modern">
-      <main className="p-main">
-        <header className="entry-heading">
-          <h1>{selectedLibrary?.name || "Мои шаблоны"}</h1>
-          <p>
-            Оформление, структура и правила — для следующей задачи в вашем
-            агенте.
-          </p>
+    <AppShell current="templates" account={account} className="templates-page">
+      <main className="templates-main">
+        <header className="templates-heading">
+          <div>
+            <h1>{selectedLibrary?.name || "Шаблоны"}</h1>
+            <p>Примеры и правила для вашего агента.</p>
+          </div>
+          {account && (
+            <LinkButton href="/" className="templates-from-work">
+              <Upload /> Из работы в шаблон
+            </LinkButton>
+          )}
         </header>
-        {account && (librariesLoading || libraries.length > 0 || libraryError) && (
-          <div className="template-library-picker">
-            <SelectField label="Каталог шаблонов" value={libraryId} onChange={(event) => selectLibrary(event.target.value)}>
-              <option value="">Мои шаблоны</option>
-              {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
-            </SelectField>
-            <p className="fine">Общая библиотека показывает опубликованные версии, доступные вашей команде.</p>
+        {account && (
+          <form className="templates-toolbar" onSubmit={(event) => {
+            event.preventDefault(); setQuery(draftQuery.trim());
+          }}>
+            <label className="ui-search templates-search">
+              <Search aria-hidden="true" />
+              <input type="search" aria-label="Найти шаблон" value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)} maxLength={200}
+                placeholder="Найти шаблон" />
+            </label>
+            {(librariesLoading || libraries.length > 0) && (
+              <Segmented label="Каталог шаблонов" value={libraryId} onChange={selectLibrary} options={scopes} wide />
+            )}
+            <label className="templates-history">
+              <input type="checkbox" checked={includePrevious}
+                onChange={(event) => setIncludePrevious(event.target.checked)} />
+              Предыдущие выпуски
+            </label>
+            <button type="submit" className="sr-only">Найти</button>
+          </form>
+        )}
+        {account && (
+          <div className="templates-libraries">
+            <CreateLibrary key={account.id} accountId={account.id} onCreated={(library) => {
+              setLibraries((current) => [library, ...current]);
+              selectLibrary(library.id);
+            }} />
+            <span className="fine">Общая библиотека показывает опубликованные версии, доступные вашей команде. По умолчанию — последний закреплённый выпуск каждого шаблона.</span>
           </div>
         )}
-        {account && <div className="template-library-create"><CreateLibrary key={account.id} accountId={account.id} onCreated={(library) => {
-          setLibraries((current) => [library, ...current]);
-          selectLibrary(library.id);
-        }} /></div>}
         {account && selectedLibrary && <TemplateLibraryManagement
           key={`${account.id}:${selectedLibrary.id}`}
           library={selectedLibrary}
@@ -164,26 +188,10 @@ export function Templates() {
           onRefreshLibraries={() => setLibraryAttempt((value) => value + 1)}
         />}
         {account && selectedLibrary && personalError && <div><ErrorNotice error={personalError} /><Button onClick={() => setPersonalAttempt((value) => value + 1)}>Повторить загрузку личных выпусков</Button></div>}
-        {account && <form className="template-search" onSubmit={(event) => {
-          event.preventDefault(); setQuery(draftQuery.trim());
-        }}>
-          <div className="template-search-row">
-            <TextField label="Найти шаблон" type="search" value={draftQuery}
-              onChange={(event) => setDraftQuery(event.target.value)} maxLength={200}
-              placeholder="Например, отчёт команды или предложение клиенту" />
-            <Button type="submit">Найти</Button>
-          </div>
-          <label className="template-history-toggle">
-            <input type="checkbox" checked={includePrevious}
-              onChange={(event) => setIncludePrevious(event.target.checked)} />
-            Показать предыдущие выпуски
-          </label>
-          <p className="fine">По умолчанию — последний закреплённый выпуск каждого шаблона. Задачу опишите в своём агенте.</p>
-        </form>}
         {account === null ? (
-          <LinkButton href="/?login=1&next=%2Ftemplates">
-            Войти в свою Полку
-          </LinkButton>
+          <EmptyState title="Шаблоны живут на вашей полке" action={<LinkButton variant="primary" href="/?login=1&next=%2Ftemplates">Войти в свою Полку</LinkButton>}>
+            Оформление, структура и правила — для следующей задачи в вашем агенте.
+          </EmptyState>
         ) : libraryError ? (
           <div><ErrorNotice error={libraryError} /><Button onClick={() => setLibraryAttempt((value) => value + 1)}>Повторить загрузку библиотек</Button></div>
         ) : error ? (
@@ -194,7 +202,9 @@ export function Templates() {
             </Button>
           </div>
         ) : !loaded ? (
-          <p role="status">Загружаем шаблоны…</p>
+          <div className="templates-grid" role="status" aria-label="Загружаем шаблоны…">
+            {[0, 1, 2].map((i) => <div key={i} className="template-card"><div className="template-cover placeholder" /></div>)}
+          </div>
         ) : items.length === 0 && query ? (
           <EmptyState title="Подходящих шаблонов не найдено" action={<Button onClick={() => {
             setDraftQuery(""); setQuery("");
@@ -208,30 +218,39 @@ export function Templates() {
         ) : items.length === 0 ? (
           <EmptyState
             title="Сохраните первый шаблон"
-            action={<LinkButton href="/">Открыть Мою Полку</LinkButton>}
+            action={<LinkButton variant="primary" href="/"><Sparkles /> Открыть Мою полку</LinkButton>}
           >
             Откройте материал → «Скопировать для агента» → «Сохранить эту версию
             как шаблон». Исходники и правила останутся вместе.
           </EmptyState>
         ) : (
-          <div className="template-catalog">
+          <div className="templates-grid">
             {items.map((t) => (
-              <article className="template-card" key={t.releaseId}>
-                <h2>{t.title}</h2>
-                <p><Badge tone={t.isLatest ? "success" : "neutral"}>v{t.revisionNumber} · {t.isLatest ? "последний выпуск" : "предыдущий выпуск"}</Badge></p>
-                <p>{t.summary}</p>
-                <p className="template-format">Формат: {formatLabel(t.mime)}</p>
-                <Button variant="primary" onClick={() => setSelected(t)}>
-                  Скопировать для агента
-                </Button>
-                {isHtmlTemplate(t) && libraryId && t.publicationId ? <Button onClick={() => openPreview(t)}>Предпросмотр</Button> :
-                  isHtmlTemplate(t) ? <a href={`/works/${t.artifactId}?revision=${t.revisionId}`}>Посмотреть материал</a> :
-                    <Button onClick={() => setSelected(t)}>Исходники</Button>}
+              <article className="template-card" key={t.releaseId} data-selected={selected?.releaseId === t.releaseId || undefined}>
+                <button type="button" className="template-cover" onClick={() => setSelected(t)} aria-label={`Открыть контекст: ${t.title}`}>
+                  <TextCover id={t.artifactId} title={t.title} eyebrow={`Шаблон · ${formatLabel(t.mime)}`} note={`v${t.revisionNumber}`} />
+                </button>
+                <div className="template-card-body">
+                  <h2>{t.title}</h2>
+                  <p>{t.summary}</p>
+                  <div className="template-card-meta">
+                    <Badge tone={t.isLatest ? "accent" : "neutral"}>v{t.revisionNumber}{t.isLatest ? "" : " · предыдущий"}</Badge>
+                    <span>{formatLabel(t.mime)}</span>
+                  </div>
+                </div>
+                <div className="template-card-actions">
+                  <Button variant="primary" onClick={() => setSelected(t)}>
+                    <Sparkles /> Для агента
+                  </Button>
+                  {isHtmlTemplate(t) && libraryId && t.publicationId ? <Button variant="quiet" onClick={() => openPreview(t)}><Eye /> Предпросмотр</Button> :
+                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={`/works/${t.artifactId}?revision=${t.revisionId}`}>Материал <ArrowUpRight /></LinkButton> :
+                      <Button variant="quiet" onClick={() => setSelected(t)}><FileCode2 /> Исходники</Button>}
+                </div>
               </article>
             ))}
           </div>
         )}
-        {loaded && hasMore && <p role="status">Показаны первые 100 совпадений. Уточните поиск по названию или назначению.</p>}
+        {loaded && hasMore && <p className="fine templates-more" role="status">Показаны первые 100 совпадений. Уточните поиск по названию или назначению.</p>}
       </main>
       {selected && (
         <AgentContextPanel

@@ -1,28 +1,20 @@
-.agent-context-panel {
-  display: grid;
-  gap: 16px;
-}
-.agent-context-panel h3,
-.agent-context-panel p {
-  margin: 0;
-}
-.agent-context-panel section,
-.agent-context-panel form {
-  display: grid;
-  gap: 12px;
-}
-.agent-context-panel details {
-  padding: 12px;
-  border: 1px solid var(--line, #ddd);
-  border-radius: 12px;
-}
-.agent-context-panel summary {
-  cursor: pointer;
-}
-.agent-context-panel li {
-  overflow-wrap: anywhere;
-  margin: 8px 0;
-}
-.agent-context-panel .context-pre {
-  white-space: pre-wrap;
-}
+/* «Для вашего агента» side panel. */
+.agent-context-panel { gap: 20px; }
+.agent-context-panel h3 { font-size: var(--text-lg); letter-spacing: -.01em; }
+.agent-context-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-context-lead { color: var(--muted); font-size: var(--text-md); line-height: 1.55; }
+.agent-context-section { display: grid; gap: 12px; }
+.agent-context-section > p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
+.agent-context-text .copy-text textarea { min-height: 132px; }
+.agent-context-text .copy-row > .ui-button { width: 100%; min-height: 48px; }
+.agent-context-files { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.agent-context-files > summary { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; }
+.agent-context-files > summary svg { width: 16px; height: 16px; color: var(--muted); }
+.agent-context-files ul { margin: 10px 0 0; padding-left: 18px; }
+.agent-context-files li { overflow-wrap: anywhere; margin: 6px 0; font-size: var(--text-base); }
+.agent-context-files li a { color: var(--accent); }
+.agent-context-files li small { color: var(--muted-2); }
+.agent-context-panel .context-pre { margin-top: 10px; white-space: pre-wrap; color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
+.agent-context-offline { padding-top: 18px; border-top: 1px solid var(--line); }
+.agent-context-offline-actions { display: grid; gap: 8px; }
+.agent-context-form { display: grid; gap: 14px; margin-top: 12px; }

@@ -90,3 +90,40 @@ export function profileView(
     plan: "Страницы с формами, паролями и загрузкой из сети не планируется открывать по ссылке без проверки.",
   };
 }
+export const dateLong = (s: string) =>
+  new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+export const dateTime = (s: string) =>
+  new Date(s).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+/** Whether an active link exists (a link that is behind still opens). */
+export const isLinked = (a: Pick<Artifact, "share">) =>
+  !!a.share && ["active", "behind"].includes(a.share.status);
+/** Short access label for cards and toolbars. */
+export const accessLabel = (a: Pick<Artifact, "share">) =>
+  isLinked(a) ? "Доступно по ссылке" : "Только я";
+export type Category = "pages" | "documents" | "images" | "other";
+export const categoryLabel: Record<Category, string> = {
+  pages: "Страницы",
+  documents: "Документы",
+  images: "Изображения",
+  other: "Другое",
+};
+/** Client-side grouping by what the saved bytes are; the server has no categories. */
+export const categoryOf = (r: Pick<Revision, "mime" | "htmlProfile" | "storageKind">): Category =>
+  r.mime.startsWith("image/")
+    ? "images"
+    : r.mime === "text/plain"
+      ? "documents"
+      : r.mime === "text/html" && r.htmlProfile !== "unsupported"
+        ? "pages"
+        : "other";
+/** A stable hue per material so typographic covers differ without being random. */
+export const hueOf = (id: string) => {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
+};

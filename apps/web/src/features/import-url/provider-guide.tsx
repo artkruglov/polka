@@ -42,10 +42,9 @@ export function ProviderGuide({
           </Button>
         </div>
       )}
-      <p className="bring-hint">
+      <p className="url-import-agent">
         Агент может сохранить работу сам:{" "}
-        <a href="/settings/agents">подключите Claude Code или Codex</a>. Скоро —
-        кнопка «На Полку» прямо в чате Claude.
+        <a href="/settings/agents">подключите Claude Code или Codex</a>.
       </p>
     </>
   );

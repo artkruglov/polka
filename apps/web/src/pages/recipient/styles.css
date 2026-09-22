@@ -1,168 +1,38 @@
-.recipient.recipient-reader {
-  min-height: 100vh;
-  background: #fff;
-  color: #151922;
-}
+/* Recipient view: the material in the reader's typography, with provenance and a report action. */
+.recipient-main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 28px var(--gutter) 64px; }
+.recipient-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--muted); font-size: var(--text-sm); }
+.recipient-bar .ui-badge { padding: 4px 9px; }
+.recipient-reader-profile { padding-left: 14px; border-left: 1px solid var(--line-strong); }
+.recipient-heading { padding: 18px 0 20px; }
+.recipient-heading h1 { max-width: 24ch; font-size: clamp(30px, 3.4vw, 46px); line-height: 1.08; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.recipient-main > .stage { margin-top: 0; }
+.recipient-main > .stage[data-kind="text"] { margin-top: 8px; }
+.recipient-reader-footer { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 18px 28px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
+.recipient-reader-provenance { max-width: 720px; min-width: 0; }
+.recipient-reader-provenance p { margin-bottom: 6px; font-size: var(--text-base); line-height: 1.55; color: var(--ink-2); }
+.recipient-reader-provenance small { font-size: var(--text-sm); line-height: 1.5; }
+.recipient-reader-footer-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; }
+.recipient-reader-footer-actions a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--accent); font-size: var(--text-base); font-weight: 500; }
+.recipient-reader-footer-actions .report-button { min-height: 40px; color: var(--muted); padding: 8px 4px; }
+.report-sent { color: var(--success); font-size: var(--text-base); }
 
-.recipient-reader > header {
-  height: 68px;
-  padding: 0 clamp(20px, 4vw, 56px);
-  border-bottom: 1px solid #e7eaf0;
-  background: #fff;
-}
+/* Denied: no hint whether a work ever existed here. */
+.recipient-denied { max-width: 620px; margin: 0 auto; padding: 72px var(--gutter) 96px; }
+.recipient-denied h1 { font-size: clamp(28px, 3vw, 36px); }
+.recipient-request { display: grid; gap: 8px; width: 100%; margin-top: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); text-align: left; }
+.recipient-request strong { color: var(--ink); font-size: var(--text-md); }
+.recipient-request small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.recipient-request .copy-text { margin-top: 6px; }
+.recipient-explore { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink-2); font-size: var(--text-base); }
+.recipient-explore:hover { color: var(--accent); }
+.recipient-explore svg { width: 18px; height: 18px; }
 
-.recipient-reader > header .pill {
-  background: #f5f7fb;
-  border: 1px solid #e5eaf2;
-  border-radius: 7px;
-  color: #5a6578;
-  font-size: 12px;
-}
-
-.recipient.recipient-reader > main {
-  width: 100%;
-  max-width: 1280px;
-  box-sizing: border-box;
-  padding: 28px 40px 48px;
-}
-
-.recipient-reader .recipient-heading {
-  display: block;
-  margin: 0 0 12px;
-}
-
-.recipient-reader .recipient-heading h1 {
-  margin: 0;
-  font-size: clamp(25px, 3vw, 38px);
-  line-height: 1.15;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-
-.recipient-reader-context {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  margin-bottom: 18px;
-  color: #697386;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.recipient-reader-profile {
-  padding-left: 16px;
-  border-left: 1px solid #dce3ed;
-}
-
-.recipient-reader > main > .stage {
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  background: #fff;
-}
-
-.recipient-reader .work-text {
-  max-width: 940px;
-  box-sizing: border-box;
-  padding: 28px 40px 20px;
-}
-
-.recipient-reader .reading-article h1 {
-  margin: 20px 0;
-  font-size: clamp(34px, 5vw, 66px);
-  line-height: 1.08;
-}
-
-.recipient-reader .work-image {
-  background: #f7f9fc;
-}
-
-.recipient-reader .html-preview-note {
-  background: #f7f9fc;
-  border-color: #e7ecf4;
-}
-
-.recipient-reader .recipient-reader-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 18px 28px;
-  margin-top: 28px;
-  padding: 20px 0 0;
-  border-top: 1px solid #e7eaf0;
-  text-align: left;
-  color: #697386;
-}
-
-.recipient-reader-provenance {
-  max-width: 720px;
-  min-width: 0;
-}
-.recipient-reader-provenance p {
-  margin: 0 0 7px;
-  font-size: 12px;
-  line-height: 1.55;
-}
-.recipient-reader-provenance small {
-  font-size: 11px;
-  line-height: 1.5;
-}
-.recipient-reader-footer-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-}
-.recipient-reader-footer-actions a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  color: #1f4fff;
-  text-decoration: none;
-  font-size: 12px;
-}
-.recipient-reader-footer-actions .report-button {
-  min-height: 40px;
-  color: #697386;
-  padding: 8px 0;
-}
-.recipient-reader-footer-actions a:focus-visible,
-.recipient-reader-footer-actions button:focus-visible {
-  outline: 2px solid #1f4fff;
-  outline-offset: 4px;
-}
-
-@media (max-width: 640px) {
-  .recipient-reader > header {
-    height: 62px;
-    padding: 0 20px;
-  }
-  .recipient.recipient-reader > main {
-    padding: 24px 20px 36px;
-  }
-  .recipient-reader-context {
-    gap: 6px;
-    align-items: flex-start;
-    flex-direction: column;
-    margin-bottom: 16px;
-  }
-  .recipient-reader-profile {
-    padding-left: 0;
-    border-left: 0;
-  }
-  .recipient-reader .work-text {
-    padding: 16px 0 12px;
-  }
-  .recipient-reader .reading-body p {
-    font-size: 17px;
-    line-height: 1.75;
-  }
-  .recipient-reader .recipient-reader-footer {
-    margin-top: 20px;
-    gap: 10px;
-  }
+@media (max-width: 760px) {
+  .recipient-main { padding: 20px var(--gutter-mobile) 48px; }
+  .recipient-bar { gap: 6px 12px; }
+  .recipient-reader-profile { padding-left: 0; border-left: 0; flex-basis: 100%; }
+  .recipient-heading { padding: 12px 0 16px; }
+  .recipient-heading h1 { font-size: 30px; }
+  .recipient-reader-footer { margin-top: 20px; gap: 12px; }
+  .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
 }

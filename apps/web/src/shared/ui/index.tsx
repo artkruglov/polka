@@ -23,11 +23,19 @@ export function Dialog({
   children,
   onClose,
   busy = false,
+  variant = "center",
+  eyebrow,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   busy?: boolean;
+  /** `panel` docks to the right edge on desktop; every variant is a sheet on phones. */
+  variant?: "center" | "panel" | "wide";
+  /** Small tracked label above the title (e.g. «Для вашего агента»). */
+  eyebrow?: string;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null),
     returnFocus = useRef<HTMLElement | null>(null);
@@ -38,7 +46,7 @@ export function Dialog({
   }, []);
   return (
     <dialog
-      className="ui-dialog"
+      className={`ui-dialog${variant !== "center" ? ` ui-dialog--${variant}` : ""} ${className}`}
       ref={ref}
       onCancel={(e) => {
         e.preventDefault();
@@ -47,7 +55,10 @@ export function Dialog({
       aria-label={title}
     >
       <div className="dialog-head">
-        <h2>{title}</h2>
+        <div className="dialog-title">
+          {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+          <h2>{title}</h2>
+        </div>
         <Button
           variant="quiet"
           className="icon"

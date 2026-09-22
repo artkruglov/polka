@@ -347,9 +347,9 @@ export function AgentConnections() {
       account={account}
       className="agent-connections-page"
     >
-      <main className="p-main agent-connections" id="main">
+      <main className="agent-connections" id="main">
         <header className="agent-page-heading">
-          <span className="p-eyebrow">Ваш агент → ваша Полка</span>
+          <span className="eyebrow">Ваш агент → ваша Полка</span>
           <h1>Подключить агента</h1>
           <p className="agent-lead">
             Claude Code, Codex или другой MCP-клиент будет сохранять работы
@@ -489,6 +489,7 @@ export function AgentConnections() {
                   </div>
                   <Button
                     type="button"
+                    variant="quiet"
                     className="icon"
                     aria-label="Закрыть токен"
                     onClick={() => {

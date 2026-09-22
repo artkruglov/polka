@@ -11,15 +11,25 @@ export type MenuAction = {
   label: string;
   icon?: React.ReactNode;
   disabled?: boolean;
+  tone?: "danger";
   onSelect: () => void;
 };
 /** A menu for actions, not global navigation. Dialogs restore focus to its trigger. */
 export function ActionMenu({
   label = "Ещё",
   items,
+  icon,
+  placement = "end",
+  direction = "down",
+  className = "",
 }: {
   label?: string;
   items: MenuAction[];
+  /** Icon-only trigger; `label` becomes its accessible name. */
+  icon?: React.ReactNode;
+  placement?: "start" | "end";
+  direction?: "down" | "up";
+  className?: string;
 }) {
   const [open, setOpen] = useState(false),
     id = useId(),
@@ -59,7 +69,7 @@ export function ActionMenu({
   }, [open]);
   return (
     <div
-      className="ui-action-menu"
+      className={`ui-action-menu${placement === "start" ? " ui-action-menu--start" : ""}${direction === "up" ? " ui-action-menu--up" : ""} ${className}`}
       ref={root}
       onBlur={(e) => {
         if (
@@ -72,6 +82,10 @@ export function ActionMenu({
     >
       <span ref={trigger}>
         <Button
+          variant={icon ? "quiet" : "secondary"}
+          className={icon ? "icon ui-action-menu-trigger" : ""}
+          aria-label={icon ? label : undefined}
+          title={icon ? label : undefined}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-controls={open ? id : undefined}
@@ -87,7 +101,7 @@ export function ActionMenu({
             }
           }}
         >
-          {label}
+          {icon ?? label}
         </Button>
       </span>
       {open && (
@@ -124,6 +138,7 @@ export function ActionMenu({
               key={item.id}
               type="button"
               role="menuitem"
+              className={item.tone === "danger" ? "danger" : undefined}
               tabIndex={-1}
               disabled={item.disabled}
               onClick={() => {

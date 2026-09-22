@@ -1,6 +1,6 @@
-import { Button, LinkButton } from "../../shared/ui/controls.tsx";
+import { Button, Chip, LinkButton } from "../../shared/ui/controls.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
-import { Bot, FileUp } from "lucide-react";
+import { ArrowUpRight, Bot, FileUp } from "lucide-react";
 import React, { useState } from "react";
 import { EditorialArtwork } from "../../entities/editorial/Artwork.tsx";
 import { editorialCover } from "../../entities/editorial/covers.ts";
@@ -43,12 +43,12 @@ export function EditorialCatalog({
       </div>
 
       {loading && (
-        <div
-          className="editorial-catalog-state"
-          role="status"
-          aria-live="polite"
-        >
-          Загружаем материалы…
+        <div className="editorial-catalog-grid" role="status" aria-live="polite" aria-label="Загружаем материалы…">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="editorial-catalog-card">
+              <div className="editorial-cover placeholder" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -90,63 +90,65 @@ export function EditorialCatalog({
 
       {!loading && !error && items.length > 0 && (
         <div className="editorial-topics" aria-label="Темы материалов">
-          {[null, ...topics].map((value) => (
-            <Button
-              key={value ?? "all"}
-              type="button"
-              aria-pressed={activeTopic === value}
-              onClick={() => setTopic(value)}
-            >
-              {value ?? "Всё"}
-            </Button>
-          ))}
+          <div className="ui-chips">
+            {[null, ...topics].map((value) => (
+              <Chip
+                key={value ?? "all"}
+                pressed={activeTopic === value}
+                onClick={() => setTopic(value)}
+              >
+                {value ?? "Всё"}
+              </Chip>
+            ))}
+          </div>
           <span role="status">Материалов: {visibleItems.length}</span>
         </div>
       )}
       {!loading && !error && items.length > 0 && (
         <div className="editorial-catalog-grid">
-          {visibleItems.map((item) => (
-            <article className="editorial-catalog-card" key={item.slug}>
-              {(() => {
-                const recipientUrl = safeEditorialRecipientUrl(
-                  item.recipientUrl,
-                );
-                return (
-                  <>
-                    {editorialCover(item.slug, item.title) && recipientUrl && (
-                      <a
-                        className="editorial-cover"
-                        href={recipientUrl}
-                        aria-label={`Открыть ${item.title}`}
-                      >
-                        <EditorialArtwork slug={item.slug} />
-                      </a>
+          {visibleItems.map((item) => {
+            const recipientUrl = safeEditorialRecipientUrl(item.recipientUrl);
+            const hasCover = !!editorialCover(item.slug, item.title);
+            return (
+              <article className="editorial-catalog-card" key={item.slug}>
+                {recipientUrl ? (
+                  <a
+                    className="editorial-cover"
+                    href={recipientUrl}
+                    aria-label={`Открыть ${item.title}`}
+                    tabIndex={-1}
+                  >
+                    {hasCover ? <EditorialArtwork slug={item.slug} /> : <span className="editorial-cover-fallback">{item.topic}</span>}
+                  </a>
+                ) : (
+                  <div className="editorial-cover">
+                    {hasCover ? <EditorialArtwork slug={item.slug} /> : <span className="editorial-cover-fallback">{item.topic}</span>}
+                  </div>
+                )}
+                <div className="editorial-catalog-card-body">
+                  <h3>
+                    {recipientUrl ? (
+                      <a href={recipientUrl}>{item.title}</a>
+                    ) : (
+                      item.title
                     )}
-                    <h3>
-                      {recipientUrl ? (
-                        <a href={recipientUrl}>{item.title}</a>
-                      ) : (
-                        item.title
-                      )}
-                    </h3>
-
-                    <div className="editorial-catalog-card-footer">
-                      <span title={`${item.license} · ${item.action}`}>
-                        {item.topic} · {item.author}
-                      </span>
-                      {recipientUrl ? (
-                        <a href={recipientUrl}>
-                          Открыть <span aria-hidden="true">↗</span>
-                        </a>
-                      ) : (
-                        <span>Ссылка недоступна</span>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
-            </article>
-          ))}
+                  </h3>
+                  <span className="editorial-catalog-card-meta" title={`${item.license} · ${item.action}`}>
+                    {item.topic} · {item.author}
+                  </span>
+                </div>
+                <div className="editorial-catalog-card-footer">
+                  {recipientUrl ? (
+                    <a href={recipientUrl}>
+                      Открыть <ArrowUpRight aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <span>Ссылка недоступна</span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

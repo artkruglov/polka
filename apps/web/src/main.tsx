@@ -1,21 +1,17 @@
-import "./entry-redesign.css";
-import React from "react";
-import {createRoot} from "react-dom/client";
-import {AppRoutes} from "./app/routing/index.tsx";
-
-// Transitional CSS entry: keep cascade order explicit until route CSS migration is complete.
-import "./widgets/editorial-catalog/styles.css";
-import "./style.css";
-import "./shared/ui/dialog.css";
-import "./widgets/artifact-preview/styles.css";
-import "./community.css";
-import "./entry.css";
-import "./modern.css";
-import "./widgets/artifact-reader/layout.css";
-import "./shared/styles/visual-system.css";
-import "./widgets/navigation/navigation.css";
+// Global layers in cascade order: tokens → base → shared primitives → widgets that
+// Node tests render without CSS. Pages and features import their own stylesheets.
+import "./shared/styles/tokens.css";
+import "./shared/styles/base.css";
 import "./shared/ui/controls.css";
+import "./shared/ui/dialog.css";
+import "./widgets/navigation/navigation.css";
+import "./widgets/artifact-preview/styles.css";
 import "./widgets/artifact-reader/styles.css";
+import "./widgets/editorial-catalog/styles.css";
+import "./widgets/trash/styles.css";
 import "./pages/agents/styles.css";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { AppRoutes } from "./app/routing/index.tsx";
 
-createRoot(document.getElementById("root")!).render(<AppRoutes/>);
+createRoot(document.getElementById("root")!).render(<AppRoutes />);

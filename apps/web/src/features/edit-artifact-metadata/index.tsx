@@ -130,7 +130,7 @@ export function ArtifactMetadataPanel({
           </SelectField>
           {error && (
             <p
-              className={conflict ? "metadata-conflict" : "error"}
+              className={conflict ? "ui-field-hint" : "ui-field-error"}
               role="alert"
             >
               {error}

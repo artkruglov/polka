@@ -1,248 +1,319 @@
-import React from "react";
-import { Button, LinkButton } from "../../shared/ui/controls.tsx";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./styles.css";
+import { Button, Chip, IconButton, LinkButton, Segmented } from "../../shared/ui/controls.tsx";
+import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import {
-  Plus,
-  Upload,
-  Folder as FolderIcon,
-  ChevronRight,
-  ArrowLeft,
-  Search,
-  X,
-  Grid2X2,
-  List,
-  Image as ImageIcon,
-  FileText,
-  Link as LinkIcon,
-  LockKeyhole,
   ArrowUpRight,
-  PlugZap,
+  Bot,
   Compass,
+  Ellipsis,
+  FileUp,
+  Folder as FolderIcon,
+  Grid2X2,
+  Link as LinkIcon,
+  List,
+  LockKeyhole,
+  Search,
+  Share2,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import type {
   Artifact,
   Folder,
 } from "../../../../../packages/contracts/index.ts";
-import { Preview } from "../../widgets/artifact-preview/index.ts";
+import { Preview, TextCover } from "../../widgets/artifact-preview/index.ts";
 import {
+  accessLabel,
+  categoryLabel,
+  categoryOf,
   date,
-  status,
   isImage,
+  isLinked,
   kindOf,
+  type Category,
 } from "../../entities/artifact/format.ts";
+
+export type ShelfSort = "newest" | "oldest" | "title";
+export type CardAction = "share" | "metadata" | "trash";
 type Props = {
   activeFolder: Folder | undefined;
   folderId: string | null;
-  folders: Folder[];
   items: Artifact[];
   query: string;
   view: "grid" | "list";
+  sort: ShelfSort;
   loading: boolean;
   loadingMore: boolean;
   cursor: string | null;
-  setFolderId: (id: string | null) => void;
+  focusSearch: boolean;
   setQuery: (query: string) => void;
   setView: (view: "grid" | "list") => void;
+  setSort: (sort: ShelfSort) => void;
   setPanel: (panel: "upload" | "folder") => void;
-  open: (id: string) => void;
+  open: (id: string, panel?: CardAction) => void;
   loadMore: () => void;
 };
+
+const categories: Category[] = ["pages", "documents", "images", "other"];
+
+/** The cover a card shows: the material itself when it can be drawn, otherwise a typographic cover. */
+function CardCover({ a }: { a: Artifact }) {
+  const r = a.revision;
+  const drawable =
+    isImage(r) ||
+    (r.mime === "text/html" && r.htmlProfile !== "unsupported");
+  if (drawable) return <Preview revision={r} compact />;
+  return (
+    <TextCover
+      id={a.id}
+      title={a.title}
+      eyebrow={r.mime === "text/plain" ? "Заметка" : kindOf(r)}
+      note={r.mime === "text/plain" ? undefined : "Просмотр недоступен"}
+    />
+  );
+}
+
 export function ShelfPage({
   activeFolder,
   folderId,
-  folders,
   items,
   query,
   view,
+  sort,
   loading,
   loadingMore,
   cursor,
-  setFolderId,
+  focusSearch,
   setQuery,
   setView,
+  setSort,
   setPanel,
   open,
   loadMore,
 }: Props) {
+  const [category, setCategory] = useState<Category | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusSearch) searchRef.current?.focus();
+  }, [focusSearch]);
+  const counts = useMemo(() => {
+    const result: Record<Category, number> = { pages: 0, documents: 0, images: 0, other: 0 };
+    for (const a of items) result[categoryOf(a.revision)]++;
+    return result;
+  }, [items]);
+  const active = category && counts[category] ? category : null;
+  const visible = useMemo(() => {
+    const list = active ? items.filter((a) => categoryOf(a.revision) === active) : [...items];
+    if (sort === "title") list.sort((x, y) => x.title.localeCompare(y.title, "ru"));
+    else if (sort === "oldest") list.sort((x, y) => x.updatedAt.localeCompare(y.updatedAt));
+    return list;
+  }, [items, active, sort]);
+  const bringHref = folderId ? `/bring?folder=${encodeURIComponent(folderId)}` : "/bring";
+  const focusTools = () => searchRef.current?.focus();
   return (
     <>
-      <div className="shelf-heading">
-        <div>
-          <span className="eyebrow">ВАШИ РАБОТЫ · ВСЕГДА ПОД РУКОЙ</span>
-          <h1>{activeFolder?.name ?? "Моя Полка"}</h1>
-          <p className="muted">
-            {activeFolder
-              ? "Всё по одной теме. Откройте работу и продолжите с того места, где остановились."
-              : "Хорошие идеи не теряются в чатах. Здесь — ваши работы и их версии."}
-          </p>
-        </div>
-        <div className="shelf-actions">
-          <LinkButton variant="primary" href={folderId ? `/bring?folder=${encodeURIComponent(folderId)}` : "/bring"}>
-            <Plus />
-            Сохранить работу
-          </LinkButton>
-          <Button onClick={() => setPanel("upload")}>
-            <Upload />
-            Загрузить файл
-          </Button>
-        </div>
-      </div>
-      {!folderId && folders.length > 0 && (
-        <section className="shelf-folders" aria-label="Папки">
-          <div className="shelf-section-heading">
-            <h2>
-              Папки <span>{folders.length}</span>
-            </h2>
-            <Button variant="quiet" onClick={() => setPanel("folder")}>
-              <Plus /> Новая папка
+      {activeFolder ? (
+        <header className="shelf-folder-heading">
+          <span className="eyebrow">Папка</span>
+          <h1>{activeFolder.name}</h1>
+        </header>
+      ) : (
+        <section className="shelf-hero" aria-label="Сохранить работу">
+          <div className="shelf-hero-top">
+            <IconButton label="Поиск по полке" onClick={focusTools}>
+              <Search />
+            </IconButton>
+          </div>
+          <h1>Сохраняйте. Делитесь. Возвращайтесь.</h1>
+          <form
+            className="shelf-hero-entry"
+            action="/bring"
+            method="get"
+            onSubmit={(e) => {
+              const input = e.currentTarget.elements.namedItem("url") as HTMLInputElement;
+              if (!input.value.trim()) e.preventDefault();
+            }}
+          >
+            <label className="shelf-hero-field">
+              <LinkIcon aria-hidden="true" />
+              <input
+                type="url"
+                name="url"
+                inputMode="url"
+                placeholder="Вставьте ссылку на артефакт"
+                aria-label="Ссылка на артефакт"
+              />
+            </label>
+            {folderId && <input type="hidden" name="folder" value={folderId} />}
+            <Button type="submit" variant="primary" className="shelf-hero-save">
+              Сохранить
             </Button>
-          </div>
-          <div className="folder-chips">
-            {folders.map((f) => (
-              <Button key={f.id} onClick={() => setFolderId(f.id)}>
-                <FolderIcon />
-                <span>{f.name}</span>
-                <ChevronRight />
-              </Button>
-            ))}
-          </div>
+            <span className="shelf-hero-divider" aria-hidden="true" />
+            <div className="shelf-hero-agent">
+              <LinkButton href="/settings/agents">
+                <Bot /> Подключить агента
+              </LinkButton>
+              <span>Агенты сами находят и сохраняют важное для вас</span>
+            </div>
+          </form>
+          <p className="shelf-hero-fine">
+            Или{" "}
+            <button type="button" className="text-button" onClick={() => setPanel("upload")}>
+              загрузите файл с компьютера
+            </button>
+            : HTML, текст или изображение до 5 МБ.
+          </p>
         </section>
       )}
+
       <section
         className="shelf-library"
         aria-label="Сохранённые работы"
         aria-busy={loading}
       >
-        <div className="shelf-section-heading shelf-library-heading">
-          <div>
-            {activeFolder && (
-              <Button
-                variant="quiet" className="shelf-back"
-                onClick={() => setFolderId(null)}
-              >
-                <ArrowLeft /> Все работы
-              </Button>
-            )}
-            <h2>
-              {query
-                ? "Результаты поиска"
-                : activeFolder
-                  ? "В этой папке"
-                  : "Все работы"}
-            </h2>
-          </div>
-          <span className="shelf-order">Последние изменения</span>
-        </div>
-        <div className="shelf-tools">
-          <label className="search">
-            <Search />
-            <input
-              aria-label="Найти работу"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Найти на Полке…"
+        <div className="shelf-library-head">
+          <h2>{query ? "Результаты поиска" : activeFolder ? "В этой папке" : "Моя полка"}</h2>
+          <div className="shelf-tools">
+            <label className="ui-search ui-search--quiet shelf-search">
+              <Search aria-hidden="true" />
+              <input
+                ref={searchRef}
+                type="search"
+                aria-label="Поиск по полке"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Поиск по полке"
+              />
+              {query && (
+                <IconButton size="sm" label="Очистить поиск" onClick={() => setQuery("")}>
+                  <X />
+                </IconButton>
+              )}
+            </label>
+            <label className="shelf-sort">
+              <span className="sr-only">Порядок</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as ShelfSort)}>
+                <option value="newest">Сначала новые</option>
+                <option value="oldest">Сначала старые</option>
+                <option value="title">По названию</option>
+              </select>
+            </label>
+            <Segmented
+              label="Вид полки"
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "grid", label: <Grid2X2 />, title: "Карточки" },
+                { id: "list", label: <List />, title: "Список" },
+              ]}
             />
-            {query && (
-              <Button
-                className="icon small"
-                aria-label="Очистить поиск"
-                onClick={() => setQuery("")}
-              >
-                <X />
-              </Button>
-            )}
-          </label>
-          <div className="segmented compact" role="group" aria-label="Вид Полки">
-            <Button
-              aria-label="Карточки"
-              aria-pressed={view === "grid"}
-              onClick={() => setView("grid")}
-            >
-              <Grid2X2 />
-            </Button>
-            <Button
-              aria-label="Список"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-            >
-              <List />
-            </Button>
           </div>
         </div>
-        {loading ? (
-          <div className="empty" role="status">
-            Загружаем работы…
+        {items.length > 0 && (
+          <div className="ui-chips shelf-chips" role="group" aria-label="Тип материала">
+            <Chip pressed={active === null} onClick={() => setCategory(null)} count={items.length}>
+              Все
+            </Chip>
+            {categories
+              .filter((c) => counts[c] > 0)
+              .map((c) => (
+                <Chip key={c} pressed={active === c} onClick={() => setCategory(c)} count={counts[c]}>
+                  {categoryLabel[c]}
+                </Chip>
+              ))}
           </div>
-        ) : items.length ? (
+        )}
+
+        {loading ? (
+          <div className="shelf-gallery shelf-gallery--skeleton" role="status" aria-label="Загружаем работы…">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="shelf-card">
+                <div className="shelf-cover placeholder" />
+              </div>
+            ))}
+          </div>
+        ) : visible.length ? (
           <>
-            {view === "list" && (
-              <div className="shelf-list-heading" aria-hidden="true">
-                <span>Работа</span>
-                <span>Доступ</span>
-                <span />
+            <div className={view === "grid" ? "shelf-gallery" : "shelf-list"}>
+              {visible.map((a) => {
+                const href = `/works/${a.id}`;
+                const go = (e: React.MouseEvent) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+                  e.preventDefault();
+                  open(a.id);
+                };
+                const menu = (
+                  <ActionMenu
+                    label={`Действия: ${a.title}`}
+                    icon={<Ellipsis />}
+                    items={[
+                      { id: "open", label: "Открыть", icon: <ArrowUpRight />, onSelect: () => open(a.id) },
+                      { id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") },
+                      { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
+                      { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
+                    ]}
+                  />
+                );
+                return (
+                  <article className="shelf-card" key={a.id}>
+                    <a className="shelf-cover" href={href} onClick={go} aria-label={`Открыть ${a.title}`} tabIndex={-1}>
+                      <CardCover a={a} />
+                      {view === "grid" && (
+                        <span className="shelf-cover-cta" aria-hidden="true">
+                          Открыть <ArrowUpRight />
+                        </span>
+                      )}
+                    </a>
+                    <div className="shelf-card-body">
+                      <h3>
+                        <a href={href} onClick={go}>{a.title}</a>
+                      </h3>
+                      <div className="shelf-card-meta">
+                        <span className="shelf-card-access" title={accessLabel(a)}>
+                          {isLinked(a) ? <Users /> : <LockKeyhole />}
+                          {accessLabel(a)}
+                        </span>
+                        <span className="shelf-card-kind">
+                          {kindOf(a.revision)} · v{a.revision.number} · {date(a.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shelf-card-actions">
+                      <a className="shelf-card-open" href={href} onClick={go}>
+                        Открыть <ArrowUpRight />
+                      </a>
+                      {menu}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {cursor && !active && (
+              <div className="shelf-more">
+                <Button busy={loadingMore} onClick={loadMore}>
+                  Показать ещё
+                </Button>
               </div>
             )}
-            <div className={view === "grid" ? "gallery" : "file-list"}>
-              {items.map((a) => (
-                <a
-                  className="artifact-card"
-                  aria-label={`Открыть ${a.title}`}
-                  key={a.id}
-                  href={`/works/${a.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    open(a.id);
-                  }}
-                >
-                  <div className="cover">
-                    <Preview revision={a.revision} compact />
-                  </div>
-                  <div className="card-details">
-                    <h3>{a.title}</h3>
-                    <p>
-                      {isImage(a.revision) ? <ImageIcon /> : <FileText />}
-                      <span>
-                        {kindOf(a.revision)} · v{a.revision.number}
-                      </span>
-                      <span className="card-date">{date(a.updatedAt)}</span>
-                    </p>
-                  </div>
-                  <div className="shelf-card-footer">
-                    <span className="card-access">
-                      {a.share &&
-                      ["active", "behind"].includes(a.share.status) ? (
-                        <LinkIcon />
-                      ) : (
-                        <LockKeyhole />
-                      )}
-                      <span>{status(a)}</span>
-                    </span>
-                    <span className="shelf-card-open">
-                      Открыть <ArrowUpRight />
-                    </span>
-                  </div>
-                </a>
-              ))}
-            </div>
-            {cursor && (
-              <Button
-                className="load-more"
-                busy={loadingMore}
-                onClick={loadMore}
-              >
-                Показать ещё
-              </Button>
+            {cursor && active && (
+              <p className="shelf-more-note">
+                Фильтр действует на загруженные работы.{" "}
+                <button type="button" className="text-button" onClick={loadMore} disabled={loadingMore}>
+                  Загрузить ещё
+                </button>
+              </p>
             )}
           </>
         ) : (
-          <div className="empty">
-            <div className="empty-icon">
-              {query ? <Search /> : <FolderIcon />}
-            </div>
+          <div className="shelf-empty">
+            <div className="empty-icon">{query ? <Search /> : <FolderIcon />}</div>
             <h2>
               {query
                 ? "Ничего не нашлось"
                 : activeFolder
-                  ? "Первая работа в этой папке"
+                  ? "В этой папке пока пусто"
                   : "Сохраните то, к чему хочется вернуться"}
             </h2>
             <p>
@@ -250,29 +321,24 @@ export function ShelfPage({
                 ? "Попробуйте другое название."
                 : activeFolder
                   ? "Загрузите файл сюда или перенесите сохранённую работу через её меню «Название и папка»."
-                  : "Отчёт, заметку или страницу из чата. Загрузите файл — он останется на вашей полке вместе с новыми версиями."}
+                  : "Отчёт, заметку или страницу из чата. Она останется на вашей полке вместе с новыми версиями, а ссылку вы включите сами."}
             </p>
-            {query && (
+            {query ? (
               <Button onClick={() => setQuery("")}>Сбросить поиск</Button>
-            )}
-            {!query && (
+            ) : (
               <>
                 <div className="button-row">
-                  <LinkButton variant="primary" href={folderId ? `/bring?folder=${encodeURIComponent(folderId)}` : "/bring"}>
-                    <LinkIcon />
-                    Сохранить работу
-                  </LinkButton>
-                  <Button onClick={() => setPanel("upload")}>
-                    <Upload />
-                    Загрузить файл с компьютера
+                  <Button variant="primary" onClick={() => setPanel("upload")}>
+                    <FileUp /> Загрузить файл
                   </Button>
+                  <LinkButton href={bringHref}>
+                    <LinkIcon /> Сохранить по ссылке
+                  </LinkButton>
                 </div>
-                <a className="login-explore" href="/settings/agents">
-                  <PlugZap /> Подключить агента
-                </a>
-                <a className="login-explore" href="/discover">
-                  <Compass /> Посмотреть публичные примеры
-                </a>
+                <div className="shelf-empty-links">
+                  <a href="/settings/agents"><Bot /> Подключить агента</a>
+                  <a href="/discover"><Compass /> Посмотреть примеры</a>
+                </div>
               </>
             )}
           </div>

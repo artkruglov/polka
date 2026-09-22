@@ -1,5 +1,5 @@
-import {Tabs} from "../../shared/ui/Tabs.tsx";
-import {ActionMenu} from "../../shared/ui/ActionMenu.tsx";
+import { Tabs } from "../../shared/ui/Tabs.tsx";
+import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import React from "react";
 import { Badge, Button } from "../../shared/ui/controls.tsx";
 import {
@@ -11,9 +11,10 @@ import {
   Check,
   Download,
   FileText,
+  Folder as FolderIcon,
   Image as ImageIcon,
   Sparkles,
-  Share2,
+  Ellipsis,
 } from "lucide-react";
 import type {
   Artifact,
@@ -21,6 +22,7 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import {
   date,
+  dateTime,
   size,
   status,
   kindOf,
@@ -43,6 +45,8 @@ type Props = {
   setPanel: (value: ReaderAction) => void;
   preview: React.ReactNode;
   onDownload: () => void;
+  /** The page's «На весь экран» targets the stage. */
+  stageRef?: React.Ref<HTMLElement>;
 };
 /** Read-only composition. The page owns fetching, mutations and asynchronous races. */
 export function ArtifactReader({
@@ -57,112 +61,125 @@ export function ArtifactReader({
   setPanel,
   preview,
   onDownload,
+  stageRef,
 }: Props) {
   const profile = profileView(work.revision);
   const linked =
     !!work.share && ["active", "behind"].includes(work.share.status);
   const KindIcon = isImage(shown) ? ImageIcon : FileText;
+  const plainText = shown.mime === "text/plain" && !work.trashedAt;
   return (
     <>
-      <div className="work-heading" aria-label={`${folderName} · ${work.title}`}>
-        <div className="work-heading-start">
-          {(work.trashedAt || shown.mime !== "text/plain") && (
-            <h1>{work.title}</h1>
-          )}
-          <div className="meta">
-            <Badge tone={linked ? "success" : "neutral"}>
-              {linked ? <LinkIcon /> : <LockKeyhole />}
-              {status(work)}
-            </Badge>
-            <span>
-              {work.trashedAt
-                ? "В корзине · только скачивание"
-                : `Просмотр · v${shown.number}`}
-            </span>
-          </div>
+      <header className={`work-heading${plainText ? " work-heading--quiet" : ""}`} aria-label={`${folderName} · ${work.title}`}>
+        <span className="eyebrow">
+          {work.trashedAt
+            ? "В корзине"
+            : work.revision.mime === "text/html" && profile
+              ? profile.label
+              : kindOf(shown)}
+        </span>
+        {!plainText && <h1>{work.title}</h1>}
+        <div className="work-meta">
+          <Badge tone={linked ? "accent" : "neutral"}>
+            {linked ? <LinkIcon /> : <LockKeyhole />}
+            {status(work)}
+          </Badge>
+          <span>
+            {work.trashedAt
+              ? "Только скачивание"
+              : `v${shown.number} · ${date(shown.createdAt)}`}
+          </span>
+          <span>{kindOf(shown)} · {size(shown.size)}</span>
         </div>
-        {!work.trashedAt && (
-          <div className="button-row">
-            <Button onClick={()=>setPanel("agent-context")}>
-              <Sparkles />
-              Скопировать для агента
-            </Button>
-            <Button onClick={() => setPanel("version")}>
-              <Upload />
-              Новая версия
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => setPanel("share")}
-              disabled={!profile?.linkable && !work.share}
-              title={profile?.linkable ? undefined : profile?.text}
-            >
-              <Share2 />
-              Поделиться
-            </Button>
-            <ActionMenu items={[
-              {id:"metadata",label:"Название и папка",onSelect:()=>setPanel("metadata")},
-              {id:"trash",label:"В корзину",icon:<Trash2/>,onSelect:()=>setPanel("trash")},
-            ]}/>
-
-          </div>
-        )}
-      </div>
+      </header>
       {!work.trashedAt && work.revision.mime === "text/html" && profile && (
-        <p className="history-note" role="note">
-          <strong>{profile.label}.</strong> {profile.text}
+        <p className="work-profile" role="note">
+          {profile.text}
         </p>
       )}
-      <Tabs label="Материал и версии" value={history?"history":"material"} onChange={value=>setHistory(value==="history")} items={[
-        {id:"material",label:"Материал"},
-        {id:"history",label:<><Clock3/>Версии <span>{revisions.length}</span></>},
-      ]} trailing={<span className="muted">{kindOf(shown)} · {size(shown.size)}</span>}>
-      {history && (
-        <div className="reader-versions" aria-label="Версии материала">
-          {revisions.map((r) => (
-            <Button
-              key={r.id}
-              aria-pressed={shown.id === r.id}
-              onClick={() => setViewed(r)}
-            >
-              <span>
-                Версия {r.number}
-                {work.share?.revisionId === r.id &&
-                  ["active", "behind"].includes(work.share.status) && (
-                    <small>по ссылке</small>
-                  )}
-              </span>
-              <small>{date(r.createdAt)}</small>
-              {shown.id === r.id && <Check />}
-            </Button>
-          ))}
-        </div>
-      )}
-      {viewed && viewed.id !== work.revision.id && (
-        <p className="history-note">
-          Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не
-          изменяются.
-          <Button variant="quiet" onClick={() => setViewed(null)}>
-            К текущей версии
-          </Button>
-        </p>
-      )}
-      <section className="stage" data-kind={shown.mime === "text/plain" ? "text" : isImage(shown) ? "image" : "page"}>
-        {work.trashedAt ? (
-          <div className="preview-error">
-            Работа в корзине. Просмотр отключён; версии и оригиналы доступны для
-            скачивания.
+      <Tabs
+        label="Материал и версии"
+        value={history ? "history" : "material"}
+        onChange={(value) => setHistory(value === "history")}
+        items={[
+          { id: "material", label: "Материал" },
+          { id: "history", label: <><Clock3 />Версии <span>{revisions.length}</span></> },
+        ]}
+        trailing={
+          !work.trashedAt ? (
+            <div className="work-actions">
+              <Button onClick={() => setPanel("agent-context")}>
+                <Sparkles />
+                <span>Скопировать для агента</span>
+              </Button>
+              <Button onClick={() => setPanel("version")}>
+                <Upload />
+                <span>Новая версия</span>
+              </Button>
+              <ActionMenu
+                label="Ещё действия"
+                icon={<Ellipsis />}
+                items={[
+                  { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => setPanel("metadata") },
+                  { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => setPanel("trash") },
+                ]}
+              />
+            </div>
+          ) : undefined
+        }
+      >
+        {history && (
+          <div className="reader-versions" aria-label="Версии материала">
+            {revisions.map((r) => (
+              <Button
+                key={r.id}
+                aria-pressed={shown.id === r.id}
+                onClick={() => setViewed(r)}
+              >
+                <span>
+                  Версия {r.number}
+                  {work.share?.revisionId === r.id &&
+                    ["active", "behind"].includes(work.share.status) && (
+                      <small>по ссылке</small>
+                    )}
+                </span>
+                <small>{date(r.createdAt)}</small>
+                {shown.id === r.id && <Check />}
+              </Button>
+            ))}
           </div>
-        ) : (
-          preview
         )}
-      </section>
+        {viewed && viewed.id !== work.revision.id && (
+          <p className="history-note" role="status">
+            Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не
+            изменяются.
+            <Button variant="quiet" onClick={() => setViewed(null)}>
+              К текущей версии
+            </Button>
+          </p>
+        )}
+        <section
+          className="stage"
+          ref={stageRef}
+          data-kind={shown.mime === "text/plain" ? "text" : isImage(shown) ? "image" : "page"}
+        >
+          {work.trashedAt ? (
+            <div className="preview-error">
+              Работа в корзине. Просмотр отключён; версии и оригиналы доступны для
+              скачивания.
+            </div>
+          ) : (
+            preview
+          )}
+        </section>
       </Tabs>
-      <div className="work-foot">
+      <footer className="work-foot">
         <span className="work-foot-file">
-          <KindIcon />
-          {kindOf(shown)} · {size(shown.size)}
-          <em>{shown.filename}</em>
+          <Clock3 />
+          <span>Сохранённая версия · {dateTime(shown.createdAt)}</span>
+          <em>
+            <KindIcon /> {shown.filename} · {size(shown.size)}
+          </em>
         </span>
         <div className="work-foot-actions">
           <Button variant="quiet" onClick={onDownload}>
@@ -177,7 +194,7 @@ export function ArtifactReader({
             </Button>
           )}
         </div>
-      </div>
+      </footer>
     </>
   );
 }

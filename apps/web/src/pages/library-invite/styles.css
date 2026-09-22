@@ -1,5 +1,4 @@
-.library-invite-page { max-width: 560px; margin: 12vh auto; padding: 0 24px; }
-.library-invite-page h1 { margin: 12px 0 16px; }
-.library-invite-page p { line-height: 1.6; }
-.library-invite-page .ui-button { margin-top: 12px; }
-@media (max-width: 560px) { .library-invite-page { margin: 8vh auto; padding: 0 18px; } }
+.library-invite-page { display: grid; gap: 16px; justify-items: start; width: 100%; max-width: 560px; margin: 0 auto; padding: 64px var(--gutter) 96px; }
+.library-invite-page h1 { font-size: clamp(30px, 3.4vw, 40px); }
+.library-invite-page p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+@media (max-width: 760px) { .library-invite-page { padding: 32px var(--gutter-mobile) 48px; } }

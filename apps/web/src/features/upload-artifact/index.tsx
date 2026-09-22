@@ -1,4 +1,5 @@
-import { Button, TextAreaField, TextField, SelectField } from "../../shared/ui/controls.tsx";
+import "./styles.css";
+import { Button, Segmented, TextAreaField, TextField, SelectField } from "../../shared/ui/controls.tsx";
 import React, { useRef, useState } from "react";
 import { ArrowUpRight, Upload } from "lucide-react";
 import type {
@@ -97,28 +98,20 @@ export function UploadPanel({
             ? "Отправленная ссылка останется на прежней версии. Обновить её можно отдельно после просмотра."
             : "Сначала работу видите только вы. Поделиться ссылкой можно после сохранения."}
         </p>
-        <div className="segmented">
-          <Button
-            aria-pressed={mode === "file"}
-            onClick={() => {
-              setMode("file");
-              reset();
-            }}
-            disabled={busy}
-          >
-            Загрузить файл
-          </Button>
-          <Button
-            aria-pressed={mode === "text"}
-            onClick={() => {
-              setMode("text");
-              reset();
-            }}
-            disabled={busy}
-          >
-            Вставить текст
-          </Button>
-        </div>
+        <Segmented
+          label="Что сохранить"
+          value={mode}
+          onChange={(next) => {
+            if (busy) return;
+            setMode(next);
+            reset();
+          }}
+          options={[
+            { id: "file", label: "Загрузить файл" },
+            { id: "text", label: "Вставить текст" },
+          ]}
+          wide
+        />
         <TextField label="Название"
             value={title}
             onChange={(e) => {

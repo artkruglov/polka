@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { Check, Download, FileCode2, PlugZap } from "lucide-react";
 import type { AgentContext } from "../../../../../packages/contracts/agent-context.ts";
 import { request } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import {
+  Badge,
   Button,
   LinkButton,
   SelectField,
@@ -11,6 +13,7 @@ import {
 } from "../../shared/ui/controls.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import "./styles.css";
+/** «Для вашего агента»: the copyable context for one version, docked to the right. */
 export function AgentContextPanel({
   artifactId,
   revisionId,
@@ -54,28 +57,39 @@ export function AgentContextPanel({
     context !== null &&
     context.availableContent.length > 0 &&
     context.availableContent.every((file) => file.mime.startsWith("image/"));
+  const files = context?.availableContent.length ?? 0;
+  const included = context
+    ? [
+        files > 0 && (imageOnly ? `Визуальный пример · ${files} ${files === 1 ? "файл" : "файла"}` : `Исходники · ${files} ${files === 1 ? "файл" : files < 5 ? "файла" : "файлов"}`),
+        context.rules && "Правила оформления и использования",
+        context.questions && "Вопросы, которые агент уточнит",
+        context.releaseId && "Закреплённый выпуск шаблона",
+      ].filter((item): item is string => !!item)
+    : [];
   return (
-    <Dialog title="Скопировать для агента" onClose={onClose}>
+    <Dialog
+      variant="panel"
+      eyebrow="Для вашего агента"
+      title={context ? context.title : "Скопировать для агента"}
+      onClose={onClose}
+    >
       <div className="dialog-body agent-context-panel">
         <ErrorNotice error={error} />
         {!context && !error && <p role="status">Получаем выбранную версию…</p>}
         {context && (
           <>
-            <h3>
-              {context.title} · v{context.revisionNumber}
-            </h3>
+            <div className="agent-context-pills">
+              <Badge tone="accent">Версия {context.revisionNumber}</Badge>
+              {context.releaseId && <Badge>Шаблон</Badge>}
+            </div>
+            <p className="agent-context-lead">
+              {context.summary || "Возьмите за основу в своём чате: задачу и новые материалы опишите там."}
+            </p>
             {imageOnly && (
               <p className="fine">
-                Визуальный пример · доступны только изображения. Это ориентир по
-                внешнему виду, а не редактируемый стиль или набор ресурсов.
+                Доступны только изображения. Это ориентир по внешнему виду, а не
+                редактируемый стиль или набор ресурсов.
               </p>
-            )}
-            <p>
-              {context.summary ||
-                "Добавьте материал в текущий чат. Задачу и другие источники опишите там."}
-            </p>
-            {context.releaseId && (
-              <p className="fine">Шаблон · выпуск закреплён за этой версией</p>
             )}
             <SelectField
               label="Как использовать"
@@ -86,23 +100,36 @@ export function AgentContextPanel({
               <option value="source">Использовать как источник</option>
               <option value="style">{imageOnly ? "Использовать как визуальный пример" : "Взять оформление"}</option>
             </SelectField>
-            <CopyText
-              key={context.clipboardText}
-              label="Текст для агента"
-              value={context.clipboardText}
-              rows={7}
-              collapsible
-              buttonLabel="Скопировать для агента"
-              successText="Скопировано. Вставьте в чат своего агента"
-            />
-            <p className="fine">
-              Копирование не запускает агента и не меняет доступ. Для чтения
-              через MCP нужно разрешение «Читать исходники и шаблоны».
-            </p>
-            <details>
+            {included.length > 0 && (
+              <section className="agent-context-section">
+                <h3>Вместе с материалом</h3>
+                <ul className="ui-checklist">
+                  {included.map((item) => (
+                    <li key={item}>
+                      <span><Check /></span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <section className="agent-context-section agent-context-text">
+              <h3>Текст для агента</h3>
+              <CopyText
+                key={context.clipboardText}
+                label="Текст для агента"
+                value={context.clipboardText}
+                rows={6}
+                buttonVariant="primary"
+                buttonLabel="Скопировать для агента"
+                successText="Скопировано. Вставьте в чат своего агента"
+              />
+              <p className="fine">Вставьте в чат и опишите, что нужно сделать. Копирование не запускает агента и не открывает доступ к материалу.</p>
+            </section>
+            <details className="agent-context-files">
               <summary>
-                {imageOnly ? "Визуальный пример" : "Состав и отдельные файлы"} ·{" "}
-                {context.availableContent.length}
+                <FileCode2 />
+                {imageOnly ? "Визуальный пример" : "Состав и отдельные файлы"} · {files}
               </summary>
               <ul>
                 {context.availableContent.map((f) => (
@@ -120,88 +147,88 @@ export function AgentContextPanel({
                 ))}
               </ul>
             </details>
-            <section>
-              <h3>Агент не подключён к Полке?</h3>
-              <p>
-                Скачайте пакет и приложите к чату. Если агент не читает ZIP,
-                распакуйте его или скачайте нужные файлы выше.
-              </p>
-              <LinkButton href={context.sourceAccess.packageUrl} download>
-                Скачать пакет
-              </LinkButton>{" "}
-              <LinkButton href="/settings/agents" variant="quiet">
-                Подключить агента
-              </LinkButton>
-              <p className="fine">
-                Отзыв доступа не удалит уже скачанные копии.
-              </p>
-            </section>
-            <details>
-              <summary>Правила и вопросы шаблона</summary>
-              <p className="context-pre">
-                {context.rules || "Опубликованных правил нет."}
-              </p>
-              <p className="context-pre">{context.questions}</p>
-            </details>
-            {!context.releaseId && (
-              <Button onClick={() => setEdit(!edit)}>
-                Сохранить эту версию как шаблон
-              </Button>
+            {(context.rules || context.questions) && (
+              <details className="agent-context-files">
+                <summary>Правила и вопросы шаблона</summary>
+                <p className="context-pre">{context.rules || "Опубликованных правил нет."}</p>
+                <p className="context-pre">{context.questions}</p>
+              </details>
             )}
-            {edit && !context.releaseId && (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (busy) return;
-                  setBusy(true);
-                  setError("");
-                  try {
-                    await request(
-                      `/artifacts/${artifactId}/template-releases`,
-                      { revisionId, summary, rules, questions },
-                    );
-                    setEdit(false);
-                    setPurpose("");
-                    setRefresh((x) => x + 1);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <p>
-                  Закрепите правила для повторного использования. Шаблон
-                  останется в вашей Полке; публичная ссылка не создаётся.
-                  Правила выпуска неизменяемы — для изменений нужна новая версия
-                  материала.
-                </p>
-                <TextField
-                  label="Для каких случаев"
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  maxLength={600}
-                  required
-                />
-                <TextAreaField
-                  label="Правила оформления и использования"
-                  value={rules}
-                  onChange={(e) => setRules(e.target.value)}
-                  maxLength={6000}
-                  required
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Что агенту уточнить, если данных нет в чате"
-                  value={questions}
-                  onChange={(e) => setQuestions(e.target.value)}
-                  maxLength={3000}
-                  rows={3}
-                />
-                <Button type="submit" busy={busy} variant="primary">
-                  Закрепить шаблон v{context.revisionNumber}
+            <section className="agent-context-section agent-context-offline">
+              <h3>Агент не подключён к Полке?</h3>
+              <p>Скачайте пакет и приложите его к сообщению. Если агент не читает ZIP, распакуйте его или скачайте нужные файлы выше.</p>
+              <div className="agent-context-offline-actions">
+                <LinkButton href={context.sourceAccess.packageUrl} download className="ui-button--block">
+                  <Download /> Скачать пакет
+                </LinkButton>
+                <LinkButton href="/settings/agents" variant="quiet" className="ui-button--block">
+                  <PlugZap /> Подключить агента
+                </LinkButton>
+              </div>
+              <p className="fine">Для чтения через MCP нужно разрешение «Читать исходники и шаблоны». Отзыв доступа не удалит уже скачанные копии.</p>
+            </section>
+            {!context.releaseId && (
+              <section className="agent-context-section">
+                <Button onClick={() => setEdit(!edit)} aria-expanded={edit}>
+                  Сохранить эту версию как шаблон
                 </Button>
-              </form>
+                {edit && (
+                  <form
+                    className="agent-context-form"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (busy) return;
+                      setBusy(true);
+                      setError("");
+                      try {
+                        await request(
+                          `/artifacts/${artifactId}/template-releases`,
+                          { revisionId, summary, rules, questions },
+                        );
+                        setEdit(false);
+                        setPurpose("");
+                        setRefresh((x) => x + 1);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    <p className="fine">
+                      Закрепите правила для повторного использования. Шаблон
+                      останется в вашей Полке; публичная ссылка не создаётся.
+                      Правила выпуска неизменяемы — для изменений нужна новая версия
+                      материала.
+                    </p>
+                    <TextField
+                      label="Для каких случаев"
+                      value={summary}
+                      onChange={(e) => setSummary(e.target.value)}
+                      maxLength={600}
+                      required
+                    />
+                    <TextAreaField
+                      label="Правила оформления и использования"
+                      value={rules}
+                      onChange={(e) => setRules(e.target.value)}
+                      maxLength={6000}
+                      required
+                      rows={4}
+                    />
+                    <TextAreaField
+                      label="Что агенту уточнить, если данных нет в чате"
+                      value={questions}
+                      onChange={(e) => setQuestions(e.target.value)}
+                      maxLength={3000}
+                      rows={3}
+                    />
+                    <Button type="submit" busy={busy} variant="primary">
+                      Закрепить шаблон v{context.revisionNumber}
+                    </Button>
+                  </form>
+                )}
+              </section>
             )}
             <LinkButton
               href={
@@ -218,9 +245,6 @@ export function AgentContextPanel({
         {!context && error && (
           <Button onClick={() => setRefresh((x) => x + 1)}>Повторить</Button>
         )}
-      </div>
-      <div className="dialog-footer">
-        <Button onClick={onClose}>Закрыть</Button>
       </div>
     </Dialog>
   );
