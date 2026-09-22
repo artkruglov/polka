@@ -1,25 +1,40 @@
-FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS build
-
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
+
+# Web bundle only: full dev toolchain, nothing from this stage but dist/ ships.
+FROM base AS web
+RUN npm ci --no-audit --no-fund
+COPY apps/web ./apps/web
+COPY packages ./packages
 RUN npm run build
+
+# Production dependencies only. tsx is the runtime entrypoint; esbuild's
+# install script is the one allowed (it validates the platform binary that
+# the runtime builder and tsx use).
+FROM base AS deps
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+ && npm rebuild esbuild \
+ && npm cache clean --force
 
 FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/apps ./apps
-COPY --from=build --chown=node:node /app/packages ./packages
-COPY --from=build --chown=node:node /app/scripts ./scripts
-COPY --from=build --chown=node:node /app/deploy/migrations ./deploy/migrations
-COPY --from=build --chown=node:node /app/dist ./dist
+# Everything is root-owned and read-only for the node user that runs the app.
+COPY package.json package-lock.json LICENSE ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/server ./apps/server
+COPY packages ./packages
+# Only server-side operator scripts (.dockerignore drops tests and dev tools).
+COPY scripts ./scripts
+COPY deploy/migrations ./deploy/migrations
 # Operator publication verifies these original sources before registration.
-COPY --from=build --chown=node:node /app/content/editorial ./content/editorial
-COPY --from=build --chown=node:node /app/LICENSE ./LICENSE
+COPY content/editorial ./content/editorial
+COPY --from=web /app/dist ./dist
+# The runtime builder starts esbuild through this memory-limiting wrapper.
+RUN chmod 0755 apps/server/esbuild-limited.sh \
+ && node -e "require.resolve('@esbuild/linux-' + (process.arch === 'arm64' ? 'arm64' : 'x64') + '/bin/esbuild')"
 
 USER node
 EXPOSE 4390
