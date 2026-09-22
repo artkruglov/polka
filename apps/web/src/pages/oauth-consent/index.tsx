@@ -94,7 +94,12 @@ export function OAuthConsent() {
       const csrf = await client.agentConnections.csrf();
       const result = await oauthConsent.decide(
         decision === "approve"
-          ? { request: state.details.requestId, decision, scopes }
+          ? {
+              request: state.details.requestId,
+              decision,
+              // «Сведения и статус» is shown as always on, so it is always granted.
+              scopes: [...new Set<AgentScope>(["context", ...scopes])],
+            }
           : { request: state.details.requestId, decision },
         csrf.csrfToken,
       );
@@ -191,7 +196,7 @@ function ConsentForm({
     <section className="oauth-card" aria-labelledby="oauth-title">
       <span className="eyebrow">Подключение к Полке</span>
       <h1 id="oauth-title">
-        Разрешить доступ к вашей Полке для{" "}
+        Разрешить доступ к вашей полке для{" "}
         <span className="oauth-host">{details.client.redirectHost}</span>?
       </h1>
       <p className="oauth-lead">
@@ -201,7 +206,7 @@ function ConsentForm({
       </p>
       {accountName && (
         <p className="oauth-account">
-          Полка: <strong>{accountName}</strong>
+          Аккаунт: <strong>{accountName}</strong>
         </p>
       )}
       {details.replaces && (
@@ -238,12 +243,12 @@ function ConsentForm({
       <p className="oauth-terms">
         <ShieldCheck size={17} />
         <span>
-          Разрешения действуют на всю Полку. Приложение получает ключ на{" "}
+          Разрешения действуют на всю вашу полку. Приложение получает ключ на{" "}
           {details.accessMinutes} минут и само продлевает его, пока пользуется
           Полкой; если оно не обращается {details.refreshDays} дней, доступ
           закроется, а без повторного подтверждения — не позже чем через год.
           Отозвать доступ можно в любой момент в разделе «Агенты». Уже выданные
-          ссылки при отзыве не закрываются — их закрывают на Полке.
+          ссылки при отзыве не закрываются — их закрывают на вашей полке.
         </span>
       </p>
       {error && <Notice tone="error">{error}</Notice>}

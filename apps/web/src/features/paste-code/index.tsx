@@ -2,19 +2,20 @@ import "./styles.css";
 import React, { useEffect, useRef, useState } from "react";
 import { Check, CircleAlert, LockKeyhole, LogIn } from "lucide-react";
 import type {
-  Account,
   Artifact,
   Receipt,
 } from "../../../../../packages/contracts/index.ts";
-import { client, saveUpload, type PendingUpload } from "../../shared/api/client.ts";
 import { size } from "../../entities/artifact/format.ts";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { useFolders } from "../../entities/folder/useFolders.ts";
-import { Button, LinkButton, SelectField, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
+import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
+import { useSaveUpload } from "../../entities/artifact/useSaveUpload.ts";
+import { SavedReceipt } from "../../entities/artifact/SavedReceipt.tsx";
+import { Button, LinkButton, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
-import { Status } from "../../shared/ui/Status.tsx";
 import { describePaste } from "./model.ts";
 
-export const PASTE_CODE_LOGIN = `/signup?next=${encodeURIComponent("/bring#paste")}`;
+const PASTE_CODE_LOGIN = `/signup?next=${encodeURIComponent("/bring#paste")}`;
 
 /**
  * For people without a connector: paste the artifact's code copied from the
@@ -22,13 +23,11 @@ export const PASTE_CODE_LOGIN = `/signup?next=${encodeURIComponent("/bring#paste
  * finalize); the page composes the receipt through `renderResult`.
  */
 export function PasteCode({
-  account,
   initialFolderId = "",
   renderResult,
   embedded = false,
   titled = true,
 }: {
-  account: Account | null | undefined;
   initialFolderId?: string;
   renderResult: (
     saved: { receipt: Receipt; work: Artifact },
@@ -39,17 +38,15 @@ export function PasteCode({
   /** False when a surrounding tab already names the card: the heading stays for screen readers. */
   titled?: boolean;
 }) {
+  const { account, error: accountError, retry: retryAccount } = useAccountState();
   const folders = useFolders(account?.id);
   const [folderId, setFolderId] = useState(initialFolderId);
   const [code, setCode] = useState(""),
-    [title, setTitle] = useState(""),
-    [stage, setStage] = useState(""),
-    [error, setError] = useState(""),
-    [saved, setSaved] = useState<{ receipt: Receipt; work: Artifact } | null>(null);
-  const operation = useRef<PendingUpload | null>(null),
-    suggested = useRef(""),
+    [title, setTitle] = useState("");
+  const upload = useSaveUpload();
+  const suggested = useRef(""),
     card = useRef<HTMLElement>(null),
-    busy = !!stage;
+    busy = upload.busy;
   const pasted = describePaste(code);
 
   useEffect(() => {
@@ -58,8 +55,7 @@ export function PasteCode({
 
   const edit = (next: string) => {
     setCode(next);
-    operation.current = null;
-    setError("");
+    upload.invalidate();
     const previous = suggested.current,
       proposal = describePaste(next)?.title ?? "";
     suggested.current = proposal;
@@ -69,37 +65,24 @@ export function PasteCode({
 
   const save = async () => {
     if (!pasted || !title.trim())
-      return setError("Вставьте код и укажите название.");
-    if (pasted.tooLarge) return setError("Код больше 5 МБ.");
-    setError("");
-    operation.current ??= {
-      file: new Blob([code], { type: pasted.mime }),
-      key: crypto.randomUUID(),
-    };
-    try {
-      const receipt = await saveUpload(
-        operation.current,
-        { title: title.trim(), filename: pasted.filename, folderId: folderId || null },
-        setStage,
-      );
-      setSaved({ receipt, work: await client.artifact(receipt.artifactId) });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setStage("");
-    }
+      return upload.setError("Вставьте код и укажите название.");
+    if (pasted.tooLarge) return upload.setError("Код больше 5 МБ.");
+    await upload.save(new Blob([code], { type: pasted.mime }), {
+      title: title.trim(),
+      filename: pasted.filename,
+      folderId: folderId || null,
+    });
   };
 
   const restart = () => {
-    operation.current = null;
+    upload.reset();
     suggested.current = "";
     setCode("");
     setTitle("");
-    setSaved(null);
-    setError("");
   };
 
   const guest = account === null;
+  const saved = upload.saved;
 
   return (
     <section
@@ -109,15 +92,23 @@ export function PasteCode({
       aria-labelledby={embedded ? undefined : "paste-code-title"}
       aria-label={embedded ? "Вставить код артефакта" : undefined}
     >
-      {saved ? (
-        renderResult(saved, restart)
+      {saved?.work ? (
+        renderResult({ receipt: saved.receipt, work: saved.work }, restart)
+      ) : saved ? (
+        <SavedReceipt
+          receipt={saved.receipt}
+          error={upload.error}
+          busy={busy}
+          onShow={() => void upload.showSaved(saved.receipt)}
+          onRestart={restart}
+          restartLabel="Вставить другой код"
+        />
       ) : (
         <div className="bring-entry paste-code-entry">
           {!embedded && (
             <>
               <div className={titled ? "paste-code-head" : "paste-code-head sr-only"}>
                 <h2 id="paste-code-title">Вставить код</h2>
-                <Status is="real" />
               </div>
               <p className="paste-code-hint">
                 Нет файла? В Claude или ChatGPT откройте артефакт, нажмите
@@ -162,41 +153,30 @@ export function PasteCode({
               value={title}
               maxLength={160}
               disabled={busy}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                upload.invalidate();
+              }}
             />
           )}
           {account && (
-            <SelectField
-              label="Куда сохранить"
+            <FolderSelect
+              folders={folders}
               value={folderId}
-              disabled={busy || folders.loading}
-              error={folders.error}
-              onChange={(e) => {
-                setFolderId(e.target.value);
-                operation.current = null;
+              disabled={busy}
+              onChange={(next) => {
+                setFolderId(next);
+                upload.invalidate();
               }}
-            >
-              <option value="">Моя Полка — без папки</option>
-              {folderId && !folders.items.some((f) => f.id === folderId) && (
-                <option value={folderId}>
-                  {folders.loading ? "Проверяем выбранную папку…" : "Выбранная папка недоступна"}
-                </option>
-              )}
-              {folders.items.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </SelectField>
+            />
           )}
-          {folders.error && <Button onClick={folders.retry}>Загрузить папки снова</Button>}
-          <ErrorNotice error={error} />
+          <ErrorNotice error={upload.error} />
           {guest ? (
             <div className="paste-code-login" role="note">
               <p>
                 {pasted
-                  ? "Код ещё не сохранён и никуда не отправлен. Сохранять можно только на свою Полку — войдите. После входа вернём сюда; код нужно будет вставить ещё раз."
-                  : "Сохранение идёт на вашу Полку, поэтому сначала нужен вход. После входа вернём сюда."}
+                  ? "Код ещё не сохранён и никуда не отправлен. Сохранять можно только на свою полку — войдите. После входа вернём сюда; код нужно будет вставить ещё раз."
+                  : "Сохранение идёт на вашу полку, поэтому сначала нужен вход. После входа вернём сюда."}
               </p>
               <div className="bring-actions">
                 <LinkButton
@@ -212,9 +192,16 @@ export function PasteCode({
               </div>
             </div>
           ) : account === undefined ? (
-            <p className="paste-code-hint" role="status">
-              Проверяем вход…
-            </p>
+            accountError ? (
+              <div className="bring-actions">
+                <ErrorNotice error={`Не удалось проверить вход. ${accountError}`} />
+                <Button onClick={retryAccount}>Проверить снова</Button>
+              </div>
+            ) : (
+              <p className="paste-code-hint" role="status">
+                Проверяем вход…
+              </p>
+            )
           ) : (
             <div className="bring-actions">
               <Button
@@ -224,8 +211,8 @@ export function PasteCode({
                 disabled={!pasted || pasted.tooLarge || busy}
               >
                 <LockKeyhole />{" "}
-                {stage ||
-                  (error && operation.current ? "Повторить сохранение" : "Сохранить на Полку")}
+                {upload.stage ||
+                  (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
               </Button>
             </div>
           )}

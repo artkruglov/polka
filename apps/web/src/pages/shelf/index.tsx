@@ -58,7 +58,7 @@ type Props = {
 
 const categories: Category[] = ["pages", "documents", "images", "other"];
 
-/** The cover a card shows: the material itself when it can be drawn, otherwise a typographic cover. */
+/** The cover a card shows: the work itself when it can be drawn, otherwise a typographic cover. */
 function CardCover({ a }: { a: Artifact }) {
   const r = a.revision;
   const drawable =
@@ -72,6 +72,56 @@ function CardCover({ a }: { a: Artifact }) {
       eyebrow={r.mime === "text/plain" ? "Заметка" : kindOf(r)}
       note={r.mime === "text/plain" ? undefined : "Просмотр недоступен"}
     />
+  );
+}
+
+/** True once the element comes near the viewport; covers below the fold load no bytes or iframes until then. */
+function useNearViewport<T extends Element>() {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (near || !node) return;
+    if (typeof IntersectionObserver !== "function") {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [near]);
+  return [ref, near] as const;
+}
+
+function CoverLink({
+  a,
+  href,
+  onClick,
+  cta,
+}: {
+  a: Artifact;
+  href: string;
+  onClick: (e: React.MouseEvent) => void;
+  cta: boolean;
+}) {
+  const [ref, near] = useNearViewport<HTMLAnchorElement>();
+  return (
+    <a ref={ref} className="shelf-cover" href={href} onClick={onClick} aria-label={`Открыть ${a.title}`} tabIndex={-1}>
+      {near ? <CardCover a={a} /> : <div className="placeholder" aria-hidden="true" />}
+      {cta && (
+        <span className="shelf-cover-cta" aria-hidden="true">
+          Открыть <ArrowUpRight />
+        </span>
+      )}
+    </a>
   );
 }
 
@@ -155,7 +205,7 @@ export function ShelfPage({
               <LinkButton href="/settings/agents">
                 <Bot /> Подключить агента
               </LinkButton>
-              <span>Агенты сами находят и сохраняют важное для вас</span>
+              <span>Агент сохранит работу на полку, когда вы попросите</span>
             </div>
           </form>
           <p className="shelf-hero-fine">
@@ -212,7 +262,7 @@ export function ShelfPage({
           </div>
         </div>
         {items.length > 0 && (
-          <div className="ui-chips shelf-chips" role="group" aria-label="Тип материала">
+          <div className="ui-chips shelf-chips" role="group" aria-label="Тип работы">
             <Chip pressed={active === null} onClick={() => setCategory(null)} count={items.length}>
               Все
             </Chip>
@@ -258,14 +308,7 @@ export function ShelfPage({
                 );
                 return (
                   <article className="shelf-card" key={a.id}>
-                    <a className="shelf-cover" href={href} onClick={go} aria-label={`Открыть ${a.title}`} tabIndex={-1}>
-                      <CardCover a={a} />
-                      {view === "grid" && (
-                        <span className="shelf-cover-cta" aria-hidden="true">
-                          Открыть <ArrowUpRight />
-                        </span>
-                      )}
-                    </a>
+                    <CoverLink a={a} href={href} onClick={go} cta={view === "grid"} />
                     <div className="shelf-card-body">
                       <h3>
                         <a href={href} onClick={go}>{a.title}</a>
@@ -290,16 +333,16 @@ export function ShelfPage({
                 );
               })}
             </div>
-            {cursor && !active && (
+            {cursor && !active && sort === "newest" && (
               <div className="shelf-more">
                 <Button busy={loadingMore} onClick={loadMore}>
                   Показать ещё
                 </Button>
               </div>
             )}
-            {cursor && active && (
+            {cursor && (active || sort !== "newest") && (
               <p className="shelf-more-note">
-                Фильтр действует на загруженные работы.{" "}
+                {active ? "Фильтр" : "Порядок"} действует на загруженные работы.{" "}
                 <button type="button" className="text-button" onClick={loadMore} disabled={loadingMore}>
                   Загрузить ещё
                 </button>

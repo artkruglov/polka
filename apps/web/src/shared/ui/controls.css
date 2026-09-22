@@ -159,7 +159,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .ui-badge--accent { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* Status ribbon (honest readiness markers) */
-.status-ribbon { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0 18px; padding: 10px 14px; list-style: none; border: 1px solid var(--line); border-radius: var(--radius-lg); font-size: var(--text-sm); }
 
 /* Password login shared by the login and signup routes. */
 .password-login { display: grid; gap: var(--space-4); }

@@ -2,11 +2,11 @@ import "./styles.css";
 import React from "react";
 import { ArrowUpRight, Bot, Link2, FileUp } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { useImportCapabilities } from "../../features/import-url/useImportCapabilities.ts";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 export function FirstSave() {
   const account = useAccount();
-  const imports = useImportCapabilities();
-  const canImport = imports.status === "ready" && imports.capabilities.enabled;
+  const imports = useCapabilities();
+  const canImport = imports.status === "ready" && imports.capabilities.urlImport;
   return (
     <AppShell current="bring" account={account}>
       <main className="start-main">
@@ -57,15 +57,15 @@ export function FirstSave() {
               <strong>Есть ссылка на работу?</strong>
               <p>
                 Сохраните копию поддерживаемой HTML-страницы и откройте её на
-                Полке.
+                своей полке.
               </p>
             </div>
             <ArrowUpRight />
           </a>
         ) : (
-          <p className="start-link-note">
+          <p className="start-link-note" role="status">
             {imports.status === "ready"
-              ? "Импорт по ссылке на этой Полке выключен: ссылки из Claude и ChatGPT сохраняйте экспортом в файл или через агента."
+              ? "Импорт по ссылке на этой Полке выключен: артефакты Claude и ChatGPT сохраняйте файлом или через агента."
               : imports.status === "failed"
                 ? "Доступность импорта по ссылке проверить не удалось; загрузка файла и агент работают."
                 : "Проверяем, доступен ли импорт по ссылке…"}

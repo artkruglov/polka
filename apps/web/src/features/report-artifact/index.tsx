@@ -3,6 +3,18 @@ import { Flag } from "lucide-react";
 import { client } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Button, TextAreaField, SelectField } from "../../shared/ui/controls.tsx";
+import {
+  REPORT_REASONS,
+  type ReportReason,
+} from "../../../../../packages/contracts/constants.ts";
+
+const reasonLabel: Record<ReportReason, string> = {
+  phishing: "Фишинг или обман",
+  malware: "Вредоносное содержимое",
+  personal_data: "Чужие личные данные",
+  illegal: "Незаконное содержимое",
+  other: "Другое",
+};
 export function ReportArtifactPanel({
   token,
   onClose,
@@ -13,9 +25,7 @@ export function ReportArtifactPanel({
   onSent: () => void;
 }) {
   const sending = useRef(false);
-  const [reportReason, setReportReason] = useState<
-    "phishing" | "malware" | "personal_data" | "illegal" | "other"
-  >("other");
+  const [reportReason, setReportReason] = useState<ReportReason>("other");
   const [reportComment, setReportComment] = useState("");
   const [reportError, setReportError] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
@@ -58,23 +68,23 @@ export function ReportArtifactPanel({
             disabled={reportBusy}
             value={reportReason}
             onChange={(event) =>
-              setReportReason(event.target.value as typeof reportReason)
+              setReportReason(event.target.value as ReportReason)
             }
           >
-            <option value="phishing">Фишинг или обман</option>
-            <option value="malware">Вредоносное содержимое</option>
-            <option value="personal_data">Чужие личные данные</option>
-            <option value="illegal">Незаконное содержимое</option>
-            <option value="other">Другое</option>
+            {REPORT_REASONS.map((reason) => (
+              <option key={reason} value={reason}>
+                {reasonLabel[reason]}
+              </option>
+            ))}
           </SelectField>
           <TextAreaField
- label="Комментарий (необязательно)"
-              value={reportComment}
-              onChange={(event) => setReportComment(event.target.value)}
-              maxLength={1000}
-              rows={4}
-              placeholder="Что нужно проверить?"
-            />
+            label="Комментарий (необязательно)"
+            value={reportComment}
+            onChange={(event) => setReportComment(event.target.value)}
+            maxLength={1000}
+            rows={4}
+            placeholder="Что нужно проверить?"
+          />
           <ErrorNotice error={reportError} />
         </div>
         <div className="dialog-footer">

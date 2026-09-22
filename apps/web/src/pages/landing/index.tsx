@@ -10,25 +10,25 @@ import {
   LockKeyhole,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { useImportCapabilities } from "../../features/import-url/useImportCapabilities.ts";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { Button, LinkButton } from "../../shared/ui/controls.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 
-export function NewLanding() {
+export function Landing() {
   const account = useAccount();
   const [retry, setRetry] = useState(0);
   const catalog = useEditorialList(retry);
-  const imports = useImportCapabilities();
-  const canImport = imports.status === "ready" && imports.capabilities.enabled;
+  const imports = useCapabilities();
+  const canImport = imports.status === "ready" && imports.capabilities.urlImport;
   const livePreview =
-    imports.status === "ready" ? imports.capabilities.livePreview : undefined;
+    imports.status === "ready" && imports.capabilities.livePreview;
   return (
     <AppShell current="landing" account={account} className="landing">
       <main className="landing-main">
         <section className="landing-hero">
-          <span className="eyebrow">Ваши артефакты. Своя полка.</span>
+          <span className="eyebrow">Ваши работы. Своя полка.</span>
           <h1>
             Сделали с агентом.
             <br />
@@ -47,7 +47,7 @@ export function NewLanding() {
                   type="url"
                   name="url"
                   required
-                  aria-label="Ссылка на артефакт"
+                  aria-label="Ссылка на страницу"
                   placeholder="Вставьте ссылку на публичную HTML-страницу"
                 />
                 <Button type="submit" variant="primary">
@@ -74,15 +74,15 @@ export function NewLanding() {
             </div>
           )}
 
-          <small className="landing-fine">
+          <small className="landing-fine" role="status">
             {imports.status === "loading"
               ? "Проверяем доступные способы сохранения…"
               : imports.status === "failed"
                 ? "Доступность импорта ссылки не удалось проверить. Загрузка файла и подключение агента работают."
                 : canImport
                   ? "По ссылке сохраняем самостоятельные публичные HTML-страницы. Для Claude и ChatGPT нужен экспорт файлом или передача файлов агентом."
-                  : "Агент сохраняет работы на Полку через MCP. Файлом можно сохранить HTML, текст или изображение до 5 МБ."}
-            {livePreview === true &&
+                  : "Агент сохраняет работы на вашу полку через MCP. Файлом можно сохранить HTML, текст или изображение до 5 МБ."}
+            {livePreview &&
               " Поддерживаемые интерактивные страницы открываются в изолированном просмотре."}
           </small>
         </section>
@@ -106,8 +106,8 @@ export function NewLanding() {
               n: "02",
               title: "Поделитесь",
               text: "Доступ по ссылке включается и отзывается за секунду. Получатель видит зафиксированную версию — без аккаунта.",
-              href: "/settings/agents",
-              cta: "Подключить агента",
+              href: account ? "/" : `/?login=1&next=${encodeURIComponent("/")}`,
+              cta: "Открыть мою полку",
             },
             {
               icon: <History />,
@@ -153,7 +153,7 @@ export function NewLanding() {
             </h2>
             <p>
               Полка — открытый код. Подключайте своего агента через MCP и
-              храните материалы на своей установке или в облаке. Размещение
+              храните работы на своей установке или в облаке. Размещение
               внутри компании требует отдельной настройки.
             </p>
           </div>
