@@ -25,7 +25,10 @@ export function createS3Store(config: {
       accessKeyId: config.accessKey,
       secretAccessKey: config.secretKey,
     },
-    // Some calls run while row locks are held; a stalled S3 must not hold them.
+    // Some calls run while the owner's rows are locked, so a stalled S3 holds
+    // those locks for up to maxAttempts × requestTimeout (60 s). Requests
+    // waiting on them get a retryable 503 after the pool's statement_timeout.
+    maxAttempts: 2,
     requestHandler: new NodeHttpHandler({
       connectionTimeout: 5_000,
       requestTimeout: 30_000,

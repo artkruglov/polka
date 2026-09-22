@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
-import { uuid } from "../../../packages/contracts/index.ts";
+import { MAX_TITLE, uuid } from "../../../packages/contracts/index.ts";
 import type { Actor } from "../artifacts.ts";
 import { lockActiveOwnerTenant } from "../owner-state.ts";
 import { Problem, missing } from "../errors.ts";
@@ -12,7 +12,7 @@ export const importRequestSchema = z
   .object({
     key: uuid,
     url: z.string().trim().min(1).max(2048),
-    title: z.string().trim().min(1).max(200).optional(),
+    title: z.string().trim().min(1).max(MAX_TITLE).optional(),
     folderId: uuid.optional(),
   })
   .strict();

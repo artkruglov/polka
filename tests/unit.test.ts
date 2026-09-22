@@ -226,6 +226,7 @@ test("zod-free contract constants match the contract module", async () => {
   const contracts = await import("../packages/contracts/index.ts");
   const constants = await import("../packages/contracts/constants.ts");
   assert.equal(constants.MAX_BYTES, contracts.MAX_BYTES);
+  assert.equal(constants.MAX_TITLE, contracts.MAX_TITLE);
   assert.deepEqual(constants.MIME, contracts.MIME);
   assert.deepEqual(constants.REPORT_REASONS, contracts.REPORT_REASONS);
   assert.deepEqual(constants.AGENT_SCOPES, contracts.AGENT_SCOPES);
