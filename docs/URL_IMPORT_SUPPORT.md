@@ -12,7 +12,7 @@
 | fetch, XHR, WebSocket, EventSource, sendBeacon, динамическая загрузка JS | Копия с предупреждением; внешние запросы запрещены CSP | compatibility corpus в tests/url-import-html.test.ts; простая статическая диагностика, возможны ложные срабатывания и пропуски |
 | JS modules/importmap/async/defer, CSS @import | Копия с ограничениями; интерактивная сборка не гарантируется | importer corpus и правила bundle-inline.ts |
 | srcset; iframe/object/embed | Копия с предупреждением; зависимости не локализованы полностью | importer corpus; не считается полным переносом |
-| Claude / ChatGPT share URL, включая redirect | Не поддерживается; предлагается экспорт HTML или MCP-передача файлов | guard/corpus; реальный Claude вернул оболочку без данных, API HTTP403 (IMPLEMENTATION_GOAL.md). Реальный перенос ChatGPT не доказан |
+| Claude / ChatGPT artifact и share URL (`claude.ai/artifact/<id>`, `claude.ai/public/artifacts/<id>`, `*.claude.site`, `chatgpt.com/share/…`, `canvas/shared/…`), включая redirect | Не копируется сервером. Браузер распознаёт ссылку до отправки, объясняет причину и принимает скачанный файл прямо в карточке; альтернатива — сохранение через агента (MCP) | guard/corpus; `claude.ai/artifact/<id>` 22.09 вернул HTTP 403 Cloudflare «Just a moment…» без браузера; публичный артефакт — оболочка без данных, API HTTP403. План автоматического переноса — ROADMAP (коннектор, расширение) |
 | Не-HTML, повреждённый UTF-8, недоступный ресурс | Ошибка с причиной | importer corpus |
 | Локальные/зарезервированные IP, metadata, непубличный DNS, HTTP | Отклоняется | tests/url-import-fetch.test.ts; проверка каждого redirect и закреплённого DNS-адреса |
 

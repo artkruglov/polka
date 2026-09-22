@@ -81,9 +81,11 @@ test("importMock classifies links without issuing ids or receipts", () => {
   const cases: [string, string, string | null][] = [
     ["not a url", "not_https", null],
     ["http://claude.ai/public/artifacts/abc", "not_https", null],
-    ["https://claude.ai/public/artifacts/abc-123", "ready", "claude"],
-    ["https://chatgpt.com/share/abc", "ready", "chatgpt"],
-    ["https://chatgpt.com/canvas/shared/abc", "ready", "chatgpt"],
+    ["https://claude.ai/public/artifacts/abc-123", "provider", "claude"],
+    ["https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo", "provider", "claude"],
+    ["https://abc.claude.site/artifacts/x", "provider", "claude"],
+    ["https://chatgpt.com/share/abc", "provider", "chatgpt"],
+    ["https://chatgpt.com/canvas/shared/abc", "provider", "chatgpt"],
     ["https://claude.ai/chat/abc", "closed", "claude"],
     ["https://chatgpt.com/c/abc", "closed", "chatgpt"],
     ["https://example.com/login?next=/report", "closed", null],
@@ -101,6 +103,10 @@ test("importMock classifies links without issuing ids or receipts", () => {
   for (const [url] of cases)
     if (classify(url).source !== "zip")
       assert.match(classify(url).explain, /файл/i, url);
+  // Provider artifacts explain why Полка cannot fetch them and how to bring the file.
+  const provider = classify("https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo");
+  assert.match(provider.explain, /Download/);
+  assert.match(provider.explain, /не может сама забрать/);
 });
 
 test("User-facing profile strings do not promise universal VPN-free availability", () => {

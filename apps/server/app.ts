@@ -157,8 +157,8 @@ export async function createApp() {
     liveExperimental: config.HTML_LIVE_ENABLED,
     liveMode: config.HTML_LIVE_MODE,
     liveProfile: config.HTML_LIVE_ENABLED ? LIVE_HTML_PROFILE : null,
-    // Links are only recognised in the browser demo; the server never fetches a URL.
-    urlImport: false,
+    // Mirrors /api/imports/capabilities: when disabled, links are only recognised in the browser.
+    urlImport: config.URL_IMPORT_ENABLED,
     htmlView: "static-sandbox",
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,

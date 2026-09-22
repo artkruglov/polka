@@ -3,6 +3,8 @@ import { useFolders } from "../../entities/folder/useFolders.ts";
 import React, { useEffect, useRef, useState } from "react";
 import { request, ApiError } from "../../shared/api/client.ts";
 import { Button, LinkButton, TextField, SelectField } from "../../shared/ui/controls.tsx";
+import { classify, type ImportClassification } from "./classify-demo.ts";
+import { ProviderGuide } from "./provider-guide.tsx";
 
 type Job = {
   id: string;
@@ -56,12 +58,18 @@ export function UrlImport({
   initialFolderId = "",
   onFile,
   accountId,
+  fileSave,
 }: {
   initialFolderId?: string;
   initial?: string;
   onFile: () => void;
   accountId?: string;
+  fileSave?: React.ReactNode;
 }) {
+  const [provider, setProvider] = useState<ImportClassification | null>(() => {
+    const recognised = initial ? classify(initial) : null;
+    return recognised?.status === "provider" ? recognised : null;
+  });
   const [url, setUrl] = useState(
       () => initial || sessionStorage.getItem(draftKey) || "",
     ),
@@ -116,6 +124,13 @@ export function UrlImport({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (sending.current) return;
+    // The server blocks Claude/ChatGPT hosts; show the real path instead of a failing job.
+    const recognised = classify(url);
+    if (recognised.status === "provider") {
+      setProvider(recognised);
+      return;
+    }
+    setProvider(null);
     sending.current = true;
     setNeedsLogin(false);
     setBusy(true);
@@ -317,11 +332,15 @@ export function UrlImport({
           импорт.
         </p>
       )}
-      <div className="bring-actions">
-        <Button variant="quiet" onClick={onFile}>
-          Загрузить HTML-файл вместо ссылки
-        </Button>
-      </div>
+      {provider ? (
+        <ProviderGuide result={provider} fileSave={fileSave} onFile={onFile} />
+      ) : (
+        <div className="bring-actions">
+          <Button variant="quiet" onClick={onFile}>
+            Загрузить HTML-файл вместо ссылки
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
