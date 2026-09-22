@@ -110,7 +110,8 @@ test("publishes without an Origin header and returns the link", async () => {
   assert.equal(body.shelfUrl, `${origin}/works/${body.artifactId}`);
   assert.equal(body.interactiveReady, false);
   const days = (Date.parse(body.expiresAt) - Date.now()) / 86_400_000;
-  assert.ok(days > 6.9 && days <= 7, String(days));
+  // expiresAt comes from the database clock; allow a second of skew.
+  assert.ok(days > 6.9 && days <= 7 + 1 / 86_400, String(days));
   const shared = await app.inject({
     method: "POST",
     url: "/api/resolve",

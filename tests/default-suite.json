@@ -1,5 +1,6 @@
 [
   "tests/unit.test.ts",
+  "tests/storage-bootstrap.test.ts",
   "tests/viewer-config.test.ts",
   "tests/account-deletion-config.test.ts",
   "tests/account-purge.test.ts",
