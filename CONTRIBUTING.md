@@ -29,7 +29,7 @@ npm run build
 npm test        # создаёт отдельную БД и bucket, после прогона удаляет их
 ```
 
-Отдельные наборы (`npm run test:live`, `test:mcp` и др.) используют рабочий `.env` и пишут в него — запускайте их только на локальной, не ценной базе.
+Отдельные наборы (`npm run test:live`, `test:mcp` и др.) используют рабочий `.env` и пишут в него — запускайте их только на локальной, не ценной базе. Файлы, которым нужен включённый viewer (`tests/live-suite.json`: trash, live-viewer, bundle-runtime, editorial-catalog, editorial-seed-live), изолированно запускает `npm test -- --live` (или `npm test -- --live tests/trash.test.ts`).
 
 ## Правила
 

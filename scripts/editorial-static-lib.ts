@@ -9,6 +9,12 @@ export const STATIC_NOTICES =
   "Оригинальный учебный материал Редакции Полки. Статичная версия: примеры и данные демонстрационные, интерактивные элементы в ней не работают.";
 export const STATIC_EVIDENCE_PATH =
   "docs/reviews/2026-09-22-editorial-static/README.md";
+// Used instead of the snapshot's notices when the original is published
+// through its ready interactive version.
+export const INTERACTIVE_NOTICES =
+  "Оригинальный учебный материал Редакции Полки. Примеры и данные демонстрационные.";
+export const INTERACTIVE_EVIDENCE_PATH =
+  "docs/reviews/2026-09-22-editorial-live/README.md";
 
 // The publish service requires the source to be an index.html entry point.
 export const staticSourcePath = (slug: string) =>
@@ -87,21 +93,31 @@ export type StaticBinding = {
   manifestSha256: string | null;
 };
 
-/**
- * Operator input for one static single-HTML publication: public metadata from
- * the candidate, exact binding to the uploaded revision and its catalogue
- * share, no derivative.
- */
-export function buildStaticPublishInput(input: {
+export type InteractiveBinding = StaticBinding & {
+  manifestSha256: string;
+  derivative: {
+    id: string;
+    sha256: string;
+    builderVersion: string;
+    runtimeProfile: string;
+  };
+};
+
+function publishInput(input: {
   candidate: StaticCandidate;
+  notices: string;
+  sourcePath: string;
+  sourceSha256: string;
+  evidencePath: string;
   binding: StaticBinding;
+  derivative: InteractiveBinding["derivative"] | null;
   publicationId: string;
   expectedPublicationId: string | null;
   checkedAt: string;
 }) {
-  const { candidate, binding } = input;
-  if (binding.sourceSha256 !== candidate.sourceSha256)
-    throw new Error(`${candidate.slug}: revision hash differs from the snapshot`);
+  const { candidate, binding, derivative } = input;
+  if (binding.sourceSha256 !== input.sourceSha256)
+    throw new Error(`${candidate.slug}: revision hash differs from the source`);
   return staticPublishInputSchema.parse({
     publicationId: input.publicationId,
     expectedPublicationId: input.expectedPublicationId,
@@ -115,20 +131,20 @@ export function buildStaticPublishInput(input: {
         action: candidate.action,
         author: candidate.author,
         license: candidate.license,
-        notices: candidate.notices,
+        notices: input.notices,
       },
       source: {
-        path: candidate.sourcePath,
+        path: input.sourcePath,
         commit: null,
-        sha256: candidate.sourceSha256,
+        sha256: input.sourceSha256,
       },
       runtimeProof: {
         originalRevisionId: binding.revisionId,
         originalSha256: binding.sourceSha256,
         originalManifestSha256: binding.manifestSha256,
-        derivative: null,
+        derivative,
         checkedAt: input.checkedAt,
-        evidencePath: candidate.evidencePath,
+        evidencePath: input.evidencePath,
       },
       binding: {
         tenantId: binding.tenantId,
@@ -137,11 +153,55 @@ export function buildStaticPublishInput(input: {
         shareId: binding.shareId,
         sourceSha256: binding.sourceSha256,
         manifestSha256: binding.manifestSha256,
-        derivativeId: null,
-        derivativeSha256: null,
-        builderVersion: null,
-        runtimeProfile: null,
+        derivativeId: derivative?.id ?? null,
+        derivativeSha256: derivative?.sha256 ?? null,
+        builderVersion: derivative?.builderVersion ?? null,
+        runtimeProfile: derivative?.runtimeProfile ?? null,
       },
     },
+  });
+}
+
+/**
+ * Operator input for one static single-HTML publication: public metadata from
+ * the candidate, exact binding to the uploaded revision and its catalogue
+ * share, no derivative.
+ */
+export function buildStaticPublishInput(input: {
+  candidate: StaticCandidate;
+  binding: StaticBinding;
+  publicationId: string;
+  expectedPublicationId: string | null;
+  checkedAt: string;
+}) {
+  return publishInput({
+    ...input,
+    notices: input.candidate.notices,
+    sourcePath: input.candidate.sourcePath,
+    sourceSha256: input.candidate.sourceSha256,
+    evidencePath: input.candidate.evidencePath,
+    derivative: null,
+  });
+}
+
+/**
+ * Operator input for the interactive original: the one-file bundle revision
+ * of content/editorial/<slug>/index.html and its catalogue share, both bound
+ * to the ready derivative the live viewer serves.
+ */
+export function buildInteractivePublishInput(input: {
+  candidate: StaticCandidate;
+  binding: InteractiveBinding;
+  publicationId: string;
+  expectedPublicationId: string | null;
+  checkedAt: string;
+}) {
+  return publishInput({
+    ...input,
+    notices: INTERACTIVE_NOTICES,
+    sourcePath: input.candidate.interactiveSourcePath,
+    sourceSha256: input.candidate.interactiveSourceSha256,
+    evidencePath: INTERACTIVE_EVIDENCE_PATH,
+    derivative: input.binding.derivative,
   });
 }
