@@ -60,7 +60,7 @@ test("inlines the team report deterministically without mutating source bytes", 
   assert.equal(first.ok, true);
   assert.deepEqual(second, first);
   if (!first.ok) return;
-  assert.equal(first.builderVersion, "bundle-inline-v3");
+  assert.equal(first.builderVersion, "bundle-inline-v4");
   assert.equal(first.runtimeProfile, "bundle-inline-experimental-v1");
   assert.deepEqual(first.consumedPaths, sourcePaths.slice().sort());
   assert.match(first.html.toString("utf8"), /<style>/);
@@ -174,4 +174,112 @@ test('CSS external, escaped, missing and active-image references fail closed',()
  const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');bytes.set('assets/mark.svg',svg);
  const updated=canonicalizeManifest({...manifest,files:manifest.files.map(f=>f.path==='assets/mark.svg'?{...f,size:svg.length,sha256:digest(svg)}:f)});
  assert.equal(buildInlineBundle(updated,bytes).ok,false);
+});
+
+// bundle-inline-v4: markup a chat artifact commonly carries.
+const PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const GIF = Buffer.from("GIF89a\x01\x00\x01\x00\x00\x00\x00;", "latin1").toString("base64");
+const WOFF2 = Buffer.from("wOF2\x00\x01\x00\x00", "latin1").toString("base64");
+const WOFF = Buffer.from("wOFF\x00\x01\x00\x00", "latin1").toString("base64");
+const INERT_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>',
+).toString("base64");
+
+test("v4 keeps validated data: images and fonts as they are", () => {
+  for (const html of [
+    `<!doctype html><img src="data:image/png;base64,${PNG}" alt="">`,
+    `<!doctype html><img src="data:image/gif;base64,${GIF}" alt="">`,
+    `<!doctype html><img src="data:image/svg+xml;base64,${INERT_SVG}" alt="">`,
+    `<!doctype html><style>div{background:url("data:image/png;base64,${PNG}")}</style>`,
+    `<!doctype html><style>@font-face{font-family:A;src:url(data:font/woff2;base64,${WOFF2}) format("woff2"),url(data:font/woff;base64,${WOFF})}</style>`,
+    `<!doctype html><p style="background:url(data:image/png;base64,${PNG})">x</p>`,
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
+    if (result.ok) assert.match(result.html.toString(), /data:(image|font)\//);
+  }
+});
+
+test("v4 refuses data: URIs of other types, mislabelled bytes and active SVG", () => {
+  const activeSvg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+  ).toString("base64");
+  for (const html of [
+    `<!doctype html><img src="data:image/png;base64,${Buffer.from("not a png").toString("base64")}">`,
+    `<!doctype html><img src="data:image/svg+xml;base64,${activeSvg}">`,
+    "<!doctype html><img src=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>\">",
+    '<!doctype html><img src="data:text/html;base64,PGI+">',
+    `<!doctype html><img src="data:image/png;base64,${PNG.slice(0, -2)}">`,
+    `<!doctype html><img src="data:image/png;charset=utf-8;base64,${PNG}">`,
+    `<!doctype html><img src="data:font/woff2;base64,${WOFF2}">`,
+    '<!doctype html><style>div{background:url(data:text/html;base64,PGI+)}</style>',
+    `<!doctype html><style>div{background:url(data:application/javascript;base64,${PNG})}</style>`,
+  ])
+    assert.equal(resultForHtml(html).ok, false, html);
+});
+
+test("v4 accepts fragment and absolute web links but no script or relative ones", () => {
+  for (const html of [
+    '<!doctype html><a href="#top">top</a>',
+    '<!doctype html><a href="#">top</a>',
+    '<!doctype html><a href="https://example.org/a?b=c#d">x</a>',
+    '<!doctype html><a href="http://example.org">x</a>',
+    '<!doctype html><a href="mailto:owner@example.org">x</a>',
+    '<!doctype html><svg><symbol id="i"><path d="M0 0"/></symbol><use href="#i"/><use xlink:href="#i"/></svg>',
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
+  }
+  for (const html of [
+    '<!doctype html><a href="javascript:alert(1)">x</a>',
+    '<!doctype html><a href=" JavaScript:alert(1)">x</a>',
+    '<!doctype html><a href="java\tscript:alert(1)">x</a>',
+    '<!doctype html><a href="vbscript:x">x</a>',
+    '<!doctype html><a href="data:text/html,x">x</a>',
+    '<!doctype html><a href="other.html">x</a>',
+    '<!doctype html><a href="//example.org">x</a>',
+    '<!doctype html><svg><use href="sprite.svg#i"/></svg>',
+    '<!doctype html><svg><use href="https://example.org/s.svg#i"/></svg>',
+    '<!doctype html><area href="https://example.org">',
+  ])
+    assert.equal(resultForHtml(html).ok, false, html);
+});
+
+test("v4 accepts CSS escapes in strings and identifiers, not in functions or at-rules", () => {
+  for (const html of [
+    '<!doctype html><style>q::before{content:"\\201C"}</style>',
+    "<!doctype html><style>.md\\:flex{display:flex}</style>",
+    "<!doctype html><style>/* \\x */ a{color:red}</style>",
+    '<!doctype html><p style="font-family:\'A\\42 C\'">x</p>',
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
+  }
+  for (const html of [
+    "<!doctype html><style>a{background:u\\72l(assets/mark.svg)}</style>",
+    "<!doctype html><style>a{background:\\75 rl(assets/mark.svg)}</style>",
+    "<!doctype html><style>a{background:URL(assets/\\6d ark.svg)}</style>",
+    '<!doctype html><style>a{background:url("assets/\\6d ark.svg")}</style>',
+    '<!doctype html><style>@\\69mport "x.css";</style>',
+    '<!doctype html><style>@im\\port "x.css";</style>',
+    "<!doctype html><style>a{background:image-\\73 et(x)}</style>",
+    "<!doctype html><style>a{width:calc(1px + \\31 px)}</style>",
+  ])
+    assert.equal(resultForHtml(html).ok, false, html);
+});
+
+test("v4 accepts inline classic scripts with async or defer, not modules or JSX", () => {
+  for (const html of [
+    "<!doctype html><script async>1</script>",
+    "<!doctype html><script defer>1</script>",
+  ])
+    assert.equal(resultForHtml(html).ok, true, html);
+  for (const html of [
+    '<!doctype html><script async src="assets/report.js"></script>',
+    '<!doctype html><script defer src="assets/report.js"></script>',
+    '<!doctype html><script type="module">1</script>',
+    '<!doctype html><script type="text/babel">1</script>',
+  ])
+    assert.equal(resultForHtml(html).ok, false, html);
 });

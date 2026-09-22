@@ -6,8 +6,9 @@ import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readBlob, sha256 } from "./storage.ts";
 import {
-  BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
+  SERVED_BUILDER_VERSIONS_SQL,
+  derivativePreferenceSql,
 } from "./bundle-runtime-contract.ts";
 import { assertEditorialShareAccessible } from "./editorial.ts";
 import { isLiveRevisionEligible } from "./viewer-config.ts";
@@ -61,9 +62,14 @@ export async function issueOwnerLiveView(
          FROM revisions r
          JOIN sessions session ON session.hash=$2 AND session.account_id=$3
          JOIN accounts account ON account.id=session.account_id
-         LEFT JOIN revision_derivatives d
-           ON d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
-          AND d.builder_version=$6 AND d.runtime_profile=$7 AND d.state='ready'
+         LEFT JOIN LATERAL (
+           SELECT d.id FROM revision_derivatives d
+           WHERE r.storage_kind='bundle'
+             AND d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
+             AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+             AND d.runtime_profile=$6 AND d.state='ready'
+           ORDER BY ${derivativePreferenceSql("d")} LIMIT 1
+         ) d ON true
          WHERE r.id=$4 AND r.tenant_id=$5 AND r.mime='text/html'
            AND (r.storage_kind='single' OR (r.storage_kind='bundle' AND d.id IS NOT NULL))
            AND session.expires_at>now() AND NOT account.disabled
@@ -75,7 +81,6 @@ export async function issueOwnerLiveView(
           actor.id,
           revisionId,
           actor.tenant,
-          BUNDLE_BUILDER_VERSION,
           BUNDLE_RUNTIME_PROFILE,
         ],
       )
@@ -131,16 +136,12 @@ export async function issueRecipientLiveView(sourceGrant: string) {
            AND NOT s.revoked AND s.expires_at>now() AND r.mime='text/html'
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
            AND ((r.storage_kind='single' AND g.derivative_id IS NULL)
-             OR (r.storage_kind='bundle' AND d.state='ready'
+             OR (r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
-               AND d.builder_version=$3 AND d.runtime_profile=$4))
+               AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+               AND d.runtime_profile=$3))
          RETURNING expires_at,derivative_id`,
-        [
-          sha256(token),
-          sourceGrantHash,
-          BUNDLE_BUILDER_VERSION,
-          BUNDLE_RUNTIME_PROFILE,
-        ],
+        [sha256(token), sourceGrantHash, BUNDLE_RUNTIME_PROFILE],
       )
     ).rows[0];
   });
@@ -167,9 +168,10 @@ async function authorizedRevision(token: string) {
      LEFT JOIN revision_derivatives d ON d.id=vg.derivative_id AND d.revision_id=vg.revision_id
      WHERE vg.hash=$1 AND vg.expires_at>now() AND r.mime='text/html'
        AND ((r.storage_kind='single' AND vg.derivative_id IS NULL)
-         OR (r.storage_kind='bundle' AND d.state='ready'
+         OR (r.storage_kind IN ('single','bundle') AND d.state='ready'
            AND d.source_manifest_sha256=r.manifest_sha256
-           AND d.builder_version=$2 AND d.runtime_profile=$3))
+           AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+           AND d.runtime_profile=$2))
        AND (
          (
            vg.owner_session_hash IS NOT NULL
@@ -202,7 +204,7 @@ async function authorizedRevision(token: string) {
            )
          )
        )`,
-    [sha256(token), BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE],
+    [sha256(token), BUNDLE_RUNTIME_PROFILE],
   );
   if (revision && !isLiveRevisionEligible(config, revision.id)) return null;
   if (revision?.authorized_share_id)

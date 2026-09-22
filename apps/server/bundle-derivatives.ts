@@ -14,9 +14,15 @@ import {
   BUNDLE_RUNTIME_PROFILE,
   DERIVATIVE_BUILD_TIMEOUT_MS,
   DERIVATIVE_RESERVATION_BYTES,
+  derivativePreferenceSql,
+  derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
 
 const activeBuilds = new Set<string>();
+
+// A single HTML upload is built like a one-file bundle: its interactive
+// version is how a page the static view cannot show gets a link.
+const buildableStorage = (kind: string) => kind === "bundle" || kind === "single";
 let runningWorkers = 0;
 
 export type DerivativeTransactionRunner = <T>(
@@ -40,7 +46,8 @@ export const inlineBuildSelect = `(
   FROM revision_derivatives d
   WHERE d.revision_id=r.id
     AND d.source_manifest_sha256=r.manifest_sha256
-    AND d.builder_version='${BUNDLE_BUILDER_VERSION}'
+    AND ${derivativeVersionSql("d")}
+  ORDER BY ${derivativePreferenceSql("d")}
   LIMIT 1
 ) AS inline_build`;
 
@@ -161,18 +168,23 @@ async function prepare(
     );
     if (
       !revision ||
-      revision.storage_kind !== "bundle" ||
+      !buildableStorage(revision.storage_kind) ||
       revision.mime !== "text/html" ||
       !revision.manifest_sha256
     )
       throw missing();
+    // A ready derivative of an older served builder keeps serving; it is not
+    // rebuilt. Otherwise only the current builder's row is considered.
     const {
       rows: [existing],
     } = await c.query(
-      `SELECT * FROM revision_derivatives
-       WHERE revision_id=$1 AND source_manifest_sha256=$2 AND builder_version=$3
+      `SELECT * FROM revision_derivatives d
+       WHERE revision_id=$1 AND source_manifest_sha256=$2
+         AND ${derivativeVersionSql("d")}
+       ORDER BY ${derivativePreferenceSql("d")}
+       LIMIT 1
        FOR UPDATE`,
-      [revisionId, revision.manifest_sha256, BUNDLE_BUILDER_VERSION],
+      [revisionId, revision.manifest_sha256],
     );
     if (existing && ["ready", "unsupported"].includes(existing.state))
       return { row: existing, run: false, resumed: false };
@@ -292,7 +304,7 @@ async function executeBuild(
   let result: WorkerResult;
   try {
     source = await readSource();
-    if (source.revision.storage_kind !== "bundle") throw missing();
+    if (!buildableStorage(source.revision.storage_kind)) throw missing();
     if (source.manifestSha256 !== derivative.source_manifest_sha256)
       throw new Error("Derivative source changed");
     result = await runBuilder(source.manifest, source.files);
@@ -407,13 +419,17 @@ export async function getInlineBuildStatus(actor: Actor, revisionId: string) {
     [revisionId, actor.tenant],
   );
   if (!revision) throw missing();
-  if (revision.storage_kind !== "bundle") return null;
+  if (!buildableStorage(revision.storage_kind) || !revision.manifest_sha256)
+    return null;
   const {
     rows: [row],
   } = await db.query(
-    `SELECT * FROM revision_derivatives
-     WHERE revision_id=$1 AND source_manifest_sha256=$2 AND builder_version=$3`,
-    [revisionId, revision.manifest_sha256, BUNDLE_BUILDER_VERSION],
+    `SELECT * FROM revision_derivatives d
+     WHERE revision_id=$1 AND source_manifest_sha256=$2
+       AND ${derivativeVersionSql("d")}
+     ORDER BY ${derivativePreferenceSql("d")}
+     LIMIT 1`,
+    [revisionId, revision.manifest_sha256],
   );
   return row ? statusDTO(row) : null;
 }

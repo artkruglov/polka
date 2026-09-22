@@ -24,8 +24,10 @@ import {
   isStaticSingleFileBundle,
 } from "./revision-manifest.ts";
 import {
-  BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
+  SERVED_BUILDER_VERSIONS_SQL,
+  derivativePreferenceSql,
+  derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 export type Actor = { id: string; tenant: string; connectionId?: string };
@@ -111,9 +113,10 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
           'reason',d.reason,'path',d.error_path
         ) FROM revision_derivatives d
         WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
-          AND d.builder_version=$2 LIMIT 1) AS inline_build
+          AND ${derivativeVersionSql("d")}
+        ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS inline_build
      FROM revisions r WHERE r.id=$1`,
-    [a.latest_revision_id, BUNDLE_BUILDER_VERSION],
+    [a.latest_revision_id],
   );
   const {
     rows: [s],
@@ -284,13 +287,15 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
   const {
     rows: [r],
   } = await c.query(
-    `SELECT r.html_profile,r.storage_kind,r.mime,r.manifest,d.id AS derivative_id
+    `SELECT r.html_profile,r.storage_kind,r.mime,r.manifest,
+       (SELECT d.id FROM revision_derivatives d
+        WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
+          AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+          AND d.runtime_profile=$2 AND d.state='ready'
+        ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS derivative_id
      FROM revisions r
-     LEFT JOIN revision_derivatives d
-       ON d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
-      AND d.builder_version=$2 AND d.runtime_profile=$3 AND d.state='ready'
      WHERE r.id=$1`,
-    [revisionId, BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE],
+    [revisionId, BUNDLE_RUNTIME_PROFILE],
   );
   if (!r) throw missing();
   if (r.storage_kind === "bundle") {
@@ -311,12 +316,19 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
           : "Пакет из нескольких файлов открывается только в интерактивной версии, а интерактивный просмотр на этой установке выключен. Ссылку не выпускаем; сохраните страницу одним самодостаточным HTML-файлом (стили и картинки встроены) без скриптов.",
     );
   }
-  if (r.html_profile === "unsupported")
+  if (r.html_profile === "unsupported") {
+    // A single page the static view cannot show is linked only through its
+    // built interactive version, never as the raw upload.
+    if (config.HTML_LIVE_ENABLED && r.derivative_id)
+      return r.derivative_id as string;
     throw new Problem(
       422,
       "unsupported",
-      "Эта страница собирается скриптами, а интерактивный просмотр в этой сборке ещё не включён. Ссылку на неё не выпускаем.",
+      config.HTML_LIVE_ENABLED
+        ? "Статичный просмотр не покажет эту страницу, а её интерактивная версия ещё не подготовлена или не собралась. Подготовьте интерактивную версию и повторите."
+        : "Эта страница собирается скриптами, а интерактивный просмотр в этой сборке ещё не включён. Ссылку на неё не выпускаем.",
     );
+  }
   return null;
 }
 async function lockUpload(c: PoolClient, actor: Actor, id: string) {
