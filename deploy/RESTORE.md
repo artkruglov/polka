@@ -4,7 +4,7 @@ This runbook describes the current restore barrier for an already restored, dedi
 
 ## Required inputs
 
-Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (currently schema 018), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
+Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (the exact set is in `packages/migrations.ts`, currently 028), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
 
 Provide these exact values through a protected operator environment file or secret manager, never as command-line arguments:
 
@@ -35,8 +35,8 @@ Render both compose files with the protected environment file before running any
 
 Retrying the same generation is appropriate only after inspecting the failed run and preserving its exact authorities; use the same `RESTORE_RUN_ID` when resuming an interrupted reconciliation. Start a new generation with a new UUID for a different backup, target, or intentionally new restore attempt. Do not reuse a completed receipt or silently overwrite an existing generation.
 
-The operational CLI and actual application startup gate also passed an isolated local run with a distinct read-only MinIO identity: [operational evidence](../docs/reviews/2026-09-21-restore-target/README.md). Container startup remains unaccepted.
+The operational CLI and actual application startup gate also passed an isolated local run with a distinct read-only MinIO identity. Container startup remains unaccepted.
 
-The full-backup evidence is synthetic/local: [full schema18 restore result](../docs/reviews/2026-09-21-account-purge/full-restore-schema18-result.json) records exact remapped references, old recipient/session denial, source and metadata erasure, preserved historic receipt, and residue cleanup. It reports `productionRestoreProven: false`; it is not evidence of production backup retention, cloud IAM, container startup, or hosted deletion.
+The full-backup evidence is synthetic/local: the full schema 018 restore run recorded exact remapped references, old recipient/session denial, source and metadata erasure, preserved historic receipt, and residue cleanup. It reports `productionRestoreProven: false`; it is not evidence of production backup retention, cloud IAM, container startup, or hosted deletion.
 
 The compose overlay keeps the application live/hosted viewer disabled for this base shape. A real operator acceptance still needs a reviewed backup source, production role grants, retention/rollback policy and a controlled restore drill on the selected deployment.

@@ -1,30 +1,37 @@
-.git
-.local
-.env
-.env.*
-!.env.example
-dist
-node_modules
-tests
-docs
-*.md
-*.log
-Dockerfile*
+# Allowlist: the build context holds only what the Dockerfile copies. Anything
+# new (env files, operator notes, keys, local data) stays out by default.
+*
 
-# Include provenance alongside the bundled original editorial materials.
-!content/editorial/**/README.md
+!package.json
+!package-lock.json
+!LICENSE
+!apps/server/**
+!apps/web/**
+!packages/**
+!scripts/*.ts
+!scripts/polka-publish.mjs
+!deploy/migrations/*.sql
+!content/editorial/**
 
-# Never send deployment credentials to the Docker daemon/build cache.
-deploy/base.env
-deploy/smtp.env
-
-# Keys, local data and caches never belong in the build context.
-*.pem
-*.key
-data
-uploads
-coverage
-test-results
-playwright-report
+# Development and acceptance tools never run inside the image.
+scripts/test-*
+scripts/restore-drill*
+scripts/seed-design-demo.ts
+scripts/url-import-browser-check.ts
+scripts/capture-via-mcp.ts
+scripts/prepare-capture.ts
+scripts/editorial-static-snapshots.ts
+**/*.test.ts
+**/node_modules
 **/__pycache__
-.github
+
+# Secrets can never enter the context, even inside an allowed directory.
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/.local
+**/.DS_Store

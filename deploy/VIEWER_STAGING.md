@@ -29,4 +29,4 @@ The runtime currently serves CSP from the app/viewer code. Keep `sandbox="allow-
 
 Run `python3 scripts/test-viewer-proxy.py --confirm-synthetic` from the repository. It requires the already cached pinned nginx image, host Python/OpenSSL and Docker; it never pulls images, publishes ports, connects to a database or changes the trust store. The test snapshots this proxy configuration and mounts temporary certificates in a network-none container with two synthetic upstreams. It checks14 routing, TLS, header, body-limit and log cases and removes its exact container and temporary directory. The pinned image is the verified local ARM64 image; another operator must explicitly validate a suitable image before changing that test pin.
 
-[Local results](../docs/reviews/2026-09-21-viewer-staging/proxy-result.json) prove these synthetic proxy cases only. Browser, real-domain and cloud acceptance remain separate.
+The local results of this test prove these synthetic proxy cases only. Browser, real-domain and cloud acceptance remain separate.

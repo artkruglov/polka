@@ -2,8 +2,9 @@
 // Publish one HTML file to Полка through POST /api/v1/publish and print the link.
 // No dependencies: Node 22+ (global fetch). The token is read from POLKA_TOKEN only.
 //
-//   POLKA_TOKEN=… node polka-publish.mjs report.html --title "Отчёт" --share 7
-//   cat report.html | node polka-publish.mjs - --title "Отчёт"
+//   POLKA_ENDPOINT=https://polka.example.com POLKA_TOKEN=… \
+//     node polka-publish.mjs report.html --title "Отчёт" --share 7
+//   cat report.html | node polka-publish.mjs - --title "Отчёт" --endpoint https://polka.example.com
 //
 // See docs/PUBLISH_API.md.
 import { randomUUID } from "node:crypto";
@@ -13,8 +14,9 @@ import { basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-// An installation that serves this file replaces the default with its own origin.
-const DEFAULT_ENDPOINT = "https://polochka.app";
+// Empty in the repository: the address is required. An installation that
+// serves this file (GET /api/v1/cli/polka-publish.mjs) fills in its own origin.
+const DEFAULT_ENDPOINT = "";
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
 
@@ -28,13 +30,13 @@ Options:
   --share <days>     Link lifetime: 1, 7 or 30 days (default 30)
   --folder <uuid>    Save into this folder
   --key <uuid>       Idempotency key; reuse it only to retry the same publish
-  --endpoint <url>   Полка address (default: $POLKA_ENDPOINT or ${DEFAULT_ENDPOINT})
+  --endpoint <url>   Полка address (required unless $POLKA_ENDPOINT is set${DEFAULT_ENDPOINT ? `; default ${DEFAULT_ENDPOINT}` : ""})
   --json             Print the full JSON response
   -h, --help         Show this help
 
 Environment:
   POLKA_TOKEN        Agent token from Полка → Агенты (required; never pass it as an argument)
-  POLKA_ENDPOINT     Default for --endpoint`;
+  POLKA_ENDPOINT     Полка address, e.g. https://polka.example.com (or pass --endpoint)`;
 
 class CliError extends Error {
   constructor(message, code = 1) {
@@ -195,9 +197,19 @@ export async function main(
         "Set POLKA_TOKEN to an agent token from Полка → Агенты (for example: read -r -s POLKA_TOKEN && export POLKA_TOKEN).",
         2,
       );
-    const endpoint = new URL(
-      options.endpoint ?? env.POLKA_ENDPOINT ?? DEFAULT_ENDPOINT,
-    );
+    const address =
+      options.endpoint?.trim() || env.POLKA_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
+    if (!address)
+      throw new CliError(
+        "Set POLKA_ENDPOINT or pass --endpoint with your Полка address (for example https://polka.example.com).",
+        2,
+      );
+    let endpoint;
+    try {
+      endpoint = new URL(address);
+    } catch {
+      throw new CliError("The endpoint must be a URL such as https://polka.example.com.", 2);
+    }
     if (
       endpoint.protocol !== "https:" &&
       !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname)

@@ -1,6 +1,32 @@
 # Self-host base candidate. Requires an operator-provided base.env and one
 # immutable POLKA_IMAGE digest. DB and S3 are external and are never published here.
 name: polka-base
+# Shared runtime configuration (storage-check, app, maintenance). VIEWER_ORIGIN
+# is only used when HTML_LIVE_MODE is not disabled; see deploy/BASE.md.
+x-runtime-env: &runtime-env
+  DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
+  S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
+  S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
+  LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
+  APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+  HOST: 127.0.0.1
+  PORT: "4390"
+  VIEWER_ORIGIN: ${VIEWER_ORIGIN:-http://localhost:4391}
+  VIEWER_HOST: 127.0.0.1
+  VIEWER_PORT: "4391"
+  # Comma-separated reverse proxy addresses/CIDRs whose X-Forwarded-For is
+  # trusted for client IPs (rate limits). Empty: the socket address is used.
+  TRUST_PROXY: ${TRUST_PROXY:-}
+  # disabled | production. Anything but disabled needs loopback listeners that
+  # this bridge-network shape cannot expose; see deploy/BASE.md.
+  HTML_LIVE_MODE: ${HTML_LIVE_MODE:-disabled}
+  URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
+  ACCOUNT_DELETION_ENABLED: "false"
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  MAIL_MODE: "disabled"
+
 services:
   migrate:
     image: ${POLKA_IMAGE:?Set POLKA_IMAGE to the exact release image digest}
@@ -12,6 +38,7 @@ services:
     stop_grace_period: 20s
     environment:
       DATABASE_URL: ${SCHEMA_DATABASE_URL:?Set SCHEMA_DATABASE_URL for the migration owner}
+      MIGRATION_STATEMENT_TIMEOUT_MS: ${MIGRATION_STATEMENT_TIMEOUT_MS:-120000}
     command: ["node", "--import", "tsx", "scripts/migrate.ts"]
     restart: "no"
     deploy:
@@ -29,18 +56,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     stop_grace_period: 20s
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
-      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
-      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
-      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
-      HOST: 127.0.0.1
-      PORT: "4390"
-      HTML_LIVE_ENABLED: "false"
-      ACCOUNT_DELETION_ENABLED: "false"
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      <<: *runtime-env
     command: ["node", "--import", "tsx", "scripts/storage-check.ts", "--confirm-bootstrap"]
     depends_on:
       migrate:
@@ -61,21 +77,8 @@ services:
     security_opt: ["no-new-privileges:true"]
     stop_grace_period: 30s
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
-      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
-      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
-      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+      <<: *runtime-env
       HOST: 0.0.0.0
-      PORT: "4390"
-      HTML_LIVE_ENABLED: "false"
-      ACCOUNT_DELETION_ENABLED: "false"
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      MAIL_MODE: "disabled"
-    ports:
-      - "127.0.0.1:${APP_PORT:-4390}:4390"
     command: ["node", "--import", "tsx", "apps/server/main.ts"]
     restart: unless-stopped
     logging:
@@ -105,19 +108,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     stop_grace_period: 65s
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set runtime DATABASE_URL}
-      S3_ENDPOINT: ${S3_ENDPOINT:?Set S3_ENDPOINT}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
-      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET}
-      LINK_KEY: ${LINK_KEY:?Set LINK_KEY}
-      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
-      HOST: 127.0.0.1
-      PORT: "4390"
-      HTML_LIVE_ENABLED: "false"
-      ACCOUNT_DELETION_ENABLED: "false"
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      MAIL_MODE: "disabled"
+      <<: *runtime-env
     command: ["node", "--import", "tsx", "scripts/maintenance-runner.ts"]
     restart: unless-stopped
     logging:
