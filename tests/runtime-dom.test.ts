@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash, randomInt } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -138,12 +138,13 @@ before(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   profile = mkdtempSync(path.join(tmpdir(), "polka-chrome-"));
-  const port = randomInt(20000, 60000);
+  // Port 0: Chrome picks a free port and writes it to DevToolsActivePort, so a
+  // busy runner cannot hand us a port something else already holds.
   chrome = spawn(
     chromePath!,
     [
       "--headless=new",
-      `--remote-debugging-port=${port}`,
+      "--remote-debugging-port=0",
       `--user-data-dir=${profile}`,
       "--no-first-run",
       "--no-default-browser-check",
@@ -152,20 +153,37 @@ before(async () => {
     ],
     { stdio: "ignore" },
   );
+  let exited: number | null = null;
+  chrome.once("exit", (code) => (exited = code ?? -1));
+  // A cold Chrome on a loaded CI runner can take well over 15 s to start.
+  const deadline = Date.now() + 45_000;
+  let port = 0;
   let targets: any[] = [];
-  for (let attempt = 0; attempt < 60; attempt++) {
+  while (Date.now() < deadline && exited === null) {
     try {
-      targets = (await (
-        await fetch(`http://127.0.0.1:${port}/json`)
-      ).json()) as any[];
-      if (targets.some((target) => target.type === "page")) break;
+      port ||= Number(
+        readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0],
+      );
+      if (port) {
+        targets = (await (
+          await fetch(`http://127.0.0.1:${port}/json`)
+        ).json()) as any[];
+        if (targets.some((target) => target.type === "page")) break;
+        // The browser answers but its first tab is not there yet: open one.
+        await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" });
+      }
     } catch {
-      /* not listening yet */
+      /* not started or not listening yet */
     }
     await wait(250);
   }
   const target = targets.find((item) => item.type === "page");
-  assert.ok(target, "Chrome did not open a page target");
+  assert.ok(
+    target,
+    exited === null
+      ? "Chrome did not open a page target within 45 s"
+      : `Chrome exited (${exited}) before opening a page`,
+  );
   socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket!.addEventListener("open", resolve);
