@@ -286,7 +286,7 @@ export async function createApp() {
     { bodyLimit: 2048 },
     async (req, reply) => {
       const input = z
-        .object({ id: uuid, code: z.string().regex(/^\d{6}$/) })
+        .object({ id: uuid, code: z.string().regex(/^\d{8}$/) })
         .strict()
         .parse(req.body);
       const token = await verifyEmailLogin(

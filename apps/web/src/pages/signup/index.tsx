@@ -172,12 +172,12 @@ export function Signup() {
             ) : (
               <>
                 <TextField
-                  label="Код из шести цифр"
+                  label="Код из восьми цифр"
                   autoFocus
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
+                  pattern="[0-9]{8}"
+                  maxLength={9}
                   required
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}

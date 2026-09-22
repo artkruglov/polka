@@ -907,7 +907,7 @@ test(
       "local fixture must not assert email ownership",
     );
     const third = await challenge();
-    const wrong = third.code === "111111" ? "222222" : "111111";
+    const wrong = third.code === "11111111" ? "22222222" : "11111111";
     for (let i = 0; i < 5; i++)
       assert.equal(
         (
@@ -965,51 +965,42 @@ test(
 );
 
 test(
-  "Email identity: wrong codes are capped per address across new challenges",
+  "Email identity: a stranger's wrong codes do not lock the owner out",
   { skip: config.MAIL_MODE !== "local" },
   async () => {
     const { readFile } = await import("node:fs/promises");
-    const { createHash } = await import("node:crypto");
     const email = `lockout-${randomUUID()}@example.test`;
-    const start = await call("POST", "/api/auth/email/start", { email }, "");
-    assert.equal(start.statusCode, 200, start.body);
-    const id = start.json().id;
-    const cookie = `polka_email_challenge=${start.cookies[0].value}`;
-    const code = JSON.parse(
-      await readFile(`.local/mail/${id}.json`, "utf8"),
-    ).code;
-    const wrong = code === "111111" ? "222222" : "111111";
-    const key = createHash("sha256")
-      .update(`email-verify-fail:${email}`)
-      .digest("hex");
-    assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/verify",
-          { id, code: wrong },
-          cookie,
-        )
-      ).statusCode,
-      401,
+    const begin = async () => {
+      const start = await call("POST", "/api/auth/email/start", { email }, "");
+      assert.equal(start.statusCode, 200, start.body);
+      const id = start.json().id as string;
+      const { code } = JSON.parse(await readFile(`.local/mail/${id}.json`, "utf8"));
+      return { id, code: code as string, cookie: `polka_email_challenge=${start.cookies[0].value}` };
+    };
+    // Someone who knows the address spends every try of their own code.
+    const stranger = await begin();
+    assert.match(stranger.code, /^\d{8}$/);
+    const wrong = stranger.code === "11111111" ? "22222222" : "11111111";
+    for (let i = 0; i < 5; i++)
+      assert.equal(
+        (await call("POST", "/api/auth/email/verify", { id: stranger.id, code: wrong }, stranger.cookie)).statusCode,
+        401,
+      );
+    // Even a full day of such guesses (the old per-address lock stopped at 30)
+    // must not refuse the owner.
+    const { createHash } = await import("node:crypto");
+    await db.query(
+      "INSERT INTO login_limits VALUES($1,1000,now()+interval '1 day') ON CONFLICT(key) DO UPDATE SET attempts=1000",
+      [createHash("sha256").update(`email-verify-fail:${email}`).digest("hex")],
     );
+    // The owner's own code, in the owner's browser, still signs in.
+    const owner = await begin();
+    const signedIn = await call("POST", "/api/auth/email/verify", { id: owner.id, code: owner.code }, owner.cookie);
+    assert.equal(signedIn.statusCode, 200, signedIn.body);
+    // A six-digit code is not accepted any more.
     assert.equal(
-      (await db.query("SELECT attempts FROM login_limits WHERE key=$1", [key]))
-        .rows[0].attempts,
-      1,
-    );
-    // Simulate earlier guesses spread over many challenges for this address.
-    await db.query("UPDATE login_limits SET attempts=30 WHERE key=$1", [key]);
-    assert.equal(
-      (await call("POST", "/api/auth/email/verify", { id, code }, cookie))
-        .statusCode,
-      401,
-    );
-    await db.query("DELETE FROM login_limits WHERE key=$1", [key]);
-    assert.equal(
-      (await call("POST", "/api/auth/email/verify", { id, code }, cookie))
-        .statusCode,
-      200,
+      (await call("POST", "/api/auth/email/verify", { id: owner.id, code: "123456" }, owner.cookie)).statusCode,
+      400,
     );
   },
 );
