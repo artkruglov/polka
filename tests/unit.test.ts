@@ -72,15 +72,16 @@ for (const [name, fixture] of Object.entries(fixtures))
   });
 
 test("Static CSP stays scriptless and networkless", () => {
-  // Links may open only on a reader's click; no scripts, same-origin, forms or free top navigation.
+  // Links open only in a new tab on a reader's click; no scripts,
+  // same-origin, forms or top navigation (a target=_top link could
+  // replace the Полка tab with a look-alike page).
   const sandbox = STATIC_HTML_CSP.split(";")[0]!.split(" ");
   assert.equal(sandbox[0], "sandbox");
   assert.deepEqual(sandbox.slice(1).sort(), [
     "allow-popups",
     "allow-popups-to-escape-sandbox",
-    "allow-top-navigation-by-user-activation",
   ]);
-  assert.doesNotMatch(STATIC_HTML_CSP, /allow-scripts|script-src|connect-src/);
+  assert.doesNotMatch(STATIC_HTML_CSP, /allow-scripts|allow-top-navigation|script-src|connect-src/);
   assert.match(STATIC_HTML_CSP, /default-src 'none'/);
 });
 

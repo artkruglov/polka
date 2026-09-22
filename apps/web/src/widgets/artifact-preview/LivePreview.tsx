@@ -22,6 +22,12 @@ type LiveView = {
 };
 type InlineBuild = NonNullable<Revision["inlineBuild"]>;
 
+// The profile of a live view that runs the saved upload itself, not a build.
+const UPLOAD_PROFILE = "inline-live-experimental-v1";
+// Keep in sync with LIVE_VIEWER_SANDBOX on the server: scripts and the
+// page's own submit handlers; no popups, dialogs, top navigation or origin.
+const LIVE_SANDBOX = "allow-scripts allow-forms";
+
 function messageFor(error: unknown) {
   return error instanceof Error && error.message
     ? error.message
@@ -81,6 +87,7 @@ export function LivePreview({
   const [stopped, setStopped] = useState(false);
   const autoLaunched = useRef(false);
   const autoPrepared = useRef(false);
+  const relaunchedForBuild = useRef(false);
   const launchAbort = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const buildAbort = useRef<AbortController | null>(null);
@@ -105,6 +112,7 @@ export function LivePreview({
     setStopped(false);
     autoLaunched.current = false;
     autoPrepared.current = false;
+    relaunchedForBuild.current = false;
     setBuild(revision.inlineBuild ?? null);
     return () => {
       abort.abort();
@@ -369,6 +377,49 @@ export function LivePreview({
     }
   }, [build?.state, buildForLink, capability, grant, requiresBuild, stopped]);
 
+  // The owner's upload was running while its build was prepared: switch to
+  // the built version, which is what a link recipient sees. Once only.
+  useEffect(() => {
+    if (
+      build?.state !== "ready" ||
+      live?.profile !== UPLOAD_PROFILE ||
+      grant ||
+      stopped ||
+      relaunchedForBuild.current
+    )
+      return;
+    relaunchedForBuild.current = true;
+    void launch();
+  }, [build?.state, live?.profile, grant, stopped]);
+
+  // A ready build may list what it left out (remote fonts, images, hints).
+  const builtNote =
+    build?.state === "ready" && build.reason ? (
+      <p className="html-preview-note">{build.reason}.</p>
+    ) : null;
+  // A single upload runs as is for its owner, but its link needs the build.
+  const linkNote =
+    !grant &&
+    buildForLink &&
+    (build?.state === "unsupported" || build?.state === "failed") ? (
+      <p className="html-preview-note">
+        Ссылка на интерактивную версию пока невозможна: её не удалось
+        подготовить.
+        {build.reason ? ` Причина: ${build.reason}.` : ""}
+        {build.path ? ` Файл: ${build.path}.` : ""}{" "}
+        {build.state === "failed" && (
+          <Button
+            type="button"
+            variant="quiet"
+            onClick={prepare}
+            busy={buildBusy}
+          >
+            Повторить подготовку
+          </Button>
+        )}
+      </p>
+    ) : null;
+
   if (capability === "disabled") return <>{children}</>;
 
   if (live)
@@ -407,11 +458,13 @@ export function LivePreview({
             </Button>
           )}
         </div>
+        {live.profile !== UPLOAD_PROFILE && builtNote}
+        {linkNote}
         <iframe
           className="work-html"
           title={revision.filename}
           src={live.url}
-          sandbox="allow-scripts"
+          sandbox={LIVE_SANDBOX}
           referrerPolicy="no-referrer"
         />
       </div>
@@ -437,107 +490,104 @@ export function LivePreview({
           </Button>
         </p>
       )}
-      {isLive(capability) &&
-        requiresBuild &&
-        build?.state !== "ready" && (
-          <div className="html-preview-note">
-            {error && <p className="preview-error">{error}</p>}
-            {build?.state === "pending" ? (
-              <>
-                <p role="status">
-                  {pollPaused ||
-                    "Подготавливаем интерактивную версию. Она откроется здесь сама."}
-                </p>
-                {pollPaused && (
-                  <Button
-                    type="button"
-                    variant="quiet"
-                    onClick={prepare}
-                    busy={buildBusy}
-                  >
-                    {buildBusy
-                      ? "Повторяем подготовку…"
-                      : "Повторить подготовку"}
-                  </Button>
-                )}
-              </>
-            ) : build?.state === "unsupported" || build?.state === "failed" ? (
-              <p className="preview-error">
-                Интерактивную версию не удалось подготовить.
-                {build.reason ? ` Причина: ${build.reason}.` : ""}
-                {build.path ? ` Файл: ${build.path}.` : ""}
+      {isLive(capability) && requiresBuild && build?.state !== "ready" && (
+        <div className="html-preview-note">
+          {error && <p className="preview-error">{error}</p>}
+          {build?.state === "pending" ? (
+            <>
+              <p role="status">
+                {pollPaused ||
+                  "Подготавливаем интерактивную версию. Она откроется здесь сама."}
               </p>
-            ) : null}
-            {!grant && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={prepare}
-                busy={buildBusy} disabled={build?.state === "pending"}
-              >
-                {buildBusy
-                  ? "Подготавливаем…"
-                  : build?.state
-                    ? "Повторить подготовку"
-                    : "Подготовить интерактивную версию"}
-              </Button>
-            )}
-          </div>
-        )}
-      {isLive(capability) &&
-        (!requiresBuild || build?.state === "ready") && (
-          <div className="html-preview-note">
-            <p>
-              {capability === "production"
-                ? "Интерактивная версия."
-                : capability === "staging"
-                  ? "Тестовый просмотр."
-                  : "Локальная проверка."}{" "}
-              Код этой страницы запускается в браузере; не используйте здесь
-              конфиденциальные данные. Внешние запросы и системные диалоги
-              (alert, prompt, confirm) здесь не работают. Если страница их
-              использует, часть действий будет недоступна.
+              {pollPaused && (
+                <Button
+                  type="button"
+                  variant="quiet"
+                  onClick={prepare}
+                  busy={buildBusy}
+                >
+                  {buildBusy ? "Повторяем подготовку…" : "Повторить подготовку"}
+                </Button>
+              )}
+            </>
+          ) : build?.state === "unsupported" || build?.state === "failed" ? (
+            <p className="preview-error">
+              Интерактивную версию не удалось подготовить.
+              {build.reason ? ` Причина: ${build.reason}.` : ""}
+              {build.path ? ` Файл: ${build.path}.` : ""}
             </p>
-            {error && (
-              <p className="preview-error">
-                {grant
-                  ? "Доступ к просмотру мог истечь. Обновите страницу, чтобы проверить ссылку заново."
-                  : error}
-                {grant && (
-                  <>
-                    {" "}
-                    <Button
-                      type="button"
-                      variant="quiet"
-                      onClick={() => location.reload()}
-                    >
-                      Обновить доступ
-                    </Button>
-                  </>
-                )}
-              </p>
-            )}
-            {grant && !error && (
-              <Button
-                type="button"
-                variant="quiet"
-                onClick={() => location.reload()}
-              >
-                Обновить доступ
-              </Button>
-            )}
+          ) : null}
+          {!grant && (
             <Button
               type="button"
               variant="secondary"
-              onClick={launch}
-              busy={busy}
+              onClick={prepare}
+              busy={buildBusy}
+              disabled={build?.state === "pending"}
             >
-              {busy
-                ? "Запускаем интерактивную версию…"
-                : "Запустить интерактивную версию"}
+              {buildBusy
+                ? "Подготавливаем…"
+                : build?.state
+                  ? "Повторить подготовку"
+                  : "Подготовить интерактивную версию"}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
+      )}
+      {isLive(capability) && (!requiresBuild || build?.state === "ready") && (
+        <div className="html-preview-note">
+          <p>
+            {capability === "production"
+              ? "Интерактивная версия."
+              : capability === "staging"
+                ? "Тестовый просмотр."
+                : "Локальная проверка."}{" "}
+            Код этой страницы запускается в браузере; не используйте здесь
+            конфиденциальные данные. Внешние запросы здесь не работают. В
+            подготовленной версии alert показывается внутри страницы, а confirm
+            отвечает «да»; prompt возвращает значение по умолчанию.
+          </p>
+          {linkNote}
+          {error && (
+            <p className="preview-error">
+              {grant
+                ? "Доступ к просмотру мог истечь. Обновите страницу, чтобы проверить ссылку заново."
+                : error}
+              {grant && (
+                <>
+                  {" "}
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    onClick={() => location.reload()}
+                  >
+                    Обновить доступ
+                  </Button>
+                </>
+              )}
+            </p>
+          )}
+          {grant && !error && (
+            <Button
+              type="button"
+              variant="quiet"
+              onClick={() => location.reload()}
+            >
+              Обновить доступ
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={launch}
+            busy={busy}
+          >
+            {busy
+              ? "Запускаем интерактивную версию…"
+              : "Запустить интерактивную версию"}
+          </Button>
+        </div>
+      )}
     </>
   );
 }

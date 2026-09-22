@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { parse as parseJs } from "acorn";
 import { transform, type Loader } from "esbuild";
+import { BUILD_LIMITS } from "./bundle-runtime-contract.ts";
 
 /**
  * Guards for the Полка runtime builder. esbuild reads the disk on the
@@ -13,19 +14,16 @@ import { transform, type Loader } from "esbuild";
  * Oversized or deeply nested sources are refused before esbuild parses them.
  */
 
-export const MAX_RUNTIME_MODULES = 32;
-export const MAX_RUNTIME_SOURCE_BYTES = 2 * 1024 * 1024;
-const MAX_NESTING = 500;
-const MAX_CHAIN = 1000;
-const MAX_UNARY_RUN = 1000;
+const MAX_NESTING = BUILD_LIMITS.nesting;
+const MAX_CHAIN = BUILD_LIMITS.chain;
+const MAX_UNARY_RUN = BUILD_LIMITS.unaryRun;
 
 const dependencyNames = (manifest: Record<string, unknown>) =>
-  [
-    "dependencies",
-    "peerDependencies",
-    "optionalDependencies",
-  ].flatMap((field) =>
-    Object.keys((manifest[field] as Record<string, string> | undefined) ?? {}),
+  ["dependencies", "peerDependencies", "optionalDependencies"].flatMap(
+    (field) =>
+      Object.keys(
+        (manifest[field] as Record<string, string> | undefined) ?? {},
+      ),
   );
 
 /**
@@ -212,8 +210,7 @@ const plainCall = (call: any, callee: any) =>
   call.arguments.length === 1 &&
   staticSpecifier(call.arguments[0]);
 
-const PLAIN_REQUIRE =
-  "require must be called directly with one plain string";
+const PLAIN_REQUIRE = "require must be called directly with one plain string";
 
 function parseEither(code: string) {
   const options = {
@@ -242,7 +239,7 @@ function parseEither(code: string) {
  * source is reduced to JavaScript by esbuild's transform with the loader
  * the bundler uses (it reads no files), parsed as a module or else as a
  * script, and walked iteratively. A source that cannot be transformed or
- * parsed is refused.
+ * parsed is refused; a failure of esbuild itself is thrown.
  */
 export async function staticImportsOnly(source: string, loader: Loader) {
   if (loader === "css" || loader === "json") return null;
@@ -258,7 +255,15 @@ export async function staticImportsOnly(source: string, loader: Loader) {
       })
     ).code;
   } catch (error) {
-    const first = (error as { errors?: Array<{ text: string; location?: { line: number } | null }> }).errors?.[0];
+    const errors = (
+      error as {
+        errors?: Array<{ text: string; location?: { line: number } | null }>;
+      }
+    ).errors;
+    // No diagnostics means esbuild itself failed (stopped service, missing
+    // binary, memory limit): not the page's fault, so the caller retries.
+    if (!Array.isArray(errors)) throw error;
+    const first = errors[0];
     return first
       ? `compilation failed: ${first.text.slice(0, 200)}${first.location ? ` (line ${first.location.line})` : ""}`
       : "compilation failed";
@@ -276,7 +281,8 @@ export async function staticImportsOnly(source: string, loader: Loader) {
     const { node, parent, key } = stack.pop()!;
     switch (node.type) {
       case "ImportExpression":
-        if (node.options) return "import attributes (with {...}) are not allowed";
+        if (node.options)
+          return "import attributes (with {...}) are not allowed";
         if (!staticSpecifier(node.source))
           return "import() must name a module with a plain string";
         break;
@@ -287,18 +293,27 @@ export async function staticImportsOnly(source: string, loader: Loader) {
           return "import attributes (with {...}) are not allowed";
         break;
       case "MemberExpression":
-        if (namesRequire(node) && !(key === "callee" && plainCall(parent, node)))
+        if (
+          namesRequire(node) &&
+          !(key === "callee" && plainCall(parent, node))
+        )
           return PLAIN_REQUIRE;
         break;
       case "Identifier":
         if (node.name !== "require") break;
         // The property of `x.require` is judged with its member expression;
         // a plain object key is not a reference.
-        if (key === "property" && parent.type === "MemberExpression" && !parent.computed)
+        if (
+          key === "property" &&
+          parent.type === "MemberExpression" &&
+          !parent.computed
+        )
           break;
         if (
           key === "key" &&
-          ["Property", "PropertyDefinition", "MethodDefinition"].includes(parent.type) &&
+          ["Property", "PropertyDefinition", "MethodDefinition"].includes(
+            parent.type,
+          ) &&
           !parent.computed
         )
           break;

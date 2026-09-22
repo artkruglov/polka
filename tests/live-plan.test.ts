@@ -36,9 +36,18 @@ test("a script-free page gets no interactive controls", () => {
   assert.equal(liveKind(page({ mime: "image/png", htmlProfile: null })), "none");
 });
 
+const buildState = (state: "ready" | "pending" | "failed" | "unsupported") => ({
+  state,
+  runtimeProfile: state === "ready" ? ("react-runtime-v1" as const) : null,
+  reason: null,
+  path: null,
+});
+
 test("scripted pages run directly or after a build", () => {
   assert.equal(liveKind(page({ htmlProfile: "limited" })), "direct");
-  assert.equal(liveKind(page({ htmlProfile: "unsupported" })), "direct");
+  // A page the static view cannot show (CDN React/Babel/Tailwind) waits
+  // for its build; the upload itself would not run offline.
+  assert.equal(liveKind(page({ htmlProfile: "unsupported" })), "build");
   for (const htmlProfile of ["limited", "unsupported"] as const)
     assert.equal(
       liveKind(page({ storageKind: "bundle", manifest: singleFile, htmlProfile })),
@@ -113,4 +122,16 @@ test("a single page the static view cannot show runs and is built for its link",
   assert.deepEqual(nextLiveSteps({ ...forLink, launched: true }), ["prepare"]);
   assert.deepEqual(nextLiveSteps({ ...forLink, build: "failed" }), ["launch"]);
   assert.deepEqual(nextLiveSteps({ ...forLink, owner: false }), ["launch"]);
+});
+
+test("the owner of a single upload sees the built version once it is ready", () => {
+  for (const htmlProfile of ["limited", "unsupported"] as const) {
+    assert.equal(liveKind(page({ htmlProfile, inlineBuild: buildState("ready") })), "build");
+    // A refused build leaves the owner the upload as it is.
+    assert.equal(liveKind(page({ htmlProfile, inlineBuild: buildState("unsupported") })), "direct");
+    assert.equal(liveKind(page({ htmlProfile, inlineBuild: buildState("failed") })), "direct");
+  }
+  assert.equal(liveKind(page({ htmlProfile: "limited", inlineBuild: buildState("pending") })), "direct");
+  assert.equal(liveKind(page({ htmlProfile: "unsupported", inlineBuild: buildState("pending") })), "build");
+  assert.equal(liveKind(page({ inlineBuild: buildState("ready") })), "none");
 });

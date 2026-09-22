@@ -15,6 +15,11 @@ export const isLive = (state: CapabilityState): state is LiveMode =>
  * nothing to run (a script-free page), "direct" when the saved page runs as
  * is (only for its owner), "build" when it needs a prepared interactive
  * version first. A link recipient runs only the version the link is bound to.
+ *
+ * The owner of a single upload sees what a recipient would: the built
+ * version once it is ready. A page the static view cannot show at all
+ * (typically CDN React/Babel/Tailwind, which only the build can run) waits
+ * for that build; if the build is refused, the upload still runs as is.
  */
 export function liveKind(
   revision: Revision,
@@ -29,6 +34,14 @@ export function liveKind(
       : "build";
   if (revision.mime !== "text/html" || revision.htmlProfile === "static")
     return "none";
+  const build = revision.inlineBuild?.state;
+  if (build === "ready") return "build";
+  if (
+    revision.htmlProfile === "unsupported" &&
+    build !== "unsupported" &&
+    build !== "failed"
+  )
+    return "build";
   return "direct";
 }
 
@@ -61,12 +74,7 @@ export function nextLiveSteps({
   if (!isLive(capability) || stopped) return [];
   const steps: Array<"launch" | "prepare"> = [];
   if ((!requiresBuild || build === "ready") && !launched) steps.push("launch");
-  if (
-    (requiresBuild || buildForLink) &&
-    owner &&
-    build === null &&
-    !prepared
-  )
+  if ((requiresBuild || buildForLink) && owner && build === null && !prepared)
     steps.push("prepare");
   return steps;
 }

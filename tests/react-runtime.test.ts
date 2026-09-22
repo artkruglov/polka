@@ -104,7 +104,7 @@ export default function App() {
   );
 }`);
   assert.equal(result.runtimeProfile, "react-runtime-v1");
-  assert.equal(result.builderVersion, "bundle-inline-v5");
+  assert.equal(result.builderVersion, "bundle-inline-v6");
   assert.deepEqual(result.consumedPaths, ["App.jsx", "index.html"]);
   const html = result.html.toString("utf8");
   assert.match(html, /\.p-4\s*\{/);
@@ -203,7 +203,7 @@ test("network imports and missing files are refused", async () => {
   const syntax = await compile(`export default function App( { return <div>; }`);
   assert.equal(syntax.ok, false);
   if (!syntax.ok) {
-    assert.match(syntax.reason, /compilation failed: .*\(line 1\)/);
+    assert.match(syntax.reason, /compilation failed: .*\(App\.jsx:1\)/);
     assert.equal(syntax.path, "App.jsx");
   }
   const cdn = fixture({
@@ -291,8 +291,10 @@ test("a page without module scripts keeps the v4 rules and profile", async () =>
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.runtimeProfile, "bundle-inline-experimental-v1");
-  assert.equal(result.builderVersion, "bundle-inline-v5");
-  assert.doesNotMatch(result.html.toString("utf8"), /localStorage/);
+  assert.equal(result.builderVersion, "bundle-inline-v6");
+  // v6: a plain script gets the same environment prelude, but no compiler.
+  assert.match(result.html.toString("utf8"), /^<!DOCTYPE html><html><head><script>\(\(\)=>\{"use strict";/);
+  assert.doesNotMatch(result.html.toString("utf8"), /__polkaRun/);
 });
 
 // Security review of the runtime builder (22.09.2026): esbuild reads the
@@ -373,7 +375,7 @@ export default () => <svg>${'<path d="M0 0" fill="red" stroke="blue" />'.repeat(
 
 test("a runtime page is limited in source files and size", async () => {
   const many: Record<string, string> = { "index.html": componentShell("App", "App.jsx") };
-  many["App.jsx"] = "export default () => null;";
+  many["App.jsx"] = `${Array.from({ length: 32 }, (_, index) => `import { v${index} } from "./lib/m${index}.js";`).join("\n")}\nexport default () => v0;`;
   for (let index = 0; index < 32; index++) many[`lib/m${index}.js`] = `export const v${index} = ${index};`;
   const tooMany = fixture(many);
   const result = await buildDerivative(tooMany.manifest, tooMany.bytes);
@@ -382,6 +384,32 @@ test("a runtime page is limited in source files and size", async () => {
   const big = await compile(`export default () => ${JSON.stringify("x".repeat(2 * 1024 * 1024))};`);
   assert.equal(big.ok, false);
   if (!big.ok) assert.match(big.reason, /exceed 2 MiB/);
+});
+
+test("files the page never loads are neither checked nor counted", async () => {
+  const sources: Record<string, string> = {
+    "index.html": componentShell("App", "App.jsx"),
+    "App.jsx": 'import { label } from "./used.js";\nexport default () => <p>{label}</p>;',
+    "used.js": 'export const label = "used";',
+    // Would be refused if it were loaded: a computed import and a require alias.
+    "unused.js": 'const x = "a"; export default () => import(`./${x}`);',
+  };
+  for (let index = 0; index < 40; index++) sources[`spare/m${index}.js`] = `export const v = ${index};`;
+  const value = fixture(sources);
+  const result = await buildDerivative(value.manifest, value.bytes);
+  assert.equal(result.ok, true, result.ok ? "" : `${result.reason} (${result.path})`);
+  if (result.ok) {
+    assert.ok(result.consumedPaths.includes("used.js"));
+    assert.equal(result.consumedPaths.includes("unused.js"), false);
+  }
+  // Loaded, the same file is refused and named.
+  const loaded = fixture({ ...sources, "App.jsx": 'import f from "./unused.js";\nexport default f;' });
+  const refusal = await buildDerivative(loaded.manifest, loaded.bytes);
+  assert.equal(refusal.ok, false);
+  if (!refusal.ok) {
+    assert.match(refusal.reason, /import\(\) must name a module with a plain string/);
+    assert.equal(refusal.path, "unused.js");
+  }
 });
 
 test("the build service admits a runtime page only when asked to", async () => {
@@ -461,4 +489,128 @@ test("esbuild crash output stays out of the server logs", async () => {
   assert.equal(run.status, 0);
   assert.equal(run.stdout, "protocol\n");
   assert.equal(run.stderr, "");
+});
+
+// Release review (22.09.2026): common chat HTML the runtime used to refuse
+// or build into a page that fails at run time.
+const CDN_HEAD = `<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>`;
+
+async function page(html: string) {
+  const value = fixture({ "index.html": html });
+  return buildDerivative(value.manifest, value.bytes);
+}
+
+test("text/babel scripts share one module scope, in page order", async () => {
+  const result = await page(`<!doctype html><html><head>${CDN_HEAD}</head><body><div id="root"></div>
+<script type="text/babel">const Header = () => <h1>Hi</h1>;</script>
+<script>window.plain = 1;</script>
+<script type="text/babel">ReactDOM.createRoot(document.getElementById("root")).render(<Header/>);</script>
+</body></html>`);
+  assert.equal(result.ok, true, result.ok ? "" : result.reason);
+  if (!result.ok) return;
+  const html = result.html.toString("utf8");
+  // One compiled script replaces both Babel scripts; the classic one stays,
+  // after the environment prelude: three script elements in all.
+  const parts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+  assert.equal(parts.length, 3, parts.map((part) => part.slice(0, 40)).join(" | "));
+  assert.match(parts[0], /localStorage/);
+  assert.equal(parts[2], "window.plain = 1;");
+  assert.doesNotMatch(html, /text\/babel/);
+  assertSelfContained(html);
+});
+
+test("a refusal in an inline script names the page file and its line", async () => {
+  const result = await page(`<!doctype html><html><head>${CDN_HEAD}</head><body>
+<script type="text/babel">const A = 1;</script>
+<script type="text/babel">
+const B = 2;
+const C = 1 +* 2;
+</script></body></html>`);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.path, "index.html");
+  assert.match(result.reason, /\(index\.html:8\)$/);
+  const module = await page(`<!doctype html><html><body>\n<script type="module">\nimport x from "left-pad";\n</script></body></html>`);
+  assert.equal(module.ok, false);
+  if (!module.ok) {
+    assert.equal(module.path, "index.html");
+    assert.match(module.reason, /module "left-pad" is not available/);
+  }
+});
+
+test("ES imports from esm.sh, Skypack, jsDelivr and unpkg use the vendored libraries", async () => {
+  const result = await compile(`import React, { useState } from "https://esm.sh/react@18.2.0";
+import { createRoot } from "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0";
+import { Camera } from "https://cdn.skypack.dev/lucide-react@0.300.0";
+import debounce from "https://cdn.jsdelivr.net/npm/lodash@4.17.21/debounce/+esm";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js?module";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+export default () => <p>{typeof createRoot}{typeof debounce}{typeof OrbitControls}{THREE.REVISION}<Camera/>{String(useState)}</p>;`);
+  assert.equal(result.ok, true, result.ok ? "" : result.reason);
+  if (result.ok) assert.doesNotMatch(result.html.toString("utf8"), /esm\.sh|skypack|jsdelivr|unpkg/);
+  await refused(`import confetti from "https://esm.sh/canvas-confetti"; export default () => null;`, /needs the network/);
+  await refused(`import x from "https://esm.sh/react@18/cjs/react.development.js"; export default () => null;`, /needs the network/);
+});
+
+test("three.js example scripts from a CDN become THREE members or refuse by name", async () => {
+  const ok = await page(`<!doctype html><html><body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>const scene = new THREE.Scene(); window.hasControls = typeof THREE.OrbitControls;</script></body></html>`);
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+  if (ok.ok) assert.match(ok.html.toString("utf8"), /OrbitControls/);
+  const missing = await page(`<!doctype html><html><body>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/NoSuchAddon.js"></script></body></html>`);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.match(missing.reason, /three\.js example examples\/js\/NoSuchAddon\.js is not part of the runtime/);
+});
+
+test("an inline Tailwind v3 config is applied and v3 borders keep their gray", async () => {
+  const result = await page(`<!doctype html><html><head>${CDN_HEAD}
+<script>tailwind.config = { darkMode: "class", theme: { extend: { colors: { brand: { 500: "#123456" } }, fontFamily: { display: ["Inter", "sans-serif"] } } }, plugins: [window.x] };</script>
+</head><body><div id="root" class="bg-brand-500 font-display dark:text-brand-500 border"></div>
+<script type="text/babel">ReactDOM.createRoot(document.getElementById("root")).render(<p>x</p>);</script></body></html>`);
+  assert.equal(result.ok, true, result.ok ? "" : result.reason);
+  if (!result.ok) return;
+  const html = result.html.toString("utf8");
+  assert.match(html, /\.bg-brand-500\s*\{\s*background-color:\s*#123456/);
+  assert.match(html, /font-family:\s*Inter,\s*sans-serif/);
+  assert.match(html, /\.dark\\:text-brand-500:is\(\.dark \*\)/);
+  assert.match(html, /border-color:\s*var\(--color-gray-200,\s*currentColor\)/);
+  // The config script still runs against the prelude's tailwind object.
+  assert.match(html, /tailwind\.config = \{/);
+  assert.ok(result.warnings.some((warning) => warning.includes("tailwind.config")));
+});
+
+test("a failure of esbuild itself is retryable, not a refusal of the page", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { mkdtempSync, writeFileSync, chmodSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const directory = mkdtempSync(path.join(tmpdir(), "polka-esbuild-"));
+  const broken = path.join(directory, "esbuild");
+  writeFileSync(broken, "#!/bin/sh\nexit 97\n");
+  chmodSync(broken, 0o755);
+  const script = `
+import { buildDerivative } from ${JSON.stringify(new URL("../apps/server/react-runtime.ts", import.meta.url).href)};
+import { componentShell } from ${JSON.stringify(new URL("../packages/contracts/runtime.ts", import.meta.url).href)};
+import { canonicalizeManifest } from ${JSON.stringify(new URL("../packages/contracts/bundle.ts", import.meta.url).href)};
+import { createHash } from "node:crypto";
+const files = new Map([["index.html", Buffer.from(componentShell("App", "App.jsx"))], ["App.jsx", Buffer.from("export default () => null;")]]);
+const manifest = canonicalizeManifest({ version: 1, entrypoint: "index.html", runtime: "inline-live-experimental-v1",
+  files: [...files].map(([path, value]) => ({ path, mime: path.endsWith(".html") ? "text/html" : "text/javascript", size: value.length, sha256: createHash("sha256").update(value).digest("hex") })),
+  provenance: { kind: "mcp", sourceUrl: null, capturedAt: "2026-09-22T10:00:00Z", attribution: "Test", license: "unknown" },
+  dependencies: { status: "self-contained", unresolved: [] } });
+console.log(JSON.stringify(await buildDerivative(manifest, files)));`;
+  const child = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
+    encoding: "utf8",
+    env: { ...process.env, ESBUILD_BINARY_PATH: broken },
+  });
+  const result = JSON.parse(child.stdout.trim().split("\n").at(-1) || "{}");
+  assert.equal(result.ok, false, child.stderr);
+  assert.equal(result.failed, true);
+  assert.equal(result.category, "compiler");
 });

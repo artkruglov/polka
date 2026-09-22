@@ -3,11 +3,15 @@ import {parse,serialize,type DefaultTreeAdapterTypes as Tree} from 'parse5';
 import postcss from 'postcss';
 import {canonicalizeManifest} from '../../../packages/contracts/bundle.ts';
 import {MAX_BYTES} from '../../../packages/contracts/index.ts';
-import {buildInlineBundle} from '../bundle-inline.ts';
+import {checkBuildInWorker} from '../bundle-derivatives.ts';
+import {cdnRole} from '../react-runtime.ts';
 import {fetchPublic,publicUrl,type PublicResponse} from './public-fetch.ts';
 
 type Fetcher=(url:string,options:{maxBytes:number;signal:AbortSignal})=>Promise<PublicResponse>;
 export class HtmlCaptureError extends Error {constructor(public code:string,message:string){super(message);}}
+/** A resource the viewer cannot use anyway (a font format it does not load); it is left out with a warning. */
+class SkippedResource extends Error {}
+const SKIPPED_FONTS=['font/ttf','font/otf','font/sfnt','font/woff','application/font-woff','application/x-font-ttf','application/x-font-otf','application/font-sfnt','application/vnd.ms-fontobject'];
 const extensions:Record<string,string>={'text/html':'html','text/css':'css','text/javascript':'js','application/javascript':'js','image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/svg+xml':'svg','font/woff2':'woff2'};
 /** Produces a bundle, never executes source JavaScript and never saves/publishes it.
  * All dependency requests use the same public-fetch boundary as the entrypoint.
@@ -34,8 +38,11 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
   if(paths.size>=63)throw new HtmlCaptureError('too_many_files','У страницы слишком много ресурсов.');
   // Reserve the URL before traversing CSS so cycles cannot cause unbounded requests.
   const key=`asset-${++sequence}`;paths.set(url.href,key);
+  // A font the viewer does not load is not downloaded at all.
+  if(/\.(?:ttf|otf|eot|woff)$/i.test(url.pathname)){paths.delete(url.href);warnings.add('Шрифты TTF/OTF/EOT/WOFF пропущены: просмотр подключает только WOFF2, используется запасной шрифт.');throw new SkippedResource();}
   const response=await request(url.href);const originalMime=response.contentType.split(';')[0].trim().toLowerCase();const extension=extensions[originalMime];
-  if(!extension||originalMime==='text/html')throw new HtmlCaptureError('unsupported_asset','Ресурс страницы имеет неподдерживаемый формат.');
+  if(SKIPPED_FONTS.includes(originalMime)){paths.delete(url.href);warnings.add('Шрифты TTF/OTF/EOT/WOFF пропущены: просмотр подключает только WOFF2, используется запасной шрифт.');throw new SkippedResource();}
+  if(!extension||originalMime==='text/html')throw new HtmlCaptureError('unsupported_asset',`Ресурс страницы ${url.hostname}${url.pathname.slice(0,80)} имеет неподдерживаемый формат (${originalMime||'без типа'}).`);
   // Extension is not needed by the bundle contract; stable paths also handle CSS cycles.
   const mime=originalMime==='application/javascript'?'text/javascript':originalMime;
   let bytes=response.bytes;
@@ -48,8 +55,13 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
   for(const r of imports){const match=r.params.match(/^(?:url\(\s*)?["']([^"']+)["']\s*\)?(.*)$/s);if(!match)throw new HtmlCaptureError('unsupported_css','Не удалось разобрать CSS import.');r.params=`url("${await resource(match[1],parent)}")${match[2]}`;}
   for(const d of declarations){
    if(/url\(/i.test(d.value)&&/\\/.test(d.value))throw new HtmlCaptureError('unsupported_css','CSS URL с escape-последовательностью пока не поддерживается.');
-   const matches=[...d.value.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)/gi)];
-   let next=d.value;for(const m of matches){const path=await resource(m[1]??m[2]??m[3],parent);next=next.replace(m[0],()=>`url("${path}")`);}d.value=next;
+   // A skipped font drops its entry of a comma list (@font-face src), or the whole declaration.
+   const parts=[];for(const part of postcss.list.comma(d.value)){
+    const matches=[...part.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]*))\s*\)/gi)];
+    let next=part,skipped=false;for(const m of matches){try{const path=await resource(m[1]??m[2]??m[3],parent);next=next.replace(m[0],()=>`url("${path}")`);}catch(error){if(!(error instanceof SkippedResource))throw error;skipped=true;}}
+    if(!skipped)parts.push(next);
+   }
+   if(parts.length)d.value=parts.join(', ');else d.remove();
   }return tree.toString();
  }
  for(const node of nodes){
@@ -59,7 +71,12 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
   for(const a of node.attrs){
    if(a.name==='style')a.value=await css(a.value,base);
    if(a.name==='srcset')warnings.add('Адаптивные изображения srcset ещё не локализованы.');
-   if((a.name==='src'&&['script','img','source','video','audio'].includes(node.tagName))||(a.name==='poster'&&node.tagName==='video')||(a.name==='href'&&node.tagName==='link'&&node.attrs.some(x=>x.name==='rel'&&x.value.split(/\s+/).some(v=>['stylesheet','icon'].includes(v)))))a.value=await resource(a.value,base);
+   const stylesheet=node.tagName==='link'&&node.attrs.some(x=>x.name==='rel'&&x.value.toLowerCase().split(/\s+/).includes('stylesheet'));
+   // A CDN library or Tailwind stays a recognisable URL: the runtime replaces it with Полка's vendored copy.
+   if(((a.name==='src'&&node.tagName==='script')||(a.name==='href'&&stylesheet))&&a.value&&cdnRole(new URL(a.value,base).href)){a.value=new URL(a.value,base).href;continue;}
+   // Icons and other link hints are not downloaded; the interactive build leaves them out.
+   if(a.name==='href'&&node.tagName==='link'&&!stylesheet){if(a.value)a.value=new URL(a.value,base).href;continue;}
+   if((a.name==='src'&&['script','img','source','video','audio'].includes(node.tagName))||(a.name==='poster'&&node.tagName==='video')||(a.name==='href'&&stylesheet))a.value=await resource(a.value,base);
   }
   if(node.tagName==='style')for(const child of node.childNodes)if(child.nodeName==='#text') (child as Tree.TextNode).value=await css((child as Tree.TextNode).value,base);
  }
@@ -75,8 +92,10 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
  const output=Buffer.from(serialize(doc));stored.set('index.html',{mime:'text/html',bytes:output});
  const safeSource=new URL(main.url);safeSource.search='';safeSource.hash='';
  const manifest=canonicalizeManifest({version:1,entrypoint:'index.html',runtime:'preserved-only-v1',files:[...stored].map(([path,{mime,bytes}])=>({path,mime,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')})),provenance:{kind:'url',sourceUrl:safeSource.href,capturedAt:new Date().toISOString(),attribution:'Imported from a public URL by the user',license:'unknown'},dependencies:{status:'unknown',unresolved:[]}});
- const built=buildInlineBundle(manifest,new Map([...stored].map(([p,f])=>[p,f.bytes])));
- if(!built.ok)warnings.add(`Интерактивная сборка недоступна: ${built.reason}`);
+ // The same isolated build worker (and runtime) as the interactive version, off the main thread.
+ const built=await checkBuildInWorker(manifest,[...stored].map(([path,f])=>({path,bytes:f.bytes})));
+ if(!built.ok)warnings.add(built.failed?`Интерактивная сборка не проверена: ${built.reason}`:`Интерактивная сборка недоступна: ${built.reason}`);
+ else for(const warning of built.warnings??[])warnings.add(`В интерактивной версии: ${warning}`);
  // Successful localization alone cannot prove arbitrary JavaScript is offline.
  const title=nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,200)||sourceUrl.hostname;
  return {title,manifest,files:[...stored].map(([path,{bytes}])=>({path,encoding:'base64' as const,data:bytes.toString('base64')})),previewReady:built.ok&&warnings.size===0,warnings:[...warnings]};
