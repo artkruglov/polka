@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { RUNTIME_LIBRARIES, runtimeLibraryFor } from "../packages/contracts/runtime.ts";
 import { buildInlineBundle } from "../apps/server/bundle-inline.ts";
@@ -288,4 +290,100 @@ test("a page without module scripts keeps the v4 rules and profile", async () =>
   assert.equal(result.runtimeProfile, "bundle-inline-experimental-v1");
   assert.equal(result.builderVersion, "bundle-inline-v5");
   assert.doesNotMatch(result.html.toString("utf8"), /localStorage/);
+});
+
+// Security review of the runtime builder (22.09.2026): esbuild reads the
+// server's disk, so computed imports, import attributes and files outside
+// the allowlisted packages must never reach the bundle.
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
+const SECRETS = /S3_SECRET_KEY|DATABASE_URL|POSTGRES_PASSWORD|LINK_KEY|localhost|"name":\s*"polka"/;
+
+async function refused(source: string, pattern: RegExp, file = "App.jsx") {
+  const result = await compile(source, file);
+  if (result.ok) {
+    assert.doesNotMatch(result.html.toString("utf8"), SECRETS);
+    assert.fail(`built instead of refusing: ${source}`);
+  }
+  assert.match(result.reason, pattern, source);
+  assert.ok(!result.reason.includes(ROOT) && !result.reason.includes("node_modules"), result.reason);
+}
+
+test("computed imports and import attributes are refused before esbuild can glob the disk", async () => {
+  const computed = /must name a module with a plain string/;
+  const attributes = /import attributes/;
+  await refused('const n = ""; export default async () => (await import(`../../.env${n}`)).default;', computed);
+  await refused('const n = ""; export default async () => (await import(`../../.env${n}`, { with: { type: "text" } })).default;', attributes);
+  await refused('const n = "self/environ"; export default async () => (await import(`../../../../../../../../proc/${n}`, { with: { type: "text" } })).default;', attributes);
+  await refused('const n = "package"; export default () => require(`./${n}.json`);', computed);
+  await refused('const n = "package"; export default () => require("../../" + n + ".json");', computed);
+  await refused('const n = "x"; export default () => require.resolve(n);', computed);
+  await refused('export default async () => import("./" + location.hash);', computed);
+  await refused('import text from "./App.jsx" with { type: "text" };\nexport default () => text;', attributes);
+  await refused('export * from "react" with { type: "js" };', attributes, "App.tsx");
+  // A plain string, or a template without expressions, stays allowed.
+  const ok = await compile('export default async () => { const m = await import(`react`); return typeof m; };');
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+});
+
+test("page modules are named only through the generated entry", async () => {
+  await refused('import secret from "user:../../.env";\nexport default () => secret;', /import "user:\.\.\/\.\.\/\.env" needs the network/);
+  await refused('import secret from "/etc/hosts";\nexport default () => secret;', /is not available/);
+});
+
+test("only files of allowlisted library packages and their dependencies are readable", async () => {
+  const { allowedPackageDirs, isAllowedLibraryFile } = await import("../apps/server/runtime-guards.ts");
+  const dirs = allowedPackageDirs(ROOT, RUNTIME_LIBRARIES.map((library) => library.name));
+  const at = (file: string) => isAllowedLibraryFile(path.join(ROOT, file), dirs);
+  assert.equal(at("node_modules/react/index.js"), true);
+  assert.equal(at("node_modules/d3-array/src/index.js"), true); // a resolved d3 dependency
+  assert.equal(at("node_modules/immer/package.json"), true); // recharts -> @reduxjs/toolkit -> immer
+  assert.equal(at("package.json"), false);
+  assert.equal(at(".env"), false);
+  assert.equal(at("apps/server/config.ts"), false);
+  assert.equal(at("node_modules/pg/package.json"), false);
+  assert.equal(at("node_modules/esbuild/package.json"), false);
+  assert.equal(at("node_modules/react/../pg/package.json"), false);
+  assert.equal(isAllowedLibraryFile("/etc/hosts", dirs), false);
+  assert.equal(isAllowedLibraryFile("/proc/self/environ", dirs), false);
+});
+
+test("deeply nested sources are refused before esbuild parses them", async () => {
+  const deep = /nests too deeply/;
+  await refused(`export default () => ${"(".repeat(600)}1${")".repeat(600)};`, deep);
+  await refused(`export default () => ${"<a>".repeat(600)}${"</a>".repeat(600)};`, deep);
+  await refused(`export default () => ${"-".repeat(2000)}1;`, deep);
+  await refused(`let a; export default () => ${"a?1:".repeat(1500)}2;`, deep);
+  await refused(`let a; export default () => ${"a=".repeat(1500)}1;`, deep);
+  const json = fixture({
+    "index.html": componentShell("App", "App.jsx"),
+    "App.jsx": 'import data from "./data.json"; export default () => data.length;',
+    "data.json": `${"[".repeat(700)}${"]".repeat(700)}`,
+  });
+  const nested = await buildDerivative(json.manifest, json.bytes);
+  assert.equal(nested.ok, false);
+  if (!nested.ok) assert.equal(nested.path, "data.json");
+  // Ordinary components with many attributes, handlers and separators pass.
+  const ok = await compile(`// ${"-".repeat(120)}
+export default () => <svg>${'<path d="M0 0" fill="red" stroke="blue" />'.repeat(800)}</svg>;`);
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+});
+
+test("a runtime page is limited in source files and size", async () => {
+  const many: Record<string, string> = { "index.html": componentShell("App", "App.jsx") };
+  many["App.jsx"] = "export default () => null;";
+  for (let index = 0; index < 32; index++) many[`lib/m${index}.js`] = `export const v${index} = ${index};`;
+  const tooMany = fixture(many);
+  const result = await buildDerivative(tooMany.manifest, tooMany.bytes);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.reason, /at most 32 source files/);
+  const big = await compile(`export default () => ${JSON.stringify("x".repeat(2 * 1024 * 1024))};`);
+  assert.equal(big.ok, false);
+  if (!big.ok) assert.match(big.reason, /exceed 2 MiB/);
+});
+
+test("the build service admits a runtime page only when asked to", async () => {
+  const value = component("export default () => null;");
+  const result = await buildDerivative(value.manifest, value.bytes, { allowRuntime: false });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.reason, /not admitted/);
 });

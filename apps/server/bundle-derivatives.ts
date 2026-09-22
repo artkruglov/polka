@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import type { PoolClient } from "pg";
 import type { InlineBuildStatus } from "../../packages/contracts/index.ts";
@@ -9,6 +11,7 @@ import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readRevisionSource, type Actor } from "./artifacts.ts";
 import { putImmutable, sha256 } from "./storage.ts";
+import { needsRuntimeBuild } from "./react-runtime.ts";
 import {
   BUNDLE_BUILDER_VERSION,
   isServedRuntimeProfile,
@@ -61,6 +64,26 @@ function releaseWorkerSlot() {
   runningWorkers--;
 }
 
+// esbuild's memory is outside the worker heap: one runtime build at a time.
+let runtimeBuildRunning = false;
+
+export function acquireRuntimeSlot() {
+  if (runtimeBuildRunning) return false;
+  runtimeBuildRunning = true;
+  return true;
+}
+
+export function releaseRuntimeSlot() {
+  runtimeBuildRunning = false;
+}
+
+const runtimeBusy = () =>
+  new Problem(
+    429,
+    "quota",
+    "Сервер уже собирает другую страницу с компонентами. Повторите запрос через несколько секунд.",
+  );
+
 type WorkerResult =
   | {
       ok: true;
@@ -73,9 +96,37 @@ type WorkerResult =
     }
   | { ok: false; reason: string; path?: string; failed?: boolean };
 
+const requireFromHere = createRequire(import.meta.url);
+
+/**
+ * The only environment a build worker (and the esbuild it starts) gets:
+ * never the server's own, which holds database and storage secrets. The
+ * esbuild binary is started through a wrapper that sets a hard memory limit.
+ */
+export function builderEnv() {
+  let binary = "";
+  try {
+    binary = requireFromHere.resolve(
+      `@esbuild/${process.platform}-${process.arch}/bin/esbuild`,
+    );
+  } catch {
+    // Without a platform binary the runtime build fails; classic builds run.
+  }
+  return {
+    PATH: "/usr/local/bin:/usr/bin:/bin",
+    GOMEMLIMIT: "256MiB",
+    GOMAXPROCS: "2",
+    ESBUILD_BINARY_PATH: fileURLToPath(
+      new URL("./esbuild-limited.sh", import.meta.url),
+    ),
+    POLKA_ESBUILD_BINARY: binary,
+  };
+}
+
 async function runBuilder(
   manifest: ReturnType<typeof canonicalizeManifest>,
   files: Array<{ path: string; bytes: Buffer }>,
+  allowRuntime: boolean,
 ) {
   return new Promise<WorkerResult>((resolve, reject) => {
     const worker = new Worker(
@@ -86,9 +137,9 @@ async function runBuilder(
           maxYoungGenerationSizeMb: 16,
           stackSizeMb: 4,
         },
-        // The runtime builder runs esbuild as a child process of this worker;
-        // it inherits these Go runtime limits and ends with the worker.
-        env: { ...process.env, GOMEMLIMIT: "256MiB", GOMAXPROCS: "2" },
+        // esbuild runs as a child process of this worker, inherits this
+        // environment and ends with the worker.
+        env: builderEnv(),
       },
     );
     let settled = false;
@@ -118,7 +169,7 @@ async function runBuilder(
       clearTimeout(timeout);
       reject(new Error(`Bundle build worker exited with code ${code}`));
     });
-    worker.postMessage({ manifest, files });
+    worker.postMessage({ manifest, files, allowRuntime });
   });
 }
 
@@ -305,13 +356,25 @@ async function executeBuild(
 ) {
   let source: Awaited<ReturnType<typeof readRevisionSource>>;
   let result: WorkerResult;
+  let runtimeSlot = false;
   try {
     source = await readSource();
     if (!buildableStorage(source.revision.storage_kind)) throw missing();
     if (source.manifestSha256 !== derivative.source_manifest_sha256)
       throw new Error("Derivative source changed");
-    result = await runBuilder(source.manifest, source.files);
+    // esbuild runs outside the worker heap, so runtime pages are admitted
+    // one at a time; the row stays pending and a retry resumes it.
+    const runtime = needsRuntimeBuild(
+      source.manifest,
+      new Map(source.files.map((file) => [file.path, file.bytes])),
+    );
+    if (runtime) {
+      if (!acquireRuntimeSlot()) throw runtimeBusy();
+      runtimeSlot = true;
+    }
+    result = await runBuilder(source.manifest, source.files, runtime);
   } catch (error) {
+    if (error instanceof Problem && error.status === 429) throw error;
     if (resumed) throw error;
     const failed = await finishNonReady(
       sourceTenantId,
@@ -322,6 +385,8 @@ async function executeBuild(
     );
     if (!failed) throw error;
     return statusDTO(failed);
+  } finally {
+    if (runtimeSlot) releaseRuntimeSlot();
   }
   if (!result.ok) {
     if (resumed) return statusDTO(derivative);

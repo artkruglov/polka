@@ -26,6 +26,14 @@ import {
   BUNDLE_BUILDER_VERSION,
   REACT_RUNTIME_PROFILE,
 } from "./bundle-runtime-contract.ts";
+import {
+  MAX_RUNTIME_MODULES,
+  MAX_RUNTIME_SOURCE_BYTES,
+  allowedPackageDirs,
+  isAllowedLibraryFile,
+  staticImportsOnly,
+  withinNestingLimits,
+} from "./runtime-guards.ts";
 
 /**
  * The Полка runtime builder (profile react-runtime-v1). A page whose scripts
@@ -44,6 +52,12 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 7 * 1024 * 1024;
 const MAX_CANDIDATES = 20_000;
 const XHTML = "http://www.w3.org/1999/xhtml";
+let allowedDirs: string[] | null = null;
+const libraryDirs = () =>
+  (allowedDirs ??= allowedPackageDirs(
+    ROOT,
+    RUNTIME_LIBRARIES.map((library) => library.name),
+  ));
 
 type Node = {
   nodeName?: string;
@@ -237,13 +251,16 @@ const loaderFor = (file: string): Loader | null =>
   (RUNTIME_MODULE_LOADERS as Record<string, Loader>)[path.posix.extname(file)] ??
   (file.endsWith(".css") ? "css" : file.endsWith(".json") ? "json" : null);
 
+/**
+ * A compile error is reported only when it points into the page's own
+ * source; anything about library or server files stays generic, and
+ * absolute paths are removed from the text.
+ */
 function describe(errors: Message[]) {
   const first = errors[0];
-  if (!first) return "compilation failed";
-  const where = first.location
-    ? ` (${first.location.file.replace(/^user:/, "")}:${first.location.line})`
-    : "";
-  return `${first.text}${where}`.slice(0, 280);
+  if (!first?.location?.file.startsWith("user:")) return "compilation failed";
+  const text = first.text.replace(/(?:^|(?<=[\s"'(]))\/[^\s"')]*/g, "…");
+  return `compilation failed: ${text} (${first.location.file.slice(5)}:${first.location.line})`.slice(0, 280);
 }
 
 /** Words that may be Tailwind classes; the compiler ignores the rest. */
@@ -300,6 +317,49 @@ async function tailwindCss(words: string[], preflight: boolean) {
   return compiler.build(words);
 }
 
+const typeOf = (node: Node) => (attr(node, "type") ?? "").trim().toLowerCase();
+const isRuntimeScript = (node: Node) =>
+  MODULE_TYPES.includes(typeOf(node)) ||
+  typeOf(node) === "importmap" ||
+  (CLASSIC_TYPES.includes(typeOf(node)) && !!cdnRole(attr(node, "src")));
+
+function scanPage(document: Node) {
+  const scripts: Node[] = [];
+  const cdnLinks: Node[] = [];
+  walk(document, (node) => {
+    if (node.tagName === "script") scripts.push(node);
+    else if (
+      node.tagName === "link" &&
+      /\bstylesheet\b/i.test(attr(node, "rel") ?? "") &&
+      cdnRole(attr(node, "href"))?.kind === "tailwind"
+    )
+      cdnLinks.push(node);
+  });
+  return {
+    scripts,
+    cdnLinks,
+    runtime: scripts.some(isRuntimeScript) || cdnLinks.length > 0,
+  };
+}
+
+/**
+ * Whether a page is built by the runtime (esbuild) rather than the v4 rules.
+ * The build service uses it to admit one runtime build at a time.
+ */
+export function needsRuntimeBuild(
+  manifest: BundleManifest,
+  sourceBytes: Map<string, Buffer>,
+) {
+  const entry = sourceBytes.get(manifest.entrypoint);
+  if (!entry) return false;
+  try {
+    const html = new TextDecoder("utf-8", { fatal: true }).decode(entry);
+    return scanPage(parse(html) as Node).runtime;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Builds a runtime page, or returns null when the entrypoint has no module,
  * JSX or known-CDN script (the caller then applies the v4 rules as before).
@@ -338,23 +398,8 @@ export async function buildRuntimeBundle(
     return fail("entrypoint is not valid HTML", entryPath);
   }
 
-  const scripts: Node[] = [];
-  const cdnLinks: Node[] = [];
-  walk(document, (node) => {
-    if (node.tagName === "script") scripts.push(node);
-    else if (
-      node.tagName === "link" &&
-      /\bstylesheet\b/i.test(attr(node, "rel") ?? "") &&
-      cdnRole(attr(node, "href"))?.kind === "tailwind"
-    )
-      cdnLinks.push(node);
-  });
-  const typeOf = (node: Node) => (attr(node, "type") ?? "").trim().toLowerCase();
-  const isRuntimeScript = (node: Node) =>
-    MODULE_TYPES.includes(typeOf(node)) ||
-    typeOf(node) === "importmap" ||
-    (CLASSIC_TYPES.includes(typeOf(node)) && !!cdnRole(attr(node, "src")));
-  if (!scripts.some(isRuntimeScript) && !cdnLinks.length) return null;
+  const { scripts, cdnLinks, runtime } = scanPage(document);
+  if (!runtime) return null;
 
   const files = new Map(canonical.files.map((file) => [file.path, file]));
   const modules: Module[] = [];
@@ -461,9 +506,43 @@ export async function buildRuntimeBundle(
   );
   if (!page.ok) return page;
 
+  // Everything esbuild could parse from the page, checked before it runs:
+  // count and size caps, a nesting bound, and static import specifiers only.
+  const codeFiles = canonical.files.filter(
+    (file) => file.path !== entryPath && loaderFor(file.path) !== null,
+  );
+  const sources = [
+    ...modules.filter((module) => !files.has(module.path)),
+    ...codeFiles.map((file) => ({
+      path: file.path,
+      source: decode(file.path),
+      loader: loaderFor(file.path)!,
+    })),
+  ];
+  if (sources.length > MAX_RUNTIME_MODULES)
+    return fail(`a runtime page may have at most ${MAX_RUNTIME_MODULES} source files`, entryPath);
+  if (
+    sources.reduce((total, item) => total + Buffer.byteLength(item.source ?? ""), 0) >
+    MAX_RUNTIME_SOURCE_BYTES
+  )
+    return fail("runtime sources exceed 2 MiB", entryPath);
+  for (const item of sources) {
+    if (item.source === null) return fail("source is not valid UTF-8", item.path);
+    if (!withinNestingLimits(item.source))
+      return fail("source nests too deeply to compile safely", item.path);
+  }
+  for (const item of sources) {
+    const refusal = await staticImportsOnly(item.source!, item.loader);
+    if (refusal) return fail(refusal, item.path);
+  }
+
   const userSources = new Map(modules.map((module) => [module.path, module]));
   const mount = modules.some((module) => exportsDefault(module.source));
   let refused: { reason: string; path: string } | null = null;
+  const notAllowed = () => {
+    refused ??= { reason: "import not allowed", path: entryPath };
+    return { errors: [{ text: "import not allowed" }] };
+  };
   const plugin: Plugin = {
     name: "polka-runtime",
     setup(builder) {
@@ -471,8 +550,11 @@ export async function buildRuntimeBundle(
         if (args.kind === "entry-point")
           return { path: "entry", namespace: "polka" };
         if (args.namespace !== "polka" && args.namespace !== "user") return;
-        if (args.path.startsWith("user:"))
-          return { path: args.path.slice(5), namespace: "user" };
+        // Only the generated entry names page modules directly.
+        if (args.namespace === "polka" && args.path.startsWith("user:")) {
+          const target = args.path.slice(5);
+          if (userSources.has(target)) return { path: target, namespace: "user" };
+        }
         const importer = args.namespace === "user" ? args.importer : entryPath;
         if (args.path.startsWith("./") || args.path.startsWith("../")) {
           const resolved = resolveUserFile(args.path, importer, files, entryPath);
@@ -504,8 +586,20 @@ export async function buildRuntimeBundle(
       builder.onLoad({ filter: /.*/, namespace: "user" }, (args) => {
         const inline = userSources.get(args.path);
         if (inline) return { contents: inline.source, loader: inline.loader, resolveDir: ROOT };
-        const loader = loaderFor(args.path)!;
-        return { contents: decode(args.path) ?? "", loader, resolveDir: ROOT };
+        const loader = loaderFor(args.path);
+        const contents = files.has(args.path) ? decode(args.path) : null;
+        if (!loader || contents === null) return notAllowed();
+        return { contents, loader, resolveDir: ROOT };
+      });
+      // Every file esbuild reads from disk, including glob expansions that
+      // never pass onResolve, must belong to an allowed library package.
+      builder.onLoad({ filter: /.*/ }, (args) => {
+        // A library's browser-disabled builtin ("crypto": false) is an
+        // empty stub esbuild makes without reading anything.
+        if (args.namespace === "") return undefined;
+        if (args.namespace !== "file") return notAllowed();
+        if (!isAllowedLibraryFile(args.path, libraryDirs())) return notAllowed();
+        return undefined;
       });
     },
   };
@@ -533,6 +627,11 @@ export async function buildRuntimeBundle(
     js = result.outputFiles.find((file) => file.path.endsWith(".js"))?.text ?? "";
     importedCss =
       result.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? "";
+    for (const input of Object.keys(result.metafile.inputs)) {
+      if (input.startsWith("user:") || input === "polka:entry" || input.startsWith("(disabled):")) continue;
+      if (/^[a-z-]+:/.test(input) || !isAllowedLibraryFile(path.resolve(ROOT, input), libraryDirs()))
+        return fail("import not allowed", entryPath);
+    }
     consumed = Object.keys(result.metafile.inputs)
       .filter((input) => input.startsWith("user:"))
       .map((input) => input.slice(5))
@@ -541,10 +640,7 @@ export async function buildRuntimeBundle(
     const current = refused as { reason: string; path: string } | null;
     if (current) return fail(current.reason, current.path);
     const errors = (error as { errors?: Message[] }).errors;
-    return fail(
-      errors ? `compilation failed: ${describe(errors)}` : "compilation failed",
-      entryPath,
-    );
+    return fail(errors ? describe(errors) : "compilation failed", entryPath);
   }
   if (Buffer.byteLength(js) > MAX_SCRIPT_BYTES)
     return fail("compiled script exceeds 7 MiB", entryPath);
@@ -646,7 +742,12 @@ function resolveUserFile(
 export async function buildDerivative(
   manifest: BundleManifest,
   sourceBytes: Map<string, Buffer>,
+  { allowRuntime = true }: { allowRuntime?: boolean } = {},
 ): Promise<BundleInlineResult> {
+  // The service admits runtime builds one at a time; a page it classified as
+  // classic must not start esbuild here.
+  if (!allowRuntime && needsRuntimeBuild(manifest, sourceBytes))
+    return fail("runtime build was not admitted", manifest.entrypoint);
   return (
     (await buildRuntimeBundle(manifest, sourceBytes)) ??
     buildInlineBundle(manifest, sourceBytes)
