@@ -39,6 +39,7 @@
 - [MCP_IMPLEMENTATION_SPEC](MCP_IMPLEMENTATION_SPEC.md) — контракт реализованного локального сервера; незавершённые приёмки перечислены в STATUS.
 - [MCP_ONBOARDING_SPEC](MCP_ONBOARDING_SPEC.md) — контракт настоящего подключения в интерфейсе; заменяет MCP-демо старого ONBOARDING_SPEC.
 - [MCP_CONNECTOR](MCP_CONNECTOR.md) — Полка как коннектор Claude.ai и ChatGPT: OAuth 2.1, согласие, `polka_publish`, отзыв и ограничения.
+- [PUBLISH_API](PUBLISH_API.md) — HTTP API публикации (`POST /api/v1/publish`) и CLI без зависимостей для агентов и скриптов без MCP.
 
 - [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md) — переход от локального runtime к HTTPS staging и ещё не пройденные проверки.
 
