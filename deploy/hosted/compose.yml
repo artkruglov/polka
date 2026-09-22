@@ -63,7 +63,9 @@ services:
     ports: ["127.0.0.1:5432:5432"]
     networks: [polka]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U polka_admin -d polka"]
+      # TCP, not the socket: during first-boot init a temporary server
+      # accepts socket connections only, and migrate connects over TCP.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U polka_admin -d polka"]
       interval: 5s
       retries: 30
     logging:

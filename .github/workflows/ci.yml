@@ -64,6 +64,7 @@ jobs:
 
   secrets:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -84,6 +85,19 @@ jobs:
         with:
           node-version: "22.16"
       - run: docker build -t polka:ci .
+      - name: Backup image builds
+        run: docker build -t polka-backup:ci deploy/hosted/backup
+      # Interpolation errors in the shipped compose files surface here, not
+      # on an operator's server. Dummy values stand in for the secrets.
+      - name: Compose files render
+        env:
+          POLKA_IMAGE: polka:ci
+          APP_HOST: polka.example.com
+          VIEWER_HOST_NAME: polka-view.example.com
+        run: |
+          cp deploy/hosted/hosted.env.example /tmp/hosted.env
+          sed -i -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' /tmp/hosted.env
+          docker compose -f deploy/hosted/compose.yml --env-file /tmp/hosted.env config --quiet
       - run: npm run local:setup
       - run: npm run infra:up
       - name: Smoke test the image (runtime role)

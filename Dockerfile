@@ -22,7 +22,7 @@ FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3e
 ENV NODE_ENV=production
 WORKDIR /app
 # Everything is root-owned and read-only for the node user that runs the app.
-COPY package.json package-lock.json LICENSE ./
+COPY package.json package-lock.json LICENSE NOTICE THIRD_PARTY_NOTICES.md ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/server ./apps/server
 COPY packages ./packages

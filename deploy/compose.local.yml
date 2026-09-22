@@ -9,7 +9,7 @@ services:
     ports: ["127.0.0.1:54388:5432"]
     volumes: ["metadata:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U polka -d polka"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U polka -d polka"]
       interval: 2s
       retries: 30
   # Development compatibility fixture, not the supported production distribution.

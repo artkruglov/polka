@@ -5,6 +5,8 @@
 !package.json
 !package-lock.json
 !LICENSE
+!NOTICE
+!THIRD_PARTY_NOTICES.md
 !apps/server/**
 !apps/web/**
 !packages/**

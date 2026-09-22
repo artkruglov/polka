@@ -1,0 +1,17 @@
+# Security and version updates. Every dependency is pinned exactly, so
+# nothing moves unless one of these pull requests is reviewed and merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: monthly }
+  - package-ecosystem: docker
+    directory: /deploy/hosted/backup
+    schedule: { interval: monthly }
