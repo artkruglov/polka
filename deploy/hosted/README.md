@@ -35,6 +35,27 @@ printf '%s' "$PASSWORD" | docker compose --env-file hosted.env run --rm -T --no-
   node --import tsx scripts/account.ts <login>
 ```
 
+## Редакционный каталог («Интересное»)
+
+Пока интерактивный HTML выключен, каталог наполняется статичными версиями редакционных материалов (`content/editorial/<slug>/static/index.html`, [evidence](../../docs/reviews/2026-09-22-editorial-static/README.md)). Нужен образ, содержащий `content/editorial/static-candidates.json`. Один раз создать редакционный аккаунт (пароль генерируется на VM и хранится только у оператора):
+
+```sh
+cd /opt/polka/deploy/hosted
+umask 077 && openssl rand -base64 24 > /root/polka-redakciya.pw
+docker compose --env-file hosted.env run --rm -T --no-deps app \
+  node --import tsx scripts/account.ts redakciya < /root/polka-redakciya.pw
+```
+
+Опубликовать (и раз в неделю продлевать: share живёт 30 дней, публикация с share, истекающей в ближайшие 7 дней, заменяется свежей без перерыва):
+
+```sh
+docker compose --env-file hosted.env run --rm -T --no-deps app \
+  node --import tsx scripts/editorial-seed-hosted.ts --confirm-publication --login redakciya
+curl -s https://polochka.app/api/editorial | grep -o '"slug"' | wc -l   # 12
+```
+
+Вывод — по строке `{"slug":…,"status":…}`: `published`, `unchanged`, `replaced`, `renewed`; `blocked` (slug занят другим tenant) и `failed` дают exit 1. Снять материал: `scripts/editorial-publish.ts withdraw --confirm-publication --tenant … --owner … --publication …`.
+
 ## Обновление
 
 ```sh

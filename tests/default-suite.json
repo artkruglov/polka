@@ -14,6 +14,7 @@
   "tests/restore-gate.test.ts",
   "tests/restore-target.test.ts",
   "tests/editorial.test.ts",
+  "tests/editorial-static.test.ts",
   "tests/editorial-client.test.ts",
   "tests/health.test.ts",
   "tests/health-adapters.test.ts",

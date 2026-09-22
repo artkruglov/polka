@@ -1,13 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
-import {
-  editorialPublishSchema,
-  publishEditorial,
-  withdrawEditorial,
-} from "../apps/server/editorial.ts";
+import { withdrawEditorial } from "../apps/server/editorial.ts";
 import { db } from "../apps/server/db.ts";
-import { sha256 } from "../apps/server/storage.ts";
+import { publishEditorialOperatorInput } from "./editorial-operator.ts";
 
 const uuid = z.string().uuid();
 const args = process.argv.slice(2);
@@ -30,17 +26,10 @@ try {
     const encoded = await readFile(inputPath);
     if (encoded.length > 64 * 1024)
       throw new Error("Editorial manifest exceeds 64 KiB");
-    const input = editorialPublishSchema.parse(
+    result = await publishEditorialOperatorInput(
+      { id: owner, tenant },
       JSON.parse(encoded.toString("utf8")),
     );
-    if (input.manifest.binding.tenantId !== tenant)
-      throw new Error("Expected tenant does not match the manifest");
-    if (!input.manifest.source.path.startsWith("content/editorial/"))
-      throw new Error("Editorial source must be inside content/editorial");
-    const source = await readFile(resolve(input.manifest.source.path));
-    if (sha256(source) !== input.manifest.source.sha256)
-      throw new Error("Editorial source hash mismatch");
-    result = await publishEditorial({ id: owner, tenant }, input);
   } else {
     result = await withdrawEditorial(
       { id: owner, tenant },
