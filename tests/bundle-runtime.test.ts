@@ -554,7 +554,7 @@ test("a static single-file bundle links statically until a ready derivative exis
     "",
   );
   assert.equal(document.statusCode, 200, document.body);
-  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/);
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox;/);
   // The static view (not the download) opens links in a new tab.
   assert.equal(document.body, `<base target="_blank">${page}`);
   assert.equal(
@@ -622,7 +622,7 @@ async function shareAndOpen(artifactId: string, revisionId: string) {
 }
 
 test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", async () => {
-  assert.equal(BUNDLE_BUILDER_VERSION, "bundle-inline-v5");
+  assert.equal(BUNDLE_BUILDER_VERSION, "bundle-inline-v6");
   const saved = await saveBundle();
   // Stand in for a derivative built before v4 shipped (ready rows are
   // immutable, so it is stored as the v3 builder would have left it).
@@ -884,14 +884,17 @@ test("an unsupported single upload is linked only through its built interactive 
       .statusCode,
     404,
   );
-  // The owner keeps running the upload itself.
+  // The owner sees what the recipient sees: the built version, not the upload.
   const ownerView = await call(
     "POST",
     `/api/revisions/${saved.revisionId}/live-view`,
     {},
   );
   assert.equal(ownerView.statusCode, 200, ownerView.body);
-  assert.equal(ownerView.json().profile, "inline-live-experimental-v1");
+  assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
+  const ownerDocument = await embedded(tokenFrom(ownerView.json().url));
+  assert.equal(ownerDocument.statusCode, 200);
+  assert.equal(ownerDocument.body, document.body);
 
   // A page that needs the network is refused by the builder and stays unlinked.
   const networked = await saveSingle(
@@ -935,6 +938,14 @@ test("a limited single upload links statically until its interactive version is 
     assert.equal(resolved.statusCode, 200, resolved.body);
     return { share: created, grant: resolved.json().grant as string };
   };
+  // Before any build the owner runs the upload itself.
+  const beforeBuild = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/live-view`,
+    {},
+  );
+  assert.equal(beforeBuild.statusCode, 200, beforeBuild.body);
+  assert.equal(beforeBuild.json().profile, "inline-live-experimental-v1");
   // No interactive version yet: static sandbox only, no direct run of the upload.
   const staticLink = await share();
   assert.equal(
@@ -977,12 +988,12 @@ test("a limited single upload links statically until its interactive version is 
     (await call("GET", "/api/view/bytes", undefined, "", liveLink.grant)).statusCode,
     404,
   );
-  // The owner may still run the upload itself.
+  // Once a build is ready the owner runs it too, not the upload.
   const ownerView = await call(
     "POST",
     `/api/revisions/${saved.revisionId}/live-view`,
     {},
   );
   assert.equal(ownerView.statusCode, 200, ownerView.body);
-  assert.equal(ownerView.json().profile, "inline-live-experimental-v1");
+  assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
 });

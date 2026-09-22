@@ -151,10 +151,7 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   );
   assert.equal(document.statusCode, 200, document.body);
   assert.equal(document.headers["content-security-policy"], STATIC_HTML_CSP);
-  assert.match(
-    document.headers["content-security-policy"] as string,
-    /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/,
-  );
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox;/);
   assert.equal(document.headers["cross-origin-resource-policy"], "same-origin");
   assert.equal(
     document.body,

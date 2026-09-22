@@ -6,6 +6,7 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readBlob, sha256 } from "./storage.ts";
+import { liveViewerCsp } from "./html.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -76,8 +77,10 @@ export async function issueOwnerLiveView(
          JOIN sessions session ON session.hash=$2 AND session.account_id=$3
          JOIN accounts account ON account.id=session.account_id
          LEFT JOIN LATERAL (
+           -- The owner runs what a link recipient would: the built version
+           -- when one is ready (single uploads too), else the single upload.
            SELECT d.id FROM revision_derivatives d
-           WHERE r.storage_kind='bundle'
+           WHERE r.storage_kind IN ('single','bundle')
              AND d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
              AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
              AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL} AND d.state='ready'
@@ -88,16 +91,15 @@ export async function issueOwnerLiveView(
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
          RETURNING expires_at,derivative_id`,
-        [
-          sha256(token),
-          sessionHash,
-          actor.id,
-          revisionId,
-          actor.tenant,
-        ],
+        [sha256(token), sessionHash, actor.id, revisionId, actor.tenant],
       )
     ).rows[0];
-    return inserted && { ...inserted, profile: await grantedProfile(c, inserted.derivative_id) };
+    return (
+      inserted && {
+        ...inserted,
+        profile: await grantedProfile(c, inserted.derivative_id),
+      }
+    );
   });
   if (!grant) throw missing();
   return liveViewResult(token, grant.expires_at, grant.profile);
@@ -152,7 +154,12 @@ export async function issueRecipientLiveView(sourceGrant: string) {
         [sha256(token), sourceGrantHash],
       )
     ).rows[0];
-    return inserted && { ...inserted, profile: await grantedProfile(c, inserted.derivative_id) };
+    return (
+      inserted && {
+        ...inserted,
+        profile: await grantedProfile(c, inserted.derivative_id),
+      }
+    );
   });
   if (!grant) throw missing();
   return liveViewResult(token, grant.expires_at, grant.profile);
@@ -227,7 +234,7 @@ export async function createLiveViewerApp() {
   viewer.addHook("onRequest", async (req, reply) => {
     reply.headers({
       "cache-control": "no-store",
-      "content-security-policy": `sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${config.APP_ORIGIN}`,
+      "content-security-policy": liveViewerCsp(config.APP_ORIGIN),
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow, noarchive",

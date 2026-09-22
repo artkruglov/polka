@@ -22,7 +22,21 @@ Viewer — отдельный Fastify listener, не маршрут SPA. HTML в
 
 Только явный запуск на странице HTML, не в карточке. (22.09.2026: владелец принял автозапуск интерактивной версии; изоляция прежняя. На странице HTML интерактивная версия открывается сразу, в карточке по-прежнему нет; см. [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md).) Видимая пометка локального эксперимента; остановка удаляет iframe, повтор получает новый capability. Статичный просмотр и скачивание остаются. htmlRuntime не становится true до полной приёмки; отдельный liveExperimental сообщает только о доступности эксперимента.
 
-Iframe: sandbox="allow-scripts", no-referrer. CSP документа: sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img/font/media-src data:; connect/frame/worker/object-src 'none'; base-uri/form-action 'none'; frame-ancestors APP_ORIGIN. Никаких allow-same-origin, popups, forms или top navigation. Дополнительно no-store/nosniff/noindex. CSP приложения разрешает frame-src конкретного viewer-origin только при включении эксперимента.
+Iframe: sandbox="allow-scripts allow-forms" (22.09.2026), no-referrer. CSP документа: sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img/font/media-src data:; connect/frame/worker/object-src 'none'; base-uri/form-action 'none'; frame-ancestors APP_ORIGIN. Никаких allow-same-origin, popups, modals или top navigation. Дополнительно no-store/nosniff/noindex. CSP приложения разрешает frame-src конкретного viewer-origin только при включении эксперимента.
+
+### Формы и диалоги (22.09.2026)
+
+`allow-forms` добавлен в sandbox документа и в iframe приложения: без него браузер прерывает отправку формы до события `submit`, поэтому у артефакта из чата (`<form onSubmit={e => e.preventDefault()}>`) не работали ввод, добавление и любые действия «по Enter». Сама отправка по-прежнему невозможна: `form-action 'none'` в CSP документа блокирует навигацию и запрос, `connect-src 'none'` — фоновую отправку, `allow-top-navigation` нет. То есть разрешено только выполнение собственного обработчика страницы.
+
+`allow-modals` сознательно не добавлен. Кросс-доменный `prompt()`/`confirm()` рисуется браузером как системный диалог с именем чужого домена — удобная поверхность для имитации входа или запроса пароля; цикл `alert()` в кадре блокирует вкладку читателя. Вместо этого собранная страница получает подмену: `alert` показывает заметку внутри страницы, `confirm` показывает заметку и возвращает `true` (читатель уже нажал кнопку действия), `prompt` возвращает значение по умолчанию или `null`. Это часть prelude сборщика (см. [BUNDLE_INLINE_SPEC](BUNDLE_INLINE_SPEC.md)), а не ослабление изоляции: в неподготовленной загрузке владельца диалоги по-прежнему просто игнорируются браузером.
+
+### Владелец видит ту же версию, что получатель (22.09.2026)
+
+Раньше владелец одиночной HTML-загрузки всегда запускал исходный файл, а получатель ссылки — собранную производную; страница с CDN React/Babel у владельца просто не работала (сеть запрещена), хотя сборка её умеет. Теперь выдача живого просмотра владельцу предпочитает готовую производную и для `storage_kind='single'`, а UI страницы со статусом `htmlProfile=unsupported` ждёт сборку вместо запуска заведомо неработающей загрузки. Если сборщик отказал, владелец по-прежнему запускает исходный файл, а причина отказа показывается рядом. Основания доступа (сессия владельца, share + grant, срок 60 секунд) не меняются.
+
+### Статичный просмотр: без top navigation (22.09.2026)
+
+Из sandbox статичного просмотра (`STATIC_HTML_SANDBOX`, ответ `/document` и iframe приложения) убран `allow-top-navigation-by-user-activation`: ссылка с `target="_top"` могла по клику читателя заменить вкладку Полки чужой страницей, похожей на Полку. Остаются `allow-popups allow-popups-to-escape-sandbox`, а сам просмотр вставляет `<base target="_blank">`, поэтому обычная ссылка по-прежнему открывается новой вкладкой. Скачивание и оригинал не меняются.
 
 ## Что этот срез НЕ доказывает
 
