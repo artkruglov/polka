@@ -1,6 +1,6 @@
 # Единая система интерфейса
 
-Статус на 22.09.2026: 61 модуль проверяется `npm run check:layers`; корневых legacy-стилей больше нет (см. «Визуальная система»).
+Статус на 22.09.2026: 66 модулей проверяется `npm run check:layers`; корневых legacy-стилей больше нет (см. «Визуальная система»).
 
 ## Правило композиции
 
@@ -15,6 +15,7 @@
 | entities/account, folder, artifact | состояние пользователя, папки, форматирование материала | features и выше |
 | features/import-url | форма, очередь, восстановление задания | bring |
 | features/capture-file, share-artifact, upload-artifact | отдельные пользовательские действия | страницы и reader |
+| features/paste-code | вставка кода артефакта из чата; квитанцию (`SavedWork` из capture-file) подставляет страница | bring, provider-guide через bring |
 | widgets/navigation | единая глобальная навигация desktop/mobile | страницы |
 | widgets/shelf-navigation | папки и корзина; одинаковые пункты на desktop/mobile | app/workspace |
 | widgets/artifact-reader, artifact-preview | материал, версии и изолированный просмотр | app/workspace, recipient |

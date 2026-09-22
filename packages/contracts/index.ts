@@ -10,6 +10,11 @@ export const MIME = [
 // How a saved HTML page may be shown. "static" and "limited" render in a
 // scriptless, networkless sandbox; "unsupported" needs a runtime profile that
 // this build does not have, so it gets no link.
+/** Whether text is an HTML page rather than prose; the server refuses text/html without it. */
+export const looksLikeHtml = (source: string) =>
+  /<(?:!doctype\s+html|html|head|body|main|div|p|h[1-6]|table|section|article|ul|ol|style)\b/i.test(
+    source,
+  );
 export const HTML_PROFILES = ["static", "limited", "unsupported"] as const;
 export type HtmlProfile = (typeof HTML_PROFILES)[number];
 export type InlineBuildStatus = {

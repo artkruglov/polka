@@ -4,6 +4,7 @@
 .bring-heading h1 { max-width: 16ch; font-size: clamp(34px, 4vw, 48px); line-height: 1.05; letter-spacing: -.045em; }
 .bring-heading > p { margin-top: 12px; color: var(--muted); font-size: var(--text-xl); line-height: 1.5; }
 .bring-or { display: flex; align-items: center; gap: 16px; margin: 28px 0; color: var(--muted-2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+.bring-or[hidden] { display: none; }
 .bring-or::before, .bring-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .bring-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--line); }
 .bring-fact { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 4px 0; }
@@ -19,3 +20,6 @@
   .bring-heading > p { font-size: var(--text-lg); }
   .bring-facts { grid-template-columns: 1fr; gap: 16px; margin-top: 36px; }
 }
+/* File or pasted code: two tabs over one card, the panel's own heading kept for screen readers. */
+.bring-capture > [role="tabpanel"] { padding-top: 20px; }
+.bring-capture > [role="tabpanel"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius); }

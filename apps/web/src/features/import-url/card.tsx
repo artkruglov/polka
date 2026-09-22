@@ -17,6 +17,8 @@ export function UrlImportCard(props: {
   accountId?: string;
   /** File capture rendered inside the card for provider links (composed by the page). */
   fileSave?: React.ReactNode;
+  /** Paste capture offered next to it (composed by the page). */
+  pasteCode?: React.ReactNode;
   onProviderChange?: (active: boolean) => void;
 }) {
   const state = useImportCapabilities();
@@ -47,11 +49,13 @@ function UrlImportDemo({
   initial = "",
   onFile,
   fileSave,
+  pasteCode,
   onProviderChange,
 }: {
   initial?: string;
   onFile: () => void;
   fileSave?: React.ReactNode;
+  pasteCode?: React.ReactNode;
   onProviderChange?: (active: boolean) => void;
 }) {
   const [value, setValue] = useState(initial);
@@ -95,7 +99,12 @@ function UrlImportDemo({
         <Button type="submit" variant="primary">Продолжить</Button>
       </form>
       {result && provider ? (
-        <ProviderGuide result={result} fileSave={fileSave} onFile={onFile} />
+        <ProviderGuide
+          result={result}
+          fileSave={fileSave}
+          pasteCode={pasteCode}
+          onFile={onFile}
+        />
       ) : (
         <>
           {result && (

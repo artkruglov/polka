@@ -28,3 +28,10 @@
 .url-import-agent a { color: var(--accent); font-weight: 500; }
 .bring-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .url-import > .ui-field-error { margin: 0; }
+.url-import-paste { padding: 6px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
+.url-import-paste > summary { display: flex; align-items: center; gap: 8px; min-height: 36px; color: var(--accent); font-size: var(--text-base); font-weight: 500; cursor: pointer; list-style: none; }
+.url-import-paste > summary::-webkit-details-marker { display: none; }
+.url-import-paste > summary svg { flex-shrink: 0; width: 16px; height: 16px; }
+.url-import-paste > p { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.url-import-paste[open] { padding-bottom: 18px; }
+.url-import-paste > * + * { margin-top: 12px; }

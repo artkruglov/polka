@@ -1,0 +1,19 @@
+/* Paste capture: one large code field, what it was recognised as, then the same few fields as a file. */
+.paste-code { display: grid; gap: 16px; scroll-margin-top: 24px; }
+.paste-code-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.paste-code-head h2 { font-size: var(--text-xl); letter-spacing: -.02em; }
+.paste-code-head .ui-badge { flex-shrink: 0; }
+.paste-code-hint { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; margin-top: -8px; }
+.paste-code .paste-code-input { min-height: 240px; resize: vertical; font: 400 var(--text-sm) / 1.55 var(--font-mono); tab-size: 2; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+.paste-code.paste-code--embedded .paste-code-input { min-height: 176px; }
+.paste-code-kind { display: flex; gap: 8px; align-items: flex-start; margin: -4px 0 0; color: var(--success); font-size: var(--text-sm); line-height: 1.5; }
+.paste-code-kind svg { flex-shrink: 0; width: 15px; height: 15px; margin-top: 2px; }
+.paste-code-kind.warn { padding: 12px 14px; border-radius: var(--radius); background: var(--warning-soft); color: var(--warning); }
+.paste-code-login { display: grid; gap: 12px; padding: 16px 18px; border-radius: var(--radius-md); background: var(--soft); }
+.paste-code-login p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
+.paste-code .bring-actions > .ui-button--primary { min-height: 52px; padding-inline: 24px; font-size: var(--text-md); }
+.paste-code .bring-actions > .ui-button--primary:only-child { width: 100%; border-radius: var(--radius-md); }
+@media (max-width: 600px) {
+  .paste-code .bring-actions { flex-direction: column; }
+  .paste-code .bring-actions > * { width: 100%; }
+}

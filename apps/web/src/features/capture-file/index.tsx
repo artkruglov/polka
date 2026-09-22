@@ -43,12 +43,15 @@ export function FileSave({
   initialFolderId = "",
   renderPreview,
   embedded = false,
+  titled = true,
 }: {
   account: Account | null | undefined;
   initialFolderId?: string;
   renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
   /** Rendered inside the link guide: no heading of its own, no page anchor. */
   embedded?: boolean;
+  /** False when a surrounding tab already names the card: the heading stays for screen readers. */
+  titled?: boolean;
 }) {
   const folders = useFolders(account?.id);
   const [folderId, setFolderId] = useState(initialFolderId);
@@ -58,13 +61,11 @@ export function FileSave({
     [error, setError] = useState(""),
     [receipt, setReceipt] = useState<Receipt | null>(null),
     [work, setWork] = useState<Artifact | null>(null),
-    [sharing, setSharing] = useState(false),
-    [copied, setCopied] = useState(false),
     [dragging, setDragging] = useState(false);
   const operation = useRef<PendingUpload | null>(null),
     picked = useRef<File | null>(null),
     card = useRef<HTMLElement>(null),
-    busy = !!stage || sharing;
+    busy = !!stage;
 
   useEffect(() => {
     if (!embedded && location.hash === "#file") card.current?.scrollIntoView();
@@ -117,19 +118,6 @@ export function FileSave({
     }
   };
 
-  const share = async () => {
-    if (!work) return;
-    setSharing(true);
-    setError("");
-    try {
-      setWork(await client.enable(work, 30));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSharing(false);
-    }
-  };
-
   const restart = () => {
     operation.current = null;
     setFile(null);
@@ -137,13 +125,9 @@ export function FileSave({
     setReceipt(null);
     setWork(null);
     setError("");
-    setCopied(false);
   };
 
   const guest = account === null;
-  const view = work ? profileView(work.revision) : null;
-  const link =
-    work?.share && work.share.status === "active" ? work.share : null;
 
   return (
     <section
@@ -153,128 +137,20 @@ export function FileSave({
       aria-labelledby={embedded ? undefined : "file-save-title"}
       aria-label={embedded ? "Загрузить скачанный файл" : undefined}
     >
-      {receipt && work && view ? (
-        <div className="bring-result">
-          <span className="result-kicker ok">
-            <Check /> Сохранено на полке · версия {receipt.number}
-          </span>
-          <h2 id={embedded ? undefined : "file-save-title"} tabIndex={-1}>
-            {work.title}
-          </h2>
-          <dl className="import-facts">
-            <div>
-              <dt>Файл</dt>
-              <dd>
-                {work.revision.filename} · {size(work.revision.size)}
-              </dd>
-            </div>
-            <div>
-              <dt>Доступ</dt>
-              <dd>
-                {link ? (
-                  <>
-                    <Link2 /> По ссылке до {date(link.expiresAt)}
-                  </>
-                ) : (
-                  <>
-                    <LockKeyhole /> Только вы
-                  </>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Как откроется</dt>
-              <dd data-profile={work.revision.htmlProfile ?? "file"}>
-                {view.label}
-              </dd>
-            </div>
-          </dl>
-          <p
-            className={view.linkable ? "next-note" : "next-note warn"}
-            role="note"
-          >
-            {view.linkable ? <Check /> : <CircleAlert />} {view.text}
-          </p>
-          <ul
-            className="profile-now-plan"
-            aria-label="Как откроется у получателя"
-          >
-            <li>
-              <Status is={view.linkable ? "real" : "unsupported"} />{" "}
-              <strong>Сейчас:</strong> {view.now}
-            </li>
-            {view.plan && (
-              <li>
-                <Status is="plan" /> <strong>В плане:</strong> {view.plan}
-              </li>
-            )}
-          </ul>
-          <div className="file-save-preview">
-            {renderPreview(work.revision, !view.linkable)}
-          </div>
-          {link ? (
-            <div className="share-ready" role="status">
-              <div>
-                <Link2 />
-                <code>{link.url}</code>
-              </div>
-              <div className="share-ready-actions">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(link.url!);
-                      setCopied(true);
-                    } catch {
-                      setError("Не удалось скопировать. Выделите адрес выше.");
-                    }
-                  }}
-                >
-                  {copied ? <Check /> : <Copy />}{" "}
-                  {copied ? "Скопировано" : "Скопировать ссылку"}
-                </Button>
-                <LinkButton href={link.url!} target="_blank" rel="noopener">
-                  Открыть как получатель <ArrowUpRight />
-                </LinkButton>
-              </div>
-            </div>
-          ) : null}
-          <ErrorNotice error={error} />
-          <div className="bring-actions">
-            <LinkButton variant={view.linkable && !link ? "secondary" : "primary"} href={`/works/${work.id}`}>
-              Открыть на полке <ArrowUpRight />
-            </LinkButton>
-            <Button type="button" variant="quiet" onClick={restart} disabled={busy}>
-              Сохранить другой файл
-            </Button>
-            {view.linkable && !link && (
-              <Button
-                type="button"
-                variant="primary"
-                onClick={share}
-                disabled={busy}
-              >
-                <Link2 />{" "}
-                {sharing ? "Создаём ссылку…" : "Создать ссылку на 30 дней"}
-              </Button>
-            )}
-          </div>
-          <p className="bring-hint">
-            {link
-              ? "Ссылка открывает версию " +
-                link.number +
-                ". Отозвать её или обновить до новой версии можно в Моей Полке."
-              : view.linkable
-                ? "Ссылка — отдельное действие. Её можно отозвать в Моей Полке."
-                : "Сохраните версию без скриптов и внешних ресурсов, чтобы отправить её ссылкой."}
-          </p>
-        </div>
+      {receipt && work ? (
+        <SavedWork
+          receipt={receipt}
+          work={work}
+          renderPreview={renderPreview}
+          onRestart={restart}
+          restartLabel="Сохранить другой файл"
+          headingId={embedded ? undefined : "file-save-title"}
+        />
       ) : (
         <div className="bring-entry file-save-entry">
           {!embedded && (
             <>
-              <div className="file-save-head">
+              <div className={titled ? "file-save-head" : "file-save-head sr-only"}>
                 <h2 id="file-save-title">Загрузить файл</h2>
                 <Status is="real" />
               </div>
@@ -373,5 +249,164 @@ export function FileSave({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The receipt after a save from /bring: what was saved, how it opens, a
+ * preview and the optional 30-day link. Shared by the file and paste paths.
+ */
+export function SavedWork({
+  receipt,
+  work: saved,
+  renderPreview,
+  onRestart,
+  restartLabel,
+  headingId,
+}: {
+  receipt: Receipt;
+  work: Artifact;
+  renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
+  onRestart: () => void;
+  restartLabel: string;
+  headingId?: string;
+}) {
+  const [work, setWork] = useState(saved),
+    [sharing, setSharing] = useState(false),
+    [copied, setCopied] = useState(false),
+    [error, setError] = useState("");
+  const busy = sharing;
+  const view = profileView(work.revision);
+  const link = work.share && work.share.status === "active" ? work.share : null;
+
+  const share = async () => {
+    setSharing(true);
+    setError("");
+    try {
+      setWork(await client.enable(work, 30));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return (
+    <div className="bring-result">
+      <span className="result-kicker ok">
+        <Check /> Сохранено на полке · версия {receipt.number}
+      </span>
+      <h2 id={headingId} tabIndex={-1}>
+        {work.title}
+      </h2>
+      <dl className="import-facts">
+        <div>
+          <dt>Файл</dt>
+          <dd>
+            {work.revision.filename} · {size(work.revision.size)}
+          </dd>
+        </div>
+        <div>
+          <dt>Доступ</dt>
+          <dd>
+            {link ? (
+              <>
+                <Link2 /> По ссылке до {date(link.expiresAt)}
+              </>
+            ) : (
+              <>
+                <LockKeyhole /> Только вы
+              </>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Как откроется</dt>
+          <dd data-profile={work.revision.htmlProfile ?? "file"}>
+            {view.label}
+          </dd>
+        </div>
+      </dl>
+      <p
+        className={view.linkable ? "next-note" : "next-note warn"}
+        role="note"
+      >
+        {view.linkable ? <Check /> : <CircleAlert />} {view.text}
+      </p>
+      <ul
+        className="profile-now-plan"
+        aria-label="Как откроется у получателя"
+      >
+        <li>
+          <Status is={view.linkable ? "real" : "unsupported"} />{" "}
+          <strong>Сейчас:</strong> {view.now}
+        </li>
+        {view.plan && (
+          <li>
+            <Status is="plan" /> <strong>В плане:</strong> {view.plan}
+          </li>
+        )}
+      </ul>
+      <div className="file-save-preview">
+        {renderPreview(work.revision, !view.linkable)}
+      </div>
+      {link ? (
+        <div className="share-ready" role="status">
+          <div>
+            <Link2 />
+            <code>{link.url}</code>
+          </div>
+          <div className="share-ready-actions">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(link.url!);
+                  setCopied(true);
+                } catch {
+                  setError("Не удалось скопировать. Выделите адрес выше.");
+                }
+              }}
+            >
+              {copied ? <Check /> : <Copy />}{" "}
+              {copied ? "Скопировано" : "Скопировать ссылку"}
+            </Button>
+            <LinkButton href={link.url!} target="_blank" rel="noopener">
+              Открыть как получатель <ArrowUpRight />
+            </LinkButton>
+          </div>
+        </div>
+      ) : null}
+      <ErrorNotice error={error} />
+      <div className="bring-actions">
+        <LinkButton variant={view.linkable && !link ? "secondary" : "primary"} href={`/works/${work.id}`}>
+          Открыть на полке <ArrowUpRight />
+        </LinkButton>
+        <Button type="button" variant="quiet" onClick={onRestart} disabled={busy}>
+          {restartLabel}
+        </Button>
+        {view.linkable && !link && (
+          <Button
+            type="button"
+            variant="primary"
+            onClick={share}
+            disabled={busy}
+          >
+            <Link2 />{" "}
+            {sharing ? "Создаём ссылку…" : "Создать ссылку на 30 дней"}
+          </Button>
+        )}
+      </div>
+      <p className="bring-hint">
+        {link
+          ? "Ссылка открывает версию " +
+            link.number +
+            ". Отозвать её или обновить до новой версии можно в Моей Полке."
+          : view.linkable
+            ? "Ссылка — отдельное действие. Её можно отозвать в Моей Полке."
+            : "Сохраните версию без скриптов и внешних ресурсов, чтобы отправить её ссылкой."}
+      </p>
+    </div>
   );
 }
