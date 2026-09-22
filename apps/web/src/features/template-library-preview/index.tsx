@@ -174,6 +174,8 @@ export function TemplateLibraryPreview({
               className="template-library-preview-frame"
               title={`Предпросмотр шаблона «${template.title}»`}
               src={liveView.url}
+              // Narrower than LIVE_VIEWER_SANDBOX on purpose: a template
+              // preview has no forms. Widen only together with that constant.
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"
             />

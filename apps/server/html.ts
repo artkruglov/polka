@@ -1,3 +1,4 @@
+import { parse } from "parse5";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
@@ -26,10 +27,20 @@ export const liveViewerCsp = (appOrigin: string) =>
 // blocks any <base href>; this element carries only a target.
 const LINK_TARGET = Buffer.from('<base target="_blank">');
 export function withNewTabLinks(html: Buffer): Buffer {
-  const head = /<head(?:\s[^>]*)?>/i.exec(html.toString("latin1"));
-  if (!head) return Buffer.concat([LINK_TARGET, html]);
-  const at = head.index + head[0].length;
-  return Buffer.concat([html.subarray(0, at), LINK_TARGET, html.subarray(at)]);
+  const text = html.toString("latin1");
+  // A <head> inside a comment is not the head: inserting there would leave the
+  // element inert and every link would navigate this frame instead.
+  const token = /<!--[\s\S]*?(?:-->|$)|<head(?:\s[^>]*)?>/gi;
+  for (let match = token.exec(text); match; match = token.exec(text)) {
+    if (match[0].startsWith("<!--")) continue;
+    const at = match.index + match[0].length;
+    return Buffer.concat([
+      html.subarray(0, at),
+      LINK_TARGET,
+      html.subarray(at),
+    ]);
+  }
+  return Buffer.concat([LINK_TARGET, html]);
 }
 
 const interactive =
@@ -42,11 +53,41 @@ const interactive =
 const unsafe =
   /<form\b|<input\b[^>]+type\s*=\s*["']?password\b|(?:src|action)\s*=\s*["']?(?:https?:|\/\/|javascript:)|<meta[^>]+http-equiv\s*=\s*["']?refresh/i;
 
+/**
+ * Every start tag of the document, rewritten with the attribute values a
+ * browser actually sees. Browsers resolve character references before acting
+ * on an attribute, so `http-equiv="&#x72;efresh"` is a refresh; the patterns
+ * above read the raw source, so they read this rendering too. Escaped text
+ * such as `&lt;script&gt;` stays text here and is not mistaken for a tag.
+ */
+function decodedTags(source: string): string {
+  const out: string[] = [];
+  const walk = (node: unknown) => {
+    const children = (node as { childNodes?: unknown[] }).childNodes ?? [];
+    for (const child of children) {
+      const element = child as {
+        tagName?: string;
+        attrs?: { name: string; value: string }[];
+      };
+      if (element.tagName)
+        out.push(
+          `<${element.tagName}${(element.attrs ?? [])
+            .map((a) => ` ${a.name}="${a.value.replace(/"/g, "&quot;")}"`)
+            .join("")}>`,
+        );
+      walk(child);
+    }
+  };
+  walk(parse(source));
+  return out.join("");
+}
+
 // A conservative heuristic, not a safety verdict: it only decides how honestly
 // the page can be shown without a runtime. Isolation comes from the CSP above.
 export function classifyHtml(source: string): HtmlProfile {
-  if (unsafe.test(source)) return "unsupported";
-  if (!interactive.test(source)) return "static";
+  const tags = decodedTags(source);
+  if (unsafe.test(source) || unsafe.test(tags)) return "unsupported";
+  if (!interactive.test(source) && !interactive.test(tags)) return "static";
   const visible = source
     .replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
     .replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, " ")

@@ -79,6 +79,9 @@ services:
     environment:
       <<: *runtime-env
       HOST: 0.0.0.0
+    # Loopback only: your reverse proxy terminates TLS and forwards here.
+    ports:
+      - "127.0.0.1:${APP_PORT:-4390}:4390"
     command: ["node", "--import", "tsx", "apps/server/main.ts"]
     restart: unless-stopped
     logging:

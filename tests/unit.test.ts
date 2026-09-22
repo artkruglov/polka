@@ -196,6 +196,27 @@ test("Static view opens links in a new tab without touching the stored bytes' co
   );
   assert.equal(view("<p>no head</p>"), '<base target="_blank"><p>no head</p>');
   assert.equal(view("<header>not head</header>"), '<base target="_blank"><header>not head</header>');
+  // A commented-out head would swallow the element and leave links navigating
+  // this frame; the real head follows it.
+  assert.equal(
+    view('<!-- <head> --><html><head><a href="https://e.x">a</a></head></html>'),
+    '<!-- <head> --><html><head><base target="_blank"><a href="https://e.x">a</a></head></html>',
+  );
+});
+
+test("Page classification reads attributes the way a browser does, not as raw text", () => {
+  const article = `<p>Пример: &lt;script&gt;alert(1)&lt;/script&gt; ${"текст ".repeat(30)}</p>`;
+  // Browsers resolve character references before acting on an attribute, so a
+  // refresh spelled with them still redirects the reader off Полка.
+  for (const page of [
+    '<meta http-equiv="refresh" content="0;url=https://evil.example">',
+    '<meta http-equiv="&#x72;efresh" content="0;url=https://evil.example">',
+    "<meta http-equiv=refres&#x68; content=\"0;url=https://evil.example\">",
+    '<a href="&#x6a;avascript:alert(1)">x</a>',
+  ])
+    assert.equal(classifyHtml(page), "unsupported", page);
+  // Escaped code shown as text is still an ordinary page.
+  assert.equal(classifyHtml(article), "static");
 });
 
 test("zod-free contract constants match the contract module", async () => {
