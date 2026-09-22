@@ -54,6 +54,7 @@ import {
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
+import { PUBLISH_API_PATHS, registerPublishApi } from "./publish-api.ts";
 import {
   enableOwnerShare,
   publishOwnerShare,
@@ -97,11 +98,13 @@ export async function createApp() {
       "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-src 'self'${config.HTML_LIVE_ENABLED ? ` ${config.VIEWER_ORIGIN}` : ""}; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
     });
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
-    // /mcp and the OAuth machine endpoints are cookie-less server-to-server
-    // surfaces with their own authentication; browser routes keep this check.
+    // /mcp, the OAuth machine endpoints and the HTTP publish API are
+    // cookie-less server-to-server surfaces with their own authentication;
+    // browser routes keep this check.
     if (
       pathname !== "/mcp" &&
       !OAUTH_MACHINE_PATHS.has(pathname) &&
+      !PUBLISH_API_PATHS.has(pathname) &&
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== config.APP_ORIGIN
     )
@@ -830,5 +833,6 @@ export async function createApp() {
   );
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
+  await registerPublishApi(app);
   return app;
 }

@@ -231,6 +231,39 @@ export async function getArtifactForAgent(
   return artifactProjection(row);
 }
 
+/**
+ * Metadata for the HTTP publish API's status call. A connection with `read`
+ * sees any work of the shelf; otherwise only works this connection saved.
+ */
+export async function artifactStatusForAgent(
+  actor: ServiceActor,
+  raw: z.input<typeof agentGetArtifactInputSchema>,
+) {
+  const verified = await recheckServiceActor(actor, "context");
+  const input = agentGetArtifactInputSchema.parse(raw);
+  const {
+    rows: [row],
+  } = await db.query(
+    `SELECT ${artifactColumns}
+     FROM artifacts artifact
+     JOIN revisions r ON r.id=artifact.latest_revision_id
+     WHERE artifact.id=$1 AND artifact.tenant_id=$2
+       AND ($3::boolean OR EXISTS (
+         SELECT 1 FROM uploads upload
+         WHERE upload.tenant_id=artifact.tenant_id
+           AND upload.connection_id=$4
+           AND upload.receipt->>'artifactId'=artifact.id::text))`,
+    [
+      input.artifactId,
+      verified.tenantId,
+      verified.scopes.includes("read"),
+      verified.connectionId,
+    ],
+  );
+  if (!row) throw missing();
+  return artifactProjection(row);
+}
+
 export async function listFoldersForAgent(
   actor: ServiceActor,
   raw: z.input<typeof agentFolderListInputSchema>,
