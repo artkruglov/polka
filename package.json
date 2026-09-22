@@ -37,6 +37,7 @@
     "storage:bootstrap-local": "tsx --env-file=.env scripts/local-storage-bootstrap.ts --confirm-local-bootstrap",
     "maintenance:watch": "tsx --env-file=.env scripts/maintenance-runner.ts",
     "check:layers": "node scripts/check-frontend-layers.mjs",
+    "check:links": "node scripts/check-doc-links.mjs",
     "test:live": "tsx --env-file=.env scripts/test-isolated.ts --live",
     "test:runtime-grants": "tsx --env-file=.env scripts/test-runtime-grants-isolated.ts --confirm-synthetic"
   },
