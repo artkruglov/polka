@@ -24,8 +24,8 @@ import {
   isStaticSingleFileBundle,
 } from "./revision-manifest.ts";
 import {
-  BUNDLE_RUNTIME_PROFILE,
   SERVED_BUILDER_VERSIONS_SQL,
+  SERVED_RUNTIME_PROFILES_SQL,
   derivativePreferenceSql,
   derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
@@ -291,11 +291,11 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
        (SELECT d.id FROM revision_derivatives d
         WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
           AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-          AND d.runtime_profile=$2 AND d.state='ready'
+          AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL} AND d.state='ready'
         ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS derivative_id
      FROM revisions r
      WHERE r.id=$1`,
-    [revisionId, BUNDLE_RUNTIME_PROFILE],
+    [revisionId],
   );
   if (!r) throw missing();
   if (r.storage_kind === "bundle") {

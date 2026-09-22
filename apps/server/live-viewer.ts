@@ -1,13 +1,14 @@
 import { randomBytes } from "node:crypto";
 import Fastify from "fastify";
+import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readBlob, sha256 } from "./storage.ts";
 import {
-  BUNDLE_RUNTIME_PROFILE,
   SERVED_BUILDER_VERSIONS_SQL,
+  SERVED_RUNTIME_PROFILES_SQL,
   derivativePreferenceSql,
 } from "./bundle-runtime-contract.ts";
 import { assertEditorialShareAccessible } from "./editorial.ts";
@@ -22,6 +23,18 @@ const liveViewResult = (token: string, expiresAt: Date, profile: string) => ({
   expiresAt: expiresAt.toISOString(),
   profile,
 });
+
+/** The runtime profile of the derivative a new viewer grant is bound to. */
+async function grantedProfile(c: PoolClient, derivativeId: string | null) {
+  if (!derivativeId) return LIVE_HTML_PROFILE;
+  const {
+    rows: [row],
+  } = await c.query(
+    "SELECT runtime_profile FROM revision_derivatives WHERE id=$1",
+    [derivativeId],
+  );
+  return row.runtime_profile as string;
+}
 
 export async function issueOwnerLiveView(
   actor: Actor,
@@ -55,7 +68,7 @@ export async function issueOwnerLiveView(
       [revision.artifact_id, actor.tenant],
     );
     if (!artifact.rowCount) throw missing();
-    return (
+    const inserted = (
       await c.query(
         `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at)
          SELECT $1,r.id,$2,d.id,LEAST(now()+interval '60 seconds',session.expires_at)
@@ -67,7 +80,7 @@ export async function issueOwnerLiveView(
            WHERE r.storage_kind='bundle'
              AND d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
              AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-             AND d.runtime_profile=$6 AND d.state='ready'
+             AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL} AND d.state='ready'
            ORDER BY ${derivativePreferenceSql("d")} LIMIT 1
          ) d ON true
          WHERE r.id=$4 AND r.tenant_id=$5 AND r.mime='text/html'
@@ -81,17 +94,13 @@ export async function issueOwnerLiveView(
           actor.id,
           revisionId,
           actor.tenant,
-          BUNDLE_RUNTIME_PROFILE,
         ],
       )
     ).rows[0];
+    return inserted && { ...inserted, profile: await grantedProfile(c, inserted.derivative_id) };
   });
   if (!grant) throw missing();
-  return liveViewResult(
-    token,
-    grant.expires_at,
-    grant.derivative_id ? BUNDLE_RUNTIME_PROFILE : LIVE_HTML_PROFILE,
-  );
+  return liveViewResult(token, grant.expires_at, grant.profile);
 }
 
 export async function issueRecipientLiveView(sourceGrant: string) {
@@ -122,7 +131,7 @@ export async function issueRecipientLiveView(sourceGrant: string) {
       [candidate.share_id, candidate.tenant_id],
     );
     await assertEditorialShareAccessible(c, candidate.share_id);
-    return (
+    const inserted = (
       await c.query(
         `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at)
          SELECT $1,r.id,s.id,g.hash,g.derivative_id,LEAST(now()+interval '60 seconds',g.expires_at)
@@ -138,18 +147,15 @@ export async function issueRecipientLiveView(sourceGrant: string) {
            AND (r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
                AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-               AND d.runtime_profile=$3)
+               AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL})
          RETURNING expires_at,derivative_id`,
-        [sha256(token), sourceGrantHash, BUNDLE_RUNTIME_PROFILE],
+        [sha256(token), sourceGrantHash],
       )
     ).rows[0];
+    return inserted && { ...inserted, profile: await grantedProfile(c, inserted.derivative_id) };
   });
   if (!grant) throw missing();
-  return liveViewResult(
-    token,
-    grant.expires_at,
-    grant.derivative_id ? BUNDLE_RUNTIME_PROFILE : LIVE_HTML_PROFILE,
-  );
+  return liveViewResult(token, grant.expires_at, grant.profile);
 }
 
 async function authorizedRevision(token: string) {
@@ -171,7 +177,7 @@ async function authorizedRevision(token: string) {
          OR (r.storage_kind IN ('single','bundle') AND d.state='ready'
            AND d.source_manifest_sha256=r.manifest_sha256
            AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-           AND d.runtime_profile=$2))
+           AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL}))
        AND (
          (
            vg.owner_session_hash IS NOT NULL
@@ -204,7 +210,7 @@ async function authorizedRevision(token: string) {
            )
          )
        )`,
-    [sha256(token), BUNDLE_RUNTIME_PROFILE],
+    [sha256(token)],
   );
   if (revision && !isLiveRevisionEligible(config, revision.id)) return null;
   if (revision?.authorized_share_id)
