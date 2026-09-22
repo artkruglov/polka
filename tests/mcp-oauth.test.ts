@@ -735,6 +735,26 @@ test("refresh tokens rotate; reusing a rotated one revokes the grant", async () 
   });
   assert.equal(widened.json().error, "invalid_scope");
 
+  // An immediate retry of the rotated token (a lost response, a parallel
+  // refresh) is refused but does not end the grant.
+  const retry = await token({
+    grant_type: "refresh_token",
+    refresh_token: first.refresh_token,
+    client_id: connected.clientId,
+  });
+  assert.equal(retry.statusCode, 400);
+  assert.equal(retry.json().error, "invalid_grant");
+  assert.equal((await initialize(second.access_token)).status, 200);
+
+  // Outside the grace window the same reuse is treated as theft.
+  await db.query(
+    `UPDATE oauth_refresh_tokens
+     SET created_at=created_at-interval '5 minutes',
+         expires_at=expires_at-interval '5 minutes',
+         rotated_at=rotated_at-interval '2 minutes'
+     WHERE token_hash=$1`,
+    [createHash("sha256").update(first.refresh_token).digest("hex")],
+  );
   const reuse = await token({
     grant_type: "refresh_token",
     refresh_token: first.refresh_token,
@@ -749,6 +769,131 @@ test("refresh tokens rotate; reusing a rotated one revokes the grant", async () 
     client_id: connected.clientId,
   });
   assert.equal(afterTheft.json().error, "invalid_grant");
+});
+
+test("the grace window covers only the live token's immediate predecessor", async () => {
+  const connected = await connect(owner);
+  const refresh = (value: string) =>
+    token({
+      grant_type: "refresh_token",
+      refresh_token: value,
+      client_id: connected.clientId,
+    });
+  const second = (await refresh(connected.tokens.refresh_token)).json();
+  const third = (await refresh(second.refresh_token)).json();
+  assert.ok(third.access_token);
+  // The first token is two rotations old: reuse revokes even within 60 s.
+  const stale = await refresh(connected.tokens.refresh_token);
+  assert.equal(stale.json().error, "invalid_grant");
+  assert.equal((await initialize(third.access_token)).status, 401);
+  assert.equal(
+    (await refresh(third.refresh_token)).json().error,
+    "invalid_grant",
+  );
+});
+
+test("form endpoints refuse JSON posing as form data and non-string values", async () => {
+  const connected = await connect(owner);
+  for (const url of ["/oauth/token", "/oauth/revoke"]) {
+    const posing = await app.inject({
+      method: "POST",
+      url,
+      remoteAddress: address(),
+      headers: { "content-type": "application/json" },
+      payload: {
+        params: {
+          grant_type: "refresh_token",
+          refresh_token: connected.tokens.refresh_token,
+          token: connected.tokens.refresh_token,
+          client_id: connected.clientId,
+          code_verifier: ["x".repeat(43)],
+          scope: ["context"],
+        },
+        duplicate: false,
+      },
+    });
+    assert.equal(posing.statusCode, 400, `${url} ${posing.body}`);
+    assert.equal(posing.json().error, "invalid_request");
+  }
+  // Nothing above was applied: the grant still refreshes.
+  const refreshed = await token({
+    grant_type: "refresh_token",
+    refresh_token: connected.tokens.refresh_token,
+    client_id: connected.clientId,
+  });
+  assert.equal(refreshed.statusCode, 200, refreshed.body);
+});
+
+test("a refused re-authorization over the quota keeps the previous connection", async () => {
+  const crowded = await newOwner("oauth-quota");
+  const { client_id } = await publicClient("Claude");
+  const first = await connect(crowded, { clientId: client_id });
+  // Twenty other live connections: more than the quota already (e.g. a race).
+  for (let index = 0; index < 20; index++)
+    await db.query(
+      `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
+       VALUES($1,$2,$3,$4,'filler',ARRAY['context'],$5,now()+interval '1 day')`,
+      [
+        randomUUID(),
+        crowded.tenant,
+        crowded.id,
+        createHash("sha256").update(randomBytes(32)).digest("hex"),
+        MCP_AUDIENCE,
+      ],
+    );
+  const grant = await approvedCode(crowded, { clientId: client_id });
+  const refused = await token({
+    grant_type: "authorization_code",
+    code: grant.code,
+    redirect_uri: CLAUDE_CALLBACK,
+    code_verifier: grant.verifier,
+    client_id,
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.equal(refused.json().error, "invalid_grant");
+  assert.equal((await initialize(first.tokens.access_token)).status, 200);
+});
+
+test("vendor names are reserved for the vendors' own redirect hosts", async () => {
+  const name = async (client_name: string, redirect_uris: string[]) => {
+    const response = await register({
+      client_name,
+      redirect_uris,
+      token_endpoint_auth_method: "none",
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    return response.json().client_name as string;
+  };
+  const unverified = " (имя не подтверждено)";
+  assert.equal(await name("Claude", [CLAUDE_CALLBACK]), "Claude");
+  assert.equal(
+    await name("ChatGPT", [
+      "https://chatgpt.com/connector_platform_oauth_redirect",
+    ]),
+    "ChatGPT",
+  );
+  assert.equal(
+    await name("Claude", ["https://evil.example/callback"]),
+    `Claude${unverified}`,
+  );
+  assert.equal(
+    await name("anthropic  helper", [
+      CLAUDE_CALLBACK,
+      "https://evil.example/cb",
+    ]),
+    `anthropic helper${unverified}`,
+  );
+  // Cyrillic lookalike letters do not get around the check.
+  const lookalike = String.fromCharCode(0x0421) + "laude";
+  assert.equal(
+    await name(lookalike, ["https://evil.example/callback"]),
+    `${lookalike}${unverified}`,
+  );
+  assert.equal(
+    await name("Open AI", ["https://claude.ai/api/mcp/auth_callback"]),
+    `Open AI${unverified}`,
+  );
+  assert.equal(await name("My agent", ["https://evil.example/cb"]), "My agent");
 });
 
 test("an expired access token needs a refresh", async () => {
