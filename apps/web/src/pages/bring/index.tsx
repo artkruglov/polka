@@ -1,12 +1,16 @@
 import "./styles.css";
 import React, { useState } from "react";
 import { ArrowUpRight, Bot, Layers, LockKeyhole } from "lucide-react";
-import { FileSave } from "../../features/capture-file/index.tsx";
+import { FileSave, SavedWork } from "../../features/capture-file/index.tsx";
+import { PasteCode } from "../../features/paste-code/index.tsx";
+import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { UrlImportCard } from "../../features/import-url/card.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 
-/** File capture and capability-gated URL import: one column, the link first, the file below. */
+type Capture = "file" | "paste";
+
+/** File capture and capability-gated URL import: one column, the link first, a file or pasted code below. */
 export function Bring() {
   const account = useAccount();
   const params = new URLSearchParams(location.search);
@@ -14,11 +18,29 @@ export function Bring() {
   const [pasted] = useState(() => params.get("url") ?? "");
   // A recognised Claude/ChatGPT link shows its own file drop; the standalone one steps aside.
   const [providerGuide, setProviderGuide] = useState(false);
-  const toFile = () =>
-    document.getElementById("file")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const [capture, setCapture] = useState<Capture>(() =>
+    location.hash === "#paste" ? "paste" : "file",
+  );
+  const toFile = () => {
+    setCapture("file");
+    requestAnimationFrame(() =>
+      document.getElementById("file")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
   const renderPreview = (revision: Parameters<typeof Preview>[0]["revision"], compact: boolean) => (
     <Preview revision={revision} compact={compact} />
   );
+  const renderSaved =
+    (headingId?: string) =>
+    (saved: Pick<Parameters<typeof SavedWork>[0], "receipt" | "work">, restart: () => void) => (
+      <SavedWork
+        {...saved}
+        headingId={headingId}
+        renderPreview={renderPreview}
+        onRestart={restart}
+        restartLabel="Вставить другой код"
+      />
+    );
   return (
     <AppShell current="bring" account={account} className="bring-page">
       <main className="bring-main" id="main">
@@ -40,16 +62,44 @@ export function Bring() {
               embedded
             />
           }
+          pasteCode={
+            <PasteCode
+              account={account}
+              initialFolderId={initialFolderId}
+              renderResult={renderSaved()}
+              embedded
+            />
+          }
         />
         <div className="bring-or" hidden={providerGuide} aria-hidden={providerGuide}>
           <span>или</span>
         </div>
-        <div hidden={providerGuide}>
-          <FileSave
-            account={account}
-            initialFolderId={initialFolderId}
-            renderPreview={renderPreview}
-          />
+        <div className="bring-capture" hidden={providerGuide}>
+          <Tabs
+            label="Как сохранить"
+            value={capture}
+            onChange={setCapture}
+            items={[
+              { id: "file", label: "Загрузить файл" },
+              { id: "paste", label: "Вставить код" },
+            ]}
+          >
+            {capture === "file" ? (
+              <FileSave
+                account={account}
+                initialFolderId={initialFolderId}
+                renderPreview={renderPreview}
+                titled={false}
+              />
+            ) : (
+              <PasteCode
+                account={account}
+                initialFolderId={initialFolderId}
+                renderResult={renderSaved("paste-code-title")}
+                titled={false}
+              />
+            )}
+          </Tabs>
         </div>
         <aside className="bring-facts" aria-label="О сохранении">
           <div className="bring-fact">
@@ -71,7 +121,8 @@ export function Bring() {
             <div>
               <strong>Сохраняйте прямо с агентом</strong>
               <p>
-                Claude Code, Codex или другой MCP-клиент <ArrowUpRight />
+                Claude Code, Codex, MCP-клиент или свой скрипт через HTTP API{" "}
+                <ArrowUpRight />
               </p>
             </div>
           </a>

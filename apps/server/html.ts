@@ -45,7 +45,5 @@ export function classifyHtml(source: string): HtmlProfile {
   return visible.length >= 80 ? "limited" : "unsupported";
 }
 
-export const looksLikeHtml = (source: string) =>
-  /<(?:!doctype\s+html|html|head|body|main|div|p|h[1-6]|table|section|article|ul|ol|style)\b/i.test(
-    source,
-  );
+// Shared with the web app, which decides whether pasted code is saved as HTML.
+export { looksLikeHtml } from "../../packages/contracts/index.ts";

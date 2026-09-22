@@ -61,6 +61,7 @@ export function UrlImport({
   onFile,
   accountId,
   fileSave,
+  pasteCode,
   onProviderChange,
 }: {
   initialFolderId?: string;
@@ -68,6 +69,7 @@ export function UrlImport({
   onFile: () => void;
   accountId?: string;
   fileSave?: React.ReactNode;
+  pasteCode?: React.ReactNode;
   /** Tells the page when the Claude/ChatGPT guide (with its own file drop) is showing. */
   onProviderChange?: (active: boolean) => void;
 }) {
@@ -351,7 +353,12 @@ export function UrlImport({
         </p>
       )}
       {provider && (
-        <ProviderGuide result={provider} fileSave={fileSave} onFile={onFile} />
+        <ProviderGuide
+          result={provider}
+          fileSave={fileSave}
+          pasteCode={pasteCode}
+          onFile={onFile}
+        />
       )}
     </section>
   );

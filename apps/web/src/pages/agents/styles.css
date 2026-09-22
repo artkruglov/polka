@@ -19,7 +19,7 @@
 .agent-field, .agent-card fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .agent-field > span, .agent-card legend { display: block; margin-bottom: 10px; padding: 0; font: 500 var(--text-base) / 1.4 var(--font-sans); color: var(--ink-2); }
 .agent-field input { width: 100%; max-width: 100%; min-height: var(--control-height); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 400 var(--text-md) / 1.4 var(--font-sans); }
-.agent-choice-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.agent-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .agent-choice { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font-size: var(--text-base); line-height: 1.35; cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
 .agent-choice:hover { border-color: #c9d2e0; }
 .agent-choice[data-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
@@ -66,6 +66,12 @@
 .agent-instruction { color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; }
 .agent-instruction code, .agent-next-step code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); }
 .agent-next-step { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-sm); line-height: 1.55; }
+/* HTTP API and CLI: the same instruction blocks, switched by two tabs. */
+.agent-http h2 { margin-bottom: 8px; }
+.agent-http .agent-help code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); }
+.agent-http .ui-tabs { margin-top: 14px; }
+.agent-http [role="tabpanel"] { padding-top: 4px; }
+.agent-http > .agent-instruction { margin-top: 14px; }
 @media (max-width: 940px) {
   .agent-workspace { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .agent-connections { max-width: 760px; padding: 36px 28px 96px; }

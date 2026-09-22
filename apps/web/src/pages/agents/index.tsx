@@ -20,6 +20,7 @@ import type {
 import { ApiError, client } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
+import { Tabs } from "../../shared/ui/Tabs.tsx";
 
 const statusText: Record<AgentConnection["status"], string> = {
   issued: "Токен выдан; запросов пока нет",
@@ -37,7 +38,9 @@ const clientDefaults = {
   codex: "Codex CLI",
   claude: "Claude Code",
   other: "MCP-клиент",
+  http: "Скрипт (HTTP API)",
 } as const;
+type ClientKind = keyof typeof clientDefaults;
 const agentScope = z.enum([
   "context",
   "read",
@@ -106,9 +109,8 @@ export function AgentConnections() {
   );
   const [listError, setListError] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [clientKind, setClientKind] = useState<"codex" | "claude" | "other">(
-    "codex",
-  );
+  const [clientKind, setClientKind] = useState<ClientKind>("codex");
+  const [httpExample, setHttpExample] = useState<"cli" | "curl">("cli");
   const [ttlDays, setTtlDays] = useState(7);
   const [scopes, setScopes] = useState<AgentScope[]>(["capture", "context"]);
   const [action, setAction] = useState<string | null>(null);
@@ -279,6 +281,28 @@ export function AgentConnections() {
   };
 
   const endpoint = secret?.connection.audience ?? "";
+  const tokenVariable = clientKind === "http" ? "POLKA_TOKEN" : "POLKA_MCP_TOKEN";
+  // Placeholders only: the token itself never appears in a snippet.
+  const cliCommands = useMemo(
+    () =>
+      [
+        `curl -fsSLo polka-publish.mjs ${shellQuote(`${location.origin}/api/v1/cli/polka-publish.mjs`)}`,
+        "read -r -s POLKA_TOKEN && export POLKA_TOKEN",
+        'node polka-publish.mjs report.html --title "Отчёт" --share 7',
+      ].join("\n"),
+    [],
+  );
+  const curlCommand = useMemo(
+    () =>
+      [
+        'jq -n --rawfile html report.html --arg title "Отчёт" --arg key "$(uuidgen)" \\',
+        "  '{key: $key, title: $title, html: $html, expiresInDays: 7}' |",
+        `  curl -sS ${shellQuote(`${location.origin}/api/v1/publish`)} \\`,
+        '    -H "Authorization: Bearer $POLKA_TOKEN" \\',
+        '    -H "Content-Type: application/json" --data-binary @-',
+      ].join("\n"),
+    [],
+  );
   const codexCommand = useMemo(
     () =>
       `read -r -s POLKA_MCP_TOKEN\nexport POLKA_MCP_TOKEN\ncodex mcp add polka --url ${shellQuote(endpoint)} --bearer-token-env-var POLKA_MCP_TOKEN`,
@@ -367,6 +391,7 @@ export function AgentConnections() {
                         ["codex", "Codex CLI"],
                         ["claude", "Claude Code"],
                         ["other", "Другой MCP-клиент"],
+                        ["http", "HTTP API / скрипт"],
                       ] as const
                     ).map(([id, label]) => (
                       <label
@@ -403,6 +428,13 @@ export function AgentConnections() {
                     Разрешения действуют на всю Полку, а не на одну папку.
                     Чтение списка и каждое действие включаются отдельно.
                   </p>
+                  {clientKind === "http" && !scopes.includes("share") && (
+                    <p className="agent-help">
+                      Чтобы API сразу возвращал ссылку, включите «
+                      {scopeOptions.find((scope) => scope.id === "share")?.label}
+                      ». Без этого работа сохранится только для вас.
+                    </p>
+                  )}
                   <div className="agent-scopes">
                     {scopeOptions.map((scope) => (
                       <label
@@ -539,6 +571,13 @@ export function AgentConnections() {
                     copied={copyState === "config"}
                   />
                 )}
+                {clientKind === "http" && (
+                  <p className="agent-instruction">
+                    Команды для публикации — в карточке «HTTP API и CLI» ниже:
+                    CLI и API читают токен из переменной{" "}
+                    <code>POLKA_TOKEN</code>.
+                  </p>
+                )}
                 {clientKind === "other" && (
                   <p className="agent-instruction">
                     Используйте Streamable HTTP endpoint и Authorization Bearer
@@ -547,17 +586,79 @@ export function AgentConnections() {
                   </p>
                 )}
                 <p className="agent-instruction">
-                  <code>read -r -s POLKA_MCP_TOKEN</code>, затем вставьте токен
+                  <code>read -r -s {tokenVariable}</code>, затем вставьте токен
                   и нажмите Enter; после этого выполните{" "}
-                  <code>export POLKA_MCP_TOKEN</code>. Клиент запускается из
-                  этого же терминала.
+                  <code>export {tokenVariable}</code>.{" "}
+                  {clientKind === "http"
+                    ? "Скрипт запускается из этого же терминала; на сервере положите токен в хранилище секретов."
+                    : "Клиент запускается из этого же терминала."}
                 </p>
                 <p className="agent-next-step">
-                  Попросите клиента вызвать <code>polka_context</code>, затем
-                  обновите состояние здесь.
+                  {clientKind === "http" ? (
+                    <>
+                      Опубликуйте файл командой ниже, затем обновите состояние
+                      здесь.
+                    </>
+                  ) : (
+                    <>
+                      Попросите клиента вызвать <code>polka_context</code>,
+                      затем обновите состояние здесь.
+                    </>
+                  )}
                 </p>
               </section>
             )}
+
+            <section
+              className="agent-card agent-http"
+              aria-labelledby="agent-http-title"
+            >
+              <h2 id="agent-http-title">HTTP API и CLI</h2>
+              <p className="agent-help">
+                Для внутренних агентов, CI и скриптов без MCP: один запрос{" "}
+                <code>POST /api/v1/publish</code> сохраняет HTML-страницу и,
+                если подключению разрешено управлять ссылками, возвращает
+                ссылку. Нужен токен с разрешением «
+                {scopeOptions.find((scope) => scope.id === "capture")?.label}».
+                Токен — только в заголовке Authorization и переменной
+                окружения, не в аргументах и не в чате.
+              </p>
+              <Tabs
+                label="Пример"
+                value={httpExample}
+                onChange={setHttpExample}
+                items={[
+                  { id: "cli", label: "CLI (Node 22+)" },
+                  { id: "curl", label: "curl" },
+                ]}
+              >
+                {httpExample === "cli" ? (
+                  <InstructionBlock
+                    title="Скачать CLI и опубликовать файл"
+                    value={cliCommands}
+                    onCopy={() => void copy(cliCommands, "http-cli")}
+                    copied={copyState === "http-cli"}
+                    copyLabel="Скопировать команды"
+                    copiedLabel="Команды скопированы"
+                  />
+                ) : (
+                  <InstructionBlock
+                    title="Один запрос: jq собирает JSON, curl отправляет"
+                    value={curlCommand}
+                    onCopy={() => void copy(curlCommand, "http-curl")}
+                    copied={copyState === "http-curl"}
+                    copyLabel="Скопировать команду"
+                    copiedLabel="Команда скопирована"
+                  />
+                )}
+              </Tabs>
+              <p className="agent-instruction">
+                Ответ: <code>url</code> — ссылка для отправки,{" "}
+                <code>shelfUrl</code> — работа на Полке. Повтор с тем же{" "}
+                <code>key</code> возвращает ту же ссылку. Лимит: 5 МБ на
+                страницу, 120 запросов за 10 минут на подключение.
+              </p>
+            </section>
           </div>
           <section
             className="agent-card agent-existing"
@@ -665,11 +766,15 @@ function InstructionBlock({
   value,
   onCopy,
   copied,
+  copyLabel = "Скопировать безопасную конфигурацию",
+  copiedLabel = "Конфигурация скопирована",
 }: {
   title: string;
   value: string;
   onCopy: () => void;
   copied: boolean;
+  copyLabel?: string;
+  copiedLabel?: string;
 }) {
   return (
     <div className="agent-instruction-block">
@@ -679,9 +784,7 @@ function InstructionBlock({
       </pre>
       <Button type="button" onClick={onCopy}>
         {copied ? <Check size={16} /> : <Copy size={16} />}{" "}
-        {copied
-          ? "Конфигурация скопирована"
-          : "Скопировать безопасную конфигурацию"}
+        {copied ? copiedLabel : copyLabel}
       </Button>
     </div>
   );

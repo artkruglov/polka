@@ -58,5 +58,6 @@
   "tests/template-library-viewer.test.ts",
   "tests/frontend-layers.test.ts",
   "tests/library-invite-parser.test.ts",
-  "tests/live-plan.test.ts"
+  "tests/live-plan.test.ts",
+  "tests/paste-code.test.ts"
 ]
