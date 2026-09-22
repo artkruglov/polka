@@ -232,7 +232,7 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
   assert.equal(document.body, interactive);
   assert.match(
     document.headers["content-security-policy"] as string,
-    /^sandbox allow-scripts;/,
+    /^sandbox allow-scripts allow-forms;/,
   );
   for (const directive of [
     "default-src 'none'",

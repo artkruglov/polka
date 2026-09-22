@@ -50,7 +50,7 @@ test('network-dependent inline, handler and downloaded JavaScript cannot claim a
 
 test('compatibility corpus preserves copies while declaring unsupported viewer features',async()=>{
  const cases=[
-  ['module','<script type="module">export const x=1</script>'],
+  ['module','<script type="module">import pad from "left-pad";console.log(pad)</script>'],
   ['srcset','<img srcset="wide.png 2x" alt="responsive">'],
   ['css-import','<style>@import "theme.css";</style>'],
   ['iframe','<iframe src="https://example.org/embedded"></iframe>'],
@@ -68,4 +68,31 @@ test('compatibility corpus preserves copies while declaring unsupported viewer f
 test('redirected provider shells and invalid UTF-8 cannot masquerade as a saved artifact',async()=>{
  await assert.rejects(captureHtmlUrl(base,{fetcher:async()=>({url:'https://chatgpt.com/share/example',contentType:'text/html',bytes:Buffer.from('<div id="root"></div>')})}),{code:'provider_adapter_required'});
  await assert.rejects(captureHtmlUrl(base,{fetcher:async()=>({url:base,contentType:'text/html',bytes:Buffer.from([0xff,0xfe])})}),{code:'unsupported_encoding'});
+});
+
+test('CDN libraries stay recognisable for the runtime; icons and TTF fonts are skipped with a warning',async()=>{
+ const requests:string[]=[];
+ const page='<!doctype html><html><head><title>App</title><link rel="icon" type="image/x-icon" href="/favicon.ico">'+
+  '<script src="https://unpkg.com/react@18/umd/react.production.min.js" integrity="sha384-x" crossorigin></script>'+
+  '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>'+
+  '<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><script src="https://cdn.tailwindcss.com"></script>'+
+  '<link rel="stylesheet" href="fonts.css"></head><body><div id="root"></div>'+
+  '<script type="text/babel">function App(){return <h1 className="text-xl">Hi</h1>}ReactDOM.createRoot(document.getElementById("root")).render(<App/>)</script></body></html>';
+ const result=await captureHtmlUrl(base,{fetcher:source({
+  [base]:['text/html',page],
+  [base+'fonts.css']:['text/css','@font-face{font-family:A;src:url(a.ttf) format("truetype")}@font-face{font-family:B;src:url(b.woff2) format("woff2"),url(b.ttf) format("truetype")}h1{font-family:A,B}'],
+  [base+'b.woff2']:['font/woff2','wOF2xxxx'],
+ },requests)});
+ // Neither the CDN scripts, the icon nor the TTF files were downloaded.
+ assert.deepEqual(requests.sort(),[base,base+'b.woff2',base+'fonts.css'].sort());
+ const index=Buffer.from(result.files.find(f=>f.path==='index.html')!.data,'base64').toString();
+ assert.match(index,/src="https:\/\/unpkg\.com\/react@18\/umd\/react\.production\.min\.js"/);
+ assert.doesNotMatch(index,/integrity/);
+ const css=result.files.map(f=>Buffer.from(f.data,'base64').toString()).find(t=>t.includes('@font-face'))!;
+ assert.doesNotMatch(css,/\.ttf|truetype/);
+ assert.match(css,/font-family:B;src:url\("asset-\d+"\) format\("woff2"\)/);
+ assert.ok(result.warnings.some(w=>w.includes('TTF')),JSON.stringify(result.warnings));
+ // The same build worker as the interactive version compiles it (runtime), leaving the icon out.
+ assert.ok(!result.warnings.some(w=>w.includes('Интерактивная сборка')),JSON.stringify(result.warnings));
+ assert.ok(result.warnings.some(w=>w.includes('значки')),JSON.stringify(result.warnings));
 });

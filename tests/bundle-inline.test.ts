@@ -60,12 +60,15 @@ test("inlines the team report deterministically without mutating source bytes", 
   assert.equal(first.ok, true);
   assert.deepEqual(second, first);
   if (!first.ok) return;
-  assert.equal(first.builderVersion, "bundle-inline-v5");
+  assert.equal(first.builderVersion, "bundle-inline-v6");
   assert.equal(first.runtimeProfile, "bundle-inline-experimental-v1");
   assert.deepEqual(first.consumedPaths, sourcePaths.slice().sort());
   assert.match(first.html.toString("utf8"), /<style>/);
   assert.match(first.html.toString("utf8"), /<script>/);
-  const script = first.html.toString("utf8").match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  // The page's own script follows the environment prelude.
+  const scripts = [...first.html.toString("utf8").matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.match(scripts[0][1], /localStorage/);
+  const script = scripts.at(-1)?.[1];
   assert.ok(script);
   assert.equal(script, value.bytes.get("assets/report.js")!.toString("utf8"));
   assert.match(script, /=>/);
@@ -96,10 +99,8 @@ test("rejects unsupported script modes, raw-text closers, external resources, CS
     '<!doctype html><script src=""></script>',
     '<!doctype html><script type=""></script>',
     "<!doctype html><script>const x = '</script>';</script>",
-    '<!doctype html><img src="https://evil.invalid/a.png">',
     '<!doctype html><input type="image" src="assets/mark.svg">',
     '<!doctype html><svg><image href="assets/mark.svg"></image></svg>',
-    '<!doctype html><link rel="stylesheet" href="https://evil.invalid/a.css">',
     '<!doctype html><style>@import "evil.css";</style>',
     '<!doctype html><img src="../outside.png">',
   ]) {
@@ -166,7 +167,7 @@ test('CSS local images are embedded in stylesheets and style attributes', () => 
  }
 });
 test('CSS external, escaped, missing and active-image references fail closed',()=>{
- for(const reference of ['https://example.org/tracker.png','//example.org/tracker.png','data:image/svg+xml,evil','../outside.png','missing.png','assets/report.js','assets/mark.svg#fragment','assets/\\6dark.svg']){
+ for(const reference of ['data:image/svg+xml,evil','../outside.png','missing.png','assets/report.js','assets/mark.svg#fragment','assets/\\6dark.svg']){
   const {manifest,bytes}=fixture(`<style>body{background:url("${reference}")}</style>`);
   assert.equal(buildInlineBundle(manifest,bytes).ok,false,reference);
  }
@@ -282,4 +283,120 @@ test("v4 accepts inline classic scripts with async or defer, not modules or JSX"
     '<!doctype html><script type="text/babel">1</script>',
   ])
     assert.equal(resultForHtml(html).ok, false, html);
+});
+
+// bundle-inline-v6: what a chat artifact carries that the viewer could never
+// load is left out with a warning instead of refusing the page.
+test("v6 drops link hints, remote stylesheets, fonts and images with warnings", () => {
+  const result = resultForHtml(
+    '<!doctype html><html><head>' +
+      '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="icon" href="favicon.ico">' +
+      '<link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" crossorigin>' +
+      '<link rel="stylesheet" href="https://cdn.example.org/lib.css" integrity="sha384-x">' +
+      '<style>@import url("https://fonts.googleapis.com/css2?family=Roboto");' +
+      "body{font-family:Inter,sans-serif;background:url(https://example.org/bg.png) #fafafa}h1{color:red}</style>" +
+      '</head><body><h1 style="background-image:url(//example.org/x.png)">Hi</h1>' +
+      '<img src="https://images.example.org/a.jpg" alt="Photo" width="20"></body></html>',
+  );
+  assert.equal(result.ok, true, JSON.stringify(result));
+  if (!result.ok) return;
+  const html = result.html.toString();
+  assert.doesNotMatch(html, /<link\b/i);
+  assert.doesNotMatch(html, /https?:\/\/|\/\/example/);
+  assert.match(html, /<img alt="Photo" width="20">/);
+  assert.match(html, /h1\{color:red\}/);
+  assert.equal(result.warnings.length, 5, result.warnings.join(" | "));
+  assert.ok(result.warnings.some((warning) => warning.includes("fonts.googleapis.com")));
+  assert.ok(result.warnings.some((warning) => warning.includes("внешние изображения (1)")));
+  // The same remote references stay refused in a stylesheet the builder
+  // generated itself, and a local-but-missing file is still an error.
+  assert.equal(resultForHtml('<!doctype html><link rel="alternate" href="https://example.org/feed">').ok, false);
+  assert.equal(resultForHtml('<!doctype html><link rel="stylesheet" href="missing.css">').ok, false);
+});
+
+test("v6 keeps same-document url(#id) references in CSS and inert SVG images", () => {
+  for (const html of [
+    '<!doctype html><style>.a{fill:url(#g)}.b{filter:url("#glow")}.c{clip-path:url(#clip)}</style><svg><defs><linearGradient id="g"></linearGradient></defs><rect class="a"/></svg>',
+    '<!doctype html><svg><rect style="fill:url(#g);mask:url(#m)"/></svg>',
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
+    if (result.ok) assert.match(result.html.toString(), /url\((?:"|&quot;)#g(?:"|&quot;)\)/);
+  }
+  for (const reference of ["#", "#a b", "#x)", "other.svg#g"])
+    assert.equal(resultForHtml(`<!doctype html><style>.a{fill:url("${reference}")}</style>`).ok, false, reference);
+});
+
+const svgImage = (svg: string) => {
+  const value = fixture("<!doctype html><img src=assets/mark.svg>");
+  const bytes = Buffer.from(svg);
+  value.bytes.set("assets/mark.svg", bytes);
+  const manifest = canonicalizeManifest({
+    ...value.manifest,
+    files: value.manifest.files.map((file) =>
+      file.path === "assets/mark.svg" ? { ...file, size: bytes.length, sha256: digest(bytes) } : file,
+    ),
+  });
+  return buildInlineBundle(manifest, value.bytes);
+};
+
+test("v6 accepts presentational SVG images (icons, gradients, text), not active ones", () => {
+  for (const svg of [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 0h24v24z"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10"><defs><linearGradient id="g" x1="0" x2="1" gradientTransform="rotate(45)"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f" stop-opacity=".5"/></linearGradient><clipPath id="c"><circle r="5"/></clipPath></defs><g transform="translate(1 1)" clip-path="url(#c)"><rect width="10" height="10" fill="url(#g)" stroke-dasharray="2 1"/></g><text x="1" y="9" font-size="3" text-anchor="start">Tom &amp; Jerry &#8212;</text></svg>',
+  ]) {
+    const result = svgImage(svg);
+    assert.equal(result.ok, true, `${svg}: ${JSON.stringify(result)}`);
+  }
+  for (const svg of [
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><div/></foreignObject></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(https://example.org/p)"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="u&#114;l(https://example.org/p)"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><image href="x.png"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><use href="#a"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><style>rect{fill:red}</style></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect onclick="x()"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="https://example.org/"><rect/></svg>',
+    '<!DOCTYPE svg [<!ENTITY a "b">]><svg xmlns="http://www.w3.org/2000/svg">&a;</svg>',
+  ])
+    assert.equal(svgImage(svg).ok, false, svg);
+});
+
+test("v6 keeps inline data blocks (shaders, JSON) and refuses them with src", () => {
+  for (const html of [
+    '<!doctype html><script type="x-shader/x-vertex" id="vs">void main(){gl_Position=vec4(0.);}</script>',
+    '<!doctype html><script type="application/ld+json">{"@type":"Thing"}</script>',
+    '<!doctype html><script type="application/json" id="data">[1,2]</script>',
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
+    // Data blocks run nothing, so they get no environment prelude.
+    if (result.ok) assert.doesNotMatch(result.html.toString(), /localStorage/);
+  }
+  for (const html of [
+    '<!doctype html><script type="x-shader/x-vertex" src="assets/report.js"></script>',
+    '<!doctype html><script type="speculationrules">{}</script>',
+  ])
+    assert.equal(resultForHtml(html).ok, false, html);
+});
+
+test("v6 gives plain-script pages the environment prelude before their first script", () => {
+  for (const html of [
+    '<!doctype html><html><head><meta charset="utf-8"><title>T</title><script>localStorage.setItem("a","1")</script></head><body></body></html>',
+    '<!doctype html><button onclick="alert(1)">x</button>',
+  ]) {
+    const result = resultForHtml(html);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    if (!result.ok) continue;
+    const page = result.html.toString();
+    const prelude = page.indexOf('Object.defineProperty(window,name,{value:memory()');
+    assert.ok(prelude > 0, page.slice(0, 300));
+    assert.ok(prelude > page.indexOf("<title>"), "after meta and title");
+    const firstScript = page.indexOf('localStorage.setItem("a"');
+    if (firstScript >= 0) assert.ok(prelude < firstScript);
+  }
+  // A script-free page is unchanged by the prelude.
+  const plain = resultForHtml("<!doctype html><p>Hi</p>");
+  assert.equal(plain.ok && plain.html.toString().includes("<script"), false);
 });

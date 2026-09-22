@@ -2,11 +2,23 @@ import type { HtmlProfile } from "../../packages/contracts/index.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
 // scripts, forms, plugins or network. Inline styles and data: images still work.
-// Links work only by the reader's own click: without scripts the page cannot
-// navigate by itself; target=_blank opens a normal, unsandboxed tab.
+// Links open only in a new, unsandboxed tab (the view adds <base
+// target="_blank">). There is no top navigation: a link with target=_top
+// could otherwise replace the Полка tab with a look-alike page.
 export const STATIC_HTML_SANDBOX =
-  "allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
+  "allow-popups allow-popups-to-escape-sandbox";
 export const STATIC_HTML_CSP = `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
+
+/**
+ * The interactive viewer's sandbox, shared by its CSP and the app's iframe.
+ * allow-forms lets a page's own submit handler run (React onSubmit with
+ * preventDefault); form-action 'none' still blocks any real submission or
+ * navigation. No allow-modals (see PRELUDE in bundle-inline.ts), popups,
+ * top navigation or same-origin.
+ */
+export const LIVE_VIEWER_SANDBOX = "allow-scripts allow-forms";
+export const liveViewerCsp = (appOrigin: string) =>
+  `sandbox ${LIVE_VIEWER_SANDBOX}; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${appOrigin}`;
 
 // View-only transform (downloads stay byte-exact): a plain link would try to
 // load the external site inside Полка's frame, which the app forbids, so every
