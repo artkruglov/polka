@@ -10,6 +10,7 @@ import {
   MCP_AUDIENCE,
 } from "../apps/server/service-auth.ts";
 import { s3 } from "../apps/server/storage.ts";
+import { publishToolDescription } from "../apps/server/agent-publish.ts";
 
 // The default suite runs static-only (HTML_LIVE_MODE=disabled), like the
 // hosted installation a chat connector talks to.
@@ -548,7 +549,7 @@ test("full Claude.ai flow: code + PKCE → token → MCP publish → resolvable 
   const publishTool = listed.message.result.tools.find(
     (tool: any) => tool.name === "polka_publish",
   );
-  assert.match(publishTool.description, /standalone HTML/);
+  assert.equal(publishTool.description, publishToolDescription());
   assert.match(publishTool.description, /React/);
 
   const published = await publish(tokens.access_token, "Quarterly chat report");
@@ -1019,6 +1020,101 @@ test("a page that needs the network is saved but not linked", async () => {
   assert.equal(result.htmlProfile, "unsupported");
   assert.equal(result.url, null);
   assert.ok(result.linkUnavailableReason);
+  if (config.HTML_LIVE_ENABLED) {
+    // The build this call ran explains the refusal, not a request to run it.
+    assert.equal(result.interactiveReady, false);
+    assert.match(result.linkUnavailableReason, /script reference is not local/);
+    assert.doesNotMatch(result.linkUnavailableReason, /polka_prepare_preview/);
+  }
+});
+
+test("the publish guidance follows the interactive viewer setting", () => {
+  const live = publishToolDescription(true);
+  const staticOnly = publishToolDescription(false);
+  assert.match(live, /JavaScript inline/);
+  assert.match(live, /isolated sandbox on a separate viewer domain/);
+  assert.match(live, /interactiveUnavailableReason/);
+  assert.doesNotMatch(live, /static HTML snapshot/);
+  assert.match(staticOnly, /static HTML snapshot/);
+  assert.match(staticOnly, /scripts do not run/);
+  assert.doesNotMatch(staticOnly, /JavaScript inline/);
+  for (const text of [live, staticOnly]) assert.match(text, /under 5 MB/);
+});
+
+const scriptedArtifact = (extra = "") =>
+  `<!doctype html><html><head><meta charset="utf-8"><title>Workbench</title><style>body{font-family:system-ui;margin:40px}</style></head><body><h1>Workbench prototype</h1><p>A small interactive prototype with a counter, produced in a chat conversation for the owner.</p>${extra}<button id="count">0</button><script>let n=0;document.getElementById("count").onclick=(event)=>{event.target.textContent=String(++n)}</script></body></html>`;
+
+test("a scripted page is published interactive where the viewer is enabled", async () => {
+  const { tokens } = await connect(owner);
+  const key = randomUUID();
+  const call = async () => {
+    const called = await mcp(tokens.access_token, "tools/call", {
+      name: "polka_publish",
+      arguments: { key, title: "Workbench", html: scriptedArtifact() },
+    });
+    assert.equal(called.status, 200);
+    return called.message.result.structuredContent as any;
+  };
+  const published = await call();
+  assert.equal(published.state, "shared");
+  assert.equal(published.htmlProfile, "limited");
+  const {
+    rows: [share],
+  } = await db.query(
+    `SELECT share.derivative_id,derivative.state FROM shares share
+     LEFT JOIN revision_derivatives derivative ON derivative.id=share.derivative_id
+     WHERE share.id=$1`,
+    [published.shareId],
+  );
+  if (config.HTML_LIVE_ENABLED) {
+    assert.equal(published.interactiveReady, true);
+    assert.equal(published.interactiveUnavailableReason, undefined);
+    assert.equal(published.scriptsRunForRecipients, true);
+    assert.ok(share.derivative_id);
+    assert.equal(share.state, "ready");
+    const resolved = await app.inject({
+      method: "POST",
+      url: "/api/resolve",
+      remoteAddress: address(),
+      headers: { origin },
+      payload: { token: new URL(published.url).hash.slice(1) },
+    });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    assert.equal(resolved.json().revision.inlineBuild.state, "ready");
+  } else {
+    // Static-only installation: the scripted page is linked as a static copy.
+    assert.equal(published.interactiveReady, undefined);
+    assert.equal(published.scriptsRunForRecipients, false);
+    assert.equal(share.derivative_id, null);
+  }
+  // A retry replays the same save and the same link.
+  const again = await call();
+  assert.equal(again.artifactId, published.artifactId);
+  assert.equal(again.shareId, published.shareId);
+  assert.equal(again.url, published.url);
+  assert.equal(again.scriptsRunForRecipients, published.scriptsRunForRecipients);
+});
+
+test("a failed interactive build keeps the save and a static link, with the reason", async () => {
+  const { tokens } = await connect(owner);
+  const called = await mcp(tokens.access_token, "tools/call", {
+    name: "polka_publish",
+    arguments: {
+      key: randomUUID(),
+      title: "Workbench with a link",
+      html: scriptedArtifact('<a href="#count">To the counter</a>'),
+    },
+  });
+  const result = called.message.result.structuredContent;
+  assert.equal(result.state, "shared");
+  assert.equal(result.scriptsRunForRecipients, false);
+  if (config.HTML_LIVE_ENABLED) {
+    assert.equal(result.interactiveReady, false);
+    assert.match(
+      result.interactiveUnavailableReason,
+      /unhandled resource-bearing HTML attribute/,
+    );
+  } else assert.equal(result.interactiveUnavailableReason, undefined);
 });
 
 test("re-authorizing a client replaces its previous connection", async () => {

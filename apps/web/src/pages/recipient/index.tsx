@@ -106,7 +106,9 @@ function RecipientScreen({
                 className="recipient-reader-profile"
                 data-profile={viewer.revision.htmlProfile ?? "file"}
               >
-                {viewer.revision.htmlProfile === "limited"
+                {viewer.revision.inlineBuild?.state === "ready"
+                  ? "Интерактивная версия"
+                  : viewer.revision.htmlProfile === "limited"
                   ? "Статичный просмотр · интерактивные действия отключены"
                   : profileView(viewer.revision).badge}
               </span>

@@ -20,7 +20,7 @@ Viewer — отдельный Fastify listener, не маршрут SPA. HTML в
 
 ## UI и политика документа
 
-Только явный запуск на странице HTML, не в карточке. Видимая пометка локального эксперимента; остановка удаляет iframe, повтор получает новый capability. Статичный просмотр и скачивание остаются. htmlRuntime не становится true до полной приёмки; отдельный liveExperimental сообщает только о доступности эксперимента.
+Только явный запуск на странице HTML, не в карточке. (22.09.2026: владелец принял автозапуск интерактивной версии; изоляция прежняя. На странице HTML интерактивная версия открывается сразу, в карточке по-прежнему нет; см. [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md).) Видимая пометка локального эксперимента; остановка удаляет iframe, повтор получает новый capability. Статичный просмотр и скачивание остаются. htmlRuntime не становится true до полной приёмки; отдельный liveExperimental сообщает только о доступности эксперимента.
 
 Iframe: sandbox="allow-scripts", no-referrer. CSP документа: sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img/font/media-src data:; connect/frame/worker/object-src 'none'; base-uri/form-action 'none'; frame-ancestors APP_ORIGIN. Никаких allow-same-origin, popups, forms или top navigation. Дополнительно no-store/nosniff/noindex. CSP приложения разрешает frame-src конкретного viewer-origin только при включении эксперимента.
 

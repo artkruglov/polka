@@ -8,6 +8,7 @@ import {
   size,
 } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
+import { liveKind } from "./live-plan.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 export function Preview({
@@ -79,7 +80,7 @@ export function Preview({
         }
       >
         {revision.inlineBuild?.state === "ready"
-          ? "Просмотр готов. Нажмите «Запустить» ниже."
+          ? "Интерактивная версия готова."
           : "Просмотр пакета ещё недоступен."}{" "}
         Размер: {size(revision.totalSize)}.
       </StatusPanel>
@@ -139,14 +140,16 @@ export function Preview({
         )}
       </div>
     );
-    return compact ? (
+    // A script-free page has nothing to run: no interactive controls.
+    const kind = liveKind(revision);
+    return compact || kind === "none" ? (
       fallback
     ) : (
       <LivePreview
         key={`${revision.id}:${grant ?? ""}`}
         revision={revision}
         grant={grant}
-        requiresBuild={revision.storageKind === "bundle"}
+        requiresBuild={kind === "build"}
         onInlineBuildChange={onInlineBuildChange}
       >
         {fallback}

@@ -2,12 +2,18 @@ import { Button } from "../../shared/ui/controls.tsx";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
+import {
+  isLive,
+  nextLiveStep,
+  type CapabilityState,
+  type LiveMode,
+} from "./live-plan.ts";
 
-type LiveMode = "local" | "staging" | "production";
-type CapabilityState = LiveMode | "loading" | "disabled" | "error";
-
-const isLive = (state: CapabilityState): state is LiveMode =>
-  state === "local" || state === "staging" || state === "production";
+const modeLabel: Record<LiveMode, string> = {
+  production: "Интерактивная версия",
+  staging: "Тестовый интерактивный просмотр",
+  local: "Локальная проверка",
+};
 
 type LiveView = {
   url: string;
@@ -69,6 +75,10 @@ export function LivePreview({
   const [buildBusy, setBuildBusy] = useState(false);
   const [pollPaused, setPollPaused] = useState("");
   const [expanded, setExpanded] = useState(false);
+  // Opened automatically once per revision; a stop returns to the static view.
+  const [stopped, setStopped] = useState(false);
+  const autoLaunched = useRef(false);
+  const autoPrepared = useRef(false);
   const launchAbort = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const buildAbort = useRef<AbortController | null>(null);
@@ -90,6 +100,9 @@ export function LivePreview({
     setBuildBusy(false);
     setError("");
     setPollPaused("");
+    setStopped(false);
+    autoLaunched.current = false;
+    autoPrepared.current = false;
     setBuild(revision.inlineBuild ?? null);
     return () => {
       abort.abort();
@@ -322,7 +335,27 @@ export function LivePreview({
   const stop = () => {
     setExpanded(false);
     setLive(null);
+    setStopped(true);
   };
+
+  useEffect(() => {
+    const step = nextLiveStep({
+      capability,
+      requiresBuild,
+      build: build?.state ?? null,
+      owner: !grant,
+      stopped,
+      launched: autoLaunched.current,
+      prepared: autoPrepared.current,
+    });
+    if (step === "launch") {
+      autoLaunched.current = true;
+      void launch();
+    } else if (step === "prepare") {
+      autoPrepared.current = true;
+      void prepare();
+    }
+  }, [build?.state, capability, grant, requiresBuild, stopped]);
 
   if (capability === "disabled") return <>{children}</>;
 
@@ -333,7 +366,9 @@ export function LivePreview({
         ref={expandedContainer}
       >
         <div className="html-preview-note html-preview-toolbar">
-          <span>Экспериментальный интерактивный просмотр</span>{" "}
+          <span title="Код страницы выполняется в изолированной песочнице на отдельном домене, без сети. Не вводите здесь конфиденциальные данные.">
+            {isLive(capability) ? modeLabel[capability] : ""}
+          </span>{" "}
           <Button
             type="button"
             variant="quiet"
@@ -342,7 +377,12 @@ export function LivePreview({
           >
             {expanded ? "Свернуть" : "Развернуть"}
           </Button>
-          <Button type="button" variant="quiet" onClick={stop}>
+          <Button
+            type="button"
+            variant="quiet"
+            onClick={stop}
+            title="Остановить и показать сохранённую статичную версию"
+          >
             Остановить
           </Button>
           {grant && (
@@ -392,7 +432,10 @@ export function LivePreview({
             {error && <p className="preview-error">{error}</p>}
             {build?.state === "pending" ? (
               <>
-                <p>{pollPaused || "Подготавливаем интерактивную версию…"}</p>
+                <p role="status">
+                  {pollPaused ||
+                    "Подготавливаем интерактивную версию. Она откроется здесь сама."}
+                </p>
                 {pollPaused && (
                   <Button
                     type="button"
@@ -407,9 +450,9 @@ export function LivePreview({
                 )}
               </>
             ) : build?.state === "unsupported" || build?.state === "failed" ? (
-              <p>
+              <p className="preview-error">
                 Интерактивную версию не удалось подготовить.
-                {build.reason ? ` ${build.reason}` : ""}
+                {build.reason ? ` Причина: ${build.reason}.` : ""}
                 {build.path ? ` Файл: ${build.path}.` : ""}
               </p>
             ) : null}

@@ -1,14 +1,27 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { uuid } from "../../packages/contracts/index.ts";
+import {
+  MAX_BYTES,
+  uuid,
+  type InlineBuildStatus,
+} from "../../packages/contracts/index.ts";
 import { captureFromAgent } from "./agent-capture.ts";
+import {
+  preparePreviewFromAgent,
+  previewStatusInTransaction,
+} from "./agent-preview.ts";
+import { DERIVATIVE_BUILD_TIMEOUT_MS } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem } from "./errors.ts";
-import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
+import {
+  recheckServiceActor,
+  withServiceActorTransaction,
+  type ServiceActor,
+} from "./service-auth.ts";
 import { shareFromAgent } from "./shares.ts";
 
-const MAX_HTML_BYTES = 8 * 1024 * 1024;
+const MAX_HTML_MB = Math.floor(MAX_BYTES / (1024 * 1024));
 
 export const agentPublishInputSchema = z
   .object({
@@ -22,15 +35,70 @@ export const agentPublishInputSchema = z
   })
   .strict();
 
-/** What the chat tool description tells the model about this installation. */
-export function publishToolDescription() {
+/**
+ * What the chat tool description tells the model about this installation.
+ * Where the interactive viewer is enabled, scripts are kept and run; the
+ * guidance names what the interactive builder accepts (bundle-inline).
+ */
+export function publishToolDescription(
+  liveEnabled: boolean = config.HTML_LIVE_ENABLED,
+) {
   return [
     'Save one chat artifact to the owner\'s Polka shelf and, when this connection may manage links, return an unlisted share link in the same call. Use it when the user asks to save/publish an artifact to Polka ("сохрани на Полку").',
-    "Send the artifact as ONE standalone HTML document in `html`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network.",
-    "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
+    ...(liveEnabled
+      ? [
+          `Send the artifact as ONE self-contained HTML document in \`html\`, keeping its JavaScript inline in classic <script> tags (no type=module, async or defer). Scripts run in an isolated sandbox on a separate viewer domain, and the returned link opens the interactive version. The sandbox has no network: no external URLs at all (no CDN scripts, stylesheets, fonts or images, no fetch). Inline every library the artifact needs (for example the React and ReactDOM production builds) and compile JSX to plain JavaScript; in-browser Babel, eval, workers and localStorage are unavailable. Keep it under ${MAX_HTML_MB} MB.`,
+          "The interactive builder accepts: CSS in <style> without url() and without backslash escapes; system fonts; pictures as inline <svg> or canvas drawing; buttons and inputs. It refuses <a href> links, <img>, <iframe>, <video>/<audio> and data: URIs. Markdown or text: convert to semantic HTML first.",
+        ]
+      : [
+          `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
+          "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
+        ]),
     "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30).",
-    "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`.",
+    liveEnabled
+      ? "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`. If `interactiveUnavailableReason` is present, tell the user the scripts will not run and why; the link, if any, shows a static copy."
+      : "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`.",
   ].join("\n");
+}
+
+type InteractiveOutcome = { ready: boolean; reason: string | null };
+
+/**
+ * Builds the interactive version of a scripted page in the same call, so the
+ * link is bound to it. Build refusals are reported, never thrown: the save
+ * and a static link stand on their own.
+ */
+async function prepareInteractive(
+  actor: ServiceActor,
+  key: string,
+  revisionId: string,
+  htmlProfile: string | null,
+): Promise<InteractiveOutcome | null> {
+  if (!config.HTML_LIVE_ENABLED || htmlProfile === "static") return null;
+  let status: InlineBuildStatus | null;
+  try {
+    status = await preparePreviewFromAgent(actor, { key });
+    // Another call with this key may be building; wait for it within the
+    // builder's own deadline instead of starting a second build.
+    const deadline = Date.now() + DERIVATIVE_BUILD_TIMEOUT_MS + 1_000;
+    while (status?.state === "pending" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      status = await withServiceActorTransaction(actor, "capture", (c) =>
+        previewStatusInTransaction(c, actor.tenantId, revisionId),
+      );
+    }
+  } catch (error) {
+    if (error instanceof Problem) return { ready: false, reason: error.message };
+    throw error;
+  }
+  if (status?.state === "ready") return { ready: true, reason: null };
+  return {
+    ready: false,
+    reason:
+      status?.state === "pending"
+        ? "Интерактивная версия ещё собирается; владелец увидит её на Полке, когда сборка закончится."
+        : `Интерактивную версию не удалось собрать: ${status?.reason ?? "причина не указана"}${status?.path ? ` (${status.path})` : ""}.`,
+  };
 }
 
 /** A replay must rebuild the same upload request, including capture time. */
@@ -52,8 +120,12 @@ async function capturedAtFor(actor: ServiceActor, key: string) {
 export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
   const input = agentPublishInputSchema.parse(raw);
   const bytes = Buffer.from(input.html, "utf8");
-  if (bytes.length > MAX_HTML_BYTES)
-    throw new Problem(413, "quota", "Страница превышает лимит передачи 8 МБ.");
+  if (bytes.length > MAX_BYTES)
+    throw new Problem(
+      413,
+      "quota",
+      `Страница больше ${MAX_HTML_MB} МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.`,
+    );
   const verified = await recheckServiceActor(actor, "capture");
   const receipt = (await captureFromAgent(
     verified,
@@ -86,12 +158,26 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
     },
     "capture",
   )) as { artifactId: string; revisionId: string; htmlProfile?: string };
+  const interactive = await prepareInteractive(
+    verified,
+    input.key,
+    receipt.revisionId,
+    receipt.htmlProfile ?? null,
+  );
   const saved = {
     artifactId: receipt.artifactId,
     revisionId: receipt.revisionId,
     htmlProfile: receipt.htmlProfile ?? null,
     shelfUrl: `${config.APP_ORIGIN}/works/${receipt.artifactId}`,
     scriptsRunForRecipients: false,
+    ...(interactive
+      ? {
+          interactiveReady: interactive.ready,
+          ...(interactive.reason
+            ? { interactiveUnavailableReason: interactive.reason }
+            : {}),
+        }
+      : {}),
   };
   const current = await recheckServiceActor(verified, "context");
   if (!current.scopes.includes("share"))
@@ -135,7 +221,12 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         ...saved,
         state: "saved" as const,
         url: null,
-        linkUnavailableReason: error.message,
+        // The generic refusal suggests polka_prepare_preview, which this call
+        // already ran; the build's own reason is the useful one.
+        linkUnavailableReason:
+          error.code === "unsupported" && interactive?.reason
+            ? `Ссылку не выпускаем: страницу нельзя показать без скриптов. ${interactive.reason}`
+            : error.message,
       };
     throw error;
   }
