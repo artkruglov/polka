@@ -1,50 +1,62 @@
 # Документация Полки
 
-**Передача релиза Claude:** [GitHub, production-блокеры и порядок запуска](CLAUDE_RELEASE_HANDOFF.md).
+Если вы здесь впервые, начните с [README](../README.md), затем прочитайте [архитектуру](architecture.md) и [состояние](status.md).
 
-Актуальная редакция: 21 сентября 2026. Начните с продукта, затем состояния и дорожной карты. Архивные документы не задают текущий scope.
+## Пользователю
 
-| Документ | За что отвечает |
+| Документ | О чём |
 |---|---|
-| [PRODUCT.md](PRODUCT.md) | Для кого продукт, ценность, jobs, границы MVP, словарь |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Требования и критерии приёмки с идентификаторами R01–R20 |
-| [STATUS.md](STATUS.md) | Что действительно работает; что только нарисовано; текущие проверки |
-| [UX.md](UX.md) | Карта экранов, навигация, единый дизайн и отсутствующие состояния |
-| [ONBOARDING_SPEC.md](ONBOARDING_SPEC.md) | Регистрация, первый результат и мастер MCP: детальные истории |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Хранение, API, агенты, HTML, данные и границы доверия |
-| [ROADMAP.md](ROADMAP.md) | Единственный актуальный порядок разработки и условия выпуска |
-| [BUNDLE_SPEC.md](BUNDLE_SPEC.md) | Manifest, текущее хранение одиночного HTML и следующий multi-file capture |
-| [LIVE_VIEWER_SPEC.md](LIVE_VIEWER_SPEC.md) | Контракт локального live HTML эксперимента и незакрытые риски hosted |
-| [MODEL_WORKFLOW.md](MODEL_WORKFLOW.md) | Модели, делегирование, ревью и пакеты исполнения дорожной карты |
-| [LAUNCH.md](LAUNCH.md) | Облако, ёмкость, эксплуатация, open source и запуск |
-| [CONTENT.md](CONTENT.md) | Стартовая коллекция и правила авторства |
-| [ACCOUNT_DELETION_SPEC.md](ACCOUNT_DELETION_SPEC.md) | Контракт R17: отзыв доступа, удаление данных и ограничения резервных копий; revoke принят локально, полный purge в разработке |
-| [SELF_HOST_BASE_SPEC.md](SELF_HOST_BASE_SPEC.md) | Readiness, maintenance и критерии локальной/контейнерной поставки |
-| [research/COLD_START_PROMPT.md](research/COLD_START_PROMPT.md) | Готовый промпт для отдельного исследования артефактов |
-| [URL_IMPORT_SUPPORT.md](URL_IMPORT_SUPPORT.md) | Проверенная поддержка источников URL-import и ограничения viewer |
-| [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) | Запуск и проверки текущего кода |
-| [DECISIONS.md](DECISIONS.md) | Принятые изменения против прежних требований |
+| [connect-agents.md](connect-agents.md) | Как подключить Claude.ai, ChatGPT, Claude Code, Codex, скрипты и CI |
+| [faq.md](faq.md) | Лимиты, сеть, отзыв ссылок, почему ссылки Claude/ChatGPT не импортируются |
+| [MCP_CONNECTOR.md](MCP_CONNECTOR.md) | Коннектор для Claude.ai и ChatGPT: OAuth 2.1, разрешения, отзыв, приёмка |
+| [PUBLISH_API.md](PUBLISH_API.md) | `POST /api/v1/publish`, `GET /api/v1/status/:id`, ошибки, CLI |
 
-[Повторная ревизия](reviews/2026-09-20-requirements-revision/REVIEW.md) и [базовое ревью](reviews/2026-09-20-mvp-audit/REVIEW.md) — доказательства и найденные противоречия. [Архив](archive/README.md) — прежние планы, исторические ревью и исходные требования.
+## Разработчику и оператору
 
-## Правила сопровождения
+| Документ | О чём |
+|---|---|
+| [architecture.md](architecture.md) | Что где работает, данные, путь страницы к получателю, границы доверия |
+| [local-development.md](local-development.md) | Локальный запуск, тесты, интерактивный режим, почта, restore drill |
+| [status.md](status.md) | Одна таблица: что работает, что в коде, чего нет |
+| [roadmap.md](roadmap.md) | Этапы: что сделано и что дальше |
+| [deploy/BASE.md](../deploy/BASE.md) | Базовая самостоятельная установка: образ, PostgreSQL, S3, роли БД |
+| [deploy/hosted/README.md](../deploy/hosted/README.md) | Установка на одну VM с Caddy, как polochka.app |
+| [deploy/RESTORE.md](../deploy/RESTORE.md) | Восстановление из резервной копии |
+| [../CHANGELOG.md](../CHANGELOG.md) | История изменений |
 
-1. Пользовательское решение меняет PRODUCT/REQUIREMENTS; порядок — ROADMAP; фактический статус — STATUS. Не создавать очередной параллельный «финальный план».
-2. У задачи есть критерий и доказательство. «В коде», «проверено локально», «проверено в облаке» — разные статусы.
-3. Генеративный макет/React-демо не подтверждает готовность серверной функции.
-4. Устаревший документ хранится в archive; reviews/evidence/design — справочные материалы, не backlog. Новое решение ссылается на предыдущее, но не наследует отменённый запрет.
-5. REQUIREMENTS_TRACE.csv и reference/lanka-requirements.json сохраняют старые PR-ID; их preserved/adapted не означают выполнение новых R-ID. Путь дальнейшего развития отражён в REQUIREMENTS и DECISIONS.
+## Спецификации
 
-- [Производное для просмотра bundle](BUNDLE_INLINE_SPEC.md) — сборщик, локальная интеграция и оставшаяся приёмка.
-- [MCP_IMPLEMENTATION_SPEC](MCP_IMPLEMENTATION_SPEC.md) — контракт реализованного локального сервера; незавершённые приёмки перечислены в STATUS.
-- [MCP_ONBOARDING_SPEC](MCP_ONBOARDING_SPEC.md) — контракт настоящего подключения в интерфейсе; заменяет MCP-демо старого ONBOARDING_SPEC.
-- [MCP_CONNECTOR](MCP_CONNECTOR.md) — Полка как коннектор Claude.ai и ChatGPT: OAuth 2.1, согласие, `polka_publish`, отзыв и ограничения.
-- [PUBLISH_API](PUBLISH_API.md) — HTTP API публикации (`POST /api/v1/publish`) и CLI без зависимостей для агентов и скриптов без MCP.
+Контракты отдельных частей. У каждой в начале стоит статус: **реализовано** (код соответствует документу), **контракт** (действующие требования) или **историческое** (контекст решений, на текущий код не распространяется). В спецификациях сохранены протоколы приёмки со старыми номерами схемы. Текущее состояние смотрите в [status.md](status.md).
 
-- [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md) — переход от локального runtime к HTTPS staging и ещё не пройденные проверки.
+| Документ | Статус | О чём |
+|---|---|---|
+| [BUNDLE_INLINE_SPEC.md](BUNDLE_INLINE_SPEC.md) | реализовано | Сборка интерактивной производной, React runtime |
+| [LIVE_VIEWER_SPEC.md](LIVE_VIEWER_SPEC.md) | реализовано | Контракт изолированного viewer |
+| [HOSTED_VIEWER_DELTA.md](HOSTED_VIEWER_DELTA.md) | реализовано | Viewer на отдельном домене в hosted-установке |
+| [FRONTEND_COMPONENT_SYSTEM.md](FRONTEND_COMPONENT_SYSTEM.md) | реализовано | Слои и компоненты интерфейса |
+| [specs/BUNDLE_SPEC.md](specs/BUNDLE_SPEC.md) | реализовано | Manifest и пакет файлов |
+| [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md) | реализовано | MCP-сервер: транспорт, авторизация, инструменты |
+| [specs/MCP_ONBOARDING_SPEC.md](specs/MCP_ONBOARDING_SPEC.md) | реализовано | Выдача токена на странице «Агенты» |
+| [specs/TRASH_SPEC.md](specs/TRASH_SPEC.md) | реализовано | Корзина и восстановление |
+| [specs/AGENT_CONTEXT_TEMPLATES.md](specs/AGENT_CONTEXT_TEMPLATES.md) | реализовано | Контекст для агента и закреплённые шаблоны |
+| [specs/COMPANY_TEMPLATE_LIBRARY.md](specs/COMPANY_TEMPLATE_LIBRARY.md) | реализовано | Библиотеки шаблонов: роли, приглашения, журнал |
+| [specs/SELF_HOST_BASE_SPEC.md](specs/SELF_HOST_BASE_SPEC.md) | реализовано | Health, readiness, maintenance |
+| [specs/RESTORE_DRILL_SPEC.md](specs/RESTORE_DRILL_SPEC.md) | реализовано | Совместное восстановление БД и объектов |
+| [specs/URL_IMPORT_SUPPORT.md](specs/URL_IMPORT_SUPPORT.md) | реализовано | Импорт по URL (выключен по умолчанию) |
+| [specs/ACCOUNT_DELETION_SPEC.md](specs/ACCOUNT_DELETION_SPEC.md) | контракт | Удаление аккаунта и очистка данных |
+| [specs/PRODUCT.md](specs/PRODUCT.md) | контракт | Для кого продукт, границы, словарь |
+| [specs/REQUIREMENTS.md](specs/REQUIREMENTS.md) | контракт | Требования R01–R20 |
+| [specs/DECISIONS.md](specs/DECISIONS.md) | историческое | Журнал решений |
+| [specs/ONBOARDING_SPEC.md](specs/ONBOARDING_SPEC.md) | историческое | Первый вход и первый результат |
+| [specs/CLAUDE_IMPORT_EXPERIMENT.md](specs/CLAUDE_IMPORT_EXPERIMENT.md) | историческое | Почему ссылки Claude нельзя забрать сервером |
 
-- [RESTORE_DRILL_SPEC](RESTORE_DRILL_SPEC.md) — контракт совместного восстановления DB+objects; изолированное восстановление schema18 и журнала удаления принято; штатный restore CLI/startup gate и отдельная read-only identity приняты локально, облачная приёмка впереди.
+## Прочее
 
-- [TRASH_SPEC](TRASH_SPEC.md) — обратимая корзина, сохранность версий, отзыв доступа и гонки; backend/UI и MCP management приняты локально с ограничениями из STATUS. Полный purge и облачная приёмка остаются открытыми.
+- [screenshots/](screenshots/) — снимки polochka.app для README.
+- `reviews/2026-09-2*-editorial-*` — протоколы приёмки материалов «Интересного». На них ссылаются манифесты каталога (`evidencePath`), поэтому они остаются в репозитории.
 
-- [Контекст для агента и закреплённые шаблоны](AGENT_CONTEXT_TEMPLATES.md) — реализация v2, API/MCP, экспорт и границы корпоративного доступа.
+## Правила
+
+1. Поведение меняется вместе с документом: пользовательские инструкции, `status.md` и нужная спецификация обновляются в том же pull request.
+2. «В коде», «работает на polochka.app» и «проверено вручную с настоящим клиентом» — это разные статусы.
+3. Новый план не пишется параллельным документом: этапы живут в [roadmap.md](roadmap.md), решения — в [specs/DECISIONS.md](specs/DECISIONS.md).
