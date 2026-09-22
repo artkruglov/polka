@@ -77,7 +77,9 @@ const guides = (actor: ServiceActor) => ({
       "provenance: kind = \"mcp\" (or \"file\"/\"url\"); sourceUrl = null, or an https:// URL without credentials, query or fragment (http, file and local paths are rejected); capturedAt = RFC3339 with timezone, e.g. 2026-09-21T12:00:00Z; attribution and license = non-empty strings (use \"unknown\" if unknown).",
       "dependencies: {status:\"self-contained\", unresolved:[]} when every asset is inside the files; {status:\"incomplete\", unresolved:[...at least one...]} when something is missing; or {status:\"unknown\", unresolved:[]}.",
     ].join("\n"),
-    "Sharing rule: a manifest with exactly one self-contained HTML file (inline styles, data: images, no scripts, forms or external URLs) is saved with receipt.htmlProfile=static (limited if it has scripts but readable text) and polka_share can link it on every installation. htmlProfile=unsupported and multi-file bundles need an interactive version, which exists only where polka_prepare_preview is advertised.",
+    config.HTML_LIVE_ENABLED
+      ? "Sharing rule: this installation runs scripts in an isolated sandbox on a separate viewer domain. Keep an artifact's JavaScript: send one self-contained HTML file with inline classic <script> tags (no network, no external URLs or CDNs; inline libraries such as React/ReactDOM and compile JSX to plain JavaScript), then call polka_prepare_preview with the same key before polka_share so the link opens the interactive version. The builder refuses <a href>, <img>, data: URIs, CSS url() and CSS backslash escapes; use system fonts and inline <svg>. A script-free page (receipt.htmlProfile=static) needs no preparation. polka_publish does all of this in one call."
+      : "Sharing rule: a manifest with exactly one self-contained HTML file (inline styles, data: images, no scripts, forms or external URLs) is saved with receipt.htmlProfile=static (limited if it has scripts but readable text) and polka_share can link it on every installation. Scripts do not run on this installation; for a scripted artifact send a static HTML snapshot of what it renders. htmlProfile=unsupported and multi-file bundles cannot be linked here.",
     `Minimal valid polka_capture arguments (use your own fresh key):\n${JSON.stringify(CAPTURE_EXAMPLE)}`,
   ].join("\n\n"),
   [GUIDE_HTML]: [
@@ -150,6 +152,8 @@ async function context(actor: ServiceActor) {
       htmlLiveMode: config.HTML_LIVE_MODE,
       preview: {
         automatic: false,
+        // polka_publish builds the interactive version of a scripted page itself.
+        builtByPublish: config.HTML_LIVE_ENABLED,
         buildViaMcp:
           config.HTML_LIVE_ENABLED &&
           (verified.scopes.includes("capture") ||
@@ -187,7 +191,9 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
     { name: "polka", version: POLKA_VERSION },
     {
       instructions:
-        "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one standalone HTML file in, a private save and (with link permission) an unlisted link out. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
+        config.HTML_LIVE_ENABLED
+          ? "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one self-contained HTML file with its JavaScript inline in, a private save and (with link permission) an unlisted link to the interactive version out. Capture and revise preserve selected source bytes; polka_prepare_preview builds the interactive version of a capture. Sharing is explicit and revision-bound."
+          : "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one standalone HTML file in, a private save and (with link permission) an unlisted link out. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
     },
   );
   if (actor.scopes.includes("context")) {
@@ -341,7 +347,9 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
       {
         title: "Save a new private artifact",
         description:
-          "Save a validated manifest and its selected source bytes as a new private artifact. Returns a durable receipt; it does not build or share the artifact. Read polka://guides/capture-v1 for the exact manifest fields and a complete valid example. For a shareable page, send one self-contained HTML file without scripts.",
+          config.HTML_LIVE_ENABLED
+            ? "Save a validated manifest and its selected source bytes as a new private artifact. Returns a durable receipt; it does not build or share the artifact. Read polka://guides/capture-v1 for the exact manifest fields and a complete valid example. Keep an artifact's JavaScript inline in one self-contained HTML file (no network or external URLs); polka_prepare_preview then builds the interactive version."
+            : "Save a validated manifest and its selected source bytes as a new private artifact. Returns a durable receipt; it does not build or share the artifact. Read polka://guides/capture-v1 for the exact manifest fields and a complete valid example. For a shareable page, send one self-contained HTML file without scripts.",
         inputSchema: newCaptureInput,
         annotations: {
           readOnlyHint: false,
@@ -396,7 +404,7 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
       {
         title: "Prepare an experimental preview",
         description:
-          "Explicitly prepare the finalized bundle from this connection selected by uploadId or idempotency key. The source revision stays immutable; status calls never start work.",
+          "Build the interactive version of a finalized save from this connection, selected by uploadId or idempotency key, and wait for the result (ready, or unsupported/failed with a reason). Scripts then run in an isolated sandbox on a separate viewer domain; a later polka_share links that interactive version. The source revision stays immutable; status calls never start work.",
         inputSchema: agentPreviewInputSchema,
         annotations: {
           readOnlyHint: false,
