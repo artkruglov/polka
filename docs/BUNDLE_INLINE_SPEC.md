@@ -1,16 +1,18 @@
 # Производное для живого просмотра пакета
 
+> **Статус:** реализовано; разделы ниже — история версий, текущая — bundle-inline-v6.
+
 20.09.2026. Следующий шаг [BUNDLE_SPEC](specs/BUNDLE_SPEC.md). Оригинальные файлы и их export не меняются. Сборщик подключён к локальному HTTP/viewer через отдельное производное; один recipient-сценарий проверен в браузере (см. протокол ниже).
 
 ## Чистый сборщик
 
-`buildInlineBundle(manifest, Map<path, Buffer>)` сверяет канонический manifest, размеры/hash/UTF-8, затем создаёт воспроизводимые bytes без сети и выполнения JS. Выход: ok, html, sha256, size, sourceManifestSha256, builderVersion (сейчас bundle-inline-v4, см. ниже), runtimeProfile=bundle-inline-experimental-v1, consumedPaths. Либо structured unsupported с причиной/path.
+`buildInlineBundle(manifest, Map<path, Buffer>)` сверяет канонический manifest, размеры/hash/UTF-8, затем создаёт воспроизводимые bytes без сети и выполнения JS. Выход: ok, html, sha256, size, sourceManifestSha256, builderVersion (сейчас bundle-inline-v6, см. ниже), runtimeProfile=bundle-inline-experimental-v1, consumedPaths. Либо structured unsupported с причиной/path.
 
 Для оригинального team-report поддержаны синхронный classic script, локальная CSS и инертная SVG-картинка. HTML разбирается [parse5](https://parse5.js.org/), CSS — [PostCSS](https://postcss.org/api/), корректность XML проверяет [saxes](https://github.com/lddubeau/saxes). Результат ограничен8MiB.
 
 Неподдержанные ресурсы, modules/async/defer, CSS imports/resource functions/escape forms, выход за корень и повреждённые bytes дают отказ. Stylesheet link с дополнительными атрибутами пока отклоняется, чтобы не менять их смысл при замене на style. SVG ограничен простыми инертными элементами/атрибутами. Это ограничение первого builder, не запрет сохранять богатый оригинал.
 
-Сборщик не доказывает эквивалентность произвольного JS: currentScript, вычисляемые URL, provider API и storage могут зависеть от исходной среды. CSP и авторизация остаются отдельной защитой. Пока5 unit cases проходят, включая determinism/original hashes и3 исправленных false-ready из ревью Astra. Автономное поведение team-report проверено через настоящий локальный viewer.
+Сборщик не доказывает эквивалентность произвольного JS: currentScript, вычисляемые URL, provider API и storage могут зависеть от исходной среды. CSP и авторизация остаются отдельной защитой. Пока 5 unit cases проходят, включая determinism/original hashes и 3 исправленных false-ready, найденных на ревью. Автономное поведение team-report проверено через настоящий локальный viewer.
 
 ## Контракт интеграции и приёмка
 
@@ -28,7 +30,7 @@
 
 ## bundle-inline-v4 (22.09.2026)
 
-Решение владельца: сборщик должен принимать обычные артефакты из чата, иначе интерактивная версия почти всегда отказывает. Новые сборки получают `builderVersion=bundle-inline-v4`. Готовые производные v3 продолжают обслуживаться: все проверки версий (resolve, grants, live viewer, editorial, template-library viewer, assertLinkable, повторная подготовка) принимают список `SERVED_BUILDER_VERSIONS = [v4, v3]`, v3 не пересобирается. Неготовые строки v3 (`unsupported`/`failed`) игнорируются, поэтому отклонённая v3 страница собирается заново уже v4. Изоляция просмотра прежняя: отдельный registrable domain, iframe `sandbox="allow-scripts"` без allow-same-origin/popups/top-navigation, CSP `default-src 'none'`, `connect-src 'none'`, `img-src data:`, `font-src data:`, короткие grants, viewer без cookies.
+Решение: сборщик должен принимать обычные артефакты из чата, иначе интерактивная версия почти всегда отказывает. Новые сборки получают `builderVersion=bundle-inline-v4`. Готовые производные v3 продолжают обслуживаться: все проверки версий (resolve, grants, live viewer, editorial, template-library viewer, assertLinkable, повторная подготовка) принимают список `SERVED_BUILDER_VERSIONS = [v4, v3]`, v3 не пересобирается. Неготовые строки v3 (`unsupported`/`failed`) игнорируются, поэтому отклонённая v3 страница собирается заново уже v4. Изоляция просмотра прежняя: отдельный registrable domain, iframe `sandbox="allow-scripts"` без allow-same-origin/popups/top-navigation, CSP `default-src 'none'`, `connect-src 'none'`, `img-src data:`, `font-src data:`, короткие grants, viewer без cookies.
 
 Что разрешено и почему это безопасно:
 

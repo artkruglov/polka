@@ -56,13 +56,13 @@ codex mcp add polka --url https://polochka.app/mcp --bearer-token-env-var POLKA_
 | `polka_status` | `context` | Статус своих сохранений |
 | `polka_list`, `polka_get_artifact`, `polka_list_folders` | `read` | Поиск и метаданные работ полки |
 | `polka_revise` | `revise` | Новая версия существующей работы |
-| `polka_prepare_preview` | `capture` или `revise` | Собирает интерактивную версию для просмотра |
+| `polka_prepare_preview` | `capture` или `revise` | Собирает интерактивную версию для просмотра; есть, только если на установке включён интерактивный просмотр |
 | `polka_share`, `polka_revoke_share` | `share` | Выпускает и отзывает ссылку |
 | `polka_update_artifact`, `polka_trash`, `polka_restore` | `manage` | Название, папка, корзина |
 | `polka_list_templates`, `polka_list_template_libraries`, `polka_read_source` | `source:read` | Шаблоны и их исходники точной версии |
 | `polka_import_url`, `polka_import_status`, `polka_cancel_import` | `capture` | Импорт по URL, если он включён на установке |
 
-Все изменяющие инструменты принимают ключ идемпотентности: повтор того же запроса не создаёт вторую работу. Полный контракт описан в [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md).
+Создающие инструменты (`polka_publish`, `polka_capture`, `polka_revise`, `polka_share`, `polka_update_artifact`, `polka_import_url`) принимают ключ идемпотентности: повтор того же запроса не создаёт вторую работу. Корзина и восстановление защищены ожидаемой версией (CAS), отзыв ссылки идемпотентен по `shareId`. Полный контракт описан в [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md).
 
 ## Скрипты и CI: HTTP API и CLI
 

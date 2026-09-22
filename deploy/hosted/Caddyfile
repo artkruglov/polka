@@ -2,7 +2,7 @@
 	# No access log: share tokens live in URL fragments, but viewer grants and
 	# other capabilities can appear in paths.
 	# No admin API: every host-network container could reach it on loopback.
-	# Apply Caddyfile changes with `docker compose restart caddy`.
+	# Apply Caddyfile changes with `docker compose --env-file hosted.env restart caddy`.
 	admin off
 	# HTTP is handled per site below: an automatic redirect would carry a
 	# viewer capability path in Location.

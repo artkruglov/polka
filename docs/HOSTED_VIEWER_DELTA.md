@@ -1,6 +1,8 @@
 # Hosted viewer: ограниченный переход к staging
 
-20.09.2026. Delta к [LIVE_VIEWER_SPEC](LIVE_VIEWER_SPEC.md) и [ARCHITECTURE](ARCHITECTURE.md). Это контракт эксперимента, не разрешение production и не изменение R06. HTML/CSS/JS остаются целью; оригиналы и производные различаются, неподдержанное содержимое сохраняется без ложного ready. Код этим документом не меняется.
+> **Статус:** реализовано, включая режим `production` (polochka.app + polochka.page). Заголовок и первые абзацы описывают исходный переход к staging. Acceptance пунктов 4–6 на реальном hosted ещё не записан.
+
+20.09.2026. Delta к [LIVE_VIEWER_SPEC](LIVE_VIEWER_SPEC.md) и [ARCHITECTURE](architecture.md). Это контракт эксперимента, не разрешение production и не изменение R06. HTML/CSS/JS остаются целью; оригиналы и производные различаются, неподдержанное содержимое сохраняется без ложного ready. Код этим документом не меняется.
 
 ## Текущее состояние реализации
 
@@ -47,7 +49,7 @@
 5. **Достоверный egress контроль:** собственный третий origin со счётчиком/redirect endpoint и необходимые DNS/сетевые наблюдения. Сначала положительный контроль вне sandbox в том же браузере и сети действительно достигает collector; затем marker попытки из iframe и сопоставление server counters/browser events. Ноль без работающего positive control, DNS error или blocked render не считается успехом. Не выводить capability в collector; отдельный marker достаточен. Для redirect через viewer использовать только отдельную тестовую конфигурацию, не добавлять production open redirect.
 6. **CPU/UI и матрица:** ограниченный hostile loop/DOM corpus, отзыв/Stop и responsiveness родителя, память/восстановление; terminating server build worker не останавливает уже исполняемый browser JS. Зафиксировать реальные версии Chromium, Firefox, Safari/WebKit и целевые мобильные платформы. Проверенный браузер не доказывает безопасность остальных. Если необходимое ограничение не действует, фиксировать незакрытую runtime acceptance, а не переключать silently в static-only и объявлять R06 выполненным.
 
-## Решения, которые ещё нужны ведущему
+## Открытые решения
 
 - Выбрать конкретные два домена, TLS/proxy/staging host и доступ оператора; без этого HTTPS delivery/cookie acceptance не выполнена.
 - Обеспечить рабочий независимый collector и browser matrix. До этого «без произвольного egress» не доказано; одних CSP violations недостаточно.

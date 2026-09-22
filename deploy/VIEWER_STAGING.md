@@ -22,11 +22,11 @@ Set `HTML_LIVE_STAGING_REVISION_IDS` to at most 100 distinct, immutable revision
 
 The current contract does not prove CPU limits, browser egress isolation, WebRTC/DNS behavior, third-party-cookie behavior or real TLS/browser compatibility. No public production enablement, hosted beta, cloud rollout or certificate/domain installation is claimed here.
 
-The runtime currently serves CSP from the app/viewer code. Keep `sandbox="allow-scripts"`, viewer `frame-ancestors` and the exact grant checks unchanged; this proxy cannot replace browser isolation or server authorization.
+The runtime currently serves CSP from the app/viewer code. Keep `sandbox="allow-scripts allow-forms"` (no `allow-same-origin`), viewer `frame-ancestors` and the exact grant checks unchanged; this proxy cannot replace browser isolation or server authorization.
 
 
 ## Repeatable local proxy smoke
 
-Run `python3 scripts/test-viewer-proxy.py --confirm-synthetic` from the repository. It requires the already cached pinned nginx image, host Python/OpenSSL and Docker; it never pulls images, publishes ports, connects to a database or changes the trust store. The test snapshots this proxy configuration and mounts temporary certificates in a network-none container with two synthetic upstreams. It checks14 routing, TLS, header, body-limit and log cases and removes its exact container and temporary directory. The pinned image is the verified local ARM64 image; another operator must explicitly validate a suitable image before changing that test pin.
+Run `python3 scripts/test-viewer-proxy.py --confirm-synthetic` from the repository. It requires the already cached pinned nginx image, host Python/OpenSSL and Docker; it never pulls images, publishes ports, connects to a database or changes the trust store. The test snapshots this proxy configuration and mounts temporary certificates in a network-none container with two synthetic upstreams. It checks 14 routing, TLS, header, body-limit and log cases and removes its exact container and temporary directory. The pinned image is the verified local ARM64 image; another operator must explicitly validate a suitable image before changing that test pin.
 
 The local results of this test prove these synthetic proxy cases only. Browser, real-domain and cloud acceptance remain separate.

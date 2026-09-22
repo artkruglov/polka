@@ -1,6 +1,6 @@
 # B3: MCP для внешних агентов
 
-> **Статус:** реализовано. Актуальное описание подключения — [connect-agents.md](../connect-agents.md) и [MCP_CONNECTOR](../MCP_CONNECTOR.md).
+> **Статус:** реализовано, кроме мест, которые заменили [MCP_CONNECTOR](../MCP_CONNECTOR.md) и [PUBLISH_API](../PUBLISH_API.md) (они отмечены в тексте). Актуальное описание подключения — [connect-agents.md](../connect-agents.md) и [MCP_CONNECTOR](../MCP_CONNECTOR.md).
 
 20.09.2026. Контракт реализации, не готовое подключение. Цель: Codex CLI и Claude Code сохраняют оригинальный файл/bundle, получают receipt и разрешённую ссылку. Полка не запускает встроенную модель или чат. Основа: [ONBOARDING_SPEC](ONBOARDING_SPEC.md), [BUNDLE_SPEC](BUNDLE_SPEC.md).
 
@@ -56,7 +56,7 @@ Scope определяется действием: begin capture запреща�
 
 **Атомарный share receipt.** Добавить `agent_operations` с tenant/account/connection binding, operation=`share`, key, canonical request/hash и immutable result; UNIQUE `(tenant_id,operation,key)`, отдельное от upload namespace. Под tenant → connection сначала проверить scope и существующий receipt: другой connection или изменённый request → conflict. Новый запрос блокирует artifact, проверяет expectedRevisionId и использует общий share service, затем пишет receipt в той же транзакции. Result фиксирует shareId, revisionId, derivativeId и expiresAt; URL вычисляется из shareId только в ответе авторизованного share-вызова. Не вычислять result через последующий `getArtifact`, который может увидеть уже другую версию.
 
-Если активная share уже указывает на expected revision, зафиксировать её в receipt; если она указывает на другую версию, вернуть conflict и не публиковать молча новую. MCP v1 revise не переключает share; отдельный publish tool пока не добавлять. Retry прежнего share key не создаёт и не открывает новую ссылку после её revoke/expiry: возвращает исходные идентификаторы и актуальное closed состояние, URL=null. `polka_status` не раскрывает share receipts; повтор `polka_share` снова требует share scope. Отзыв share идемпотентен и использует общий service, без удаления operation tombstone.
+Если активная share уже указывает на expected revision, зафиксировать её в receipt; если она указывает на другую версию, вернуть conflict и не публиковать молча новую. MCP v1 revise не переключает share; отдельный publish tool пока не добавлять (позже добавлен `polka_publish`, см. [MCP_CONNECTOR](../MCP_CONNECTOR.md)). Retry прежнего share key не создаёт и не открывает новую ссылку после её revoke/expiry: возвращает исходные идентификаторы и актуальное closed состояние, URL=null. `polka_status` не раскрывает share receipts; повтор `polka_share` снова требует share scope. Отзыв share идемпотентен и использует общий service, без удаления operation tombstone.
 
 Приёмка refactor: прежние web single/bundle тесты; потерянный ответ после begin/PUT/finalize/share; changed request и чужой connection с тем же key; revoke между PUT и finalize и перед replay готового receipt; параллельные revise CAS и share/publish; S3→DB rollback с прежним GC; status не раскрывает другой connection или share URL. Проверить, что mutation path не открывает вложенную транзакцию и не обращается к pool из `InTransaction`.
 
@@ -167,7 +167,7 @@ readOnlyHint false; trash destructiveHint true (отзывает доступ), 
 metadata false; hints не заменяют авторизацию.
 
 Следующая свободная migration меняет только named scopes CHECK (max6 и allowlist
-с manage) и operation CHECK. Без UPDATE scopes существующих connections. Catalog
+с manage; позже с `source:read` scopes стало 7) и operation CHECK. Без UPDATE scopes существующих connections. Catalog
 миграций обновляется вместе с migration. `polka_context` добавляет management
 capability, readOnly учитывает manage. Tool visibility зависит от scope; resource
 `polka://guides/management-v1` объясняет CAS, receipt vs current state, trash quota

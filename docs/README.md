@@ -31,7 +31,7 @@
 | Документ | Статус | О чём |
 |---|---|---|
 | [BUNDLE_INLINE_SPEC.md](BUNDLE_INLINE_SPEC.md) | реализовано | Сборка интерактивной производной, React runtime |
-| [LIVE_VIEWER_SPEC.md](LIVE_VIEWER_SPEC.md) | реализовано | Контракт изолированного viewer |
+| [LIVE_VIEWER_SPEC.md](LIVE_VIEWER_SPEC.md) | историческое | Первый локальный эксперимент изолированного viewer; текущее — HOSTED_VIEWER_DELTA |
 | [HOSTED_VIEWER_DELTA.md](HOSTED_VIEWER_DELTA.md) | реализовано | Viewer на отдельном домене в hosted-установке |
 | [FRONTEND_COMPONENT_SYSTEM.md](FRONTEND_COMPONENT_SYSTEM.md) | реализовано | Слои и компоненты интерфейса |
 | [specs/BUNDLE_SPEC.md](specs/BUNDLE_SPEC.md) | реализовано | Manifest и пакет файлов |
