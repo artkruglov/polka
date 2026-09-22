@@ -7,6 +7,10 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
+import {
+  BUILD_FAILURE_MESSAGES,
+  BUNDLE_BUILDER_VERSION,
+} from "../apps/server/bundle-runtime-contract.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 if (!config.HTML_LIVE_ENABLED)
@@ -624,4 +628,28 @@ test("bundle storage cannot use single-file live capabilities, including an exis
   } finally {
     await db.query("UPDATE revisions SET storage_kind='single',html_profile='static' WHERE id=$1", [saved.revisionId]);
   }
+});
+
+test("a build the builder gave up on is not rebuilt in a loop", async () => {
+  const saved = await save(scripted("Build cooldown"));
+  // Stand in for a builder timeout that happened just now.
+  const {
+    rows: [failed],
+  } = await db.query(
+    `INSERT INTO revision_derivatives(
+       id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,attempt_id,reason
+     )
+     SELECT $1,r.tenant_id,r.id,r.manifest_sha256,$2,'failed',$3,$4
+     FROM revisions r WHERE r.id=$5
+     RETURNING id`,
+    [randomUUID(), BUNDLE_BUILDER_VERSION, randomUUID(), BUILD_FAILURE_MESSAGES.timeout, saved.revisionId],
+  );
+  const retried = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
+  assert.equal(retried.json().state, "failed", retried.body);
+  // After the cooldown the same source is built again.
+  await db.query(
+    "UPDATE revision_derivatives SET updated_at=now()-interval '31 seconds' WHERE id=$1",
+    [failed.id],
+  );
+  await buildReady(saved.revisionId);
 });

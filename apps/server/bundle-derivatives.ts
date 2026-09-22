@@ -23,6 +23,9 @@ import {
   type BuildFailureCategory,
 } from "./bundle-runtime-contract.ts";
 
+const BUILD_RETRY_COOLDOWN_MS = 30_000;
+const BUILDER_FAILURES = new Set<string>(Object.values(BUILD_FAILURE_MESSAGES));
+
 const activeBuilds = new Set<string>();
 
 // A single HTML upload is built like a one-file bundle: its interactive
@@ -338,6 +341,18 @@ async function prepare(
       [revisionId, revision.manifest_sha256],
     );
     if (existing && ["ready", "unsupported"].includes(existing.state))
+      return { row: existing, run: false };
+    // A build the builder itself gave up on (timeout, out of memory, crash)
+    // is the expensive kind; a client retrying it in a loop would hold the
+    // process's build slots for every other owner, so the same source is not
+    // rebuilt for a while. An attempt that never ran (abandoned, then failed
+    // by maintenance) or failed to store is retried at once.
+    if (
+      existing?.state === "failed" &&
+      BUILDER_FAILURES.has(existing.reason) &&
+      Date.now() - new Date(existing.updated_at).getTime() <
+        BUILD_RETRY_COOLDOWN_MS
+    )
       return { row: existing, run: false };
     if (existing?.state === "pending")
       return {
