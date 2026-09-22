@@ -3,7 +3,7 @@
 # and viewer listeners stay on loopback (required by HTML_LIVE_MODE=production);
 # only Caddy listens publicly. PostgreSQL is published on 127.0.0.1 only.
 # HTML_LIVE_MODE defaults to disabled (static HTML only).
-# Not HA: one VM, nightly logical DB backups. See deploy/hosted/README.md.
+# Not HA: one VM, periodic logical DB backups. See deploy/hosted/README.md.
 name: polka-hosted
 
 x-hardening: &hardening
@@ -76,6 +76,7 @@ services:
     user: node
     environment:
       DATABASE_URL: postgres://polka_schema:${POLKA_SCHEMA_PASSWORD:?}@postgres:5432/polka
+      MIGRATION_STATEMENT_TIMEOUT_MS: ${MIGRATION_STATEMENT_TIMEOUT_MS:-120000}
     command: ["node", "--import", "tsx", "scripts/migrate.ts"]
     networks: [polka]
     depends_on:
@@ -143,7 +144,7 @@ services:
         limits: {cpus: "0.5", memory: 768M}
 
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     restart: unless-stopped
     environment:
       APP_HOST: ${APP_HOST:?}
@@ -167,16 +168,31 @@ services:
       options: {max-size: "10m", max-file: "5"}
 
   backup:
-    image: alpine:3.22
+    # Built locally from the pinned postgres image (pg_dump matches the server)
+    # plus the AWS CLI: `docker compose --env-file hosted.env up -d --build`.
+    build: ./backup
+    image: polka-backup:local
     restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
     environment:
       BACKUP_DATABASE_URL: postgres://polka_schema:${POLKA_SCHEMA_PASSWORD:?}@postgres:5432/polka
       S3_ENDPOINT: ${S3_ENDPOINT:?}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      # Prefer a dedicated write-only key for the backups bucket; the app key
+      # is only a fallback for installations that have not created one yet.
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-${S3_ACCESS_KEY:?}}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-${S3_SECRET_KEY:?}}
       BACKUP_BUCKET: ${BACKUP_BUCKET:?}
-    volumes: ["./backup.sh:/backup.sh:ro"]
-    command: ["/bin/sh", "/backup.sh"]
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    # Unhealthy when no dump was uploaded within the interval plus one hour.
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/last-success && test $$(( $$(date +%s) - $$(cat /tmp/last-success) )) -lt $$(( $${BACKUP_INTERVAL_SECONDS:-86400} + 3600 ))"]
+      interval: 5m
+      timeout: 5s
+      start_period: 10m
     networks: [polka]
     depends_on:
       postgres: {condition: service_healthy}
