@@ -33,7 +33,7 @@ npm test               # временные БД и bucket, после прог�
 npm test -- --live     # файлы из tests/live-suite.json с включённым viewer
 ```
 
-`npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Интересного». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. Команды `npm run test:live`, `test:mcp` и подобные работают с базой из `.env` и пишут в неё, поэтому запускайте их только на локальной базе, которую не жалко.
+`npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Интересного». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
 
 CI повторяет `check`, `build` и `npm test`, а ещё проверяет лицензии production-зависимостей, секреты в истории и собранный Docker-образ.
 

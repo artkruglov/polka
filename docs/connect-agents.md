@@ -77,7 +77,7 @@ node polka-publish.mjs report.html --title "Отчёт за квартал" --sh
 # → https://polochka.app/s#…
 ```
 
-CLI — это один файл для Node 22+ без зависимостей. Из репозитория он запускается как `node scripts/polka-publish.mjs`. Адрес Полки задаётся в `POLKA_ENDPOINT` или флагом `--endpoint`. Токен читается только из `POLKA_TOKEN`.
+CLI — это один файл для Node 22+ без зависимостей. Из репозитория он запускается как `node scripts/polka-publish.mjs`. Скачанная копия по умолчанию обращается к своей установке. Копии из репозитория адрес нужно передать через `POLKA_ENDPOINT` или `--endpoint`. Токен читается только из `POLKA_TOKEN`.
 
 Без CLI достаточно одного запроса `POST /api/v1/publish` с полями `key` (UUID), `title`, `html` и необязательными `expiresInDays` и `folderId`. Ответы, ошибки и лимиты частоты описаны в [PUBLISH_API](PUBLISH_API.md).
 
