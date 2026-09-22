@@ -3,7 +3,11 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
 
-type CapabilityState = "loading" | "local" | "staging" | "disabled" | "error";
+type LiveMode = "local" | "staging" | "production";
+type CapabilityState = LiveMode | "loading" | "disabled" | "error";
+
+const isLive = (state: CapabilityState): state is LiveMode =>
+  state === "local" || state === "staging" || state === "production";
 
 type LiveView = {
   url: string;
@@ -173,8 +177,9 @@ export function LivePreview({
           setCapability(
             result.liveExperimental !== true
               ? "disabled"
-              : result.liveMode === "staging"
-                ? "staging"
+              : result.liveMode === "staging" ||
+                  result.liveMode === "production"
+                ? result.liveMode
                 : result.liveMode === "local" || result.liveMode === undefined
                   ? "local"
                   : "disabled",
@@ -193,7 +198,7 @@ export function LivePreview({
     if (
       !requiresBuild ||
       grant ||
-      (capability !== "local" && capability !== "staging") ||
+      !isLive(capability) ||
       build?.state !== "pending" ||
       pollPaused
     )
@@ -380,7 +385,7 @@ export function LivePreview({
           </Button>
         </p>
       )}
-      {(capability === "local" || capability === "staging") &&
+      {isLive(capability) &&
         requiresBuild &&
         build?.state !== "ready" && (
           <div className="html-preview-note">
@@ -424,13 +429,15 @@ export function LivePreview({
             )}
           </div>
         )}
-      {(capability === "local" || capability === "staging") &&
+      {isLive(capability) &&
         (!requiresBuild || build?.state === "ready") && (
           <div className="html-preview-note">
             <p>
-              {capability === "staging"
-                ? "Тестовый просмотр."
-                : "Локальная проверка."}{" "}
+              {capability === "production"
+                ? "Интерактивная версия."
+                : capability === "staging"
+                  ? "Тестовый просмотр."
+                  : "Локальная проверка."}{" "}
               Код этой страницы запускается в браузере; не используйте здесь
               конфиденциальные данные. Внешние запросы и системные диалоги
               (alert, prompt, confirm) здесь не работают. Если страница их

@@ -1,7 +1,12 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
-export const HTML_LIVE_MODES = ["disabled", "local", "staging"] as const;
+export const HTML_LIVE_MODES = [
+  "disabled",
+  "local",
+  "staging",
+  "production",
+] as const;
 export type HtmlLiveMode = (typeof HTML_LIVE_MODES)[number];
 
 const LOOPBACK_HOSTS = ["127.0.0.1", "localhost"] as const;
@@ -36,7 +41,9 @@ function modeFor(input: ViewerConfigInput): HtmlLiveMode {
     explicit !== undefined &&
     !(HTML_LIVE_MODES as readonly string[]).includes(explicit)
   )
-    throw new Error("HTML_LIVE_MODE must be disabled, local or staging");
+    throw new Error(
+      "HTML_LIVE_MODE must be disabled, local, staging or production",
+    );
   if (
     input.HTML_LIVE_ENABLED !== undefined &&
     input.HTML_LIVE_ENABLED !== "true" &&
@@ -49,7 +56,8 @@ function modeFor(input: ViewerConfigInput): HtmlLiveMode {
       ? "local"
       : "disabled")) as HtmlLiveMode;
   if (
-    (mode === "staging" && input.HTML_LIVE_ENABLED !== undefined) ||
+    ((mode === "staging" || mode === "production") &&
+      input.HTML_LIVE_ENABLED !== undefined) ||
     (mode === "disabled" && input.HTML_LIVE_ENABLED === "true") ||
     (mode === "local" && input.HTML_LIVE_ENABLED === "false")
   )
@@ -127,21 +135,24 @@ export function parseViewerConfig(input: ViewerConfigInput): ViewerConfig {
       );
   }
 
-  if (mode === "staging") {
+  // Production differs from staging only by serving every eligible revision
+  // instead of an explicit allowlist; the delivery requirements are the same.
+  if (mode === "staging" || mode === "production") {
+    const label = mode === "staging" ? "Staging" : "Production";
     if (appUrl.protocol !== "https:" || viewerUrl.protocol !== "https:")
-      throw new Error("Staging live HTML requires canonical HTTPS origins");
+      throw new Error(`${label} live HTML requires canonical HTTPS origins`);
     if (
       appUrl.origin !== input.APP_ORIGIN ||
       viewerUrl.origin !== input.VIEWER_ORIGIN
     )
-      throw new Error("Staging live HTML requires canonical HTTPS origins");
+      throw new Error(`${label} live HTML requires canonical HTTPS origins`);
     if (input.COOKIE_SECURE !== "true")
-      throw new Error("Staging live HTML requires secure cookies");
+      throw new Error(`${label} live HTML requires secure cookies`);
     const appDomain = registrableDomain(appUrl.hostname);
     const viewerDomain = registrableDomain(viewerUrl.hostname);
     if (!appDomain || !viewerDomain || appDomain === viewerDomain)
       throw new Error(
-        "Staging app and viewer require different registrable domains",
+        `${label} app and viewer require different registrable domains`,
       );
   }
 
