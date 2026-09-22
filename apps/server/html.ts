@@ -2,8 +2,23 @@ import type { HtmlProfile } from "../../packages/contracts/index.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
 // scripts, forms, plugins or network. Inline styles and data: images still work.
-export const STATIC_HTML_CSP =
-  "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; child-src 'none'; worker-src 'none'; manifest-src 'none'; navigate-to 'none'";
+// Links work only by the reader's own click: without scripts the page cannot
+// navigate by itself; target=_blank opens a normal, unsandboxed tab.
+export const STATIC_HTML_SANDBOX =
+  "allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
+export const STATIC_HTML_CSP = `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
+
+// View-only transform (downloads stay byte-exact): a plain link would try to
+// load the external site inside Полка's frame, which the app forbids, so every
+// link in the static view opens in a new tab instead. base-uri 'none' still
+// blocks any <base href>; this element carries only a target.
+const LINK_TARGET = Buffer.from('<base target="_blank">');
+export function withNewTabLinks(html: Buffer): Buffer {
+  const head = /<head(?:\s[^>]*)?>/i.exec(html.toString("latin1"));
+  if (!head) return Buffer.concat([LINK_TARGET, html]);
+  const at = head.index + head[0].length;
+  return Buffer.concat([html.subarray(0, at), LINK_TARGET, html.subarray(at)]);
+}
 
 const interactive =
   /<script\b|<(?:iframe|frame|object|embed|applet|form)\b|<[^>]+\son[a-z]+\s*=|<[^>]+=\s*["']?\s*javascript:|<meta[^>]+http-equiv\s*=\s*["']?refresh/i;

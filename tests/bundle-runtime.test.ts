@@ -549,7 +549,7 @@ test("a static single-file bundle links statically until a ready derivative exis
     "",
   );
   assert.equal(document.statusCode, 200, document.body);
-  assert.match(document.headers["content-security-policy"] as string, /^sandbox;/);
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/);
   assert.equal(document.body, page.toString());
   assert.equal(
     (await call("POST", `/api/shares/${before.share.id}/revoke`, {})).statusCode,
