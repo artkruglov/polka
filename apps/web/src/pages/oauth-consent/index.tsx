@@ -191,12 +191,13 @@ function ConsentForm({
     <section className="oauth-card" aria-labelledby="oauth-title">
       <span className="eyebrow">Подключение к Полке</span>
       <h1 id="oauth-title">
-        Разрешить «{details.client.name}» доступ к вашей Полке?
+        Разрешить доступ к вашей Полке для{" "}
+        <span className="oauth-host">{details.client.redirectHost}</span>?
       </h1>
       <p className="oauth-lead">
-        После ответа вы вернётесь на{" "}
-        <strong>{details.client.redirectHost}</strong>. Название приложение
-        указало само — разрешайте, только если вы сами начали подключение там.
+        Ответ получит сайт <strong>{details.client.redirectHost}</strong>.
+        Приложение называет себя «{details.client.name}» — это имя оно указало
+        само. Разрешайте, только если вы сами начали подключение на этом сайте.
       </p>
       {accountName && (
         <p className="oauth-account">

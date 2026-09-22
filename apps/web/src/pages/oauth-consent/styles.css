@@ -3,6 +3,7 @@
 .oauth-card { display: grid; gap: 18px; padding: 32px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
 .oauth-card h1 { font-size: clamp(26px, 3vw, 34px); line-height: 1.15; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .oauth-card p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+.oauth-host { color: var(--accent-ink); overflow-wrap: anywhere; }
 .oauth-lead strong, .oauth-account strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
 .oauth-account { padding: 10px 14px; border-radius: var(--radius); background: var(--soft); font-size: var(--text-base); }
 .oauth-scopes { display: grid; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; min-width: 0; }

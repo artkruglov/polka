@@ -39,6 +39,7 @@ import { sha256 } from "./storage.ts";
 
 const ACCESS_TTL_SECONDS = 3600;
 const CODE_TTL_SECONDS = 60;
+const REFRESH_REUSE_GRACE_SECONDS = 60;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const AUTH_METHODS = [
@@ -197,6 +198,50 @@ const cleanName = (value: string | undefined) => {
   return name || "MCP-клиент";
 };
 
+// Names people trust are reserved for the vendors' own callback hosts, so a
+// self-registered client cannot pose as Claude or ChatGPT on the consent page.
+const RESERVED_NAMES = [
+  { words: ["claude", "anthropic"], hosts: ["claude.ai", "claude.com"] },
+  { words: ["chatgpt", "openai"], hosts: ["chatgpt.com", "openai.com"] },
+];
+const LOOKALIKES: Record<string, string> = {
+  а: "a",
+  с: "c",
+  е: "e",
+  о: "o",
+  р: "p",
+  х: "x",
+  у: "y",
+  і: "i",
+  ӏ: "l",
+  к: "k",
+  м: "m",
+  т: "t",
+  н: "h",
+  в: "b",
+  г: "r",
+  "0": "o",
+  "1": "l",
+};
+const onHost = (uri: string, hosts: string[]) => {
+  const host = new URL(uri).hostname;
+  return hosts.some((known) => host === known || host.endsWith(`.${known}`));
+};
+
+export function vettedClientName(name: string, redirectUris: string[]) {
+  const folded = [...name.normalize("NFKC").toLowerCase()]
+    .map((char) => LOOKALIKES[char] ?? char)
+    .join("")
+    .replace(/[^a-z]/g, "");
+  const claimed = RESERVED_NAMES.find((entry) =>
+    entry.words.some((word) => folded.includes(word)),
+  );
+  if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts)))
+    return name;
+  const suffix = " (имя не подтверждено)";
+  return `${name.slice(0, 80 - suffix.length).trim()}${suffix}`;
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic Client Registration (RFC 7591)
 
@@ -252,7 +297,10 @@ export async function registerClient(body: unknown, ip: string) {
     );
   const clientId = `pc_${randomBytes(16).toString("base64url")}`;
   const clientSecret = method === "none" ? null : secret();
-  const clientName = cleanName(input.client_name);
+  const clientName = vettedClientName(
+    cleanName(input.client_name),
+    redirectUris,
+  );
   const {
     rows: [row],
   } = await db.query(
@@ -683,20 +731,23 @@ async function exchangeCode(
        ORDER BY id FOR UPDATE`,
       [row.tenant_id, row.account_id, client.client_id],
     );
-    for (const connection of previous)
-      await revokeConnectionInTransaction(c, connection);
+    // Check the quota before replacing anything: a refusal must leave the
+    // previous connection working.
     const {
       rows: [active],
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
-       WHERE tenant_id=$1 AND revoked_at IS NULL AND expires_at>now()`,
-      [row.tenant_id],
+       WHERE tenant_id=$1 AND revoked_at IS NULL AND expires_at>now()
+         AND NOT (id = ANY($2::uuid[]))`,
+      [row.tenant_id, previous.map((connection) => connection.id)],
     );
     if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
       return new OAuthFailure(
         "invalid_grant",
         "Too many active agent connections. Revoke one on the Polka agents page.",
       );
+    for (const connection of previous)
+      await revokeConnectionInTransaction(c, connection);
     const accessToken = secret();
     const connectionId = randomUUID();
     const {
@@ -792,6 +843,27 @@ async function refresh(
     );
     if (!row || row.client_id !== client.client_id) return invalidGrant();
     if (row.rotated_at) {
+      // A client retrying a refresh whose answer it lost (or racing itself)
+      // presents the token it just rotated. Within the grace window, and only
+      // for the immediate predecessor of the live token, refuse without
+      // ending the grant; the successor pair from that rotation stays valid.
+      const {
+        rows: [grace],
+      } = await c.query(
+        // Compare in SQL: a JS Date would drop the microseconds.
+        `SELECT token.rotated_at>clock_timestamp()-$2*interval '1 second'
+                AND NOT EXISTS(
+                  SELECT 1 FROM oauth_refresh_tokens later
+                  WHERE later.connection_id=token.connection_id
+                    AND later.id<>token.id AND later.rotated_at>token.rotated_at
+                ) AS retry
+         FROM oauth_refresh_tokens token WHERE token.id=$1`,
+        [row.id, REFRESH_REUSE_GRACE_SECONDS],
+      );
+      if (grace.retry && !row.revoked_at && !row.connection_revoked_at)
+        return invalidGrant(
+          "This refresh token was just rotated; use the tokens from that response.",
+        );
       // Reuse of a rotated refresh token: assume theft and end the grant.
       await revokeConnectionInTransaction(c, {
         id: row.connection_id,
@@ -907,10 +979,25 @@ export async function revokeRequest(
 // ---------------------------------------------------------------------------
 // Routes
 
-function formParams(body: unknown) {
-  if (!body || typeof body !== "object" || !("params" in body)) return null;
-  const parsed = body as { params: Record<string, string>; duplicate: boolean };
-  return parsed.duplicate ? null : parsed.params;
+/** Only the urlencoded parser below creates this; JSON cannot pose as it. */
+class FormBody {
+  constructor(
+    public params: Record<string, string>,
+    public duplicate: boolean,
+  ) {}
+}
+
+function formParams(req: FastifyRequest) {
+  const type = String(req.headers["content-type"] ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (type !== "application/x-www-form-urlencoded") return null;
+  const body = req.body;
+  if (!(body instanceof FormBody) || body.duplicate) return null;
+  return Object.values(body.params).every((value) => typeof value === "string")
+    ? body.params
+    : null;
 }
 
 function sendFailure(reply: FastifyReply, error: unknown) {
@@ -998,7 +1085,7 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
           if (key in params) duplicate = true;
           params[key] = value;
         }
-        done(null, { params, duplicate });
+        done(null, new FormBody(params, duplicate));
       },
     );
     machine.post(
@@ -1015,7 +1102,7 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
     machine.post("/oauth/token", async (req, reply) => {
       reply.header("pragma", "no-cache");
       try {
-        const params = formParams(req.body);
+        const params = formParams(req);
         if (!params)
           throw new OAuthFailure(
             "invalid_request",
@@ -1030,7 +1117,7 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
     });
     machine.post("/oauth/revoke", async (req, reply) => {
       try {
-        const params = formParams(req.body);
+        const params = formParams(req);
         if (!params)
           throw new OAuthFailure(
             "invalid_request",
