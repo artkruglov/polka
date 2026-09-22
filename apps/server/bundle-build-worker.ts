@@ -5,6 +5,7 @@ import { buildDerivative } from "./react-runtime.ts";
 type Request = {
   manifest: BundleManifest;
   files: Array<{ path: string; bytes: Uint8Array }>;
+  allowRuntime: boolean;
 };
 
 if (!parentPort) throw new Error("Bundle build worker needs a parent port");
@@ -16,6 +17,7 @@ parentPort.once("message", async (request: Request) => {
       new Map(
         request.files.map((file) => [file.path, Buffer.from(file.bytes)]),
       ),
+      { allowRuntime: request.allowRuntime === true },
     );
     parentPort!.postMessage(result);
   } catch {

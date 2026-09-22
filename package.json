@@ -42,6 +42,7 @@
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@smithy/node-http-handler": "4.12.1",
+    "acorn": "8.18.0",
     "chart.js": "4.5.1",
     "d3": "7.9.0",
     "esbuild": "0.28.2",

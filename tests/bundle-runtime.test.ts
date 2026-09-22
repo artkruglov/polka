@@ -13,6 +13,7 @@ import {
   REACT_RUNTIME_PROFILE,
 } from "../apps/server/bundle-runtime-contract.ts";
 import { componentShell } from "../packages/contracts/runtime.ts";
+import { builderEnv } from "../apps/server/bundle-derivatives.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
@@ -751,6 +752,62 @@ test("a component page v4 refused is compiled by the Полка runtime and serv
   const ownerView = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(ownerView.statusCode, 200, ownerView.body);
   assert.equal(ownerView.json().profile, REACT_RUNTIME_PROFILE);
+});
+
+test("runtime builds get a minimal environment and run one at a time", async () => {
+  const env = builderEnv();
+  assert.deepEqual(Object.keys(env).sort(), [
+    "ESBUILD_BINARY_PATH",
+    "GOMAXPROCS",
+    "GOMEMLIMIT",
+    "PATH",
+    "POLKA_ESBUILD_BINARY",
+  ]);
+  for (const secret of [config.DATABASE_URL, process.env.S3_SECRET_KEY, process.env.LINK_KEY])
+    if (secret) assert.ok(!Object.values(env).includes(secret));
+  assert.match(env.ESBUILD_BINARY_PATH, /esbuild-limited\.sh$/);
+
+  const component = (label: string) =>
+    saveBundle(
+      new Map([
+        ["index.html", Buffer.from(componentShell(label, "App.jsx"))],
+        [
+          "App.jsx",
+          Buffer.from(
+            `import { BarChart, Bar } from "recharts";\nexport default () => <BarChart width={100} height={50} data={[{ v: 1 }]}><Bar dataKey="v" /></BarChart>; // ${label}`,
+          ),
+        ],
+      ]),
+    );
+  const [first, second] = [await component("one"), await component("two")];
+  const [a, b] = await Promise.all(
+    [first, second].map((saved) =>
+      call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {}),
+    ),
+  );
+  assert.deepEqual([a.statusCode, b.statusCode].sort(), [200, 429]);
+  const busy = a.statusCode === 429 ? { response: a, saved: first } : { response: b, saved: second };
+  assert.match(busy.response.json().message, /уже собирает/);
+  // The refused attempt stays pending and a retry builds it.
+  const retried = await call("POST", `/api/revisions/${busy.saved.revisionId}/build-inline`, {});
+  assert.equal(retried.json().state, "ready", retried.body);
+});
+
+test("a computed import is refused through the build worker without reading the disk", async () => {
+  const saved = await saveBundle(
+    new Map([
+      ["index.html", Buffer.from(componentShell("Leak", "App.jsx"))],
+      [
+        "App.jsx",
+        Buffer.from(
+          'const n = "";\nexport default async () => (await import(`../../../../../../../../proc/self/environ${n}`, { with: { type: "text" } })).default;',
+        ),
+      ],
+    ]),
+  );
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
+  assert.equal(built.json().state, "unsupported", built.body);
+  assert.match(built.json().reason, /import attributes/);
 });
 
 test("a component with an import outside the runtime is refused with the module named", async () => {
