@@ -54,6 +54,27 @@ test("scripted pages run directly or after a build", () => {
   );
 });
 
+test("a link recipient runs only the interactive version the link is bound to", () => {
+  const limited = page({ htmlProfile: "limited" });
+  assert.equal(liveKind(limited, true), "none");
+  assert.equal(liveKind(page({ htmlProfile: "unsupported" }), true), "none");
+  assert.equal(
+    liveKind(
+      {
+        ...limited,
+        inlineBuild: {
+          state: "ready",
+          runtimeProfile: "bundle-inline-experimental-v1",
+          reason: null,
+          path: null,
+        },
+      },
+      true,
+    ),
+    "build",
+  );
+});
+
 const base = {
   capability: "production" as const,
   requiresBuild: false,

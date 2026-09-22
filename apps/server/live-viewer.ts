@@ -135,11 +135,10 @@ export async function issueRecipientLiveView(sourceGrant: string) {
          WHERE g.hash=$2 AND g.expires_at>now()
            AND NOT s.revoked AND s.expires_at>now() AND r.mime='text/html'
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
-           AND ((r.storage_kind='single' AND g.derivative_id IS NULL)
-             OR (r.storage_kind IN ('single','bundle') AND d.state='ready'
+           AND (r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
                AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-               AND d.runtime_profile=$3))
+               AND d.runtime_profile=$3)
          RETURNING expires_at,derivative_id`,
         [sha256(token), sourceGrantHash, BUNDLE_RUNTIME_PROFILE],
       )
@@ -167,7 +166,8 @@ async function authorizedRevision(token: string) {
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      LEFT JOIN revision_derivatives d ON d.id=vg.derivative_id AND d.revision_id=vg.revision_id
      WHERE vg.hash=$1 AND vg.expires_at>now() AND r.mime='text/html'
-       AND ((r.storage_kind='single' AND vg.derivative_id IS NULL)
+       AND ((r.storage_kind='single' AND vg.derivative_id IS NULL
+             AND vg.owner_session_hash IS NOT NULL)
          OR (r.storage_kind IN ('single','bundle') AND d.state='ready'
            AND d.source_manifest_sha256=r.manifest_sha256
            AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}

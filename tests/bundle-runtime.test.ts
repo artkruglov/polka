@@ -760,7 +760,19 @@ test("an unsupported single upload is linked only through its built interactive 
   const document = await embedded(tokenFrom(opened.live.url));
   assert.equal(document.statusCode, 200);
   assert.match(document.body, /Rendered by script/);
-  // The static document route still refuses the page to the recipient.
+  // Neither the static document nor the raw upload reaches the recipient.
+  assert.equal(
+    (
+      await call(
+        "GET",
+        "/api/view/bytes",
+        undefined,
+        "",
+        opened.viewer.grant,
+      )
+    ).statusCode,
+    404,
+  );
   assert.equal(
     (await call("GET", `/api/view/${opened.viewer.grant}/document`, undefined, ""))
       .statusCode,
@@ -794,4 +806,77 @@ test("an unsupported single upload is linked only through its built interactive 
     ).statusCode,
     422,
   );
+});
+
+test("a limited single upload links statically until its interactive version is ready", async () => {
+  const saved = await saveSingle(
+    '<!doctype html><h1>Counter prototype</h1><p>A small scripted page saved by its owner, with enough readable text to be shown statically.</p><button id="b">0</button><script>document.getElementById("b").onclick=(e)=>{e.target.textContent="1"}</script>',
+  );
+  assert.equal(saved.htmlProfile, "limited");
+  const share = async () => {
+    const response = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+      expectedRevisionId: saved.revisionId,
+      expiresInDays: 1,
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    const created = response.json().share;
+    const resolved = await call(
+      "POST",
+      "/api/resolve",
+      { token: new URL(created.url).hash.slice(1) },
+      "",
+    );
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    return { share: created, grant: resolved.json().grant as string };
+  };
+  // No interactive version yet: static sandbox only, no direct run of the upload.
+  const staticLink = await share();
+  assert.equal(
+    (await call("POST", "/api/view/live-view", undefined, "", staticLink.grant))
+      .statusCode,
+    404,
+  );
+  assert.equal(
+    (await call("GET", `/api/view/${staticLink.grant}/document`, undefined, ""))
+      .statusCode,
+    200,
+  );
+  assert.equal(
+    (await call("GET", "/api/view/bytes", undefined, "", staticLink.grant))
+      .statusCode,
+    200,
+  );
+  assert.equal(
+    (await call("POST", `/api/shares/${staticLink.share.id}/revoke`, {})).statusCode,
+    200,
+  );
+
+  const built = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/build-inline`,
+    {},
+  );
+  assert.equal(built.json().state, "ready", built.body);
+  const liveLink = await share();
+  const derivativeId = (
+    await db.query("SELECT derivative_id FROM shares WHERE id=$1", [
+      liveLink.share.id,
+    ])
+  ).rows[0].derivative_id;
+  assert.ok(derivativeId);
+  const live = await call("POST", "/api/view/live-view", undefined, "", liveLink.grant);
+  assert.equal(live.statusCode, 200, live.body);
+  assert.equal(live.json().profile, BUNDLE_RUNTIME_PROFILE);
+  assert.equal(
+    (await call("GET", "/api/view/bytes", undefined, "", liveLink.grant)).statusCode,
+    404,
+  );
+  // The owner may still run the upload itself.
+  const ownerView = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/live-view`,
+    {},
+  );
+  assert.equal(ownerView.statusCode, 200, ownerView.body);
+  assert.equal(ownerView.json().profile, "inline-live-experimental-v1");
 });

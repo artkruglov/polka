@@ -107,16 +107,17 @@ export function Preview({
           : "Эту страницу нельзя показать в безопасном просмотре: ей нужны скрипты или внешние ресурсы. Оригинал сохранён и доступен для скачивания."}
       </div>
     );
-    return compact ? (
+    const kind = liveKind(revision, !!grant);
+    return compact || kind === "none" ? (
       fallback
     ) : (
       <LivePreview
         key={`${revision.id}:${grant ?? ""}`}
         revision={revision}
         grant={grant}
-        requiresBuild={false}
+        requiresBuild={kind === "build"}
         // Runs as uploaded for the owner; a link needs the built version.
-        buildForLink={revision.storageKind === "single"}
+        buildForLink={kind === "direct"}
         onInlineBuildChange={onInlineBuildChange}
       >
         {fallback}
@@ -143,7 +144,7 @@ export function Preview({
       </div>
     );
     // A script-free page has nothing to run: no interactive controls.
-    const kind = liveKind(revision);
+    const kind = liveKind(revision, !!grant);
     return compact || kind === "none" ? (
       fallback
     ) : (
@@ -152,6 +153,8 @@ export function Preview({
         revision={revision}
         grant={grant}
         requiresBuild={kind === "build"}
+        // Runs as uploaded for the owner; a link needs the built version.
+        buildForLink={kind === "direct"}
         onInlineBuildChange={onInlineBuildChange}
       >
         {fallback}

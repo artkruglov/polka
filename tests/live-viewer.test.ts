@@ -79,6 +79,15 @@ async function save(
   return finish.json();
 }
 
+// A page with scripts: recipients run it only through its built version.
+const scripted = (label: string) =>
+  `<!doctype html><h1>${label}</h1><p>A scripted page with enough readable text to be shown statically before it runs.</p><script>document.title="${label}"</script>`;
+
+async function buildReady(revisionId: string) {
+  const built = await call("POST", `/api/revisions/${revisionId}/build-inline`, {});
+  assert.equal(built.json().state, "ready", built.body);
+}
+
 const capabilityToken = (url: string) =>
   new URL(url).pathname.split("/").at(-1) as string;
 
@@ -297,8 +306,8 @@ test("owner capability is revoked by logout, account disable and expiry", async 
 });
 
 test("recipient capability stays pinned and cannot outlive, revoke or lose its source grant", async () => {
-  const firstSource = "<!doctype html><h1>version one</h1>";
-  const first = await save(firstSource);
+  const first = await save(scripted("version one"));
+  await buildReady(first.revisionId);
   const enabled = await call(
     "POST",
     `/api/artifacts/${first.artifactId}/share`,
@@ -328,14 +337,11 @@ test("recipient capability stays pinned and cannot outlive, revoke or lose its s
   );
   const token = capabilityToken(issued.json().url);
 
-  const second = await save(
-    "<!doctype html><h1>version two</h1>",
-    "text/html",
-    {
-      artifactId: first.artifactId,
-      baseRevisionId: first.revisionId,
-    },
-  );
+  const second = await save(scripted("version two"), "text/html", {
+    artifactId: first.artifactId,
+    baseRevisionId: first.revisionId,
+  });
+  await buildReady(second.revisionId);
   assert.equal(
     (
       await call("POST", `/api/shares/${share.id}/publish`, {
@@ -345,7 +351,7 @@ test("recipient capability stays pinned and cannot outlive, revoke or lose its s
     ).statusCode,
     200,
   );
-  assert.equal((await embeddedDocument(`/document/${token}`)).body, firstSource);
+  assert.match((await embeddedDocument(`/document/${token}`)).body, /version one/);
 
   await db.query(
     "UPDATE grants SET expires_at=now()-interval '1 second' WHERE hash=$1",
@@ -509,7 +515,8 @@ test("staging allowlist gates owner and recipient issuance and every read", asyn
 
 test("production mode serves every eligible revision and reports itself honestly", async () => {
   const first = await save("<!doctype html><p>Production revision one</p>");
-  const second = await save("<!doctype html><p>Production revision two</p>");
+  const second = await save(scripted("Production revision two"));
+  await buildReady(second.revisionId);
   const shared = await call("POST", `/api/artifacts/${second.artifactId}/share`, {
     expectedRevisionId: second.revisionId,
     expiresInDays: 1,
@@ -600,14 +607,15 @@ test("bundle storage cannot use single-file live capabilities, including an exis
   const ownerLaunch = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   const recipientLaunch = await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`);
   assert.equal(ownerLaunch.statusCode, 200, ownerLaunch.body);
-  assert.equal(recipientLaunch.statusCode, 200, recipientLaunch.body);
+  // A recipient never runs a single upload directly, only a built version.
+  assert.equal(recipientLaunch.statusCode, 404, recipientLaunch.body);
   // Synthetic inconsistent metadata tests the final read gate independently of
   // issuance/share checks. Real revisions never change storage kind.
   await db.query("UPDATE revisions SET storage_kind='bundle',html_profile='unsupported' WHERE id=$1", [saved.revisionId]);
   try {
     assert.equal((await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {})).statusCode, 404);
     assert.equal((await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`)).statusCode, 404);
-    for (const launched of [ownerLaunch, recipientLaunch]) {
+    for (const launched of [ownerLaunch]) {
       const path = `/document/${capabilityToken(launched.json().url)}`;
       assert.equal((await embeddedDocument(path)).statusCode, 404);
     }
