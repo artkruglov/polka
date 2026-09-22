@@ -6,7 +6,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
-import { STATIC_HTML_CSP } from "../apps/server/html.ts";
+import { STATIC_HTML_CSP, withNewTabLinks } from "../apps/server/html.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
@@ -125,7 +125,7 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   );
   assert.equal(own.statusCode, 200, own.body);
   assert.equal(own.headers["content-security-policy"], STATIC_HTML_CSP);
-  assert.equal(own.body, CAPTURE_EXAMPLE.files[0].data);
+  assert.equal(own.body, withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString());
 
   const shared = await share(receipt.artifactId, receipt.revisionId);
   assert.equal(shared.state, "active");
@@ -146,9 +146,9 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   );
   assert.equal(document.statusCode, 200, document.body);
   assert.equal(document.headers["content-security-policy"], STATIC_HTML_CSP);
-  assert.match(document.headers["content-security-policy"] as string, /^sandbox;/);
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/);
   assert.equal(document.headers["cross-origin-resource-policy"], "same-origin");
-  assert.equal(document.body, CAPTURE_EXAMPLE.files[0].data);
+  assert.equal(document.body, withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString());
 
   // Source export still reads the bundle's own file rows.
   const exported = await exportRevision(

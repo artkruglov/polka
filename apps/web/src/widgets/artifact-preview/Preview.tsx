@@ -200,7 +200,8 @@ function SandboxFrame({ src, title }: { src: string; title: string }) {
         className="work-html"
         title={title}
         src={src}
-        sandbox=""
+        // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open only on click.
+        sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
         referrerPolicy="no-referrer"
         onLoad={() => setLoaded(true)}
       />

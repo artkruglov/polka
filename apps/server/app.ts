@@ -11,7 +11,7 @@ import { db, transaction } from "./db.ts";
 import { identity, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
-import { STATIC_HTML_CSP } from "./html.ts";
+import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
   isStaticSingleFileBundle,
   staticSingleFileBundleSql,
@@ -635,7 +635,7 @@ export async function createApp() {
       .type("text/html; charset=utf-8")
       .header("content-security-policy", STATIC_HTML_CSP)
       .header("cross-origin-resource-policy", "same-origin");
-    return readBlob(r.object_key, r.object_version);
+    return withNewTabLinks(await readBlob(r.object_key, r.object_version));
   };
   app.get("/api/revisions/:id/document", async (req, reply) => {
     const actor = await identity(req);

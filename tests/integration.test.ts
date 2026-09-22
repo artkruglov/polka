@@ -1,4 +1,5 @@
 import { test, before, after } from "node:test";
+import { withNewTabLinks } from "../apps/server/html.ts";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -355,7 +356,7 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     document.headers["content-security-policy"] as string,
     /sandbox/,
   );
-  assert.equal(document.body, body.toString());
+  assert.equal(document.body, withNewTabLinks(Buffer.from(body)).toString());
 
   const shared = (
     await call("POST", `/api/artifacts/${receipt.artifactId}/share`, {
@@ -372,7 +373,7 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     url: `/api/view/${viewer.grant}/document`,
   });
   assert.equal(grantedDocument.statusCode, 200);
-  assert.equal(grantedDocument.body, body.toString());
+  assert.equal(grantedDocument.body, withNewTabLinks(Buffer.from(body)).toString());
   const report = await call(
     "POST",
     "/api/reports",

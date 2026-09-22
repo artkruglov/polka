@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { classify } from "../apps/web/src/features/import-url/classify-demo.ts";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
-import { STATIC_HTML_CSP, classifyHtml } from "../apps/server/html.ts";
+import { STATIC_HTML_CSP, classifyHtml, withNewTabLinks } from "../apps/server/html.ts";
 
 const prose =
   "Отчёт за квартал: выручка выросла, расходы снизились, команда закрыла все ключевые задачи и подготовила план на следующий период.";
@@ -72,7 +72,14 @@ for (const [name, fixture] of Object.entries(fixtures))
   });
 
 test("Static CSP stays scriptless and networkless", () => {
-  assert.ok(STATIC_HTML_CSP.startsWith("sandbox;"));
+  // Links may open only on a reader's click; no scripts, same-origin, forms or free top navigation.
+  const sandbox = STATIC_HTML_CSP.split(";")[0]!.split(" ");
+  assert.equal(sandbox[0], "sandbox");
+  assert.deepEqual(sandbox.slice(1).sort(), [
+    "allow-popups",
+    "allow-popups-to-escape-sandbox",
+    "allow-top-navigation-by-user-activation",
+  ]);
   assert.doesNotMatch(STATIC_HTML_CSP, /allow-scripts|script-src|connect-src/);
   assert.match(STATIC_HTML_CSP, /default-src 'none'/);
 });
@@ -179,4 +186,14 @@ test("authentication return target preserves protected pages without nesting log
   assert.equal(authReturnTo({pathname:"/signup",search:"?next=https%3A%2F%2Fevil.example",hash:""}), "/start");
   assert.equal(authReturnTo({pathname:"/",search:"?login=1",hash:""}), "/start");
   assert.equal(authReturnTo({pathname:"/s",search:"",hash:"#share-token"}), "/s#share-token");
+});
+
+test("Static view opens links in a new tab without touching the stored bytes' content", () => {
+  const view = (html: string) => withNewTabLinks(Buffer.from(html)).toString();
+  assert.equal(
+    view('<!doctype html><html><HEAD lang="ru"><title>x</title></HEAD><a href="https://e.x">a</a>'),
+    '<!doctype html><html><HEAD lang="ru"><base target="_blank"><title>x</title></HEAD><a href="https://e.x">a</a>',
+  );
+  assert.equal(view("<p>no head</p>"), '<base target="_blank"><p>no head</p>');
+  assert.equal(view("<header>not head</header>"), '<base target="_blank"><header>not head</header>');
 });
