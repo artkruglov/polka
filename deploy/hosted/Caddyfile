@@ -11,6 +11,13 @@
 		# The Host header must match the TLS SNI name (421 otherwise).
 		strict_sni_host on
 	}
+	# Upstream error entries (http.log.error) embed the full request: URI with
+	# a viewer capability, client IP and headers. Keep only Caddy's own
+	# operational logs (TLS, config); upstream health is seen via /readyz.
+	log default {
+		output stderr
+		exclude http.log.error
+	}
 }
 
 http://{$APP_HOST} {
