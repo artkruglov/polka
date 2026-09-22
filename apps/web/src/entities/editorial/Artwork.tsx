@@ -18,7 +18,7 @@ const editions: Record<string, {name:string; caption:string; tone:string; motif:
 export function EditorialArtwork({slug}:{slug:string}) {
  const e=editions[slug]; if(!e) return null;
  return <div className={`editorial-art art-${e.tone}`} aria-hidden="true">
-  <span className="art-edition">ПОЛКА / ИНТЕРАКТИВНАЯ КОЛЛЕКЦИЯ</span>
+  <span className="art-edition">ПОЛКА / РЕДАКЦИЯ</span>
   <strong>{e.name.split('\n').map((s,i)=><React.Fragment key={s}>{i>0&&<br/>}{s}</React.Fragment>)}</strong>
   <span className="art-caption">{e.caption}</span>
   <svg viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice">
