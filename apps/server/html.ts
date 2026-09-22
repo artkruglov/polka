@@ -27,74 +27,115 @@ export const liveViewerCsp = (appOrigin: string) =>
 // blocks any <base href>; this element carries only a target.
 const LINK_TARGET = Buffer.from('<base target="_blank">');
 export function withNewTabLinks(html: Buffer): Buffer {
+  // A hand-written scan, linear in the page size: a regex that restarts at
+  // every "<" is quadratic, and this runs on each view of a shared page.
   const text = html.toString("latin1");
-  // A <head> inside a comment is not the head: inserting there would leave the
-  // element inert and every link would navigate this frame instead.
-  const token = /<!--[\s\S]*?(?:-->|$)|<head(?:\s[^>]*)?>/gi;
-  for (let match = token.exec(text); match; match = token.exec(text)) {
-    if (match[0].startsWith("<!--")) continue;
-    const at = match.index + match[0].length;
-    return Buffer.concat([
-      html.subarray(0, at),
-      LINK_TARGET,
-      html.subarray(at),
-    ]);
+  for (let at = text.indexOf("<"); at !== -1; at = text.indexOf("<", at + 1)) {
+    // A <head> inside a comment is not the head: inserting there would leave
+    // the element inert and every link would navigate this frame instead.
+    if (text.startsWith("<!--", at)) {
+      const end = text.indexOf("-->", at + 4);
+      if (end === -1) break;
+      at = end + 2;
+      continue;
+    }
+    if (
+      text.slice(at + 1, at + 5).toLowerCase() === "head" &&
+      /^[\s/>]$/.test(text[at + 5] ?? "")
+    ) {
+      const close = text.indexOf(">", at);
+      if (close === -1) break;
+      return Buffer.concat([
+        html.subarray(0, close + 1),
+        LINK_TARGET,
+        html.subarray(close + 1),
+      ]);
+    }
   }
   return Buffer.concat([LINK_TARGET, html]);
 }
 
-const interactive =
-  /<script\b|<(?:iframe|frame|object|embed|applet|form)\b|<[^>]+\son[a-z]+\s*=|<[^>]+=\s*["']?\s*javascript:|<meta[^>]+http-equiv\s*=\s*["']?refresh/i;
+type Node = {
+  nodeName: string;
+  tagName?: string;
+  value?: string;
+  attrs?: { name: string; value: string }[];
+  childNodes?: Node[];
+  content?: Node;
+};
 
-// A page with a submission target, password field, script URL or remote asset
-// is kept as an unsupported source in this build. CSP still protects the
-// viewer, but refusing a link avoids presenting an unsafe page as a trusted
-// copy on the Polka domain.
-const unsafe =
-  /<form\b|<input\b[^>]+type\s*=\s*["']?password\b|(?:src|action)\s*=\s*["']?(?:https?:|\/\/|javascript:)|<meta[^>]+http-equiv\s*=\s*["']?refresh/i;
-
-/**
- * Every start tag of the document, rewritten with the attribute values a
- * browser actually sees. Browsers resolve character references before acting
- * on an attribute, so `http-equiv="&#x72;efresh"` is a refresh; the patterns
- * above read the raw source, so they read this rendering too. Escaped text
- * such as `&lt;script&gt;` stays text here and is not mistaken for a tag.
- */
-function decodedTags(source: string): string {
-  const out: string[] = [];
-  const walk = (node: unknown) => {
-    const children = (node as { childNodes?: unknown[] }).childNodes ?? [];
-    for (const child of children) {
-      const element = child as {
-        tagName?: string;
-        attrs?: { name: string; value: string }[];
-      };
-      if (element.tagName)
-        out.push(
-          `<${element.tagName}${(element.attrs ?? [])
-            .map((a) => ` ${a.name}="${a.value.replace(/"/g, "&quot;")}"`)
-            .join("")}>`,
-        );
-      walk(child);
-    }
-  };
-  walk(parse(source));
-  return out.join("");
-}
+// Browsers drop tabs and newlines anywhere in a URL and leading control
+// characters and spaces, so "\tjava\nscript:" still runs.
+const url = (value: string) =>
+  value.replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
+const SCRIPT_URL = /^javascript:/i;
+const REMOTE_URL = /^(?:https?:|[\\/]{2})/i;
+const ACTIVE_ELEMENTS = new Set([
+  "script",
+  "iframe",
+  "frame",
+  "object",
+  "embed",
+  "applet",
+]);
+const HIDDEN_TEXT = new Set(["script", "style", "template"]);
 
 // A conservative heuristic, not a safety verdict: it only decides how honestly
 // the page can be shown without a runtime. Isolation comes from the CSP above.
+//
+// It reads the document the way a browser does: parse5 resolves character
+// references, so `http-equiv="&#x72;efresh"` is a refresh, while escaped text
+// such as `&lt;script&gt;` stays text. One walk of the tree keeps the cost
+// linear in the page size; this runs on the request thread for every save.
 export function classifyHtml(source: string): HtmlProfile {
-  const tags = decodedTags(source);
-  if (unsafe.test(source) || unsafe.test(tags)) return "unsupported";
-  if (!interactive.test(source) && !interactive.test(tags)) return "static";
-  const visible = source
-    .replace(/<script\b[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
-    .replace(/<style\b[\s\S]*?(?:<\/style\s*>|$)/gi, " ")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&[a-z0-9#]+;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // A page with a submission target, password field, script URL or remote
+  // asset is kept as an unsupported source. CSP still protects the viewer, but
+  // refusing a link avoids presenting an unsafe page as a trusted copy.
+  let unsafe = false;
+  let interactive = false;
+  const text: string[] = [];
+  const walk = (node: Node, hidden: boolean) => {
+    if (unsafe) return;
+    if (node.nodeName === "#text") {
+      if (!hidden) text.push(node.value ?? "");
+      return;
+    }
+    const tag = node.tagName?.toLowerCase();
+    if (tag) {
+      if (tag === "form") unsafe = true;
+      if (ACTIVE_ELEMENTS.has(tag)) interactive = true;
+      for (const { name, value } of node.attrs ?? []) {
+        const attr = name.toLowerCase();
+        const target = url(value);
+        if (attr.startsWith("on")) interactive = true;
+        if (SCRIPT_URL.test(target)) interactive = true;
+        if (
+          (attr.endsWith("src") || attr.endsWith("action")) &&
+          (REMOTE_URL.test(target) || SCRIPT_URL.test(target))
+        )
+          unsafe = true;
+        if (
+          tag === "input" &&
+          attr === "type" &&
+          value.trim().toLowerCase() === "password"
+        )
+          unsafe = true;
+        if (
+          tag === "meta" &&
+          attr === "http-equiv" &&
+          value.trim().toLowerCase() === "refresh"
+        )
+          unsafe = true;
+      }
+    }
+    const inner = hidden || (tag !== undefined && HIDDEN_TEXT.has(tag));
+    for (const child of node.childNodes ?? []) walk(child, inner);
+    if (node.content) walk(node.content, true);
+  };
+  walk(parse(source) as unknown as Node, false);
+  if (unsafe) return "unsupported";
+  if (!interactive) return "static";
+  const visible = text.join(" ").replace(/\s+/g, " ").trim();
   return visible.length >= 80 ? "limited" : "unsupported";
 }
 

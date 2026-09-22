@@ -222,6 +222,19 @@ test("Page classification reads attributes the way a browser does, not as raw te
   assert.equal(classifyHtml(article), "static");
 });
 
+test("Classifying and viewing a hostile page stays linear in its size", () => {
+  // Both run on the request thread; a regex that restarts at every "<" took
+  // minutes on a page far below the 5 MB limit and froze the whole server.
+  for (const unit of ["< ", "<meta ", "<input ", "<head ", "<a "]) {
+    const page = unit.repeat(Math.floor((1024 * 1024) / unit.length));
+    const started = performance.now();
+    classifyHtml(page);
+    withNewTabLinks(Buffer.from(page));
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed < 1_500, `${JSON.stringify(unit)}: ${Math.round(elapsed)} ms`);
+  }
+});
+
 test("zod-free contract constants match the contract module", async () => {
   const contracts = await import("../packages/contracts/index.ts");
   const constants = await import("../packages/contracts/constants.ts");
