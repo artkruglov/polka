@@ -83,6 +83,15 @@ export function Bring() {
                   initialFolderId={initialFolderId}
                   onFile={toFile}
                   accountId={account?.id}
+                  fileSave={
+                    <FileSave
+                      account={account}
+                      initialFolderId={initialFolderId}
+                      renderPreview={(revision, compact) => (
+                        <Preview revision={revision} compact={compact} />
+                      )}
+                    />
+                  }
                 />
               </div>
               <div hidden={tab !== "file"}>

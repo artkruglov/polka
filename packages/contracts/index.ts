@@ -177,7 +177,7 @@ export interface Receipt {
 // Legacy browser-only URL classification shapes. These are NOT the durable
 // /api/imports job contract implemented in server/url-import; no receipt here.
 export type ImportStatus =
-  "not_https" | "closed" | "unsupported_host" | "ready";
+  "not_https" | "closed" | "unsupported_host" | "ready" | "provider";
 export interface ImportProvenance {
   sourceUrl: string;
   sourceHost: string;

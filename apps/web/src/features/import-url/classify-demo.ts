@@ -38,6 +38,17 @@ export function classify(input: string): ImportClassification {
       explain: `Полка принимает только защищённые адреса. ${FILE_NEXT}`,
     };
   const path = url.pathname.toLowerCase();
+  // Artifacts shared from Claude/ChatGPT open only inside the provider's app and
+  // answer servers with a bot-protection page, so Полка cannot fetch a copy.
+  const provider = providerArtifact(host, path);
+  if (provider)
+    return {
+      status: "provider",
+      source: provider,
+      host,
+      title: provider === "claude" ? "Артефакт Claude" : "Работа из ChatGPT",
+      explain: `${provider === "claude" ? "Claude" : "ChatGPT"} показывает такую ссылку только в своём приложении, а на запросы сервера отвечает защитной страницей, поэтому Полка не может сама забрать копию. Скачайте работу в чате (меню ⋯ → Download) и перетащите файл сюда — ссылка на Полке будет готова сразу.`,
+    };
   const loginPath = /(^|\/)(login|signin|sign-in|auth|oauth)(\/|$)/.test(path);
   if (loginPath || (sourceOf(host) && !isPublic(host, path)))
     return {
@@ -46,22 +57,6 @@ export function classify(input: string): ImportClassification {
       host,
       title: "Ссылка похожа на закрытую",
       explain: `Такая страница открывается только после входа, и Полка её не обходит. Скачайте работу из чата как HTML. ${FILE_NEXT}`,
-    };
-  if (host === "claude.ai" && /^\/public\/artifacts\/[^/]+/.test(path))
-    return {
-      status: "ready",
-      source: "claude",
-      host,
-      title: "Публичная ссылка Claude",
-      explain: `Ссылку узнали. Скачивать её копию Полка пока не умеет. ${FILE_NEXT}`,
-    };
-  if ((host === "chatgpt.com" || host === "chat.openai.com") && /^\/(share|canvas\/shared)\/[^/]+/.test(path))
-    return {
-      status: "ready",
-      source: "chatgpt",
-      host,
-      title: "Публичная ссылка ChatGPT",
-      explain: `Ссылку узнали. Скачивать её копию Полка пока не умеет. ${FILE_NEXT}`,
     };
   if (/\.html?$/.test(path))
     return {
@@ -84,8 +79,17 @@ export function classify(input: string): ImportClassification {
     source: null,
     host,
     title: "Этот сайт не распознан",
-    explain: `Узнаём публичные ссылки Claude и ChatGPT и прямые ссылки на HTML. ${FILE_NEXT}`,
+    explain: `Узнаём ссылки на артефакты Claude и ChatGPT и прямые ссылки на HTML. ${FILE_NEXT}`,
   };
+}
+
+function providerArtifact(host: string, path: string): ImportSource {
+  if (host === "claude.site" || host.endsWith(".claude.site")) return "claude";
+  if (host === "claude.ai" && /^\/(artifact|public\/artifacts)\/[^/]+/.test(path))
+    return "claude";
+  if ((host === "chatgpt.com" || host === "chat.openai.com") && /^\/(share|canvas\/shared)\/[^/]+/.test(path))
+    return "chatgpt";
+  return null;
 }
 
 function sourceOf(host: string): ImportSource {
@@ -93,5 +97,5 @@ function sourceOf(host: string): ImportSource {
 }
 
 function isPublic(host: string, path: string) {
-  return (host === "claude.ai" && path.startsWith("/public/")) || ((host === "chatgpt.com" || host === "chat.openai.com") && /^\/(share|canvas\/shared)\//.test(path));
+  return providerArtifact(host, path) !== null;
 }
