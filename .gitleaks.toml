@@ -1,8 +1,17 @@
-# Default rules plus reviewed false positives.
+# Default rules plus reviewed false positives, each pinned to its exact value
+# (no path is allowlisted wholesale). gitleaks v8.24 has one global allowlist.
 [extend]
 useDefault = true
 
 [allowlist]
 description = "Reviewed test fixtures: UUID idempotency keys and S3 object names"
-regexes = ['''\.polka-r17-test''', '''abcdefghijklmnopqrstuvwxyzABCDEFG0123456789_-''', '''0b6f3d2e-6a4c-4f7e-9d1a-2c5b8e7f4a10''']
-paths = ['''docs/reviews/2026-09-20-cli-capture/results\.json''']
+regexes = [
+  '''\.polka-r17-test''',
+  '''abcdefghijklmnopqrstuvwxyzABCDEFG0123456789_-''',
+  '''0b6f3d2e-6a4c-4f7e-9d1a-2c5b8e7f4a10''',
+  # Idempotency keys recorded in docs/reviews/2026-09-20-cli-capture/results.json
+  '''^5fd44e7d-88f2-4f40-96cc-b9fbb5c0c0e9$''',
+  '''^a0c860f5-e0ef-41dc-8fba-b2ebdb4015e1$''',
+  '''^17c86833-3121-4658-abe4-dce32612cfd3$''',
+  '''^a8a2505b-5445-47fd-82ba-417870e8d1d6$''',
+]

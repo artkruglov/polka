@@ -14,13 +14,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Third-party code is pinned by commit SHA / image digest; the comment names
+# the release the pin was taken from.
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22.16"
           cache: npm
@@ -31,31 +33,58 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm test
+      - name: Live viewer suite
+        run: npm test -- --live
+      # Unlicense: robust-predicates (via d3-delaunay), public-domain dedication.
       - name: Licenses of production dependencies
         run: >
-          npx --yes license-checker-rseidelsohn@4 --production --excludePrivatePackages
-          --onlyAllow "MIT;MIT-0;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;BlueOak-1.0.0"
+          npx --yes license-checker-rseidelsohn@4.4.2 --production --excludePrivatePackages
+          --onlyAllow "MIT;MIT-0;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;BlueOak-1.0.0;Unlicense"
+
+  runtime-grants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.16"
+          cache: npm
+      - run: npm ci
+      - run: npm run local:setup
+      - run: npm run infra:up
+      # Temporary owner/runtime/purge/restore roles against the reviewed grants
+      # recipes; the expected schema is the head of packages/migrations.ts.
+      - name: Runtime, purge and restore grants (isolated)
+        run: |
+          schema=$(node --import tsx --input-type=module \
+            -e 'import { CURRENT_SCHEMA_VERSION } from "./packages/migrations.ts"; console.log(CURRENT_SCHEMA_VERSION)')
+          node --env-file=.env --import tsx scripts/test-runtime-grants-isolated.ts \
+            --confirm-synthetic --expected-schema="$schema"
 
   secrets:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Scan history for secrets
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 git /repo --config /repo/.gitleaks.toml --redact --no-banner
+          # zricethezav/gitleaks:v8.24.2
+          docker run --rm -v "$PWD:/repo" \
+            zricethezav/gitleaks@sha256:b5918eb91b8d2473cec722f066abb4352e4ffdc4ec9f4283ec143aba9ec9ebc4 \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
   image:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22.16"
       - run: docker build -t polka:ci .
       - run: npm run local:setup
       - run: npm run infra:up
-      - name: Smoke test the image
+      - name: Smoke test the image (runtime role)
         run: node scripts/ci/image-smoke.mjs polka:ci
