@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { classify } from "../apps/web/src/features/import-url/classify-demo.ts";
+import { classify } from "../apps/web/src/features/import-url/classify-link.ts";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
 import { STATIC_HTML_CSP, classifyHtml, withNewTabLinks } from "../apps/server/html.ts";
 
@@ -62,10 +62,9 @@ for (const [name, fixture] of Object.entries(fixtures))
     assert.equal(profile, fixture.profile);
     const view = profileView({ mime: "text/html", htmlProfile: profile });
     assert.equal(view.linkable, profile !== "unsupported");
-    assert.ok(view.now.length > 0);
+    assert.ok(view.text.length > 0);
     if (profile === "limited") {
       assert.match(view.badge, /Статичный просмотр без скриптов/);
-      assert.equal(view.plan, "");
       assert.match(view.text, /Если доступен интерактивный режим/);
     }
     if (profile === "static") assert.equal(view.badge, "Статичный просмотр");
@@ -197,4 +196,15 @@ test("Static view opens links in a new tab without touching the stored bytes' co
   );
   assert.equal(view("<p>no head</p>"), '<base target="_blank"><p>no head</p>');
   assert.equal(view("<header>not head</header>"), '<base target="_blank"><header>not head</header>');
+});
+
+test("zod-free contract constants match the contract module", async () => {
+  const contracts = await import("../packages/contracts/index.ts");
+  const constants = await import("../packages/contracts/constants.ts");
+  assert.equal(constants.MAX_BYTES, contracts.MAX_BYTES);
+  assert.deepEqual(constants.MIME, contracts.MIME);
+  assert.deepEqual(constants.REPORT_REASONS, contracts.REPORT_REASONS);
+  assert.deepEqual(constants.AGENT_SCOPES, contracts.AGENT_SCOPES);
+  for (const sample of ["<p>x</p>", "<!doctype html>", "просто текст", "<main>", "a < b"])
+    assert.equal(constants.looksLikeHtml(sample), contracts.looksLikeHtml(sample), sample);
 });

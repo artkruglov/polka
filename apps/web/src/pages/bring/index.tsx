@@ -7,6 +7,7 @@ import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { UrlImportCard } from "../../features/import-url/card.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
+import { scrollBehavior } from "../../shared/lib/motion.ts";
 
 type Capture = "file" | "paste";
 
@@ -24,7 +25,7 @@ export function Bring() {
   const toFile = () => {
     setCapture("file");
     requestAnimationFrame(() =>
-      document.getElementById("file")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      document.getElementById("file")?.scrollIntoView({ behavior: scrollBehavior(), block: "start" }),
     );
   };
   const renderPreview = (revision: Parameters<typeof Preview>[0]["revision"], compact: boolean) => (
@@ -56,7 +57,6 @@ export function Bring() {
           onProviderChange={setProviderGuide}
           fileSave={
             <FileSave
-              account={account}
               initialFolderId={initialFolderId}
               renderPreview={renderPreview}
               embedded
@@ -64,7 +64,6 @@ export function Bring() {
           }
           pasteCode={
             <PasteCode
-              account={account}
               initialFolderId={initialFolderId}
               renderResult={renderSaved()}
               embedded
@@ -86,14 +85,12 @@ export function Bring() {
           >
             {capture === "file" ? (
               <FileSave
-                account={account}
                 initialFolderId={initialFolderId}
                 renderPreview={renderPreview}
                 titled={false}
               />
             ) : (
               <PasteCode
-                account={account}
                 initialFolderId={initialFolderId}
                 renderResult={renderSaved("paste-code-title")}
                 titled={false}

@@ -3,9 +3,10 @@ import { pollImport } from "./polling.ts";
 import { useFolders } from "../../entities/folder/useFolders.ts";
 import React, { useEffect, useRef, useState } from "react";
 import { request, ApiError } from "../../shared/api/client.ts";
-import { Button, IconButton, LinkButton, SelectField } from "../../shared/ui/controls.tsx";
+import { Button, IconButton, LinkButton } from "../../shared/ui/controls.tsx";
+import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import { Link2, X } from "lucide-react";
-import { classify, type ImportClassification } from "./classify-demo.ts";
+import { classify, type ImportClassification } from "./classify-link.ts";
 import { ProviderGuide } from "./provider-guide.tsx";
 
 type Job = {
@@ -19,7 +20,7 @@ const labels: Record<string, string> = {
   queued: "В очереди",
   fetching: "Получаем страницу и ресурсы",
   prepared: "Копия подготовлена",
-  saving: "Сохраняем на Полку",
+  saving: "Сохраняем на полку",
   previewing: "Копия сохранена. Подготавливаем просмотр…",
   ready: "Сохранено. Можно открыть",
   partial: "Сохранено с ограничениями",
@@ -30,7 +31,7 @@ const reasons: Record<string, string> = {
   preview_disabled:
     "Интерактивный просмотр выключен на этом сервере. Копия сохранена.",
   preview_unavailable:
-    "Копия сохранена, но интерактивный просмотр не подготовлен. Можно открыть материал и проверить ограничения.",
+    "Копия сохранена, но интерактивный просмотр не подготовлен. Можно открыть работу и проверить ограничения.",
   provider_adapter_required:
     "Ссылки Claude и ChatGPT пока нельзя перенести автоматически. Загрузите экспортированный HTML-файл или передайте файлы через агента.",
   blocked_address: "Адрес не является публичным источником.",
@@ -55,6 +56,30 @@ const active = (j: Job | null) =>
   ["queued", "fetching", "prepared", "saving", "previewing"].includes(j.state);
 const storageKey = "polka.active-url-import";
 const draftKey = "polka.url-import-draft";
+// Storage can be blocked (private mode, disabled site data): the import still works for this tab.
+const session = {
+  get(key: string): string | null {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key: string, value: string) {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch {
+      /* not restored after reload */
+    }
+  },
+  remove(key: string) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      /* nothing was stored */
+    }
+  },
+};
 export function UrlImport({
   initial = "",
   initialFolderId = "",
@@ -78,13 +103,13 @@ export function UrlImport({
     return recognised?.status === "provider" ? recognised : null;
   });
   const [url, setUrl] = useState(
-      () => initial || sessionStorage.getItem(draftKey) || "",
+      () => initial || session.get(draftKey) || "",
     ),
     [job, setJob] = useState<Job | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [needsLogin, setNeedsLogin] = useState(false);
-  const [jobId, setJobId] = useState(() => sessionStorage.getItem(storageKey));
+  const [jobId, setJobId] = useState(() => session.get(storageKey));
   const folders = useFolders(accountId);
   const [destination, setDestination] = useState({ accountId, folderId: initialFolderId });
   const folderId =
@@ -117,7 +142,7 @@ export function UrlImport({
           return null;
         }
         if (e instanceof ApiError && [403, 404].includes(e.status)) {
-          sessionStorage.removeItem(storageKey);
+          session.remove(storageKey);
           setJobId(null);
           setJob(null);
           setError(
@@ -153,11 +178,11 @@ export function UrlImport({
       });
       setJob(next);
       setJobId(next.id);
-      sessionStorage.setItem(storageKey, next.id);
-      sessionStorage.removeItem(draftKey);
+      session.set(storageKey, next.id);
+      session.remove(draftKey);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
-        sessionStorage.setItem(draftKey, url);
+        session.set(draftKey, url);
         setNeedsLogin(true);
       }
       setError(e instanceof Error ? e.message : "Не удалось отправить ссылку.");
@@ -194,7 +219,7 @@ export function UrlImport({
     stopPolling.current();
     setJob(null);
     setJobId(null);
-    sessionStorage.removeItem(storageKey);
+    session.remove(storageKey);
     key.current = crypto.randomUUID();
     setError("");
     setNeedsLogin(false);
@@ -228,34 +253,16 @@ export function UrlImport({
             )}
           </label>
           {accountId && (
-            <>
-              <SelectField
-                label="Куда сохранить"
-                value={folderId}
-                disabled={busy || folders.loading}
-                hint={
-                  folders.loading
-                    ? "Загружаем папки…"
-                    : "Доступ к материалу останется приватным."
-                }
-                error={folders.error}
-                onChange={(e) => {
-                  setDestination({ accountId, folderId: e.target.value });
-                  key.current = crypto.randomUUID();
-                }}
-              >
-                <option value="">Моя Полка — без папки</option>
-                {folderId && !folders.items.some(f => f.id === folderId) && <option value={folderId}>{folders.loading ? "Проверяем выбранную папку…" : "Выбранная папка недоступна"}</option>}
-                {folders.items.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </SelectField>
-              {folders.error && (
-                <Button onClick={folders.retry}>Загрузить папки снова</Button>
-              )}
-            </>
+            <FolderSelect
+              folders={folders}
+              value={folderId}
+              disabled={busy}
+              hint="Доступ к работе останется приватным."
+              onChange={(next) => {
+                setDestination({ accountId, folderId: next });
+                key.current = crypto.randomUUID();
+              }}
+            />
           )}
           <Button variant="primary" type="submit" busy={busy}>
             Сохранить
@@ -272,7 +279,7 @@ export function UrlImport({
         <p>
           Лучше всего подходят автономные HTML-отчёты, калькуляторы и прототипы.
           Обычные CSS, изображения, WOFF2-шрифты и скрипты копируются вместе со
-          страницей. Лимит — 5 МиБ и 64 файла, включая HTML.
+          страницей. Лимит — 5 МБ и 64 файла, включая HTML.
         </p>
         <p>
           Внешние API, вход на другом сайте и встроенные страницы не работают в
@@ -282,7 +289,7 @@ export function UrlImport({
         </p>
         <p>
           Наличие интерактивного просмотра не гарантирует работу каждой кнопки:
-          проверьте сохранённый материал перед отправкой. Исходную ссылку и
+          проверьте сохранённую работу перед отправкой. Исходную ссылку и
           доступ к источнику получатель не использует.
         </p>
       </details>
@@ -296,7 +303,7 @@ export function UrlImport({
           {job.errorCode && (
             <p>
               {(job.receipt
-                ? "Копия сохранена, но просмотр не удалось подготовить. Откройте материал, чтобы проверить его состояние."
+                ? "Копия сохранена, но просмотр не удалось подготовить. Откройте работу, чтобы проверить её состояние."
                 : reasons[job.errorCode]) ??
                 "Источник не удалось перенести. Попробуйте сохранить его файлом."}
             </p>
@@ -309,13 +316,13 @@ export function UrlImport({
               variant="primary"
               href={`/works/${job.receipt.artifactId}`}
             >
-              Открыть сохранённый материал
+              Открыть сохранённую работу
             </LinkButton>
           )}
           {active(job) ? (
             job.receipt ? (
               <p>
-                Можно открыть материал сейчас. Просмотр появится после
+                Можно открыть работу сейчас. Просмотр появится после
                 подготовки.
               </p>
             ) : (

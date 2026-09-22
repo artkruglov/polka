@@ -104,7 +104,7 @@ export function ComponentCatalog() {
             label="Название"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            hint="Будет видно на вашей Полке."
+            hint="Будет видно на вашей полке."
           />
           <TextField
             label="Ссылка с ошибкой"

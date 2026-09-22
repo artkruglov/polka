@@ -2,6 +2,7 @@ import "./styles.css";
 import React, { useEffect, useState, useRef } from "react";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import { request } from "../../shared/api/client.ts";
+import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
@@ -22,9 +23,9 @@ export function Signup() {
   const next =
     safeNext(new URLSearchParams(location.search).get("next")) || "/start";
   useEffect(() => {
-    request<{ emailLogin: string }>("/capabilities")
+    loadCapabilities()
       .then(async (c) => {
-        setMode(c.emailLogin || "disabled");
+        setMode(c.emailLogin);
         if (c.emailLogin === "disabled") return;
         const pending = await request<{
           id: string;
@@ -90,7 +91,7 @@ export function Signup() {
           {mode === "loading"
             ? "Ваша личная полка."
             : passwordOnly
-              ? "Войдите в свою Полку."
+              ? "Войдите в Полку."
               : challenge
                 ? "Проверьте почту."
                 : "Ваша личная полка."}

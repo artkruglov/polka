@@ -1,7 +1,7 @@
 import React from "react";
 import { ClipboardPaste, FileUp } from "lucide-react";
 import { Button } from "../../shared/ui/controls.tsx";
-import type { ImportClassification } from "./classify-demo.ts";
+import type { ImportClassification } from "./classify-link.ts";
 
 /**
  * Claude/ChatGPT artifacts cannot be fetched by Полка, so the pasted link turns
@@ -31,7 +31,7 @@ export function ProviderGuide({
         {result.host && <small>{result.host}</small>}
         <p>{result.explain}</p>
         <ol className="url-import-steps">
-          <li>Откройте работу в {app}.</li>
+          <li>Откройте артефакт в {app}.</li>
           <li>В меню ⋯ выберите Download и сохраните файл.</li>
           <li>Перетащите файл ниже — Полка сохранит копию и даст ссылку.</li>
         </ol>
@@ -52,8 +52,8 @@ export function ProviderGuide({
             сюда
           </summary>
           <p>
-            В {app} откройте работу и нажмите «Копировать» (Copy) — скопируется
-            её код. Скачивать файл не нужно.
+            В {app} откройте артефакт и нажмите «Копировать» (Copy) — скопируется
+            его код. Скачивать файл не нужно.
           </p>
           {pasteCode}
         </details>

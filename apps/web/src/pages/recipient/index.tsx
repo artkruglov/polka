@@ -1,9 +1,16 @@
 import "./styles.css";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useState } from "react";
-import { ArrowUpRight, Compass, Flag, Link as LinkIcon, LockKeyhole } from "lucide-react";
+import {
+  ArrowUpRight,
+  Compass,
+  Flag,
+  Link as LinkIcon,
+  LockKeyhole,
+  WifiOff,
+} from "lucide-react";
 import type { Viewer } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
+import { ApiError, client } from "../../shared/api/client.ts";
 import { dateTime, kindOf, profileView } from "../../entities/artifact/format.ts";
 import { Button, Badge } from "../../shared/ui/controls.tsx";
 import { ReportArtifactPanel } from "../../features/report-artifact/index.tsx";
@@ -11,12 +18,16 @@ import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 
 const accessRequest =
-  "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, ты её отозвал или истёк срок. Пришлёшь новую?";
+  "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
+
+/** «Unavailable» is the link's answer; a network or server failure is not, and can be retried. */
+type Failure = { kind: "unavailable" | "unreachable"; message: string } | null;
 
 export function Recipient() {
   const [token, setToken] = useState(() => location.hash.slice(1));
   const [viewer, setViewer] = useState<Viewer | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Failure>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     let generation = 0;
@@ -25,15 +36,27 @@ export function Recipient() {
       const requestGeneration = ++generation;
       setToken(nextToken);
       setViewer(null);
-      setError("");
+      setError(null);
       client
         .resolve(nextToken)
         .then((nextViewer) => {
           if (active && requestGeneration === generation) setViewer(nextViewer);
         })
-        .catch(() => {
-          if (active && requestGeneration === generation)
-            setError("Работа по этой ссылке недоступна");
+        .catch((e) => {
+          if (!active || requestGeneration !== generation) return;
+          const unreachable =
+            !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
+          setError(
+            unreachable
+              ? {
+                  kind: "unreachable",
+                  message:
+                    e instanceof ApiError && e.status === 429
+                      ? "Слишком много открытий подряд. Подождите немного и повторите."
+                      : "Полка сейчас не отвечает. Ссылка при этом может быть рабочей.",
+                }
+              : { kind: "unavailable", message: "Работа по этой ссылке недоступна" },
+          );
         });
     };
     load();
@@ -42,9 +65,15 @@ export function Recipient() {
       active = false;
       window.removeEventListener("hashchange", load);
     };
-  }, []);
+  }, [attempt]);
   return (
-    <RecipientScreen key={token} viewer={viewer} error={error} token={token} />
+    <RecipientScreen
+      key={token}
+      viewer={viewer}
+      error={error}
+      token={token}
+      onRetry={() => setAttempt((value) => value + 1)}
+    />
   );
 }
 
@@ -53,10 +82,12 @@ function RecipientScreen({
   viewer,
   error,
   token,
+  onRetry,
 }: {
   viewer: Viewer | null;
-  error: string;
+  error: Failure;
   token: string;
+  onRetry: () => void;
 }) {
   const account = useAccount();
   const [reporting, setReporting] = useState(false);
@@ -68,10 +99,19 @@ function RecipientScreen({
       account={account}
       className="recipient recipient-reader"
     >
-      {error ? (
+      {error?.kind === "unreachable" ? (
+        <main className="empty recipient-denied">
+          <div className="empty-icon"><WifiOff /></div>
+          <h1>Не удалось открыть работу</h1>
+          <p role="alert">{error.message}</p>
+          <Button variant="primary" onClick={onRetry}>
+            Повторить
+          </Button>
+        </main>
+      ) : error ? (
         <main className="empty recipient-denied">
           <div className="empty-icon"><LockKeyhole /></div>
-          <h1>{error}</h1>
+          <h1>{error.message}</h1>
           <p>
             Владелец мог отозвать ссылку, у неё мог истечь срок, или адрес
             скопирован не полностью. Мы не показываем, была ли здесь работа.

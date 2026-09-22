@@ -102,7 +102,7 @@ export function AgentContextPanel({
             </SelectField>
             {included.length > 0 && (
               <section className="agent-context-section">
-                <h3>Вместе с материалом</h3>
+                <h3>Вместе с работой</h3>
                 <ul className="ui-checklist">
                   {included.map((item) => (
                     <li key={item}>
@@ -124,7 +124,7 @@ export function AgentContextPanel({
                 buttonLabel="Скопировать для агента"
                 successText="Скопировано. Вставьте в чат своего агента"
               />
-              <p className="fine">Вставьте в чат и опишите, что нужно сделать. Копирование не запускает агента и не открывает доступ к материалу.</p>
+              <p className="fine">Вставьте в чат и опишите, что нужно сделать. Копирование не запускает агента и не открывает доступ к работе.</p>
             </section>
             <details className="agent-context-files">
               <summary>
@@ -197,9 +197,9 @@ export function AgentContextPanel({
                   >
                     <p className="fine">
                       Закрепите правила для повторного использования. Шаблон
-                      останется в вашей Полке; публичная ссылка не создаётся.
+                      останется на вашей полке; публичная ссылка не создаётся.
                       Правила выпуска неизменяемы — для изменений нужна новая версия
-                      материала.
+                      работы.
                     </p>
                     <TextField
                       label="Для каких случаев"
