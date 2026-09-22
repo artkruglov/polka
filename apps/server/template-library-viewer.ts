@@ -4,10 +4,11 @@ import type { Actor } from "./artifacts.ts";
 import { readAuthorizedRevisionSource } from "./artifacts.ts";
 import { buildInlineRevisionFromSource } from "./bundle-derivatives.ts";
 import {
-  BUNDLE_RUNTIME_PROFILE,
   SERVED_BUILDER_VERSIONS_SQL,
+  SERVED_RUNTIME_PROFILES_SQL,
   derivativePreferenceSql,
   derivativeVersionSql,
+  isServedRuntimeProfile,
 } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { transaction } from "./db.ts";
@@ -144,7 +145,7 @@ export async function issueLibraryLiveView(
       if (
         !candidate ||
         candidate.state !== "ready" ||
-        candidate.runtime_profile !== BUNDLE_RUNTIME_PROFILE
+        !isServedRuntimeProfile(candidate.runtime_profile)
       ) {
         return {
           status: "preparation_required",
@@ -195,7 +196,7 @@ export async function issueLibraryLiveView(
       status: "ready",
       url: `${config.VIEWER_ORIGIN}/library-document/${token}`,
       expiresAt: grant.expires_at.toISOString(),
-      profile: derivative ? BUNDLE_RUNTIME_PROFILE : LIVE_HTML_PROFILE,
+      profile: derivative ? derivative.runtime_profile : LIVE_HTML_PROFILE,
     };
   });
 }
@@ -282,14 +283,9 @@ export async function readLibraryLiveDocument(token: string) {
          WHERE id=$1 AND revision_id=$2 AND state='ready'
            AND source_manifest_sha256=$3
            AND builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-           AND runtime_profile=$4
+           AND runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL}
          FOR SHARE`,
-        [
-          grant.derivative_id,
-          candidate.revisionId,
-          grant.manifest_sha256,
-          BUNDLE_RUNTIME_PROFILE,
-        ],
+        [grant.derivative_id, candidate.revisionId, grant.manifest_sha256],
       );
       if (!derivative) throw missing();
       objectKey = derivative.object_key;

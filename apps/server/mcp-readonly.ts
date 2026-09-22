@@ -12,6 +12,10 @@ import {
 import { db } from "./db.ts";
 import { config } from "./config.ts";
 import { uuid } from "../../packages/contracts/index.ts";
+import {
+  RUNTIME_IMPORT_LIST,
+  RUNTIME_TAILWIND_META,
+} from "../../packages/contracts/runtime.ts";
 import { readFileSync } from "node:fs";
 import {
   CAPTURE_EXAMPLE,
@@ -78,7 +82,7 @@ const guides = (actor: ServiceActor) => ({
       "dependencies: {status:\"self-contained\", unresolved:[]} when every asset is inside the files; {status:\"incomplete\", unresolved:[...at least one...]} when something is missing; or {status:\"unknown\", unresolved:[]}.",
     ].join("\n"),
     config.HTML_LIVE_ENABLED
-      ? "Sharing rule: this installation runs scripts in an isolated sandbox on a separate viewer domain. Keep an artifact's JavaScript: send one self-contained HTML file with inline classic <script> tags (no network, no external URLs or CDNs; inline libraries such as React/ReactDOM and compile JSX to plain JavaScript), then call polka_prepare_preview with the same key before polka_share so the link opens the interactive version. Images and fonts go inline as base64 data: URIs (png, jpeg, webp, gif, plain SVG; woff2/woff); links may point to #fragments or absolute https/mailto addresses; relative or remote resource URLs, iframes, media elements, <script src> and type=module or text/babel are refused. A script-free page (receipt.htmlProfile=static) needs no preparation. polka_publish does all of this in one call."
+      ? `Sharing rule: this installation runs scripts in an isolated sandbox on a separate viewer domain. Keep an artifact's JavaScript, then call polka_prepare_preview with the same key before polka_share so the link opens the interactive version. The sandbox has no network: no external URLs, no fetch. Images and fonts go inline as base64 data: URIs (png, jpeg, webp, gif, plain SVG; woff2/woff); links may point to #fragments or absolute https/mailto addresses; iframes, media elements and other relative or remote resource URLs are refused. A script-free page (receipt.htmlProfile=static) needs no preparation. polka_publish does all of this in one call.\n\nReact/JSX artifacts (Polka runtime, react-runtime-v1): do not hand-bundle. polka_publish takes the component source as-is in \`component\`. With polka_capture, send an HTML entrypoint with <div id="root"></div> and <script type="module" src="App.jsx"></script> plus the source file(s) with mime text/javascript; the extension picks the syntax (.js/.mjs/.jsx JavaScript with JSX, .ts, .tsx), relative imports between files, .css and .json work. The entry module's default export is rendered into #root; add <meta name="${RUNTIME_TAILWIND_META}" content="preflight"> for Tailwind's base reset (Tailwind utilities are generated for the classes used either way). Inline <script type="module"> and text/babel work too, and CDN <script src> of the libraries below, Babel and the Tailwind CDN are replaced by Polka's own copies. Imports available offline: ${RUNTIME_IMPORT_LIST}. Any other import refuses the build and the reason names the module.`
       : "Sharing rule: a manifest with exactly one self-contained HTML file (inline styles, data: images, no scripts, forms or external URLs) is saved with receipt.htmlProfile=static (limited if it has scripts but readable text) and polka_share can link it on every installation. Scripts do not run on this installation; for a scripted artifact send a static HTML snapshot of what it renders. htmlProfile=unsupported and multi-file bundles cannot be linked here.",
     `Minimal valid polka_capture arguments (use your own fresh key):\n${JSON.stringify(CAPTURE_EXAMPLE)}`,
   ].join("\n\n"),
@@ -192,7 +196,7 @@ export function createReadonlyMcpServer(actor: ServiceActor) {
     {
       instructions:
         config.HTML_LIVE_ENABLED
-          ? "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one self-contained HTML file with its JavaScript inline in, a private save and (with link permission) an unlisted link to the interactive version out. Capture and revise preserve selected source bytes; polka_prepare_preview builds the interactive version of a capture. Sharing is explicit and revision-bound."
+          ? "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: a React component's source as-is (component) or one self-contained HTML file (html) in, a private save and (with link permission) an unlisted link to the interactive version out. Capture and revise preserve selected source bytes; polka_prepare_preview builds the interactive version of a capture. Sharing is explicit and revision-bound."
           : "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one standalone HTML file in, a private save and (with link permission) an unlisted link out. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
     },
   );

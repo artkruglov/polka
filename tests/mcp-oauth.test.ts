@@ -1031,13 +1031,14 @@ test("a page that needs the network is saved but not linked", async () => {
 test("the publish guidance follows the interactive viewer setting", () => {
   const live = publishToolDescription(true);
   const staticOnly = publishToolDescription(false);
-  assert.match(live, /JavaScript inline/);
+  assert.match(live, /source code as-is in `component`/);
+  assert.match(live, /recharts/);
   assert.match(live, /isolated sandbox on a separate viewer domain/);
   assert.match(live, /interactiveUnavailableReason/);
   assert.doesNotMatch(live, /static HTML snapshot/);
   assert.match(staticOnly, /static HTML snapshot/);
   assert.match(staticOnly, /scripts do not run/);
-  assert.doesNotMatch(staticOnly, /JavaScript inline/);
+  assert.doesNotMatch(staticOnly, /`component`/);
   for (const text of [live, staticOnly]) assert.match(text, /under 5 MB/);
 });
 
@@ -1115,6 +1116,93 @@ test("a failed interactive build keeps the save and a static link, with the reas
       /unhandled resource-bearing HTML attribute/,
     );
   } else assert.equal(result.interactiveUnavailableReason, undefined);
+});
+
+const counterComponent = `import { useState } from "react";
+import { Plus } from "lucide-react";
+import { BarChart, Bar } from "recharts";
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <main className="p-6">
+      <button className="rounded bg-blue-600 px-3 py-2 text-white" onClick={() => setCount(count + 1)}>
+        <Plus className="h-4 w-4" /> {count}
+      </button>
+      <BarChart width={200} height={100} data={[{ v: 1 }, { v: 3 }]}><Bar dataKey="v" /></BarChart>
+    </main>
+  );
+}`;
+
+test("a React component is published as source and compiled where the viewer is enabled", async () => {
+  const { tokens } = await connect(owner);
+  const key = randomUUID();
+  const call = () =>
+    mcp(tokens.access_token, "tools/call", {
+      name: "polka_publish",
+      arguments: { key, title: "Counter", component: counterComponent },
+    });
+  const called = await call();
+  assert.equal(called.status, 200);
+  if (!config.HTML_LIVE_ENABLED) {
+    // Nothing would run here: the call is refused instead of saving a shell.
+    assert.equal(called.message.result.isError, true);
+    assert.match(JSON.stringify(called.message.result), /html/);
+    return;
+  }
+  const published = called.message.result.structuredContent;
+  assert.equal(published.state, "shared", JSON.stringify(published));
+  assert.equal(published.interactiveReady, true);
+  assert.equal(published.scriptsRunForRecipients, true);
+  const {
+    rows: [stored],
+  } = await db.query(
+    `SELECT revision.storage_kind,revision.manifest,derivative.state,
+       derivative.builder_version,derivative.runtime_profile
+     FROM shares share
+     JOIN revisions revision ON revision.id=share.revision_id
+     JOIN revision_derivatives derivative ON derivative.id=share.derivative_id
+     WHERE share.id=$1`,
+    [published.shareId],
+  );
+  assert.equal(stored.storage_kind, "bundle");
+  assert.deepEqual(
+    stored.manifest.files.map((file: any) => [file.path, file.mime]),
+    [["App.jsx", "text/javascript"], ["index.html", "text/html"]],
+  );
+  assert.equal(stored.state, "ready");
+  assert.equal(stored.builder_version, "bundle-inline-v5");
+  assert.equal(stored.runtime_profile, "react-runtime-v1");
+  const resolved = await app.inject({
+    method: "POST",
+    url: "/api/resolve",
+    remoteAddress: address(),
+    headers: { origin },
+    payload: { token: new URL(published.url).hash.slice(1) },
+  });
+  assert.equal(resolved.statusCode, 200, resolved.body);
+  assert.equal(resolved.json().revision.inlineBuild.runtimeProfile, "react-runtime-v1");
+  const again = (await call()).message.result.structuredContent;
+  assert.equal(again.shareId, published.shareId);
+  assert.equal(again.url, published.url);
+});
+
+test("a component importing a module outside the runtime is saved with the reason", async () => {
+  if (!config.HTML_LIVE_ENABLED) return;
+  const { tokens } = await connect(owner);
+  const called = await mcp(tokens.access_token, "tools/call", {
+    name: "polka_publish",
+    arguments: {
+      key: randomUUID(),
+      title: "Animated",
+      component: `import { motion } from "framer-motion";\nexport default () => <motion.div />;`,
+    },
+  });
+  const result = called.message.result.structuredContent;
+  assert.equal(result.state, "saved");
+  assert.equal(result.url, null);
+  assert.equal(result.interactiveReady, false);
+  assert.match(result.interactiveUnavailableReason, /module "framer-motion" is not available/);
+  assert.match(result.linkUnavailableReason, /framer-motion/);
 });
 
 test("re-authorizing a client replaces its previous connection", async () => {
