@@ -736,6 +736,8 @@ test("confirmed deletion atomically closes access while preserving source data f
       "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
       [neighbor.id],
     );
+    // resolve takes the read lock, which still queues behind the marker's
+    // FOR UPDATE above; waiting for the write form would never match.
     racingResolve = call(
       "POST",
       "/api/resolve",
@@ -749,7 +751,7 @@ test("confirmed deletion atomically closes access while preserving source data f
           `SELECT 1 FROM pg_stat_activity
            WHERE datname=current_database() AND pid<>pg_backend_pid() AND state='active'
              AND wait_event_type='Lock'
-             AND query LIKE '%SELECT * FROM tenants%owner_id%FOR UPDATE%'`,
+             AND query LIKE '%SELECT * FROM tenants%owner_id%FOR SHARE%'`,
         )
       ).rowCount;
       if (!blocked) await new Promise((resolve) => setTimeout(resolve, 25));
