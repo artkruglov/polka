@@ -16,7 +16,7 @@
 |---|---|---|
 | ![Главная страница Полки](docs/screenshots/landing.png) | ![Каталог «Интересное»](docs/screenshots/discover.png) | ![Интерактивный материал у получателя](docs/screenshots/recipient.png) |
 
-> **Статус: prerelease.** Последний тег — `v0.1.0-rc.1`, изменения после него перечислены в [CHANGELOG](CHANGELOG.md). Hosted-пилот работает на https://polochka.app, аккаунты выдаёт оператор. API, схема БД и интерфейс ещё могут меняться. Что сделано и что нет: [docs/status.md](docs/status.md).
+> **Статус: prerelease.** Последний тег — `v0.1.0-rc.2`, изменения после него перечислены в [CHANGELOG](CHANGELOG.md). Hosted-пилот работает на https://polochka.app, аккаунты выдаёт оператор. API, схема БД и интерфейс ещё могут меняться. Что сделано и что нет: [docs/status.md](docs/status.md).
 
 ## Четыре способа сохранить работу
 

@@ -1,6 +1,6 @@
 {
   "name": "polka",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Полка: a private shelf for AI-made HTML artifacts, reports and files, with expiring share links.",
   "license": "Apache-2.0",
   "repository": {
