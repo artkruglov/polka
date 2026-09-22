@@ -653,7 +653,9 @@ test("grant issuance serialized behind trash cannot create a capability after re
     });
     await waitForBlocked("FROM artifacts%WHERE id=$1%FOR UPDATE");
     const resolving = call("POST", "/api/resolve", { token }, "");
-    await waitForBlocked("FROM tenants WHERE id=$1 FOR UPDATE");
+    // Trash holds the tenant row (lockActiveOwnerTenant) while it waits for
+    // the artifact, so resolve must queue on that same tenant lock.
+    await waitForBlocked("FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE");
     await blocker.query("COMMIT");
     assert.equal((await trashing).statusCode, 200);
     assert.equal((await resolving).statusCode, 404);

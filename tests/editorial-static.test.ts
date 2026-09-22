@@ -151,7 +151,7 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   const args = ["--confirm-publication", "--login", login, "--candidates", candidates];
   const first = await seed(...args);
   assert.equal(first.code, 0, first.stderr);
-  assert.deepEqual(JSON.parse(first.stdout), { slug, status: "published" });
+  assert.deepEqual(JSON.parse(first.stdout), { slug, status: "published", version: "static" });
   assert.doesNotMatch(first.stdout + first.stderr, /https?:|\/s#|[0-9a-f]{8}-[0-9a-f]{4}-/);
 
   const {
@@ -186,7 +186,7 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
 
   const again = await seed(...args);
   assert.equal(again.code, 0, again.stderr);
-  assert.deepEqual(JSON.parse(again.stdout), { slug, status: "unchanged" });
+  assert.deepEqual(JSON.parse(again.stdout), { slug, status: "unchanged", version: "static" });
   assert.equal(
     (
       await db.query(
@@ -213,7 +213,7 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   );
   const renewed = await seed(...args);
   assert.equal(renewed.code, 0, renewed.stderr);
-  assert.deepEqual(JSON.parse(renewed.stdout), { slug, status: "renewed" });
+  assert.deepEqual(JSON.parse(renewed.stdout), { slug, status: "renewed", version: "static" });
   const { rows } = await db.query(
     `SELECT publication.id,publication.withdrawn_at IS NULL AS active,share.revoked
      FROM editorial_publications publication
