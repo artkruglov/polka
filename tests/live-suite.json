@@ -1,0 +1,7 @@
+[
+  "tests/trash.test.ts",
+  "tests/live-viewer.test.ts",
+  "tests/bundle-runtime.test.ts",
+  "tests/editorial-catalog.test.ts",
+  "tests/editorial-seed-live.test.ts"
+]

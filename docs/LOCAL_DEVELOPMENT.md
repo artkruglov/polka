@@ -89,7 +89,7 @@ node --import tsx --env-file=.env scripts/restore-drill.ts --confirm-synthetic
 
 ## Изоляция основного набора тестов
 
-`npm test` запускает `scripts/test-isolated.ts`: создаёт случайную PostgreSQL-базу на локальном сервере и отдельный versioned S3-bucket, применяет миграции, запускает список из `tests/default-suite.json`, затем удаляет только созданные им ресурсы. Рабочие DATABASE_URL/S3_BUCKET не передаются тестам как цели. Нужны local fixtures и локальные права CREATEDB/CreateBucket.
+`npm test` запускает `scripts/test-isolated.ts`: создаёт случайную PostgreSQL-базу на локальном сервере и отдельный versioned S3-bucket, применяет миграции, запускает список из `tests/default-suite.json`, затем удаляет только созданные им ресурсы. `npm test -- --live [файлы]` так же изолированно запускает файлы из `tests/live-suite.json` с включённым локальным viewer. Рабочие DATABASE_URL/S3_BUCKET не передаются тестам как цели. Нужны local fixtures и локальные права CREATEDB/CreateBucket.
 
 Дочерние команды получают те же изолированные настройки. Рабочий каталог временный: `.local/mail` с кодами вымышленных `.test` адресов не смешивается с почтой приложения; SMTP не используется. Остальной код доступен через symlink, временная `.env` пуста. В конце печатается `test-suite.cleanup` с подтверждением удаления базы и bucket. Ошибка cleanup делает прогон неуспешным.
 
