@@ -15,15 +15,18 @@ export async function transaction<T>(
   fn: (c: pg.PoolClient) => Promise<T>,
 ): Promise<T> {
   const c = await db.connect();
+  let broken = false;
   try {
     await c.query("BEGIN");
     const result = await fn(c);
     await c.query("COMMIT");
     return result;
   } catch (e) {
-    await c.query("ROLLBACK");
+    // A failed ROLLBACK (the connection dropped) must not replace the real
+    // error; the client is then discarded instead of returned to the pool.
+    await c.query("ROLLBACK").catch(() => (broken = true));
     throw e;
   } finally {
-    c.release();
+    c.release(broken);
   }
 }

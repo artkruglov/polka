@@ -120,16 +120,19 @@ export async function issueRecipientLiveView(sourceGrant: string) {
     ).rows[0];
     if (!candidate) throw missing();
     if (!isLiveRevisionEligible(config, candidate.revision_id)) throw missing();
-    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
+    // Read locks, as in /api/resolve: recipients of one owner's links must
+    // not queue behind each other, while trash, revoke, disable and deletion
+    // (FOR UPDATE) still serialize with this and are rechecked below.
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [
       candidate.tenant_id,
     ]);
     const artifact = await c.query(
-      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
       [candidate.artifact_id, candidate.tenant_id],
     );
     if (!artifact.rowCount) throw missing();
     await c.query(
-      "SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+      "SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR SHARE",
       [candidate.share_id, candidate.tenant_id],
     );
     await assertEditorialShareAccessible(c, candidate.share_id);
