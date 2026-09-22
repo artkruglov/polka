@@ -44,7 +44,8 @@ function invitationError(error: unknown) {
 
 export function LibraryInvite() {
   const { account, error: accountError, retry: retryAccount } = useAccountState();
-  const [invitation, setInvitation] = useState<LibraryInvitation | null>(null);
+  // undefined until the link is read: a valid invite must not flash an error.
+  const [invitation, setInvitation] = useState<LibraryInvitation | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => setInvitation(readInvitation()), []);
@@ -63,7 +64,7 @@ export function LibraryInvite() {
     <main className="library-invite-page">
       <span className="eyebrow">Общая библиотека</span>
       <h1>Приглашение в библиотеку</h1>
-      {!invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ? (accountError ?
+      {invitation === undefined ? null : !invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ? (accountError ?
         <><ErrorNotice error={`Не удалось проверить аккаунт. ${accountError}`} /><Button onClick={retryAccount}>Проверить снова</Button></> :
         <p role="status">Проверяем аккаунт…</p>) : account === null ? <>
           <p>Войдите с адресом, на который отправили приглашение. Ссылка продолжится после входа в текущей вкладке.</p>

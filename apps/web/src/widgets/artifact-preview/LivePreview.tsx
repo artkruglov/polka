@@ -345,8 +345,12 @@ export function LivePreview({
       if (!abort.signal.aborted && generation.current === currentGeneration)
         setError(messageFor(reason));
     } finally {
-      if (launchAbort.current === abort) launchAbort.current = null;
-      if (generation.current === currentGeneration) setBusy(false);
+      // A launch superseded by a newer one must not re-enable the button
+      // while that newer launch is still running.
+      if (launchAbort.current === abort) {
+        launchAbort.current = null;
+        if (generation.current === currentGeneration) setBusy(false);
+      }
     }
   };
 

@@ -58,8 +58,9 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
           <span className="eyebrow">Ваша полка</span>
           <h2 id="login-title">С возвращением</h2>
           <p className="muted">
-            Аккаунт выдаёт администратор этой Полки. Войдите с логином и
-            паролем, которые вам передали.
+            {emailLogin
+              ? "Войдите с логином и паролем или по почте."
+              : "Аккаунт выдаёт администратор этой Полки. Войдите с логином и паролем, которые вам передали."}
           </p>
           <PasswordLoginForm
             onLogin={onLogin}
@@ -91,10 +92,12 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
               <Compass /> Публичные примеры <ArrowUpRight />
             </a>
           </div>
-          <small>
-            Нет логина? Попросите администратора создать аккаунт — публичной
-            регистрации здесь нет.
-          </small>
+          {!emailLogin && (
+            <small>
+              Нет логина? Попросите администратора создать аккаунт — публичной
+              регистрации здесь нет.
+            </small>
+          )}
         </section>
       </main>
     </AppShell>

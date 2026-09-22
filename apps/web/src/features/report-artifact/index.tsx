@@ -25,6 +25,10 @@ export function ReportArtifactPanel({
   onSent: () => void;
 }) {
   const sending = useRef(false);
+  // One key per report: a retry after a lost response must not file a second
+  // one. Editing the report starts a new key, since the server rejects a key
+  // reused for different content.
+  const attempt = useRef<{ key: string; payload: string } | null>(null);
   const [reportReason, setReportReason] = useState<ReportReason>("other");
   const [reportComment, setReportComment] = useState("");
   const [reportError, setReportError] = useState("");
@@ -43,7 +47,15 @@ export function ReportArtifactPanel({
           setReportBusy(true);
           setReportError("");
           try {
-            await client.report(token, reportReason, reportComment);
+            const payload = JSON.stringify([reportReason, reportComment.trim()]);
+            if (attempt.current?.payload !== payload)
+              attempt.current = { key: crypto.randomUUID(), payload };
+            await client.report(
+              token,
+              reportReason,
+              reportComment,
+              attempt.current.key,
+            );
             onSent();
             onClose();
           } catch (e) {

@@ -185,7 +185,10 @@ test("authentication return target preserves protected pages without nesting log
   assert.equal(authReturnTo({pathname:"/",search:"?login=1&next=%2Fbring%3Furl%3D",hash:""}), "/bring?url=");
   assert.equal(authReturnTo({pathname:"/signup",search:"?next=https%3A%2F%2Fevil.example",hash:""}), "/start");
   assert.equal(authReturnTo({pathname:"/",search:"?login=1",hash:""}), "/start");
-  assert.equal(authReturnTo({pathname:"/s",search:"",hash:"#share-token"}), "/s#share-token");
+  // The share token lives in the fragment and must not move into ?next=.
+  assert.equal(authReturnTo({pathname:"/s",search:"",hash:"#share-token"}), "/start");
+  for (const escape of ["/.//evil.example", "/a/..//evil.example", "/%2e//evil.example"])
+    assert.equal(authReturnTo({pathname:"/",search:`?login=1&next=${encodeURIComponent(escape)}`,hash:""}), "/start", escape);
 });
 
 test("Static view opens links in a new tab without touching the stored bytes' content", () => {

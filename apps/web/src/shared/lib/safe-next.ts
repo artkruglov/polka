@@ -9,9 +9,11 @@ export function safeNext(value: string | null) {
   try {
     const base = "https://polka.invalid";
     const parsed = new URL(value, base);
-    return parsed.origin === base
-      ? parsed.pathname + parsed.search + parsed.hash
-      : null;
+    if (parsed.origin !== base) return null;
+    const path = parsed.pathname + parsed.search + parsed.hash;
+    // Dot segments normalise "/.//host" to "//host", a protocol-relative URL
+    // that would leave Полка, so the result is checked again, not only the input.
+    return path.startsWith("//") ? null : path;
   } catch {
     return null;
   }
@@ -31,6 +33,9 @@ export function authReturnTo(location: {
     (location.pathname === "/" && query.has("login"))
   )
     return "/start";
+  // A share link carries its token in the fragment so it never reaches a
+  // server; putting it into ?next= would send it to every proxy log.
+  if (location.pathname === "/s") return "/start";
   return (
     safeNext(location.pathname + location.search + location.hash) || "/start"
   );
