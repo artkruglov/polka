@@ -1,5 +1,5 @@
 :root {
-  --accent: #1257f5;
+  --accent: #1f4fff;
   --muted: #697386;
   --line: #e7eaf0;
   --soft: #f5f7fa;
@@ -20,9 +20,9 @@ select {
 }
 .primary,
 .p-primary {
-  background: #1257f5 !important;
+  background: #1f4fff !important;
   color: white !important;
-  border-color: #1257f5 !important;
+  border-color: #1f4fff !important;
 }
 .site-header {
   background: #fff;
@@ -61,7 +61,7 @@ select {
 }
 .p-main a:focus-visible,
 .p-main button:focus-visible {
-  outline: 3px solid #1257f5;
+  outline: 3px solid #1f4fff;
   outline-offset: 4px;
 }
 .p-primary {
@@ -137,7 +137,7 @@ select {
 }
 .p-main button[aria-pressed="true"] {
   background: #edf3ff;
-  color: #1257f5;
+  color: #1f4fff;
 }
 .p-grid {
   display: grid;
@@ -215,7 +215,7 @@ select {
   bottom: 15px;
   right: 15px;
   background: white;
-  color: #1257f5;
+  color: #1f4fff;
   border-radius: 6px;
   padding: 8px 12px;
   display: flex;
@@ -341,7 +341,7 @@ select {
 .p-slider input {
   display: block;
   width: 100%;
-  accent-color: #1257f5;
+  accent-color: #1f4fff;
 }
 .p-full .site-header,
 .p-full .site-tabbar {
@@ -378,7 +378,7 @@ select {
   margin: 22px 0;
 }
 .p-hero h1 span {
-  color: #1257f5;
+  color: #1f4fff;
 }
 .p-hero p {
   font-size: 19px;
@@ -428,7 +428,7 @@ select {
   color: #687183;
 }
 .p-benefits a {
-  color: #1257f5;
+  color: #1f4fff;
 }
 .p-company {
   padding: 40px;
@@ -553,7 +553,7 @@ select {
 }
 .site-tabbar a[aria-current="page"] {
   background: #edf3ff;
-  color: #1257f5;
+  color: #1f4fff;
 }
 .p-art-1 {
   transform: rotate(-15deg) scale(1.3);
@@ -615,7 +615,7 @@ select {
 .p-donut {
   aspect-ratio: 1;
   border-radius: 50%;
-  background: conic-gradient(#1257f5 0 50%, #6ed2dc 50% 80%, #ffca68 80%);
+  background: conic-gradient(#1f4fff 0 50%, #6ed2dc 50% 80%, #ffca68 80%);
   display: grid;
   place-items: center;
   max-width: 330px;
@@ -639,7 +639,7 @@ select {
 .p-budget input {
   display: block;
   width: 100%;
-  accent-color: #1257f5;
+  accent-color: #1f4fff;
   margin: 15px 0 30px;
 }
 @media (max-width: 600px) {
@@ -694,7 +694,7 @@ select {
 }
 .onboard-icon {
   margin-bottom: 24px;
-  color: #1257f5;
+  color: #1f4fff;
 }
 .onboard-note {
   font-size: 12px;
@@ -788,7 +788,7 @@ select {
   padding: 22px;
   background: #f6f8fc;
   margin: 24px 0;
-  border-left: 2px solid #1257f5;
+  border-left: 2px solid #1f4fff;
 }
 
 .agent-connections {

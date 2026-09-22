@@ -1,19 +1,29 @@
 /* Shared visual system. Self-hosted OFL type; no third-party font requests. */
 @font-face { font-family:'Polka Sans'; src:url('/fonts/IBMPlexSans-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
-@font-face { font-family:'Polka Sans'; src:url('/fonts/IBMPlexSans-SemiBold.ttf') format('truetype'); font-weight:600 800; font-style:normal; font-display:swap; }
-:root { --font-sans:'Polka Sans',sans-serif; --accent:#0755ff; --muted:#647087; --line:#e7ebf1; --soft:#f4f6fa; font-family:var(--font-sans); background:#fff; color:#101318; }
-:is(.discover-reference,.shelf-layout,.entry-redesign,.agent-connections-page,.recipient-reader,.reader-layout,.p-modern) { font-family:var(--font-sans); --accent:#0755ff; --muted:#647087; --line:#e7ebf1; color:#101318; background:#fff; }
-:is(.discover-reference,.shelf-layout,.entry-redesign,.agent-connections-page,.recipient-reader,.reader-layout,.p-modern) :is(h1,h2,h3,.brand,.site-brand) { font-family:var(--font-sans); color:#101318; }
+@font-face { font-family:'Polka Sans'; src:url('/fonts/IBMPlexSans-SemiBold.ttf') format('truetype'); font-weight:500 800; font-style:normal; font-display:swap; }
+/* Tokens: cool white canvas, ink text, one cobalt accent, hairline dividers, 8px controls. */
+:root {
+ --font-sans:'Polka Sans',sans-serif;
+ --accent:#1f4fff; --accent-strong:#1740e0; --accent-soft:#edf2ff; --accent-ink:#1a3fd1;
+ --ink:#101318; --ink-2:#28354a; --muted:#647087; --muted-2:#8a95a8;
+ --line:#e7ebf1; --line-strong:#dbe1ea; --soft:#f5f7fa; --soft-2:#eef1f6; --canvas:#fff;
+ --radius:8px; --radius-lg:12px;
+ font-family:var(--font-sans); background:var(--canvas); color:var(--ink);
+}
+:is(.discover-reference,.shelf-layout,.entry-redesign,.agent-connections-page,.recipient-reader,.reader-layout,.p-modern,.login-shell) { font-family:var(--font-sans); --accent:#1f4fff; --muted:#647087; --line:#e7ebf1; color:var(--ink); background:#fff; }
+:is(.discover-reference,.shelf-layout,.entry-redesign,.agent-connections-page,.recipient-reader,.reader-layout,.p-modern,.login-shell) :is(h1,h2,h3,.brand,.site-brand) { font-family:var(--font-sans); color:var(--ink); }
 :is(.site-brand,.brand) .brand-mark { display:none; }
 :is(.site-brand,.brand) { font-family:var(--font-sans); font-weight:600; letter-spacing:-.055em; }
 :is(.entry-redesign,.agent-connections-page,.p-modern) .site-nav { border:0; background:transparent; box-shadow:none; gap:8px; }
 :is(.entry-redesign,.agent-connections-page,.p-modern) .site-nav a { border-radius:6px; font-size:15px; font-weight:400; color:#455168; }
-:is(.entry-redesign,.agent-connections-page,.p-modern) .site-nav a[aria-current=page] { background:#eaf0ff; color:#0755ff; }
-:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(button,.button,input,select,textarea) { font-family:var(--font-sans); border-radius:6px; }
-:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(button.primary,.button.primary,.p-primary) { background:#0755ff; border-color:#0755ff; color:#fff; box-shadow:none; }
-:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(button.primary,.p-primary):hover { background:#0344d7; color:#fff; }
-:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(h1,h2) { font-weight:600; letter-spacing:-.04em; line-height:1.12; }
+:is(.entry-redesign,.agent-connections-page,.p-modern) .site-nav a[aria-current=page] { background:var(--accent-soft); color:var(--accent); }
+:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout,.login-shell) :is(button,.button,input,select,textarea) { font-family:var(--font-sans); border-radius:var(--radius); }
+:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(button.primary,.button.primary,.p-primary) { background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:none; }
+:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout) :is(button.primary,.p-primary):hover { background:var(--accent-strong); color:#fff; }
+:is(.entry-redesign,.agent-connections-page,.reader-layout,.p-modern,.shelf-layout,.login-shell,.discover-reference) :is(h1,h2) { font-weight:600; letter-spacing:-.04em; line-height:1.1; }
 :is(.entry-redesign,.agent-connections-page) :is(.entry-eyebrow,.agent-eyebrow) { font-size:12px; letter-spacing:.06em; }
+/* Eyebrows: small, blue, tracked. */
+:is(.p-modern,.entry-redesign,.agent-connections-page,.login-shell,.shelf-layout) :is(.p-eyebrow,.entry-eyebrow,.eyebrow) { display:block; font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); }
 /* Catalog: a title, a quiet filter row, then the collection. */
 /* Application navigation follows the same rail as the catalog. */
 @media(min-width:901px) {
@@ -34,19 +44,19 @@
 .shelf-layout .shelf-heading .eyebrow { display:none; }
 .shelf-layout .shelf-heading h1 { margin:0 0 12px; font-size:44px; }
 .shelf-layout .shelf-heading p { font-size:16px; max-width:600px; }
-.shelf-layout .artifact-card { border-radius:8px; box-shadow:none; }
+.shelf-layout .artifact-card { border-radius:var(--radius); box-shadow:none; }
 .shelf-layout .card-details h3 { font-size:20px; font-weight:600; letter-spacing:-.025em; }
 .capture-redesign .entry-heading h1,.agent-connections-page .agent-page-heading h1 { font-size:44px; margin:12px 0; }
 .capture-redesign .entry-heading,.agent-connections-page .agent-page-heading { margin-bottom:28px; }
-.capture-redesign .bring-card { box-shadow:none; background:#fafbfe; border-radius:8px; }
+.capture-redesign .bring-card { box-shadow:none; background:#fafbfe; border-radius:var(--radius); }
 .capture-redesign .capture-layout { gap:32px; }
 .capture-redesign .capture-fact h2 { font-size:17px; }
-.capture-redesign .capture-agent { background:#eef3ff; border:0; border-radius:8px; }
-.agent-connections-page :is(.agent-card,.agent-panel) { box-shadow:none; border-radius:8px; }
+.capture-redesign .capture-agent { background:var(--accent-soft); border:0; border-radius:var(--radius); }
+.agent-connections-page :is(.agent-card,.agent-panel) { box-shadow:none; border-radius:var(--radius); }
 .recipient-reader .recipient-heading h1,.reader-layout .work-heading h1 { font-size:clamp(30px,3vw,44px); line-height:1.12; letter-spacing:-.04em; }
-.recipient-reader .stage,.reader-layout .stage { box-shadow:none; border-radius:8px; border-color:#e7ebf1; }
+.recipient-reader .stage,.reader-layout .stage { box-shadow:none; border-radius:var(--radius); border-color:var(--line); }
 .p-modern .p-hero h1 { font-family:var(--font-sans); font-weight:600; letter-spacing:-.045em; }
-.p-modern :is(.p-entry,.p-card,.p-benefits > *) { border-radius:8px; box-shadow:none; }
+.p-modern :is(.p-entry,.p-card,.p-benefits > *) { border-radius:var(--radius); box-shadow:none; }
 @media(max-width:900px) {
  .capture-redesign .capture-layout { grid-template-columns:1fr; }
  .capture-redesign .capture-context { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
@@ -66,3 +76,6 @@
 .p-modern .site-avatar { background:#e8edf5; color:#455168; }
 
 :is(.entry-redesign,.agent-connections-page,.discover-reference) .site-avatar { background:#e8edf5; color:#455168; }
+
+/* Brand motif: a soft blue/violet wave used under headlines and in empty states. */
+.polka-wave { display:block; width:100%; height:auto; }

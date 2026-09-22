@@ -1,6 +1,6 @@
 /* Personal shelf only. Reader and shared material keep their own layout. */
 .app.shelf-layout {
-  --accent: #2448f5;
+  --accent: #1f4fff;
   --muted: #6b7385;
   --line: #e6eaf1;
   --soft: #f5f7fb;
@@ -8,7 +8,7 @@
   color: #151925;
   background: #fff;
 }
-.shelf-layout :focus-visible { outline-color: #2448f5; }
+.shelf-layout :focus-visible { outline-color: #1f4fff; }
 .shelf-layout button { border-radius: 8px; }
 .shelf-layout button:hover { background: #f2f5fb; border-color: #d5ddea; }
 .shelf-layout > aside {
@@ -24,7 +24,7 @@
 .shelf-layout aside > nav { flex: 1; height: auto; min-height: 0; overflow-y: auto; }
 .shelf-layout .nav-link { padding: 11px 13px; min-height: 44px; color: #5b6578; font-size: 13px; border-radius: 8px; }
 .shelf-layout .nav-link:hover { background: #eef1f8; }
-.shelf-layout .nav-link.active { background: #eaf0ff; color: #2448f5; }
+.shelf-layout .nav-link.active { background: #eaf0ff; color: #1f4fff; }
 .shelf-layout .nav-label { padding: 28px 13px 8px; font-size: 10px; font-weight: 600; }
 .shelf-layout .shelf-nav-hint { padding: 0 13px 20px; color: #80899a; font-size: 12px; line-height: 1.65; }
 .shelf-layout .shelf-nav-secondary { margin-top: auto; padding-top: 30px; }
@@ -41,9 +41,9 @@
 .shelf-layout .shelf-heading h1 { font-size: clamp(36px, 3.4vw, 50px); line-height: 1.12; font-weight: 660; letter-spacing: -.045em; margin: 13px 0 14px; overflow-wrap: anywhere; }
 .shelf-layout .shelf-heading p { max-width: 490px; font-size: 15px; line-height: 1.65; }
 .shelf-layout .shelf-actions { flex-shrink: 0; align-items: flex-end; flex-direction: column; gap: 7px; padding-top: 20px; }
-.shelf-layout .shelf-actions .primary { padding: 12px 18px; min-height: 46px; box-shadow: 0 3px 8px #2448f51a; }
+.shelf-layout .shelf-actions .primary { padding: 12px 18px; min-height: 46px; box-shadow: 0 3px 8px #1f4fff1a; }
 .shelf-layout .shelf-actions > button:not(.primary) { min-height: 36px; padding: 7px 2px; border-color: transparent; color: #647087; font-size: 12px; background: transparent; }
-.shelf-layout .shelf-actions > button:not(.primary):hover { color: #2448f5; }
+.shelf-layout .shelf-actions > button:not(.primary):hover { color: #1f4fff; }
 .shelf-layout .shelf-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
 .shelf-layout .shelf-section-heading h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 620; letter-spacing: -.025em; }
 .shelf-layout .shelf-section-heading h2 > span { color: #98a1b1; font-size: 12px; font-weight: 450; }
@@ -60,10 +60,10 @@
 .shelf-layout .shelf-tools { gap: 16px; align-items: center; margin: 0 0 26px; }
 .shelf-layout .search { width: min(100%, 440px); min-width: 0; flex: 1; border: 1px solid #e3e8f0; border-radius: 8px; background: #f8fafd; min-height: 44px; color: #8b95a6; padding: 0 13px; }
 .shelf-layout .search input:not([type="file"]) { min-height: 44px; font-size: 13px; }
-.shelf-layout .search:focus-within { outline: 2px solid #2448f5; outline-offset: 2px; background: #fff; }
+.shelf-layout .search:focus-within { outline: 2px solid #1f4fff; outline-offset: 2px; background: #fff; }
 .shelf-layout .segmented { flex-shrink: 0; padding: 3px; background: #f2f4f9; border: 1px solid #e9edf4; border-radius: 8px; }
 .shelf-layout .segmented button { min-width: 37px; min-height: 36px; padding: 7px 9px; color: #8390a5; }
-.shelf-layout .segmented button[aria-pressed="true"] { background: #fff; color: #2448f5; box-shadow: 0 1px 4px #1824460d; }
+.shelf-layout .segmented button[aria-pressed="true"] { background: #fff; color: #1f4fff; box-shadow: 0 1px 4px #1824460d; }
 .shelf-layout .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 24px; }
 .shelf-layout .artifact-card { border-radius: 8px; }
 .shelf-layout .cover { position: relative; aspect-ratio: 1.42; border: 1px solid #e5eaf3; border-radius: 8px; background: #f4f7fc; }
@@ -86,7 +86,7 @@
 .shelf-layout .card-date { color: #8a95a6; }
 .shelf-layout .shelf-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .shelf-layout .card-access { color: #8290a5; margin: 0; font-size: 10px; }
-.shelf-layout .shelf-card-open { display: inline-flex; align-items: center; gap: 5px; color: #3158d8; font-size: 11px; white-space: nowrap; }
+.shelf-layout .shelf-card-open { display: inline-flex; align-items: center; gap: 5px; color: #1f4fff; font-size: 11px; white-space: nowrap; }
 .shelf-layout .shelf-card-open svg { width: 14px; height: 14px; }
 .shelf-layout .shelf-list-heading { display: grid; grid-template-columns: minmax(0, 1fr) 130px 72px; gap: 24px; padding: 0 14px 12px; color: #8994a6; font-size: 10px; }
 .shelf-layout .file-list { border-color: #e9edf5; }
@@ -155,7 +155,7 @@
   .shelf-layout .segmented button { min-width: 34px; padding: 7px; }
   .shelf-layout .shelf-mobile-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: auto; position: fixed; inset: auto 0 0; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #e6eaf3; background: #fffffff5; backdrop-filter: blur(16px); z-index: 15; gap: 8px; }
   .shelf-layout .shelf-mobile-tabs > a, .shelf-layout .shelf-mobile-tabs > button { display: flex; flex-direction: column; gap: 5px; align-items: center; justify-content: center; min-height: 48px; color: #7b879b; font-size: 10px; font-weight: 500; border: 0; padding: 5px 0; background: transparent; border-radius: 7px; }
-  .shelf-layout .shelf-mobile-tabs [aria-current="page"] { color: #2448f5; background: #edf2ff; }
+  .shelf-layout .shelf-mobile-tabs [aria-current="page"] { color: #1f4fff; background: #edf2ff; }
   .shelf-layout .file-list .artifact-card { padding: 16px 0; gap: 12px; }
   .shelf-layout .file-list .cover { width: 66px; height: 55px; }
   .shelf-layout .file-list .shelf-card-open { font-size: 0; width: auto; }
@@ -176,3 +176,24 @@
   .shelf-layout .empty h2 { font-size: 24px; }
   .shelf-layout .empty .button-row { flex-direction: column; }
 }
+
+/* Confirmation dialogs share the button row. */
+.dialog-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+.dialog-body > p { color:#455168; font-size:14px; line-height:1.55; }
+.shelf-layout .shelf-heading h1 { font-weight:600; }
+
+/* Shelf polish toward the catalog concept: quiet chrome, large previews, one accent. */
+.shelf-layout .shelf-heading h1 { letter-spacing:-.045em; }
+.shelf-layout .shelf-heading p { color:#647087; }
+.shelf-layout .shelf-actions .ui-button--primary { min-height:46px; padding:12px 18px; box-shadow:none; }
+.shelf-layout .cover { border-radius:10px; border-color:#e7ebf1; }
+.shelf-layout .artifact-card:hover .cover { transform:none; box-shadow:0 8px 22px #16244314; }
+.shelf-layout .card-details h3 { font-size:17px; }
+.shelf-layout .shelf-card-open { color:#1f4fff; font-size:13px; font-weight:500; }
+.shelf-layout .card-access { font-size:12px; }
+.shelf-layout .search { background:#fff; border-color:#dbe1ea; border-radius:8px; }
+.shelf-layout .segmented { background:#f5f7fa; border-color:#e7ebf1; border-radius:8px; }
+.shelf-layout .folder-chips .ui-button { border-radius:8px; background:#fff; }
+.shelf-layout .empty { background:#fafbfe; border:1px solid #e7ebf1; border-radius:12px; }
+.shelf-layout .empty h2 { font-weight:600; letter-spacing:-.035em; }
+.shelf-layout .empty-icon { background:#edf2ff; color:#1f4fff; border-radius:12px; }

@@ -3,15 +3,17 @@ import {ActionMenu} from "../../shared/ui/ActionMenu.tsx";
 import React from "react";
 import { Badge, Button } from "../../shared/ui/controls.tsx";
 import {
-  ChevronRight,
   LockKeyhole,
   Link as LinkIcon,
   Upload,
   Trash2,
   Clock3,
   Check,
-  GitFork,
   Download,
+  FileText,
+  Image as ImageIcon,
+  Sparkles,
+  Share2,
 } from "lucide-react";
 import type {
   Artifact,
@@ -22,6 +24,7 @@ import {
   size,
   status,
   kindOf,
+  isImage,
   profileView,
 } from "../../entities/artifact/format.ts";
 
@@ -32,6 +35,7 @@ type Props = {
   shown: Revision;
   revisions: Revision[];
   viewed: Revision | null;
+  /** Shown by the page's top bar; the reader only names it for assistive technology. */
   folderName: string;
   history: boolean;
   setHistory: (value: boolean) => void;
@@ -55,21 +59,19 @@ export function ArtifactReader({
   onDownload,
 }: Props) {
   const profile = profileView(work.revision);
+  const linked =
+    !!work.share && ["active", "behind"].includes(work.share.status);
+  const KindIcon = isImage(shown) ? ImageIcon : FileText;
   return (
     <>
-      <div className="work-heading">
-        <div>
-          <span className="breadcrumb">
-            {folderName}
-            <ChevronRight />
-            Материал
-          </span>
+      <div className="work-heading" aria-label={`${folderName} · ${work.title}`}>
+        <div className="work-heading-start">
           {(work.trashedAt || shown.mime !== "text/plain") && (
             <h1>{work.title}</h1>
           )}
           <div className="meta">
-            <Badge>
-              <LockKeyhole />
+            <Badge tone={linked ? "success" : "neutral"}>
+              {linked ? <LinkIcon /> : <LockKeyhole />}
               {status(work)}
             </Badge>
             <span>
@@ -81,19 +83,22 @@ export function ArtifactReader({
         </div>
         {!work.trashedAt && (
           <div className="button-row">
-            <Button onClick={()=>setPanel("agent-context")}>Скопировать для агента</Button>
+            <Button onClick={()=>setPanel("agent-context")}>
+              <Sparkles />
+              Скопировать для агента
+            </Button>
+            <Button onClick={() => setPanel("version")}>
+              <Upload />
+              Новая версия
+            </Button>
             <Button
               variant="primary"
               onClick={() => setPanel("share")}
               disabled={!profile?.linkable && !work.share}
               title={profile?.linkable ? undefined : profile?.text}
             >
-              <LinkIcon />
+              <Share2 />
               Поделиться
-            </Button>
-            <Button onClick={() => setPanel("version")}>
-              <Upload />
-              Новая версия
             </Button>
             <ActionMenu items={[
               {id:"metadata",label:"Название и папка",onSelect:()=>setPanel("metadata")},
@@ -142,7 +147,7 @@ export function ArtifactReader({
           </Button>
         </p>
       )}
-      <section className="stage">
+      <section className="stage" data-kind={shown.mime === "text/plain" ? "text" : isImage(shown) ? "image" : "page"}>
         {work.trashedAt ? (
           <div className="preview-error">
             Работа в корзине. Просмотр отключён; версии и оригиналы доступны для
@@ -154,19 +159,24 @@ export function ArtifactReader({
       </section>
       </Tabs>
       <div className="work-foot">
-        <span>{shown.filename}</span>
-        {!work.trashedAt && (
-          <Button variant="quiet" onClick={() => setPanel("rework")}>
-            <GitFork /> Переработать с агентом
+        <span className="work-foot-file">
+          <KindIcon />
+          {kindOf(shown)} · {size(shown.size)}
+          <em>{shown.filename}</em>
+        </span>
+        <div className="work-foot-actions">
+          <Button variant="quiet" onClick={onDownload}>
+            <Download />
+            {shown.storageKind === "bundle"
+              ? "Скачать весь пакет"
+              : "Скачать оригинал"}
           </Button>
-        )}
-
-        <Button variant="quiet" onClick={onDownload}>
-          <Download />
-          {shown.storageKind === "bundle"
-            ? "Скачать весь пакет"
-            : "Скачать оригинал"}
-        </Button>
+          {!work.trashedAt && (
+            <Button variant="quiet" onClick={() => setPanel("rework")}>
+              <Sparkles /> Переработать с агентом
+            </Button>
+          )}
+        </div>
       </div>
     </>
   );

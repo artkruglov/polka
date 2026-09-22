@@ -1,4 +1,6 @@
-import { Button } from "../../shared/ui/controls.tsx";
+import { Button, LinkButton } from "../../shared/ui/controls.tsx";
+import { Wave } from "../../shared/ui/Wave.tsx";
+import { Bot, FileUp } from "lucide-react";
 import React, { useState } from "react";
 import { EditorialArtwork } from "../../entities/editorial/Artwork.tsx";
 import { editorialCover } from "../../entities/editorial/covers.ts";
@@ -65,8 +67,24 @@ export function EditorialCatalog({
       )}
 
       {!loading && !error && items.length === 0 && (
-        <div className="editorial-catalog-state">
-          Здесь пока нет опубликованных материалов.
+        <div className="editorial-catalog-empty">
+          <Wave compact className="editorial-catalog-empty-wave" />
+          <div className="editorial-catalog-empty-body">
+            <h3>Пока здесь пусто</h3>
+            <p>
+              В «Интересном» появляются материалы, которые авторы опубликовали
+              после проверки. Ваши работы сюда не попадают сами: по умолчанию
+              их видите только вы.
+            </p>
+            <div className="editorial-catalog-empty-actions">
+              <LinkButton variant="primary" href="/bring#file">
+                <FileUp /> Сохранить свою работу
+              </LinkButton>
+              <LinkButton href="/settings/agents">
+                <Bot /> Подключить агента
+              </LinkButton>
+            </div>
+          </div>
         </div>
       )}
 

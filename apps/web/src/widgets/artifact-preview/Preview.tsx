@@ -122,16 +122,13 @@ export function Preview({
   if (revision.mime === "text/html") {
     const fallback = (
       <div className="html-preview">
-        <iframe
-          className="work-html"
+        <SandboxFrame
           title={revision.filename}
           src={
             grant
               ? `/api/view/${grant}/document`
               : `/api/revisions/${revision.id}/document`
           }
-          sandbox=""
-          referrerPolicy="no-referrer"
         />
         {revision.htmlProfile === "limited" && (
           <p className="html-preview-note">
@@ -185,6 +182,29 @@ export function Preview({
       </div>
     );
   return <div className="placeholder" aria-label="Загрузка материала…" />;
+}
+
+/** The sandboxed document can take seconds to arrive; say so instead of showing a blank frame. */
+function SandboxFrame({ src, title }: { src: string; title: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="html-preview-frame" data-loaded={loaded || undefined}>
+      {!loaded && (
+        <div className="html-preview-loading" role="status">
+          <span className="ui-spinner" aria-hidden="true" />
+          Загружаем безопасный просмотр…
+        </div>
+      )}
+      <iframe
+        className="work-html"
+        title={title}
+        src={src}
+        sandbox=""
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
 }
 
 /** Read-only typography for plain text. Never interprets source as HTML. */

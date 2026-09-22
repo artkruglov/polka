@@ -24,6 +24,7 @@ import {
   type PendingUpload,
 } from "../../shared/api/client.ts";
 import { date, profileView, size } from "../../entities/artifact/format.ts";
+import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
 import { Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { Status } from "../../shared/ui/Status.tsx";
@@ -57,6 +58,7 @@ export function FileSave({
     [copied, setCopied] = useState(false),
     [dragging, setDragging] = useState(false);
   const operation = useRef<PendingUpload | null>(null),
+    picked = useRef<File | null>(null),
     card = useRef<HTMLElement>(null),
     busy = !!stage || sharing;
 
@@ -66,10 +68,17 @@ export function FileSave({
 
   const pick = (f: File | undefined) => {
     if (!f) return;
+    picked.current = f;
     operation.current = null;
     setError("");
     setFile(f);
-    setTitle(f.name.replace(/\.[^.]+$/, "") || f.name);
+    const fallback = fallbackTitle(f);
+    setTitle(fallback);
+    // HTML pages usually name themselves; replace the file name unless the author already typed.
+    void suggestTitle(f).then((suggested) => {
+      if (picked.current === f)
+        setTitle((current) => (current === fallback ? suggested : current));
+    });
     const mime = fileMime(f);
     if (!(MIME as readonly string[]).includes(mime))
       setError(

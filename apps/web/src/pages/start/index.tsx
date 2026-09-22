@@ -63,25 +63,27 @@ export function FirstSave() {
             </span>
           </a>
         </div>
-        <a className="start-link-demo" href="/bring?url=">
-          <Link2 />
-          <div>
-            <strong>
-              Есть ссылка на работу?{" "}
-              {!canImport && imports.status === "ready" && (
-                <span className="entry-demo-label">Импорт выключен</span>
-              )}
-            </strong>
-            <p>
-              {canImport
-                ? "Сохраните копию поддерживаемой HTML-страницы и откройте её на Полке."
-                : imports.status === "ready"
-                  ? "На этой установке можно проверить адрес или сохранить материал файлом."
-                  : "Откройте форму, чтобы проверить доступность импорта."}
-            </p>
-          </div>
-          <ArrowUpRight />
-        </a>
+        {canImport ? (
+          <a className="start-link-demo" href="/bring?url=">
+            <Link2 />
+            <div>
+              <strong>Есть ссылка на работу?</strong>
+              <p>
+                Сохраните копию поддерживаемой HTML-страницы и откройте её на
+                Полке.
+              </p>
+            </div>
+            <ArrowUpRight />
+          </a>
+        ) : (
+          <p className="start-link-note">
+            {imports.status === "ready"
+              ? "Импорт по ссылке на этой Полке выключен: ссылки из Claude и ChatGPT сохраняйте экспортом в файл или через агента."
+              : imports.status === "failed"
+                ? "Доступность импорта по ссылке проверить не удалось; загрузка файла и агент работают."
+                : "Проверяем, доступен ли импорт по ссылке…"}
+          </p>
+        )}
         <a className="onboard-legacy" href="/discover">
           Посмотреть примеры работ <ArrowUpRight />
         </a>

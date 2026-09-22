@@ -34,7 +34,7 @@
 .ui-action-menu-items > button:hover,
 .ui-action-menu-items > button:focus-visible {
   background: #f0f5ff;
-  outline: 2px solid #0755ff;
+  outline: 2px solid #1f4fff;
   outline-offset: -2px;
 }
 .ui-action-menu-items > button:disabled {

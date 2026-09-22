@@ -12,7 +12,7 @@
 }
 
 .editorial-catalog-eyebrow {
-  color: #315df4;
+  color: #1f4fff;
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -61,7 +61,7 @@
 }
 
 .editorial-catalog-card-topline span:first-child {
-  color: #315df4;
+  color: #1f4fff;
   font-weight: 800;
 }
 
@@ -95,9 +95,9 @@
 .editorial-catalog-card-footer a,
 .editorial-catalog-state button {
   min-height: 42px;
-  border: 1px solid #315df4;
+  border: 1px solid #1f4fff;
   border-radius: 10px;
-  background: #315df4;
+  background: #1f4fff;
   color: #fff;
   padding: 9px 14px;
   font: inherit;
@@ -107,7 +107,7 @@
 
 .editorial-catalog-card-footer a:hover,
 .editorial-catalog-state button:hover {
-  background: #2449ce;
+  background: #1740e0;
 }
 
 .editorial-catalog-card-footer a:focus-visible,
@@ -117,11 +117,12 @@
 }
 
 .editorial-catalog-state {
-  border: 1px dashed #d9dfe8;
-  border-radius: 16px;
-  background: #ffffff;
-  padding: 28px 20px;
+  border: 1px solid #e7ebf1;
+  border-radius: 12px;
+  background: #fafbfe;
+  padding: 28px 24px;
   color: #5e6872;
+  line-height: 1.5;
 }
 
 .editorial-catalog-state p {
@@ -129,8 +130,19 @@
 }
 
 .editorial-catalog-error {
-  border-color: #c58a73;
-  color: #713522;
+  border-color: #f0c6cf;
+  background: #fff8f9;
+  color: #992b42;
+}
+.editorial-catalog-state button {
+  background: #fff;
+  border-color: #dbe1ea;
+  color: #1b2230;
+  font-weight: 500;
+  border-radius: 8px;
+}
+.editorial-catalog-state button:hover {
+  background: #f5f7fb;
 }
 
 @media (max-width: 640px) {
@@ -179,7 +191,7 @@
   min-height: 44px;
   margin: 8px 0 20px;
   border-radius: 10px;
-  background: #315df4;
+  background: #1f4fff;
   color: #fff;
   padding: 10px 16px;
   font-weight: 800;
@@ -188,14 +200,14 @@
 
 /* Recovered original: docs/design/2026-09-20/recovered/concept-5.png.
    Scoped to the public catalog; other routes retain their own layout. */
-.discover-reference { --accent:#0755ff; --muted:#637087; --line:#e9edf3; color:#101318; background:#fff; min-height:100vh; font-family:var(--font-sans); font-size:16px; }
+.discover-reference { --accent:#1f4fff; --muted:#637087; --line:#e9edf3; color:#101318; background:#fff; min-height:100vh; font-family:var(--font-sans); font-size:16px; }
 .discover-reference .editorial-catalog { max-width:1600px; padding:64px 36px; padding-top:42px; }
 .discover-reference .editorial-catalog-heading { margin-bottom:26px; }
 .discover-reference .editorial-catalog-eyebrow { color:#647087; font-size:12px; font-weight:500; letter-spacing:.06em; }
 .discover-reference .editorial-catalog-heading p { max-width:720px; color:#637087; line-height:1.5; font-size:17px; }
 .editorial-topics { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 24px; }
 .discover-reference .editorial-topics button { min-height:40px; padding:8px 12px; border:0; border-radius:6px; background:transparent; color:#445066; font-size:14px; font-weight:400; }
-.discover-reference .editorial-topics button[aria-pressed=true] { background:#eaf0ff; color:#0755ff; }
+.discover-reference .editorial-topics button[aria-pressed=true] { background:#eaf0ff; color:#1f4fff; }
 .editorial-topics > span { margin-left:auto; color:#69758a; font-size:13px; }
 .discover-reference .editorial-catalog-grid { gap:28px 22px; }
 .discover-reference .editorial-catalog-card { grid-template-columns:1fr auto; grid-template-rows:auto auto auto 1fr; align-content:start; min-width:0; min-height:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; display:flex; flex-direction:column; gap:0; }
@@ -206,13 +218,13 @@
 .discover-reference .editorial-catalog-card-topline span:first-child { color:#637087; font-weight:400; }
 .discover-reference .editorial-catalog-card h3 { grid-column:1; grid-row:2; color:#101318; letter-spacing:-.025em; font-family:var(--font-sans); font-size:20px; line-height:1.25; margin:0 0 6px; font-weight:600; }
 .editorial-catalog-card h3 a { color:inherit; text-decoration:none; }
-.editorial-catalog-card h3 a:hover { color:#0755ff; }
+.editorial-catalog-card h3 a:hover { color:#1f4fff; }
 .discover-reference .editorial-catalog-task { grid-column:1/-1; grid-row:4; margin:8px 0 0; color:#637087; font-size:14px; line-height:1.5; }
 .discover-reference .editorial-catalog-card-footer { grid-column:2; grid-row:2/4; align-self:start; padding:0; margin:0; order:4; width:100%; margin-top:8px; }
 .discover-reference .editorial-catalog-card-footer > span { display:block; color:#7b8494; font-size:12px; }
-.discover-reference .editorial-catalog-card-footer a { display:inline-flex; align-items:center; gap:6px; border:0; border-radius:6px; background:transparent; color:#0755ff; font-family:inherit; font-size:14px; font-weight:500; white-space:nowrap; text-decoration:none; padding:0; min-height:32px; font:400 14px/1.4 var(--font-sans); }
+.discover-reference .editorial-catalog-card-footer a { display:inline-flex; align-items:center; gap:6px; border:0; border-radius:6px; background:transparent; color:#1f4fff; font-family:inherit; font-size:14px; font-weight:500; white-space:nowrap; text-decoration:none; padding:0; min-height:32px; font:400 14px/1.4 var(--font-sans); }
 .discover-reference .editorial-catalog-card-footer a:hover { background:#edf3ff; }
-.discover-reference a:focus-visible, .discover-reference button:focus-visible { outline:2px solid #0755ff; outline-offset:3px; }
+.discover-reference a:focus-visible, .discover-reference button:focus-visible { outline:2px solid #1f4fff; outline-offset:3px; }
 @media (min-width:761px) and (max-width:1180px) { .discover-reference .editorial-catalog-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:760px) {
  .discover-reference .editorial-catalog { padding:28px 20px 100px; }
@@ -231,7 +243,7 @@
 .editorial-art .art-caption { position:static; display:block; margin-top:10px; max-width:75%; font-size:12px; line-height:1.3; }
 .art-night { --art-bg:#0c1d32; color:#bad6ff; }
 .art-night strong { color:#fff; }
-.art-blue { --art-bg:#dfe9ff; color:#0755ff; }
+.art-blue { --art-bg:#dfe9ff; color:#1f4fff; }
 .art-blue strong { color:#123a96; }
 .art-peach { --art-bg:#fae4d9; color:#c06840; }
 .art-peach strong { color:#562f28; }
@@ -253,3 +265,17 @@
 .p-modern .landing-catalog { min-height:0; margin-top:48px; }
 .p-modern .landing-catalog .editorial-catalog { padding:0 0 20px; }
 .p-modern .landing-catalog .editorial-catalog-heading :is(h1,h2) { font-size:32px; }
+
+/* Empty catalog: the brand wave, a plain explanation and the two real paths. */
+.editorial-catalog-empty { position:relative; overflow:hidden; display:grid; gap:0; padding:0; border:1px solid var(--line,#e7ebf1); border-radius:12px; background:#fff; }
+.editorial-catalog-empty-wave { height:clamp(80px,12vw,150px); background:#fbfcff; border-bottom:1px solid var(--line,#e7ebf1); }
+.editorial-catalog-empty-body { padding:28px 32px 32px; max-width:640px; }
+.editorial-catalog-empty h3 { margin:0 0 10px; font:600 24px/1.2 var(--font-sans); letter-spacing:-.03em; color:#101318; }
+.editorial-catalog-empty p { margin:0 0 20px; color:#647087; font-size:15px; line-height:1.6; }
+.editorial-catalog-empty-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.discover-reference .editorial-catalog-heading :is(h1,h2) { font-weight:600; }
+.discover-reference .editorial-topics button { font-family:var(--font-sans); }
+@media (max-width:600px) {
+ .editorial-catalog-empty-body { padding:22px 20px 24px; }
+ .editorial-catalog-empty-actions { flex-direction:column; align-items:stretch; }
+}
