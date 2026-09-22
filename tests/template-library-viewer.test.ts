@@ -251,7 +251,7 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   assert.equal(document.body, singleHtml);
   assert.match(
     String(document.headers["content-security-policy"]),
-    /^sandbox allow-scripts;/,
+    /^sandbox allow-scripts allow-forms;/,
   );
   assert.match(
     String(document.headers["content-security-policy"]),

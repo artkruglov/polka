@@ -1170,7 +1170,7 @@ test("a React component is published as source and compiled where the viewer is 
     [["App.jsx", "text/javascript"], ["index.html", "text/html"]],
   );
   assert.equal(stored.state, "ready");
-  assert.equal(stored.builder_version, "bundle-inline-v5");
+  assert.equal(stored.builder_version, "bundle-inline-v6");
   assert.equal(stored.runtime_profile, "react-runtime-v1");
   const resolved = await app.inject({
     method: "POST",

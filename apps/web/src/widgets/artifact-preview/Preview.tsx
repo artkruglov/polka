@@ -208,8 +208,9 @@ function SandboxFrame({ src, title }: { src: string; title: string }) {
         className="work-html"
         title={title}
         src={src}
-        // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open only on click.
-        sandbox="allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+        // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open
+        // only in a new tab, never over this one (no top navigation).
+        sandbox="allow-popups allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
         onLoad={() => setLoaded(true)}
       />

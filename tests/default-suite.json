@@ -29,6 +29,7 @@
   "tests/bundle-manifest.test.ts",
   "tests/bundle-inline.test.ts",
   "tests/react-runtime.test.ts",
+  "tests/runtime-dom.test.ts",
   "tests/revision-manifest.test.ts",
   "tests/bundle-upload.test.ts",
   "tests/html-negative-corpus.test.ts",

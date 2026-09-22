@@ -11,21 +11,24 @@ import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readRevisionSource, type Actor } from "./artifacts.ts";
 import { putImmutable, sha256 } from "./storage.ts";
-import { needsRuntimeBuild } from "./react-runtime.ts";
 import {
+  BUILD_FAILURE_MESSAGES,
+  BUILD_LIMITS,
   BUNDLE_BUILDER_VERSION,
   isServedRuntimeProfile,
   DERIVATIVE_BUILD_TIMEOUT_MS,
   DERIVATIVE_RESERVATION_BYTES,
   derivativePreferenceSql,
   derivativeVersionSql,
+  type BuildFailureCategory,
 } from "./bundle-runtime-contract.ts";
 
 const activeBuilds = new Set<string>();
 
 // A single HTML upload is built like a one-file bundle: its interactive
 // version is how a page the static view cannot show gets a link.
-const buildableStorage = (kind: string) => kind === "bundle" || kind === "single";
+const buildableStorage = (kind: string) =>
+  kind === "bundle" || kind === "single";
 let runningWorkers = 0;
 
 export type DerivativeTransactionRunner = <T>(
@@ -55,7 +58,7 @@ export const inlineBuildSelect = `(
 ) AS inline_build`;
 
 function acquireWorkerSlot() {
-  if (runningWorkers >= 2) return false;
+  if (runningWorkers >= BUILD_LIMITS.workers) return false;
   runningWorkers++;
   return true;
 }
@@ -84,7 +87,7 @@ const runtimeBusy = () =>
     "Сервер уже собирает другую страницу с компонентами. Повторите запрос через несколько секунд.",
   );
 
-type WorkerResult =
+export type WorkerResult =
   | {
       ok: true;
       sourceManifestSha256: string;
@@ -93,8 +96,39 @@ type WorkerResult =
       html: Uint8Array;
       sha256: string;
       size: number;
+      warnings?: string[];
     }
-  | { ok: false; reason: string; path?: string; failed?: boolean };
+  | {
+      ok: false;
+      reason: string;
+      path?: string;
+      // failed: the builder broke, not the page; busy: no runtime slot.
+      failed?: boolean;
+      category?: BuildFailureCategory;
+      busy?: boolean;
+    };
+
+/** A build worker that did not answer: timed out, ran out of memory, died. */
+export class BuildWorkerError extends Error {
+  constructor(public category: BuildFailureCategory) {
+    super(`Bundle build worker failed: ${category}`);
+  }
+}
+
+/**
+ * One line per builder failure: the category and stage only. Stored HTML,
+ * paths and error text stay out of the logs.
+ */
+function logBuildFailure(category: string, stage: string) {
+  console.error(
+    JSON.stringify({
+      event: "derivative.build.failed",
+      category,
+      stage,
+      builderVersion: BUNDLE_BUILDER_VERSION,
+    }),
+  );
+}
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -123,19 +157,23 @@ export function builderEnv() {
   };
 }
 
+/**
+ * Runs one build in a fresh worker under the heap limits and the build
+ * deadline. The worker asks for the runtime slot itself (it classifies the
+ * page); the slot is held until the worker ends.
+ */
 async function runBuilder(
   manifest: ReturnType<typeof canonicalizeManifest>,
   files: Array<{ path: string; bytes: Buffer }>,
-  allowRuntime: boolean,
 ) {
   return new Promise<WorkerResult>((resolve, reject) => {
     const worker = new Worker(
       new URL("./bundle-build-worker.mjs", import.meta.url),
       {
         resourceLimits: {
-          maxOldGenerationSizeMb: 64,
-          maxYoungGenerationSizeMb: 16,
-          stackSizeMb: 4,
+          maxOldGenerationSizeMb: BUILD_LIMITS.workerHeapMb,
+          maxYoungGenerationSizeMb: BUILD_LIMITS.workerYoungMb,
+          stackSizeMb: BUILD_LIMITS.workerStackMb,
         },
         // esbuild runs as a child process of this worker, inherits this
         // environment and ends with the worker.
@@ -143,34 +181,93 @@ async function runBuilder(
       },
     );
     let settled = false;
-    const timeout = setTimeout(async () => {
-      if (settled) return;
-      settled = true;
-      await worker.terminate();
-      reject(new Error("Bundle build deadline exceeded"));
-    }, DERIVATIVE_BUILD_TIMEOUT_MS);
-    worker.once("message", async (result: WorkerResult) => {
+    let runtimeSlot = false;
+    const settle = async (outcome: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       await worker.terminate();
-      resolve(result);
-    });
-    worker.once("error", async (error) => {
+      if (runtimeSlot) releaseRuntimeSlot();
+      runtimeSlot = false;
+      outcome();
+    };
+    const timeout = setTimeout(
+      () => void settle(() => reject(new BuildWorkerError("timeout"))),
+      DERIVATIVE_BUILD_TIMEOUT_MS,
+    );
+    worker.on("message", (message: { type: string; result?: WorkerResult }) => {
       if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      await worker.terminate();
-      reject(error);
+      if (message?.type === "runtime") {
+        runtimeSlot = acquireRuntimeSlot();
+        worker.postMessage(runtimeSlot);
+        return;
+      }
+      void settle(() => resolve(message.result!));
     });
-    worker.once("exit", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(new Error(`Bundle build worker exited with code ${code}`));
+    worker.once("error", (error: Error & { code?: string }) => {
+      void settle(() =>
+        reject(
+          new BuildWorkerError(
+            error?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "oom" : "crash",
+          ),
+        ),
+      );
     });
-    worker.postMessage({ manifest, files, allowRuntime });
+    worker.once("exit", () => {
+      void settle(() => reject(new BuildWorkerError("crash")));
+    });
+    worker.postMessage({ manifest, files });
   });
+}
+
+/**
+ * A build that is only a check (URL import): it waits a little for a free
+ * worker instead of refusing, and never throws. A busy runtime slot or a
+ * broken worker comes back as a refusal marked failed.
+ */
+export async function checkBuildInWorker(
+  manifest: ReturnType<typeof canonicalizeManifest>,
+  files: Array<{ path: string; bytes: Buffer }>,
+  { waitMs = 10_000 }: { waitMs?: number } = {},
+): Promise<WorkerResult> {
+  const deadline = Date.now() + waitMs;
+  while (!acquireWorkerSlot()) {
+    if (Date.now() >= deadline)
+      return {
+        ok: false,
+        failed: true,
+        busy: true,
+        reason: "сервер занят другими сборками",
+      };
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  try {
+    for (;;) {
+      let result: WorkerResult;
+      try {
+        result = await runBuilder(manifest, files);
+      } catch (error) {
+        const category =
+          error instanceof BuildWorkerError ? error.category : "crash";
+        logBuildFailure(category, "check");
+        return {
+          ok: false,
+          failed: true,
+          category,
+          reason: BUILD_FAILURE_MESSAGES[category],
+        };
+      }
+      if (!result.ok && result.busy && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      if (!result.ok && result.failed)
+        logBuildFailure(result.category ?? "crash", "check");
+      return result;
+    }
+  } finally {
+    releaseWorkerSlot();
+  }
 }
 
 async function lockDerivative(
@@ -241,7 +338,7 @@ async function prepare(
       [revisionId, revision.manifest_sha256],
     );
     if (existing && ["ready", "unsupported"].includes(existing.state))
-      return { row: existing, run: false, resumed: false };
+      return { row: existing, run: false };
     if (existing?.state === "pending")
       return {
         row: existing,
@@ -249,7 +346,6 @@ async function prepare(
           Number(existing.artifact_lifecycle_version) ===
             Number(revision.artifact_lifecycle_version) &&
           new Date(existing.attempt_expires_at).getTime() > Date.now(),
-        resumed: true,
       };
     const {
       rows: [pending],
@@ -280,7 +376,7 @@ async function prepare(
          WHERE id=$1 RETURNING *`,
         [existing.id, attemptId, revision.artifact_lifecycle_version],
       );
-      return { row, run: true, resumed: false };
+      return { row, run: true };
     }
     const {
       rows: [row],
@@ -300,7 +396,7 @@ async function prepare(
         revision.artifact_lifecycle_version,
       ],
     );
-    return { row, run: true, resumed: false };
+    return { row, run: true };
   });
 }
 
@@ -350,128 +446,147 @@ async function finishNonReady(
 async function executeBuild(
   sourceTenantId: string,
   derivative: any,
-  resumed: boolean,
   runTransaction: DerivativeTransactionRunner,
   readSource: () => ReturnType<typeof readRevisionSource>,
 ) {
+  // Every outcome ends this attempt (a resumed one too); finishNonReady
+  // changes only the row still pending under this attempt_id.
+  const finish = async (
+    state: "unsupported" | "failed",
+    reason: string,
+    errorPath?: string,
+  ) => {
+    const row = await finishNonReady(
+      sourceTenantId,
+      derivative,
+      state,
+      reason,
+      runTransaction,
+      errorPath,
+    );
+    if (!row) throw missing();
+    return statusDTO(row);
+  };
   let source: Awaited<ReturnType<typeof readRevisionSource>>;
   let result: WorkerResult;
-  let runtimeSlot = false;
   try {
     source = await readSource();
     if (!buildableStorage(source.revision.storage_kind)) throw missing();
     if (source.manifestSha256 !== derivative.source_manifest_sha256)
       throw new Error("Derivative source changed");
-    // esbuild runs outside the worker heap, so runtime pages are admitted
-    // one at a time; the row stays pending and a retry resumes it.
-    const runtime = needsRuntimeBuild(
-      source.manifest,
-      new Map(source.files.map((file) => [file.path, file.bytes])),
-    );
-    if (runtime) {
-      if (!acquireRuntimeSlot()) throw runtimeBusy();
-      runtimeSlot = true;
-    }
-    result = await runBuilder(source.manifest, source.files, runtime);
+    result = await runBuilder(source.manifest, source.files);
   } catch (error) {
-    if (error instanceof Problem && error.status === 429) throw error;
-    if (resumed) throw error;
-    const failed = await finishNonReady(
-      sourceTenantId,
-      derivative,
+    const category = error instanceof BuildWorkerError ? error.category : null;
+    logBuildFailure(category ?? "internal", "build");
+    return finish(
       "failed",
-      "Не удалось безопасно собрать страницу.",
-      runTransaction,
+      category
+        ? BUILD_FAILURE_MESSAGES[category]
+        : "Не удалось безопасно собрать страницу.",
     );
-    if (!failed) throw error;
-    return statusDTO(failed);
-  } finally {
-    if (runtimeSlot) releaseRuntimeSlot();
   }
   if (!result.ok) {
-    if (resumed) return statusDTO(derivative);
-    return statusDTO(
-      await finishNonReady(
-        sourceTenantId,
-        derivative,
-        result.failed ? "failed" : "unsupported",
-        result.reason,
-        runTransaction,
-        result.path,
-      ),
+    // esbuild runs outside the worker heap, so runtime pages are admitted
+    // one at a time; the row stays pending and a retry resumes it.
+    if (result.busy) throw runtimeBusy();
+    if (result.failed) logBuildFailure(result.category ?? "crash", "build");
+    return finish(
+      result.failed ? "failed" : "unsupported",
+      result.reason,
+      result.path,
     );
   }
-  if (
-    result.sourceManifestSha256 !== derivative.source_manifest_sha256 ||
-    result.builderVersion !== BUNDLE_BUILDER_VERSION ||
-    !isServedRuntimeProfile(result.runtimeProfile) ||
-    result.size > DERIVATIVE_RESERVATION_BYTES ||
-    sha256(result.html) !== result.sha256
-  )
-    throw new Error("Bundle builder result invariant failed");
+  const built = result;
   const objectKey = `${sourceTenantId}/derivatives/${derivative.id}/${derivative.attempt_id}.html`;
-  const ready = await runTransaction(async (c) => {
-    const { tenant, artifact, row } = await lockDerivative(
-      c,
-      sourceTenantId,
-      derivative.id,
-      derivative.revision_id,
-    );
+  let ready: any;
+  try {
     if (
-      !row ||
-      !artifact ||
-      artifact.trashed_at ||
-      Number(artifact.lifecycle_version) !==
-        Number(row.artifact_lifecycle_version) ||
-      row.state !== "pending" ||
-      row.attempt_id !== derivative.attempt_id ||
-      new Date(row.attempt_expires_at).getTime() <= Date.now()
+      built.sourceManifestSha256 !== derivative.source_manifest_sha256 ||
+      built.builderVersion !== BUNDLE_BUILDER_VERSION ||
+      !isServedRuntimeProfile(built.runtimeProfile) ||
+      built.size > DERIVATIVE_RESERVATION_BYTES ||
+      sha256(built.html) !== built.sha256
     )
-      return row;
-    const {
-      rows: [pending],
-    } = await c.query(
-      "SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending' AND id<>$2",
-      [sourceTenantId, derivative.id],
-    );
-    if (
-      Number(tenant.derivative_used_bytes) +
-        Number(pending.count) * DERIVATIVE_RESERVATION_BYTES +
-        result.size >
-      Number(tenant.derivative_quota_bytes)
-    )
-      throw new Problem(
-        413,
-        "quota",
-        "Недостаточно места для собранной страницы.",
-      );
-    const objectVersion = await putImmutable(
-      objectKey,
-      Buffer.from(result.html),
-    );
-    await c.query(
-      "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
-      [sourceTenantId, result.size],
-    );
-    const {
-      rows: [updated],
-    } = await c.query(
-      `UPDATE revision_derivatives
-       SET state='ready',attempt_expires_at=NULL,runtime_profile=$3,size=$4,sha256=$5,
-           object_key=$6,object_version=$7,reason=NULL,error_path=NULL,updated_at=now()
-       WHERE id=$1 AND attempt_id=$2 RETURNING *`,
-      [
+      throw new Error("Bundle builder result invariant failed");
+    ready = await runTransaction(async (c) => {
+      const { tenant, artifact, row } = await lockDerivative(
+        c,
+        sourceTenantId,
         derivative.id,
-        derivative.attempt_id,
-        result.runtimeProfile,
-        result.size,
-        result.sha256,
+        derivative.revision_id,
+      );
+      if (
+        !row ||
+        !artifact ||
+        artifact.trashed_at ||
+        Number(artifact.lifecycle_version) !==
+          Number(row.artifact_lifecycle_version) ||
+        row.state !== "pending" ||
+        row.attempt_id !== derivative.attempt_id ||
+        new Date(row.attempt_expires_at).getTime() <= Date.now()
+      )
+        return row;
+      const {
+        rows: [pending],
+      } = await c.query(
+        "SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending' AND id<>$2",
+        [sourceTenantId, derivative.id],
+      );
+      if (
+        Number(tenant.derivative_used_bytes) +
+          Number(pending.count) * DERIVATIVE_RESERVATION_BYTES +
+          built.size >
+        Number(tenant.derivative_quota_bytes)
+      )
+        throw new Problem(
+          413,
+          "quota",
+          "Недостаточно места для собранной страницы.",
+        );
+      const objectVersion = await putImmutable(
         objectKey,
-        objectVersion,
-      ],
+        Buffer.from(built.html),
+      );
+      await c.query(
+        "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
+        [sourceTenantId, built.size],
+      );
+      // A ready row's reason lists what the builder left out, if anything.
+      const warnings = built.warnings?.length
+        ? `Пропущено: ${built.warnings.join("; ")}`
+        : null;
+      const {
+        rows: [updated],
+      } = await c.query(
+        `UPDATE revision_derivatives
+         SET state='ready',attempt_expires_at=NULL,runtime_profile=$3,size=$4,sha256=$5,
+             object_key=$6,object_version=$7,reason=$8,error_path=NULL,updated_at=now()
+         WHERE id=$1 AND attempt_id=$2 RETURNING *`,
+        [
+          derivative.id,
+          derivative.attempt_id,
+          built.runtimeProfile,
+          built.size,
+          built.sha256,
+          objectKey,
+          objectVersion,
+          warnings?.slice(0, 300) ?? null,
+        ],
+      );
+      return updated;
+    });
+  } catch (error) {
+    // Quota, storage or invariant: the attempt ends as failed (retryable)
+    // instead of staying pending until it expires.
+    const quota = error instanceof Problem && error.status === 413;
+    logBuildFailure(quota ? "quota" : "store", "finish");
+    return finish(
+      "failed",
+      quota
+        ? error.message
+        : "Не удалось сохранить собранную страницу. Повторите подготовку.",
     );
-    return updated;
-  });
+  }
   return statusDTO(ready);
 }
 
@@ -565,7 +680,6 @@ export async function buildInlineRevisionFromSource({
       status: await executeBuild(
         sourceTenantId,
         prepared.row,
-        prepared.resumed,
         runTransaction,
         readSource,
       ),
