@@ -1,10 +1,18 @@
 # Self-host base candidate
 
-This is a compose draft for an operator-provided database, versioned private S3-compatible bucket, and one already-built Polka release image. It is a deployment candidate, not production acceptance or a hosted interactive beta.
+This is a draft for experienced operators; the recommended path is the single-VM setup in [hosted/README.md](hosted/README.md). It is a compose draft for an operator-provided database, versioned private S3-compatible bucket, and one already-built Polka release image. It is a deployment candidate, not production acceptance or a hosted interactive beta.
 
 Copy `deploy/base.env.example` to an untracked `deploy/base.env`, fill the runtime credentials, schema-owner URL, bucket settings, public `APP_ORIGIN`, and one exact `POLKA_IMAGE` digest. Before rendering compose, run `node --env-file=deploy/base.env deploy/check-base-image.mjs`; this is an offline format check and does not pull or build an image. The schema-owner URL is passed only to the migration job; `app`, `storage-check`, and `maintenance` receive the runtime `DATABASE_URL`. The migration job does not receive runtime S3, link, or app credentials. No secret has a committed default.
 
 The sequence is `migrate` → `storage-check` → healthy `app` → `maintenance`. The storage check uses the existing `--confirm-bootstrap` capability check against the preprovisioned bucket and cleans only its own probe versions. It does not create a bucket or publish DB/S3 ports. The app binds its container listener to `0.0.0.0`, while the sample host port is limited to `127.0.0.1`; put an explicitly configured reverse proxy in front when needed. Mail is deliberately disabled in this base sample; SMTP configuration is a separate operator overlay.
+
+No published image exists; build it from source and push it to a registry you control, which gives the image its digest:
+
+```sh
+docker build -t <registry>/polka:<tag> .
+docker push <registry>/polka:<tag>
+docker inspect --format '{{index .RepoDigests 0}}' <registry>/polka:<tag>   # use this value as POLKA_IMAGE
+```
 
 Use an operator-controlled immutable image and inspect the rendered file without starting services:
 

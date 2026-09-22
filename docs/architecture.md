@@ -79,10 +79,10 @@ flowchart LR
 | Граница | Как защищена |
 |---|---|
 | Пользовательский HTML ↔ Полка | Отдельный registrable domain, `sandbox` без `allow-same-origin`, строгая CSP без сети, короткоживущий грант на конкретную производную. Контракты: [LIVE_VIEWER_SPEC](LIVE_VIEWER_SPEC.md), [HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md) |
-| Сборка чужого кода | Worker с кучей 64 МБ, срок сборки 5 с, одна runtime-сборка за раз. У esbuild лимит памяти (`ulimit -d`) и нет доступа к файлам сервера. Размер выхода не больше 8 МиБ |
+| Сборка чужого кода | Worker с кучей 64 МБ, срок сборки 5 с, одна runtime-сборка за раз в одном процессе. У esbuild лимит памяти (`ulimit -d`, соблюдается только на Linux; на macOS остаётся срок worker'а). esbuild загружает только файлы страницы и разрешённых библиотек (проверка в плагине сборки). Размер выхода не больше 8 МиБ |
 | Агент ↔ аккаунт | Bearer-токен подключения с узкими scopes (`context`, `capture`, `read`, `share`, `revise`, `manage`, `source:read`). В БД хранятся только хеши. Отзыв на странице «Агенты» действует сразу |
 | Чат-приложение ↔ аккаунт | OAuth 2.1: PKCE S256, DCR, resource indicator, ротация refresh-токена с обнаружением повтора, страница согласия с CSRF. См. [MCP_CONNECTOR](MCP_CONNECTOR.md) |
-| Браузер ↔ API | Сессионная cookie, CSRF и проверка `Origin`. Машинные маршруты (`/mcp`, `/oauth/token`, `/api/v1/publish`) не читают cookies и отклоняют чужой `Origin` |
+| Браузер ↔ API | Сессионная cookie, CSRF и проверка `Origin`. Машинные маршруты не читают cookies. `/mcp` и `/api/v1/publish` отклоняют чужой `Origin`; `/oauth/token`, `/oauth/register`, `/oauth/revoke` — серверные endpoint'ы без cookies, Origin не проверяют (защита — PKCE и client auth) |
 | Импорт по URL (выключен по умолчанию) | Только публичные адреса. DNS закрепляется, каждый redirect проверяется, частные диапазоны запрещены, есть лимиты размера и времени. См. [URL_IMPORT_SUPPORT](specs/URL_IMPORT_SUPPORT.md) |
 
 ## Код

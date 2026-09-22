@@ -21,12 +21,19 @@ npm run dev
 
 Остановить контейнеры с сохранением данных: `npm run infra:stop`. Не удаляйте volumes, `.env` и `LINK_KEY`: без ключа старые ссылки перестанут открываться.
 
+Порты 54388, 9038, 4390 и 4391 фиксированы, compose-проект называется `polka-local`. Второй клон репозитория попадает в тот же проект. Если вы пересоздали `.env`, а volumes остались от прошлой установки, пароль не совпадёт, и `db:migrate` упадёт с ошибкой аутентификации. Сброс локального окружения — удалить его вместе с данными и поднять заново, затем повторить первый запуск начиная с `db:migrate`:
+
+```bash
+docker compose --env-file=.env -f deploy/compose.local.yml down -v   # удалит локальные БД и bucket
+npm run infra:up
+```
+
 ## Проверки
 
 ```bash
 npm run check          # направления зависимостей frontend + TypeScript
 npm run build
-npm test               # основной набор
+npm test               # основной набор (нужны запущенные infra:up и .env)
 npm test -- --live     # наборы с включённым локальным viewer
 npm test -- --live tests/trash.test.ts   # один файл из live-набора
 ```
