@@ -11,8 +11,8 @@ export type ImportClassification = {
   explain: string;
 };
 
-// Client-only recognition of a pasted link. Nothing is fetched: the server has no URL importer yet,
-// so every outcome ends with the same real next step — save the page as a file.
+// Client-only recognition of a pasted link. Nothing is fetched: used when server import is off,
+// and for Claude/ChatGPT links that no server can fetch. The next step is always a file.
 const FILE_NEXT = "Импорт по ссылке ещё не подключён: сохраните страницу файлом.";
 
 export function classify(input: string): ImportClassification {
@@ -46,8 +46,8 @@ export function classify(input: string): ImportClassification {
       status: "provider",
       source: provider,
       host,
-      title: provider === "claude" ? "Артефакт Claude" : "Работа из ChatGPT",
-      explain: `${provider === "claude" ? "Claude" : "ChatGPT"} показывает такую ссылку только в своём приложении, а на запросы сервера отвечает защитной страницей, поэтому Полка не может сама забрать копию. Скачайте работу в чате (меню ⋯ → Download) и перетащите файл сюда — ссылка на Полке будет готова сразу.`,
+      title: provider === "claude" ? "Артефакт Claude" : "Артефакт ChatGPT",
+      explain: `${provider === "claude" ? "Claude" : "ChatGPT"} показывает такую ссылку только в своём приложении, а на запросы сервера отвечает защитной страницей, поэтому Полка не может сама забрать копию. Скачайте артефакт в чате (меню ⋯ → Download) и перетащите файл сюда — ссылка будет готова сразу.`,
     };
   const loginPath = /(^|\/)(login|signin|sign-in|auth|oauth)(\/|$)/.test(path);
   if (loginPath || (sourceOf(host) && !isPublic(host, path)))
@@ -56,7 +56,7 @@ export function classify(input: string): ImportClassification {
       source: sourceOf(host),
       host,
       title: "Ссылка похожа на закрытую",
-      explain: `Такая страница открывается только после входа, и Полка её не обходит. Скачайте работу из чата как HTML. ${FILE_NEXT}`,
+      explain: `Такая страница открывается только после входа, и Полка её не обходит. Скачайте артефакт из чата как HTML. ${FILE_NEXT}`,
     };
   if (/\.html?$/.test(path))
     return {

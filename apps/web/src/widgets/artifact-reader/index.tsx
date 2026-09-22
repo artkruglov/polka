@@ -63,7 +63,8 @@ export function ArtifactReader({
   onDownload,
   stageRef,
 }: Props) {
-  const profile = profileView(work.revision);
+  // Badge and explanation describe the version on screen, which may be an older one.
+  const profile = profileView(shown);
   const linked =
     !!work.share && ["active", "behind"].includes(work.share.status);
   const KindIcon = isImage(shown) ? ImageIcon : FileText;
@@ -74,7 +75,7 @@ export function ArtifactReader({
         <span className="eyebrow">
           {work.trashedAt
             ? "В корзине"
-            : work.revision.mime === "text/html" && profile
+            : shown.mime === "text/html"
               ? profile.label
               : kindOf(shown)}
         </span>
@@ -92,18 +93,26 @@ export function ArtifactReader({
           <span>{kindOf(shown)} · {size(shown.size)}</span>
         </div>
       </header>
-      {!work.trashedAt && work.revision.mime === "text/html" && profile && (
+      {!work.trashedAt && shown.mime === "text/html" && (
         <p className="work-profile" role="note">
           {profile.text}
         </p>
       )}
       <Tabs
-        label="Материал и версии"
+        label="Работа и версии"
         value={history ? "history" : "material"}
         onChange={(value) => setHistory(value === "history")}
         items={[
-          { id: "material", label: "Материал" },
-          { id: "history", label: <><Clock3 />Версии <span>{revisions.length}</span></> },
+          { id: "material", label: "Работа" },
+          {
+            id: "history",
+            label: (
+              <>
+                <Clock3 />
+                Версии <span>{revisions.length}</span>
+              </>
+            ),
+          },
         ]}
         trailing={
           !work.trashedAt ? (
@@ -129,7 +138,7 @@ export function ArtifactReader({
         }
       >
         {history && (
-          <div className="reader-versions" aria-label="Версии материала">
+          <div className="reader-versions" role="group" aria-label="Выбор версии">
             {revisions.map((r) => (
               <Button
                 key={r.id}

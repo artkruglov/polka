@@ -10,7 +10,7 @@ const work:Artifact={id:'a',title:'Отчёт',folderId:null,updatedAt:first.cre
 function render(artifact:Artifact,shown=first){return renderToStaticMarkup(React.createElement(ArtifactReader,{work:artifact,shown,revisions:[latest,first],viewed:shown,folderName:'Исследования',history:true,setHistory:()=>{},setViewed:()=>{},setPanel:()=>{},preview:React.createElement('div',{'data-testid':'isolated-preview'},'Saved content'),onDownload:()=>{}}));}
 test('reader distinguishes historical selection, current version and shared revision',()=>{
  const html=render(work);
- assert.match(html,/role="tablist" aria-label="Материал и версии"/);
+ assert.match(html,/role="tablist" aria-label="Работа и версии"/);
  assert.match(html,/role="tabpanel"/);
  assert.match(html,/aria-selected="true"[^>]*>.*?Версии/);
  assert.match(html,/Вы смотрите версию 1/);
@@ -26,4 +26,10 @@ test('trashed reader keeps history/download while suppressing preview and mutati
  assert.match(html,/Версии/);
  assert.match(html,/Скачать оригинал/);
  assert.match(html,/Просмотр отключён/);
+});
+test('reader profile describes the version on screen, not the latest one',()=>{
+ const limited:Revision={...latest,htmlProfile:'limited'};
+ const html=renderToStaticMarkup(React.createElement(ArtifactReader,{work:{...work,revision:limited},shown:first,revisions:[limited,first],viewed:first,folderName:'Исследования',history:false,setHistory:()=>{},setViewed:()=>{},setPanel:()=>{},preview:null,onDownload:()=>{}}));
+ assert.match(html,/Страница · без скриптов/);
+ assert.doesNotMatch(html,/ограниченный просмотр/);
 });

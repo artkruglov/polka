@@ -202,7 +202,7 @@ function preparationError(reason: unknown) {
   if (reason && typeof reason === "object" && "state" in reason) {
     const preparation = reason as Preparation;
     if (preparation.state === "unsupported" || preparation.reason === "unsupported")
-      return "Этот материал нельзя подготовить для интерактивного просмотра.";
+      return "Эту работу нельзя подготовить для интерактивного просмотра.";
     if (preparation.state === "failed")
       return preparation.reason || "Не удалось подготовить просмотр.";
   }
@@ -212,7 +212,7 @@ function preparationError(reason: unknown) {
     if (reason.status === 413 || reason.status === 429 || reason.payload.code === "quota" || reason.payload.status === "quota" || reason.payload.reason === "quota")
       return "Достигнут лимит подготовки просмотров. Повторите позже.";
     if (reason.payload.state === "unsupported" || reason.payload.reason === "unsupported")
-      return "Этот материал нельзя подготовить для интерактивного просмотра.";
+      return "Эту работу нельзя подготовить для интерактивного просмотра.";
     return reason.message || "Не удалось подготовить просмотр.";
   }
   return reason instanceof Error && reason.message ? reason.message : "Не удалось подготовить просмотр.";

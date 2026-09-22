@@ -52,4 +52,3 @@ code, pre { font-family: var(--font-mono); }
 
 /* The brand wordmark: lowercase grotesk, no icon. */
 .brand, .site-brand { display: inline-flex; align-items: center; color: var(--ink); font-weight: 600; font-size: 28px; line-height: 1; letter-spacing: -.055em; }
-.brand-mark, .brand .alpha { display: none; }

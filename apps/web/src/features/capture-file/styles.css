@@ -33,8 +33,6 @@
 .next-note { display: flex; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius); background: var(--success-soft); color: var(--success); font-size: var(--text-sm); line-height: 1.5; }
 .next-note svg { flex-shrink: 0; width: 15px; height: 15px; margin-top: 2px; }
 .next-note.warn { background: var(--warning-soft); color: var(--warning); }
-.profile-now-plan { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.profile-now-plan strong { color: var(--ink-2); font-weight: 500; }
 .file-save-preview { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); }
 .file-save-preview .html-preview { height: 340px; min-height: 0; }
 .file-save-preview .work-image { max-height: 340px; }

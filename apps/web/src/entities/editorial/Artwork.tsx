@@ -1,33 +1,61 @@
-import React from 'react';
+import React from "react";
+import type { EditorialPublicResponse } from "../../../../../packages/editorial.ts";
 
-// Editorial illustrations, not screenshots or representations of live data.
-const editions: Record<string, {name:string; caption:string; tone:string; motif:string}> = {
-  'decision-matrix':{name:'Искусство\nвыбирать',caption:'Сравнивайте. Решайте.',tone:'night',motif:'matrix'},
-  'probability-lab':{name:'Случайность\nпод контролем',caption:'Лаборатория вероятностей',tone:'blue',motif:'dots'},
-  'tile-pattern':{name:'Ритм\nи повторение',caption:'Геометрия простых вещей',tone:'peach',motif:'tiles'},
-  'reading-session':{name:'Время\nдля чтения',caption:'Один текст. Один вопрос.',tone:'paper',motif:'pages'},
-  'sorting-explainer':{name:'Из хаоса\nв порядок',caption:'Алгоритмы становятся видимыми',tone:'night',motif:'bars'},
-  'meal-plan':{name:'Неделя\nна столе',caption:'Маленький план на каждый день',tone:'green',motif:'matrix'},
-  'contrast-explorer':{name:'Почувствуйте\nразницу',caption:'Цвет. Свет. Контраст.',tone:'blue',motif:'dots'},
-  'packing-checklist':{name:'Всё нужное\nс собой',caption:'Собираемся на прогулку',tone:'peach',motif:'pages'},
-  'data-literacy':{name:'За средним —\nцелая история',caption:'Посмотрите на данные иначе',tone:'paper',motif:'bars'},
-  'week-allocation':{name:'168 часов.\nВаша неделя.',caption:'Время в наглядных пропорциях',tone:'blue',motif:'bars'},
-  'city-observation':{name:'Город\nв деталях',caption:'Учимся замечать',tone:'night',motif:'city'},
-  'fractions':{name:'Часть\nцелого',caption:'Доли без зубрёжки',tone:'green',motif:'dots'},
-};
-export function EditorialArtwork({slug}:{slug:string}) {
- const e=editions[slug]; if(!e) return null;
- return <div className={`editorial-art art-${e.tone}`} aria-hidden="true">
-  <span className="art-edition">ПОЛКА / РЕДАКЦИЯ</span>
-  <strong>{e.name.split('\n').map((s,i)=><React.Fragment key={s}>{i>0&&<br/>}{s}</React.Fragment>)}</strong>
-  <span className="art-caption">{e.caption}</span>
-  <svg viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice">
-   {e.motif==='dots'&&Array.from({length:21},(_,i)=><circle key={i} cx={265+i%5*40} cy={75+Math.floor(i/5)*45} r={14+i%3*3} fill="currentColor" opacity={.25+(i%4)*.2}/>)}
-   {e.motif==='matrix'&&Array.from({length:16},(_,i)=><rect key={i} x={255+i%4*48} y={77+Math.floor(i/4)*48} width="36" height="36" rx="7" fill="currentColor" opacity={.12+(i%5)*.18} transform="rotate(-12 345 165)"/>)}
-   {e.motif==='tiles'&&Array.from({length:20},(_,i)=><path key={i} d={`M ${240+i%4*55} ${40+Math.floor(i/4)*55} h 50 v 50 a 50 50 0 0 1 -50 -50`} fill="currentColor" opacity={.2+(i%3)*.3}/>)}
-   {e.motif==='bars'&&[70,130,95,185,155,230].map((h,i)=><rect key={i} x={247+i*35} y={285-h} width="25" height={h} rx="6" fill="currentColor" opacity={.22+i*.13}/>)}
-   {e.motif==='pages'&&[0,1,2].map(i=><g key={i} transform={`translate(${240+i*24},${90+i*15}) rotate(${i*9-12})`}><rect width="140" height="190" rx="6" fill="currentColor" opacity={.25+i*.22}/><path d="M20 36h95M20 56h95M20 76h65" stroke="var(--art-bg)" strokeWidth="5"/></g>)}
-   {e.motif==='city'&&[130,210,170,250,110].map((h,i)=><g key={i}><rect x={245+i*44} y={300-h} width="34" height={h} fill="currentColor" opacity={.3+i*.12}/>{[0,1,2,3].map(j=><path key={j} d={`M${253+i*44} ${310-h+j*23}h17`} stroke="var(--art-bg)" strokeWidth="5"/>)}</g>)}
-  </svg>
- </div>;
+// A typographic cover drawn from the item itself: its title and topic, with a
+// tone and motif chosen by its slug so it is stable between visits. Decorative
+// only — not a screenshot of the material.
+const tones = ["night", "blue", "peach", "paper", "green"] as const;
+const motifs = ["matrix", "dots", "tiles", "bars", "pages", "city"] as const;
+
+function hash(value: string) {
+  let h = 0;
+  for (const ch of value) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+/** Two balanced lines: the cover sets the title large. */
+function lines(title: string) {
+  const words = title.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return [title];
+  let best = 1,
+    bestGap = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const gap = Math.abs(
+      words.slice(0, i).join(" ").length - words.slice(i).join(" ").length,
+    );
+    if (gap < bestGap) [best, bestGap] = [i, gap];
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
+
+export function EditorialArtwork({
+  item,
+}: {
+  item: Pick<EditorialPublicResponse, "slug" | "title" | "topic">;
+}) {
+  const h = hash(item.slug);
+  const tone = tones[h % tones.length];
+  const motif = motifs[Math.floor(h / tones.length) % motifs.length];
+  return (
+    <div className={`editorial-art art-${tone}`} aria-hidden="true">
+      <span className="art-edition">ПОЛКА / РЕДАКЦИЯ</span>
+      <strong>
+        {lines(item.title).map((line, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <br />}
+            {line}
+          </React.Fragment>
+        ))}
+      </strong>
+      <span className="art-caption">{item.topic}</span>
+      <svg viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice">
+        {motif === "dots" && Array.from({ length: 21 }, (_, i) => <circle key={i} cx={265 + (i % 5) * 40} cy={75 + Math.floor(i / 5) * 45} r={14 + (i % 3) * 3} fill="currentColor" opacity={0.25 + (i % 4) * 0.2} />)}
+        {motif === "matrix" && Array.from({ length: 16 }, (_, i) => <rect key={i} x={255 + (i % 4) * 48} y={77 + Math.floor(i / 4) * 48} width="36" height="36" rx="7" fill="currentColor" opacity={0.12 + (i % 5) * 0.18} transform="rotate(-12 345 165)" />)}
+        {motif === "tiles" && Array.from({ length: 20 }, (_, i) => <path key={i} d={`M ${240 + (i % 4) * 55} ${40 + Math.floor(i / 4) * 55} h 50 v 50 a 50 50 0 0 1 -50 -50`} fill="currentColor" opacity={0.2 + (i % 3) * 0.3} />)}
+        {motif === "bars" && [70, 130, 95, 185, 155, 230].map((height, i) => <rect key={i} x={247 + i * 35} y={285 - height} width="25" height={height} rx="6" fill="currentColor" opacity={0.22 + i * 0.13} />)}
+        {motif === "pages" && [0, 1, 2].map((i) => <g key={i} transform={`translate(${240 + i * 24},${90 + i * 15}) rotate(${i * 9 - 12})`}><rect width="140" height="190" rx="6" fill="currentColor" opacity={0.25 + i * 0.22} /><path d="M20 36h95M20 56h95M20 76h65" stroke="var(--art-bg)" strokeWidth="5" /></g>)}
+        {motif === "city" && [130, 210, 170, 250, 110].map((height, i) => <g key={i}><rect x={245 + i * 44} y={300 - height} width="34" height={height} fill="currentColor" opacity={0.3 + i * 0.12} />{[0, 1, 2, 3].map((j) => <path key={j} d={`M${253 + i * 44} ${310 - height + j * 23}h17`} stroke="var(--art-bg)" strokeWidth="5" />)}</g>)}
+      </svg>
+    </div>
+  );
 }

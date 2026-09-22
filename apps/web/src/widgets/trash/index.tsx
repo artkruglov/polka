@@ -83,13 +83,13 @@ export function TrashPanel({
 
       {error && <Notice tone="error">{error}</Notice>}
       {loading && items.length === 0 && (
-        <p className="trash-panel-state" aria-live="polite">
+        <p className="trash-panel-state" role="status">
           Загружаем корзину…
         </p>
       )}
       {!loading && !error && items.length === 0 && (
         <EmptyState title="Корзина пуста">
-          Материалы появятся здесь, если вы переместите их в корзину.
+          Работы появятся здесь, если вы переместите их в корзину.
         </EmptyState>
       )}
 

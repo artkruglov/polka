@@ -3,9 +3,7 @@ import { Wave } from "../../shared/ui/Wave.tsx";
 import { ArrowUpRight, Bot, FileUp } from "lucide-react";
 import React, { useState } from "react";
 import { EditorialArtwork } from "../../entities/editorial/Artwork.tsx";
-import { editorialCover } from "../../entities/editorial/covers.ts";
 import type { EditorialPublicResponse } from "../../../../../packages/editorial.ts";
-
 import { safeEditorialRecipientUrl } from "../../entities/editorial/api.ts";
 
 export type EditorialCatalogProps = {
@@ -89,7 +87,7 @@ export function EditorialCatalog({
       )}
 
       {!loading && !error && items.length > 0 && (
-        <div className="editorial-topics" aria-label="Темы материалов">
+        <div className="editorial-topics" role="group" aria-label="Темы материалов">
           <div className="ui-chips">
             {[null, ...topics].map((value) => (
               <Chip
@@ -108,7 +106,6 @@ export function EditorialCatalog({
         <div className="editorial-catalog-grid">
           {visibleItems.map((item) => {
             const recipientUrl = safeEditorialRecipientUrl(item.recipientUrl);
-            const hasCover = !!editorialCover(item.slug, item.title);
             return (
               <article className="editorial-catalog-card" key={item.slug}>
                 {recipientUrl ? (
@@ -118,11 +115,11 @@ export function EditorialCatalog({
                     aria-label={`Открыть ${item.title}`}
                     tabIndex={-1}
                   >
-                    {hasCover ? <EditorialArtwork slug={item.slug} /> : <span className="editorial-cover-fallback">{item.topic}</span>}
+                    <EditorialArtwork item={item} />
                   </a>
                 ) : (
                   <div className="editorial-cover">
-                    {hasCover ? <EditorialArtwork slug={item.slug} /> : <span className="editorial-cover-fallback">{item.topic}</span>}
+                    <EditorialArtwork item={item} />
                   </div>
                 )}
                 <div className="editorial-catalog-card-body">

@@ -10,7 +10,7 @@ import type {
   AgentScope,
   OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
-import type { REPORT_REASONS } from "../../../../../packages/contracts/index.ts";
+import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -20,22 +20,89 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export async function request<T>(
-  path: string,
-  body?: unknown,
-  method = body === undefined ? "GET" : "POST",
+
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+
+/** What the person sees when a proxy or the network answers instead of Полка. */
+function fallbackMessage(status: number) {
+  if (status === 0)
+    return "Нет связи с Полкой. Проверьте подключение и повторите попытку.";
+  if (status === 413) return "Файл слишком большой для сервера.";
+  if (status === 429)
+    return "Слишком много запросов. Подождите немного и повторите.";
+  if (status >= 500)
+    return "Полка временно недоступна. Повторите попытку через минуту.";
+  return "Не удалось выполнить запрос.";
+}
+
+/**
+ * Every browser request goes through here. The status is checked before the
+ * body is read, so an HTML error page from a proxy never reaches the UI raw.
+ * A network failure becomes ApiError with status 0.
+ */
+async function send(url: string, init: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    if (init.signal?.aborted) throw e;
+    throw new ApiError(0, "network", fallbackMessage(0));
+  }
+  if (res.ok) return res;
+  let problem: { code?: unknown; message?: unknown } = {};
+  try {
+    const parsed = await res.json();
+    if (parsed && typeof parsed === "object") problem = parsed;
+  } catch {
+    // An intermediary answered with HTML or nothing; keep the HTTP status.
+  }
+  throw new ApiError(
+    res.status,
+    typeof problem.code === "string" ? problem.code : "http_error",
+    typeof problem.message === "string" && problem.message
+      ? problem.message
+      : fallbackMessage(res.status),
+  );
+}
+
+async function json<T>(
+  url: string,
+  body: unknown,
+  method: Method,
   signal?: AbortSignal,
+  csrfToken?: string,
 ): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await send(url, {
     method,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(csrfToken ? { "x-polka-csrf": csrfToken } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   });
-  const result = await res.json();
-  if (!res.ok) throw new ApiError(res.status, result.code, result.message);
-  return result;
+  try {
+    return await res.json();
+  } catch {
+    throw new ApiError(
+      res.status,
+      "invalid_response",
+      "Сервер вернул некорректный ответ. Повторите попытку.",
+    );
+  }
 }
+
+/** JSON API under /api. */
+export function request<T>(
+  path: string,
+  body?: unknown,
+  method: Method = body === undefined ? "GET" : "POST",
+  signal?: AbortSignal,
+  csrfToken?: string,
+): Promise<T> {
+  return json<T>(`/api${path}`, body, method, signal, csrfToken);
+}
+
 export const client = {
   me: () => request<Account>("/me"),
   login: (name: string, password: string) =>
@@ -93,11 +160,7 @@ export const client = {
       expectedPublishedRevisionId: a.share!.revisionId,
     }),
   resolve: (token: string) => request<Viewer>("/resolve", { token }),
-  report: (
-    token: string,
-    reason: (typeof REPORT_REASONS)[number],
-    comment?: string,
-  ) =>
+  report: (token: string, reason: ReportReason, comment?: string) =>
     request<{ ok: true }>("/reports", {
       key: crypto.randomUUID(),
       token,
@@ -106,14 +169,14 @@ export const client = {
     }),
   agentConnections: {
     list: (signal?: AbortSignal) =>
-      agentRequest<AgentConnection[]>(
+      request<AgentConnection[]>(
         "/agent-connections",
         undefined,
         "GET",
         signal,
       ),
     csrf: (signal?: AbortSignal) =>
-      agentRequest<{ csrfToken: string; expiresAt: string }>(
+      request<{ csrfToken: string; expiresAt: string }>(
         "/agent-connections/csrf",
         {},
         "POST",
@@ -129,7 +192,7 @@ export const client = {
       csrfToken: string,
       signal?: AbortSignal,
     ) =>
-      agentRequest<{ connection: AgentConnection; token: string }>(
+      request<{ connection: AgentConnection; token: string }>(
         "/agent-connections",
         input,
         "POST",
@@ -137,7 +200,7 @@ export const client = {
         csrfToken,
       ),
     revoke: (id: string, csrfToken: string, signal?: AbortSignal) =>
-      agentRequest<{ ok: true }>(
+      request<{ ok: true }>(
         `/agent-connections/${id}/revoke`,
         {},
         "POST",
@@ -150,7 +213,7 @@ export const client = {
 /** Connector consent lives under /oauth, next to the authorization endpoint. */
 export const oauthConsent = {
   details: (requestId: string, signal?: AbortSignal) =>
-    jsonRequest<OAuthConsentDetails>(
+    json<OAuthConsentDetails>(
       `/oauth/authorize/details?${new URLSearchParams({ request: requestId })}`,
       undefined,
       "GET",
@@ -163,7 +226,7 @@ export const oauthConsent = {
     csrfToken: string,
     signal?: AbortSignal,
   ) =>
-    jsonRequest<{ redirectTo: string }>(
+    json<{ redirectTo: string }>(
       "/oauth/authorize/decision",
       input,
       "POST",
@@ -172,80 +235,18 @@ export const oauthConsent = {
     ),
 };
 
-export function agentRequest<T>(
-  path: string,
-  body: unknown,
-  method: "GET" | "POST",
-  signal?: AbortSignal,
-  csrfToken?: string,
-): Promise<T> {
-  return jsonRequest<T>(`/api${path}`, body, method, signal, csrfToken);
-}
-
-async function jsonRequest<T>(
-  url: string,
-  body: unknown,
-  method: "GET" | "POST",
-  signal?: AbortSignal,
-  csrfToken?: string,
-): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: {
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      ...(csrfToken ? { "x-polka-csrf": csrfToken } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    let result: { code?: unknown; message?: unknown } = {};
-    try {
-      const parsed = await res.json();
-      if (parsed && typeof parsed === "object") result = parsed;
-    } catch {
-      // Preserve the HTTP status when an intermediary returns an empty/HTML error.
-    }
-    throw new ApiError(
-      res.status,
-      typeof result.code === "string" ? result.code : "http_error",
-      typeof result.message === "string"
-        ? result.message
-        : "Не удалось выполнить запрос.",
-    );
-  }
-  try {
-    return await res.json();
-  } catch {
-    throw new Error("Некорректный ответ сервера.");
-  }
-}
 export async function bytes(
   path: string,
   grant?: string,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(`/api${path}`, {
+  const response = await send(`/api${path}`, {
     headers: grant ? { Authorization: `Bearer ${grant}` } : {},
     signal,
   });
-  if (!response.ok) {
-    const e = await response.json();
-    throw new ApiError(response.status, e.code, e.message);
-  }
   return response.blob();
 }
-// Browsers may report an empty or generic type for downloaded files; use the
-// extension as a hint, while the server still checks the real bytes.
-export function fileMime(file: File) {
-  if (file.type && file.type !== "application/octet-stream") return file.type;
-  if (/\.html?$/i.test(file.name)) return "text/html";
-  if (/\.txt$/i.test(file.name)) return "text/plain";
-  if (/\.png$/i.test(file.name)) return "image/png";
-  if (/\.jpe?g$/i.test(file.name)) return "image/jpeg";
-  if (/\.webp$/i.test(file.name)) return "image/webp";
-  return file.type;
-}
+
 export type PendingUpload = { file: Blob; key: string; id?: string };
 /** begin → bytes → finalize. Reusing `op` after a failure retries the same upload key. */
 export async function saveUpload(
@@ -272,18 +273,11 @@ export async function saveUpload(
     if (started.receipt) return started.receipt;
   }
   stage("Передаём файл…");
-  await transfer(op.id, op.file);
-  stage("Сохраняем версию…");
-  return client.finalize(op.id);
-}
-export async function transfer(id: string, file: Blob) {
-  const response = await fetch(`/api/uploads/${id}/bytes`, {
+  await send(`/api/uploads/${op.id}/bytes`, {
     method: "PUT",
     headers: { "Content-Type": "application/octet-stream" },
-    body: file,
+    body: op.file,
   });
-  if (!response.ok) {
-    const e = await response.json();
-    throw new ApiError(response.status, e.code, e.message);
-  }
+  stage("Сохраняем версию…");
+  return client.finalize(op.id);
 }

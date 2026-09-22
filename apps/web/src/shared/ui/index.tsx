@@ -1,18 +1,6 @@
 import { Button, Notice } from "./controls.tsx";
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-export function Brand() {
-  return (
-    <a className="brand" href="/" aria-label="Полка — главная">
-      <span className="brand-mark">
-        <i />
-        <i />
-        <i />
-      </span>
-      полка<span className="alpha">local</span>
-    </a>
-  );
-}
 export function ErrorNotice({ error }: { error: string }) {
   return error ? (
     <Notice tone="error">{error}</Notice>

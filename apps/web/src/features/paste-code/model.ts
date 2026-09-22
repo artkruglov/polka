@@ -1,7 +1,8 @@
 import {
   MAX_BYTES,
   looksLikeHtml,
-} from "../../../../../packages/contracts/index.ts";
+} from "../../../../../packages/contracts/constants.ts";
+import { clipTitle, htmlTitle } from "../../entities/artifact/html-title.ts";
 
 /**
  * What pasted code becomes on the shelf. HTML is saved as a page; everything
@@ -16,52 +17,12 @@ export type PastedCode = {
   tooLarge: boolean;
 };
 
-const ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
-
-function plain(fragment: string) {
-  return fragment
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
-      if (name[0] !== "#") return ENTITIES[name.toLowerCase()] ?? entity;
-      const code =
-        name[1] === "x" || name[1] === "X"
-          ? parseInt(name.slice(2), 16)
-          : Number(name.slice(1));
-      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
-    })
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const clip = (title: string) =>
-  title.length > 160 ? `${title.slice(0, 159).trimEnd()}…` : title;
-
-function htmlTitle(source: string) {
-  const head = source.slice(0, 256 * 1024);
-  for (const pattern of [
-    /<title[^>]*>([\s\S]*?)<\/title>/i,
-    /<h1[^>]*>([\s\S]*?)<\/h1>/i,
-  ]) {
-    const found = pattern.exec(head);
-    const title = found ? plain(found[1]) : "";
-    if (title) return clip(title);
-  }
-  return "";
-}
-
 function textTitle(source: string) {
   const line = source
     .split("\n")
     .map((value) => value.replace(/^\s*#+\s*/, "").trim())
     .find(Boolean);
-  return line ? clip(line) : "";
+  return line ? clipTitle(line) : "";
 }
 
 /** React/JSX or module source: it looks like markup but is a program, not a page. */

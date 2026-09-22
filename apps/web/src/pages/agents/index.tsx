@@ -11,16 +11,19 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Check, Copy, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { RefreshCw, ShieldCheck, X } from "lucide-react";
 import { z } from "zod";
-import type {
-  AgentConnection,
-  AgentScope,
+import {
+  agentScopeSchema,
+  type AgentConnection,
+  type AgentScope,
 } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 import { Tabs } from "../../shared/ui/Tabs.tsx";
+import { CopyButton } from "../../shared/ui/CopyText.tsx";
+import { Dialog } from "../../shared/ui/index.tsx";
 
 const statusText: Record<AgentConnection["status"], string> = {
   issued: "Токен выдан; запросов пока нет",
@@ -41,19 +44,10 @@ const clientDefaults = {
   http: "Скрипт (HTTP API)",
 } as const;
 type ClientKind = keyof typeof clientDefaults;
-const agentScope = z.enum([
-  "context",
-  "read",
-  "source:read",
-  "capture",
-  "revise",
-  "share",
-  "manage",
-]);
 const agentConnectionSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(80),
-  scopes: z.array(agentScope),
+  scopes: z.array(agentScopeSchema),
   audience: z
     .string()
     .url()
@@ -121,7 +115,8 @@ export function AgentConnections() {
     connection: AgentConnection;
   } | null>(null);
   const [showSecret, setShowSecret] = useState(false);
-  const [copyState, setCopyState] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<AgentConnection | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const listAbort = useRef<AbortController | null>(null);
   const actionAbort = useRef<AbortController | null>(null);
   const actionRef = useRef<string | null>(null);
@@ -152,17 +147,17 @@ export function AgentConnections() {
       setListState("ready");
     } catch (error) {
       if (!mounted.current || controller.signal.aborted) return;
-      const classification = classifyIssueError(error);
-      if (classification.kind === "session") {
+      if (classifyIssueError(error).kind === "session") {
         goToLogin();
         return;
       }
-      if (classification.kind === "form") {
-        setFormError(classification.message);
-        return;
-      }
+      // Any other failure ends loading: the list shows the reason and a retry.
       setListState("error");
-      setListError("Не удалось загрузить подключения. Повторите попытку.");
+      setListError(
+        error instanceof ApiError && error.status >= 400 && error.status < 500
+          ? error.message
+          : "Не удалось загрузить подключения. Повторите попытку.",
+      );
     } finally {
       if (listAbort.current === controller) listAbort.current = null;
     }
@@ -239,10 +234,11 @@ export function AgentConnections() {
     }
   };
 
+  /** Resolves true once access is revoked; the confirmation stays open on failure. */
   const revoke = async (connection: AgentConnection) => {
-    if (actionRef.current) return;
+    if (actionRef.current) return false;
     setBusy(`revoke:${connection.id}`);
-    setFormError(null);
+    setRevokeError(null);
     const controller = new AbortController();
     actionAbort.current = controller;
     try {
@@ -252,31 +248,25 @@ export function AgentConnections() {
         csrf.csrfToken,
         controller.signal,
       );
-      if (!mounted.current || controller.signal.aborted) return;
-      await refresh();
+      if (!mounted.current || controller.signal.aborted) return false;
       if (secret?.connection.id === connection.id) setSecret(null);
+      void refresh();
+      return true;
     } catch (error) {
-      if (!mounted.current || controller.signal.aborted) return;
+      if (!mounted.current || controller.signal.aborted) return false;
       if (error instanceof ApiError && error.status === 401) {
         goToLogin();
-        return;
+        return false;
       }
-      setFormError("Не удалось отозвать доступ. Повторите попытку.");
+      setRevokeError(
+        error instanceof ApiError && error.status >= 400 && error.status < 500
+          ? error.message
+          : "Не удалось отозвать доступ. Повторите попытку.",
+      );
+      return false;
     } finally {
       if (actionAbort.current === controller) actionAbort.current = null;
       if (actionRef.current === `revoke:${connection.id}`) setBusy(null);
-    }
-  };
-
-  const copy = async (value: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      if (mounted.current) {
-        setCopyState(label);
-        window.setTimeout(() => mounted.current && setCopyState(null), 1800);
-      }
-    } catch {
-      if (mounted.current) setCopyState(null);
     }
   };
 
@@ -334,11 +324,11 @@ export function AgentConnections() {
     >
       <main className="agent-connections" id="main">
         <header className="agent-page-heading">
-          <span className="eyebrow">Ваш агент → ваша Полка</span>
+          <span className="eyebrow">Ваш агент → ваша полка</span>
           <h1>Подключить агента</h1>
           <p className="agent-lead">
             Claude Code, Codex или другой MCP-клиент будет сохранять работы
-            прямо на вашу Полку — и только то, что вы разрешили.
+            прямо на вашу полку — и только то, что вы разрешили.
           </p>
           <p className="agent-boundary">
             <ShieldCheck size={17} /> Здесь выдаётся токен для CLI-клиентов.
@@ -366,7 +356,7 @@ export function AgentConnections() {
             <span>3</span>
             <div>
               <strong>Попросите агента сохранить</strong>
-              <p>Работа появится на Полке; статус видно здесь.</p>
+              <p>Работа появится на вашей полке; статус видно здесь.</p>
             </div>
           </li>
         </ol>
@@ -425,7 +415,7 @@ export function AgentConnections() {
                 <fieldset>
                   <legend>Разрешения</legend>
                   <p className="agent-help">
-                    Разрешения действуют на всю Полку, а не на одну папку.
+                    Разрешения действуют на всю вашу полку, а не на одну папку.
                     Чтение списка и каждое действие включаются отдельно.
                   </p>
                   {clientKind === "http" && !scopes.includes("share") && (
@@ -512,20 +502,11 @@ export function AgentConnections() {
                     </Button>
                   </div>
                 </label>
-                <Button
-                  type="button"
-
-                  onClick={() => void copy(secret.token, "token")}
-                >
-                  {copyState === "token" ? (
-                    <Check size={16} />
-                  ) : (
-                    <Copy size={16} />
-                  )}{" "}
-                  {copyState === "token"
-                    ? "Токен скопирован"
-                    : "Скопировать токен"}
-                </Button>
+                <CopyButton
+                  value={secret.token}
+                  label="Скопировать токен"
+                  successText="Токен скопирован"
+                />
                 <dl className="agent-details">
                   <div>
                     <dt>Endpoint</dt>
@@ -559,16 +540,12 @@ export function AgentConnections() {
                   <InstructionBlock
                     title="Codex CLI"
                     value={codexCommand}
-                    onCopy={() => void copy(codexCommand, "config")}
-                    copied={copyState === "config"}
                   />
                 )}
                 {clientKind === "claude" && (
                   <InstructionBlock
                     title="Claude Code — добавьте в существующий .mcp.json"
                     value={claudeConfig}
-                    onCopy={() => void copy(claudeConfig, "config")}
-                    copied={copyState === "config"}
                   />
                 )}
                 {clientKind === "http" && (
@@ -636,8 +613,6 @@ export function AgentConnections() {
                   <InstructionBlock
                     title="Скачать CLI и опубликовать файл"
                     value={cliCommands}
-                    onCopy={() => void copy(cliCommands, "http-cli")}
-                    copied={copyState === "http-cli"}
                     copyLabel="Скопировать команды"
                     copiedLabel="Команды скопированы"
                   />
@@ -645,8 +620,6 @@ export function AgentConnections() {
                   <InstructionBlock
                     title="Один запрос: jq собирает JSON, curl отправляет"
                     value={curlCommand}
-                    onCopy={() => void copy(curlCommand, "http-curl")}
-                    copied={copyState === "http-curl"}
                     copyLabel="Скопировать команду"
                     copiedLabel="Команда скопирована"
                   />
@@ -654,7 +627,7 @@ export function AgentConnections() {
               </Tabs>
               <p className="agent-instruction">
                 Ответ: <code>url</code> — ссылка для отправки,{" "}
-                <code>shelfUrl</code> — работа на Полке. Повтор с тем же{" "}
+                <code>shelfUrl</code> — работа на вашей полке. Повтор с тем же{" "}
                 <code>key</code> возвращает ту же ссылку. Лимит: 5 МБ на
                 страницу, 120 запросов за 10 минут на подключение.
               </p>
@@ -669,12 +642,11 @@ export function AgentConnections() {
                 <h2 id="agent-list-title">Существующие подключения</h2>
                 <p>
                   Запрос от агента ещё не означает, что файл сохранён. Результат
-                  сохранения проверяйте на Полке.
+                  сохранения проверяйте на вашей полке.
                 </p>
               </div>
               <Button
                 type="button"
-
                 onClick={() => void refresh()}
                 disabled={listState === "loading"}
               >
@@ -687,11 +659,7 @@ export function AgentConnections() {
             {listState === "error" && (
               <div className="agent-error" role="alert">
                 <p>{listError}</p>
-                <Button
-                  type="button"
-
-                  onClick={() => void refresh()}
-                >
+                <Button type="button" onClick={() => void refresh()}>
                   Повторить
                 </Button>
               </div>
@@ -739,7 +707,10 @@ export function AgentConnections() {
                       <Button
                         type="button"
                         className="danger"
-                        onClick={() => void revoke(connection)}
+                        onClick={() => {
+                          setRevokeError(null);
+                          setConfirmRevoke(connection);
+                        }}
                         disabled={action !== null}
                       >
                         {action === `revoke:${connection.id}`
@@ -757,6 +728,37 @@ export function AgentConnections() {
           </section>
         </div>
       </main>
+      {confirmRevoke && (
+        <Dialog
+          title="Отозвать доступ?"
+          onClose={() => setConfirmRevoke(null)}
+          busy={action !== null}
+        >
+          <div className="dialog-body">
+            <p>
+              «{confirmRevoke.name}» больше не сможет обращаться к вашей полке.
+              Вернуть этот доступ нельзя — понадобится новое подключение.
+            </p>
+            <p className="fine">Уже выданные ссылки на работы останутся открытыми.</p>
+            {revokeError && <Notice tone="error">{revokeError}</Notice>}
+          </div>
+          <div className="dialog-footer">
+            <Button disabled={action !== null} onClick={() => setConfirmRevoke(null)}>
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              className="danger"
+              busy={action === `revoke:${confirmRevoke.id}`}
+              onClick={async () => {
+                if (await revoke(confirmRevoke)) setConfirmRevoke(null);
+              }}
+            >
+              Отозвать доступ
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </AppShell>
   );
 }
@@ -764,15 +766,11 @@ export function AgentConnections() {
 function InstructionBlock({
   title,
   value,
-  onCopy,
-  copied,
   copyLabel = "Скопировать безопасную конфигурацию",
   copiedLabel = "Конфигурация скопирована",
 }: {
   title: string;
   value: string;
-  onCopy: () => void;
-  copied: boolean;
   copyLabel?: string;
   copiedLabel?: string;
 }) {
@@ -782,10 +780,7 @@ function InstructionBlock({
       <pre>
         <code>{value}</code>
       </pre>
-      <Button type="button" onClick={onCopy}>
-        {copied ? <Check size={16} /> : <Copy size={16} />}{" "}
-        {copied ? copiedLabel : copyLabel}
-      </Button>
+      <CopyButton value={value} label={copyLabel} successText={copiedLabel} />
     </div>
   );
 }
