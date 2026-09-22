@@ -764,6 +764,7 @@ export async function createApp() {
       await db.query(
         `SELECT r.*,
            s.id AS authorized_share_id,
+           g.derivative_id AS granted_derivative_id,
            CASE WHEN d.id IS NULL THEN NULL ELSE jsonb_build_object(
              'state',d.state,'runtimeProfile',d.runtime_profile,'reason',NULL,'path',NULL
            ) END AS inline_build
@@ -798,7 +799,14 @@ export async function createApp() {
       req.headers.authorization?.replace(/^Bearer /, "") ?? "",
     );
     if (!r) throw missing();
-    if (r.storage_kind === "bundle") throw missing();
+    // A link bound to an interactive version, and a page the static view
+    // refuses, never hand the recipient the raw upload (as sendHtml).
+    if (
+      r.storage_kind === "bundle" ||
+      r.granted_derivative_id ||
+      r.html_profile === "unsupported"
+    )
+      throw missing();
     reply
       .type(r.mime)
       .header("content-security-policy", "sandbox; default-src 'none'");

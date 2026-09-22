@@ -13,9 +13,15 @@ export const isLive = (state: CapabilityState): state is LiveMode =>
 /**
  * How the interactive viewer relates to a saved page: "none" when there is
  * nothing to run (a script-free page), "direct" when the saved page runs as
- * is, "build" when it needs a prepared interactive version first.
+ * is (only for its owner), "build" when it needs a prepared interactive
+ * version first. A link recipient runs only the version the link is bound to.
  */
-export function liveKind(revision: Revision): "none" | "direct" | "build" {
+export function liveKind(
+  revision: Revision,
+  recipient = false,
+): "none" | "direct" | "build" {
+  if (recipient && revision.storageKind === "single")
+    return revision.inlineBuild?.state === "ready" ? "build" : "none";
   if (revision.storageKind === "bundle")
     return isStaticSingleFileBundle(revision) &&
       revision.htmlProfile === "static"

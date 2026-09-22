@@ -316,11 +316,16 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
           : "Пакет из нескольких файлов открывается только в интерактивной версии, а интерактивный просмотр на этой установке выключен. Ссылку не выпускаем; сохраните страницу одним самодостаточным HTML-файлом (стили и картинки встроены) без скриптов.",
     );
   }
+  // A single page with scripts is linked to its built interactive version when
+  // one is ready; recipients never run the raw upload.
+  if (
+    config.HTML_LIVE_ENABLED &&
+    r.derivative_id &&
+    r.mime === "text/html" &&
+    (r.html_profile === "limited" || r.html_profile === "unsupported")
+  )
+    return r.derivative_id as string;
   if (r.html_profile === "unsupported") {
-    // A single page the static view cannot show is linked only through its
-    // built interactive version, never as the raw upload.
-    if (config.HTML_LIVE_ENABLED && r.derivative_id)
-      return r.derivative_id as string;
     throw new Problem(
       422,
       "unsupported",
