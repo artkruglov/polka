@@ -173,7 +173,7 @@ capability, readOnly учитывает manage. Tool visibility зависит �
 его автоматически. Старый локальный z.enum scopes в AgentConnections обновить.
 
 Разрешённые файлы backend Sol: новая migration, packages/migrations.ts,
-packages/contracts/index.ts, apps/server/agent-management.ts, mcp-readonly.ts,
+packages/contracts/index.ts, apps/server/agent-management.ts, mcp-server.ts,
 service-auth.ts только при необходимости типа scope, tests/agent-management.test.ts,
 tests/mcp-transport.test.ts, migrations.test.ts и точечное подключение tests в
 package.json. `scripts/restore-drill.ts` — только синхронизация schema catalog/

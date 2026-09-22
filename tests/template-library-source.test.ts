@@ -12,7 +12,7 @@ import {
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
-import { createReadonlyMcpServer } from "../apps/server/mcp-readonly.ts";
+import { createMcpServer } from "../apps/server/mcp-server.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
@@ -27,9 +27,18 @@ after(async () => {
 
 test("library catalog and exact source pins match API and MCP then close on revoke", async () => {
   const password = randomBytes(24).toString("hex");
-  const owner = await createAccount(`library-owner-${randomBytes(5).toString("hex")}`, password);
-  const reader = await createAccount(`library-reader-${randomBytes(5).toString("hex")}`, password);
-  const outsider = await createAccount(`library-outside-${randomBytes(5).toString("hex")}`, password);
+  const owner = await createAccount(
+    `library-owner-${randomBytes(5).toString("hex")}`,
+    password,
+  );
+  const reader = await createAccount(
+    `library-reader-${randomBytes(5).toString("hex")}`,
+    password,
+  );
+  const outsider = await createAccount(
+    `library-outside-${randomBytes(5).toString("hex")}`,
+    password,
+  );
   async function connection(account: typeof owner, scopes = ["source:read"]) {
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
@@ -48,7 +57,12 @@ test("library catalog and exact source pins match API and MCP then close on revo
     ...(await prepareCapture(
       "tests/fixtures/bundle-corpus/team-report",
       "index.html",
-      ["index.html", "assets/report.css", "assets/report.js", "assets/mark.svg"],
+      [
+        "index.html",
+        "assets/report.css",
+        "assets/report.js",
+        "assets/mark.svg",
+      ],
     )),
     key: randomUUID(),
     title: "Library proposal",
@@ -78,7 +92,14 @@ test("library catalog and exact source pins match API and MCP then close on revo
       `INSERT INTO template_library_publications(
          id,library_id,release_id,artifact_id,revision_id,publisher_id
        ) VALUES($1,$2,$3,$4,$5,$6)`,
-      [publicationId, libraryId, release.releaseId, receipt.artifactId, receipt.revisionId, owner.id],
+      [
+        publicationId,
+        libraryId,
+        release.releaseId,
+        receipt.artifactId,
+        receipt.revisionId,
+        owner.id,
+      ],
     );
   });
   const pins = {
@@ -88,10 +109,15 @@ test("library catalog and exact source pins match API and MCP then close on revo
     publicationId,
   };
 
-  assert.equal((await sourceForAgent(ownerAgent, {
-    artifactId: receipt.artifactId,
-    revisionId: receipt.revisionId,
-  })).files.length, 4);
+  assert.equal(
+    (
+      await sourceForAgent(ownerAgent, {
+        artifactId: receipt.artifactId,
+        revisionId: receipt.revisionId,
+      })
+    ).files.length,
+    4,
+  );
   await assert.rejects(
     sourceForAgent(readerAgent, {
       artifactId: receipt.artifactId,
@@ -111,7 +137,8 @@ test("library catalog and exact source pins match API and MCP then close on revo
     [{ libraryId, publicationId, revisionId: receipt.revisionId }],
   );
   assert.equal(
-    (await transaction((c) => listTemplates(c, outsider, { libraryId }))).items.length,
+    (await transaction((c) => listTemplates(c, outsider, { libraryId }))).items
+      .length,
     0,
   );
   await assert.rejects(
@@ -130,25 +157,34 @@ test("library catalog and exact source pins match API and MCP then close on revo
   const direct = await sourceForAgent(readerAgent, pins);
   assert.equal(direct.context.libraryId, libraryId);
   assert.equal(direct.context.publicationId, publicationId);
-  const expectedCss = direct.files.find((file) => file.path === "assets/report.css")!.data;
-  const server = createReadonlyMcpServer(readerAgent);
+  const expectedCss = direct.files.find(
+    (file) => file.path === "assets/report.css",
+  )!.data;
+  const server = createMcpServer(readerAgent);
   const client = new Client({ name: "library-source", version: "1" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
   try {
     const tools = await client.listTools();
-    assert.deepEqual(
-      tools.tools.map((tool) => tool.name).sort(),
-      ["polka_list_template_libraries", "polka_list_templates", "polka_read_source"],
-    );
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "polka_list_template_libraries",
+      "polka_list_templates",
+      "polka_read_source",
+    ]);
     const resources = await client.listResources();
     assert.deepEqual(
       resources.resources.map((resource) => resource.uri),
       ["polka://guides/templates-v1"],
     );
-    const guide = await client.readResource({ uri: "polka://guides/templates-v1" });
-    assert.match((guide.contents[0] as any).text, /polka_list_template_libraries/);
+    const guide = await client.readResource({
+      uri: "polka://guides/templates-v1",
+    });
+    assert.match(
+      (guide.contents[0] as any).text,
+      /polka_list_template_libraries/,
+    );
     assert.match((guide.contents[0] as any).text, /polka_list_templates/);
     assert.match((guide.contents[0] as any).text, /polka_read_source/);
     const libraries = await client.callTool({
@@ -161,23 +197,34 @@ test("library catalog and exact source pins match API and MCP then close on revo
       libraryList.items.map(({ id, name, role }: any) => ({ id, name, role })),
       [{ id: libraryId, name: "Team library", role: "reader" }],
     );
-    assert.deepEqual(
-      Object.keys(libraryList.items[0]).sort(),
-      ["createdAt", "id", "name", "role"],
-    );
+    assert.deepEqual(Object.keys(libraryList.items[0]).sort(), [
+      "createdAt",
+      "id",
+      "name",
+      "role",
+    ]);
     const listed = await client.callTool({
       name: "polka_list_templates",
       arguments: { libraryId, query: "client" },
     });
-    assert.equal((listed.structuredContent as any).items[0].publicationId, publicationId);
-    const read = await client.callTool({ name: "polka_read_source", arguments: pins });
+    assert.equal(
+      (listed.structuredContent as any).items[0].publicationId,
+      publicationId,
+    );
+    const read = await client.callTool({
+      name: "polka_read_source",
+      arguments: pins,
+    });
     const mcpCss = (read.structuredContent as any).files.find(
       (file: any) => file.path === "assets/report.css",
     );
     assert.equal(mcpCss.data, expectedCss);
 
-    const outsiderServer = createReadonlyMcpServer(outsiderAgent);
-    const outsiderClient = new Client({ name: "library-outsider", version: "1" });
+    const outsiderServer = createMcpServer(outsiderAgent);
+    const outsiderClient = new Client({
+      name: "library-outsider",
+      version: "1",
+    });
     const [outsiderClientTransport, outsiderServerTransport] =
       InMemoryTransport.createLinkedPair();
     await outsiderServer.connect(outsiderServerTransport);
@@ -193,14 +240,19 @@ test("library catalog and exact source pins match API and MCP then close on revo
         outsiderLibraries.items.map(({ id }: any) => id),
         [siblingLibraryId],
       );
-      assert.ok(!outsiderLibraries.items.some(({ id }: any) => id === libraryId));
+      assert.ok(
+        !outsiderLibraries.items.some(({ id }: any) => id === libraryId),
+      );
     } finally {
       await outsiderClient.close();
       await outsiderServer.close();
     }
 
-    const metadataServer = createReadonlyMcpServer(metadataAgent);
-    const metadataClient = new Client({ name: "library-no-source-scope", version: "1" });
+    const metadataServer = createMcpServer(metadataAgent);
+    const metadataClient = new Client({
+      name: "library-no-source-scope",
+      version: "1",
+    });
     const [metadataClientTransport, metadataServerTransport] =
       InMemoryTransport.createLinkedPair();
     await metadataServer.connect(metadataServerTransport);
@@ -228,21 +280,32 @@ test("library catalog and exact source pins match API and MCP then close on revo
       headers: { origin: config.APP_ORIGIN },
       payload: { name: reader.name, password },
     });
-    const cookie = login.cookies.map((item) => `${item.name}=${item.value}`).join("; ");
+    const cookie = login.cookies
+      .map((item) => `${item.name}=${item.value}`)
+      .join("; ");
     const params = new URLSearchParams({
       revisionId: receipt.revisionId,
       libraryId,
       publicationId,
     });
     const base = `/api/artifacts/${receipt.artifactId}`;
-    const context = await app.inject({ url: `${base}/agent-context?${params}`, headers: { cookie } });
+    const context = await app.inject({
+      url: `${base}/agent-context?${params}`,
+      headers: { cookie },
+    });
     assert.equal(context.statusCode, 200, context.body);
     assert.equal(context.json().publicationId, publicationId);
-    const packageResult = await app.inject({ url: `${base}/agent-package?${params}`, headers: { cookie } });
+    const packageResult = await app.inject({
+      url: `${base}/agent-package?${params}`,
+      headers: { cookie },
+    });
     assert.equal(packageResult.statusCode, 200, packageResult.body);
     const fileParams = new URLSearchParams(params);
     fileParams.set("path", "assets/report.css");
-    const file = await app.inject({ url: `${base}/agent-file?${fileParams}`, headers: { cookie } });
+    const file = await app.inject({
+      url: `${base}/agent-file?${fileParams}`,
+      headers: { cookie },
+    });
     assert.equal(file.statusCode, 200, file.body);
     assert.equal(file.rawPayload.toString("base64"), expectedCss);
     const apiCatalog = await app.inject({
@@ -257,7 +320,9 @@ test("library catalog and exact source pins match API and MCP then close on revo
     });
     assert.equal(apiLibraries.statusCode, 200, apiLibraries.body);
     assert.deepEqual(
-      apiLibraries.json().items.map(({ id, name, role }: any) => ({ id, name, role })),
+      apiLibraries
+        .json()
+        .items.map(({ id, name, role }: any) => ({ id, name, role })),
       [{ id: libraryId, name: "Team library", role: "reader" }],
     );
 
@@ -271,23 +336,46 @@ test("library catalog and exact source pins match API and MCP then close on revo
       (error: any) => error.status === 404,
     );
     assert.equal(
-      (await app.inject({ url: `${base}/agent-context?${params}`, headers: { cookie } })).statusCode,
+      (
+        await app.inject({
+          url: `${base}/agent-context?${params}`,
+          headers: { cookie },
+        })
+      ).statusCode,
       404,
     );
     assert.equal(
-      (await app.inject({ url: `${base}/agent-package?${params}`, headers: { cookie } })).statusCode,
+      (
+        await app.inject({
+          url: `${base}/agent-package?${params}`,
+          headers: { cookie },
+        })
+      ).statusCode,
       404,
     );
     assert.equal(
-      (await app.inject({ url: `${base}/agent-file?${fileParams}`, headers: { cookie } })).statusCode,
+      (
+        await app.inject({
+          url: `${base}/agent-file?${fileParams}`,
+          headers: { cookie },
+        })
+      ).statusCode,
       404,
     );
     assert.equal(
-      (await app.inject({ url: `/api/templates?${new URLSearchParams({ libraryId })}`, headers: { cookie } })).json().items.length,
+      (
+        await app.inject({
+          url: `/api/templates?${new URLSearchParams({ libraryId })}`,
+          headers: { cookie },
+        })
+      ).json().items.length,
       0,
     );
-    const revokedMembershipServer = createReadonlyMcpServer(readerAgent);
-    const revokedMembershipClient = new Client({ name: "revoked-library-member", version: "1" });
+    const revokedMembershipServer = createMcpServer(readerAgent);
+    const revokedMembershipClient = new Client({
+      name: "revoked-library-member",
+      version: "1",
+    });
     const [revokedMembershipClientTransport, revokedMembershipServerTransport] =
       InMemoryTransport.createLinkedPair();
     await revokedMembershipServer.connect(revokedMembershipServerTransport);

@@ -15,10 +15,7 @@ import {
   CAPTURE_EXAMPLE,
   captureFromAgent,
 } from "../apps/server/agent-capture.ts";
-import {
-  revokeShareFromAgent,
-  shareFromAgent,
-} from "../apps/server/shares.ts";
+import { revokeShareFromAgent, shareFromAgent } from "../apps/server/shares.ts";
 import { exportRevision } from "../apps/server/artifacts.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
 
@@ -70,7 +67,12 @@ const share = (artifactId: string, revisionId: string) =>
   });
 
 async function resolve(url: string) {
-  return call("POST", "/api/resolve", { token: new URL(url).hash.slice(1) }, false);
+  return call(
+    "POST",
+    "/api/resolve",
+    { token: new URL(url).hash.slice(1) },
+    false,
+  );
 }
 
 before(async () => {
@@ -125,7 +127,10 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   );
   assert.equal(own.statusCode, 200, own.body);
   assert.equal(own.headers["content-security-policy"], STATIC_HTML_CSP);
-  assert.equal(own.body, withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString());
+  assert.equal(
+    own.body,
+    withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString(),
+  );
 
   const shared = await share(receipt.artifactId, receipt.revisionId);
   assert.equal(shared.state, "active");
@@ -146,9 +151,15 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   );
   assert.equal(document.statusCode, 200, document.body);
   assert.equal(document.headers["content-security-policy"], STATIC_HTML_CSP);
-  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/);
+  assert.match(
+    document.headers["content-security-policy"] as string,
+    /^sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation;/,
+  );
   assert.equal(document.headers["cross-origin-resource-policy"], "same-origin");
-  assert.equal(document.body, withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString());
+  assert.equal(
+    document.body,
+    withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString(),
+  );
 
   // Source export still reads the bundle's own file rows.
   const exported = await exportRevision(
@@ -167,14 +178,8 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
   assert.ok(revoked);
   assert.equal((await resolve(shared.url!)).statusCode, 404);
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/view/${viewer.grant}/document`,
-        undefined,
-        false,
-      )
-    ).statusCode,
+    (await call("GET", `/api/view/${viewer.grant}/document`, undefined, false))
+      .statusCode,
     404,
   );
 });
@@ -273,7 +278,7 @@ test("multi-file bundles still require a prepared derivative", async () => {
 });
 
 test("MCP serverInfo reports the package release", async () => {
-  const { POLKA_VERSION } = await import("../apps/server/mcp-readonly.ts");
+  const { POLKA_VERSION } = await import("../apps/server/mcp-server.ts");
   const { default: pkg } = await import("../package.json", {
     with: { type: "json" },
   });

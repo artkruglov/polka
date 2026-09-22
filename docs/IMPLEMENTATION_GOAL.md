@@ -44,7 +44,7 @@
 
 Фронтенд — React/Vite, большая часть модулей лежит рядом в src. App.tsx объединяет полку, материал, папки и модальные сценарии. Общие и маршрутные CSS переопределяют друг друга; navigation-system ранее устранял последствия специфичностью #root. Общие компоненты существовали, но не были архитектурной границей.
 
-UI UrlImportCard/importMock только распознаёт URL в браузере, ничего не скачивает. MCP capabilities в mcp-readonly.ts: urlImport:false. polka_capture/polka_revise получают manifest и байты файлов; локальный prepare-capture помогает подготовить пакет. Это реальное сохранение файлов, не импорт ссылки.
+UI UrlImportCard/importMock только распознаёт URL в браузере, ничего не скачивает. MCP capabilities в mcp-server.ts: urlImport:false. polka_capture/polka_revise получают manifest и байты файлов; локальный prepare-capture помогает подготовить пакет. Это реальное сохранение файлов, не импорт ссылки.
 
 ## Решение по архитектуре
 

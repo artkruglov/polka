@@ -26,6 +26,53 @@ export type ServiceActor = {
   expiresAt: number;
 };
 
+/**
+ * A connection that may act: not revoked, inside both its refresh window and
+ * (for OAuth) its access-token lifetime, and owned by an active account that
+ * still owns the tenant. `match` narrows by token or id; `lock` is an optional
+ * row-lock clause for the connection row only.
+ */
+const liveConnectionSql = (match: string, lock = "") =>
+  `SELECT connection.*
+     FROM agent_connections connection
+     JOIN accounts account ON account.id=connection.account_id
+     JOIN tenants tenant ON tenant.id=connection.tenant_id
+       AND tenant.owner_id=account.id
+    WHERE ${match}
+      AND connection.revoked_at IS NULL AND connection.expires_at>now()
+      AND (connection.access_expires_at IS NULL
+        OR connection.access_expires_at>now())
+      AND NOT account.disabled AND account.deletion_requested_at IS NULL
+    ${lock}`;
+
+const CONNECTION_BY_ID = `connection.id=$1 AND connection.tenant_id=$2
+      AND connection.account_id=$3 AND connection.audience=$4`;
+const connectionIdParams = (actor: ServiceActor) => [
+  actor.connectionId,
+  actor.tenantId,
+  actor.accountId,
+  actor.audience,
+];
+
+function serviceActorFromRow(row: any): ServiceActor {
+  return {
+    accountId: row.account_id,
+    tenantId: row.tenant_id,
+    connectionId: row.id,
+    scopes: row.scopes,
+    audience: row.audience,
+    // An OAuth access token lapses before its connection's refresh window.
+    expiresAt: Math.floor(
+      Math.min(
+        new Date(row.expires_at).getTime(),
+        row.access_expires_at
+          ? new Date(row.access_expires_at).getTime()
+          : Infinity,
+      ) / 1000,
+    ),
+  };
+}
+
 export const unauthorized = () =>
   new Problem(401, "unauthorized", "Подключение агента недействительно.");
 
@@ -226,15 +273,7 @@ export async function authenticateServiceToken(
   const {
     rows: [row],
   } = await db.query(
-    `SELECT connection.*
-     FROM agent_connections connection
-     JOIN accounts account ON account.id=connection.account_id
-     JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.owner_id=account.id
-     WHERE connection.token_hash=$1 AND connection.audience=$2
-       AND connection.revoked_at IS NULL AND connection.expires_at>now()
-       AND (connection.access_expires_at IS NULL
-         OR connection.access_expires_at>now())
-       AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
+    liveConnectionSql("connection.token_hash=$1 AND connection.audience=$2"),
     [tokenHash, audience],
   );
   if (!row) throw unauthorized();
@@ -253,22 +292,7 @@ export async function authenticateServiceToken(
     [tokenHash, audience],
   );
   if (!seen.rowCount) throw unauthorized();
-  return {
-    accountId: row.account_id,
-    tenantId: row.tenant_id,
-    connectionId: row.id,
-    scopes: row.scopes,
-    audience: row.audience,
-    // An OAuth access token lapses before its connection's refresh window.
-    expiresAt: Math.floor(
-      Math.min(
-        new Date(row.expires_at).getTime(),
-        row.access_expires_at
-          ? new Date(row.access_expires_at).getTime()
-          : Infinity,
-      ) / 1000,
-    ),
-  };
+  return serviceActorFromRow(row);
 }
 
 export async function recheckServiceActor(
@@ -278,26 +302,12 @@ export async function recheckServiceActor(
   const {
     rows: [connection],
   } = await db.query(
-    `SELECT connection.*
-     FROM agent_connections connection
-     JOIN accounts account ON account.id=connection.account_id
-     JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.owner_id=account.id
-     WHERE connection.id=$1 AND connection.tenant_id=$2
-       AND connection.account_id=$3 AND connection.audience=$4
-       AND connection.revoked_at IS NULL AND connection.expires_at>now()
-       AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
-    [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+    liveConnectionSql(CONNECTION_BY_ID),
+    connectionIdParams(actor),
   );
   if (!connection) throw unauthorized();
   requireScope(connection.scopes, scope);
-  return {
-    accountId: connection.account_id,
-    tenantId: connection.tenant_id,
-    connectionId: connection.id,
-    scopes: connection.scopes,
-    audience: connection.audience,
-    expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
-  } satisfies ServiceActor;
+  return serviceActorFromRow(connection);
 }
 
 export async function withServiceActorTransaction<T>(
@@ -326,33 +336,15 @@ export async function withFreshServiceActorTransaction<T>(
     const {
       rows: [connection],
     } = await c.query(
-      `SELECT connection.* FROM agent_connections connection
-       JOIN accounts account ON account.id=connection.account_id
-       JOIN tenants tenant ON tenant.id=connection.tenant_id
-         AND tenant.owner_id=account.id
-       WHERE connection.id=$1 AND connection.tenant_id=$2
-         AND connection.account_id=$3 AND connection.audience=$4
-         AND connection.revoked_at IS NULL AND connection.expires_at>now()
-         AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
-      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+      liveConnectionSql(CONNECTION_BY_ID),
+      connectionIdParams(actor),
     );
     if (!connection) throw unauthorized();
     requireScope(connection.scopes, scope);
-    const verified: ServiceActor = {
-      accountId: connection.account_id,
-      tenantId: connection.tenant_id,
-      connectionId: connection.id,
-      scopes: connection.scopes,
-      audience: connection.audience,
-      expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
-    };
-    const result = await operation(c, verified);
+    const result = await operation(c, serviceActorFromRow(connection));
     const current = await c.query(
-      `SELECT scopes FROM agent_connections
-       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4
-         AND revoked_at IS NULL AND expires_at>now()
-       FOR SHARE`,
-      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+      liveConnectionSql(CONNECTION_BY_ID, "FOR SHARE OF connection"),
+      connectionIdParams(actor),
     );
     if (!current.rowCount) throw unauthorized();
     requireScope(current.rows[0].scopes, scope);
@@ -373,26 +365,11 @@ async function withLockedServiceActor<T>(
     const {
       rows: [connection],
     } = await c.query(
-      `SELECT * FROM agent_connections
-       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4
-       FOR UPDATE`,
-      [actor.connectionId, actor.tenantId, actor.accountId, actor.audience],
+      liveConnectionSql(CONNECTION_BY_ID, "FOR UPDATE OF connection"),
+      connectionIdParams(actor),
     );
-    if (
-      !connection ||
-      connection.revoked_at ||
-      new Date(connection.expires_at).getTime() <= Date.now()
-    )
-      throw unauthorized();
-    const verified: ServiceActor = {
-      accountId: connection.account_id,
-      tenantId: connection.tenant_id,
-      connectionId: connection.id,
-      scopes: connection.scopes,
-      audience: connection.audience,
-      expiresAt: Math.floor(new Date(connection.expires_at).getTime() / 1000),
-    };
-    return operation(c, verified);
+    if (!connection) throw unauthorized();
+    return operation(c, serviceActorFromRow(connection));
   });
 }
 

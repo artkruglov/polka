@@ -57,7 +57,8 @@ export function createDatabaseHealthAdapter(
     throw new Error("Invalid migration catalog");
   const createPool =
     dependencies.createPool ??
-    ((options: DatabasePoolOptions) => new pg.Pool(options) as unknown as DbPool);
+    ((options: DatabasePoolOptions) =>
+      new pg.Pool(options) as unknown as DbPool);
   const pool = createPool({
     connectionString: config.databaseUrl,
     max: 1,
@@ -279,7 +280,11 @@ export function createStorageHealthAdapter(
 export function createHealthAdapters(config: {
   database: DatabaseHealthConfig;
   storage: StorageHealthConfig;
-}): { database: HealthAdapter; storage: HealthAdapter; close: () => Promise<void> } {
+}): {
+  database: HealthAdapter;
+  storage: HealthAdapter;
+  close: () => Promise<void>;
+} {
   const database = createDatabaseHealthAdapter(config.database);
   const storage = createStorageHealthAdapter(config.storage);
   return {

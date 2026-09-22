@@ -11,6 +11,7 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
+import { MCP_LIMITS } from "../apps/server/mcp-transport.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
@@ -1149,4 +1150,52 @@ test("scope, revoke, Host, Origin, and web Origin boundaries survive real HTTP w
     client.callTool({ name: "polka_context", arguments: {} }),
   );
   await client.close();
+});
+
+test("/mcp is rate limited per address, before authentication, and per connection", async () => {
+  const limited = await issue(["context"]);
+  const unaffected = await issue(["context"]);
+  const post = (authorization: string, remoteAddress: string) =>
+    app.inject({
+      method: "POST",
+      url: "/mcp",
+      remoteAddress,
+      headers: {
+        host: new URL(config.APP_ORIGIN).host,
+        authorization,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    });
+  const address = () =>
+    `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+  assert.equal(
+    (await post(`Bearer ${limited.token}`, address())).statusCode,
+    200,
+  );
+  await db.query(
+    `INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')
+     ON CONFLICT(key) DO UPDATE SET attempts=excluded.attempts`,
+    [
+      sha256(`mcp:connection:${limited.connection.id}`),
+      MCP_LIMITS.perConnection,
+    ],
+  );
+  const byConnection = await post(`Bearer ${limited.token}`, address());
+  assert.equal(byConnection.statusCode, 429);
+  assert.equal(byConnection.json().code, "quota");
+  // Other connections from the same owner are unaffected.
+  assert.equal(
+    (await post(`Bearer ${unaffected.token}`, address())).statusCode,
+    200,
+  );
+  const ip = address();
+  await db.query(
+    "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
+    [sha256(`mcp:ip:${ip}`), MCP_LIMITS.perIp],
+  );
+  assert.equal((await post(`Bearer ${unaffected.token}`, ip)).statusCode, 429);
+  // Token guesses count against the address too.
+  assert.equal((await post("Bearer invalid", ip)).statusCode, 429);
 });

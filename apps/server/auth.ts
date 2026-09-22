@@ -34,7 +34,11 @@ export async function createAccount(name: string, password: string) {
     return { id, name, tenant };
   });
 }
-// Fixed 10-minute window per hashed key; shared by login and anonymous actions.
+const RETRY_AFTER = {
+  "10 minutes": "через 10 минут",
+  "24 hours": "через сутки",
+} as const;
+// Fixed window per hashed key (10 minutes unless stated); shared by login and anonymous actions.
 export async function limitAttempts(
   key: string,
   max: number,
@@ -50,7 +54,7 @@ export async function limitAttempts(
     throw new Problem(
       429,
       "quota",
-      "Слишком много попыток. Попробуйте через 10 минут.",
+      `Слишком много попыток. Попробуйте ${RETRY_AFTER[window]}.`,
     );
 }
 export async function signIn(name: string, password: string, ip: string) {
