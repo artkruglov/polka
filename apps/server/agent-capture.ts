@@ -115,7 +115,10 @@ export function validateAgentCapture(
   return { input, manifest, source };
 }
 
-export type CaptureHooks = { beforeStep?: (c:PoolClient)=>Promise<void>; afterSave?: (c:PoolClient,receipt:unknown)=>Promise<void> };
+export type CaptureHooks = {
+  beforeStep?: (c: PoolClient) => Promise<void>;
+  afterSave?: (c: PoolClient, receipt: unknown) => Promise<void>;
+};
 
 /** Each durable upload step rechecks current scope/revocation; no nested transaction. */
 async function capturePrepared(
@@ -126,13 +129,27 @@ async function capturePrepared(
 ) {
   const { input, manifest, source } = validateAgentCapture(body, mode);
   const service = "accountId" in actor ? actor : null;
-  const owner: Actor = service ? {id:service.accountId,tenant:service.tenantId,connectionId:service.connectionId} : actor as Actor;
+  const owner: Actor = service
+    ? {
+        id: service.accountId,
+        tenant: service.tenantId,
+        connectionId: service.connectionId,
+      }
+    : (actor as Actor);
   // Browser actors must never impersonate a service connection.
-  if (!service && owner.connectionId) throw new Problem(403,"forbidden","Некорректная область сохранения.");
-  const run = <T>(operation:(c:PoolClient)=>Promise<T>) => {
-    const guarded = async(c:PoolClient) => {await hooks.beforeStep?.(c);return operation(c);};
-    return service ? withServiceActorTransaction(service,mode,guarded)
-      : transaction(async c=>{await lockActiveOwnerTenant(c,owner);return guarded(c);});
+  if (!service && owner.connectionId)
+    throw new Problem(403, "forbidden", "Некорректная область сохранения.");
+  const run = <T>(operation: (c: PoolClient) => Promise<T>) => {
+    const guarded = async (c: PoolClient) => {
+      await hooks.beforeStep?.(c);
+      return operation(c);
+    };
+    return service
+      ? withServiceActorTransaction(service, mode, guarded)
+      : transaction(async (c) => {
+          await lockActiveOwnerTenant(c, owner);
+          return guarded(c);
+        });
   };
   const begun = await run(async (c) => {
     const old = (
@@ -165,7 +182,7 @@ async function capturePrepared(
     );
     await c.query(
       "UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3",
-      [result.uploadId, (owner.connectionId ?? null), owner.tenant],
+      [result.uploadId, owner.connectionId ?? null, owner.tenant],
     );
     return result;
   });
@@ -174,7 +191,7 @@ async function capturePrepared(
       const row = (
         await c.query(
           "SELECT request FROM uploads WHERE id=$1 AND tenant_id=$2 AND connection_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
-          [begun.uploadId, owner.tenant, (owner.connectionId ?? null)],
+          [begun.uploadId, owner.tenant, owner.connectionId ?? null],
         )
       ).rows[0];
       if (!row) throw missing();
@@ -197,25 +214,38 @@ async function capturePrepared(
     const row = (
       await c.query(
         "SELECT request FROM uploads WHERE id=$1 AND tenant_id=$2 AND connection_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
-        [begun.uploadId, owner.tenant, (owner.connectionId ?? null)],
+        [begun.uploadId, owner.tenant, owner.connectionId ?? null],
       )
     ).rows[0];
     if (!row) throw missing();
     if (!!row.request.artifactId !== (mode === "revise"))
       throw new Problem(403, "forbidden", "Неверное разрешение для операции.");
-    const receipt = await finalizeBundleUploadInTransaction(c, owner, begun.uploadId);
-    await hooks.afterSave?.(c,receipt);
+    const receipt = await finalizeBundleUploadInTransaction(
+      c,
+      owner,
+      begun.uploadId,
+    );
+    await hooks.afterSave?.(c, receipt);
     return receipt;
   });
 }
 
-export function captureFromAgent(actor:ServiceActor,body:unknown,mode:"capture"|"revise",hooks:CaptureHooks={}) {
-  return capturePrepared(actor,body,mode,hooks);
+export function captureFromAgent(
+  actor: ServiceActor,
+  body: unknown,
+  mode: "capture" | "revise",
+  hooks: CaptureHooks = {},
+) {
+  return capturePrepared(actor, body, mode, hooks);
 }
 
 /** Shared persistence for browser URL jobs; auth is rechecked at every step. */
-export function captureForOwner(actor:Actor,body:unknown,hooks:CaptureHooks={}) {
-  return capturePrepared(actor,body,"capture",hooks);
+export function captureForOwner(
+  actor: Actor,
+  body: unknown,
+  hooks: CaptureHooks = {},
+) {
+  return capturePrepared(actor, body, "capture", hooks);
 }
 
 export async function statusForAgent(

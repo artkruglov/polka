@@ -18,30 +18,42 @@ const fingerprint = (id: string, code: string) =>
     .update(`email:${id}:${code}`)
     .digest("hex");
 
+// Per-challenge attempts reset with every new code; this caps guesses per address.
+const EMAIL_FAILURES_PER_DAY = 30;
+const emailFailureKey = (email: string) => `email-verify-fail:${email}`;
+
 type LocalDeliveryClient = {
   query: (
     text: string,
     values?: unknown[],
-  ) => Promise<{ rowCount: number | null; rows: Array<Record<string, unknown>> }>;
+  ) => Promise<{
+    rowCount: number | null;
+    rows: Array<Record<string, unknown>>;
+  }>;
 };
 
 export async function deliverLocalEmailChallenge(
   input: { id: string; email: string; code: string },
   dependencies: {
-    runTransaction?: <T>(operation: (client: LocalDeliveryClient) => Promise<T>) => Promise<T>;
+    runTransaction?: <T>(
+      operation: (client: LocalDeliveryClient) => Promise<T>,
+    ) => Promise<T>;
     write?: (path: string, body: string) => Promise<void>;
   } = {},
 ) {
-  const run = dependencies.runTransaction ?? ((operation) => transaction(operation as any));
-  const write = dependencies.write ?? (async (path, body) => {
-    await mkdir(".local/mail", { recursive: true, mode: 0o700 });
-    await writeFile(path, body, { flag: "wx", mode: 0o600 });
-  });
+  const run =
+    dependencies.runTransaction ??
+    ((operation) => transaction(operation as any));
+  const write =
+    dependencies.write ??
+    (async (path, body) => {
+      await mkdir(".local/mail", { recursive: true, mode: 0o700 });
+      await writeFile(path, body, { flag: "wx", mode: 0o600 });
+    });
   return run(async (c) => {
-    await c.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
-      [input.email],
-    );
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+      input.email,
+    ]);
     const current = await c.query(
       `SELECT 1 FROM login_challenges challenge
        WHERE challenge.id=$1 AND challenge.email=$2
@@ -115,7 +127,12 @@ export async function beginEmailLogin(email: string, ip: string) {
     if (config.MAIL_MODE === "local") {
       const delivered = await deliverLocalEmailChallenge({ id, email, code });
       if (!delivered)
-        return { id, browser, delivery: config.MAIL_MODE, expiresInSeconds: 600 };
+        return {
+          id,
+          browser,
+          delivery: config.MAIL_MODE,
+          expiresInSeconds: 600,
+        };
     } else {
       const transport = nodemailer.createTransport({
         host: config.SMTP_HOST,
@@ -163,9 +180,6 @@ export async function verifyEmailLogin(
   if (config.MAIL_MODE === "disabled")
     throw new Problem(503, "invalid", "Вход по почте отключён.");
   await limitAttempts(`email-verify-ip:${ip}`, 40);
-  // Unused random password keeps legacy password login separate from email identities.
-  const password = await passwordHash(randomBytes(32).toString("hex"));
-  // Per-challenge attempts reset with every new code; this caps guesses per address.
   let failedEmail: string | undefined;
   const token = await transaction(async (c) => {
     const {
@@ -227,6 +241,8 @@ export async function verifyEmailLogin(
     }
     if (!account) {
       const accountId = randomUUID();
+      // Unused random password keeps legacy password login separate from email identities.
+      const password = await passwordHash(randomBytes(32).toString("hex"));
       const res = await c.query(
         `INSERT INTO accounts(id,name,password_hash,email,display_name,email_verified_at) VALUES($1,$2,$3,$4,$5,CASE WHEN $6='smtp' THEN now() ELSE NULL END) RETURNING *`,
         [
@@ -271,5 +287,3 @@ export async function verifyEmailLogin(
     );
   return token;
 }
-const EMAIL_FAILURES_PER_DAY = 30;
-const emailFailureKey = (email: string) => `email-verify-fail:${email}`;

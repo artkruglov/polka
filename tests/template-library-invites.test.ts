@@ -274,6 +274,21 @@ test("old invite cannot restore revoked access and a new invite creates a new ep
     ).json().role,
     "admin",
   );
+  // The revoked epoch stays next to the new one; every member read must find
+  // the active row, not whichever row sorts first.
+  for (const path of ["publications", "members", "events", "invitations"])
+    assert.equal(
+      (
+        await call(
+          "GET",
+          `/api/template-libraries/${libraryId}/${path}`,
+          undefined,
+          recipientCookie,
+        )
+      ).statusCode,
+      200,
+      path,
+    );
   assert.equal(
     Number(
       (

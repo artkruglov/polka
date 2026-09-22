@@ -17,10 +17,16 @@ import {
 import { config } from "./config.ts";
 import { sha256 } from "./storage.ts";
 
+// Mutations take FOR UPDATE; read-only listings take FOR SHARE, which still
+// waits for (and rechecks after) a concurrent revoke, disable or archive but
+// lets readers of the same library run side by side.
+type RowLock = "UPDATE" | "SHARE";
+
 async function lockActorAndAccounts(
   c: PoolClient,
   actor: Actor,
   accountIds: string[] = [],
+  lock: RowLock = "UPDATE",
 ) {
   // Discovering target tenants grants nothing. Both tenant ownership and every
   // account predicate are rechecked after the ordered locks are acquired.
@@ -30,7 +36,7 @@ async function lockActorAndAccounts(
   );
   const tenantIds = [...new Set(discovered.rows.map((row) => row.id))];
   const tenants = await c.query(
-    "SELECT id,owner_id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE",
+    `SELECT id,owner_id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR ${lock}`,
     [tenantIds],
   );
   if (
@@ -43,7 +49,7 @@ async function lockActorAndAccounts(
   const ids = [...new Set([actor.id, ...accountIds])];
   const accounts = await c.query(
     `SELECT id,disabled,deletion_requested_at FROM accounts
-      WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+      WHERE id=ANY($1::uuid[]) ORDER BY id FOR ${lock}`,
     [ids],
   );
   const activeActor = accounts.rows.find(
@@ -56,11 +62,15 @@ async function lockActorAndAccounts(
   return { tenants: tenants.rows, accounts: accounts.rows };
 }
 
-async function lockLibrary(c: PoolClient, libraryId: string) {
+async function lockLibrary(
+  c: PoolClient,
+  libraryId: string,
+  lock: RowLock = "UPDATE",
+) {
   const library = (
     await c.query(
       `SELECT id,name,created_at FROM template_libraries
-        WHERE id=$1 AND state='active' AND archived_at IS NULL FOR UPDATE`,
+        WHERE id=$1 AND state='active' AND archived_at IS NULL FOR ${lock}`,
       [libraryId],
     )
   ).rows[0];
@@ -72,15 +82,30 @@ async function lockMembers(
   c: PoolClient,
   libraryId: string,
   accountIds: string[],
+  lock: RowLock = "UPDATE",
 ) {
   return (
     await c.query(
       `SELECT * FROM template_library_members
         WHERE library_id=$1 AND account_id=ANY($2::uuid[])
-        ORDER BY account_id FOR UPDATE`,
+        ORDER BY account_id,joined_at FOR ${lock}`,
       [libraryId, [...new Set(accountIds)]],
     )
   ).rows;
+}
+
+// An account keeps its revoked memberships next to the current one (one row
+// per membership epoch), so every check looks for the active row.
+function requireMember(rows: any[], actorId: string) {
+  if (
+    !rows.some(
+      (row) =>
+        row.account_id === actorId &&
+        row.state === "active" &&
+        row.revoked_at === null,
+    )
+  )
+    throw missing();
 }
 
 function requireAdmin(rows: any[], actorId: string) {
@@ -192,7 +217,7 @@ export async function listTemplateLibrariesInTransaction(
 
 export async function listTemplateLibraries(actor: Actor) {
   return transaction(async (c) => {
-    await lockActorAndAccounts(c, actor);
+    await lockActorAndAccounts(c, actor, [], "SHARE");
     return listTemplateLibrariesInTransaction(c, actor);
   });
 }
@@ -202,15 +227,12 @@ export async function listTemplateLibraryMembers(
   libraryId: string,
 ) {
   return transaction(async (c) => {
-    await lockActorAndAccounts(c, actor);
-    await lockLibrary(c, libraryId);
-    const members = await lockMembers(c, libraryId, [actor.id]);
-    if (
-      !members.some(
-        (member) => member.state === "active" && member.revoked_at === null,
-      )
-    )
-      throw missing();
+    await lockActorAndAccounts(c, actor, [], "SHARE");
+    await lockLibrary(c, libraryId, "SHARE");
+    requireMember(
+      await lockMembers(c, libraryId, [actor.id], "SHARE"),
+      actor.id,
+    );
     const rows = (
       await c.query(
         `SELECT member.account_id AS "accountId",
@@ -235,9 +257,12 @@ export async function listTemplateLibraryEvents(
 ) {
   const input = listTemplateLibraryEventsInput.parse(query);
   return transaction(async (c) => {
-    await lockActorAndAccounts(c, actor);
-    await lockLibrary(c, libraryId);
-    requireAdmin(await lockMembers(c, libraryId, [actor.id]), actor.id);
+    await lockActorAndAccounts(c, actor, [], "SHARE");
+    await lockLibrary(c, libraryId, "SHARE");
+    requireAdmin(
+      await lockMembers(c, libraryId, [actor.id], "SHARE"),
+      actor.id,
+    );
     const rows = (
       await c.query(
         `SELECT id,actor_id,action,target_type,target_object_id,target_account_id,
@@ -440,9 +465,12 @@ export async function listTemplateLibraryInvitations(
   libraryId: string,
 ) {
   return transaction(async (c) => {
-    await lockActorAndAccounts(c, actor);
-    await lockLibrary(c, libraryId);
-    requireAdmin(await lockMembers(c, libraryId, [actor.id]), actor.id);
+    await lockActorAndAccounts(c, actor, [], "SHARE");
+    await lockLibrary(c, libraryId, "SHARE");
+    requireAdmin(
+      await lockMembers(c, libraryId, [actor.id], "SHARE"),
+      actor.id,
+    );
     const rows = (
       await c.query(
         `SELECT id,email,role,
@@ -785,15 +813,12 @@ export async function listTemplateLibraryPublications(
   libraryId: string,
 ) {
   return transaction(async (c) => {
-    await lockActorAndAccounts(c, actor);
-    await lockLibrary(c, libraryId);
-    const members = await lockMembers(c, libraryId, [actor.id]);
-    if (
-      !members[0] ||
-      members[0].state !== "active" ||
-      members[0].revoked_at !== null
-    )
-      throw missing();
+    await lockActorAndAccounts(c, actor, [], "SHARE");
+    await lockLibrary(c, libraryId, "SHARE");
+    requireMember(
+      await lockMembers(c, libraryId, [actor.id], "SHARE"),
+      actor.id,
+    );
     const rows = (
       await c.query(
         `SELECT publication.id,publication.release_id AS "releaseId",

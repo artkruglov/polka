@@ -96,17 +96,23 @@ export function shareDTO(s: any, latest: string): Share | null {
   };
 }
 export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
+  const [artifact] = await getArtifacts(actor, [id]);
+  if (!artifact) throw missing();
+  return artifact;
+}
+/** Owner detail for several artifacts in three queries; missing ids are skipped, order is kept. */
+export async function getArtifacts(
+  actor: Actor,
+  ids: string[],
+): Promise<Artifact[]> {
   await assertActiveOwner(db, actor);
-  const {
-    rows: [a],
-  } = await db.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2", [
-    id,
-    actor.tenant,
-  ]);
-  if (!a) throw missing();
-  const {
-    rows: [r],
-  } = await db.query(
+  if (!ids.length) return [];
+  const { rows: artifacts } = await db.query(
+    "SELECT * FROM artifacts WHERE id=ANY($1::uuid[]) AND tenant_id=$2",
+    [ids, actor.tenant],
+  );
+  if (!artifacts.length) return [];
+  const { rows: revisions } = await db.query(
     `SELECT r.*,
        (SELECT jsonb_build_object(
           'state',d.state,'runtimeProfile',CASE WHEN d.state='ready' THEN d.runtime_profile ELSE NULL END,
@@ -115,25 +121,36 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
         WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
           AND ${derivativeVersionSql("d")}
         ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS inline_build
-     FROM revisions r WHERE r.id=$1`,
-    [a.latest_revision_id],
+     FROM revisions r WHERE r.id=ANY($1::uuid[])`,
+    [artifacts.map((a) => a.latest_revision_id)],
   );
-  const {
-    rows: [s],
-  } = await db.query(
-    "SELECT s.*,r.number FROM shares s JOIN revisions r ON r.id=s.revision_id WHERE s.artifact_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 1",
-    [id],
+  const { rows: shares } = await db.query(
+    `SELECT DISTINCT ON (s.artifact_id) s.*,r.number
+       FROM shares s JOIN revisions r ON r.id=s.revision_id
+      WHERE s.artifact_id=ANY($1::uuid[])
+      ORDER BY s.artifact_id,s.created_at DESC,s.id DESC`,
+    [artifacts.map((a) => a.id)],
   );
-  return {
-    id: a.id,
-    title: a.title,
-    folderId: a.folder_id,
-    updatedAt: a.updated_at.toISOString(),
-    trashedAt: a.trashed_at ? a.trashed_at.toISOString() : null,
-    lifecycleVersion: Number(a.lifecycle_version),
-    revision: revisionDTO(r),
-    share: shareDTO(s, r.id),
-  };
+  const byId = new Map(artifacts.map((a) => [a.id, a]));
+  const revisionById = new Map(revisions.map((r) => [r.id, r]));
+  const shareByArtifact = new Map(shares.map((s) => [s.artifact_id, s]));
+  return ids.flatMap((id) => {
+    const a = byId.get(id);
+    if (!a) return [];
+    const r = revisionById.get(a.latest_revision_id);
+    return [
+      {
+        id: a.id,
+        title: a.title,
+        folderId: a.folder_id,
+        updatedAt: a.updated_at.toISOString(),
+        trashedAt: a.trashed_at ? a.trashed_at.toISOString() : null,
+        lifecycleVersion: Number(a.lifecycle_version),
+        revision: revisionDTO(r),
+        share: shareDTO(shareByArtifact.get(a.id), r.id),
+      },
+    ];
+  });
 }
 export async function beginUpload(actor: Actor, body: unknown) {
   const input = beginUploadSchema.parse(body);

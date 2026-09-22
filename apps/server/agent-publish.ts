@@ -40,12 +40,18 @@ export const agentPublishInputSchema = z
       .default(30),
   })
   .strict()
-  .refine((value) => (value.html === undefined) !== (value.component === undefined), {
-    message: "Send exactly one of html or component",
-  })
-  .refine((value) => !value.componentLanguage || value.component !== undefined, {
-    message: "componentLanguage goes with component",
-  });
+  .refine(
+    (value) => (value.html === undefined) !== (value.component === undefined),
+    {
+      message: "Send exactly one of html or component",
+    },
+  )
+  .refine(
+    (value) => !value.componentLanguage || value.component !== undefined,
+    {
+      message: "componentLanguage goes with component",
+    },
+  );
 
 /**
  * What the chat tool description tells the model about this installation.
@@ -62,7 +68,7 @@ export function publishToolDescription(
       ? [
           `Send the artifact either as React component source in \`component\` (below) or as ONE self-contained HTML document in \`html\`. Scripts run in an isolated sandbox on a separate viewer domain, and the returned link opens the interactive version. The sandbox has no network: no external URLs (no remote stylesheets, fonts or images, no fetch); eval/new Function and workers are unavailable. Keep it under ${MAX_HTML_MB} MB.`,
           `A React artifact (JSX/TSX component, as written in the chat): send its source code as-is in \`component\` instead of \`html\` (componentLanguage "tsx" for TypeScript) — do not bundle it or write an HTML shell. Polka compiles it on the server: the default export is rendered full-page, Tailwind classes work (CSS is generated for the classes used), and these imports are available offline: ${RUNTIME_IMPORT_LIST}. Any other import (framer-motion, shadcn/ui "@/components/...", URLs) fails and the reason names the module; replace it with plain React/Tailwind. localStorage/sessionStorage and window.storage work in memory for the open page; fetch and other network calls fail.`,
-          "For `html`, the interactive builder accepts: CSS in <style> or style attributes; images as <img> or CSS url() with base64 data: URIs (png, jpeg, webp, gif, plain SVG); fonts as base64 data: woff2/woff or system fonts; inline <svg> (<use href=\"#id\">); links to #fragments or absolute https/mailto addresses; <script type=module> or text/babel importing only the libraries above; CDN <script src> of those libraries, Babel and the Tailwind CDN are replaced by Polka's own copies. It refuses other relative or remote resource URLs, <iframe> and <video>/<audio>. Markdown or text: convert to semantic HTML first.",
+          'For `html`, the interactive builder accepts: CSS in <style> or style attributes; images as <img> or CSS url() with base64 data: URIs (png, jpeg, webp, gif, plain SVG); fonts as base64 data: woff2/woff or system fonts; inline <svg> (<use href="#id">); links to #fragments or absolute https/mailto addresses; <script type=module> or text/babel importing only the libraries above; CDN <script src> of those libraries, Babel and the Tailwind CDN are replaced by Polka\'s own copies. It refuses other relative or remote resource URLs, <iframe> and <video>/<audio>. Markdown or text: convert to semantic HTML first.',
         ]
       : [
           `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
@@ -102,7 +108,8 @@ async function prepareInteractive(
       );
     }
   } catch (error) {
-    if (error instanceof Problem) return { ready: false, reason: error.message };
+    if (error instanceof Problem)
+      return { ready: false, reason: error.message };
     throw error;
   }
   if (status?.state === "ready") return { ready: true, reason: null };
@@ -146,7 +153,11 @@ function publishedFiles(input: z.infer<typeof agentPublishInputSchema>) {
     );
   const file = input.componentLanguage === "tsx" ? "App.tsx" : "App.jsx";
   return [
-    { path: "index.html", mime: "text/html", data: componentShell(input.title, file) },
+    {
+      path: "index.html",
+      mime: "text/html",
+      data: componentShell(input.title, file),
+    },
     { path: file, mime: "text/javascript", data: input.component! },
   ];
 }

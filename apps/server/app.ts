@@ -8,7 +8,7 @@ import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
-import { identity, signIn } from "./auth.ts";
+import { identity, limitAttempts, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
@@ -29,6 +29,7 @@ import {
   finalizeBundleUpload,
   finalizeUpload,
   getArtifact,
+  getArtifacts,
   revisionDTO,
   uploadBundleFile,
   uploadBytes,
@@ -75,6 +76,26 @@ import {
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+
+/** Share resolutions per client IP per 10 minutes; each view resolves once per grant. */
+export const RESOLVE_LIMIT_PER_IP = 600;
+/** Concurrent upload bodies: server-wide and per shelf. */
+export const TRANSFER_SLOTS = { total: 4, perTenant: 3 };
+
+// Shelf and trash pages continue from a microsecond (timestamp,id) pair.
+const pageCursor = z.object({ date: z.string().datetime(), id: uuid });
+function decodeCursor(value: string | undefined, message: string) {
+  if (!value) return null;
+  try {
+    return pageCursor.parse(
+      JSON.parse(Buffer.from(value, "base64url").toString()),
+    );
+  } catch {
+    throw new Problem(400, "invalid", message);
+  }
+}
+const encodeCursor = (date: string, id: string) =>
+  Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
 export async function createApp() {
   const app = Fastify({
@@ -124,6 +145,12 @@ export async function createApp() {
       return reply.code(400).send({
         code: "invalid",
         message: "Проверьте формат и обязательные поля.",
+      });
+    // Deadlock or serialization victim: nothing was committed, retrying is safe.
+    if (error.code === "40P01" || error.code === "40001")
+      return reply.code(503).header("retry-after", "1").send({
+        code: "conflict",
+        message: "Действие пересеклось с другим. Повторите его.",
       });
     if (error.code === "23505")
       return reply.code(409).send({
@@ -393,20 +420,10 @@ export async function createApp() {
         cursor: z.string().max(200).optional(),
       })
       .parse(req.query);
-    let cursor: { date: string; id: string } | null = null;
-    if (q.cursor) {
-      try {
-        cursor = z
-          .object({ date: z.string().datetime(), id: uuid })
-          .parse(JSON.parse(Buffer.from(q.cursor, "base64url").toString()));
-      } catch {
-        throw new Problem(
-          400,
-          "invalid",
-          "Обновите список: указатель страницы некорректен.",
-        );
-      }
-    }
+    const cursor = decodeCursor(
+      q.cursor,
+      "Обновите список: указатель страницы некорректен.",
+    );
     const { rows } = await db.query(
       `SELECT id,updated_at,
               to_char(updated_at AT TIME ZONE 'UTC',
@@ -429,18 +446,14 @@ export async function createApp() {
       page = rows.slice(0, 24),
       last = page.at(-1);
     const items = (
-      await Promise.all(page.map((artifact) => getArtifact(actor, artifact.id)))
+      await getArtifacts(
+        actor,
+        page.map((artifact) => artifact.id),
+      )
     ).filter((artifact) => artifact.trashedAt === null);
     return {
       items,
-      nextCursor: more
-        ? Buffer.from(
-            JSON.stringify({
-              date: last.cursor_updated_at,
-              id: last.id,
-            }),
-          ).toString("base64url")
-        : null,
+      nextCursor: more ? encodeCursor(last.cursor_updated_at, last.id) : null,
     };
   });
   app.get("/api/artifacts/:id", async (req) =>
@@ -452,20 +465,10 @@ export async function createApp() {
       .object({ cursor: z.string().max(200).optional() })
       .strict()
       .parse(req.query);
-    let cursor: { date: string; id: string } | null = null;
-    if (query.cursor) {
-      try {
-        cursor = z
-          .object({ date: z.string().datetime(), id: uuid })
-          .parse(JSON.parse(Buffer.from(query.cursor, "base64url").toString()));
-      } catch {
-        throw new Problem(
-          400,
-          "invalid",
-          "Обновите корзину: указатель страницы некорректен.",
-        );
-      }
-    }
+    const cursor = decodeCursor(
+      query.cursor,
+      "Обновите корзину: указатель страницы некорректен.",
+    );
     const { rows } = await db.query(
       `SELECT id,
               to_char(trashed_at AT TIME ZONE 'UTC',
@@ -480,16 +483,15 @@ export async function createApp() {
     const page = rows.slice(0, 24);
     const last = page.at(-1);
     const items = (
-      await Promise.all(page.map((artifact) => getArtifact(actor, artifact.id)))
+      await getArtifacts(
+        actor,
+        page.map((artifact) => artifact.id),
+      )
     ).filter((artifact) => artifact.trashedAt !== null);
     return {
       items,
       nextCursor:
-        more && last
-          ? Buffer.from(
-              JSON.stringify({ date: last.cursor_trashed_at, id: last.id }),
-            ).toString("base64url")
-          : null,
+        more && last ? encodeCursor(last.cursor_trashed_at, last.id) : null,
     };
   });
   app.post("/api/artifacts/:id/trash", async (req) =>
@@ -525,16 +527,27 @@ export async function createApp() {
   app.post("/api/uploads", async (req) =>
     beginUpload(await identity(req), req.body),
   );
+  // Runs before the body is read. The session is checked first, so requests
+  // without one never hold a slot, and one shelf cannot take all of them.
   let transfers = 0;
-  const transferGuard = async (_req: any, reply: any) => {
-    if (transfers >= 4)
+  const tenantTransfers = new Map<string, number>();
+  const transferGuard = async (req: any, reply: any) => {
+    const { tenant } = await identity(req);
+    const mine = tenantTransfers.get(tenant) ?? 0;
+    if (transfers >= TRANSFER_SLOTS.total || mine >= TRANSFER_SLOTS.perTenant)
       throw new Problem(
         429,
         "quota",
         "Сервер принимает несколько файлов. Повторите через минуту.",
       );
     transfers++;
-    reply.raw.once("close", () => transfers--);
+    tenantTransfers.set(tenant, mine + 1);
+    reply.raw.once("close", () => {
+      transfers--;
+      const left = (tenantTransfers.get(tenant) ?? 1) - 1;
+      if (left > 0) tenantTransfers.set(tenant, left);
+      else tenantTransfers.delete(tenant);
+    });
   };
   app.put(
     "/api/uploads/:id/bytes",
@@ -589,6 +602,8 @@ export async function createApp() {
   app.delete("/api/bundle-uploads/:id", async (req) =>
     abortUpload(await identity(req), id(req), "bundle"),
   );
+  // Owner download and export stay available in the trash (docs/TRASH_SPEC.md:
+  // R17 export); only /document, which renders the page, refuses a trashed one.
   app.get("/api/revisions/:id/bytes", async (req, reply) => {
     const actor = await identity(req);
     const {
@@ -680,6 +695,11 @@ export async function createApp() {
       .object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
       .strict()
       .parse(req.body);
+    await limitAttempts(`resolve:ip:${req.ip}`, RESOLVE_LIMIT_PER_IP);
+    // Read locks: resolve only issues a grant, so concurrent views of one
+    // shelf do not queue behind each other, while trash, revoke, disable and
+    // deletion (which hold these rows FOR UPDATE) still serialize with it and
+    // are rechecked once they commit.
     return transaction(async (c) => {
       const tokenHash = sha256(token);
       const candidate = (
@@ -695,13 +715,15 @@ export async function createApp() {
         )
       ).rows[0];
       if (!candidate) throw missing();
-      await lockActiveOwnerTenant(c, {
-        id: candidate.account_id,
-        tenant: candidate.tenant_id,
-      });
+      await lockActiveOwnerTenant(
+        c,
+        { id: candidate.account_id, tenant: candidate.tenant_id },
+        missing,
+        "SHARE",
+      );
       const artifact = (
         await c.query(
-          "SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
+          "SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
           [candidate.artifact_id, candidate.tenant_id],
         )
       ).rows[0];
@@ -711,7 +733,7 @@ export async function createApp() {
           `SELECT * FROM shares
            WHERE id=$1 AND token_hash=$2 AND artifact_id=$3
              AND tenant_id=$4 AND NOT revoked AND expires_at>now()
-           FOR UPDATE`,
+           FOR SHARE`,
           [candidate.id, tokenHash, candidate.artifact_id, candidate.tenant_id],
         )
       ).rows[0];

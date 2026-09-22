@@ -109,7 +109,7 @@ tenant/derivative locks. Не менять accepted orphan cleanup и quota acco
 fresh capture без artifactId создаёт новую active работу. `statusForAgent`
 сохраняет connection binding и receipt для восстановления после потерянного
 ответа; добавить artifactState (`active`/`trashed`) для saved receipt и не
-показывать trash preview как доступный. `mcp-readonly.ts` list active-only;
+показывать trash preview как доступный. `mcp-server.ts` list active-only;
 prepare/share для trash отказывают. Новые MCP management tools и `manage` scope
 не входят только в текущий server/UI пакет. Это временная граница реализации,
 не human-only политика: полное управление через агента остаётся требованием.

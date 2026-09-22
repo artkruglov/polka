@@ -2,14 +2,21 @@ import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { Problem, missing } from "./errors.ts";
 
+/**
+ * Lock the owner's tenant, then account. Mutations take FOR UPDATE; a
+ * read-only path may pass "SHARE", which still queues behind (and rechecks
+ * after) any transaction holding these rows FOR UPDATE — trash, disable,
+ * deletion — without serializing readers against each other.
+ */
 export async function lockActiveOwnerTenant(
   c: PoolClient,
   actor: Actor,
   denied: () => Error = missing,
+  lock: "UPDATE" | "SHARE" = "UPDATE",
 ) {
   const tenant = (
     await c.query(
-      "SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE",
+      `SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR ${lock}`,
       [actor.tenant, actor.id],
     )
   ).rows[0];
@@ -18,7 +25,7 @@ export async function lockActiveOwnerTenant(
     await c.query(
       `SELECT id FROM accounts
        WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL
-       FOR UPDATE`,
+       FOR ${lock}`,
       [actor.id],
     )
   ).rows[0];

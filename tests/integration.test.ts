@@ -3,12 +3,17 @@ import { withNewTabLinks } from "../apps/server/html.ts";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registerFrontend } from "../apps/server/frontend.ts";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { createApp } from "../apps/server/app.ts";
+import {
+  createApp,
+  RESOLVE_LIMIT_PER_IP,
+  TRANSFER_SLOTS,
+} from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
@@ -373,7 +378,10 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     url: `/api/view/${viewer.grant}/document`,
   });
   assert.equal(grantedDocument.statusCode, 200);
-  assert.equal(grantedDocument.body, withNewTabLinks(Buffer.from(body)).toString());
+  assert.equal(
+    grantedDocument.body,
+    withNewTabLinks(Buffer.from(body)).toString(),
+  );
   const report = await call(
     "POST",
     "/api/reports",
@@ -975,8 +983,14 @@ test(
       .update(`email-verify-fail:${email}`)
       .digest("hex");
     assert.equal(
-      (await call("POST", "/api/auth/email/verify", { id, code: wrong }, cookie))
-        .statusCode,
+      (
+        await call(
+          "POST",
+          "/api/auth/email/verify",
+          { id, code: wrong },
+          cookie,
+        )
+      ).statusCode,
       401,
     );
     assert.equal(
@@ -1086,4 +1100,106 @@ test("live experiment disabled refuses owner and recipient issuance for existing
   assert.equal(capabilities.json().liveExperimental, false);
   assert.equal(capabilities.json().liveMode, "disabled");
   assert.equal(capabilities.json().htmlRuntime, false);
+});
+
+test("upload slots go only to signed-in owners, with a cap per shelf and in total", async () => {
+  const server = await createApp();
+  await server.listen({ host: "127.0.0.1", port: 0 });
+  const { port } = server.server.address() as import("node:net").AddressInfo;
+  const held: import("node:http").ClientRequest[] = [];
+  const request = (cookie: string, hold: boolean) =>
+    new Promise<number>((resolve, reject) => {
+      const bytes = Buffer.from("slot");
+      const req = httpRequest(
+        {
+          host: "127.0.0.1",
+          port,
+          method: "PUT",
+          path: `/api/uploads/${randomUUID()}/bytes`,
+          headers: {
+            origin,
+            "content-type": "application/octet-stream",
+            // A held request announces more bytes than it sends, so it keeps
+            // its slot until it is destroyed.
+            "content-length": String(hold ? 1024 : bytes.length),
+            ...(cookie ? { cookie } : {}),
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode!);
+        },
+      );
+      req.on("error", (error) => (hold ? undefined : reject(error)));
+      req.write(bytes);
+      if (hold) held.push(req);
+      else req.end();
+    });
+  // A probe's slot is released when its response closes, which can trail the
+  // client seeing it; a held request refused in that moment simply retries.
+  const hold = (cookie: string): Promise<number> =>
+    request(cookie, true).then((status) =>
+      status === 429 ? hold(cookie) : status,
+    );
+  // A finished probe releases its slot; 429 means the cap is full.
+  const refusedSoon = async (cookie: string, expected: boolean) => {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      if (((await request(cookie, false)) === 429) === expected) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.fail(`probe was ${expected ? "never" : "still"} refused`);
+  };
+  const login = async (name: string) => {
+    const response = await call("POST", "/api/login", { name, password }, "");
+    assert.equal(response.statusCode, 200);
+    return `${response.cookies[0].name}=${response.cookies[0].value}`;
+  };
+  const third = await createAccount(
+    `test-c-${randomBytes(5).toString("hex")}`,
+    password,
+  );
+  const cc = await login(third.name);
+  try {
+    // Anonymous requests are refused before a slot is taken.
+    for (let index = 0; index < 6; index++)
+      assert.equal(await request("", false), 401);
+    for (let slot = 0; slot < TRANSFER_SLOTS.perTenant; slot++) void hold(ca);
+    await refusedSoon(ca, true);
+    // Another shelf still gets the remaining slot.
+    await refusedSoon(cb, false);
+    for (
+      let slot = TRANSFER_SLOTS.perTenant;
+      slot < TRANSFER_SLOTS.total;
+      slot++
+    )
+      void hold(cb);
+    await refusedSoon(cc, true);
+    assert.equal(await request("", false), 401);
+    for (const req of held.splice(0)) req.destroy();
+    await refusedSoon(ca, false);
+    await refusedSoon(cc, false);
+  } finally {
+    for (const req of held) req.destroy();
+    await server.close();
+  }
+});
+
+test("share resolution is rate limited per address", async () => {
+  const ip = `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+  const resolve = () =>
+    app.inject({
+      method: "POST",
+      url: "/api/resolve",
+      remoteAddress: ip,
+      headers: { origin },
+      payload: { token: randomBytes(32).toString("base64url") },
+    });
+  assert.equal((await resolve()).statusCode, 404);
+  await db.query("UPDATE login_limits SET attempts=$2 WHERE key=$1", [
+    sha256(`resolve:ip:${ip}`),
+    RESOLVE_LIMIT_PER_IP,
+  ]);
+  const limited = await resolve();
+  assert.equal(limited.statusCode, 429);
+  assert.equal(limited.json().code, "quota");
 });

@@ -1,5 +1,5 @@
-import {Client,InMemoryTransport} from "@modelcontextprotocol/client";
-import {createReadonlyMcpServer} from "../apps/server/mcp-readonly.ts";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
@@ -73,10 +73,27 @@ test("exact source context, immutable template, explicit scope, tenant isolation
     artifactId: receipt.artifactId,
     revisionId: receipt.revisionId,
   };
-  const server=createReadonlyMcpServer(agent),client=new Client({name:"context-acceptance",version:"1"});
-  const [clientTransport,serverTransport]=InMemoryTransport.createLinkedPair();
-  await server.connect(serverTransport);await client.connect(clientTransport);
-  try{const tools=await client.listTools();assert(tools.tools.some(t=>t.name==="polka_read_source"));const output=await client.callTool({name:"polka_read_source",arguments:input});assert.equal(output.isError,undefined);const value=output.structuredContent as any;assert.equal(value.context.revisionId,receipt.revisionId);assert.equal(value.files.length,4);}finally{await client.close();await server.close();}
+  const server = createMcpServer(agent),
+    client = new Client({ name: "context-acceptance", version: "1" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const tools = await client.listTools();
+    assert(tools.tools.some((t) => t.name === "polka_read_source"));
+    const output = await client.callTool({
+      name: "polka_read_source",
+      arguments: input,
+    });
+    assert.equal(output.isError, undefined);
+    const value = output.structuredContent as any;
+    assert.equal(value.context.revisionId, receipt.revisionId);
+    assert.equal(value.files.length, 4);
+  } finally {
+    await client.close();
+    await server.close();
+  }
   const initial = await sourceForAgent(agent, input);
   assert.equal(initial.context.purpose, "source");
   assert.equal(initial.files.length, 4);
@@ -160,11 +177,13 @@ test("exact source context, immutable template, explicit scope, tenant isolation
       .context.releaseId,
     null,
   );
-  await transaction((c) => publishTemplate(c, owner, receipt.artifactId, {
-    revisionId: next.revisionId,
-    summary: "Предложение клиенту: рост 25%_",
-    rules: "Сохраните оформление, используйте данные клиента.",
-  }));
+  await transaction((c) =>
+    publishTemplate(c, owner, receipt.artifactId, {
+      revisionId: next.revisionId,
+      summary: "Предложение клиенту: рост 25%_",
+      rules: "Сохраните оформление, используйте данные клиента.",
+    }),
+  );
   const latest = await transaction((c) => listTemplates(c, owner));
   assert.equal(latest.items.length, 1);
   assert.equal(latest.items[0].revisionId, next.revisionId);
@@ -172,21 +191,60 @@ test("exact source context, immutable template, explicit scope, tenant isolation
   assert.equal(latest.hasMore, false);
   // Filter after picking the latest release: an old matching description must
   // never silently substitute for the current template.
-  assert.equal((await transaction((c) => listTemplates(c, owner, {query: "Еженедельный"}))).items.length, 0);
-  const history = await transaction((c) => listTemplates(c, owner, {query: "Еженедельный", includePrevious: true}));
+  assert.equal(
+    (
+      await transaction((c) =>
+        listTemplates(c, owner, { query: "Еженедельный" }),
+      )
+    ).items.length,
+    0,
+  );
+  const history = await transaction((c) =>
+    listTemplates(c, owner, { query: "Еженедельный", includePrevious: true }),
+  );
   assert.equal(history.items[0].revisionId, receipt.revisionId);
   assert.equal(history.items[0].isLatest, false);
-  assert.equal((await transaction((c) => listTemplates(c, other, {query: "Предложение", includePrevious: true}))).items.length, 0);
-  assert.equal((await transaction((c) => listTemplates(c, owner, {query: "%_"}))).items.length, 1);
-  assert.equal((await transaction((c) => listTemplates(c, owner, {query: "%missing_"}))).items.length, 0);
-  const searchServer = createReadonlyMcpServer(agent), searchClient = new Client({name: "template-search", version: "1"});
-  const [searchTransport, searchServerTransport] = InMemoryTransport.createLinkedPair();
-  await searchServer.connect(searchServerTransport); await searchClient.connect(searchTransport);
+  assert.equal(
+    (
+      await transaction((c) =>
+        listTemplates(c, other, {
+          query: "Предложение",
+          includePrevious: true,
+        }),
+      )
+    ).items.length,
+    0,
+  );
+  assert.equal(
+    (await transaction((c) => listTemplates(c, owner, { query: "%_" }))).items
+      .length,
+    1,
+  );
+  assert.equal(
+    (await transaction((c) => listTemplates(c, owner, { query: "%missing_" })))
+      .items.length,
+    0,
+  );
+  const searchServer = createMcpServer(agent),
+    searchClient = new Client({ name: "template-search", version: "1" });
+  const [searchTransport, searchServerTransport] =
+    InMemoryTransport.createLinkedPair();
+  await searchServer.connect(searchServerTransport);
+  await searchClient.connect(searchTransport);
   try {
-    const result = await searchClient.callTool({name: "polka_list_templates", arguments: {query: "клиенту"}});
+    const result = await searchClient.callTool({
+      name: "polka_list_templates",
+      arguments: { query: "клиенту" },
+    });
     assert.equal(result.isError, undefined);
-    assert.equal((result.structuredContent as any).items[0].revisionId, next.revisionId);
-  } finally { await searchClient.close(); await searchServer.close(); }
+    assert.equal(
+      (result.structuredContent as any).items[0].revisionId,
+      next.revisionId,
+    );
+  } finally {
+    await searchClient.close();
+    await searchServer.close();
+  }
   const app = await createApp();
   try {
     const login = await app.inject({
@@ -197,10 +255,16 @@ test("exact source context, immutable template, explicit scope, tenant isolation
     });
     assert.equal(login.statusCode, 200, login.body);
     const cookie = login.cookies.map((x) => `${x.name}=${x.value}`).join("; ");
-    const found = await app.inject({url: `/api/templates?${new URLSearchParams({query:"Еженедельный",includePrevious:"true"})}`, headers:{cookie}});
+    const found = await app.inject({
+      url: `/api/templates?${new URLSearchParams({ query: "Еженедельный", includePrevious: "true" })}`,
+      headers: { cookie },
+    });
     assert.equal(found.statusCode, 200, found.body);
     assert.equal(found.json().items[0].revisionId, receipt.revisionId);
-    const invalid = await app.inject({url:"/api/templates?includePrevious=anything",headers:{cookie}});
+    const invalid = await app.inject({
+      url: "/api/templates?includePrevious=anything",
+      headers: { cookie },
+    });
     assert.equal(invalid.statusCode, 400);
     const url = `/api/artifacts/${receipt.artifactId}/agent-context?revisionId=${receipt.revisionId}`;
     assert.equal((await app.inject({ url })).statusCode, 401);

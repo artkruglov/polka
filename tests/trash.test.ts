@@ -123,7 +123,11 @@ const embedded = (token: string) =>
   viewer.inject({
     method: "GET",
     url: `/document/${token}`,
-    headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" },
+    headers: {
+      host: config.VIEWER_UPSTREAM_HOST,
+      "sec-fetch-dest": "iframe",
+      "sec-fetch-mode": "navigate",
+    },
   });
 
 let preservedReady: {
@@ -654,8 +658,8 @@ test("grant issuance serialized behind trash cannot create a capability after re
     await waitForBlocked("FROM artifacts%WHERE id=$1%FOR UPDATE");
     const resolving = call("POST", "/api/resolve", { token }, "");
     // Trash holds the tenant row (lockActiveOwnerTenant) while it waits for
-    // the artifact, so resolve must queue on that same tenant lock.
-    await waitForBlocked("FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE");
+    // the artifact, so resolve's read lock must queue on that same tenant row.
+    await waitForBlocked("FROM tenants WHERE id=$1 AND owner_id=$2 FOR SHARE");
     await blocker.query("COMMIT");
     assert.equal((await trashing).statusCode, 200);
     assert.equal((await resolving).statusCode, 404);

@@ -317,7 +317,9 @@ test("status shows works this connection saved; read sees the whole shelf", asyn
   const otherOwner = await newOwner("publish-api-other");
   const outsider = await token(otherOwner, ["context", "read"]);
   assert.equal((await status(outsider.secret)).statusCode, 404);
-  assert.equal((await status(reader.secret, "nope")).statusCode, 400);
+  const invalidId = await status(reader.secret, "nope");
+  assert.equal(invalidId.statusCode, 400);
+  assert.match(invalidId.json().message, /artifactId/);
   assert.equal(
     (
       await app.inject({

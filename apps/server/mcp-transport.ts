@@ -5,17 +5,20 @@ import {
 } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { FastifyInstance } from "fastify";
+import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
   type ServiceActor,
 } from "./service-auth.ts";
-import { createReadonlyMcpServer } from "./mcp-readonly.ts";
+import { createMcpServer } from "./mcp-server.ts";
 import { PROTECTED_RESOURCE_METADATA_URL } from "./oauth.ts";
 
 const endpoint = new URL(MCP_AUDIENCE);
 const MCP_BODY_LIMIT = 8 * 1024 * 1024;
+/** Requests per 10 minutes, as for the publish API; every MCP message is one request. */
+export const MCP_LIMITS = { perIp: 600, perConnection: 300 };
 // RFC 9728 §5.1: point OAuth clients at the protected resource metadata.
 const challenge = (error?: string) =>
   `Bearer ${error ? `error="${error}", ` : ""}resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}"`;
@@ -28,7 +31,7 @@ function actorFromAuth(authInfo?: AuthInfo) {
 
 export async function registerMcpTransport(app: FastifyInstance) {
   const handler = createMcpHandler(
-    ({ authInfo }) => createReadonlyMcpServer(actorFromAuth(authInfo)),
+    ({ authInfo }) => createMcpServer(actorFromAuth(authInfo)),
     { legacy: "stateless" },
   );
   const securedHandler = {
@@ -57,6 +60,8 @@ export async function registerMcpTransport(app: FastifyInstance) {
       const origin = request.headers.origin;
       if (origin !== undefined && origin !== config.APP_ORIGIN)
         return reply.code(403).send({ code: "forbidden" });
+      // Counted before authentication, so guessing tokens is limited too.
+      await limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
       const authorization = request.headers.authorization ?? "";
       const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
       if (!match)
@@ -73,6 +78,10 @@ export async function registerMcpTransport(app: FastifyInstance) {
           .code(401)
           .send({ code: "unauthorized" });
       }
+      await limitAttempts(
+        `mcp:connection:${actor.connectionId}`,
+        MCP_LIMITS.perConnection,
+      );
       const auth: AuthInfo = {
         token: "[redacted]",
         clientId: actor.connectionId,

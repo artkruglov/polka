@@ -76,6 +76,15 @@ function invalidFields(error: z.ZodError) {
   );
 }
 
+async function withFieldErrors<T>(operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof z.ZodError) throw invalidFields(error);
+    throw error;
+  }
+}
+
 type PublishResult = Awaited<ReturnType<typeof publishFromAgent>>;
 
 function publishResponse(result: PublishResult) {
@@ -106,19 +115,18 @@ export async function registerPublishApi(app: FastifyInstance) {
     { bodyLimit: PUBLISH_BODY_LIMIT },
     async (req, reply) => {
       const actor = await bearerActor(req, reply);
-      try {
-        return publishResponse(await publishFromAgent(actor, req.body ?? {}));
-      } catch (error) {
-        if (error instanceof z.ZodError) throw invalidFields(error);
-        throw error;
-      }
+      return publishResponse(
+        await withFieldErrors(() => publishFromAgent(actor, req.body ?? {})),
+      );
     },
   );
   app.get("/api/v1/status/:artifactId", async (req, reply) => {
     const actor = await bearerActor(req, reply);
-    const artifact = await artifactStatusForAgent(actor, {
-      artifactId: (req.params as { artifactId: string }).artifactId,
-    });
+    const artifact = await withFieldErrors(() =>
+      artifactStatusForAgent(actor, {
+        artifactId: (req.params as { artifactId: string }).artifactId,
+      }),
+    );
     return {
       ...artifact,
       shelfUrl: `${config.APP_ORIGIN}/works/${artifact.id}`,

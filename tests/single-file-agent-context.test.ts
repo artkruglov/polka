@@ -21,7 +21,7 @@ import {
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
-import { createReadonlyMcpServer } from "../apps/server/mcp-readonly.ts";
+import { createMcpServer } from "../apps/server/mcp-server.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
@@ -34,7 +34,11 @@ after(async () => {
 });
 
 test("plain text and image sources preserve exact bytes, pins and ACLs", async () => {
-  assert.match(new URL(process.env.DATABASE_URL!).pathname, /^\/polka_suite_[0-9a-f]{24}$/, "Use scripts/test-isolated.ts; this test creates disposable fixtures");
+  assert.match(
+    new URL(process.env.DATABASE_URL!).pathname,
+    /^\/polka_suite_[0-9a-f]{24}$/,
+    "Use scripts/test-isolated.ts; this test creates disposable fixtures",
+  );
   const password = randomBytes(24).toString("hex");
   const owner = await createAccount(
     `single-source-owner-${randomBytes(5).toString("hex")}`,
@@ -149,7 +153,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
       (error: any) => error.status === 404,
     );
 
-    const mcpServer = createReadonlyMcpServer(ownerAgent);
+    const mcpServer = createMcpServer(ownerAgent);
     const mcpClient = new Client({ name: "single-source", version: "1" });
     const [clientTransport, serverTransport] =
       InMemoryTransport.createLinkedPair();

@@ -721,8 +721,6 @@ async function exchangeCode(
       !timingSafeEqual(Buffer.from(challenge), Buffer.from(row.code_challenge))
     )
       return invalidGrant();
-    if (params.resource !== undefined && row.resource !== MCP_AUDIENCE)
-      return new OAuthFailure("invalid_target", "Resource mismatch.");
     // One live connection per client and owner: re-authorizing replaces it.
     const { rows: previous } = await c.query(
       `SELECT id,tenant_id,account_id FROM agent_connections
@@ -968,7 +966,16 @@ export async function revokeRequest(
     [tokenHash, client.client_id],
   );
   if (!connection) return;
+  // The token and refresh paths lock owner tenant, account, then connection;
+  // revoke takes the same order so the three cannot deadlock each other. The
+  // owner need not be active: a disabled owner's grant is still revoked.
   await transaction(async (c) => {
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
+      connection.tenant_id,
+    ]);
+    await c.query("SELECT 1 FROM accounts WHERE id=$1 FOR UPDATE", [
+      connection.account_id,
+    ]);
     await c.query("SELECT id FROM agent_connections WHERE id=$1 FOR UPDATE", [
       connection.id,
     ]);
@@ -1012,6 +1019,13 @@ function sendFailure(reply: FastifyReply, error: unknown) {
     return reply.code(429).send({
       error: "temporarily_unavailable",
       error_description: "Too many requests. Retry in a few minutes.",
+    });
+  // A deadlock or serialization victim committed nothing; the client may retry.
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "40P01" || code === "40001")
+    return reply.code(503).header("retry-after", "1").send({
+      error: "temporarily_unavailable",
+      error_description: "The request raced another one. Retry it.",
     });
   throw error;
 }

@@ -2,7 +2,10 @@ import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
 const env = z
   .object({
-    URL_IMPORT_ENABLED: z.enum(["true","false"]).default("false").transform(value=>value==="true"),
+    URL_IMPORT_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     DATABASE_URL: z.string().url(),
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),
