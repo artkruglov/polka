@@ -2,7 +2,7 @@
 
 Все заметные изменения Полки. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [SemVer](https://semver.org/lang/ru/). До `1.0.0` API, схема БД и интерфейс могут меняться между prerelease-версиями.
 
-## [Unreleased] — 0.1.0-rc.2
+## [0.1.0-rc.2] — 2026-09-22
 
 ### Added
 
@@ -50,5 +50,6 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.2...HEAD
+[0.1.0-rc.2]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.2
 [0.1.0-rc.1]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.1
