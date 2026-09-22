@@ -1,20 +1,18 @@
 import { z } from "zod";
-export const MAX_BYTES = 5 * 1024 * 1024;
-export const MIME = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "text/plain",
-  "text/html",
-] as const;
+// The zod-free constants live in constants.ts so the browser's initial chunk
+// does not pull in zod; this module re-exports them.
+export {
+  MAX_BYTES,
+  MIME,
+  looksLikeHtml,
+  REPORT_REASONS,
+  AGENT_SCOPES,
+} from "./constants.ts";
+export type { UploadMime, ReportReason } from "./constants.ts";
+import { MAX_BYTES, MIME, REPORT_REASONS, AGENT_SCOPES } from "./constants.ts";
 // How a saved HTML page may be shown. "static" and "limited" render in a
 // scriptless, networkless sandbox; "unsupported" needs a runtime profile that
 // this build does not have, so it gets no link.
-/** Whether text is an HTML page rather than prose; the server refuses text/html without it. */
-export const looksLikeHtml = (source: string) =>
-  /<(?:!doctype\s+html|html|head|body|main|div|p|h[1-6]|table|section|article|ul|ol|style)\b/i.test(
-    source,
-  );
 export const HTML_PROFILES = ["static", "limited", "unsupported"] as const;
 export type HtmlProfile = (typeof HTML_PROFILES)[number];
 export type InlineBuildStatus = {
@@ -23,23 +21,7 @@ export type InlineBuildStatus = {
   reason: string | null;
   path: string | null;
 };
-export const REPORT_REASONS = [
-  "phishing",
-  "malware",
-  "personal_data",
-  "illegal",
-  "other",
-] as const;
 export const uuid = z.string().uuid();
-export const AGENT_SCOPES = [
-  "context",
-  "read",
-  "source:read",
-  "capture",
-  "revise",
-  "share",
-  "manage",
-] as const;
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 export const updateArtifactMetadataFields = {
