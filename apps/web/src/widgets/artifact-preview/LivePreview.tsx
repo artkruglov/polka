@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
 import {
   isLive,
-  nextLiveStep,
+  nextLiveSteps,
   type CapabilityState,
   type LiveMode,
 } from "./live-plan.ts";
@@ -55,12 +55,14 @@ export function LivePreview({
   revision,
   grant,
   requiresBuild = false,
+  buildForLink = false,
   onInlineBuildChange,
   children,
 }: {
   revision: Revision;
   grant?: string;
   requiresBuild?: boolean;
+  buildForLink?: boolean;
   onInlineBuildChange?: () => Promise<void>;
   children: ReactNode;
 }) {
@@ -209,7 +211,7 @@ export function LivePreview({
 
   useEffect(() => {
     if (
-      !requiresBuild ||
+      (!requiresBuild && !buildForLink) ||
       grant ||
       !isLive(capability) ||
       build?.state !== "pending" ||
@@ -259,7 +261,15 @@ export function LivePreview({
       if (timer) clearTimeout(timer);
       if (buildAbort.current === abort) buildAbort.current = null;
     };
-  }, [build?.state, capability, grant, pollPaused, requiresBuild, revision.id]);
+  }, [
+    build?.state,
+    buildForLink,
+    capability,
+    grant,
+    pollPaused,
+    requiresBuild,
+    revision.id,
+  ]);
 
   const prepare = async () => {
     const abort = new AbortController();
@@ -339,23 +349,25 @@ export function LivePreview({
   };
 
   useEffect(() => {
-    const step = nextLiveStep({
+    const steps = nextLiveSteps({
       capability,
       requiresBuild,
+      buildForLink,
       build: build?.state ?? null,
       owner: !grant,
       stopped,
       launched: autoLaunched.current,
       prepared: autoPrepared.current,
     });
-    if (step === "launch") {
+    if (steps.includes("launch")) {
       autoLaunched.current = true;
       void launch();
-    } else if (step === "prepare") {
+    }
+    if (steps.includes("prepare")) {
       autoPrepared.current = true;
       void prepare();
     }
-  }, [build?.state, capability, grant, requiresBuild, stopped]);
+  }, [build?.state, buildForLink, capability, grant, requiresBuild, stopped]);
 
   if (capability === "disabled") return <>{children}</>;
 

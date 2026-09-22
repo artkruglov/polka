@@ -27,13 +27,16 @@ export function liveKind(revision: Revision): "none" | "direct" | "build" {
 }
 
 /**
- * The step the viewer takes on its own. The interactive version opens as soon
- * as it can; the owner's page with scripts is prepared once without a click.
+ * The steps the viewer takes on its own. The interactive version opens as
+ * soon as it can; the owner's page with scripts is prepared once without a
+ * click, either to run at all (requiresBuild) or, for a single page the
+ * static view cannot show, so that it can be sent by link (buildForLink).
  * A stop, a failed build or a failed launch waits for the reader instead.
  */
-export function nextLiveStep({
+export function nextLiveSteps({
   capability,
   requiresBuild,
+  buildForLink = false,
   build,
   owner,
   stopped,
@@ -42,14 +45,22 @@ export function nextLiveStep({
 }: {
   capability: CapabilityState;
   requiresBuild: boolean;
+  buildForLink?: boolean;
   build: InlineBuildStatus["state"] | null;
   owner: boolean;
   stopped: boolean;
   launched: boolean;
   prepared: boolean;
-}): "launch" | "prepare" | null {
-  if (!isLive(capability) || stopped) return null;
-  if (!requiresBuild || build === "ready") return launched ? null : "launch";
-  if (owner && build === null && !prepared) return "prepare";
-  return null;
+}): Array<"launch" | "prepare"> {
+  if (!isLive(capability) || stopped) return [];
+  const steps: Array<"launch" | "prepare"> = [];
+  if ((!requiresBuild || build === "ready") && !launched) steps.push("launch");
+  if (
+    (requiresBuild || buildForLink) &&
+    owner &&
+    build === null &&
+    !prepared
+  )
+    steps.push("prepare");
+  return steps;
 }

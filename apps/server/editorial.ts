@@ -8,8 +8,9 @@ import {
 import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
 import { audit, tokenFor, type Actor } from "./artifacts.ts";
 import {
-  BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
+  SERVED_BUILDER_VERSIONS,
+  isServedBuilderVersion,
 } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
@@ -91,14 +92,14 @@ const PUBLICATION_USABLE = `
       AND derivative.source_manifest_sha256=revision.manifest_sha256
       AND derivative.builder_version=publication.builder_version
       AND derivative.runtime_profile=publication.runtime_profile
-      AND publication.builder_version=$2
+      AND publication.builder_version=ANY($2::text[])
       AND publication.runtime_profile=$3
     )
   )`;
 
 const usableParameters = () => [
   config.HTML_LIVE_ENABLED,
-  BUNDLE_BUILDER_VERSION,
+  [...SERVED_BUILDER_VERSIONS],
   BUNDLE_RUNTIME_PROFILE,
 ];
 
@@ -324,7 +325,7 @@ export async function publishEditorialInTransaction(
     revision.derivative_sha256 !== binding.derivativeSha256 ||
     revision.derivative_builder_version !== binding.builderVersion ||
     revision.derivative_runtime_profile !== binding.runtimeProfile ||
-    binding.builderVersion !== BUNDLE_BUILDER_VERSION ||
+    !isServedBuilderVersion(binding.builderVersion) ||
     binding.runtimeProfile !== BUNDLE_RUNTIME_PROFILE
   ) {
     throw new Problem(

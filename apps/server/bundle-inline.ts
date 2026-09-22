@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import path from "node:path";
-import postcss from "postcss";
+import postcss, { Input } from "postcss";
 import {
   parse,
   parseFragment,
@@ -208,6 +209,100 @@ function safeSvg(value: Buffer) {
   return true;
 }
 
+// postcss exposes its tokenizer only as an untyped module path.
+const tokenizer = createRequire(import.meta.url)("postcss/lib/tokenize") as (
+  input: Input,
+) => { nextToken(): [string, string, ...unknown[]] | undefined; endOfFile(): boolean };
+
+/**
+ * CSS escapes are accepted where they cannot name a function or an at-rule:
+ * inside strings and comments, and in selector/value identifiers that are not
+ * followed by "(". An escaped or obfuscated url(, image-set( or @import, and
+ * any escape inside parentheses, is refused before the url() rewrite runs.
+ */
+function cssEscapesSafe(source: string) {
+  if (!source.includes("\\")) return true;
+  const tokens: Array<[string, string]> = [];
+  const stream = tokenizer(new Input(source));
+  while (!stream.endOfFile()) {
+    const token = stream.nextToken();
+    if (token) tokens.push([token[0], token[1]]);
+  }
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const [type, value] = tokens[index];
+    if (type === "(") depth++;
+    else if (type === ")") depth = Math.max(0, depth - 1);
+    else if (type === "brackets" && value.includes("\\")) return false;
+    else if (type === "at-word") {
+      let end = index + 1;
+      let escaped = value.includes("\\");
+      for (; tokens[end]?.[0] === "word"; end++)
+        if (tokens[end][1].includes("\\")) escaped = true;
+      if (escaped) return false;
+    } else if (type === "word") {
+      let end = index;
+      let escaped = false;
+      for (; tokens[end]?.[0] === "word"; end++)
+        if (tokens[end][1].includes("\\")) escaped = true;
+      if (
+        escaped &&
+        (depth > 0 || tokens[end]?.[0] === "(" || tokens[end]?.[0] === "brackets")
+      )
+        return false;
+      index = end - 1;
+    }
+  }
+  return true;
+}
+
+const DATA_IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const DATA_FONT_MIMES = ["font/woff2", "font/woff"];
+const MAGIC: Record<string, (value: Buffer) => boolean> = {
+  "image/png": (v) => v.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")),
+  "image/jpeg": (v) => v.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")),
+  "image/gif": (v) => /^GIF8[79]a$/.test(v.subarray(0, 6).toString("latin1")),
+  "image/webp": (v) =>
+    v.subarray(0, 4).toString("latin1") === "RIFF" &&
+    v.subarray(8, 12).toString("latin1") === "WEBP",
+  "font/woff2": (v) => v.subarray(0, 4).toString("latin1") === "wOF2",
+  "font/woff": (v) => v.subarray(0, 4).toString("latin1") === "wOFF",
+  "image/svg+xml": (v) => safeSvg(v),
+};
+
+/**
+ * A data: URI kept as is when it is canonical base64 of an allowlisted type
+ * whose bytes match that type; SVG must pass the inert-image check. Returns
+ * the normalized URI, or null when the reference is not such a URI.
+ */
+function safeDataUri(reference: string, allowed: string[]) {
+  const match = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
+    reference,
+  );
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  if (!allowed.includes(mime) && mime !== "image/svg+xml") return null;
+  const value = Buffer.from(match[2], "base64");
+  if (!value.length || value.toString("base64") !== match[2]) return null;
+  if (!MAGIC[mime]?.(value)) return null;
+  return `data:${mime};base64,${match[2]}`;
+}
+
+/** Fragment links and absolute web/mail links are markup, never resources. */
+function safeLinkHref(value: string) {
+  const trimmed = value.trim();
+  if (/^#[^\s\u0000-\u001f\u007f]*$/.test(trimmed)) return true;
+  if (/[\s\u0000-\u001f\u007f\\]/.test(trimmed)) return false;
+  if (!/^(?:https?|mailto):/i.test(trimmed)) return false;
+  try {
+    return ["http:", "https:", "mailto:"].includes(new URL(trimmed).protocol);
+  } catch {
+    return false;
+  }
+}
+
+const fragmentOnly = (value: string) => /^#[A-Za-z_][\w.:-]*$/.test(value.trim());
+
 function withinHtmlBounds(root: Node) {
   const stack = [{ node: root, depth: 0 }];
   let count = 0;
@@ -222,7 +317,7 @@ function withinHtmlBounds(root: Node) {
 }
 
 function inlineCss(source: string, resourcePath: string, localAsset: (reference: string, from: string) => string) {
-  if (/<\/style/i.test(source) || /\\/.test(source))
+  if (/<\/style/i.test(source) || !cssEscapesSafe(source))
     return {
       error: "stylesheet contains an unsafe raw-text or escape sequence",
     };
@@ -249,8 +344,14 @@ function inlineCss(source: string, resourcePath: string, localAsset: (reference:
         `url("${localAsset(double ?? single ?? bare, resourcePath)}")`);
     });
     return error ? { error } : { css: root.toString() };
-  } catch {
-    return { error: "stylesheet is not valid CSS" };
+  } catch (error) {
+    // Our own refusals name the reason; parser errors stay generic.
+    return {
+      error:
+        error instanceof Error && error.name === "Error"
+          ? error.message
+          : "stylesheet is not valid CSS",
+    };
   }
 }
 
@@ -315,6 +416,13 @@ export function buildInlineBundle(
   // Shared by CSS url() and <img> inlining.
   let cssExpansionBytes = 0;
   const localCssAsset = (reference: string, from: string) => {
+    if (/^\s*data:/i.test(reference)) {
+      const data = safeDataUri(reference, [...DATA_IMAGE_MIMES, ...DATA_FONT_MIMES]);
+      if (!data) throw Error("CSS data: URI is not an allowlisted image or font");
+      cssExpansionBytes += data.length;
+      if (cssExpansionBytes > MAX_OUTPUT_BYTES) throw Error("CSS resources exceed output limit");
+      return data;
+    }
     const resolved = resolveLocal(reference, from);
     if (!resolved) throw Error("CSS resource is not local");
     const resource = readResource(resolved, manifestFiles, sourceBytes, consumed);
@@ -354,9 +462,10 @@ export function buildInlineBundle(
         ].includes(tag))
     )
       return fail("unsupported HTML resource or container", currentPath);
-    if (
-      attrs.some((item) =>
-        [
+    for (const item of attrs) {
+      const name = item.name.toLowerCase();
+      if (
+        ![
           "src",
           "href",
           "xlink:href",
@@ -364,18 +473,19 @@ export function buildInlineBundle(
           "background",
           "action",
           "formaction",
-        ].includes(item.name.toLowerCase()),
-      ) &&
-      !(
-        (tag === "img" &&
-          attrs.some((item) => item.name.toLowerCase() === "src")) ||
-        (tag === "script" &&
-          attrs.some((item) => item.name.toLowerCase() === "src")) ||
-        (tag === "link" &&
-          attrs.some((item) => item.name.toLowerCase() === "href"))
+        ].includes(name)
       )
-    )
-      return fail("unhandled resource-bearing HTML attribute", currentPath);
+        continue;
+      const handled =
+        (name === "src" && (tag === "img" || tag === "script")) ||
+        (name === "href" && tag === "link") ||
+        (name === "href" && tag === "a" && safeLinkHref(item.value)) ||
+        ((name === "href" || name === "xlink:href") &&
+          tag === "use" &&
+          fragmentOnly(item.value));
+      if (!handled)
+        return fail("unhandled resource-bearing HTML attribute", currentPath);
+    }
     if (tag === "meta" && /refresh/i.test(attr(node, "http-equiv") ?? ""))
       return fail("meta refresh is unsupported", currentPath);
     const inlineStyle = attrs.find(
@@ -450,11 +560,13 @@ export function buildInlineBundle(
             "application/ecmascript",
             "text/ecmascript",
           ].includes(type)) ||
-        hasAttr(node, "async") ||
-        hasAttr(node, "defer")
+        // Inline classic scripts ignore async/defer; a referenced one would
+        // change execution order, so that stays refused.
+        ((hasAttr(node, "async") || hasAttr(node, "defer")) &&
+          hasAttr(node, "src"))
       )
         return fail(
-          "module, importmap, async, and defer scripts are unsupported",
+          "module, importmap, non-JavaScript (e.g. text/babel) and referenced async or defer scripts are unsupported",
           currentPath,
         );
       if (hasAttr(node, "src") && !attr(node, "src"))
@@ -496,6 +608,14 @@ export function buildInlineBundle(
         if (/<\/script/i.test(script))
           return fail("script contains a raw closing sequence", currentPath);
       }
+    } else if (tag === "img" && /^\s*data:/i.test(attr(node, "src") ?? "")) {
+      const data = safeDataUri(attr(node, "src")!.trim(), DATA_IMAGE_MIMES);
+      if (!data)
+        return fail("image data: URI is not an allowlisted image", currentPath);
+      cssExpansionBytes += data.length;
+      if (cssExpansionBytes > MAX_OUTPUT_BYTES)
+        return fail("inlined HTML exceeds 8 MiB", currentPath);
+      setAttr(node, "src", data);
     } else if (tag === "img") {
       const resolved = resolveLocal(attr(node, "src"), currentPath);
       if (!resolved) return fail("image reference is not local", currentPath);

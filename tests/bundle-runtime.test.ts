@@ -589,3 +589,209 @@ test("a static single-file bundle links statically until a ready derivative exis
   assert.equal(live.statusCode, 200, live.body);
   assert.equal(live.json().profile, BUNDLE_RUNTIME_PROFILE);
 });
+
+async function shareAndOpen(artifactId: string, revisionId: string) {
+  const shared = await call("POST", `/api/artifacts/${artifactId}/share`, {
+    expectedRevisionId: revisionId,
+    expiresInDays: 1,
+  });
+  assert.equal(shared.statusCode, 200, shared.body);
+  const share = shared.json().share;
+  const resolved = await call(
+    "POST",
+    "/api/resolve",
+    { token: new URL(share.url).hash.slice(1) },
+    "",
+  );
+  assert.equal(resolved.statusCode, 200, resolved.body);
+  const live = await call(
+    "POST",
+    "/api/view/live-view",
+    undefined,
+    "",
+    resolved.json().grant,
+  );
+  assert.equal(live.statusCode, 200, live.body);
+  const derivativeId = (
+    await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])
+  ).rows[0].derivative_id;
+  return { share, viewer: resolved.json(), live: live.json(), derivativeId };
+}
+
+test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", async () => {
+  assert.equal(BUNDLE_BUILDER_VERSION, "bundle-inline-v4");
+  const saved = await saveBundle();
+  // Stand in for a derivative built before v4 shipped (ready rows are
+  // immutable, so it is stored as the v3 builder would have left it).
+  const output = buildInlineBundle(saved.manifest, saved.files);
+  assert.ok(output.ok);
+  const id = randomUUID();
+  const objectKey = `${owner.tenant}/derivatives/${id}/v3.html`;
+  const objectVersion = await putImmutable(objectKey, output.html);
+  await db.query(
+    `INSERT INTO revision_derivatives(
+       id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,
+       attempt_id,runtime_profile,size,sha256,object_key,object_version
+     ) VALUES($1,$2,$3,$4,'bundle-inline-v3','ready',$5,$6,$7,$8,$9,$10)`,
+    [
+      id,
+      owner.tenant,
+      saved.revisionId,
+      saved.manifestSha256,
+      randomUUID(),
+      BUNDLE_RUNTIME_PROFILE,
+      output.size,
+      output.sha256,
+      objectKey,
+      objectVersion,
+    ],
+  );
+  await db.query(
+    "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
+    [owner.tenant, output.size],
+  );
+  const old = { id };
+  assert.equal(
+    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json()
+      .state,
+    "ready",
+  );
+  const again = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/build-inline`,
+    {},
+  );
+  assert.equal(again.json().state, "ready");
+  assert.deepEqual(
+    (
+      await db.query(
+        "SELECT id,builder_version FROM revision_derivatives WHERE revision_id=$1",
+        [saved.revisionId],
+      )
+    ).rows,
+    [{ id: old.id, builder_version: "bundle-inline-v3" }],
+  );
+  const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
+  assert.equal(opened.derivativeId, old.id);
+  assert.equal(opened.viewer.revision.inlineBuild.state, "ready");
+  assert.equal(opened.live.profile, BUNDLE_RUNTIME_PROFILE);
+  assert.equal((await embedded(tokenFrom(opened.live.url))).statusCode, 200);
+  const ownerView = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/live-view`,
+    {},
+  );
+  assert.equal(ownerView.statusCode, 200, ownerView.body);
+  assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
+});
+
+test("a page the v3 builder refused is built again by v4", async () => {
+  const page = Buffer.from(
+    '<!doctype html><html><body><h1 id="top">Workbench</h1><a href="#top">Top</a><button id="b">0</button><script>document.getElementById("b").onclick=(e)=>{e.target.textContent="1"}</script></body></html>',
+  );
+  const saved = await saveBundle(new Map([["index.html", page]]));
+  await db.query(
+    `INSERT INTO revision_derivatives(
+       id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,reason
+     ) VALUES($1,$2,$3,$4,'bundle-inline-v3','unsupported','unhandled resource-bearing HTML attribute')`,
+    [randomUUID(), owner.tenant, saved.revisionId, saved.manifestSha256],
+  );
+  // The old refusal is not reported as the page's state.
+  assert.equal(
+    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).body,
+    "null",
+  );
+  const built = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/build-inline`,
+    {},
+  );
+  assert.equal(built.json().state, "ready", built.body);
+  const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
+  const {
+    rows: [derivative],
+  } = await db.query(
+    "SELECT builder_version FROM revision_derivatives WHERE id=$1",
+    [opened.derivativeId],
+  );
+  assert.equal(derivative.builder_version, "bundle-inline-v4");
+});
+
+async function saveSingle(source: string) {
+  const bytes = Buffer.from(source);
+  const begun = await call("POST", "/api/uploads", {
+    key: randomUUID(),
+    title: "Single page",
+    filename: "index.html",
+    mime: "text/html",
+    size: bytes.length,
+    sha256: sha256(bytes),
+  });
+  assert.equal(begun.statusCode, 200, begun.body);
+  const uploadId = begun.json().uploadId as string;
+  assert.equal(
+    (await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode,
+    200,
+  );
+  const finalized = await call("POST", `/api/uploads/${uploadId}/finalize`, {});
+  assert.equal(finalized.statusCode, 200, finalized.body);
+  return finalized.json() as any;
+}
+
+test("an unsupported single upload is linked only through its built interactive version", async () => {
+  const saved = await saveSingle(
+    '<!doctype html><div id="root"></div><script>document.getElementById("root").textContent="Rendered by script"</script>',
+  );
+  assert.equal(saved.htmlProfile, "unsupported");
+  const refused = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+    expectedRevisionId: saved.revisionId,
+    expiresInDays: 1,
+  });
+  assert.equal(refused.statusCode, 422, refused.body);
+  const built = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/build-inline`,
+    {},
+  );
+  assert.equal(built.json().state, "ready", built.body);
+  const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
+  assert.ok(opened.derivativeId);
+  assert.equal(opened.live.profile, BUNDLE_RUNTIME_PROFILE);
+  const document = await embedded(tokenFrom(opened.live.url));
+  assert.equal(document.statusCode, 200);
+  assert.match(document.body, /Rendered by script/);
+  // The static document route still refuses the page to the recipient.
+  assert.equal(
+    (await call("GET", `/api/view/${opened.viewer.grant}/document`, undefined, ""))
+      .statusCode,
+    404,
+  );
+  // The owner keeps running the upload itself.
+  const ownerView = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/live-view`,
+    {},
+  );
+  assert.equal(ownerView.statusCode, 200, ownerView.body);
+  assert.equal(ownerView.json().profile, "inline-live-experimental-v1");
+
+  // A page that needs the network is refused by the builder and stays unlinked.
+  const networked = await saveSingle(
+    '<!doctype html><div id="root"></div><script src="https://cdn.example/app.js"></script>',
+  );
+  const refusedBuild = await call(
+    "POST",
+    `/api/revisions/${networked.revisionId}/build-inline`,
+    {},
+  );
+  assert.equal(refusedBuild.json().state, "unsupported", refusedBuild.body);
+  assert.equal(
+    (
+      await call("POST", `/api/artifacts/${networked.artifactId}/share`, {
+        expectedRevisionId: networked.revisionId,
+        expiresInDays: 1,
+      })
+    ).statusCode,
+    422,
+  );
+});

@@ -115,6 +115,8 @@ export function Preview({
         revision={revision}
         grant={grant}
         requiresBuild={false}
+        // Runs as uploaded for the owner; a link needs the built version.
+        buildForLink={revision.storageKind === "single"}
         onInlineBuildChange={onInlineBuildChange}
       >
         {fallback}

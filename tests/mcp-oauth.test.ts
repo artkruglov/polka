@@ -1102,7 +1102,7 @@ test("a failed interactive build keeps the save and a static link, with the reas
     arguments: {
       key: randomUUID(),
       title: "Workbench with a link",
-      html: scriptedArtifact('<a href="#count">To the counter</a>'),
+      html: scriptedArtifact('<a href="notes.html">Notes</a>'),
     },
   });
   const result = called.message.result.structuredContent;

@@ -41,8 +41,9 @@ import {
   inlineBuildSelect,
 } from "./bundle-derivatives.ts";
 import {
-  BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
+  SERVED_BUILDER_VERSIONS_SQL,
+  isServedBuilderVersion,
 } from "./bundle-runtime-contract.ts";
 import { MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
 import {
@@ -726,15 +727,20 @@ export async function createApp() {
           [s.revision_id, s.derivative_id, candidate.artifact_id],
         )
       ).rows[0];
+      // A bundle (other than a lone static page) and any share bound to an
+      // interactive version open only through that ready derivative.
+      const needsDerivative =
+        r?.storage_kind === "bundle"
+          ? !(isStaticSingleFileBundle(r) && !s.derivative_id)
+          : !!s.derivative_id;
       if (
         !r ||
-        (r.storage_kind === "bundle" &&
-          !(isStaticSingleFileBundle(r) && !s.derivative_id) &&
+        (needsDerivative &&
           (!config.HTML_LIVE_ENABLED ||
             !s.derivative_id ||
             r.derivative_state !== "ready" ||
             r.derivative_source !== r.manifest_sha256 ||
-            r.derivative_builder !== BUNDLE_BUILDER_VERSION ||
+            !isServedBuilderVersion(r.derivative_builder) ||
             r.derivative_profile !== BUNDLE_RUNTIME_PROFILE))
       )
         throw missing();
@@ -775,16 +781,12 @@ export async function createApp() {
              ((r.storage_kind='single' OR ${staticSingleFileBundleSql("r")})
                AND g.derivative_id IS NULL)
              OR
-             ($2::boolean AND r.storage_kind='bundle' AND d.state='ready'
+             ($2::boolean AND r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
-               AND d.builder_version=$3 AND d.runtime_profile=$4)
+               AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+               AND d.runtime_profile=$3)
            )`,
-        [
-          sha256(grant),
-          config.HTML_LIVE_ENABLED,
-          BUNDLE_BUILDER_VERSION,
-          BUNDLE_RUNTIME_PROFILE,
-        ],
+        [sha256(grant), config.HTML_LIVE_ENABLED, BUNDLE_RUNTIME_PROFILE],
       )
     ).rows[0];
     if (revision)

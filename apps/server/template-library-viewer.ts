@@ -4,8 +4,10 @@ import type { Actor } from "./artifacts.ts";
 import { readAuthorizedRevisionSource } from "./artifacts.ts";
 import { buildInlineRevisionFromSource } from "./bundle-derivatives.ts";
 import {
-  BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
+  SERVED_BUILDER_VERSIONS_SQL,
+  derivativePreferenceSql,
+  derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { transaction } from "./db.ts";
@@ -131,10 +133,13 @@ export async function issueLibraryLiveView(
         rows: [candidate],
       } = await c.query(
         `SELECT id,state,runtime_profile,reason,error_path
-         FROM revision_derivatives
-         WHERE revision_id=$1 AND source_manifest_sha256=$2 AND builder_version=$3
+         FROM revision_derivatives d
+         WHERE revision_id=$1 AND source_manifest_sha256=$2
+           AND ${derivativeVersionSql("d")}
+         ORDER BY ${derivativePreferenceSql("d")}
+         LIMIT 1
          FOR SHARE`,
-        [request.revisionId, revision.manifest_sha256, BUNDLE_BUILDER_VERSION],
+        [request.revisionId, revision.manifest_sha256],
       );
       if (
         !candidate ||
@@ -275,14 +280,14 @@ export async function readLibraryLiveDocument(token: string) {
       } = await c.query(
         `SELECT object_key,object_version FROM revision_derivatives
          WHERE id=$1 AND revision_id=$2 AND state='ready'
-           AND source_manifest_sha256=$3 AND builder_version=$4
-           AND runtime_profile=$5
+           AND source_manifest_sha256=$3
+           AND builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
+           AND runtime_profile=$4
          FOR SHARE`,
         [
           grant.derivative_id,
           candidate.revisionId,
           grant.manifest_sha256,
-          BUNDLE_BUILDER_VERSION,
           BUNDLE_RUNTIME_PROFILE,
         ],
       );

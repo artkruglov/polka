@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Revision } from "../packages/contracts/index.ts";
 import {
   liveKind,
-  nextLiveStep,
+  nextLiveSteps,
 } from "../apps/web/src/widgets/artifact-preview/live-plan.ts";
 
 const page = (overrides: Partial<Revision>): Revision => ({
@@ -65,23 +65,31 @@ const base = {
 };
 
 test("the interactive version opens by itself once", () => {
-  assert.equal(nextLiveStep(base), "launch");
-  assert.equal(nextLiveStep({ ...base, owner: false }), "launch");
-  assert.equal(
-    nextLiveStep({ ...base, requiresBuild: true, build: "ready" }),
-    "launch",
+  assert.deepEqual(nextLiveSteps(base), ["launch"]);
+  assert.deepEqual(nextLiveSteps({ ...base, owner: false }), ["launch"]);
+  assert.deepEqual(
+    nextLiveSteps({ ...base, requiresBuild: true, build: "ready" }),
+    ["launch"],
   );
-  assert.equal(nextLiveStep({ ...base, launched: true }), null);
-  assert.equal(nextLiveStep({ ...base, stopped: true }), null);
+  assert.deepEqual(nextLiveSteps({ ...base, launched: true }), []);
+  assert.deepEqual(nextLiveSteps({ ...base, stopped: true }), []);
   for (const capability of ["loading", "disabled", "error"] as const)
-    assert.equal(nextLiveStep({ ...base, capability }), null);
+    assert.deepEqual(nextLiveSteps({ ...base, capability }), []);
 });
 
 test("only the owner's unprepared page is prepared without a click", () => {
   const needsBuild = { ...base, requiresBuild: true };
-  assert.equal(nextLiveStep(needsBuild), "prepare");
-  assert.equal(nextLiveStep({ ...needsBuild, owner: false }), null);
-  assert.equal(nextLiveStep({ ...needsBuild, prepared: true }), null);
+  assert.deepEqual(nextLiveSteps(needsBuild), ["prepare"]);
+  assert.deepEqual(nextLiveSteps({ ...needsBuild, owner: false }), []);
+  assert.deepEqual(nextLiveSteps({ ...needsBuild, prepared: true }), []);
   for (const build of ["pending", "failed", "unsupported"] as const)
-    assert.equal(nextLiveStep({ ...needsBuild, build }), null);
+    assert.deepEqual(nextLiveSteps({ ...needsBuild, build }), []);
+});
+
+test("a single page the static view cannot show runs and is built for its link", () => {
+  const forLink = { ...base, buildForLink: true };
+  assert.deepEqual(nextLiveSteps(forLink), ["launch", "prepare"]);
+  assert.deepEqual(nextLiveSteps({ ...forLink, launched: true }), ["prepare"]);
+  assert.deepEqual(nextLiveSteps({ ...forLink, build: "failed" }), ["launch"]);
+  assert.deepEqual(nextLiveSteps({ ...forLink, owner: false }), ["launch"]);
 });
