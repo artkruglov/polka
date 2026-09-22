@@ -1,4 +1,6 @@
 import { registerAgentContext } from "./agent-context.ts";
+import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
+import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { registerUrlImports } from "./url-import/routes.ts";
 import { beginEmailLogin, verifyEmailLogin } from "./email-auth.ts";
@@ -193,6 +195,13 @@ export async function createApp() {
   app.get("/api/health", async () => {
     await db.query("SELECT 1");
     return { ok: true };
+  });
+  // For the operator's monitor only: 404 unless OPS_STATUS_TOKEN is set and
+  // presented. 503 when a check fails, so a plain HTTP probe can alert on it.
+  app.get("/api/ops/status", async (req, reply) => {
+    authorizeOpsStatus(req.headers.authorization);
+    const status = await opsStatus(POLKA_VERSION);
+    return reply.code(status.ok ? 200 : 503).send(status);
   });
   app.get("/api/capabilities", async () => ({
     profile: "file-v1",

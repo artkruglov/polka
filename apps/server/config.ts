@@ -59,6 +59,18 @@ const env = z
       .string()
       .regex(/^[A-Za-z0-9._-]{1,80}$/)
       .optional(),
+    // Operator status for external monitoring (GET /api/ops/status). Unset or
+    // empty: the route does not exist. OPS_BACKUP_BUCKET is where the backup
+    // job writes dumps; the app only lists it to report the newest dump's age.
+    OPS_STATUS_TOKEN: z
+      .string()
+      .optional()
+      .transform((value) => value || undefined)
+      .pipe(z.string().min(32).optional()),
+    OPS_BACKUP_BUCKET: z
+      .string()
+      .optional()
+      .transform((value) => value || undefined),
     RESTORE_MODE: z.enum(["off", "required"]).default("off"),
     RESTORE_RECEIPT_PATH: z.string().optional(),
     RESTORE_RUN_ID: z.string().uuid().optional(),
