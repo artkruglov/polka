@@ -103,10 +103,11 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
 
 ## CLI без зависимостей
 
-`scripts/polka-publish.mjs` — один файл для Node 22+, только встроенный `fetch`. Установка Полки отдаёт его сама, уже настроенным на свой адрес:
+`scripts/polka-publish.mjs` — один файл для Node 22+, только встроенный `fetch`. Установка Полки отдаёт его по адресу `/api/v1/cli/polka-publish.mjs`. Адрес установки CLI берёт из `POLKA_ENDPOINT` или `--endpoint`; адреса по умолчанию нет, чтобы работа случайно не ушла на чужую установку:
 
 ```sh
-curl -fsSLo polka-publish.mjs https://polochka.app/api/v1/cli/polka-publish.mjs
+export POLKA_ENDPOINT=https://polochka.app
+curl -fsSLo polka-publish.mjs "$POLKA_ENDPOINT/api/v1/cli/polka-publish.mjs"
 read -r -s POLKA_TOKEN && export POLKA_TOKEN
 
 node polka-publish.mjs report.html --title "Отчёт за квартал" --share 7
@@ -115,7 +116,7 @@ node polka-publish.mjs report.html --title "Отчёт за квартал" --sh
 cat report.html | node polka-publish.mjs - --title "Из пайплайна" --json
 ```
 
-Из репозитория: `node scripts/polka-publish.mjs …` или `npx tsx scripts/polka-publish.mjs …`; `npm link` поставит команду `polka-publish`.
+Из репозитория: `POLKA_ENDPOINT=… node scripts/polka-publish.mjs …` или `npx tsx scripts/polka-publish.mjs …`; `npm link` поставит команду `polka-publish`.
 
 | Параметр | |
 |---|---|
@@ -124,7 +125,7 @@ cat report.html | node polka-publish.mjs - --title "Из пайплайна" --j
 | `--share 1\|7\|30` | Срок ссылки |
 | `--folder <uuid>` | Папка |
 | `--key <uuid>` | Свой ключ идемпотентности (по умолчанию новый) |
-| `--endpoint <url>` | Адрес Полки; также `POLKA_ENDPOINT`. Только https, кроме localhost |
+| `--endpoint <url>` | Адрес Полки, обязателен (или `POLKA_ENDPOINT`). Только https, кроме localhost |
 | `--json` | Весь ответ API и использованный `key` |
 
 Токен читается только из `POLKA_TOKEN`; `--token` отклоняется. CLI повторяет запрос до трёх раз при сетевой ошибке, `429` и `5xx` с тем же ключом. Коды выхода: `0` — сохранено (со ссылкой или приватно), `1` — отказ сервера или сети, `2` — неверный вызов.
