@@ -18,9 +18,13 @@ const fingerprint = (id: string, code: string) =>
     .update(`email:${id}:${code}`)
     .digest("hex");
 
-// Per-challenge attempts reset with every new code; this caps guesses per address.
-const EMAIL_FAILURES_PER_DAY = 30;
-const emailFailureKey = (email: string) => `email-verify-fail:${email}`;
+// Guessing is bounded by the code, not by a lock on the address: any limit
+// counted per address can be spent by a stranger who knows it, which locked
+// the owner out for a day. An eight-digit code, five tries per code and three
+// codes per address per 10 minutes allow at most 2 160 guesses a day, under 1%
+// over a year of continuous attack, and every code of that attack is an email
+// in the owner's inbox.
+const CODE_DIGITS = 8;
 
 type LocalDeliveryClient = {
   query: (
@@ -101,7 +105,7 @@ export async function beginEmailLogin(email: string, ip: string) {
   await limitAttempts(`email-send:${email}`, 3);
   await limitAttempts(`email-send-ip:${ip}`, 20);
   const id = randomUUID(),
-    code = String(randomInt(100000, 1000000)),
+    code = String(randomInt(10 ** (CODE_DIGITS - 1), 10 ** CODE_DIGITS)),
     browser = randomBytes(32).toString("base64url");
   const stored = await transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
@@ -154,7 +158,7 @@ export async function beginEmailLogin(email: string, ip: string) {
         from: config.MAIL_FROM,
         to: email,
         subject: "Код для входа в Полку",
-        text: `Ваш код: ${code}\nОн действует 10 минут. Если вы не запрашивали вход, проигнорируйте это письмо.`,
+        text: `Ваш код: ${code.slice(0, 4)} ${code.slice(4)}\nОн действует 10 минут. Если вы не запрашивали вход, проигнорируйте это письмо.`,
       });
       if (!result.accepted.length) throw new Error("Mail not accepted");
     }
@@ -180,7 +184,6 @@ export async function verifyEmailLogin(
   if (config.MAIL_MODE === "disabled")
     throw new Problem(503, "invalid", "Вход по почте отключён.");
   await limitAttempts(`email-verify-ip:${ip}`, 40);
-  let failedEmail: string | undefined;
   const token = await transaction(async (c) => {
     const {
       rows: [challenge],
@@ -197,11 +200,6 @@ export async function verifyEmailLogin(
       challenge.browser_hash !== sha256(browser)
     )
       return null;
-    const { rowCount: locked } = await c.query(
-      "SELECT 1 FROM login_limits WHERE key=$1 AND reset_at>now() AND attempts>=$2",
-      [sha256(emailFailureKey(challenge.email)), EMAIL_FAILURES_PER_DAY],
-    );
-    if (locked) return null;
     await c.query(
       "UPDATE login_challenges SET attempts=attempts+1 WHERE id=$1",
       [id],
@@ -211,10 +209,8 @@ export async function verifyEmailLogin(
         Buffer.from(challenge.code_hash, "hex"),
         Buffer.from(fingerprint(id, code), "hex"),
       )
-    ) {
-      failedEmail = challenge.email;
+    )
       return null;
-    }
     // Serialize two independently issued challenges for the same verified identity.
     await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
       challenge.email,
@@ -273,12 +269,6 @@ export async function verifyEmailLogin(
     );
     return session;
   });
-  if (failedEmail)
-    await limitAttempts(
-      emailFailureKey(failedEmail),
-      EMAIL_FAILURES_PER_DAY,
-      "24 hours",
-    );
   if (!token)
     throw new Problem(
       401,
