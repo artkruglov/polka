@@ -41,9 +41,10 @@ import {
   inlineBuildSelect,
 } from "./bundle-derivatives.ts";
 import {
-  BUNDLE_RUNTIME_PROFILE,
   SERVED_BUILDER_VERSIONS_SQL,
+  SERVED_RUNTIME_PROFILES_SQL,
   isServedBuilderVersion,
+  isServedRuntimeProfile,
 } from "./bundle-runtime-contract.ts";
 import { MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
 import {
@@ -741,7 +742,7 @@ export async function createApp() {
             r.derivative_state !== "ready" ||
             r.derivative_source !== r.manifest_sha256 ||
             !isServedBuilderVersion(r.derivative_builder) ||
-            r.derivative_profile !== BUNDLE_RUNTIME_PROFILE))
+            !isServedRuntimeProfile(r.derivative_profile)))
       )
         throw missing();
       const grant = randomBytes(32).toString("base64url");
@@ -785,9 +786,9 @@ export async function createApp() {
              ($2::boolean AND r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
                AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
-               AND d.runtime_profile=$3)
+               AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL})
            )`,
-        [sha256(grant), config.HTML_LIVE_ENABLED, BUNDLE_RUNTIME_PROFILE],
+        [sha256(grant), config.HTML_LIVE_ENABLED],
       )
     ).rows[0];
     if (revision)

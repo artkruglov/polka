@@ -10,7 +10,9 @@ import {
   BUNDLE_BUILDER_VERSION,
   BUNDLE_RUNTIME_PROFILE,
   DERIVATIVE_RESERVATION_BYTES,
+  REACT_RUNTIME_PROFILE,
 } from "../apps/server/bundle-runtime-contract.ts";
+import { componentShell } from "../packages/contracts/runtime.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
@@ -352,7 +354,7 @@ test("unsupported builds are durable and derivative quota plus pending-two admis
     [
       "index.html",
       Buffer.from(
-        "<!doctype html><html><body><script type=module>export{}</script></body></html>",
+        '<!doctype html><html><body><script type=module>import "left-pad"</script></body></html>',
       ),
     ],
   ]);
@@ -619,7 +621,7 @@ async function shareAndOpen(artifactId: string, revisionId: string) {
 }
 
 test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", async () => {
-  assert.equal(BUNDLE_BUILDER_VERSION, "bundle-inline-v4");
+  assert.equal(BUNDLE_BUILDER_VERSION, "bundle-inline-v5");
   const saved = await saveBundle();
   // Stand in for a derivative built before v4 shipped (ready rows are
   // immutable, so it is stored as the v3 builder would have left it).
@@ -685,7 +687,7 @@ test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", asy
   assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
 });
 
-test("a page the v3 builder refused is built again by v4", async () => {
+test("a page the v3 builder refused is built again by the current builder", async () => {
   const page = Buffer.from(
     '<!doctype html><html><body><h1 id="top">Workbench</h1><a href="#top">Top</a><button id="b">0</button><script>document.getElementById("b").onclick=(e)=>{e.target.textContent="1"}</script></body></html>',
   );
@@ -714,7 +716,54 @@ test("a page the v3 builder refused is built again by v4", async () => {
     "SELECT builder_version FROM revision_derivatives WHERE id=$1",
     [opened.derivativeId],
   );
-  assert.equal(derivative.builder_version, "bundle-inline-v4");
+  assert.equal(derivative.builder_version, BUNDLE_BUILDER_VERSION);
+});
+
+test("a component page v4 refused is compiled by the Полка runtime and served", async () => {
+  const saved = await saveBundle(
+    new Map([
+      ["index.html", Buffer.from(componentShell("Counter", "App.jsx"))],
+      [
+        "App.jsx",
+        Buffer.from(
+          'import { useState } from "react";\nexport default function App() { const [n, setN] = useState(0); return <button className="p-2" onClick={() => setN(n + 1)}>{n}</button>; }',
+        ),
+      ],
+    ]),
+  );
+  await db.query(
+    `INSERT INTO revision_derivatives(
+       id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,reason
+     ) VALUES($1,$2,$3,$4,'bundle-inline-v4','unsupported','module, importmap, non-JavaScript (e.g. text/babel) and referenced async or defer scripts are unsupported')`,
+    [randomUUID(), owner.tenant, saved.revisionId, saved.manifestSha256],
+  );
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
+  assert.equal(built.json().state, "ready", built.body);
+  assert.equal(built.json().runtimeProfile, REACT_RUNTIME_PROFILE);
+  const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
+  assert.equal(opened.viewer.revision.inlineBuild.runtimeProfile, REACT_RUNTIME_PROFILE);
+  assert.equal(opened.live.profile, REACT_RUNTIME_PROFILE);
+  const served = await embedded(tokenFrom(opened.live.url));
+  assert.equal(served.statusCode, 200);
+  assert.match(served.headers["content-security-policy"] as string, /connect-src 'none'/);
+  assert.doesNotMatch(served.body, /<script[^>]*\ssrc=|type="module"/);
+  assert.match(served.body, /\.p-2/);
+  const ownerView = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
+  assert.equal(ownerView.statusCode, 200, ownerView.body);
+  assert.equal(ownerView.json().profile, REACT_RUNTIME_PROFILE);
+});
+
+test("a component with an import outside the runtime is refused with the module named", async () => {
+  const saved = await saveBundle(
+    new Map([
+      ["index.html", Buffer.from(componentShell("Animated", "App.jsx"))],
+      ["App.jsx", Buffer.from('import { motion } from "framer-motion";\nexport default () => <motion.div />;')],
+    ]),
+  );
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
+  assert.equal(built.json().state, "unsupported", built.body);
+  assert.match(built.json().reason, /module "framer-motion" is not available in the Полка runtime/);
+  assert.equal(built.json().path, "App.jsx");
 });
 
 async function saveSingle(source: string) {

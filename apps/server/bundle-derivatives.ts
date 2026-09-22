@@ -11,7 +11,7 @@ import { readRevisionSource, type Actor } from "./artifacts.ts";
 import { putImmutable, sha256 } from "./storage.ts";
 import {
   BUNDLE_BUILDER_VERSION,
-  BUNDLE_RUNTIME_PROFILE,
+  isServedRuntimeProfile,
   DERIVATIVE_BUILD_TIMEOUT_MS,
   DERIVATIVE_RESERVATION_BYTES,
   derivativePreferenceSql,
@@ -86,6 +86,9 @@ async function runBuilder(
           maxYoungGenerationSizeMb: 16,
           stackSizeMb: 4,
         },
+        // The runtime builder runs esbuild as a child process of this worker;
+        // it inherits these Go runtime limits and ends with the worker.
+        env: { ...process.env, GOMEMLIMIT: "256MiB", GOMAXPROCS: "2" },
       },
     );
     let settled = false;
@@ -336,7 +339,7 @@ async function executeBuild(
   if (
     result.sourceManifestSha256 !== derivative.source_manifest_sha256 ||
     result.builderVersion !== BUNDLE_BUILDER_VERSION ||
-    result.runtimeProfile !== BUNDLE_RUNTIME_PROFILE ||
+    !isServedRuntimeProfile(result.runtimeProfile) ||
     result.size > DERIVATIVE_RESERVATION_BYTES ||
     sha256(result.html) !== result.sha256
   )
@@ -395,7 +398,7 @@ async function executeBuild(
       [
         derivative.id,
         derivative.attempt_id,
-        BUNDLE_RUNTIME_PROFILE,
+        result.runtimeProfile,
         result.size,
         result.sha256,
         objectKey,

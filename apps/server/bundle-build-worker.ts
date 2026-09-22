@@ -1,6 +1,6 @@
 import { parentPort } from "node:worker_threads";
 import type { BundleManifest } from "../../packages/contracts/bundle.ts";
-import { buildInlineBundle } from "./bundle-inline.ts";
+import { buildDerivative } from "./react-runtime.ts";
 
 type Request = {
   manifest: BundleManifest;
@@ -9,9 +9,9 @@ type Request = {
 
 if (!parentPort) throw new Error("Bundle build worker needs a parent port");
 
-parentPort.once("message", (request: Request) => {
+parentPort.once("message", async (request: Request) => {
   try {
-    const result = buildInlineBundle(
+    const result = await buildDerivative(
       request.manifest,
       new Map(
         request.files.map((file) => [file.path, Buffer.from(file.bytes)]),

@@ -60,7 +60,7 @@ test("inlines the team report deterministically without mutating source bytes", 
   assert.equal(first.ok, true);
   assert.deepEqual(second, first);
   if (!first.ok) return;
-  assert.equal(first.builderVersion, "bundle-inline-v4");
+  assert.equal(first.builderVersion, "bundle-inline-v5");
   assert.equal(first.runtimeProfile, "bundle-inline-experimental-v1");
   assert.deepEqual(first.consumedPaths, sourcePaths.slice().sort());
   assert.match(first.html.toString("utf8"), /<style>/);
