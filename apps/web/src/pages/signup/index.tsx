@@ -1,16 +1,11 @@
+import "./styles.css";
 import React, { useEffect, useState, useRef } from "react";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Mail,
-  Bot,
-  Link2,
-  FileUp,
-} from "lucide-react";
+import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import { request } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
+import { PasswordLoginForm } from "../../features/password-login/index.tsx";
 export function Signup() {
   const account = useAccount();
   const sending = useRef(false);
@@ -83,6 +78,7 @@ export function Signup() {
       setBusy(false);
     }
   }
+  const passwordOnly = mode === "disabled";
   return (
     <AppShell
       current="shelf"
@@ -90,17 +86,27 @@ export function Signup() {
       className="p-modern entry-redesign signup-redesign"
     >
       <main className="onboard">
-        <div className="onboard-icon">
-          <Mail />
-        </div>
-        <span className="p-eyebrow">СВОЯ ПОЛКА ЗА ПАРУ ШАГОВ</span>
-        <h1>{challenge ? "Проверьте почту." : "Ваша личная полка."}</h1>
+        <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
+        <span className="p-eyebrow">
+          {passwordOnly ? "Вход в Полку" : "Своя полка за пару шагов"}
+        </span>
+        <h1>
+          {mode === "loading"
+            ? "Ваша личная полка."
+            : passwordOnly
+              ? "Войдите в свою Полку."
+              : challenge
+                ? "Проверьте почту."
+                : "Ваша личная полка."}
+        </h1>
         <p>
-          {challenge
-            ? challenge.delivery === "local"
-              ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
-              : `Отправили код на ${email}. Он действует 10 минут.`
-            : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
+          {passwordOnly
+            ? "Аккаунт выдаёт администратор этой Полки. Введите логин и пароль, которые вам передали, — регистрация на стороне не нужна."
+            : challenge
+              ? challenge.delivery === "local"
+                ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
+                : `Отправили код на ${email}. Он действует 10 минут.`
+              : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
         </p>
         {mode === "loading" && (
           <p className="entry-loading" role="status">
@@ -113,14 +119,27 @@ export function Signup() {
             не подтверждение реальной почты.
           </aside>
         )}
-        {mode === "disabled" ? (
-          <aside className="onboard-note">
-            Доставка кодов ещё не настроена.{" "}
-            <a href={`/?login=1&next=${encodeURIComponent(next)}`}>
-              Войти с аккаунтом установки
-            </a>
-          </aside>
-        ) : (
+        {mode === "error" && (
+          <Notice tone="error">
+            {error}
+            <Button type="button" onClick={() => location.reload()}>
+              Попробовать снова
+            </Button>
+          </Notice>
+        )}
+        {passwordOnly ? (
+          <div className="onboard-password">
+            <PasswordLoginForm
+              onLogin={() => {
+                location.assign(next === "/start" ? "/" : next);
+              }}
+            />
+            <p className="onboard-fine">
+              Нет логина? Попросите администратора создать аккаунт: он выдаётся
+              вручную, без публичной регистрации.
+            </p>
+          </div>
+        ) : mode !== "loading" && mode !== "error" ? (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -175,21 +194,8 @@ export function Signup() {
                 )}
               </>
             )}
-            {error && (
-              <Notice tone="error">
-                {error}
-                {mode === "error" && (
-                  <Button type="button" onClick={() => location.reload()}>
-                    Попробовать снова
-                  </Button>
-                )}
-              </Notice>
-            )}
-            <Button
-              variant="primary"
-              type="submit"
-              disabled={busy || mode === "loading" || mode === "error"}
-            >
+            {error && <Notice tone="error">{error}</Notice>}
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy
                 ? "Пожалуйста, подождите…"
                 : challenge
@@ -221,13 +227,15 @@ export function Signup() {
               </div>
             )}
           </form>
+        ) : null}
+        {!passwordOnly && mode !== "loading" && (
+          <a
+            className="onboard-legacy"
+            href={`/?login=1&next=${encodeURIComponent(next)}`}
+          >
+            <KeyRound size={15} /> Есть логин и пароль этой Полки
+          </a>
         )}
-        <a
-          className="onboard-legacy"
-          href={`/?login=1&next=${encodeURIComponent(next)}`}
-        >
-          Есть логин и пароль этой установки
-        </a>
       </main>
     </AppShell>
   );

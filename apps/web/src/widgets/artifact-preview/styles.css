@@ -73,3 +73,9 @@
     padding: 8px 10px;
   }
 }
+/* Loading state for the sandboxed document: the frame keeps its size, the notice sits on top. */
+.html-preview-frame { position: relative; display: flex; flex: 1; min-height: 0; }
+.html-preview-frame .work-html { flex: 1; }
+.html-preview-loading { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; background: #fafbfe; color: #647087; font: 400 14px/1.4 var(--font-sans); }
+.html-preview-loading .ui-spinner { color: #1f4fff; }
+.html-preview { background: #fafbfe; }

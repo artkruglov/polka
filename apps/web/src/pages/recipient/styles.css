@@ -121,7 +121,7 @@
   align-items: center;
   gap: 6px;
   min-height: 40px;
-  color: #1257f5;
+  color: #1f4fff;
   text-decoration: none;
   font-size: 12px;
 }
@@ -132,7 +132,7 @@
 }
 .recipient-reader-footer-actions a:focus-visible,
 .recipient-reader-footer-actions button:focus-visible {
-  outline: 2px solid #1257f5;
+  outline: 2px solid #1f4fff;
   outline-offset: 4px;
 }
 

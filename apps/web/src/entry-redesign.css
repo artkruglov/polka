@@ -1,7 +1,7 @@
 /* Capture and onboarding share the shelf's visual language. Scoped to these entry routes. */
 .bring-page.entry-redesign,
 .p-modern.entry-redesign {
-  --accent: #2448f5;
+  --accent: #1f4fff;
   --muted: #6d778b;
   --line: #e5eaf2;
   --bring-line: #e4e9f2;
@@ -12,7 +12,7 @@
   background: #fff;
   min-height: 100vh;
 }
-.entry-redesign :focus-visible { outline-color: #2448f5; }
+.entry-redesign :focus-visible { outline-color: #1f4fff; }
 .entry-redesign button, .entry-redesign .button, .entry-redesign input { border-radius: 8px; }
 .entry-redesign button:hover, .entry-redesign .button:hover { background: #f2f5fb; border-color: #d2dced; }
 .entry-redesign .brand-mark { display: none; }
@@ -20,7 +20,7 @@
 .entry-redesign .site-avatar { background: #edf1f8; color: #5e6c85; }
 .entry-redesign .site-nav a[aria-current="page"] { color: #fff; background: #171c29; }
 .entry-redesign .site-tabbar { background: #fffffff5; border-color: #e7ebf3; }
-.entry-redesign .site-tabbar a[aria-current="page"] { background: #edf2ff; color: #2448f5; }
+.entry-redesign .site-tabbar a[aria-current="page"] { background: #edf2ff; color: #1f4fff; }
 .entry-redesign .entry-heading { max-width: 780px; margin-bottom: 42px; }
 .entry-redesign .entry-eyebrow { display: block; color: #71809a; font-size: 10px; font-weight: 600; letter-spacing: .13em; }
 .entry-redesign .entry-heading h1 { margin: 18px 0 20px; font-size: clamp(40px, 4.2vw, 58px); line-height: 1.08; font-weight: 650; letter-spacing: -.05em; }
@@ -39,7 +39,7 @@
 .capture-redesign .file-field { flex-direction: column !important; justify-content: center; gap: 14px !important; min-height: 178px; text-align: center; padding: 28px 18px; background: #f8faff; border: 1px dashed #bdcbed; border-radius: 8px; }
 .capture-redesign .file-field > svg { width: 30px; height: 30px; color: #6c8ce0; stroke-width: 1.4; }
 .capture-redesign .file-field:hover, .capture-redesign .file-field.dragging { background: #edf3ff; border-color: #6d90ef; }
-.capture-redesign .file-field:focus-within { outline-color: #2448f5; }
+.capture-redesign .file-field:focus-within { outline-color: #1f4fff; }
 .capture-redesign .file-field > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .capture-redesign .file-field strong { font-size: 14px; font-weight: 550; color: #3c527c; }
 .capture-redesign .file-field small { margin-top: 7px; color: #8794aa; font-size: 11px; }
@@ -56,7 +56,7 @@
 .capture-redesign .capture-agent { display: flex; align-items: flex-start; gap: 13px; padding-top: 28px; border-top: 1px solid #e9edf5; }
 .capture-redesign .capture-agent > svg { margin-top: 3px; color: #6683c8; width: 20px; }
 .capture-redesign .capture-agent strong { display: block; font-size: 14px; line-height: 1.5; font-weight: 580; margin-bottom: 7px; }
-.capture-redesign .capture-agent span { display: flex; align-items: center; gap: 6px; margin-top: 15px; font-size: 12px; color: #3158d8; }
+.capture-redesign .capture-agent span { display: flex; align-items: center; gap: 6px; margin-top: 15px; font-size: 12px; color: #1f4fff; }
 .capture-redesign .capture-agent span svg { width: 14px; }
 .capture-redesign .url-import-form { flex-direction: column; gap: 10px; margin: 24px 0; }
 .capture-redesign .url-import-form input { min-height: 46px; border-color: #dbe4f1; font-size: 14px; }
@@ -78,7 +78,7 @@
 .signup-redesign .onboard > p { color: #748095; font-size: 15px; line-height: 1.7; }
 .signup-redesign .onboard > .entry-loading { font-size: 12px; margin-top: 18px; color: #7e8ca2; }
 .signup-redesign .onboard-note { padding: 14px 16px; border: 1px solid #e6ebf4; background: #f8faff; border-radius: 8px; font-size: 12px; line-height: 1.65; margin: 22px 0; }
-.signup-redesign .onboard-note a { color: #3158d8; }
+.signup-redesign .onboard-note a { color: #1f4fff; }
 .signup-redesign .onboard form label { margin: 26px 0 18px; color: #53627a; font-size: 12px; }
 .signup-redesign .onboard form input { min-height: 50px; background: #fbfcff; border-color: #dce4f1; font-size: 16px; }
 .signup-redesign .onboard form input:focus { background: #fff; }
@@ -100,7 +100,7 @@
 .start-redesign .start-option-icon svg { width: 24px; height: 24px; stroke-width: 1.5; }
 .start-redesign .start-options h2 { font-size: 23px; line-height: 1.3; font-weight: 600; letter-spacing: -.035em; margin: 0 0 12px; }
 .start-redesign .start-options p { min-height: 0; color: #778399; font-size: 14px; line-height: 1.7; margin-bottom: 28px; }
-.start-redesign .start-option-action { display: flex; align-items: center; gap: 8px; margin-top: auto; color: #3158d8; font-size: 13px; }
+.start-redesign .start-option-action { display: flex; align-items: center; gap: 8px; margin-top: auto; color: #1f4fff; font-size: 13px; }
 .start-redesign .start-option-action svg { width: 16px; }
 .start-redesign .start-link-demo { display: flex; align-items: flex-start; gap: 16px; padding: 24px 2px; border-bottom: 1px solid #e7ecf4; margin-top: 18px; }
 .start-redesign .start-link-demo > svg { margin-top: 4px; width: 18px; color: #8899b4; }
@@ -147,3 +147,6 @@
   .start-redesign .start-options p { margin-bottom: 22px; font-size: 13px; }
   .start-redesign .start-link-demo { gap: 12px; }
 }
+
+/* Start: the link path is only a path when the installation supports it. */
+.start-redesign .start-link-note { margin:18px 2px 0; padding:18px 0; border-top:1px solid #e7ecf4; border-bottom:1px solid #e7ecf4; color:#7a869b; font-size:13px; line-height:1.6; }

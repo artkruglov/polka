@@ -7,7 +7,7 @@ import { ArtifactReader } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, LogOut, Menu } from "lucide-react";
+import { ArrowLeft, ChevronRight, LogOut, Menu } from "lucide-react";
 import type {
   Account,
   Artifact,
@@ -73,7 +73,9 @@ export function App() {
     [history, setHistory] = useState(false),
     [notice, setNotice] = useState(""),
     [trashBusy, setTrashBusy] = useState(false),
-    [trashActionError, setTrashActionError] = useState("");
+    [trashActionError, setTrashActionError] = useState(""),
+    [confirmLogout, setConfirmLogout] = useState(false),
+    [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => setTrashActionError(""), [panel, selected]);
   const shelfGeneration = useRef(0);
   const trashGeneration = useRef(0);
@@ -367,20 +369,8 @@ export function App() {
       navigation={<nav aria-label="Папки и корзина">{nav}</nav>}
       actions={<>
         <Button variant="quiet" className="navigation-mobile-menu" aria-label="Открыть папки и корзину" aria-haspopup="dialog" onClick={() => setMobile(true)}><Menu /></Button>
-        <Button variant="quiet" aria-label="Выйти" title="Выйти"
-              onClick={async () => {
-                try {
-                  await client.logout();
-                  setAccount(null);
-                  setItems([]);
-                  setFolders([]);
-                  setFolderId(null);
-                  setWork(null);
-                  open(null);
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
+        <Button variant="quiet" className="navigation-logout" aria-label="Выйти из Полки" title="Выйти из Полки"
+              onClick={() => setConfirmLogout(true)}
         ><LogOut /></Button>
       </>}
 
@@ -389,7 +379,13 @@ export function App() {
         {selected && <header className="topbar">
           <div className="top-start">
             <Button variant="quiet" className="icon" aria-label="Назад на полку" onClick={() => open(null)}><ArrowLeft /></Button>
-            <span className="shelf-top-context">Моя Полка / Материал</span>
+            <nav className="shelf-top-context" aria-label="Путь">
+              <a href="/" onClick={(e) => { e.preventDefault(); open(null); }}>
+                {folders.find((f) => f.id === work?.folderId)?.name ?? "Моя Полка"}
+              </a>
+              <ChevronRight aria-hidden="true" />
+              <span>Материал</span>
+            </nav>
           </div>
         </header>}
         <main>
@@ -486,6 +482,33 @@ export function App() {
       {mobile && (
         <Dialog title="Моя Полка" onClose={() => setMobile(false)}>
           <nav className="mobile-nav">{nav}</nav>
+        </Dialog>
+      )}
+      {confirmLogout && (
+        <Dialog title="Выйти из Полки?" onClose={() => setConfirmLogout(false)} busy={loggingOut}>
+          <div className="dialog-body">
+            <p>Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, понадобятся логин и пароль.</p>
+            <div className="button-row dialog-actions">
+              <Button variant="primary" busy={loggingOut} onClick={async () => {
+                setLoggingOut(true);
+                try {
+                  await client.logout();
+                  setConfirmLogout(false);
+                  setAccount(null);
+                  setItems([]);
+                  setFolders([]);
+                  setFolderId(null);
+                  setWork(null);
+                  open(null);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setLoggingOut(false);
+                }
+              }}><LogOut /> Выйти</Button>
+              <Button disabled={loggingOut} onClick={() => setConfirmLogout(false)}>Остаться</Button>
+            </div>
+          </div>
         </Dialog>
       )}
       {(panel === "upload" || panel === "version") && (

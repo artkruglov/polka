@@ -1,23 +1,27 @@
 import { authReturnTo, safeNext } from "../../shared/lib/safe-next.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
-import { Button, TextField } from "../../shared/ui/controls.tsx";
+import { LinkButton } from "../../shared/ui/controls.tsx";
+import { PasswordLoginForm } from "../../features/password-login/index.tsx";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
+import { Wave } from "../../shared/ui/Wave.tsx";
 import "./styles.css";
-import React, { useRef, useState } from "react";
+import React from "react";
 import {
   ArrowUpRight,
   Bookmark,
+  Bot,
   Compass,
-  Link2 as LinkIcon,
+  FileUp,
+  History,
+  Link2,
+  Mail,
 } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
-import { ErrorNotice } from "../../shared/ui/index.tsx";
 export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
-  const [name, setName] = useState(""),
-    [password, setPassword] = useState(""),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const sending = useRef(false);
+  const capabilities = useCapabilities();
+  const emailLogin =
+    capabilities.status === "ready" &&
+    capabilities.capabilities.emailLogin !== "disabled";
   const toFileSave = safeNext(
     new URLSearchParams(location.search).get("next"),
   )?.startsWith("/bring#file");
@@ -25,9 +29,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
     <AppShell current="shelf" account={null} className="login-shell">
       <main className="login-page">
         <section className="login-intro">
-          <span className="eyebrow">
-            РАБОТЫ ИЗ CLAUDE, CHATGPT И ДРУГИХ АГЕНТОВ
-          </span>
+          <span className="eyebrow">Работы из Claude, ChatGPT и других агентов</span>
           <h1>
             Сделали в чате.
             <br />
@@ -36,97 +38,64 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
             <em>Отправили ссылкой.</em>
           </h1>
           <p>
-            Каждую сохранённую работу видите только вы, пока сами
-            <br />
-            не поделитесь ссылкой или не опубликуете снимок.
+            Каждую сохранённую работу видите только вы, пока сами не поделитесь
+            ссылкой.
           </p>
-          <div className="intro-stack">
-            <div>
-              Трекер сна и привычек <ArrowUpRight />
-            </div>
-            <div>
-              Калькулятор досрочного погашения <ArrowUpRight />
-            </div>
-            <div>
-              Дроби на пицце <ArrowUpRight />
-            </div>
-          </div>
+          <Wave compact className="login-wave" />
+          <ul className="login-points">
+            <li>
+              <Link2 /> Ссылка, которую можно отозвать в любой момент
+            </li>
+            <li>
+              <History /> История версий: новая версия не ломает отправленную ссылку
+            </li>
+            <li>
+              <Bot /> Агент сохраняет работы сам — через MCP
+            </li>
+          </ul>
         </section>
-        <form
-          className="login-form"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (sending.current) return;
-            sending.current = true;
-            setBusy(true);
-            setError("");
-            try {
-              await client.login(name, password);
-              onLogin(await client.me());
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              sending.current = false;
-              setBusy(false);
-            }
-          }}
-        >
-          <span className="eyebrow">ВАША ПОЛКА</span>
-          <h2>С возвращением</h2>
-          <a
-            href={`/signup?next=${encodeURIComponent(authReturnTo(location))}`}
+        <section className="login-form" aria-labelledby="login-title">
+          <span className="eyebrow">Ваша полка</span>
+          <h2 id="login-title">С возвращением</h2>
+          <p className="muted">
+            Аккаунт выдаёт администратор этой Полки. Войдите с логином и
+            паролем, которые вам передали.
+          </p>
+          <PasswordLoginForm
+            onLogin={onLogin}
+            submitLabel={toFileSave ? "Войти и продолжить" : "Открыть Полку"}
           >
-            Войти по почте или создать свою полку →
-          </a>
-          <p className="muted">Войдите с аккаунтом этой установки.</p>
-          {toFileSave && (
-            <div className="login-intent" role="note">
-              <Bookmark />
-              <span>
-                После входа вернём к <strong>сохранению файла</strong>.
-                Выбранный до входа файл нужно будет выбрать ещё раз.
-              </span>
-            </div>
+            {toFileSave && (
+              <div className="login-intent" role="note">
+                <Bookmark />
+                <span>
+                  После входа вернём к <strong>сохранению файла</strong>.
+                  Выбранный до входа файл нужно будет выбрать ещё раз.
+                </span>
+              </div>
+            )}
+          </PasswordLoginForm>
+          {emailLogin && (
+            <a
+              className="login-email"
+              href={`/signup?next=${encodeURIComponent(authReturnTo(location))}`}
+            >
+              <Mail /> Войти по почте или создать свою полку <ArrowUpRight />
+            </a>
           )}
-          <TextField
-            label="Логин"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="username"
-            autoFocus
-            required
-          />
-          <TextField
-            label="Пароль"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-          <ErrorNotice error={error} />
-          <Button type="submit" variant="primary" busy={busy}>
-            {busy
-              ? "Входим…"
-              : toFileSave
-                ? "Войти и продолжить"
-                : "Открыть Полку"}
-            <ArrowUpRight />
-          </Button>
-          <a className="login-capture" href="/bring#file">
-            <span>
-              <LinkIcon /> Сохранить файл: HTML, текст или изображение
-            </span>
-            <ArrowUpRight />
-          </a>
-          <a className="login-explore" href="/discover">
-            <Compass /> Публичные примеры без входа <ArrowUpRight />
-          </a>
+          <div className="login-else">
+            <LinkButton href="/bring#file" variant="secondary">
+              <FileUp /> Сохранить файл без входа
+            </LinkButton>
+            <a className="login-explore" href="/discover">
+              <Compass /> Публичные примеры <ArrowUpRight />
+            </a>
+          </div>
           <small>
-            Локальная сборка. Аккаунт создаёт владелец установки; внешняя
-            регистрация не нужна.
+            Нет логина? Попросите администратора создать аккаунт — публичной
+            регистрации здесь нет.
           </small>
-        </form>
+        </section>
       </main>
     </AppShell>
   );

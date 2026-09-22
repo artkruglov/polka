@@ -349,16 +349,40 @@ export function AgentConnections() {
     >
       <main className="p-main agent-connections" id="main">
         <header className="agent-page-heading">
-          <span className="p-eyebrow">ВАШ АГЕНТ → ВАША ПОЛКА</span>
+          <span className="p-eyebrow">Ваш агент → ваша Полка</span>
           <h1>Подключить агента</h1>
           <p className="agent-lead">
-            Клиент сможет выполнять только выбранные действия с вашей Полкой.
+            Claude Code, Codex или другой MCP-клиент будет сохранять работы
+            прямо на вашу Полку — и только то, что вы разрешили.
           </p>
           <p className="agent-boundary">
             <ShieldCheck size={17} /> Настройка через токен. Вход через OAuth
             здесь не используется.
           </p>
         </header>
+        <ol className="agent-steps" aria-label="Как подключить">
+          <li>
+            <span>1</span>
+            <div>
+              <strong>Создайте подключение</strong>
+              <p>Назовите его, выберите клиента и разрешения.</p>
+            </div>
+          </li>
+          <li>
+            <span>2</span>
+            <div>
+              <strong>Передайте токен клиенту</strong>
+              <p>Через переменную окружения — не через чат.</p>
+            </div>
+          </li>
+          <li>
+            <span>3</span>
+            <div>
+              <strong>Попросите агента сохранить</strong>
+              <p>Работа появится на Полке; статус видно здесь.</p>
+            </div>
+          </li>
+        </ol>
         <div className="agent-workspace">
           <div className="agent-setup-column">
             <section className="agent-card" aria-labelledby="new-agent-title">
@@ -608,7 +632,11 @@ export function AgentConnections() {
               </div>
             )}
             {listState === "ready" && connections.length === 0 && (
-              <p>Подключений пока нет.</p>
+              <div className="agent-empty">
+                <strong>Подключений пока нет</strong>
+                Создайте первое слева: токен покажем один раз, а здесь будет
+                видно, когда агент им воспользовался.
+              </div>
             )}
             {listState === "ready" && connections.length > 0 && (
               <div className="agent-list">

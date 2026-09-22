@@ -13,6 +13,7 @@ import {
   type PendingUpload,
 } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
 export function UploadPanel({
   artifact,
   folders,
@@ -139,7 +140,13 @@ export function UploadPanel({
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 setFile(f);
-                if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ""));
+                if (f && !title) {
+                  const fallback = fallbackTitle(f);
+                  setTitle(fallback);
+                  void suggestTitle(f).then((suggested) =>
+                    setTitle((current) => (current === fallback ? suggested : current)),
+                  );
+                }
                 reset();
               }}
             />
