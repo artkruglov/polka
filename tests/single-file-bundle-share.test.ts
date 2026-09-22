@@ -157,6 +157,20 @@ test("the guide's single-file capture is static, shareable and opens sandboxed u
     document.body,
     withNewTabLinks(Buffer.from(CAPTURE_EXAMPLE.files[0].data)).toString(),
   );
+  // Inside Полка's frame the page opens; on its own as a Полка URL it does not.
+  for (const [dest, status] of [["iframe", 200], ["document", 404]] as const)
+    assert.equal(
+      (
+        await app.inject({
+          remoteAddress,
+          method: "GET",
+          url: `/api/view/${viewer.grant}/document`,
+          headers: { origin, "sec-fetch-dest": dest },
+        })
+      ).statusCode,
+      status,
+      dest,
+    );
 
   // Source export still reads the bundle's own file rows.
   const exported = await exportRevision(

@@ -654,7 +654,11 @@ export async function createApp() {
   });
   // Saved HTML is never rendered in the app origin: the response itself carries
   // a sandbox CSP, so even a direct navigation runs no scripts and has no network.
-  const sendHtml = async (reply: any, r: any) => {
+  // A browser that says it is opening the page top-level is refused too: the
+  // page belongs inside Полка's frame, and on its own at a Полка URL it could
+  // pose as a Полка screen. Browsers without Fetch Metadata still get the frame.
+  const sendHtml = async (req: any, reply: any, r: any) => {
+    if (req.headers["sec-fetch-dest"] === "document") throw missing();
     if (
       !r ||
       r.mime !== "text/html" ||
@@ -686,7 +690,7 @@ export async function createApp() {
       ).rowCount
     )
       throw missing();
-    return sendHtml(reply, r);
+    return sendHtml(req, reply, r);
   });
   app.post("/api/revisions/:id/live-view", async (req) => {
     const actor = await identity(req);
@@ -860,7 +864,7 @@ export async function createApp() {
     const { grant } = z
       .object({ grant: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
       .parse(req.params);
-    return sendHtml(reply, await granted(grant));
+    return sendHtml(req, reply, await granted(grant));
   });
   app.post("/api/reports", { bodyLimit: 4096 }, async (req) =>
     reportShare(req.body, req.ip),
