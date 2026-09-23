@@ -36,6 +36,12 @@ const EditorialPage = page(() =>
 const LibraryInvite = page(() =>
   import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite),
 );
+const PrivacyPage = page(() =>
+  import("../../pages/legal/index.tsx").then((m) => m.PrivacyPage),
+);
+const TermsPage = page(() =>
+  import("../../pages/legal/index.tsx").then((m) => m.TermsPage),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -99,4 +105,6 @@ export {
   EditorialPage,
   LibraryInvite,
   OAuthConsent,
+  PrivacyPage,
+  TermsPage,
 };

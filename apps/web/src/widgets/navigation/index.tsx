@@ -218,6 +218,18 @@ function SiteHeader({
   );
 }
 
+/** The operator's documents, linked under every page. */
+export function LegalLinks() {
+  return (
+    <footer className="site-footer">
+      <nav aria-label="Документы">
+        <a href="/privacy">Политика</a>
+        <a href="/terms">Соглашение</a>
+      </nav>
+    </footer>
+  );
+}
+
 /** Owns the page inset and navigation. Pages only supply local content. */
 export function AppShell({
   current,
@@ -242,6 +254,7 @@ export function AppShell({
         {navigation}
       </SiteHeader>
       {children}
+      <LegalLinks />
     </div>
   );
 }
