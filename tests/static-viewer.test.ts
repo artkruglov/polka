@@ -414,10 +414,14 @@ test("the comment overlay rides only on a grant issued for it", async () => {
       (await call("POST", "/api/view/static-view", undefined, "", `Bearer ${link.grant}`)).json().url,
     ),
   );
+  // Away tokens carry their own expiry second: compare them as a class.
+  const unsigned = (html: string) => html.replace(/\/away#[^"]+/g, "/away#…");
   assert.equal(
-    first.body.slice(0, "<!doctype html>".length) +
-      first.body.slice(injectedEnd),
-    ordinary.body,
+    unsigned(
+      first.body.slice(0, "<!doctype html>".length) +
+        first.body.slice(injectedEnd),
+    ),
+    unsigned(ordinary.body),
   );
   assertStaticBody(ordinary.body, PAGE);
   // A new nonce on every response.
