@@ -6,7 +6,7 @@
 
 Полка ("the shelf") keeps the reports, pages, prototypes and other artifacts you made with Claude, ChatGPT, Claude Code or Codex outside the chat history. Every work gets versions and a clear link. Recipients don't need a Claude or ChatGPT account, and you can revoke a link at any time.
 
-- **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). Claude Code, Codex and other MCP clients connect with a token. Scripts and CI use the HTTP API.
+- **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). Claude Code and Codex connect with one command and no token; other MCP clients use a token. Scripts and CI use the HTTP API.
 - **Interactive pages work for recipients.** React/JSX chat artifacts are compiled into one self-contained page, with libraries bundled in and no network access. The page opens in a sandbox on a separate domain (`polochka.page`).
 - **Exact versions.** Every save is immutable and has a SHA-256. A link shows the version you published, not your latest draft.
 - **Revocable links.** You can pick how long a link lasts (1, 7 or 30 days), revoke it, and receive reports from recipients. Private works stay out of the catalogue and search indexes.
@@ -25,7 +25,8 @@ The interface and most documentation are in Russian. Identifiers, commands and A
 | From | How | Details |
 |---|---|---|
 | Claude.ai, ChatGPT | Connector `https://polochka.app/mcp` with OAuth 2.1 sign-in. The model calls `polka_publish` and returns a link | [Connector](docs/MCP_CONNECTOR.md) |
-| Claude Code, Codex, other MCP clients | Token from the «Агенты» (Agents) page, Streamable HTTP at `/mcp` | [Connecting agents](docs/connect-agents.md) |
+| Claude Code, Codex | One command (`codex mcp add polka --url https://polochka.app/mcp`), then sign in and allow in the browser; no token | [Connecting agents](docs/connect-agents.md) |
+| Other MCP clients | Token from the «Агенты» (Agents) page, Streamable HTTP at `/mcp` | [Connecting agents](docs/connect-agents.md) |
 | Scripts, CI, in-house agents | `POST /api/v1/publish` or the dependency-free CLI `scripts/polka-publish.mjs` | [HTTP API](docs/PUBLISH_API.md) |
 | By hand | Upload a file (HTML, text, PNG/JPEG/WebP up to 5 MB), or paste code on the «Сохранить» (Save) page | [FAQ](docs/faq.md) |
 
