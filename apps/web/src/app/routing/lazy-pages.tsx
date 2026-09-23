@@ -36,6 +36,9 @@ const EditorialPage = page(() =>
 const LibraryInvite = page(() =>
   import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite),
 );
+const Moderation = page(() =>
+  import("../../pages/moderation/index.tsx").then((m) => m.Moderation),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -98,5 +101,6 @@ export {
   Landing,
   EditorialPage,
   LibraryInvite,
+  Moderation,
   OAuthConsent,
 };

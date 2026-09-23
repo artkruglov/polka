@@ -36,3 +36,21 @@
   .recipient-reader-footer { margin-top: 20px; gap: 12px; }
   .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
 }
+
+/* Above the page, before its content: who published it and what not to type in. */
+.recipient-notice { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--warning-line, var(--line-strong)); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); }
+.recipient-notice > svg { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 2px; }
+.recipient-notice-text { flex: 1 1 auto; min-width: 0; }
+.recipient-notice-text p { color: var(--ink); font-size: var(--text-base); line-height: 1.5; }
+.recipient-notice-text small { display: block; margin-top: 4px; color: var(--warning); font-size: var(--text-sm); font-weight: 500; }
+.recipient-notice .report-button { flex: 0 0 auto; min-height: 40px; padding: 8px 10px; color: var(--ink-2); }
+.recipient-notice .report-sent { flex: 0 0 auto; align-self: center; }
+.recipient-notice--editorial { align-items: center; gap: 8px; padding: 6px 0 0; border: 0; background: none; color: var(--muted); font-size: var(--text-sm); font-weight: 500; }
+.recipient-notice--editorial > svg { width: 16px; height: 16px; margin-top: 0; }
+.recipient-review p { max-width: 52ch; }
+.recipient-review-hint { color: var(--muted); }
+
+@media (max-width: 760px) {
+  .recipient-notice { flex-wrap: wrap; gap: 8px 10px; }
+  .recipient-notice .report-button { margin-left: 30px; padding-left: 0; }
+}

@@ -18,7 +18,8 @@ import { db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-import { classifyHtml, looksLikeHtml } from "./html.ts";
+import { inspectHtml, looksLikeHtml, type HtmlInspection } from "./html.ts";
+import { SignalCollector, scanScript } from "./phishing-signals.ts";
 import {
   createSingleHtmlRevisionManifest,
   isStaticSingleFileBundle,
@@ -89,6 +90,7 @@ export function shareDTO(s: any, latest: string): Share | null {
     revisionId: s.revision_id,
     number: s.number,
     status,
+    moderation: s.moderation ?? "none",
     expiresAt: new Date(s.expires_at).toISOString(),
     url: ["active", "behind"].includes(status)
       ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}`
@@ -251,7 +253,7 @@ export async function beginUploadInTransaction(
 function validateBytes(
   bytes: Buffer,
   input: ReturnType<typeof beginUploadSchema.parse>,
-) {
+): HtmlInspection | null {
   if (bytes.length !== input.size || sha256(bytes) !== input.sha256)
     throw new Problem(
       422,
@@ -294,7 +296,7 @@ function validateBytes(
           "invalid",
           "Это не похоже на HTML-страницу. Сохраните её как текст или выберите файл .html.",
         );
-      return classifyHtml(source);
+      return inspectHtml(source);
     }
   }
   return null;
@@ -413,7 +415,8 @@ export async function finalizeUploadInTransaction(
   const input = beginUploadSchema.parse(u.request);
   await validateUploadTarget(c, actor, input);
   const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
-  const htmlProfile = validateBytes(bytes, input);
+  const inspection = validateBytes(bytes, input);
+  const htmlProfile = inspection?.profile ?? null;
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
   > | null = null;
@@ -463,7 +466,7 @@ export async function finalizeUploadInTransaction(
   }
   const revisionId = randomUUID();
   await c.query(
-    "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'single',$15)",
+    "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'single',$15,$16)",
     [
       revisionId,
       actor.tenant,
@@ -480,6 +483,7 @@ export async function finalizeUploadInTransaction(
       revisionManifest?.manifest ?? null,
       revisionManifest?.manifestSha256 ?? null,
       input.size,
+      inspection?.signals ?? [],
     ],
   );
   await c.query(
@@ -826,6 +830,7 @@ export async function finalizeBundleUploadInTransaction(
     object_version: string;
   }> = [];
   let entryBytes: Buffer | null = null;
+  const signals = new SignalCollector();
   for (const [index, file] of input.manifest.files.entries()) {
     const stored = staged.find((row) => row.file_index === index);
     if (
@@ -837,6 +842,12 @@ export async function finalizeBundleUploadInTransaction(
     const bytes = await readBlob(stored.object_key, stored.object_version);
     validateBundleFileBytes(file, bytes);
     if (file.path === input.manifest.entrypoint) entryBytes = bytes;
+    // Phishing signals of every page and script (a lone entrypoint is read
+    // below, in the same walk as its profile).
+    else if (file.mime === "text/html")
+      inspectHtml(bytes.toString("utf8"), signals);
+    else if (file.mime === "text/javascript")
+      scanScript(bytes.toString("utf8"), signals);
     verified.push({ file, ...stored });
   }
   const entryIndex = input.manifest.files.findIndex(
@@ -847,8 +858,10 @@ export async function finalizeBundleUploadInTransaction(
   // multi-file bundle stays runtime-only until a derivative is prepared.
   const htmlProfile: HtmlProfile =
     input.manifest.files.length === 1 && entryBytes
-      ? classifyHtml(entryBytes.toString("utf8"))
+      ? inspectHtml(entryBytes.toString("utf8"), signals).profile
       : "unsupported";
+  if (input.manifest.files.length !== 1 && entryBytes)
+    inspectHtml(entryBytes.toString("utf8"), signals);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
   if (
@@ -864,8 +877,8 @@ export async function finalizeBundleUploadInTransaction(
   const revisionId = randomUUID();
   const manifestSha256 = sha256(JSON.stringify(input.manifest));
   await c.query(
-    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
-       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13)`,
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals)
+       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15)`,
     [
       revisionId,
       actor.tenant,
@@ -881,6 +894,7 @@ export async function finalizeBundleUploadInTransaction(
       manifestSha256,
       input.size,
       htmlProfile,
+      signals.list(),
     ],
   );
   for (const [index, stored] of verified.entries())

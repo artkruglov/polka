@@ -173,6 +173,7 @@ export async function revokeShareAsOperator(shareId: string) {
       [shareId],
     );
     await revokeShareInTransaction(c, actor, shareId);
+    await settleReports(c, shareId, "actioned");
     return {
       shareId,
       artifactId: before.artifact_id as string,
@@ -329,4 +330,230 @@ export function formatEnabled(
       ? "was not disabled; nothing changed."
       : "is enabled. Closed shares and revoked agent connections stay closed."
   }`;
+}
+
+/** The operator has looked at this link: its open reports are settled. */
+async function settleReports(
+  c: Pick<PoolClient, "query">,
+  shareId: string,
+  status: "dismissed" | "actioned",
+) {
+  return c.query(
+    "UPDATE share_reports SET status=$2 WHERE share_id=$1 AND status='new'",
+    [shareId, status],
+  );
+}
+
+export type OperatorOutcome = {
+  shareId: string;
+  /** False when the request found everything already done. */
+  changed: boolean;
+  message: string;
+};
+
+async function lockOperatorShare(c: PoolClient, shareId: string) {
+  const actor = await shareOwner(shareId);
+  const { account } = await lockTenantAccount(c, actor);
+  const {
+    rows: [share],
+  } = await c.query(
+    `SELECT *,(NOT revoked AND expires_at>now()) AS live
+     FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
+    [shareId, actor.tenant],
+  );
+  if (!share) throw new ModerationError(`No share ${shareId}`);
+  return { actor, account, share };
+}
+
+/**
+ * Let a held or paused link open, and settle its reports. With trust, the
+ * author is approved too: their next links open without review (except
+ * under SHARE_MODERATION=all). Repeating it changes nothing.
+ */
+export async function approveShareAsOperator(shareId: string, trust = false) {
+  return transaction(async (c): Promise<OperatorOutcome> => {
+    const { actor, account, share } = await lockOperatorShare(c, shareId);
+    let changed = false;
+    const notes: string[] = [];
+    if (!share.live)
+      notes.push("Ссылка уже закрыта или истекла; открывать нечего.");
+    else if (share.moderation !== "none") {
+      await c.query(
+        "UPDATE shares SET moderation='none',moderated_at=now() WHERE id=$1",
+        [shareId],
+      );
+      await audit(c, actor, "share.approved", shareId);
+      changed = true;
+      notes.push("Ссылка одобрена: получатели видят работу.");
+    } else notes.push("Ссылка уже открыта для получателей.");
+    const settled = await settleReports(c, shareId, "dismissed");
+    if (settled.rowCount) {
+      changed = true;
+      notes.push(`Жалобы отмечены рассмотренными: ${settled.rowCount}.`);
+    }
+    if (trust) {
+      if (account.disabled) notes.push("Автор отключён; доверие не выдаётся.");
+      else if (!account.trusted_at) {
+        await c.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [
+          actor.id,
+        ]);
+        await audit(c, actor, "account.trusted", actor.id);
+        changed = true;
+        notes.push(
+          "Автор теперь доверенный: его ссылки открываются без проверки.",
+        );
+      } else notes.push("Автор уже доверенный.");
+    }
+    return { shareId, changed, message: notes.join(" ") };
+  });
+}
+
+/** Lift a pause after reports. A held link stays held: approve it instead. */
+export async function unpauseShareAsOperator(shareId: string) {
+  return transaction(async (c): Promise<OperatorOutcome> => {
+    const { actor, share } = await lockOperatorShare(c, shareId);
+    if (!share.live)
+      return {
+        shareId,
+        changed: false,
+        message: "Ссылка уже закрыта или истекла; снимать паузу не с чего.",
+      };
+    if (share.moderation !== "paused")
+      return {
+        shareId,
+        changed: false,
+        message:
+          share.moderation === "held"
+            ? "Ссылка не на паузе, а ждёт первой проверки: одобрите её."
+            : "Ссылка не на паузе; ничего не изменилось.",
+      };
+    await c.query(
+      "UPDATE shares SET moderation='none',moderated_at=now() WHERE id=$1",
+      [shareId],
+    );
+    await settleReports(c, shareId, "dismissed");
+    await audit(c, actor, "share.unpaused", shareId);
+    return {
+      shareId,
+      changed: true,
+      message:
+        "Пауза снята: получатели снова видят работу. Жалобы отмечены рассмотренными.",
+    };
+  });
+}
+
+/** Close the link for good (the owner's revoke path). */
+export async function closeShareAsOperator(
+  shareId: string,
+): Promise<OperatorOutcome> {
+  const result = await revokeShareAsOperator(shareId);
+  return {
+    shareId,
+    changed: !result.alreadyRevoked,
+    message: result.alreadyRevoked
+      ? "Ссылка уже была закрыта; ничего не изменилось."
+      : "Ссылка закрыта навсегда. Работа осталась на полке автора.",
+  };
+}
+
+/** Close the link and disable its author (disableAccount closes all links). */
+export async function closeAndDisableAsOperator(
+  shareId: string,
+): Promise<OperatorOutcome> {
+  const owner = await shareOwner(shareId);
+  const {
+    rows: [account],
+  } = await db.query("SELECT name FROM accounts WHERE id=$1", [owner.id]);
+  const disabled = await disableAccount(account.name, "moderation mail");
+  await transaction((c) => settleReports(c, shareId, "actioned"));
+  return {
+    shareId,
+    changed: !disabled.alreadyDisabled,
+    message: disabled.alreadyDisabled
+      ? "Автор уже был отключён, его ссылки закрыты; ничего не изменилось."
+      : `Автор отключён: сессии завершены, подключения агентов отозваны, закрыто ссылок: ${disabled.liveShares + disabled.expiredShares}. Данные не удалены; вернуть доступ — moderation:enable.`,
+  };
+}
+
+/** Approve an author without a link at hand (scripts). */
+export async function trustAccount(login: string) {
+  const actor = await accountActor(db, login);
+  return transaction(async (c) => {
+    const { account } = await lockTenantAccount(c, actor);
+    if (account.disabled)
+      throw new ModerationError(`${account.name} is disabled; enable it first`);
+    if (!account.trusted_at) {
+      await c.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [
+        actor.id,
+      ]);
+      await audit(c, actor, "account.trusted", actor.id);
+    }
+    return {
+      name: account.name as string,
+      email: account.email as string | null,
+      alreadyTrusted: !!account.trusted_at,
+    };
+  });
+}
+
+export function formatTrusted(
+  result: Awaited<ReturnType<typeof trustAccount>>,
+) {
+  return `${clean(result.name + (result.email ? ` <${result.email}>` : ""), 120)} ${
+    result.alreadyTrusted
+      ? "was already trusted; nothing changed."
+      : "is trusted: new links open without review (except SHARE_MODERATION=all)."
+  }`;
+}
+
+/** Links waiting for the operator: held before their first open, or paused. */
+export async function listModerationQueue() {
+  const { rows } = await db.query(
+    `SELECT share.id,share.moderation,share.moderation_reason,share.moderated_at,
+       share.created_at,artifact.title,account.name,account.email,
+       (SELECT count(*) FROM share_reports report
+        WHERE report.share_id=share.id AND report.status='new') AS open_reports
+     FROM shares share
+     JOIN artifacts artifact ON artifact.id=share.artifact_id
+     JOIN tenants tenant ON tenant.id=share.tenant_id
+     JOIN accounts account ON account.id=tenant.owner_id
+     WHERE share.moderation<>'none' AND NOT share.revoked AND share.expires_at>now()
+     ORDER BY COALESCE(share.moderated_at,share.created_at),share.id
+     LIMIT $1`,
+    [REPORT_LIMIT],
+  );
+  return rows.map((row) => ({
+    shareId: row.id as string,
+    state: row.moderation as "held" | "paused",
+    reason: row.moderation_reason as string | null,
+    since: new Date(row.moderated_at ?? row.created_at),
+    title: row.title as string | null,
+    ownerName: row.name as string,
+    ownerEmail: row.email as string | null,
+    openReports: Number(row.open_reports),
+  }));
+}
+
+export function formatModerationQueue(
+  queue: Awaited<ReturnType<typeof listModerationQueue>>,
+) {
+  if (!queue.length) return "No links wait for review.";
+  return [
+    ...queue.map((item) =>
+      [
+        time(item.since),
+        item.state.toUpperCase(),
+        item.reason ?? "-",
+        item.shareId,
+        `reports ${item.openReports}`,
+        clean(
+          item.ownerName + (item.ownerEmail ? ` <${item.ownerEmail}>` : ""),
+          60,
+        ),
+        clean(item.title, 40),
+      ].join("  "),
+    ),
+    "",
+    `${queue.length} link(s) wait. Approve: moderation:approve -- <shareId> [--trust]; unpause: moderation:unpause -- <shareId>; close: moderation:revoke-share -- <shareId>.`,
+  ].join("\n");
 }

@@ -99,6 +99,17 @@ function publishResponse(result: PublishResult) {
     interactiveReady:
       "interactiveReady" in result ? !!result.interactiveReady : false,
     scriptsRunForRecipients: result.scriptsRunForRecipients,
+    // "held": the link exists, recipients see a review screen until the
+    // Полка moderator approves it; moderationMessage says so to a human.
+    ...(shared && "moderation" in shared
+      ? {
+          moderation: shared.moderation,
+          moderationMessage: shared.moderationMessage,
+        }
+      : {}),
+    ...(shared && "expiresNote" in shared && shared.expiresNote
+      ? { expiresNote: shared.expiresNote }
+      : {}),
     ...("linkUnavailableReason" in result && result.linkUnavailableReason
       ? { linkUnavailableReason: result.linkUnavailableReason }
       : {}),
