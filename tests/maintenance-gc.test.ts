@@ -173,6 +173,12 @@ test("one guarded run reconciles exact upload and derivative versions before com
   );
   assert.ok(uploadUpdate > -1 && derivativeUpdate > uploadUpdate);
   assert.equal(database.calls.filter((sql) => sql === "COMMIT").length, 5);
+  // The privacy policy keeps a report for one year.
+  assert.ok(
+    database.calls.includes(
+      "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
+    ),
+  );
 });
 
 test("abort after one exact delete rolls back metadata and a later run finishes reconciliation", async () => {
