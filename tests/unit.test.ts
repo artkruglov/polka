@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { classify } from "../apps/web/src/features/import-url/classify-link.ts";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
-import { STATIC_HTML_CSP, classifyHtml, withNewTabLinks } from "../apps/server/html.ts";
+import { STATIC_HTML_CSP, VIEWER_GUARD, classifyHtml, withNewTabLinks, withViewerGuard } from "../apps/server/html.ts";
 
 const prose =
   "Отчёт за квартал: выручка выросла, расходы снизились, команда закрыла все ключевые задачи и подготовила план на следующий период.";
@@ -245,4 +245,17 @@ test("zod-free contract constants match the contract module", async () => {
   assert.deepEqual(constants.AGENT_SCOPES, contracts.AGENT_SCOPES);
   for (const sample of ["<p>x</p>", "<!doctype html>", "просто текст", "<main>", "a < b"])
     assert.equal(constants.looksLikeHtml(sample), contracts.looksLikeHtml(sample), sample);
+});
+
+test("The viewer's WebRTC guard runs before anything the page runs", () => {
+  const view = (html: string) => withViewerGuard(Buffer.from(html)).toString();
+  // After a doctype, so the page keeps standards mode.
+  assert.equal(view("<!DOCTYPE html><p>x</p>"), `<!DOCTYPE html>${VIEWER_GUARD}<p>x</p>`);
+  assert.equal(view("\n<!-- c --> <!doctype html><p>x</p>"), `\n<!-- c --> <!doctype html>${VIEWER_GUARD}<p>x</p>`);
+  // Without a doctype, at the very start: a script before <head> runs after it.
+  assert.equal(view("<script>x()</script><head></head>"), `${VIEWER_GUARD}<script>x()</script><head></head>`);
+  assert.equal(view("<!-- c --><script>x()</script>"), `${VIEWER_GUARD}<!-- c --><script>x()</script>`);
+  // Bytes after the guard are untouched.
+  const bytes = Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("<!doctype html>é")]);
+  assert.deepEqual(withViewerGuard(bytes).subarray(-2), Buffer.from("é"));
 });

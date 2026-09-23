@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { withViewerGuard } from "../apps/server/html.ts";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -235,7 +236,8 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
     `/document/${capabilityToken(issued.json().url)}`,
   );
   assert.equal(document.statusCode, 200, document.body);
-  assert.equal(document.body, interactive);
+  // Byte-exact page, with the viewer's WebRTC guard first.
+  assert.equal(document.body, withViewerGuard(Buffer.from(interactive)).toString());
   assert.match(
     document.headers["content-security-policy"] as string,
     /^sandbox allow-scripts allow-forms;/,
