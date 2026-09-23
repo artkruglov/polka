@@ -1,8 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Сообщить об уязвимости / Report a vulnerability
-    url: https://github.com/artkruglov/polka/security/advisories/new
-    about: Приватно, не через публичный issue. / Privately, not in a public issue.
+    url: https://github.com/artkruglov/polka/blob/main/SECURITY.md
+    about: Приватно, не через публичный issue — порядок в SECURITY.md. / Privately, not in a public issue; see SECURITY.md.
   - name: Вопросы и ограничения / FAQ
     url: https://github.com/artkruglov/polka/blob/main/docs/faq.md
     about: Лимиты, сеть в страницах, ссылки Claude/ChatGPT. / Limits, network access, Claude/ChatGPT links.
+  - name: Поддержка, аккаунт на polochka.app, коммерческая лицензия / Support
+    url: https://github.com/artkruglov/polka/blob/main/SUPPORT.md
+    about: Куда писать, если это не ошибка и не идея. / Where to write if it's not a bug or an idea.
