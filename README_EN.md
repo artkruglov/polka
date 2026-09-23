@@ -10,6 +10,8 @@
 
 The agent runs one command and Полка opens: sign in or create a shelf with your e-mail and press Allow. From then on, ask the agent to save your work to Полка; the reply contains a link.
 
+For developers: install the agent skill with `npx skills add artkruglov/polka`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
+
 Полка ("the shelf") keeps the reports, pages, prototypes and other artifacts you made with Claude, ChatGPT, Claude Code or Codex outside the chat history. Every work gets versions and a clear link. Recipients don't need a Claude or ChatGPT account, and you can revoke a link at any time.
 
 - **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). The simplest way is to tell your agent "Connect Полка: https://polochka.app/connect"; it sets itself up, and you sign in by email and allow access. Claude Code and Codex connect with one command and no token; other MCP clients use a token. Scripts and CI use the HTTP API.
