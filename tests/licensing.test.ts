@@ -55,7 +55,7 @@ test("/pricing: the cloud, self-hosting under the AGPL and a commercial license"
   assert.match(html, /Бесплатно по AGPL-3\.0/);
   assert.ok(html.includes(`href="${SOURCE_URL}"`));
   assert.ok(html.includes(`href="${SOURCE_URL}/blob/main/deploy/hosted/README.md"`));
-  assert.match(html, /href="mailto:artkruglov@gmail\.com\?subject=[^"]+"[^>]*>Написать/);
+  assert.match(html, /href="mailto:hello@polochka\.app\?subject=[^"]+"[^>]*>Написать/);
   // No price is invented.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   const routes = read("apps/web/src/app/routing/index.tsx");

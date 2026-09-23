@@ -3,7 +3,7 @@ import { ArrowUpRight, Cloud, Mail, Server } from "lucide-react";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
 
-const CONTACT = "artkruglov@gmail.com";
+const CONTACT = "hello@polochka.app";
 
 /** «Для компаний»: the three ways to use Полка, with no invented prices. */
 export function PricingPlans() {
