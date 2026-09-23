@@ -135,8 +135,8 @@ export function openApiDocument(origin: string) {
         "Save a self-contained HTML page to the token owner's Полка shelf and get an unlisted link.",
       description: `Полка (Polka) keeps pages, reports and prototypes made with AI agents and gives an unlisted link to them. This API is for agents and scripts that do not speak MCP; MCP clients connect to ${origin}/mcp instead (see ${origin}/llms.txt). The human creates the token in the browser; never ask them to paste it into a chat. Errors are JSON {code, message}; message is Russian and meant for the human.`,
       license: {
-        name: "Apache-2.0",
-        identifier: "Apache-2.0",
+        name: "AGPL-3.0-only",
+        identifier: "AGPL-3.0-only",
       },
     },
     externalDocs: {
