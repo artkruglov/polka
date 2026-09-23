@@ -230,7 +230,12 @@ export function LegalLinks() {
   );
 }
 
-/** Owns the page inset and navigation. Pages only supply local content. */
+/**
+ * Owns the page inset and navigation. Pages only supply local content.
+ * `bare` drops the rail, the tab bar and the document links: a guest opening a
+ * shared work sees the work, not the app. The wrapper stays the same element,
+ * so switching `bare` once the account is known does not remount the page.
+ */
 export function AppShell({
   current,
   account,
@@ -239,6 +244,7 @@ export function AppShell({
   children,
   actions,
   onLoggedOut,
+  bare = false,
 }: {
   current: Section;
   account: Account | null | undefined;
@@ -247,14 +253,17 @@ export function AppShell({
   children: React.ReactNode;
   actions?: React.ReactNode;
   onLoggedOut?: () => void;
+  bare?: boolean;
 }) {
   return (
-    <div className={`app-shell ${className}`}>
-      <SiteHeader current={current} account={account} actions={actions} onLoggedOut={onLoggedOut}>
-        {navigation}
-      </SiteHeader>
+    <div className={`app-shell${bare ? " app-shell--bare" : ""} ${className}`}>
+      {!bare && (
+        <SiteHeader current={current} account={account} actions={actions} onLoggedOut={onLoggedOut}>
+          {navigation}
+        </SiteHeader>
+      )}
       {children}
-      <LegalLinks />
+      {!bare && <LegalLinks />}
     </div>
   );
 }
