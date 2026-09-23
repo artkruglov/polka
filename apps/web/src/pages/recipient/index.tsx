@@ -7,6 +7,7 @@ import {
   Compass,
   Flag,
   Hourglass,
+  Ban,
   Info,
   LockKeyhole,
   MessageCircle,
@@ -102,7 +103,10 @@ export function Recipient() {
   }, [attempt]);
   // Comments belong to user links; editorial pages have none.
   const commentable =
-    !!viewer && !("review" in viewer) && viewer.publisher === "user";
+    !!viewer &&
+    !("review" in viewer) &&
+    !("blocked" in viewer) &&
+    viewer.publisher === "user";
   const [reportComment, setReportComment] = useState<string | null>(null);
   const comments = useSharedComments({
     token,
@@ -163,8 +167,11 @@ export function RecipientScreen({
   const [reporting, setReporting] = useState(false);
   const [reported, setReported] = useState(false);
   const underReview = !!resolved && "review" in resolved;
+  const blocked = !!resolved && "blocked" in resolved;
   const viewer: Viewer | null =
-    resolved && !("review" in resolved) ? resolved : null;
+    resolved && !("review" in resolved) && !("blocked" in resolved)
+      ? resolved
+      : null;
   const plainText = viewer?.revision.mime === "text/plain";
   const report = reported ? (
     <span className="report-sent">Жалоба отправлена</span>
@@ -216,6 +223,23 @@ export function RecipientScreen({
           </div>
           <a className="recipient-explore" href="/discover">
             <Compass /> Посмотреть публичные примеры
+          </a>
+        </main>
+      </RecipientFrame>
+    );
+  if (blocked)
+    // Blocked by the moderator or the content filter: nothing about the work.
+    return (
+      <RecipientFrame account={account}>
+        <main className="empty recipient-denied recipient-review">
+          <div className="empty-icon"><Ban /></div>
+          <h1>Ссылка недоступна</h1>
+          <p>
+            Модератор Полки закрыл доступ по этой ссылке. Содержимое не
+            показывается.
+          </p>
+          <a className="recipient-explore" href="/">
+            Что такое Полка <ArrowUpRight size={15} />
           </a>
         </main>
       </RecipientFrame>

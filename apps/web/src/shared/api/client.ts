@@ -36,7 +36,11 @@ export type ModerationInspection = {
     mime: string;
     htmlProfile: string | null;
     version: number;
-    state: "none" | "held" | "paused" | "closed";
+    state: "none" | "held" | "paused" | "blocked" | "closed";
+    /** A CSAM signal: the title is withheld and there is no preview. */
+    csam?: boolean;
+    /** What the content filter found (never terms for CSAM). */
+    content?: string | null;
     reason: string | null;
     signals: string | null;
   };
@@ -209,10 +213,14 @@ export const client = {
       request<ModerationInspection>("/moderation/inspect", { token }),
     preview: (token: string) =>
       request<Viewer>("/moderation/preview", { token }),
-    act: (token: string) =>
+    act: (token: string, options: { legalHold?: boolean; authority?: string } = {}) =>
       request<{ action: string; shareId: string; changed: boolean; message: string }>(
         "/moderation/act",
-        { token },
+        {
+          token,
+          ...(options.legalHold ? { legalHold: true } : {}),
+          ...(options.authority ? { authority: options.authority } : {}),
+        },
       ),
   },
   report: (

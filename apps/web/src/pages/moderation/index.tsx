@@ -20,6 +20,7 @@ const STATE_LABEL: Record<ModerationInspection["share"]["state"], string> = {
   none: "открыта для получателей",
   held: "ждёт проверки",
   paused: "приостановлена после жалоб",
+  blocked: "заблокирована",
   closed: "закрыта или истекла",
 };
 
@@ -60,6 +61,9 @@ export function Moderation() {
     null,
   );
   const [actError, setActError] = useState<string | null>(null);
+  // «Заблокировать»: keep the content as evidence, decided before the block.
+  const [legalHold, setLegalHold] = useState(false);
+  const [authority, setAuthority] = useState("");
 
   const load = () =>
     client.moderation
@@ -84,7 +88,12 @@ export function Moderation() {
     setBusy(true);
     setActError(null);
     try {
-      const outcome = await client.moderation.act(token);
+      const outcome = await client.moderation.act(
+        token,
+        state.kind === "ready" && state.details.action === "block"
+          ? { legalHold, authority: authority.trim() || undefined }
+          : {},
+      );
       setDone(outcome);
       await load();
     } catch (error) {
@@ -170,7 +179,36 @@ export function Moderation() {
                 </>
               )}
             </dl>
+            {state.details.share.content && (
+              <p className="moderation-effect">
+                Фильтр содержимого: {state.details.share.content}
+              </p>
+            )}
             <p className="moderation-effect">{state.details.effect}</p>
+            {state.details.action === "block" && !done && (
+              <div className="moderation-hold">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={legalHold}
+                    onChange={(event) => setLegalHold(event.target.checked)}
+                  />{" "}
+                  Сохранить как доказательство (legal hold): не удалять, пока
+                  удержание не снято
+                </label>
+                {legalHold && (
+                  <label>
+                    Основание (запрос органа, номер){" "}
+                    <input
+                      type="text"
+                      maxLength={500}
+                      value={authority}
+                      onChange={(event) => setAuthority(event.target.value)}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
             {done && (
               <Notice>
                 <Check aria-hidden="true" /> {done.message}
@@ -183,7 +221,9 @@ export function Moderation() {
                   {state.details.actionLabel}
                 </Button>
               )}
-              {!preview && (
+              {!preview &&
+                !state.details.share.csam &&
+                state.details.share.state !== "blocked" && (
                 <Button onClick={() => void showPreview()} disabled={busy}>
                   <Eye aria-hidden="true" /> Посмотреть страницу
                 </Button>
