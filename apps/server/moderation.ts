@@ -12,6 +12,17 @@ import {
   revokeLockedShareInTransaction,
   revokeShareInTransaction,
 } from "./shares.ts";
+import { config } from "./config.ts";
+import {
+  blockRevisionInTransaction,
+  purgeBlock,
+  recordEvent,
+  retentionText,
+  type EventActor,
+} from "./content-moderation.ts";
+import { dispatchModerationNotices } from "./moderation-mail.ts";
+import type { Category } from "./content-filter/lists.ts";
+import { CATEGORY_LABEL } from "./content-filter/policy.ts";
 
 export class ModerationError extends Error {}
 
@@ -269,7 +280,16 @@ export async function disableAccount(login: string, reason?: string) {
       if (share.unexpired) liveShares++;
       else expiredShares++;
     }
-    if (!account.disabled) await audit(c, actor, "account.disabled", actor.id);
+    if (!account.disabled) {
+      await audit(c, actor, "account.disabled", actor.id);
+      await recordEvent(c, {
+        actor: "operator-script",
+        action: "account.disabled",
+        accountId: actor.id,
+        tenantId: actor.tenant,
+        reason: reason?.trim() || null,
+      });
+    }
     return {
       name: account.name as string,
       email: account.email as string | null,
@@ -313,6 +333,12 @@ export async function enableAccount(login: string) {
         actor.id,
       ]);
       await audit(c, actor, "account.enabled", actor.id);
+      await recordEvent(c, {
+        actor: "operator-script",
+        action: "account.enabled",
+        accountId: actor.id,
+        tenantId: actor.tenant,
+      });
     }
     return {
       name: account.name as string,
@@ -370,11 +396,22 @@ async function lockOperatorShare(c: PoolClient, shareId: string) {
  * author is approved too: their next links open without review (except
  * under SHARE_MODERATION=all). Repeating it changes nothing.
  */
-export async function approveShareAsOperator(shareId: string, trust = false) {
+export async function approveShareAsOperator(
+  shareId: string,
+  trust = false,
+  journalActor: EventActor = "operator-script",
+) {
   return transaction(async (c): Promise<OperatorOutcome> => {
     const { actor, account, share } = await lockOperatorShare(c, shareId);
     let changed = false;
     const notes: string[] = [];
+    if (share.moderation === "blocked")
+      return {
+        shareId,
+        changed: false,
+        message:
+          "Ссылка заблокирована; одобрение её не откроет. Снять блокировку — moderation:unblock.",
+      };
     if (!share.live)
       notes.push("Ссылка уже закрыта или истекла; открывать нечего.");
     else if (share.moderation !== "none") {
@@ -383,6 +420,15 @@ export async function approveShareAsOperator(shareId: string, trust = false) {
         [shareId],
       );
       await audit(c, actor, "share.approved", shareId);
+      await recordEvent(c, {
+        actor: journalActor,
+        action: "share.approved",
+        accountId: actor.id,
+        tenantId: actor.tenant,
+        artifactId: share.artifact_id,
+        revisionId: share.revision_id,
+        shareId,
+      });
       changed = true;
       notes.push("Ссылка одобрена: получатели видят работу.");
     } else notes.push("Ссылка уже открыта для получателей.");
@@ -409,7 +455,10 @@ export async function approveShareAsOperator(shareId: string, trust = false) {
 }
 
 /** Lift a pause after reports. A held link stays held: approve it instead. */
-export async function unpauseShareAsOperator(shareId: string) {
+export async function unpauseShareAsOperator(
+  shareId: string,
+  journalActor: EventActor = "operator-script",
+) {
   return transaction(async (c): Promise<OperatorOutcome> => {
     const { actor, share } = await lockOperatorShare(c, shareId);
     if (!share.live)
@@ -433,6 +482,13 @@ export async function unpauseShareAsOperator(shareId: string) {
     );
     await settleReports(c, shareId, "dismissed");
     await audit(c, actor, "share.unpaused", shareId);
+    await recordEvent(c, {
+      actor: journalActor,
+      action: "share.unpaused",
+      accountId: actor.id,
+      tenantId: actor.tenant,
+      shareId,
+    });
     return {
       shareId,
       changed: true,
@@ -445,8 +501,18 @@ export async function unpauseShareAsOperator(shareId: string) {
 /** Close the link for good (the owner's revoke path). */
 export async function closeShareAsOperator(
   shareId: string,
+  journalActor: EventActor = "operator-script",
 ): Promise<OperatorOutcome> {
   const result = await revokeShareAsOperator(shareId);
+  const owner = await shareOwner(shareId);
+  await recordEvent(db, {
+    actor: journalActor,
+    action: "share.closed",
+    accountId: owner.id,
+    tenantId: owner.tenant,
+    artifactId: result.artifactId,
+    shareId,
+  });
   return {
     shareId,
     changed: !result.alreadyRevoked,
@@ -459,8 +525,16 @@ export async function closeShareAsOperator(
 /** Close the link and disable its author (disableAccount closes all links). */
 export async function closeAndDisableAsOperator(
   shareId: string,
+  journalActor: EventActor = "operator-script",
 ): Promise<OperatorOutcome> {
   const owner = await shareOwner(shareId);
+  await recordEvent(db, {
+    actor: journalActor,
+    action: "share.closed",
+    accountId: owner.id,
+    tenantId: owner.tenant,
+    shareId,
+  });
   const {
     rows: [account],
   } = await db.query("SELECT name FROM accounts WHERE id=$1", [owner.id]);
@@ -517,7 +591,7 @@ export async function listModerationQueue() {
      JOIN artifacts artifact ON artifact.id=share.artifact_id
      JOIN tenants tenant ON tenant.id=share.tenant_id
      JOIN accounts account ON account.id=tenant.owner_id
-     WHERE share.moderation<>'none' AND NOT share.revoked AND share.expires_at>now()
+     WHERE share.moderation IN ('held','paused') AND NOT share.revoked AND share.expires_at>now()
      ORDER BY COALESCE(share.moderated_at,share.created_at),share.id
      LIMIT $1`,
     [REPORT_LIMIT],
@@ -575,6 +649,7 @@ export async function listShareComments(shareId: string) {
   const { rows } = await db.query(
     `SELECT comment.id,comment.parent_id,comment.body,comment.anchor,
        comment.signals,comment.held_at,comment.deleted_at,comment.resolved_at,
+       comment.blocked_at,comment.shadow,comment.content_filter,
        comment.created_at,author.name,author.email,author.disabled,
        (SELECT count(*) FROM share_reports report
         WHERE report.comment_id=comment.id AND report.status='new') AS open_reports
@@ -588,15 +663,20 @@ export async function listShareComments(shareId: string) {
   return rows.map((row) => ({
     id: row.id as string,
     parentId: row.parent_id as string | null,
-    body: row.body as string,
-    quote: (row.anchor?.exact as string | undefined) ?? null,
+    // A blocked comment's text is never shown, the operator included.
+    body: row.blocked_at ? "" : (row.body as string),
+    quote: row.blocked_at ? null : ((row.anchor?.exact as string | undefined) ?? null),
     signals: row.signals as string[],
-    state: row.deleted_at
+    state: row.blocked_at
+      ? "blocked"
+      : row.deleted_at
       ? "deleted"
       : row.disabled
         ? "author-disabled"
         : row.held_at
-          ? "held"
+          ? row.shadow
+            ? "held-spam"
+            : "held"
           : row.resolved_at
             ? "resolved"
             : "open",
@@ -702,4 +782,467 @@ export async function releaseCommentAsOperator(id: string) {
     await dispatchCommentNotices([{ kind: "comment", commentId: id }]);
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Blocking (docs/specs/CONTENT_FILTER.md): the operator's «Заблокировать»,
+// takedowns after a request of an authority or a rights holder, legal hold,
+// lifting a block, and the journal.
+
+export type BlockOptions = {
+  actor: EventActor;
+  reason: string;
+  category?: Category | "other";
+  authority?: string | null;
+  /** Keep the objects as evidence (for an investigation) until lifted. */
+  legalHold?: string | null;
+  /** Disable the author too. In strict mode a block always does. */
+  disable?: boolean;
+};
+
+async function shareRow(shareId: string) {
+  if (!z.string().uuid().safeParse(shareId).success)
+    throw new ModerationError(`Not a share id: ${clean(shareId, 60)}`);
+  const {
+    rows: [row],
+  } = await db.query(
+    `SELECT share.id,share.tenant_id,share.artifact_id,share.revision_id,
+       tenant.owner_id
+     FROM shares share JOIN tenants tenant ON tenant.id=share.tenant_id
+     WHERE share.id=$1`,
+    [shareId],
+  );
+  if (!row) throw new ModerationError(`No share ${shareId}`);
+  return row;
+}
+
+/**
+ * Block the revision a link shows: the link (and every other link to it)
+ * shows «Ссылка недоступна», the objects are deleted after
+ * MODERATION_EVIDENCE_DAYS unless a legal hold keeps them. Idempotent.
+ */
+export async function blockShareAsOperator(
+  shareId: string,
+  options: BlockOptions,
+): Promise<OperatorOutcome & { revisionId: string; frozen: boolean }> {
+  const share = await shareRow(shareId);
+  const freeze = options.disable === true || config.CONTENT_FILTER_MODE === "strict";
+  const outcome = await transaction(async (c) => {
+    await lockTenantAccount(c, { id: share.owner_id, tenant: share.tenant_id });
+    const result = await blockRevisionInTransaction(c, {
+      tenantId: share.tenant_id,
+      accountId: share.owner_id,
+      artifactId: share.artifact_id,
+      revisionId: share.revision_id,
+      category: options.category ?? "other",
+      actor: options.actor,
+      reason: options.reason,
+      authority: options.authority ?? null,
+      legalHold: options.legalHold ?? null,
+      freeze,
+    });
+    await settleReports(c, shareId, "actioned");
+    return result;
+  });
+  if (outcome.created)
+    void dispatchModerationNotices([
+      {
+        kind: "blocked",
+        shareId,
+        revisionId: share.revision_id,
+        category: options.category ?? "other",
+        frozen: outcome.frozen,
+        by: "operator",
+      },
+    ]);
+  const kept = retentionText(options.category ?? "other", !!options.legalHold);
+  return {
+    shareId,
+    revisionId: share.revision_id,
+    frozen: outcome.frozen,
+    changed: outcome.created || outcome.frozen,
+    message: outcome.created
+      ? `Заблокировано: получатели видят «Ссылка недоступна». ${kept}${outcome.frozen ? " Автор отключён." : ""}`
+      : "Уже заблокировано; ничего не изменилось.",
+  };
+}
+
+/** What a takedown target names: a link, a share id, a work or an account. */
+export async function resolveTarget(target: string) {
+  const value = target.trim();
+  const token = /#([A-Za-z0-9_-]{20,})$/.exec(value)?.[1];
+  if (token) {
+    const { sha256 } = await import("./storage.ts");
+    const {
+      rows: [row],
+    } = await db.query("SELECT id FROM shares WHERE token_hash=$1", [sha256(token)]);
+    if (!row) throw new ModerationError("No share for this link");
+    return { kind: "share" as const, shareIds: [row.id as string] };
+  }
+  if (z.string().uuid().safeParse(value).success) {
+    const share = await db.query("SELECT id FROM shares WHERE id=$1", [value]);
+    if (share.rowCount) return { kind: "share" as const, shareIds: [value] };
+    const artifact = await db.query(
+      `SELECT artifact.id,artifact.tenant_id,artifact.latest_revision_id,tenant.owner_id
+       FROM artifacts artifact JOIN tenants tenant ON tenant.id=artifact.tenant_id
+       WHERE artifact.id=$1`,
+      [value],
+    );
+    if (artifact.rowCount) return { kind: "artifact" as const, artifact: artifact.rows[0] };
+    const revision = await db.query(
+      `SELECT revision.id AS latest_revision_id,revision.artifact_id AS id,
+         revision.tenant_id,tenant.owner_id
+       FROM revisions revision JOIN tenants tenant ON tenant.id=revision.tenant_id
+       WHERE revision.id=$1`,
+      [value],
+    );
+    if (revision.rowCount) return { kind: "artifact" as const, artifact: revision.rows[0] };
+    const account = await db.query("SELECT name FROM accounts WHERE id=$1", [value]);
+    if (account.rowCount) return { kind: "account" as const, login: account.rows[0].name as string };
+    throw new ModerationError(`Nothing with id ${value}`);
+  }
+  return { kind: "account" as const, login: value };
+}
+
+export type TakedownReceipt = {
+  at: string;
+  category: Category | "other";
+  target: string;
+  reason: string;
+  authority: string | null;
+  blocked: Array<{ revisionId: string; shareId: string | null }>;
+  disabled: string | null;
+  legalHold: boolean;
+};
+
+/**
+ * A request of an authority or a rights holder: block what the target names
+ * (a link, a work: its latest revision, or every work of an account), and
+ * optionally disable the account. Journaled; returns a receipt.
+ */
+export async function takedown(
+  target: string,
+  options: {
+    reason: string;
+    authority?: string | null;
+    disable?: boolean;
+    legalHold?: boolean;
+    category?: Category | "other";
+  },
+): Promise<TakedownReceipt> {
+  if (!options.reason?.trim()) throw new ModerationError("--reason is required");
+  const resolved = await resolveTarget(target);
+  const legalHold = options.legalHold
+    ? (options.authority?.trim() || options.reason).slice(0, 500)
+    : null;
+  const common = {
+    actor: "operator-script" as const,
+    reason: options.reason.trim(),
+    authority: options.authority?.trim() || null,
+    legalHold,
+    category: options.category ?? "other",
+  };
+  const blocked: TakedownReceipt["blocked"] = [];
+  let disabled: string | null = null;
+  const blockRevision = async (row: {
+    tenant_id: string;
+    owner_id: string;
+    id: string;
+    latest_revision_id: string | null;
+  }) => {
+    if (!row.latest_revision_id) return;
+    // Every revision of the work that a link shows, and the latest one.
+    const revisions = new Set<string>([row.latest_revision_id]);
+    for (const share of (
+      await db.query(
+        "SELECT DISTINCT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
+        [row.id],
+      )
+    ).rows)
+      revisions.add(share.revision_id);
+    for (const revisionId of revisions) {
+      const outcome = await transaction(async (c) => {
+        await lockTenantAccount(c, { id: row.owner_id, tenant: row.tenant_id });
+        return blockRevisionInTransaction(c, {
+          tenantId: row.tenant_id,
+          accountId: row.owner_id,
+          artifactId: row.id,
+          revisionId,
+          freeze: false,
+          ...common,
+        });
+      });
+      blocked.push({ revisionId, shareId: outcome.shareIds[0] ?? null });
+      if (outcome.created)
+        void dispatchModerationNotices([
+          {
+            kind: "blocked",
+            shareId: outcome.shareIds[0] ?? null,
+            revisionId,
+            category: common.category,
+            frozen: false,
+            by: "operator",
+          },
+        ]);
+    }
+  };
+  if (resolved.kind === "share")
+    for (const shareId of resolved.shareIds) {
+      const share = await shareRow(shareId);
+      const outcome = await blockShareAsOperator(shareId, { ...common, disable: false });
+      blocked.push({ revisionId: outcome.revisionId, shareId });
+      if (options.disable) disabled = (
+        await db.query("SELECT name FROM accounts WHERE id=$1", [share.owner_id])
+      ).rows[0].name;
+    }
+  else if (resolved.kind === "artifact") {
+    await blockRevision(resolved.artifact);
+    if (options.disable)
+      disabled = (
+        await db.query("SELECT name FROM accounts WHERE id=$1", [resolved.artifact.owner_id])
+      ).rows[0].name;
+  } else {
+    const actor = await accountActor(db, resolved.login);
+    for (const artifact of (
+      await db.query(
+        `SELECT artifact.id,artifact.tenant_id,artifact.latest_revision_id,tenant.owner_id
+         FROM artifacts artifact JOIN tenants tenant ON tenant.id=artifact.tenant_id
+         WHERE artifact.tenant_id=$1 AND EXISTS(
+           SELECT 1 FROM shares share WHERE share.artifact_id=artifact.id AND NOT share.revoked)`,
+        [actor.tenant],
+      )
+    ).rows)
+      await blockRevision(artifact);
+    if (options.disable)
+      disabled = (await db.query("SELECT name FROM accounts WHERE id=$1", [actor.id])).rows[0].name;
+  }
+  if (disabled) await disableAccount(disabled, `takedown: ${common.reason}`);
+  const at = new Date().toISOString();
+  await recordEvent(db, {
+    actor: "operator-script",
+    action: "takedown",
+    category: common.category,
+    reason: common.reason,
+    authority: common.authority,
+    details: {
+      target: clean(target, 200),
+      blocked,
+      disabled: !!disabled,
+      legalHold: !!legalHold,
+    },
+  });
+  return {
+    at,
+    category: common.category,
+    target: clean(target, 200),
+    reason: common.reason,
+    authority: common.authority,
+    blocked,
+    disabled,
+    legalHold: !!legalHold,
+  };
+}
+
+export function formatTakedown(receipt: TakedownReceipt) {
+  return [
+    "КВИТАНЦИЯ О БЛОКИРОВКЕ",
+    `Время (UTC): ${receipt.at}`,
+    `Цель: ${receipt.target}`,
+    `Основание: ${clean(receipt.reason, 500)}`,
+    ...(receipt.authority ? [`Орган / заявитель: ${clean(receipt.authority, 500)}`] : []),
+    receipt.blocked.length
+      ? `Заблокировано версий: ${receipt.blocked.length}`
+      : "Нечего блокировать: открытых ссылок нет.",
+    ...receipt.blocked.map(
+      (item) => `  версия ${item.revisionId}${item.shareId ? `, ссылка ${item.shareId}` : ""}`,
+    ),
+    retentionText(receipt.category, receipt.legalHold),
+    receipt.disabled ? `Аккаунт отключён: ${clean(receipt.disabled, 80)}` : "Аккаунт не отключался.",
+    "Запись в журнале модерации: moderation:events.",
+  ].join("\n");
+}
+
+async function blocksOf(target: string) {
+  const value = target.trim();
+  if (!z.string().uuid().safeParse(value).success)
+    throw new ModerationError(`Not an id: ${clean(value, 60)}`);
+  const { rows } = await db.query(
+    `SELECT block.* FROM moderation_blocks block
+     WHERE (block.revision_id=$1 OR block.artifact_id=$1 OR block.comment_id=$1
+            OR block.revision_id=(SELECT revision_id FROM shares WHERE id=$1))
+       AND block.released_at IS NULL`,
+    [value],
+  );
+  if (!rows.length) throw new ModerationError(`No live block for ${value}`);
+  return rows;
+}
+
+/**
+ * The operator handed the evidence to the police: the content is deleted now
+ * (a legal hold, if any, is lifted first by the operator).
+ */
+export async function handedOver(target: string, note: string) {
+  const blocks = await blocksOf(target);
+  const notes: string[] = [];
+  for (const block of blocks) {
+    if (block.legal_hold) {
+      notes.push(`${block.revision_id ?? block.comment_id}: legal hold is on; lift it first (legal-hold <id> off)`);
+      continue;
+    }
+    await transaction(async (c) => {
+      await c.query(
+        "UPDATE moderation_blocks SET handed_over_at=now(),delete_after=now() WHERE id=$1",
+        [block.id],
+      );
+      await recordEvent(c, {
+        actor: "operator-script",
+        action: "evidence.handed_over",
+        category: block.category,
+        tenantId: block.tenant_id,
+        artifactId: block.artifact_id,
+        revisionId: block.revision_id,
+        commentId: block.comment_id,
+        reason: note?.trim() || null,
+      });
+    });
+    const result = await purgeBlock(block.id, { now: true, actor: "operator-script" });
+    notes.push(
+      `${block.revision_id ?? block.comment_id}: handed over; ${result.purged ? `deleted (${result.versions} object versions)` : "already deleted"}`,
+    );
+  }
+  return notes.join("\n");
+}
+
+/** Delete a blocked work's content now, whatever its schedule. */
+export async function purgeArtifactNow(target: string, reason: string) {
+  const blocks = await blocksOf(target);
+  const notes: string[] = [];
+  for (const block of blocks) {
+    if (block.legal_hold) {
+      notes.push(`${block.revision_id ?? block.comment_id}: legal hold is on; nothing deleted`);
+      continue;
+    }
+    const result = await purgeBlock(block.id, {
+      now: true,
+      actor: "operator-script",
+      reason: reason?.trim() || "удаление по решению оператора",
+    });
+    notes.push(
+      `${block.revision_id ?? block.comment_id}: ${result.purged ? `deleted (${result.versions} object versions)` : "already deleted"}`,
+    );
+  }
+  return notes.join("\n");
+}
+
+/** Keep a block's objects as evidence until the hold is lifted. */
+export async function setLegalHold(target: string, authority: string, on = true) {
+  if (on && !authority?.trim()) throw new ModerationError("--authority is required");
+  const blocks = await blocksOf(target);
+  const notes: string[] = [];
+  await transaction(async (c) => {
+    for (const block of blocks) {
+      if (on && block.purged_at) {
+        notes.push(`${block.revision_id ?? block.comment_id}: already deleted, only metadata remain`);
+        continue;
+      }
+      await c.query(
+        on
+          ? "UPDATE moderation_blocks SET legal_hold=$2 WHERE id=$1"
+          : "UPDATE moderation_blocks SET legal_hold=NULL WHERE id=$1",
+        on ? [block.id, authority.trim().slice(0, 500)] : [block.id],
+      );
+      await recordEvent(c, {
+        actor: "operator-script",
+        action: on ? "legal_hold.set" : "legal_hold.released",
+        category: block.category,
+        tenantId: block.tenant_id,
+        artifactId: block.artifact_id,
+        revisionId: block.revision_id,
+        commentId: block.comment_id,
+        authority: on ? authority.trim() : null,
+      });
+      notes.push(
+        `${block.revision_id ?? block.comment_id}: ${on ? "kept as evidence" : "hold lifted"}`,
+      );
+    }
+  });
+  if (!on) {
+    const { purgeDueBlocks } = await import("./content-moderation.ts");
+    await purgeDueBlocks();
+  }
+  return notes.join("\n");
+}
+
+/**
+ * Lift a block (a mistake, or an appeal granted). Links open again if the
+ * content still exists; deleted content cannot come back.
+ */
+export async function unblock(target: string, reason: string) {
+  const blocks = await blocksOf(target);
+  const notes: string[] = [];
+  await transaction(async (c) => {
+    for (const block of blocks) {
+      await c.query("UPDATE moderation_blocks SET released_at=now() WHERE id=$1", [block.id]);
+      if (block.revision_id && !block.purged_at) {
+        const opened = await c.query(
+          `UPDATE shares SET moderation='none',moderation_reason=NULL,moderated_at=now()
+           WHERE revision_id=$1 AND moderation='blocked' RETURNING id`,
+          [block.revision_id],
+        );
+        notes.push(`${block.revision_id}: unblocked, links reopened: ${opened.rowCount}`);
+      } else if (block.comment_id && !block.purged_at) {
+        await c.query("UPDATE comments SET blocked_at=NULL WHERE id=$1", [block.comment_id]);
+        notes.push(`${block.comment_id}: comment visible again`);
+      } else
+        notes.push(
+          `${block.revision_id ?? block.comment_id}: unblocked, but the content was deleted; links stay unavailable`,
+        );
+      await recordEvent(c, {
+        actor: "operator-script",
+        action: "block.released",
+        category: block.category,
+        tenantId: block.tenant_id,
+        artifactId: block.artifact_id,
+        revisionId: block.revision_id,
+        commentId: block.comment_id,
+        reason: reason?.trim() || null,
+      });
+    }
+  });
+  return notes.join("\n");
+}
+
+/** The journal, newest first, for an id (account, work, revision, link, comment) or all. */
+export async function listEvents(target?: string, limit = 100) {
+  const id = target?.trim();
+  if (id && !z.string().uuid().safeParse(id).success)
+    throw new ModerationError(`Not an id: ${clean(id, 60)}`);
+  const { rows } = await db.query(
+    `SELECT * FROM moderation_events
+     WHERE $1::uuid IS NULL OR $1 IN (account_id,tenant_id,artifact_id,revision_id,share_id,comment_id)
+     ORDER BY created_at DESC LIMIT $2`,
+    [id ?? null, limit],
+  );
+  return rows;
+}
+
+export function formatEvents(rows: Awaited<ReturnType<typeof listEvents>>) {
+  if (!rows.length) return "No moderation events.";
+  return rows
+    .map((row) =>
+      [
+        time(new Date(row.created_at)),
+        row.actor,
+        row.action,
+        row.category ? CATEGORY_LABEL[row.category as Category] ?? row.category : "-",
+        row.share_id ? `share ${row.share_id}` : "",
+        row.revision_id ? `revision ${row.revision_id}` : "",
+        row.account_id ? `account ${row.account_id}` : "",
+        row.authority ? `authority «${clean(row.authority, 80)}»` : "",
+        row.reason ? `«${clean(row.reason, 80)}»` : "",
+      ]
+        .filter(Boolean)
+        .join("  "),
+    )
+    .join("\n");
 }

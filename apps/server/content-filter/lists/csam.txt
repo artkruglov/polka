@@ -1,0 +1,69 @@
+# Сексуальное насилие над детьми (CSAM): ст. 242.1 и 242.2 УК РФ.
+#
+# Самая опасная категория: счёт от @block блокирует и изолирует работу и
+# отключает автора без проверки оператором. Поэтому упоминание (статья о
+# борьбе с CSAM, новость о приговоре) ниже порога, запрос («где скачать…»)
+# или кодовое слово — проверка (@threshold), а блокировка — только
+# сочетание нескольких признаков распространения: фраза или кодовое слово
+# плюс «скачать/смотреть/архив/слив».
+# Слова «детский» и «child» сами по себе в группу child не входят: «детская
+# порнография» и так фраза, иначе одно упоминание давало бы двойной счёт.
+@threshold 6
+@high 12
+@block 12
+@pair child explicit 3 6
+@pair abuse get 6 4
+
+4 детск* порн* | abuse
+4 педо порн* | abuse
+4 педопорн* | abuse
+4 child porn* | abuse
+4 pedo porn* | abuse
+4 pedoporn* | abuse
+4 kiddie porn* | abuse
+8 pthc | abuse
+8 hussyfan | abuse
+4 jailbait | abuse
+4 lolicon | abuse
+4 shotacon | abuse
+0 csam | abuse
+
+0 ребен* | child
+0 ребенк* | child
+0 малолет* | child
+0 несовершеннолет* | child
+0 школьниц* | child
+0 маленьк* девочк* | child
+0 preteen* | child
+0 underage | child
+0 kids | child
+0 8 лет | child
+0 9 лет | child
+0 10 лет | child
+0 11 лет | child
+0 12 лет | child
+0 13 лет | child
+
+0 порн* | explicit
+0 porn* | explicit
+0 голые | explicit
+0 голых | explicit
+0 голая | explicit
+0 голеньк* | explicit
+0 обнаженн* | explicit
+0 nude* | explicit
+0 naked | explicit
+0 xxx | explicit
+
+0 скачать | get
+0 смотреть | get
+0 купить | get
+0 продам | get
+0 продаю | get
+0 архив | get
+0 слив | get
+0 бесплатно | get
+0 download | get
+0 watch | get
+0 buy | get
+0 sell | get

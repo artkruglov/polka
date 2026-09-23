@@ -1,0 +1,71 @@
+# Наркотики: сбыт, пропаганда, способы изготовления (ст. 228.1 УК РФ,
+# ст. 6.13 КоАП РФ).
+#
+# Название вещества ничего не весит: о героине пишут врачи и журналисты.
+# Срабатывает вещество рядом с продажей (окно 8 слов) или с «как сварить».
+# Пары считаются по разным словам намерения (купить, доставка, закладки):
+# одно слово — 4 очка, ниже порога 6: новость «у него можно было купить
+# мефедрон» не срабатывает, объявление с несколькими парами — срабатывает.
+# «Рецепт» и «в домашних условиях» в группы не входят: так пишут о лечении.
+@threshold 6
+@high 10
+@pair substance sale 8 4
+@pair substance make 6 4
+
+0 героин* | substance
+0 кокаин* | substance
+0 мефедрон* | substance
+0 меф | substance
+0 мефчик | substance
+0 амфетамин* | substance
+0 метамфетамин* | substance
+0 первитин* | substance
+0 экстази | substance
+0 mdma | substance
+0 мдма | substance
+0 лсд | substance
+0 lsd | substance
+0 гашиш* | substance
+0 марихуан* | substance
+0 каннабис* | substance
+0 бошки | substance
+0 альфа пвп | substance
+0 apvp | substance
+0 спайс* | substance
+0 кетамин* | substance
+0 метадон* | substance
+0 фентанил* | substance
+0 heroin | substance
+0 cocaine | substance
+0 mephedrone | substance
+0 meth | substance
+0 ketamine | substance
+
+0 купить | sale
+0 куплю | sale
+0 продам | sale
+0 продаю | sale
+0 закладк* | sale
+0 клад | sale
+0 клады | sale
+0 в наличии | sale
+0 доставк* | sale
+0 оптом | sale
+0 опт | sale
+0 прайс* | sale
+0 за грамм | sale
+0 бот | sale
+0 магазин | sale
+0 buy | sale
+0 order | sale
+0 shop | sale
+
+0 как сварить | make
+0 как приготовить | make
+0 сварить | make
+0 синтезировать | make
+0 how to cook | make
+
+6 кладмен*
+6 работа закладчиком
+6 требуются закладчики

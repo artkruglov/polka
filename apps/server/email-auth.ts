@@ -8,6 +8,7 @@ import {
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { limitAttempts, passwordHash } from "./auth.ts";
+import { assertNotDisposable, signupSpamKeys } from "./signup-guards.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
 import { domainAllowed } from "./mail-domains.ts";
@@ -34,17 +35,21 @@ const CODE_DIGITS = 8;
 // New shelves per day: counted when an account is created, in its transaction,
 // so a refused attempt does not spend the budget. Starting a sign-in only
 // looks, so a new visitor learns about a full day before waiting for a code.
-const signupKeys = (ip: string) => [
+const signupKeys = (ip: string, email: string | null) => [
   { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
   { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
+  // Anti-spam: per network and per mail domain (signup-guards.ts).
+  ...(email ? signupSpamKeys(ip, email) : []),
 ];
 
 export async function signupRoomLeft(
   c: Pick<LocalDeliveryClient, "query">,
   ip: string,
   count: boolean,
+  /** The new shelf's address, for the per-domain limit; null when none. */
+  email: string | null = null,
 ) {
-  for (const { key, max, message } of signupKeys(ip)) {
+  for (const { key, max, message } of signupKeys(ip, email)) {
     const { rows } = count
       ? await c.query(
           `INSERT INTO login_limits VALUES($1,1,now()+interval '24 hours')
@@ -190,7 +195,8 @@ export async function beginEmailLogin(email: string, ip: string) {
       if (!emailLoginAllowed(email)) return false;
     } else {
       if (!emailSignupAllowed(email)) return false;
-      await signupRoomLeft(c, ip, false);
+      await assertNotDisposable(email);
+      await signupRoomLeft(c, ip, false, email);
     }
     await c.query(
       `INSERT INTO login_challenges(id,email,code_hash,browser_hash,delivery,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes')`,
@@ -293,7 +299,7 @@ export async function verifyEmailLogin(
     if (account && !emailLoginAllowed(challenge.email)) return null;
     if (!account) {
       if (!emailSignupAllowed(challenge.email)) return null;
-      await signupRoomLeft(c, ip, true);
+      await signupRoomLeft(c, ip, true, challenge.email);
       const accountId = randomUUID();
       // Unused random password keeps legacy password login separate from email identities.
       const password = await passwordHash(randomBytes(32).toString("hex"));

@@ -154,8 +154,9 @@ test("runtime has exact current grants and denied administrative paths", async (
   const privileges = (
     await client.query(
       `SELECT table_name,privilege_type FROM information_schema.role_table_grants
-       WHERE grantee=current_user
-         AND table_name IN ('comments','comment_reactions','account_identities','enterprise_requests')
+       WHERE grantee=current_user AND table_name IN (
+         'comments','comment_reactions','account_identities','enterprise_requests',
+         'moderation_events','moderation_blocks')
        ORDER BY table_name,privilege_type`,
     )
   ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
@@ -174,6 +175,13 @@ test("runtime has exact current grants and denied administrative paths", async (
     "enterprise_requests:INSERT",
     "enterprise_requests:SELECT",
     "enterprise_requests:UPDATE",
+    "moderation_blocks:DELETE",
+    "moderation_blocks:INSERT",
+    "moderation_blocks:SELECT",
+    "moderation_blocks:UPDATE",
+    "moderation_events:DELETE",
+    "moderation_events:INSERT",
+    "moderation_events:SELECT",
   ]);
   await client.query("BEGIN");
   try {
@@ -211,6 +219,9 @@ test("runtime has exact current grants and denied administrative paths", async (
     await denied("DELETE FROM comments");
     await denied("TRUNCATE TABLE comment_reactions");
     await denied("UPDATE comment_reactions SET emoji=emoji");
+    // The moderation journal (031): never changed, never truncated.
+    await denied("UPDATE moderation_events SET reason=reason");
+    await denied("TRUNCATE TABLE moderation_events");
     await denied("UPDATE template_library_events SET action=action");
     await denied("DELETE FROM template_library_events");
     await denied("SELECT public.preserve_account_deletion_marker()");
@@ -304,6 +315,37 @@ test("runtime app DML, trigger enforcement and session CSRF cascade work", async
     );
     await client.query(
       "UPDATE viewer_grants SET comments=comments WHERE false",
+    );
+    // Content filter (031): the runtime appends to the journal; the trigger
+    // refuses to delete an event younger than 3 years.
+    const eventId = randomUUID();
+    await client.query(
+      `INSERT INTO moderation_events(id,actor,action,category,account_id,share_id,details)
+       VALUES($1,'filter','share.blocked','drugs',$2,$3,'{"score":12}')`,
+      [eventId, accountId, shareId],
+    );
+    await client.query("SAVEPOINT journal_kept");
+    try {
+      await client.query("DELETE FROM moderation_events WHERE id=$1", [eventId]);
+      assert.fail("A fresh moderation event was deleted");
+    } catch (error: any) {
+      assert.equal(error.code, "P0001");
+    } finally {
+      await client.query("ROLLBACK TO SAVEPOINT journal_kept");
+      await client.query("RELEASE SAVEPOINT journal_kept");
+    }
+    await client.query(
+      `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,isolated,delete_after)
+       VALUES($1,$2,$3,$4,$5,'drugs',true,now())`,
+      [randomUUID(), tenantId, artifactId, revisionId, "c".repeat(64)],
+    );
+    await client.query(
+      "UPDATE moderation_blocks SET purged_at=now() WHERE revision_id=$1",
+      [revisionId],
+    );
+    await client.query(
+      "UPDATE shares SET moderation='blocked' WHERE id=$1",
+      [shareId],
     );
     await client.query(
       "INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Runtime library',$2)",

@@ -821,6 +821,15 @@ export async function createApp() {
     // are rechecked once they commit.
     return transaction(async (c) => {
       const tokenHash = sha256(token);
+      // Blocked by the operator or the content filter: «Ссылка недоступна»,
+      // whatever else became of the link or its author. Nothing else is said.
+      const blocked = (
+        await c.query(
+          "SELECT 1 FROM shares WHERE token_hash=$1 AND moderation='blocked'",
+          [tokenHash],
+        )
+      ).rowCount;
+      if (blocked) return { blocked: true as const };
       const candidate = (
         await c.query(
           `SELECT share.id,share.tenant_id,share.artifact_id,
@@ -862,7 +871,11 @@ export async function createApp() {
       await assertEditorialShareAccessible(c, s.id);
       // Held for review or paused after reports: the recipient learns only
       // that, never the title or the content, and gets no grant.
-      if (s.moderation !== "none") return { review: true as const };
+      if (s.moderation !== "none") {
+        // Held as spam: to everyone but its owner the link looks missing.
+        if (String(s.moderation_reason ?? "").startsWith("spam:")) throw missing();
+        return { review: true as const };
+      }
       const editorial = !!(
         await c.query(
           "SELECT 1 FROM editorial_publications WHERE share_id=$1",

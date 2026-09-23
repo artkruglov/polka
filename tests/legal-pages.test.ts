@@ -88,6 +88,12 @@ test("the texts keep the reviewed legal terms", () => {
     "Яндекс 360 для бизнеса",
     "ООО «Яндекс.Облако»",
     "с 14 лет",
+    // The content filter (docs/specs/CONTENT_FILTER.md): the processor of
+    // automatic checks, isolated content and the moderation journal.
+    "Yandex Cloud AI Studio",
+    "Трансграничной передачи нет",
+    "3 года после решения",
+    "до 90 дней или до передачи в полицию",
   ])
     assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
   // Processing rests on the agreement: there is no consent to withdraw.
@@ -104,6 +110,10 @@ test("the texts keep the reviewed legal terms", () => {
     "Это не обязательное условие для обращения в суд",
     "по месту вашего жительства",
     "38-ФЗ",
+    // The prohibited-content list and automatic checks.
+    "ст. 242.1 и 242.2 УК РФ",
+    "Полка автоматически проверяет всё, что вы сохраняете",
+    "с первой жалобы",
   ])
     assert.ok(terms.includes(phrase), `terms: ${phrase}`);
 });

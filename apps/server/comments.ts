@@ -33,6 +33,12 @@ import { Problem, missing } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import { isSuspicious, SignalCollector } from "./phishing-signals.ts";
 import { authorStanding } from "./share-moderation.ts";
+import {
+  blockCommentInTransaction,
+  recordEvent,
+} from "./content-moderation.ts";
+import { decideContent } from "./content-filter/policy.ts";
+import { fraudScore, scanText } from "./content-filter/scanner.ts";
 import { sha256 } from "./storage.ts";
 import {
   dispatchCommentNotices,
@@ -260,8 +266,9 @@ async function discussion(
      JOIN revisions revision ON revision.id=comment.revision_id
      WHERE comment.share_id=$1 AND comment.tenant_id=$2
        AND ${VISIBLE_AUTHOR}
-       AND (comment.held_at IS NULL OR $3::boolean
-            OR comment.author_account_id=$4::uuid)
+       AND comment.blocked_at IS NULL
+       AND (comment.held_at IS NULL OR comment.author_account_id=$4::uuid
+            OR ($3::boolean AND NOT comment.shadow))
        AND ($5::boolean OR comment.author_account_id=$6::uuid)
      ORDER BY comment.created_at,comment.id
      LIMIT 5000`,
@@ -567,6 +574,7 @@ async function createInContext(
          JOIN accounts author ON author.id=comment.author_account_id
          WHERE comment.id=$1 AND comment.share_id=$2 AND comment.parent_id IS NULL
            AND comment.deleted_at IS NULL AND ${VISIBLE_AUTHOR}
+           AND comment.blocked_at IS NULL
            AND (comment.held_at IS NULL OR comment.author_account_id=$3
                 OR $4::boolean)
            AND ($5::boolean OR comment.author_account_id=$6::uuid)`,
@@ -583,20 +591,35 @@ async function createInContext(
     if (!parent) throw missing();
   }
   const { signals, suspicious } = commentSignals(input.body);
+  // The content filter reads the comment like a page (docs/specs/CONTENT_FILTER.md,
+  // «Комментарии»), plus comment spam: addresses from a new author, the same
+  // text on several links, a burst.
+  const standing = await authorStanding(c, writer.tenant);
+  const filter = scanText(input.body);
+  const fraud = fraudScore(signals);
+  if (fraud) filter.hits.fraud = fraud;
+  const spam = await commentSpam(c, writer, share.id, input.body, standing.trusted, signals);
+  if (spam.length) filter.hits.spam = { score: 6, terms: spam };
+  const content = decideContent({
+    filter,
+    standing,
+    mode: config.CONTENT_FILTER_MODE,
+    autoblock: config.CONTENT_FILTER_AUTOBLOCK,
+    fraud: config.SHARE_MODERATION !== "off",
+  });
   // As for pages: a suspicious comment of an untrusted author waits for the
   // operator; a trusted author's is shown, and the operator is told.
-  const trusted = suspicious
-    ? (await authorStanding(c, writer.tenant)).trusted
-    : true;
+  const trusted = suspicious ? standing.trusted : true;
+  const held = (suspicious && !trusted) || content.action === "hold";
   const id = randomUUID();
   const {
     rows: [created],
   } = await c.query(
     `INSERT INTO comments(
        id,tenant_id,artifact_id,share_id,revision_id,author_account_id,
-       parent_id,anchor,body,signals,held_at
+       parent_id,anchor,body,signals,held_at,content_filter,shadow
      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-       CASE WHEN $11::boolean THEN clock_timestamp() ELSE NULL END)
+       CASE WHEN $11::boolean THEN clock_timestamp() ELSE NULL END,$12,$13)
      RETURNING id,created_at`,
     [
       id,
@@ -609,16 +632,84 @@ async function createInContext(
       parent ? null : storedAnchor(input.anchor),
       input.body,
       signals,
-      suspicious && !trusted,
+      held || content.action === "block",
+      filter,
+      content.shadow,
     ],
   );
-  if (suspicious)
-    notices.push({ kind: "suspicious", commentId: id, held: !trusted });
-  // Held comments reach no one else until the operator releases them. Owner
-  // notes send no letters: recipients are not a discussion to notify.
-  if ((!suspicious || trusted) && commentsMode() === "on")
+  if (content.action === "block") {
+    // CSAM: nobody sees it, the author is disabled, the operator is told
+    // without the text.
+    await blockCommentInTransaction(c, {
+      commentId: id,
+      tenantId: share.tenant_id,
+      authorAccountId: writer.id,
+      authorTenantId: writer.tenant,
+      category: content.category ?? "other",
+      actor: "filter",
+      reason: "фильтр содержимого: комментарий",
+      freeze: content.freeze,
+    });
+    notices.push({ kind: "suspicious", commentId: id, held: true });
+    return { id: created.id as string };
+  }
+  if (content.action !== "none")
+    await recordEvent(c, {
+      actor: "filter",
+      action: content.action === "hold" ? "comment.held" : "comment.flagged",
+      category: content.category,
+      accountId: writer.id,
+      tenantId: share.tenant_id,
+      artifactId: share.artifact_id,
+      shareId: share.id,
+      commentId: id,
+      details: {
+        findings: content.findings.map((finding) =>
+          finding.category === "csam" ? { category: "csam", score: finding.score } : finding,
+        ),
+        shadow: content.shadow,
+      },
+    });
+  if (suspicious || content.action !== "none")
+    notices.push({ kind: "suspicious", commentId: id, held });
+  // Held comments reach no one else until the operator releases them.
+  // Owner notes send no letters: recipients are not a discussion to notify.
+  if (!held && commentsMode() === "on")
     notices.push({ kind: "comment", commentId: id });
   return { id: created.id as string };
+}
+
+/**
+ * Comment spam of one writer: an address from an author who is not trusted,
+ * the same text on other links within a day, or more than 10 comments in 10
+ * minutes. The reasons, for the operator; empty when there is none.
+ */
+async function commentSpam(
+  c: PoolClient,
+  writer: Viewer,
+  shareId: string,
+  body: string,
+  trusted: boolean,
+  signals: readonly string[],
+) {
+  const reasons: string[] = [];
+  if (!trusted && signals.includes("link:address"))
+    reasons.push("адрес в комментарии нового автора");
+  const {
+    rows: [row],
+  } = await c.query(
+    `SELECT
+       count(DISTINCT share_id) FILTER (
+         WHERE share_id<>$2 AND md5(body)=md5($3) AND created_at>now()-interval '1 day'
+       )::int AS copies,
+       count(*) FILTER (WHERE created_at>now()-interval '10 minutes')::int AS burst
+     FROM comments WHERE author_account_id=$1 AND created_at>now()-interval '1 day'`,
+    [writer.id, shareId, body],
+  );
+  if (body.trim().length >= 20 && row.copies >= 2)
+    reasons.push(`тот же текст ещё на ${row.copies} ссылках за сутки`);
+  if (!trusted && row.burst >= 10) reasons.push("больше 10 комментариев за 10 минут");
+  return reasons;
 }
 
 async function reactInContext(
