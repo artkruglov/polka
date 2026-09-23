@@ -81,7 +81,7 @@ export function mcpToolCatalog() {
   );
 }
 
-export function llmsText(origin: string) {
+export function llmsText(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
   const tools = mcpToolCatalog()
     .map(
@@ -95,7 +95,7 @@ export function llmsText(origin: string) {
 > the recipient needs no account, and the owner can revoke the link at any time.
 
 This file describes the installation at ${origin}. OpenAPI: ${origin}/openapi.json. Agent skill: ${origin}/.well-known/agent-skills/index.json (or \`npx skills add ${SKILL_REPO}\`).
-
+${sourceUrl ? `\nSource code of this installation (AGPL-3.0): ${sourceUrl}\n` : ""}
 ## Connect
 
 The human signs in or creates a shelf in their own browser (email + 8-digit code) and presses «Разрешить» (Allow). Never ask for, type or store their password or email code. If polka_* tools are already available, skip this.
@@ -243,7 +243,7 @@ export function agentSkillsIndex(origin: string) {
 /** Public, cookie-less, briefly cacheable; built once from APP_ORIGIN. */
 export function registerAgentDiscovery(app: FastifyInstance) {
   const origin = config.APP_ORIGIN;
-  const llms = llmsText(origin);
+  const llms = llmsText(origin, config.SOURCE_URL);
   const openapi = JSON.stringify(openApiDocument(origin));
   const skill = skillMarkdown(origin);
   const index = JSON.stringify(agentSkillsIndex(origin));

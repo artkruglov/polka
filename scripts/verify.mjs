@@ -48,6 +48,9 @@ const steps = [
     ],
     true,
   ],
+  // Licenses of the packages Полка depends on, not Полка's own (AGPL-3.0-only;
+  // the root package is private and excluded). Every one listed is compatible
+  // with the AGPL-3.0; a new license needs that checked before it is added.
   // Unlicense: robust-predicates (via d3-delaunay), public-domain dedication.
   [
     "licenses of production dependencies",

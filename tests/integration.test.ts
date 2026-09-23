@@ -778,6 +778,8 @@ test("Capabilities state that URL import and HTML runtime are not implemented", 
   assert.equal(caps.urlImport, false);
   assert.equal(caps.htmlRuntime, false);
   assert.equal(caps.htmlView, "static-sandbox");
+  assert.equal(caps.sourceUrl, config.SOURCE_URL);
+  assert.match(caps.sourceUrl, /^https:\/\//);
   for (const url of ["/api/imports", "/api/import/url", "/api/mcp"])
     assert.equal(
       (await call("POST", url, { url: "https://claude.ai/public/artifacts/x" }))
@@ -824,6 +826,7 @@ test("Frontend rebuild serves newly created assets; missing assets never return 
       "/signup",
       "/privacy",
       "/terms",
+      "/pricing",
     ])
       assert.match((await web.inject(route)).body, /Polka shell/, route);
   } finally {
@@ -982,6 +985,7 @@ test("Agents get plain-text setup instructions at /connect", async () => {
   const mcp = `${config.APP_ORIGIN}/mcp`;
   assert.ok(guide.body.includes(`codex mcp add polka --url ${mcp}`));
   assert.ok(guide.body.includes(`claude mcp add --transport http --scope user polka ${mcp}`));
+  assert.ok(guide.body.includes(`(AGPL-3.0): ${config.SOURCE_URL}\n`));
   // The setup never asks the agent for a token or a password.
   assert.doesNotMatch(guide.body, /Bearer|POLKA_MCP_TOKEN|пароль/i);
 });

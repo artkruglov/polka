@@ -12,6 +12,7 @@ import {
   LibraryInvite,
   Moderation,
   OAuthConsent,
+  Pricing,
   PrivacyPage,
   Recipient,
   Signup,
@@ -38,6 +39,7 @@ function Route({ path }: { path: string }) {
   if (path === "/signup") return <Signup />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
+  if (path === "/pricing") return <Pricing />;
   if (path === "/start") return <FirstSave />;
   if (path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;

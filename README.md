@@ -90,4 +90,8 @@ npm test -- --live     # наборы с включённым локальным
 
 ## Лицензия
 
-[Apache-2.0](LICENSE), см. также [NOTICE](NOTICE) и [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Проект вырос из опыта [Lanka](https://github.com/artkruglov/lanka), подробнее в [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+[GNU AGPL-3.0](LICENSE) или [коммерческая лицензия](COMMERCIAL.md) (двойное лицензирование). **С версии 0.1.0 — AGPL-3.0; версии до v0.1.0-rc.5 включительно — Apache-2.0**, и для них это не меняется.
+
+Пользоваться Полкой без изменений, в том числе как сервисом для своей команды, и дорабатывать её открыто можно бесплатно по AGPL-3.0. Кто даёт пользоваться изменённой Полкой по сети, должен предложить пользователям её исходный код: укажите ссылку на него в настройке `SOURCE_URL` ([deploy/hosted](deploy/hosted/README.md#исходный-код-изменённой-версии)). Коммерческая лицензия нужна, чтобы не публиковать свои изменения, встроить Полку в закрытый продукт или получить поддержку и SLA; подробности в [COMMERCIAL.md](COMMERCIAL.md). Pull requests принимаются по [CLA](CLA.md), см. [CONTRIBUTING.md](CONTRIBUTING.md#лицензия-и-cla).
+
+См. также [NOTICE](NOTICE) и [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Проект вырос из опыта [Lanka](https://github.com/artkruglov/lanka), подробнее в [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
