@@ -27,12 +27,12 @@ import {
 } from "../../packages/contracts/comments.ts";
 import type { Actor } from "./artifacts.ts";
 import { limitAttempts } from "./auth.ts";
+import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import { isSuspicious, SignalCollector } from "./phishing-signals.ts";
 import { authorStanding } from "./share-moderation.ts";
-import { config } from "./config.ts";
 import {
   blockCommentInTransaction,
   recordEvent,
@@ -71,6 +71,30 @@ export const signInToComment = () =>
     "unauthorized",
     "Войдите по почте, чтобы оставить комментарий.",
   );
+
+/** COMMENTS_MODE, read per request so the operator's setting applies at once. */
+export const commentsMode = () => config.COMMENTS_MODE;
+
+export const recipientsDoNotComment = () =>
+  new Problem(
+    403,
+    "forbidden",
+    "На этой Полке получатели не оставляют комментарии: автор ведёт заметки к работе сам. Напишите ему напрямую — почтой или в мессенджере.",
+  );
+
+export const commentsOff = () =>
+  new Problem(404, "not_found", "Комментарии на этой Полке выключены.");
+
+/**
+ * Who may write under the current mode: anyone signed in (on), the work's
+ * owner only (owner-notes), nobody (off). Reactions exist only in `on`.
+ */
+function assertMayWrite(context: { ownerId: string }, actorId: string) {
+  const mode = commentsMode();
+  if (mode === "off") throw commentsOff();
+  if (mode === "owner-notes" && actorId !== context.ownerId)
+    throw recipientsDoNotComment();
+}
 
 const closed = () =>
   new Problem(
@@ -226,11 +250,14 @@ async function discussion(
   isOwner: boolean,
 ): Promise<ShareDiscussion> {
   const { share } = context;
+  const mode = commentsMode();
   const {
     rows: [current],
   } = await c.query("SELECT number FROM revisions WHERE id=$1", [
     share.revision_id,
   ]);
+  // owner-notes: what recipients wrote stays in the table, unseen by anyone
+  // (switching back to `on` shows it again).
   const { rows } = await c.query(
     `SELECT comment.*,revision.number AS revision_number,
        COALESCE(author.display_name,author.name) AS author_name
@@ -242,9 +269,17 @@ async function discussion(
        AND comment.blocked_at IS NULL
        AND (comment.held_at IS NULL OR comment.author_account_id=$4::uuid
             OR ($3::boolean AND NOT comment.shadow))
+       AND ($5::boolean OR comment.author_account_id=$6::uuid)
      ORDER BY comment.created_at,comment.id
      LIMIT 5000`,
-    [share.id, share.tenant_id, isOwner, viewerId],
+    [
+      share.id,
+      share.tenant_id,
+      isOwner,
+      viewerId,
+      mode === "on",
+      context.ownerId,
+    ],
   );
   const view = (row: any): CommentView => {
     const deleted = !!row.deleted_at;
@@ -270,8 +305,9 @@ async function discussion(
         : null,
       deleted,
       held: !!row.held_at,
-      canDelete: !deleted && (isOwner || mine),
-      canResolve: !deleted && !row.parent_id && (isOwner || mine),
+      canDelete: !deleted && (isOwner || (mine && mode === "on")),
+      canResolve:
+        !deleted && !row.parent_id && (isOwner || (mine && mode === "on")),
     };
   };
   const roots = new Map<string, CommentThread>();
@@ -285,7 +321,11 @@ async function discussion(
   const threads = [...roots.values()].filter(
     (thread) => !thread.deleted || thread.replies.length,
   );
-  const reactions = await c.query(
+  // Reactions exist only in `on`; in other modes they are kept, not shown.
+  const reactions =
+    mode !== "on"
+      ? { rows: [] as any[] }
+      : await c.query(
     `SELECT reaction.anchor_sig,reaction.emoji,
        (array_agg(reaction.anchor ORDER BY reaction.created_at))[1] AS anchor,
        count(*)::int AS count,
@@ -298,6 +338,7 @@ async function discussion(
     [share.id, share.tenant_id, viewerId],
   );
   return {
+    mode,
     shareId: share.id,
     revisionId: share.revision_id,
     revisionNumber: current?.number ?? 0,
@@ -324,6 +365,7 @@ export async function sharedComments(
   token: string,
   viewer: Viewer | null,
 ): Promise<SharedComments> {
+  if (commentsMode() === "off") throw commentsOff();
   return transaction(async (c) => {
     const context = await lockShareByToken(c, token);
     const isOwner = viewer?.id === context.ownerId;
@@ -357,6 +399,19 @@ export async function workCommentsInTransaction(
     )
   ).rows[0];
   if (!artifact) throw missing();
+  const mode = commentsMode();
+  if (mode === "off")
+    return {
+      mode,
+      artifactId,
+      unread: 0,
+      shares: [],
+      viewer: {
+        signedIn: true,
+        owner: true,
+        ...(await viewerSettings(c, owner.id)),
+      },
+    };
   const shares = (
     await c.query(
       `SELECT share.id FROM shares share
@@ -392,8 +447,10 @@ export async function workCommentsInTransaction(
     [artifactId, owner.tenant, owner.id, artifact.comments_seen_at],
   );
   return {
+    mode,
     artifactId,
-    unread: unread.n,
+    // Only others' comments are unread; owner-notes shows none of them.
+    unread: mode === "on" ? unread.n : 0,
     shares: result,
     viewer: {
       signedIn: true,
@@ -487,6 +544,7 @@ async function createInContext(
   input: CreateInput,
   notices: CommentNotice[],
 ) {
+  assertMayWrite(context, writer.id);
   if (!context.open) throw closed();
   await lockWriterWithName(c, writer, input.displayName);
   const { share } = context;
@@ -518,8 +576,16 @@ async function createInContext(
            AND comment.deleted_at IS NULL AND ${VISIBLE_AUTHOR}
            AND comment.blocked_at IS NULL
            AND (comment.held_at IS NULL OR comment.author_account_id=$3
-                OR $4::boolean)`,
-        [input.parentId, share.id, writer.id, writer.id === context.ownerId],
+                OR $4::boolean)
+           AND ($5::boolean OR comment.author_account_id=$6::uuid)`,
+        [
+          input.parentId,
+          share.id,
+          writer.id,
+          writer.id === context.ownerId,
+          commentsMode() === "on",
+          context.ownerId,
+        ],
       )
     ).rows[0];
     if (!parent) throw missing();
@@ -607,7 +673,9 @@ async function createInContext(
   if (suspicious || content.action !== "none")
     notices.push({ kind: "suspicious", commentId: id, held });
   // Held comments reach no one else until the operator releases them.
-  if (!held) notices.push({ kind: "comment", commentId: id });
+  // Owner notes send no letters: recipients are not a discussion to notify.
+  if (!held && commentsMode() === "on")
+    notices.push({ kind: "comment", commentId: id });
   return { id: created.id as string };
 }
 
@@ -651,6 +719,14 @@ async function reactInContext(
   emoji: Reaction,
   anchor: CommentAnchor | null | undefined,
 ) {
+  const mode = commentsMode();
+  if (mode === "off") throw commentsOff();
+  if (mode === "owner-notes")
+    throw new Problem(
+      403,
+      "forbidden",
+      "Реакции на этой Полке выключены.",
+    );
   if (!context.open) throw closed();
   await lockWriter(c, writer);
   const { share } = context;
@@ -702,6 +778,7 @@ async function deleteInContext(
   actorId: string,
   id: string,
 ) {
+  assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
   const isOwner = actorId === context.ownerId;
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
@@ -722,6 +799,7 @@ async function resolveInContext(
   id: string,
   resolved: boolean,
 ) {
+  assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
   const isOwner = actorId === context.ownerId;
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
@@ -752,7 +830,9 @@ export async function createSharedComment(
   writer: Viewer | null,
   input: CreateInput,
 ) {
-  if (!writer) throw signInToComment();
+  if (commentsMode() === "off") throw commentsOff();
+  if (!writer)
+    throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
   await limitAuthor(writer);
   const notices: CommentNotice[] = [];
   const result = await transaction(async (c) =>
@@ -768,7 +848,9 @@ export async function reactShared(
   emoji: Reaction,
   anchor: CommentAnchor | null | undefined,
 ) {
-  if (!writer) throw signInToComment();
+  if (commentsMode() === "off") throw commentsOff();
+  if (!writer)
+    throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
   await limitAuthor(writer);
   return transaction(async (c) =>
     reactInContext(c, await lockShareByToken(c, token), writer, emoji, anchor),
@@ -859,6 +941,54 @@ export async function createOwnerComment(
   void dispatchCommentNotices(notices);
   return result;
 }
+
+/**
+ * A note (or a comment in `on`) by the owner's agent: on the given link of
+ * the work, or on its newest open link. Returns the notices to send after
+ * the transaction commits.
+ */
+export async function createOwnerNoteInTransaction(
+  c: PoolClient,
+  owner: Actor,
+  artifactId: string,
+  shareId: string | undefined,
+  input: CreateInput,
+) {
+  if (commentsMode() === "off") throw commentsOff();
+  let target = shareId;
+  if (!target) {
+    const row = (
+      await c.query(
+        `SELECT share.id FROM shares share
+          WHERE share.artifact_id=$1 AND share.tenant_id=$2
+            AND NOT share.revoked AND share.expires_at>now()
+            AND share.moderation='none'
+            AND NOT EXISTS(SELECT 1 FROM editorial_publications publication
+                           WHERE publication.share_id=share.id)
+          ORDER BY share.created_at DESC,share.id DESC LIMIT 1`,
+        [artifactId, owner.tenant],
+      )
+    ).rows[0];
+    if (!row)
+      throw new Problem(
+        409,
+        "conflict",
+        "У работы нет открытой ссылки: заметка живёт на ссылке и видна её получателям. Сначала создайте ссылку (polka_share), затем добавьте заметку.",
+      );
+    target = row.id as string;
+  }
+  const notices: CommentNotice[] = [];
+  const result = await createInContext(
+    c,
+    await ownerShareContext(c, owner, target, false, artifactId),
+    ownerAsViewer(owner),
+    input,
+    notices,
+  );
+  return { ...result, shareId: target, notices };
+}
+
+export { dispatchCommentNotices };
 
 export async function reactOwner(
   owner: Actor & { name: string },

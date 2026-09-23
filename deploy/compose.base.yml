@@ -29,6 +29,22 @@ x-runtime-env: &runtime-env
   ACCOUNT_DELETION_ENABLED: "false"
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
   MAIL_MODE: "disabled"
+  # External sign-in and organisation access (docs/specs/SIGN_IN_PROVIDERS.md);
+  # each provider stays off until its client is set.
+  YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+  YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+  VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+  OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_NAME: ${OIDC_NAME:-}
+  OIDC_ALLOWED_DOMAINS: ${OIDC_ALLOWED_DOMAINS:-}
+  OIDC_ORG_CLAIM: ${OIDC_ORG_CLAIM:-}
+  OIDC_ORG_VALUE: ${OIDC_ORG_VALUE:-}
+  OIDC_ORG_LIBRARY: ${OIDC_ORG_LIBRARY:-}
+  ORG_DOMAINS: ${ORG_DOMAINS:-}
+  # on | owner-notes | off (docs/specs/SIGN_IN_PROVIDERS.md § 4).
+  COMMENTS_MODE: ${COMMENTS_MODE:-on}
 
 services:
   migrate:

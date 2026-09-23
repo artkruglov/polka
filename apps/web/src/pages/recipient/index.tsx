@@ -44,6 +44,8 @@ type Failure = { kind: "unavailable" | "unreachable"; message: string } | null;
  * wide screens and in the bottom sheet on phones while `open`.
  */
 export type CommentsSlot = {
+  /** «Комментарии» or, with owner notes, «Заметки автора». */
+  label?: string;
   count: number;
   open: boolean;
   onToggle: () => void;
@@ -124,6 +126,7 @@ export function Recipient() {
         comments={
           commentable && comments.available
             ? {
+                label: comments.label,
                 count: comments.count,
                 open: comments.open,
                 onToggle: comments.onToggle,
@@ -359,7 +362,7 @@ function RecipientFrame({
                     className="recipient-comments-toggle"
                     aria-pressed={comments.open}
                     aria-controls={railId}
-                    aria-label={`Комментарии: ${comments.count}`}
+                    aria-label={`${comments.label ?? "Комментарии"}: ${comments.count}`}
                     onClick={comments.onToggle}
                   >
                     <MessageCircle /> <span>{comments.count}</span>
@@ -389,7 +392,7 @@ function RecipientFrame({
             <aside
               id={railId}
               className="recipient-comments"
-              aria-label="Комментарии"
+              aria-label={comments.label ?? "Комментарии"}
             >
               {comments.panel}
             </aside>

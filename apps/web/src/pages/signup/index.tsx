@@ -8,6 +8,11 @@ import { safeNext } from "../../shared/lib/safe-next.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
 import { SignupConsent } from "./consent.tsx";
+import {
+  ProviderButtons,
+  providerErrorMessage,
+} from "../../features/provider-sign-in/index.tsx";
+import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 export function Signup() {
   const account = useAccount();
   const sending = useRef(false);
@@ -19,16 +24,25 @@ export function Signup() {
   } | null>(null);
   const [mode, setMode] = useState("loading");
   const [inviteOnly, setInviteOnly] = useState(false);
-  const [error, setError] = useState("");
+  const [providers, setProviders] = useState<SignInProvider[]>([]);
+  const [signupDomains, setSignupDomains] = useState<"any" | string[]>("any");
+  const [loginDomains, setLoginDomains] = useState<"any" | "signup">("any");
+  const query = new URLSearchParams(location.search);
+  const [error, setError] = useState(
+    providerErrorMessage(query.get("idp_error")) ?? "",
+  );
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const next =
-    safeNext(new URLSearchParams(location.search).get("next")) || "/start";
+    safeNext(query.get("next")) || "/start";
   useEffect(() => {
     loadCapabilities()
       .then(async (c) => {
         setMode(c.emailLogin);
         setInviteOnly(c.emailSignup === "invite");
+        setProviders(c.signInProviders);
+        setSignupDomains(c.emailSignupDomains);
+        setLoginDomains(c.emailLoginDomains);
         if (c.emailLogin === "disabled") return;
         const pending = await request<{
           id: string;
@@ -83,6 +97,19 @@ export function Signup() {
     }
   }
   const passwordOnly = mode === "disabled";
+  // The domain rule is public; the server answers the same either way, so
+  // only the interface can say in advance why a code may not come.
+  const typedDomain = email.includes("@")
+    ? email.slice(email.lastIndexOf("@") + 1).trim().toLowerCase()
+    : "";
+  const outsideDomains =
+    signupDomains !== "any" &&
+    /\.[a-z]{2,}$/.test(typedDomain) &&
+    !signupDomains.includes(typedDomain);
+  const providerNames = providers
+    .filter((p) => p.id !== "oidc")
+    .map((p) => p.name)
+    .join(" или ");
   // Sent here by an agent's connection request (Codex, Claude Code, Claude.ai…).
   const forAgent = next.startsWith("/oauth/consent");
   return (
@@ -107,21 +134,37 @@ export function Signup() {
         </h1>
         <p>
           {passwordOnly
-            ? "Аккаунт выдаёт администратор этой Полки. Введите логин и пароль, которые вам передали, — регистрация на стороне не нужна."
+            ? providers.length
+              ? "Войдите одним нажатием или логином и паролем, которые выдал администратор этой Полки."
+              : "Аккаунт выдаёт администратор этой Полки. Введите логин и пароль, которые вам передали, — регистрация на стороне не нужна."
             : challenge
               ? challenge.delivery === "local"
                 ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
+                : outsideDomains && !inviteOnly
+                ? `Если у адреса ${email} уже есть полка, код придёт в течение минуты. Он действует 10 минут.`
                 : inviteOnly
                   ? `Если адрес ${email} приглашён на эту Полку, код придёт в течение минуты. Он действует 10 минут.`
                   : `Отправили код на ${email}. Он действует 10 минут.`
               : inviteOnly
                 ? "Вход по приглашению. Введите почту, на которую вас пригласили, — пришлём код."
-                : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
+                : providers.length
+                  ? "Войдите одним нажатием или по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."
+                  : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
         </p>
+        {!challenge && mode !== "loading" && providers.length > 0 && (
+          <>
+            {passwordOnly && error && <Notice tone="error">{error}</Notice>}
+            <ProviderButtons providers={providers} next={next} />
+            {mode !== "error" && (
+              <div className="idp-or">{passwordOnly ? "или" : "или по почте"}</div>
+            )}
+          </>
+        )}
         {forAgent && !challenge && !passwordOnly && mode !== "loading" && (
           <aside className="onboard-note">
-            Войдите или создайте полку по почте. Сразу после этого Полка
-            спросит, что разрешить агенту, — и подключение готово.
+            Войдите или создайте полку{providers.length ? "" : " по почте"}.
+            Сразу после этого Полка спросит, что разрешить агенту, — и
+            подключение готово.
           </aside>
         )}
         {mode === "loading" && (
@@ -209,6 +252,16 @@ export function Signup() {
                   </p>
                 )}
               </>
+            )}
+            {!challenge && outsideDomains && !inviteOnly && (
+              <Notice>
+                {loginDomains === "signup"
+                  ? `Код на адреса ${typedDomain} на этой Полке не отправляется.`
+                  : `Новые полки по почте открываются на адресах Яндекса, Mail.ru, Рамблера и VK. Если на ${typedDomain} полки у вас ещё нет, код не придёт.`}
+                {providerNames
+                  ? ` Войдите с ${providerNames} — полка откроется сразу.`
+                  : ""}
+              </Notice>
             )}
             {error && <Notice tone="error">{error}</Notice>}
             <Button variant="primary" type="submit" disabled={busy}>

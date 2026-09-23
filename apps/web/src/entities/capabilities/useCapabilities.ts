@@ -13,7 +13,19 @@ export type InstallationCapabilities = {
   livePreview: boolean;
   /** This installation's source code (AGPL-3.0 § 13); a fork sets its own. */
   sourceUrl: string;
+  /** External sign-in that is configured here, in button order. */
+  signInProviders: SignInProvider[];
+  /** Where a NEW shelf opens by an emailed code: "any" or these domains. */
+  emailSignupDomains: "any" | string[];
+  /** "signup": existing accounts outside those domains get no code either. */
+  emailLoginDomains: "any" | "signup";
+  /** on | owner-notes (only the owner writes) | off. */
+  commentsMode: "on" | "owner-notes" | "off";
 };
+
+export type SignInProvider = { id: "yandex" | "vk" | "oidc"; name: string };
+
+const PROVIDER_IDS = new Set(["yandex", "vk", "oidc"]);
 
 export type CapabilitiesState =
   | { status: "loading"; capabilities: null }
@@ -45,6 +57,27 @@ export function loadCapabilities() {
         urlImport: raw.urlImport === true,
         livePreview: raw.liveExperimental === true,
         sourceUrl: httpsUrl(raw.sourceUrl) ?? SOURCE_URL,
+        signInProviders: Array.isArray(raw.signInProviders)
+          ? raw.signInProviders
+              .filter(
+                (item): item is SignInProvider =>
+                  !!item &&
+                  typeof item === "object" &&
+                  PROVIDER_IDS.has((item as SignInProvider).id) &&
+                  typeof (item as SignInProvider).name === "string",
+              )
+              .map((item) => ({ id: item.id, name: item.name.slice(0, 60) }))
+          : [],
+        emailSignupDomains: Array.isArray(raw.emailSignupDomains)
+          ? raw.emailSignupDomains.filter(
+              (item): item is string => typeof item === "string",
+            )
+          : "any",
+        emailLoginDomains: raw.emailLoginDomains === "signup" ? "signup" : "any",
+        commentsMode:
+          raw.commentsMode === "owner-notes" || raw.commentsMode === "off"
+            ? raw.commentsMode
+            : "on",
       } satisfies InstallationCapabilities;
     })
     .catch((error) => {

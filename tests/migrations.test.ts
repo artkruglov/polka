@@ -8,18 +8,11 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete schema 33 set (032 from a concurrent branch optional)", async () => {
+test("migration catalog is the complete contiguous schema 33 set", async () => {
   assert.equal(CURRENT_SCHEMA_VERSION, 33);
-  // 032_account_identities.sql lands from a concurrent branch; until it is on
-  // main the catalog is 1..33 with or without it, never with another gap.
-  // 031_content_filter.sql is required.
-  assert.ok(new Set(EXPECTED_MIGRATION_VERSIONS).has(31));
-  const present = new Set(EXPECTED_MIGRATION_VERSIONS);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
-    Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1).filter(
-      (version) => (version !== 31 && version !== 32) || present.has(version),
-    ),
+    Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
   );
 
   const catalogFiles = SCHEMA_MIGRATIONS.map(({ version, file }) => {
@@ -40,6 +33,20 @@ test("migration catalog is the complete schema 33 set (032 from a concurrent bra
       assert.ok((await readFile(migrationFileUrl(file), "utf8")).trim());
     }),
   );
+});
+
+test("account identities are unique per provider subject and erased with a deletion request", async () => {
+  const sql = await readFile(
+    migrationFileUrl("032_account_identities.sql"),
+    "utf8",
+  );
+  assert.match(sql, /CREATE TABLE account_identities/);
+  assert.match(sql, /UNIQUE \(provider, subject\)/);
+  assert.match(sql, /REFERENCES accounts\(id\) ON DELETE CASCADE/);
+  assert.match(sql, /WHEN \(NEW\.deletion_requested_at IS NOT NULL\)/);
+  assert.match(sql, /'template_library\.domain_joined'/);
+  // No function body of the purge is redefined: 031 may redefine it.
+  assert.doesNotMatch(sql, /terminal_erase_account_metadata\s*\(/);
 });
 
 test("only a single-file HTML bundle may carry a static profile", async () => {

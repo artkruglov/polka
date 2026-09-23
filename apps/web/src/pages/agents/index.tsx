@@ -24,6 +24,7 @@ import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
+import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 
 const statusText: Record<AgentConnection["status"], string> = {
   issued: "Токен выдан; запросов пока нет",
@@ -772,6 +773,7 @@ export function AgentConnections() {
             </p>
           </section>
         </div>
+        {account && <SignInMethods />}
       </main>
       {confirmRevoke && (
         <Dialog
