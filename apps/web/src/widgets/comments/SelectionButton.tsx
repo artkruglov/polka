@@ -17,7 +17,10 @@ export function SelectionButton({
   selection,
   onComment,
   onReact,
+  notes = false,
 }: {
+  /** owner-notes: a note instead of a comment, and no reactions. */
+  notes?: boolean;
   selection: OverlaySelection;
   onComment: (anchor: CommentAnchor) => void;
   onReact: (emoji: Reaction, anchor: CommentAnchor) => void;
@@ -45,9 +48,9 @@ export function SelectionButton({
       {anchor ? (
         <>
           <button type="button" className="selection-comment" onClick={() => onComment(anchor)}>
-            <MessageSquarePlus aria-hidden="true" /> Комментировать
+            <MessageSquarePlus aria-hidden="true" /> {notes ? "Заметка" : "Комментировать"}
           </button>
-          <span className="selection-reactions">
+          {!notes && <span className="selection-reactions">
             {REACTIONS.map((emoji) => (
               <button
                 key={emoji}
@@ -58,7 +61,7 @@ export function SelectionButton({
                 {emoji}
               </button>
             ))}
-          </span>
+          </span>}
         </>
       ) : (
         <span className="selection-too-long">
