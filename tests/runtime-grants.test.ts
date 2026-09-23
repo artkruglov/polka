@@ -330,8 +330,8 @@ test("runtime app DML, trigger enforcement and session CSRF cascade work", async
       await client.query("RELEASE SAVEPOINT journal_kept");
     }
     await client.query(
-      `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,delete_after)
-       VALUES($1,$2,$3,$4,$5,'drugs',now())`,
+      `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,isolated,delete_after)
+       VALUES($1,$2,$3,$4,$5,'drugs',true,now())`,
       [randomUUID(), tenantId, artifactId, revisionId, "c".repeat(64)],
     );
     await client.query(
