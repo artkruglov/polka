@@ -1,5 +1,6 @@
 [
   "tests/unit.test.ts",
+  "tests/browser-icons.test.ts",
   "tests/away-links.test.ts",
   "tests/ops-status.test.ts",
   "tests/storage-bootstrap.test.ts",
