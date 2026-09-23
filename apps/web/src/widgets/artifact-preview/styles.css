@@ -9,7 +9,16 @@
 .html-preview-note .ui-button { margin-top: 4px; }
 .html-preview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .html-preview-toolbar > span { flex: 1 1 auto; }
-.html-preview-toolbar > .ui-button { min-height: 36px; padding: 6px 10px; }
+.html-preview-toolbar > .ui-button { min-height: 36px; margin-top: 0; padding: 6px 10px; gap: 6px; }
+.html-preview-toolbar > .ui-button svg { width: 16px; height: 16px; flex: none; }
+/* Recipients: one row on a phone; icon buttons keep their aria-labels. */
+@media (max-width: 760px) {
+  .html-preview-toolbar--compact { flex-wrap: nowrap; }
+  .html-preview-toolbar--compact > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .html-preview > .html-preview-toolbar.html-preview-toolbar--compact > .ui-button { flex: none; min-width: 40px; min-height: 40px; margin-top: 0; padding: 6px; justify-content: center; }
+  .html-preview-toolbar--compact > .ui-button svg { width: 18px; height: 18px; }
+  .html-preview-toolbar--compact .html-preview-toolbar-label { display: none; }
+}
 .html-preview-expanded { position: fixed; inset: 16px; z-index: 100; height: auto; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); box-shadow: var(--shadow-lg); overflow: hidden; }
 .html-preview-expanded .work-html { min-height: 0; }
 .preview-error { padding: 28px; color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
