@@ -45,7 +45,7 @@ for (const [name, title] of [
     const html = render(React.createElement(Markdown, { source: doc(name) }));
     assert.match(html, new RegExp(`^<h1>${title}</h1>`));
     assert.match(html, /Круглов Артем Игоревич/);
-    assert.match(html, /artkruglov@gmail\.com/);
+    assert.match(html, /privacy@polochka\.app/);
     assert.match(html, /<aside class="legal-note" role="note">/);
     // Every field is filled: no placeholder is left for readers to see.
     assert.doesNotMatch(html, /legal-placeholder|\[[А-ЯЁ][А-ЯЁ ,.…—-]*\]/);
@@ -85,7 +85,7 @@ test("the texts keep the reviewed legal terms", () => {
     "в течение 72 часов",
     "п. 5 ч. 1 ст. 6",
     "п. 7 ч. 1 ст. 6",
-    "Google LLC (США)",
+    "Яндекс 360 для бизнеса",
     "ООО «Яндекс.Облако»",
     "с 14 лет",
   ])
