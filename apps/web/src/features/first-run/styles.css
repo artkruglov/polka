@@ -1,0 +1,64 @@
+/* First-run checklist: three numbered steps, one action each, a quiet progress bar. Imported from main.tsx (Node tests render the component). */
+.first-run { display: grid; gap: 18px; padding: 24px 28px 26px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+.first-run--card { max-width: 860px; }
+.first-run--page { padding: 0; border: 0; background: transparent; }
+.first-run-head { display: flex; align-items: center; gap: 14px; }
+.first-run-heading { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.first-run-heading h2 { font-size: var(--text-xl); letter-spacing: -.02em; }
+.first-run-progress { color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.first-run-dismiss { min-height: var(--control-height-sm); padding: 6px 10px; font-size: var(--text-sm); color: var(--muted); }
+.first-run-dismiss:not(:disabled):hover { color: var(--ink); background: var(--soft-2); }
+.first-run-bar { height: 4px; border-radius: 2px; background: var(--soft-2); overflow: hidden; }
+.first-run-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width var(--dur-slow) var(--ease); }
+.first-run-complete { color: var(--ink-2); font-size: var(--text-md); line-height: 1.55; }
+
+.first-run-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.first-run-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 14px 14px 16px; border: 1px solid transparent; border-radius: var(--radius-md); }
+.first-run-step[aria-current="step"] { border-color: var(--accent-ring); background: var(--soft-3); }
+.first-run-step[data-done] .first-run-mark { background: var(--accent); color: #fff; border-color: var(--accent); }
+.first-run-step[data-done] h3 { color: var(--muted); }
+.first-run-mark { display: grid; place-items: center; width: 28px; height: 28px; margin-top: -2px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--canvas); color: var(--ink-2); font: 600 var(--text-sm) / 1 var(--font-sans); }
+.first-run-mark svg { width: 15px; height: 15px; stroke-width: 3; }
+.first-run-body { display: grid; gap: 10px; min-width: 0; }
+.first-run-body h3 { font-size: var(--text-md); font-weight: 600; letter-spacing: -.01em; }
+.first-run-text { color: var(--muted); font-size: var(--text-base); line-height: 1.55; max-width: 62ch; }
+.first-run-note { color: var(--ink-2); font-size: var(--text-base); line-height: 1.5; overflow-wrap: anywhere; }
+.first-run-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.first-run-target { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.first-run-problem { color: #8f2a20; font-size: var(--text-sm); }
+
+.first-run-phrase { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.first-run-phrase > code { flex: 1 1 260px; min-width: 0; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 400 var(--text-md) / 1.4 var(--font-sans); color: var(--ink); overflow-wrap: anywhere; }
+.first-run-phrase .field-note { flex-basis: 100%; }
+.first-run-hints > summary { display: flex; align-items: center; min-height: 36px; color: var(--accent); font-size: var(--text-base); font-weight: 500; cursor: pointer; }
+.first-run-hints dl { display: grid; gap: 12px; margin: 6px 0 4px; }
+.first-run-hints dt { font-size: var(--text-base); font-weight: 600; margin-bottom: 4px; }
+.first-run-hints dd { display: grid; gap: 4px; margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.first-run-hints pre { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft); color: var(--ink-2); font-size: var(--text-sm); line-height: 1.5; overflow: auto; }
+.first-run-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; color: var(--muted); font-size: var(--text-sm); }
+.first-run-links a { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; color: var(--ink-2); }
+.first-run-links a:hover { color: var(--accent); }
+.first-run-links svg { width: 15px; height: 15px; color: var(--muted); }
+.first-run-links [role="alert"] { color: #8f2a20; }
+
+.first-run-try { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--soft-3); }
+.first-run-try-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent); }
+.first-run-try-icon svg { width: 18px; height: 18px; }
+.first-run-try strong { display: block; font-size: var(--text-md); }
+.first-run-try p { margin-top: 2px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.first-run-try .ui-notice { margin: 10px 0 0; }
+.first-run-saved { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--success); font-size: var(--text-base); }
+.first-run-saved svg { width: 15px; height: 15px; }
+.first-run-saved a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 500; }
+
+@media (max-width: 760px) {
+  .first-run { padding: 18px 16px 20px; gap: 14px; }
+  .first-run--page { padding: 0; }
+  .first-run-head { flex-wrap: wrap; }
+  .first-run-step { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 12px 10px 14px; }
+  .first-run-mark { width: 26px; height: 26px; }
+  .first-run-action > .ui-button, .first-run-phrase > .ui-button { width: 100%; }
+  .first-run-try { grid-template-columns: minmax(0, 1fr); }
+  .first-run-try-icon { display: none; }
+  .first-run-try > .ui-button { width: 100%; }
+}

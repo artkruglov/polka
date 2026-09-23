@@ -76,7 +76,12 @@
 .shelf-more { display: flex; justify-content: center; margin-top: var(--space-8); }
 .shelf-more-note { margin-top: var(--space-6); text-align: center; color: var(--muted); font-size: var(--text-sm); }
 
+/* First-run steps sit where the link field would be. */
+.shelf-hero > .first-run { margin-top: 4px; }
+.shelf-library-head h2:focus-visible { outline-offset: 6px; }
+
 /* Empty */
+.shelf-empty-quiet { max-width: 60ch; padding: 20px 0 8px; color: var(--muted); font-size: var(--text-md); line-height: var(--leading-loose); border-top: 1px solid var(--line); }
 .shelf-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 56px 24px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); }
 .shelf-empty h2 { max-width: 24ch; font-size: var(--text-2xl); letter-spacing: -.03em; }
 .shelf-empty p { max-width: 46ch; color: var(--muted); line-height: var(--leading-loose); }
