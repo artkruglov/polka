@@ -1,5 +1,6 @@
 // The one place Полка sends mail from: sign-in codes (email-auth.ts) and
-// operator moderation (moderation-mail.ts), comment letters (comment-mail.ts).
+// operator moderation (moderation-mail.ts), comment letters (comment-mail.ts),
+// requests from /enterprise (enterprise-requests.ts).
 // MAIL_MODE=smtp sends through
 // SMTP_*; MAIL_MODE=local never sends and writes a JSON file under
 // .local/mail instead (loopback installations and tests read it there).
@@ -13,6 +14,8 @@ export type Mail = {
   subject: string;
   text: string;
   html?: string;
+  /** Where the operator's reply goes (the requester of /enterprise). */
+  replyTo?: string;
 };
 
 /** Sign-in codes are written as `.local/mail/<challenge id>.json`. */
@@ -57,6 +60,7 @@ export async function sendSmtpMail(mail: Mail) {
     subject: mail.subject,
     text: mail.text,
     ...(mail.html ? { html: mail.html } : {}),
+    ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
   });
   if (!result.accepted.length) throw new Error("Mail not accepted");
 }
