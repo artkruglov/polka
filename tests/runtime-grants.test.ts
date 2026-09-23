@@ -251,7 +251,7 @@ test("runtime app DML, trigger enforcement and session CSRF cascade work", async
       [commentId, accountId],
     );
     await client.query(
-      "UPDATE comments SET body='',deleted_at=clock_timestamp() WHERE id=$1",
+      "UPDATE comments SET body='',anchor=NULL,deleted_at=clock_timestamp() WHERE id=$1",
       [commentId],
     );
     await client.query(
