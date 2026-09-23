@@ -7,6 +7,10 @@ import {
   PUBLISH_API_LIMITS,
   PUBLISH_BODY_LIMIT,
   problemSchema,
+  baseMismatchSchema,
+  editProblemSchema,
+  editsBodySchema,
+  editsResponseSchema,
   publishResponseSchema,
   statusResponseSchema,
 } from "./publish-api.ts";
@@ -319,6 +323,94 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/works/{artifactId}/edits": {
+        post: {
+          operationId: "editWork",
+          summary: "Patch the text of a saved work",
+          description:
+            "Saves a new version of the work by replacing text in its latest version: each edit's oldText must occur exactly once in the file (first exactly, then after normalization: NFKC per character, typographic quotes and dashes, special spaces, trailing whitespace of lines); only the matched spans change. Requires revise. With moveLink (and the share scope) the work's open link, and the reader comments on it, move to the new version. Read the comments with the MCP tool polka_comments. Retry network errors, 429 and 5xx with the same key.",
+          security: [{ bearerAuth: ["revise"] }],
+          parameters: [
+            {
+              name: "artifactId",
+              in: "path",
+              required: true,
+              schema: artifactId,
+              example: "5d0c7a61-8a52-4b7e-9d0e-2f7b1b7f4c11",
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/EditsRequest" },
+                examples: {
+                  typo: {
+                    summary: "Fix a sentence a reader commented on",
+                    value: {
+                      key: "7c1e9a52-0f3b-4d6e-8a21-5b9f0c2d7e44",
+                      baseRevisionId: "9a1e3f0b-6c1d-4e0a-8f4b-3b9d2e7c5a10",
+                      edits: [
+                        {
+                          oldText: "Выручка выросла на 12%.",
+                          newText: "Выручка выросла на 14%.",
+                        },
+                      ],
+                      moveLink: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description:
+                "Saved as a new version. link says whether the open link now shows it.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EditsResponse" },
+                },
+              },
+            },
+            "400": problem("Fields failed validation.", {
+              fields: {
+                code: "invalid",
+                message: "Проверьте поля запроса: edits.",
+              },
+            }),
+            "401": common["401"],
+            "403": common["403"],
+            "404": problem("No such work or file, or it is in the trash.", {
+              missing: {
+                code: "not_found",
+                message:
+                  "Материал недоступен. Ссылка могла измениться или доступ был закрыт.",
+              },
+            }),
+            "409": {
+              description:
+                "baseRevisionId is not the latest version: currentRevisionId names it. Read it and send the edits again. (The same key with a different body is also 409, without currentRevisionId.)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BaseMismatch" },
+                },
+              },
+            },
+            "422": {
+              description:
+                "An edit cannot be applied: editIndex names it (0-based) and reason says why (not_found, ambiguous, overlap with otherEditIndex, empty_old_text, no_change). Add surrounding text to oldText and retry with a new key.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EditProblem" },
+                },
+              },
+            },
+            "429": common["429"],
+            "503": common["503"],
+          },
+        },
+      },
       "/api/v1/cli/polka-publish.mjs": {
         get: {
           operationId: "downloadCli",
@@ -358,6 +450,10 @@ export function openApiDocument(origin: string) {
           PUBLISH_RESPONSE_NOTES,
         ),
         StatusResponse: jsonSchema(statusResponseSchema, "output"),
+        EditsRequest: jsonSchema(editsBodySchema, "input"),
+        EditsResponse: jsonSchema(editsResponseSchema, "output"),
+        EditProblem: jsonSchema(editProblemSchema, "output"),
+        BaseMismatch: jsonSchema(baseMismatchSchema, "output"),
         Problem: jsonSchema(problemSchema, "output"),
       },
     },

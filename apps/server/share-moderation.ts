@@ -59,7 +59,8 @@ export async function authorStanding(
        (account.created_at IS NULL
          OR account.created_at<=now()-$2*interval '1 day') AS aged,
        EXISTS(SELECT 1 FROM share_reports report
-              WHERE report.tenant_id=tenant.id AND report.status='new') AS open_reports,
+              WHERE report.tenant_id=tenant.id AND report.status='new'
+                AND report.comment_id IS NULL) AS open_reports,
        EXISTS(SELECT 1 FROM shares share
               WHERE share.tenant_id=tenant.id AND share.moderation='paused'
                 AND NOT share.revoked AND share.expires_at>now()) AS paused_links

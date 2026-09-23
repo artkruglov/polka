@@ -42,6 +42,9 @@ const Moderation = page(() =>
 const Away = page(() =>
   import("../../pages/away/index.tsx").then((m) => m.Away),
 );
+const MailOff = page(() =>
+  import("../../pages/mail-off/index.tsx").then((m) => m.MailOff),
+);
 const PrivacyPage = page(() =>
   import("../../pages/legal/index.tsx").then((m) => m.PrivacyPage),
 );
@@ -113,6 +116,7 @@ export {
   Moderation,
   OAuthConsent,
   Away,
+  MailOff,
   PrivacyPage,
   TermsPage,
 };

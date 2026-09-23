@@ -8,6 +8,7 @@ import {
   FirstSave,
   Landing,
   Lazy,
+  MailOff,
   LibraryInvite,
   Moderation,
   OAuthConsent,
@@ -42,6 +43,7 @@ function Route({ path }: { path: string }) {
     return <AgentConnections />;
   if (path === "/s") return <Recipient />;
   if (path === "/away") return <Away />;
+  if (path === "/mail-off") return <MailOff />;
   // The guest landing, also for people who are signed in.
   if (path === "/landing") return <Landing />;
   if (path.startsWith("/discover")) return <EditorialPage />;

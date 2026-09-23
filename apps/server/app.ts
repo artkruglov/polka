@@ -17,6 +17,7 @@ import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
+import { registerCommentRoutes } from "./comment-routes.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
   isStaticSingleFileBundle,
@@ -67,7 +68,7 @@ import {
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
-import { PUBLISH_API_PATHS, registerPublishApi } from "./publish-api.ts";
+import { isPublishApiPath, registerPublishApi } from "./publish-api.ts";
 import {
   enableOwnerShare,
   publishOwnerShare,
@@ -108,6 +109,8 @@ function decodeCursor(value: string | undefined, message: string) {
 const encodeCursor = (date: string, id: string) =>
   Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
+const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
+
 export async function createApp() {
   const app = Fastify({
     logger: false,
@@ -141,7 +144,7 @@ export async function createApp() {
     if (
       pathname !== "/mcp" &&
       !OAUTH_MACHINE_PATHS.has(pathname) &&
-      !PUBLISH_API_PATHS.has(pathname) &&
+      !isPublishApiPath(pathname) &&
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== config.APP_ORIGIN
     )
@@ -155,7 +158,7 @@ export async function createApp() {
     if (error instanceof Problem)
       return reply
         .code(error.status)
-        .send({ code: error.code, message: error.message });
+        .send({ code: error.code, message: error.message, ...error.details });
     if (error instanceof z.ZodError)
       return reply.code(400).send({
         code: "invalid",
@@ -200,6 +203,10 @@ export async function createApp() {
     });
   });
   const id = (req: any) => uuid.parse(req.params.id);
+  // The shell asks for the comment overlay when it issues a view grant; the
+  // flag lives in the grant, never in a URL anyone could open.
+  const withComments = (req: any) =>
+    viewOptions.parse(req.body ?? {}).comments === true;
   registerUrlImports(app, identity);
   registerAgentContext(app, identity);
   registerTemplateLibraryRoutes(app, identity);
@@ -721,11 +728,13 @@ export async function createApp() {
       actor,
       req.cookies.polka_session ?? "",
       revisionId,
+      withComments(req),
     );
   });
   app.post("/api/view/static-view", async (req) => {
     const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
-    if (config.HTML_LIVE_ENABLED) return issueRecipientStaticView(grant);
+    if (config.HTML_LIVE_ENABLED)
+      return issueRecipientStaticView(grant, withComments(req));
     if (!/^[A-Za-z0-9_-]{43}$/.test(grant)) throw missing();
     return { url: `/api/view/${grant}/document` };
   });
@@ -767,7 +776,12 @@ export async function createApp() {
   });
   app.post("/api/revisions/:id/live-view", async (req) => {
     const actor = await identity(req);
-    return issueOwnerLiveView(actor, req.cookies.polka_session ?? "", id(req));
+    return issueOwnerLiveView(
+      actor,
+      req.cookies.polka_session ?? "",
+      id(req),
+      withComments(req),
+    );
   });
   app.post("/api/artifacts/:id/share", async (req) => {
     return enableOwnerShare(await identity(req), id(req), req.body);
@@ -903,6 +917,7 @@ export async function createApp() {
   app.post("/api/view/live-view", async (req) =>
     issueRecipientLiveView(
       req.headers.authorization?.replace(/^Bearer /, "") ?? "",
+      withComments(req),
     ),
   );
   // An iframe cannot send Authorization, so the short-lived (60 s), revision-bound
@@ -917,6 +932,7 @@ export async function createApp() {
     reportShare(req.body, req.ip),
   );
   registerModerationRoutes(app);
+  registerCommentRoutes(app);
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);

@@ -1,0 +1,7 @@
+/* «Не присылать письма о комментариях»: one question, one button. */
+.mail-off-page { display: grid; gap: 16px; justify-items: start; max-width: 560px; margin: 0 auto; padding: 96px var(--gutter) 64px; }
+.mail-off-page h1 { font-size: clamp(26px, 3vw, 34px); }
+.mail-off-page p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.55; }
+@media (max-width: 760px) {
+  .mail-off-page { padding: 48px var(--gutter-mobile) 48px; }
+}

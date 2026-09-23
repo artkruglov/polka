@@ -22,8 +22,13 @@ import { ApiError, client } from "../../shared/api/client.ts";
 import { dateTime, kindOf, profileView } from "../../entities/artifact/format.ts";
 import { Button } from "../../shared/ui/controls.tsx";
 import { ReportArtifactPanel } from "../../features/report-artifact/index.tsx";
-import { Preview } from "../../widgets/artifact-preview/index.ts";
+import {
+  Preview,
+  type FrameOverlay,
+} from "../../widgets/artifact-preview/index.ts";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
+import { useSharedComments } from "../../widgets/comments/index.ts";
+import { takeShareAfterSignIn } from "../../shared/lib/share-return.ts";
 
 const accessRequest =
   "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
@@ -43,8 +48,16 @@ export type CommentsSlot = {
   panel?: React.ReactNode;
 };
 
+/** A reader who left to sign in (to comment) comes back to the same link. */
+function initialToken() {
+  if (location.hash.length > 1) return location.hash.slice(1);
+  const kept = takeShareAfterSignIn();
+  if (kept) history.replaceState(null, "", `/s#${kept}`);
+  return kept ?? "";
+}
+
 export function Recipient() {
-  const [token, setToken] = useState(() => location.hash.slice(1));
+  const [token, setToken] = useState(initialToken);
   const [viewer, setViewer] = useState<Resolved | null>(null);
   const [error, setError] = useState<Failure>(null);
   const [attempt, setAttempt] = useState(0);
@@ -86,14 +99,45 @@ export function Recipient() {
       window.removeEventListener("hashchange", load);
     };
   }, [attempt]);
+  // Comments belong to user links; editorial pages have none.
+  const commentable =
+    !!viewer && !("review" in viewer) && viewer.publisher === "user";
+  const [reportComment, setReportComment] = useState<string | null>(null);
+  const comments = useSharedComments({
+    token,
+    enabled: commentable,
+    onReport: setReportComment,
+  });
   return (
-    <RecipientScreen
-      key={token}
-      viewer={viewer}
-      error={error}
-      token={token}
-      onRetry={() => setAttempt((value) => value + 1)}
-    />
+    <>
+      <RecipientScreen
+        key={token}
+        viewer={viewer}
+        error={error}
+        token={token}
+        onRetry={() => setAttempt((value) => value + 1)}
+        comments={
+          commentable && comments.available
+            ? {
+                count: comments.count,
+                open: comments.open,
+                onToggle: comments.onToggle,
+                panel: comments.panel,
+              }
+            : undefined
+        }
+        overlay={commentable && comments.available ? comments.overlay : undefined}
+      />
+      {commentable && comments.floating}
+      {reportComment && (
+        <ReportArtifactPanel
+          token={token}
+          commentId={reportComment}
+          onClose={() => setReportComment(null)}
+          onSent={() => setReportComment(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -104,12 +148,15 @@ export function RecipientScreen({
   token,
   onRetry,
   comments,
+  overlay,
 }: {
   viewer: Resolved | null;
   error: Failure;
   token: string;
   onRetry: () => void;
   comments?: CommentsSlot;
+  /** The comment overlay in the document's frame (see useSharedComments). */
+  overlay?: FrameOverlay;
 }) {
   const account = useAccount();
   const [reporting, setReporting] = useState(false);
@@ -221,6 +268,7 @@ export function RecipientScreen({
         revision={viewer.revision}
         grant={viewer.grant}
         readingTitle={plainText ? viewer.title : undefined}
+        overlay={overlay}
       />
       {reporting && (
         <ReportArtifactPanel
