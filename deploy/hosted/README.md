@@ -7,7 +7,7 @@
 | Сервис | Назначение |
 |---|---|
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
-| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 028), `deploy/runtime-grants.sql`, проверка versioned S3 |
+| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 029), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
@@ -110,7 +110,7 @@ sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' deploy/hosted/hosted.e
 cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 ```
 
-`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 028): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
+`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 029): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
 
 ## Откат
 
@@ -183,7 +183,61 @@ rm polka.dump
 
 ## Модерация
 
-Жалобы получателей ссылок и блокировка — скриптами оператора, веб-интерфейса нет. Скрипты работают от runtime-роли БД и не печатают токены.
+Правила — [docs/specs/ABUSE_PROTECTION.md](../../docs/specs/ABUSE_PROTECTION.md). Отдельной админки нет: оператор получает письма с кнопками, а без почты пользуется скриптами ниже.
+
+### Настройки
+
+В `hosted.env` (все передаются через `compose.yml`):
+
+| Переменная | На запуск polochka.app | Что делает |
+|---|---|---|
+| `SHARE_MODERATION` | `new-accounts` | Какие новые ссылки ждут проверки: `off` — никакие; `flagged` (значение по умолчанию в коде) — похожие на фишинг от недоверенного автора; `new-accounts` — любая ссылка недоверенного автора; `all` — любая ссылка аккаунта, зарегистрированного по почте. Через 1–2 недели после запуска — `flagged` |
+| `OPERATOR_EMAIL` | адрес оператора | Куда идут письма. Нужен `MAIL_MODE=smtp`. Пусто — писем нет, только скрипты |
+| `MODERATION_AUTOPAUSE_REPORTS` | `3` | Столько разных жалобщиков за 7 дней ставят ссылку на паузу. `0` — никогда |
+| `NEW_ACCOUNT_DAYS` | `7` | Сколько дней аккаунт считается новым (если оператор его не одобрил) |
+| `NEW_ACCOUNT_MAX_LINKS` | `5` | Сколько открытых ссылок у нового аккаунта. `0` — без ограничения. Срок ссылки нового аккаунта — не больше 7 дней |
+
+Аккаунты, созданные оператором (`account:create`, вход по паролю), и все аккаунты, существовавшие до миграции 029, доверенные. Письма и кнопки подписаны ключом из `LINK_KEY`: смена `LINK_KEY` делает недействительными и кнопки в уже отправленных письмах.
+
+```sh
+# после правки hosted.env
+docker compose --env-file hosted.env up -d
+# проверить, что приложение видит настройки
+docker compose --env-file hosted.env exec -T app printenv SHARE_MODERATION OPERATOR_EMAIL MODERATION_AUTOPAUSE_REPORTS NEW_ACCOUNT_DAYS NEW_ACCOUNT_MAX_LINKS
+```
+
+### Письма и кнопки
+
+Письмо приходит, когда ссылка ждёт проверки, когда подозрительную страницу выложил доверенный автор (ссылка работает), на каждую жалобу и при автоматической паузе. В письме: работа, тип и профиль страницы, почта автора и возраст аккаунта, причина (жалоба с комментарием или найденные признаки) и кнопки:
+
+- «Посмотреть» — страница так, как её увидит получатель (песочница, грант на 60 секунд), даже пока ссылка ждёт;
+- «Одобрить ссылку»; «Одобрить и доверять автору» — дальше его ссылки открываются без проверки (кроме `SHARE_MODERATION=all`);
+- «Снять паузу» — после жалоб;
+- «Закрыть ссылку»; «Закрыть и отключить автора» — то же, что `moderation:disable`.
+
+Кнопка ведёт на `https://polochka.app/moderation#<токен>`. Открытие страницы ничего не меняет (почтовые сканеры открывают ссылки сами): она показывает, что будет сделано, и действие выполняется только нажатием кнопки на странице. Повтор безопасен. Кнопки действуют 7 дней; после этого — скрипты. Каждое действие пишется в лог приложения как `{"event":"moderation.action",...}`.
+
+Если письма не приходят: `docker compose --env-file hosted.env logs app | grep moderation.mail_failed`. Ошибка письма не мешает ссылке и жалобе: очередь всегда видна скриптом `queue`.
+
+### Скрипты
+
+Работают от runtime-роли БД и не печатают токены.
+
+```sh
+# ссылки, которые ждут проверки или стоят на паузе: состояние, причина, share id, жалобы, автор, работа
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts queue
+
+# одобрить ссылку (жалобы на неё отмечаются рассмотренными); --trust — ещё и доверять автору
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts approve <shareId> [--trust]
+
+# снять паузу после жалоб
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts unpause <shareId>
+
+# доверять автору без ссылки под рукой
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts trust <логин|почта>
+```
+
+Жалобы, закрытие ссылки и блокировка:
 
 ```sh
 # жалобы за 7 дней (или --days N), новые сверху: причина, комментарий, ссылка и открыта ли она,
@@ -200,7 +254,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts enable <логин|почта>
 ```
 
-Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. Локально те же команды: `npm run moderation:reports`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`.
+Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`.
 
 ## Мониторинг
 

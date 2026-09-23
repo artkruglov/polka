@@ -24,6 +24,7 @@ import {
   type ServiceActor,
 } from "./service-auth.ts";
 import { shareFromAgent } from "./shares.ts";
+import { NEW_ACCOUNT_MAX_DAYS, authorStanding } from "./share-moderation.ts";
 
 const MAX_HTML_MB = Math.floor(MAX_BYTES / (1024 * 1024));
 
@@ -74,7 +75,8 @@ export function publishToolDescription(
           `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
           "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
         ]),
-    "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30).",
+    "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30; a new Polka account gets at most 7, and `expiresNote` says so).",
+    'If `moderation` is "held" (or "paused"), the link exists but recipients see a "being reviewed by a Polka moderator" screen until the moderator approves it: tell the user exactly that (relay `moderationMessage`) and do not present the link as ready.',
     liveEnabled
       ? "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`. If `interactiveUnavailableReason` is present, tell the user the scripts will not run and why; the link, if any, shows a static copy."
       : "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`.",
@@ -162,6 +164,29 @@ function publishedFiles(input: z.infer<typeof agentPublishInputSchema>) {
   ];
 }
 
+/**
+ * A new account's link lasts at most 7 days. polka_publish defaults to 30, so
+ * instead of refusing the first link of every new user it is issued for 7 and
+ * the answer says so. A retry keeps the length its first call stored.
+ */
+async function publishExpiry(
+  actor: ServiceActor,
+  key: string,
+  requested: number,
+) {
+  if (requested <= NEW_ACCOUNT_MAX_DAYS) return { days: requested };
+  const {
+    rows: [prior],
+  } = await db.query(
+    `SELECT request->>'expiresInDays' AS days FROM agent_operations
+     WHERE tenant_id=$1 AND operation='share' AND idempotency_key=$2`,
+    [actor.tenantId, key],
+  );
+  if (prior?.days) return { days: Number(prior.days) };
+  const standing = await authorStanding(db, actor.tenantId);
+  return { days: standing.trusted ? requested : NEW_ACCOUNT_MAX_DAYS };
+}
+
 export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
   const input = agentPublishInputSchema.parse(raw);
   const files = publishedFiles(input).map((file) => ({
@@ -239,13 +264,14 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         "Saved privately. This connection was not granted the link permission (Управлять ссылками); the owner can share it from the shelf or reconnect with that permission.",
     };
   try {
+    const expiry = await publishExpiry(current, input.key, input.expiresInDays);
     // The same idempotency key names the share operation, so a retry returns
     // the same link instead of issuing another.
     const share = await shareFromAgent(current, {
       key: input.key,
       artifactId: receipt.artifactId,
       expectedRevisionId: receipt.revisionId,
-      expiresInDays: input.expiresInDays,
+      expiresInDays: expiry.days,
     });
     return {
       ...saved,
@@ -255,6 +281,17 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       expiresAt: share.expiresAt,
       scriptsRunForRecipients:
         share.url !== null && share.derivativeId !== null,
+      ...("moderation" in share
+        ? {
+            moderation: share.moderation,
+            moderationMessage: share.moderationMessage,
+          }
+        : {}),
+      ...(share.url && expiry.days < input.expiresInDays
+        ? {
+            expiresNote: `Ссылка выдана на ${expiry.days} дней вместо ${input.expiresInDays}: новым аккаунтам Полки ссылки выдаются не дольше чем на ${NEW_ACCOUNT_MAX_DAYS} дней.`,
+          }
+        : {}),
       ...(share.url
         ? {}
         : {
@@ -265,7 +302,9 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
   } catch (error) {
     if (
       error instanceof Problem &&
-      (error.code === "unsupported" || error.code === "conflict")
+      (error.code === "unsupported" ||
+        error.code === "conflict" ||
+        error.code === "quota")
     )
       return {
         ...saved,

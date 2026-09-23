@@ -14,6 +14,8 @@ import { db, transaction } from "./db.ts";
 import { identity, limitAttempts, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
+import { issueShareGrant } from "./share-grants.ts";
+import { registerModerationRoutes } from "./moderation-routes.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
   isStaticSingleFileBundle,
@@ -788,13 +790,15 @@ export async function createApp() {
       const candidate = (
         await c.query(
           `SELECT share.id,share.tenant_id,share.artifact_id,
-                  account.id AS account_id
+                  account.id AS account_id,
+                  (account.created_at IS NOT NULL
+                    AND account.created_at>now()-$2*interval '1 day') AS author_is_new
            FROM shares share
            JOIN tenants tenant ON tenant.id=share.tenant_id
            JOIN accounts account ON account.id=tenant.owner_id
            WHERE share.token_hash=$1 AND NOT account.disabled
              AND account.deletion_requested_at IS NULL`,
-          [tokenHash],
+          [tokenHash, config.NEW_ACCOUNT_DAYS],
         )
       ).rows[0];
       if (!candidate) throw missing();
@@ -822,49 +826,21 @@ export async function createApp() {
       ).rows[0];
       if (!s) throw missing();
       await assertEditorialShareAccessible(c, s.id);
-      const r = (
+      // Held for review or paused after reports: the recipient learns only
+      // that, never the title or the content, and gets no grant.
+      if (s.moderation !== "none") return { review: true as const };
+      const editorial = !!(
         await c.query(
-          `SELECT r.*,
-             CASE WHEN d.id IS NULL THEN NULL ELSE jsonb_build_object(
-               'state',d.state,'runtimeProfile',d.runtime_profile,'reason',NULL,'path',NULL
-             ) END AS inline_build,
-             d.state AS derivative_state,d.source_manifest_sha256 AS derivative_source,
-             d.builder_version AS derivative_builder,d.runtime_profile AS derivative_profile
-           FROM revisions r
-           LEFT JOIN revision_derivatives d ON d.id=$2 AND d.revision_id=r.id
-           WHERE r.id=$1 AND r.artifact_id=$3`,
-          [s.revision_id, s.derivative_id, candidate.artifact_id],
+          "SELECT 1 FROM editorial_publications WHERE share_id=$1",
+          [s.id],
         )
-      ).rows[0];
-      // A bundle (other than a lone static page) and any share bound to an
-      // interactive version open only through that ready derivative.
-      const needsDerivative =
-        r?.storage_kind === "bundle"
-          ? !(isStaticSingleFileBundle(r) && !s.derivative_id)
-          : !!s.derivative_id;
-      if (
-        !r ||
-        (needsDerivative &&
-          (!config.HTML_LIVE_ENABLED ||
-            !s.derivative_id ||
-            r.derivative_state !== "ready" ||
-            r.derivative_source !== r.manifest_sha256 ||
-            !isServedBuilderVersion(r.derivative_builder) ||
-            !isServedRuntimeProfile(r.derivative_profile)))
-      )
-        throw missing();
-      const grant = randomBytes(32).toString("base64url");
-      const g = (
-        await c.query(
-          "INSERT INTO grants(hash,share_id,revision_id,derivative_id,expires_at) VALUES($1,$2,$3,$4,now()+interval '60 seconds') RETURNING expires_at",
-          [sha256(grant), s.id, r.id, s.derivative_id],
-        )
-      ).rows[0];
+      ).rowCount;
+      const view = await issueShareGrant(c, s, candidate.artifact_id);
       return {
         title: artifact.title ?? "Работа",
-        revision: revisionDTO(r),
-        grant,
-        expiresAt: g.expires_at.toISOString(),
+        ...view,
+        publisher: editorial ? ("editorial" as const) : ("user" as const),
+        authorIsNew: !editorial && candidate.author_is_new === true,
       };
     });
   });
@@ -937,6 +913,7 @@ export async function createApp() {
   app.post("/api/reports", { bodyLimit: 4096 }, async (req) =>
     reportShare(req.body, req.ip),
   );
+  registerModerationRoutes(app);
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);

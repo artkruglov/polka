@@ -28,3 +28,5 @@
 .share-review strong { color: var(--ink-2); font-weight: 500; }
 .share-close { background: var(--danger); border-color: var(--danger); }
 .share-close:not(:disabled):hover { background: #9a1f18; border-color: #9a1f18; }
+.share-moderation { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--radius); background: var(--warning-soft); color: var(--ink); font-size: var(--text-sm); line-height: 1.5; }
+.share-moderation svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; color: var(--warning); }

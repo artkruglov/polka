@@ -1,13 +1,15 @@
 import { parentPort } from "node:worker_threads";
-import { classifyHtml } from "./html.ts";
+import { inspectHtml, type HtmlInspection } from "./html.ts";
+import { SCAN_INCOMPLETE } from "./phishing-signals.ts";
 
 // One page per worker; the parent terminates it after the answer or the deadline.
+// The answer is the profile and the phishing signals of the same walk.
 parentPort!.once("message", (source: string) => {
-  let profile: string;
+  let inspection: HtmlInspection;
   try {
-    profile = classifyHtml(source);
+    inspection = inspectHtml(source);
   } catch {
-    profile = "unsupported";
+    inspection = { profile: "unsupported", signals: [SCAN_INCOMPLETE] };
   }
-  parentPort!.postMessage(profile);
+  parentPort!.postMessage(inspection);
 });

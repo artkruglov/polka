@@ -1,6 +1,12 @@
 import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
+import {
+  SCAN_INCOMPLETE,
+  SECRET_AUTOCOMPLETE,
+  SignalCollector,
+  scanScript,
+} from "./phishing-signals.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
 // scripts, forms, plugins or network. Inline styles and data: images still work.
@@ -346,6 +352,19 @@ const ACTIVE_ELEMENTS = new Set([
 ]);
 const HIDDEN_TEXT = new Set(["script", "style", "template"]);
 
+// Attributes whose value names or labels a field: the secret signal (a).
+const FIELD_NAMING = new Set(["name", "id", "placeholder", "aria-label"]);
+// Attributes whose value is shown or read out: brand and urgency (b, c).
+const SHOWN_ATTRIBUTES = new Set([
+  "placeholder",
+  "aria-label",
+  "alt",
+  "title",
+  "value",
+]);
+
+export type HtmlInspection = { profile: HtmlProfile; signals: string[] };
+
 // A conservative heuristic, not a safety verdict: it only decides how honestly
 // the page can be shown without a runtime. Isolation comes from the CSP above.
 //
@@ -353,7 +372,14 @@ const HIDDEN_TEXT = new Set(["script", "style", "template"]);
 // references, so `http-equiv="&#x72;efresh"` is a refresh, while escaped text
 // such as `&lt;script&gt;` stays text. One walk of the tree keeps the cost
 // linear in the page size; this runs on the request thread for every save.
-export function classifyHtml(source: string): HtmlProfile {
+//
+// The same walk collects phishing signals (phishing-signals.ts): secret
+// fields, brands and urgency, each read from one node or attribute at a time
+// and from the strings of inline scripts. Never a regex over the raw source.
+export function inspectHtml(
+  source: string,
+  collector = new SignalCollector(),
+): HtmlInspection {
   // A page with a submission target, password field, script URL or remote
   // asset is kept as an unsupported source. CSP still protects the viewer, but
   // refusing a link avoids presenting an unsafe page as a trusted copy.
@@ -362,11 +388,17 @@ export function classifyHtml(source: string): HtmlProfile {
   const text: string[] = [];
   // An explicit stack, not recursion: a deeply nested page would overflow
   // the call stack. The order of visits does not matter for these checks.
-  const stack: [Node, boolean][] = [[parse(source) as unknown as Node, false]];
-  while (stack.length && !unsafe) {
-    const [node, hidden] = stack.pop()!;
+  // The walk goes on after the page is found unsafe: signals still count.
+  const stack: [Node, boolean, string | undefined][] = [
+    [parse(source) as unknown as Node, false, undefined],
+  ];
+  while (stack.length) {
+    const [node, hidden, parent] = stack.pop()!;
     if (node.nodeName === "#text") {
-      if (!hidden) text.push(node.value ?? "");
+      const value = node.value ?? "";
+      if (parent === "script") scanScript(value, collector);
+      else if (parent !== "style") collector.context(value);
+      if (!hidden && !unsafe) text.push(value);
       continue;
     }
     const tag = node.tagName?.toLowerCase();
@@ -387,63 +419,97 @@ export function classifyHtml(source: string): HtmlProfile {
           tag === "input" &&
           attr === "type" &&
           value.trim().toLowerCase() === "password"
-        )
+        ) {
           unsafe = true;
+          collector.add("secret:password-field");
+        }
         if (
           tag === "meta" &&
           attr === "http-equiv" &&
           value.trim().toLowerCase() === "refresh"
         )
           unsafe = true;
+        if (FIELD_NAMING.has(attr)) collector.secret(value);
+        if (SHOWN_ATTRIBUTES.has(attr)) collector.context(value);
+        if (
+          attr === "autocomplete" &&
+          value
+            .toLowerCase()
+            .split(/\s/)
+            .some((token) => SECRET_AUTOCOMPLETE.has(token))
+        )
+          collector.add("secret:autocomplete");
       }
     }
     const inner = hidden || (tag !== undefined && HIDDEN_TEXT.has(tag));
     // Children in reverse so text is collected in document order.
     const children = node.childNodes ?? [];
-    if (node.content) stack.push([node.content, true]);
-    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, inner]);
+    if (node.content) stack.push([node.content, true, tag]);
+    for (let i = children.length - 1; i >= 0; i--)
+      stack.push([children[i]!, inner, tag]);
   }
-  if (unsafe) return "unsupported";
-  if (!interactive) return "static";
+  const signals = collector.list();
+  if (unsafe) return { profile: "unsupported", signals };
+  if (!interactive) return { profile: "static", signals };
   const visible = text.join(" ").replace(/\s+/g, " ").trim();
-  return visible.length >= 80 ? "limited" : "unsupported";
+  return {
+    profile: visible.length >= 80 ? "limited" : "unsupported",
+    signals,
+  };
+}
+
+export function classifyHtml(source: string): HtmlProfile {
+  return inspectHtml(source).profile;
 }
 
 /**
- * classifyHtml off the request thread, with a deadline. parse5's tree builder
+ * inspectHtml off the request thread, with a deadline. parse5's tree builder
  * is quadratic on deeply nested markup (200 KB of nested <div> takes ~4 s,
  * the 5 MB upload limit ~40 min), and saving runs on the server's request
- * thread. Small pages are classified inline; larger ones in a worker that is
- * terminated at the deadline. A page that cannot be classified in time gets
- * no link ("unsupported"): the owner still sees and downloads it.
+ * thread. Small pages are inspected inline; larger ones in a worker that is
+ * terminated at the deadline. A page that cannot be read in time gets no
+ * static link ("unsupported"; the owner still sees and downloads it) and the
+ * signal SCAN_INCOMPLETE, so an interactive link to it waits for review
+ * instead of escaping the phishing check by nesting.
  */
 export const CLASSIFY_INLINE_BYTES = 16 * 1024;
 export const CLASSIFY_DEADLINE_MS = 2_000;
-export async function classifyHtmlBounded(
+const UNREAD: HtmlInspection = {
+  profile: "unsupported",
+  signals: [SCAN_INCOMPLETE],
+};
+export async function inspectHtmlBounded(
   source: string,
   deadlineMs = CLASSIFY_DEADLINE_MS,
-): Promise<HtmlProfile> {
-  if (source.length <= CLASSIFY_INLINE_BYTES) return classifyHtml(source);
+): Promise<HtmlInspection> {
+  if (source.length <= CLASSIFY_INLINE_BYTES) return inspectHtml(source);
   const { Worker } = await import("node:worker_threads");
   const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
     resourceLimits: { maxOldGenerationSizeMb: 256 },
   });
   try {
-    return await new Promise<HtmlProfile>((resolve) => {
-      const timer = setTimeout(() => resolve("unsupported"), deadlineMs);
-      worker.once("message", (profile: HtmlProfile) => {
+    return await new Promise<HtmlInspection>((resolve) => {
+      const timer = setTimeout(() => resolve(UNREAD), deadlineMs);
+      worker.once("message", (inspection: HtmlInspection) => {
         clearTimeout(timer);
-        resolve(profile);
+        resolve(inspection);
       });
       worker.once("error", () => {
         clearTimeout(timer);
-        resolve("unsupported");
+        resolve(UNREAD);
       });
       worker.postMessage(source);
     });
   } finally {
     await worker.terminate();
   }
+}
+
+export async function classifyHtmlBounded(
+  source: string,
+  deadlineMs = CLASSIFY_DEADLINE_MS,
+): Promise<HtmlProfile> {
+  return (await inspectHtmlBounded(source, deadlineMs)).profile;
 }
 
 // Shared with the web app, which decides whether pasted code is saved as HTML.

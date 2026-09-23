@@ -14,7 +14,7 @@
 
 **ChatGPT.** Settings → Apps & Connectors → Advanced settings → **Developer mode**. Затем **Create**: Name `Полка`, MCP Server URL `https://polochka.app/mcp`, Authentication **OAuth**. В чате выберите коннектор в меню «+».
 
-Модель вызывает `polka_publish` и возвращает ссылку `https://polochka.app/s#…`. Если на установке включён интерактивный просмотр, Полка сама собирает интерактивную версию. Если сборка не удалась, работа всё равно сохраняется, а модель получает причину.
+Модель вызывает `polka_publish` и возвращает ссылку `https://polochka.app/s#…`. Если ссылка ждёт проверки модератора Полки (первые ссылки нового аккаунта или страница, похожая на фишинг), ответ содержит `moderation: "held"` и `moderationMessage`: модель должна сказать, что получатели увидят работу после проверки, а не выдавать ссылку за готовую. Если на установке включён интерактивный просмотр, Полка сама собирает интерактивную версию. Если сборка не удалась, работа всё равно сохраняется, а модель получает причину.
 
 По умолчанию разрешены `context`, `capture`, `read` и `share`. Без `share` работа сохраняется приватно, и ссылки в ответе нет. Как устроены протокол, согласие и отзыв, описано в [MCP_CONNECTOR](MCP_CONNECTOR.md).
 
@@ -91,6 +91,8 @@ codex mcp add polka --url https://polochka.app/mcp --bearer-token-env-var POLKA_
 | `polka_update_artifact`, `polka_trash`, `polka_restore` | `manage` | Название, папка, корзина |
 | `polka_list_templates`, `polka_list_template_libraries`, `polka_read_source` | `source:read` | Шаблоны и их исходники точной версии |
 | `polka_import_url`, `polka_import_status`, `polka_cancel_import` | `capture` | Импорт по URL, если он включён на установке |
+
+`polka_publish` и `polka_share` возвращают `moderation: "held"` (или `"paused"`) и `moderationMessage`, пока ссылка ждёт модератора Полки: получатель до одобрения видит экран «Ссылка на проверке». У нового аккаунта ссылка живёт не больше 7 дней и открытых ссылок не больше пяти (настройки установки); отказ `quota` объясняет это словами, которые агент передаёт человеку. Правила — в [specs/ABUSE_PROTECTION.md](specs/ABUSE_PROTECTION.md).
 
 Создающие инструменты (`polka_publish`, `polka_capture`, `polka_revise`, `polka_share`, `polka_update_artifact`, `polka_import_url`) принимают ключ идемпотентности: повтор того же запроса не создаёт вторую работу. Корзина и восстановление защищены ожидаемой версией (CAS), отзыв ссылки идемпотентен по `shareId`. Полный контракт описан в [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md).
 
