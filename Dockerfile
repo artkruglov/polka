@@ -7,6 +7,8 @@ FROM base AS web
 RUN npm ci --no-audit --no-fund
 COPY apps/web ./apps/web
 COPY packages ./packages
+# /privacy and /terms render these texts; they are the only copy.
+COPY docs/legal ./docs/legal
 RUN npm run build
 
 # Production dependencies only. tsx is the runtime entrypoint; esbuild's
