@@ -13,6 +13,7 @@ export type DiscussionActions = {
   react: (emoji: Reaction, anchor: CommentAnchor | null) => Promise<void>;
   remove: (commentId: string) => Promise<void>;
   resolve: (commentId: string, resolved: boolean) => Promise<void>;
+  settings: (input: { displayName?: string; commentMail?: boolean }) => Promise<void>;
 };
 
 const REFRESH_MS = 30_000;
@@ -72,6 +73,7 @@ export function useSharedDiscussion(token: string, enabled = true) {
     remove: (id) => after(client.comments.remove(token, id)),
     resolve: (id, resolved) =>
       after(client.comments.resolve(token, id, resolved)),
+    settings: (input) => after(client.comments.settings(input)),
   };
   return { data, unavailable, error, reload, actions };
 }
@@ -116,6 +118,7 @@ export function useWorkDiscussion(artifactId: string, enabled = true) {
     remove: (id) => after(client.comments.ownerRemove(id)),
     resolve: (id, resolved) =>
       after(client.comments.ownerResolve(id, resolved)),
+    settings: (input) => after(client.comments.settings(input)),
   });
   const markSeen = useCallback(() => {
     void client.comments

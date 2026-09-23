@@ -54,10 +54,39 @@ export const commentBody = z
 
 const shareToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
+/**
+ * The name shown under a person's comments, chosen before the first one:
+ * everyone with the link sees it. Not an address.
+ */
+export const commentName = z
+  .string()
+  .transform((value) => value.replace(/\s+/g, " ").trim())
+  .refine((value) => value.length >= 1 && [...value].length <= 40, {
+    message: "Имя — от 1 до 40 символов.",
+  })
+  .refine(noControl, { message: "Уберите управляющие символы." })
+  .refine((value) => !value.includes("@"), {
+    message: "Имя не должно быть адресом почты.",
+  });
+export const commentSettingsSchema = z
+  .object({
+    displayName: commentName.optional(),
+    commentMail: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.displayName !== undefined || value.commentMail !== undefined,
+  );
+export const commentMailOffSchema = z
+  .object({ token: z.string().max(400) })
+  .strict();
+
 /** A recipient's request: the link's own token identifies the thread set. */
 export const sharedCommentsSchema = z.object({ token: shareToken }).strict();
 const commentFields = {
   body: commentBody,
+  /** Required before an account's first comment (see commentName). */
+  displayName: commentName.optional(),
   anchor: anchorSchema.nullable().optional(),
   parentId: uuid.optional(),
 };
@@ -148,16 +177,26 @@ export type ShareDiscussion = {
   reactions: ReactionGroup[];
 };
 
-/** What a link's recipient gets. */
-export type SharedComments = ShareDiscussion & {
-  viewer: { signedIn: boolean; name: string | null; owner: boolean };
+/** The person asking, as far as comments are concerned. */
+export type CommentViewer = {
+  signedIn: boolean;
+  name: string | null;
+  owner: boolean;
+  /** The name under comments was chosen; until then a comment asks for it. */
+  nameChosen: boolean;
+  /** Letters about comments are on. */
+  commentMail: boolean;
 };
+
+/** What a link's recipient gets. */
+export type SharedComments = ShareDiscussion & { viewer: CommentViewer };
 
 /** What the owner gets on the work page: every link of the work. */
 export type WorkComments = {
   artifactId: string;
   unread: number;
   shares: ShareDiscussion[];
+  viewer: CommentViewer;
 };
 
 /** Structured refusal of a patch edit (HTTP 422 / tool error). */

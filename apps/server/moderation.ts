@@ -654,7 +654,7 @@ export async function deleteCommentAsOperator(id: string) {
     if (comment.deleted_at)
       return { id, changed: false, message: "Комментарий уже удалён." };
     await c.query(
-      `UPDATE comments SET body='',signals='{}',held_at=NULL,
+      `UPDATE comments SET body='',anchor=NULL,signals='{}',held_at=NULL,
          deleted_at=clock_timestamp() WHERE id=$1`,
       [id],
     );

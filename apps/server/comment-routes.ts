@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { uuid } from "../../packages/contracts/index.ts";
 import {
+  commentMailOffSchema,
+  commentSettingsSchema,
   ownerCreateCommentSchema,
   ownerReactSchema,
   resolveSchema,
@@ -24,7 +26,11 @@ import {
   sharedComments,
   workComments,
   type Viewer,
+  updateCommentSettings,
 } from "./comments.ts";
+import { verifyCommentMailOffToken } from "./comment-mail.ts";
+import { db } from "./db.ts";
+import { Problem } from "./errors.ts";
 
 /** Reads of a link's threads per client IP per 10 minutes (as /api/resolve). */
 export const SHARED_COMMENTS_READS_PER_IP = 600;
@@ -107,6 +113,30 @@ export function registerCommentRoutes(app: FastifyInstance) {
   app.post("/api/comments/:id/delete", options, async (req) =>
     deleteOwnerComment(await identity(req), id(req)),
   );
+  // The name under one's comments, and letters about them on or off.
+  app.post("/api/account/comment-settings", options, async (req) =>
+    updateCommentSettings(
+      await identity(req),
+      commentSettingsSchema.parse(req.body),
+    ),
+  );
+  // «Не присылать такие письма» from a letter: the signed token is the
+  // capability (no session); repeating it changes nothing.
+  app.post("/api/comment-mail/off", options, async (req) => {
+    const { token } = commentMailOffSchema.parse(req.body);
+    await limitAttempts(`comment-mail-off:ip:${req.ip}`, 30);
+    const accountId = verifyCommentMailOffToken(token);
+    if (!accountId)
+      throw new Problem(
+        404,
+        "not_found",
+        "Ссылка устарела или повреждена. Письма можно отключить в панели комментариев любой работы на Полке.",
+      );
+    await db.query("UPDATE accounts SET comment_mail=false WHERE id=$1", [
+      accountId,
+    ]);
+    return { ok: true };
+  });
   app.post("/api/comments/:id/resolve", options, async (req) =>
     resolveOwnerComment(
       await identity(req),

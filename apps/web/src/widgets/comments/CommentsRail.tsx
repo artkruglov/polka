@@ -1,4 +1,11 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Check,
   CornerDownRight,
@@ -16,6 +23,7 @@ import {
   type CommentAnchor,
   type CommentThread,
   type CommentView,
+  type CommentViewer,
   type Reaction,
   type ReactionGroup,
   type ShareDiscussion,
@@ -38,6 +46,17 @@ import type { DiscussionActions } from "./useDiscussion.ts";
 
 export type PendingComment = { anchor: CommentAnchor | null } | null;
 
+/**
+ * Everyone with the link sees the name under a comment: until the person
+ * chose it, the first comment asks for it (prefilled, editable).
+ */
+const NameChoice = createContext<{ needed: boolean; suggested: string }>({
+  needed: false,
+  suggested: "",
+});
+
+export type CommentSettings = { displayName?: string; commentMail?: boolean };
+
 type Props = {
   discussion: ShareDiscussion;
   signedIn: boolean;
@@ -54,6 +73,8 @@ type Props = {
   onClose?: () => void;
   /** Closed link: read, resolve, delete; no new comments. */
   readOnly?: boolean;
+  viewer?: CommentViewer;
+  onSettings?: (settings: CommentSettings) => Promise<void>;
 };
 
 type Item =
@@ -99,6 +120,8 @@ export function CommentsRail({
   header,
   onClose,
   readOnly = false,
+  viewer,
+  onSettings,
 }: Props) {
   const [showResolved, setShowResolved] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -225,9 +248,13 @@ export function CommentsRail({
           signedIn={signedIn}
           onSignIn={onSignIn}
           onCancel={() => onPendingChange(null)}
-          onSubmit={async (body) => {
+          onSubmit={async (body, displayName) => {
             await run(() =>
-              actions.create({ body, ...(item.anchor ? { anchor: item.anchor } : {}) }),
+              actions.create({
+                body,
+                ...(item.anchor ? { anchor: item.anchor } : {}),
+                ...(displayName ? { displayName } : {}),
+              }),
             );
             onPendingChange(null);
             bridge?.clearSelection();
@@ -282,6 +309,12 @@ export function CommentsRail({
 
   const count = discussion.threads.filter((t) => !t.deleted).length;
   return (
+    <NameChoice.Provider
+      value={{
+        needed: !!viewer?.signedIn && !viewer.nameChosen,
+        suggested: viewer?.name ?? "",
+      }}
+    >
     <section className="comments" data-layout={layout} aria-label="Обсуждение">
       <header className="comments-head">
         <h2>
@@ -358,7 +391,79 @@ export function CommentsRail({
           {showResolved ? "Скрыть решённые" : `Показать решённые (${resolvedCount})`}
         </button>
       )}
+      {viewer?.signedIn && onSettings && (
+        <Settings viewer={viewer} onSettings={(value) => run(() => onSettings(value))} />
+      )}
     </section>
+    </NameChoice.Provider>
+  );
+}
+
+/** The name under one's comments and letters about them. */
+function Settings({
+  viewer,
+  onSettings,
+}: {
+  viewer: CommentViewer;
+  onSettings: (settings: CommentSettings) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(viewer.name ?? "");
+  const [busy, setBusy] = useState(false);
+  const save = async (settings: CommentSettings) => {
+    setBusy(true);
+    try {
+      await onSettings(settings);
+      setEditing(false);
+    } catch {
+      /* the rail shows the error */
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <footer className="comments-settings">
+      {viewer.nameChosen && (
+        editing ? (
+          <form
+            className="comments-settings-name"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save({ displayName: name });
+            }}
+          >
+            <input
+              className="ui-input"
+              value={name}
+              maxLength={40}
+              aria-label="Имя под комментариями"
+              onChange={(event) => setName(event.target.value)}
+            />
+            <Button type="submit" variant="quiet" busy={busy} disabled={!name.trim()}>
+              Сохранить
+            </Button>
+          </form>
+        ) : (
+          <p>
+            Под комментариями: <strong>{viewer.name}</strong>{" "}
+            <button type="button" className="text-button" onClick={() => setEditing(true)}>
+              Изменить
+            </button>
+          </p>
+        )
+      )}
+      <p>
+        Письма о комментариях {viewer.commentMail ? "приходят" : "отключены"}.{" "}
+        <button
+          type="button"
+          className="text-button"
+          disabled={busy}
+          onClick={() => void save({ commentMail: !viewer.commentMail })}
+        >
+          {viewer.commentMail ? "Отключить" : "Включить"}
+        </button>
+      </p>
+    </footer>
   );
 }
 
@@ -408,7 +513,7 @@ function Composer({
   signedIn: boolean;
   onSignIn?: () => void;
   onCancel: () => void;
-  onSubmit: (body: string) => Promise<void>;
+  onSubmit: (body: string, displayName?: string) => Promise<void>;
   cardRef?: (element: HTMLElement | null) => void;
   style?: React.CSSProperties;
   placeholder?: string;
@@ -416,6 +521,8 @@ function Composer({
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const naming = useContext(NameChoice);
+  const [name, setName] = useState(naming.suggested);
   const field = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => field.current?.focus(), []);
   const length = [...body].length;
@@ -450,7 +557,7 @@ function Composer({
           if (!body.trim() || busy) return;
           setBusy(true);
           try {
-            await onSubmit(body);
+            await onSubmit(body, naming.needed ? name : undefined);
             setBody("");
           } catch {
             /* the rail shows the error */
@@ -459,6 +566,24 @@ function Composer({
           }
         }}
       >
+        {naming.needed && (
+          <div className="comment-name">
+            <label>
+              <span>Ваше имя под комментариями</span>
+              <input
+                className="ui-input"
+                value={name}
+                maxLength={40}
+                required
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <small>
+              Имя и текст комментария увидят все, у кого есть ссылка, и автор
+              работы. Почту мы не показываем.
+            </small>
+          </div>
+        )}
         <textarea
           ref={field}
           className="ui-input comment-input"
@@ -484,7 +609,11 @@ function Composer({
             variant="primary"
             type="submit"
             busy={busy}
-            disabled={!body.trim() || length > COMMENT_MAX_CHARS}
+            disabled={
+              !body.trim() ||
+              length > COMMENT_MAX_CHARS ||
+              (naming.needed && !name.trim())
+            }
           >
             Отправить
           </Button>
@@ -671,8 +800,14 @@ function ThreadCard({
             onSignIn={onSignIn}
             placeholder="Ответ"
             onCancel={() => setReplying(false)}
-            onSubmit={async (body) => {
-              await run(() => actions.create({ body, parentId: thread.id }));
+            onSubmit={async (body, displayName) => {
+              await run(() =>
+                actions.create({
+                  body,
+                  parentId: thread.id,
+                  ...(displayName ? { displayName } : {}),
+                }),
+              );
               setReplying(false);
             }}
           />

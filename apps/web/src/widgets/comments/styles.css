@@ -62,6 +62,17 @@
 .selection-reactions button:hover, .selection-reactions button:focus-visible { background: var(--soft-2); }
 .selection-too-long { padding: 6px 10px; color: var(--ink-2); font-size: var(--text-sm); }
 
+/* Before the first comment: the name everyone with the link will see. */
+.comment-name { display: grid; gap: 4px; margin-bottom: 8px; }
+.comment-name label { display: grid; gap: 4px; color: var(--ink-2); font-size: var(--text-sm); font-weight: 500; }
+.comment-name input { min-height: 36px; font-size: var(--text-base); }
+.comment-name small { color: var(--muted); font-size: var(--text-xs); line-height: 1.45; }
+.comments-settings { display: grid; gap: 4px; margin-top: auto; padding: 12px 16px 16px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: var(--text-sm); line-height: 1.45; }
+.comments-settings strong { color: var(--ink-2); font-weight: 600; }
+.comments-settings .text-button { font-size: var(--text-sm); }
+.comments-settings-name { display: flex; gap: 6px; }
+.comments-settings-name input { flex: 1 1 auto; min-height: 32px; font-size: var(--text-sm); }
+
 @media (max-width: 760px) {
   .comments-aligned { display: none; }
   .comments-list { padding-bottom: 12px; }

@@ -66,14 +66,19 @@ async function session(accountId: string) {
 }
 
 /** An email account; `trusted` as if the operator approved it. */
-async function person(label: string, trusted = true): Promise<Person> {
+async function person(
+  label: string,
+  trusted = true,
+  named = true,
+): Promise<Person> {
   const id = randomUUID(),
     tenant = randomUUID();
   const email = `${label}-${id.slice(0, 8)}@example.test`;
   await db.query(
-    `INSERT INTO accounts(id,name,password_hash,email,display_name,created_at,trusted_at)
-     VALUES($1,$2,'unused',$3,$4,now(),CASE WHEN $5::boolean THEN now() END)`,
-    [id, `email-${id}`, email, label, trusted],
+    `INSERT INTO accounts(id,name,password_hash,email,display_name,created_at,trusted_at,comment_name_chosen_at)
+     VALUES($1,$2,'unused',$3,$4,now(),CASE WHEN $5::boolean THEN now() END,
+       CASE WHEN $6::boolean THEN now() END)`,
+    [id, `email-${id}`, email, label, trusted, named],
   );
   await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
     tenant,
@@ -188,6 +193,8 @@ test("a guest reads a link's threads; writing needs an account", async () => {
     signedIn: false,
     name: null,
     owner: false,
+    nameChosen: false,
+    commentMail: true,
   });
   const refused = await write(work.token, "", { body: "Привет" });
   assert.equal(refused.statusCode, 401);
@@ -831,6 +838,104 @@ test("an author deleting their account disappears from threads at once", async (
   assert.equal(
     (await write(work.token, leaving.cookie, { body: "ещё" })).statusCode,
     401,
+  );
+});
+
+test("the name under comments is chosen first, never an address", async () => {
+  const owner = await person("owner");
+  const fresh = await person("fresh-reader", true, false);
+  const work = await link(owner);
+  const before = (await list(work.token, fresh.cookie)).json().viewer;
+  assert.equal(before.nameChosen, false);
+  assert.equal(before.commentMail, true);
+  // Without a name: refused, saying what is missing.
+  const refused = await write(work.token, fresh.cookie, { body: "Первый" });
+  assert.equal(refused.statusCode, 400);
+  assert.equal(refused.json().nameRequired, true);
+  // An address is not a name.
+  assert.equal(
+    (
+      await write(work.token, fresh.cookie, {
+        body: "Первый",
+        displayName: "me@example.test",
+      })
+    ).statusCode,
+    400,
+  );
+  const named = await write(work.token, fresh.cookie, {
+    body: "Первый",
+    displayName: "  Мария   К. ",
+  });
+  assert.equal(named.statusCode, 200, named.body);
+  const after = (await list(work.token, fresh.cookie)).json();
+  assert.equal(after.viewer.nameChosen, true);
+  assert.equal(after.threads[0].author.name, "Мария К.");
+  // Once chosen, a later name in a comment changes nothing.
+  await write(work.token, fresh.cookie, { body: "Второй", displayName: "Другое" });
+  assert.equal((await list(work.token, fresh.cookie)).json().viewer.name, "Мария К.");
+  // The settings change it, and turn letters off and on.
+  const settings = await call(
+    "POST",
+    "/api/account/comment-settings",
+    { displayName: "Мария", commentMail: false },
+    fresh.cookie,
+  );
+  assert.equal(settings.statusCode, 200, settings.body);
+  assert.deepEqual(settings.json(), {
+    name: "Мария",
+    nameChosen: true,
+    commentMail: false,
+  });
+  assert.equal(
+    (await call("POST", "/api/account/comment-settings", {}, fresh.cookie))
+      .statusCode,
+    400,
+  );
+  assert.equal(
+    (await call("POST", "/api/account/comment-settings", { commentMail: true }, ""))
+      .statusCode,
+    401,
+  );
+});
+
+test("«Не присылать такие письма» turns the letters off with a signed link", async () => {
+  const owner = await person("owner");
+  const reader = await person("reader");
+  const work = await link(owner);
+  const first = randomBytes(6).toString("hex");
+  await write(work.token, reader.cookie, { body: `Первое ${first}` });
+  const [letter] = await lettersIn(
+    LOCAL_COMMENT_MAIL_DIRECTORY,
+    (item) => item.to === owner.email && item.text.includes(first),
+  );
+  assert.ok(letter);
+  const off = /\/mail-off#(\S+)/.exec(letter.text)?.[1];
+  assert.ok(off, letter.text);
+  // A damaged token does nothing; the right one turns letters off, twice harmlessly.
+  assert.equal(
+    (await call("POST", "/api/comment-mail/off", { token: off.slice(0, -2) + "xx" })).statusCode,
+    404,
+  );
+  for (let i = 0; i < 2; i++)
+    assert.equal(
+      (await call("POST", "/api/comment-mail/off", { token: off })).statusCode,
+      200,
+    );
+  const {
+    rows: [account],
+  } = await db.query("SELECT comment_mail FROM accounts WHERE id=$1", [owner.id]);
+  assert.equal(account.comment_mail, false);
+  const second = randomBytes(6).toString("hex");
+  await write(work.token, reader.cookie, { body: `Второе ${second}` });
+  assert.equal(
+    (
+      await lettersIn(
+        LOCAL_COMMENT_MAIL_DIRECTORY,
+        (item) => item.text.includes(second),
+        1,
+      )
+    ).length,
+    0,
   );
 });
 

@@ -1222,8 +1222,8 @@ test("agents read comments, patch the text, move the link and resolve threads", 
   // A reader with an account comments on a fragment.
   const readerId = randomUUID();
   await db.query(
-    `INSERT INTO accounts(id,name,password_hash,email,display_name,trusted_at)
-     VALUES($1,$2,'unused',$3,'Читатель',now())`,
+    `INSERT INTO accounts(id,name,password_hash,email,display_name,trusted_at,comment_name_chosen_at)
+     VALUES($1,$2,'unused',$3,'Читатель',now(),now())`,
     [readerId, `email-${readerId}`, `reader-${readerId.slice(0, 8)}@example.test`],
   );
   await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
