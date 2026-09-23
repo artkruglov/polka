@@ -534,7 +534,9 @@ test("forged, altered and expired moderation tokens are refused", async () => {
   )
     .update(payload)
     .digest("base64url");
-  const flipped = signature.slice(0, -1) + (signature.endsWith("A") ? "B" : "A");
+  // Flip the first character: the last one of a 43-char base64url HMAC
+  // carries padding bits, so A and B there decode to the same bytes.
+  const flipped = (signature.startsWith("A") ? "B" : "A") + signature.slice(1);
   for (const token of [
     `${forgedPayload}.${signature}`,
     `${payload}.${otherKey}`,
