@@ -34,18 +34,19 @@ const CODE_DIGITS = 8;
 // New shelves per day: counted when an account is created, in its transaction,
 // so a refused attempt does not spend the budget. Starting a sign-in only
 // looks, so a new visitor learns about a full day before waiting for a code.
-const signupKeys = (ip: string, email: string) => [
+const signupKeys = (ip: string, email: string | null) => [
   { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
   { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
   // Anti-spam: per network and per mail domain (signup-guards.ts).
-  ...signupSpamKeys(ip, email),
+  ...(email ? signupSpamKeys(ip, email) : []),
 ];
 
 async function signupRoomLeft(
   c: Pick<LocalDeliveryClient, "query">,
   ip: string,
   count: boolean,
-  email: string,
+  /** The new shelf's address, for the per-domain limit; null when none. */
+  email: string | null = null,
 ) {
   for (const { key, max, message } of signupKeys(ip, email)) {
     const { rows } = count
