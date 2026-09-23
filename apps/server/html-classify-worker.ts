@@ -1,15 +1,38 @@
 import { parentPort } from "node:worker_threads";
-import { inspectHtml, type HtmlInspection } from "./html.ts";
-import { SCAN_INCOMPLETE } from "./phishing-signals.ts";
+import {
+  UNREAD,
+  inspectHtml,
+  type HtmlInspection,
+  type InspectOptions,
+} from "./html.ts";
+import { SignalCollector } from "./phishing-signals.ts";
+import { scanText } from "./content-filter/scanner.ts";
 
 // One page per worker; the parent terminates it after the answer or the deadline.
-// The answer is the profile and the phishing signals of the same walk.
-parentPort!.once("message", (source: string) => {
+// The answer is the profile, the phishing signals and the content filter's
+// findings of the same walk.
+parentPort!.once(
+  "message",
+  ({
+    source,
+    options,
+    text,
+  }: {
+    source: string;
+    options?: InspectOptions;
+    text?: boolean;
+  }) => {
+  // A plain text file: only the content filter.
+  if (text) {
+    parentPort!.postMessage(scanText(source));
+    return;
+  }
   let inspection: HtmlInspection;
   try {
-    inspection = inspectHtml(source);
+    inspection = inspectHtml(source, new SignalCollector(options ?? {}));
   } catch {
-    inspection = { profile: "unsupported", signals: [SCAN_INCOMPLETE] };
+    inspection = UNREAD;
   }
   parentPort!.postMessage(inspection);
-});
+  },
+);

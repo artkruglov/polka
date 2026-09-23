@@ -290,7 +290,10 @@ test("SHARE_MODERATION decides which new links wait", async () => {
     ["flagged", operator, PHISHING, "none"],
     ["new-accounts", fresh, HONEST, "held"],
     ["new-accounts", approved, HONEST, "none"],
-    ["new-accounts", approved, PHISHING, "none"],
+    // A trusted author (not created by the operator) whose page scores high
+    // on the content filter's fraud (secret + brand + urgency) waits too
+    // (docs/specs/CONTENT_FILTER.md).
+    ["new-accounts", approved, PHISHING, "held"],
     ["all", approved, HONEST, "held"],
     ["all", operator, HONEST, "none"],
   ];
@@ -674,7 +677,12 @@ test("signals of a large page come back from the bounded worker; an unreadable p
   // Deep nesting cannot hide a page from the check: past the deadline it is
   // "unsupported" (no static link) and suspicious (a live link would wait).
   const nested = await inspectHtmlBounded("<div>".repeat(200_000), 1_000);
-  assert.deepEqual(nested, { profile: "unsupported", signals: [SCAN_INCOMPLETE] });
+  assert.deepEqual(
+    { profile: nested.profile, signals: nested.signals },
+    { profile: "unsupported", signals: [SCAN_INCOMPLETE] },
+  );
+  // The content filter counts an unread page as possible fraud as well.
+  assert.ok(nested.filter.hits.fraud);
   assert.equal(isSuspicious(nested.signals), true);
 });
 

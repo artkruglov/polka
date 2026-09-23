@@ -14,6 +14,8 @@
 // constant and the scan stays linear in the page: keep them that way (no *,
 // + or nested quantifiers).
 
+import { ContentScanner } from "./content-filter/scanner.ts";
+
 export type SignalFamily = "secret" | "brand" | "urgency";
 
 type Signal = {
@@ -134,9 +136,17 @@ const CONTEXT_SIGNALS = [...byFamily("brand"), ...byFamily("urgency")];
 /** Longer pieces are cut: a signal is a phrase, not a document. */
 const MAX_PIECE = 4096;
 
-/** A collector for one save: signals found in all its pieces of text. */
+/**
+ * A collector for one save: signals found in all its pieces of text. The
+ * content filter (content-filter/scanner.ts) reads the same pieces.
+ */
 export class SignalCollector {
   readonly found = new Set<string>();
+  readonly content: ContentScanner;
+
+  constructor(options: ConstructorParameters<typeof ContentScanner>[0] = {}) {
+    this.content = new ContentScanner(options);
+  }
 
   /** A field name, id, placeholder, label or script string: secrets. */
   secret(value: string) {
@@ -146,6 +156,7 @@ export class SignalCollector {
   /** Visible text, titles, script strings: brands and urgency. */
   context(value: string) {
     this.match(value, CONTEXT_SIGNALS);
+    this.content.text(value);
   }
 
   add(key: string) {
@@ -260,7 +271,12 @@ export function scanScript(source: string, collector: SignalCollector) {
   // A literal is where a field's name or placeholder lives; JSX text is what
   // the page says, like visible text of a static page.
   scriptStrings(source, (text, kind) => {
-    if (kind === "literal") collector.secret(text);
+    if (kind === "literal") {
+      collector.secret(text);
+      // An address in a string: fetch("https://…"), <a href={"…"}>.
+      if (/^(?:https?:)?\/\//i.test(text)) collector.content.url(text);
+    }
     collector.context(text);
   });
+  collector.content.code(source);
 }

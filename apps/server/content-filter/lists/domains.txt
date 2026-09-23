@@ -1,0 +1,32 @@
+# Домены, ссылки на которые придерживают страницу (docs/specs/CONTENT_FILTER.md).
+# Строка: домен и категория (по умолчанию blocklisted_domain). Поддомены
+# совпадают: rutracker.org ловит и www.rutracker.org. Любой .onion код
+# ловит отдельно. Одна ссылка — 6 очков (порог категории).
+#
+# Начальный список: крупные пиратские сайты, заблокированные по решениям
+# Мосгорсуда, нелегальные казино и логгеры IP-адресов. Перед добавлением
+# проверьте адрес в реестре Роскомнадзора (blocklist.rkn.gov.ru).
+
+# Пиратство
+rutracker.org piracy
+rutracker.net piracy
+rutor.info piracy
+rutor.org piracy
+nnmclub.to piracy
+nnm-club.me piracy
+kinozal.tv piracy
+thepiratebay.org piracy
+1337x.to piracy
+lostfilm.tv piracy
+
+# Нелегальные казино и букмекеры
+1xbet.com gambling
+joycasino.com gambling
+azino777.com gambling
+
+# Логгеры IP-адресов: в фишинге их прячут за ссылками
+grabify.link
+iplogger.org
+iplogger.com
+2no.co
+blasze.com

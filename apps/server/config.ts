@@ -65,6 +65,12 @@ const env = z
     // and per client IP. 0 stops new shelves; existing accounts sign in as usual.
     EMAIL_SIGNUP_DAILY_LIMIT: z.coerce.number().int().min(0).max(100000).default(50),
     EMAIL_SIGNUP_DAILY_PER_IP: z.coerce.number().int().min(0).max(1000).default(3),
+    // Anti-spam (docs/specs/CONTENT_FILTER.md, «Спам»): new shelves per day
+    // from one /24 (IPv4) or /48 (IPv6) network, and per mail domain other
+    // than the large public providers. 0 (the default in code): no limit;
+    // hosted.env.example sets them.
+    EMAIL_SIGNUP_DAILY_PER_SUBNET: z.coerce.number().int().min(0).max(10000).default(0),
+    EMAIL_SIGNUP_DAILY_PER_DOMAIN: z.coerce.number().int().min(0).max(10000).default(0),
     EMAIL_SIGNUP_ALLOW: z
       .string()
       .default("")
@@ -120,9 +126,15 @@ const env = z
     // waits for the operator: off, flagged (looks like phishing and the
     // author is not trusted), new-accounts (any link of an untrusted
     // account), all (any link of an account the operator did not create).
+    // auto (docs/specs/CONTENT_FILTER.md, «Автоматическая модерация»): no
+    // link waits because of who made it; the content filter decides, and trust
+    // is earned automatically. Only images of a new account wait while no
+    // image model is configured.
     SHARE_MODERATION: z
-      .enum(["off", "flagged", "new-accounts", "all"])
+      .enum(["off", "auto", "flagged", "new-accounts", "all"])
       .default("flagged"),
+    // auto: saves of an account (none blocked) before it is trusted by age.
+    TRUST_MIN_CLEAN_SAVES: z.coerce.number().int().min(0).max(1000).default(3),
     // Where moderation mail goes. Unset or empty: no mail, scripts only.
     OPERATOR_EMAIL: unsetIfEmpty(z.string().email()),
     // Distinct reporters of one link within 7 days that pause it. 0: never.
@@ -131,6 +143,76 @@ const env = z
     // most NEW_ACCOUNT_MAX_LINKS live links, each for at most 7 days.
     NEW_ACCOUNT_DAYS: z.coerce.number().int().min(0).max(365).default(7),
     NEW_ACCOUNT_MAX_LINKS: z.coerce.number().int().min(0).max(10000).default(5),
+    // Links a new account may create per day, closed ones included. 0: no limit.
+    NEW_ACCOUNT_DAILY_LINKS: z.coerce.number().int().min(0).max(10000).default(10),
+    // The prohibited-content filter (docs/specs/CONTENT_FILTER.md). off: no
+    // filter; balanced: severe categories wait for review, the rest only for
+    // new authors; strict: every flagged link waits, a severe category with a
+    // high score is blocked and its author disabled until review.
+    CONTENT_FILTER_MODE: z.enum(["off", "balanced", "strict"]).default("balanced"),
+    // What happens to blocked content, per category (docs/specs/CONTENT_FILTER.md,
+    // «Изоляция и удаление»): «<category>=<days>|keep|manual», comma-separated,
+    // over the defaults. Days: isolated from everyone, the owner included, and
+    // deleted after that many days (0: at once). keep: links closed, the owner
+    // still sees it, never deleted. manual: isolated until the operator decides.
+    MODERATION_RETENTION: z.string().max(1000).default(""),
+    // Where an owner appeals a block. Unset: OPERATOR_EMAIL, if any.
+    OPERATOR_CONTACT: unsetIfEmpty(z.string().email()),
+    // Automatic blocking. false (the first weeks on polochka.app): anything
+    // flagged waits for the operator; only CSAM and certain malicious code
+    // (a miner, an executable) are blocked at once. true: a severe category
+    // both models agree on, or rules at their high score, blocks too.
+    CONTENT_FILTER_AUTOBLOCK: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    // The model stage (docs/specs/CONTENT_FILTER.md, «Модель»), run after a
+    // save and never blocking it. off: rules only. yandex: Yandex AI Studio
+    // (the production choice: data stays with a Russian provider).
+    // openai-compatible: a self-hosted server with the same API.
+    CONTENT_MODEL_PROVIDER: z.enum(["off", "yandex", "openai-compatible"]).default("off"),
+    CONTENT_MODEL_URL: z
+      .string()
+      .url()
+      .default("https://llm.api.cloud.yandex.net/v1/chat/completions"),
+    // Model names (gpt://<folder>/<model>/latest on AI Studio) are only
+    // configuration: hosted.env.example carries the benchmark's choice.
+    // The primary reads text and images; the fallback is the second opinion
+    // of another family; the code model reviews page scripts.
+    CONTENT_MODEL_PRIMARY: unsetIfEmpty(z.string().max(300)),
+    CONTENT_MODEL_FALLBACK: unsetIfEmpty(z.string().max(300)),
+    CONTENT_CODE_MODEL: unsetIfEmpty(z.string().max(300)),
+    // Extra request fields per model, JSON objects (thinking off, reasoning
+    // effort): model-specific, so configuration too.
+    CONTENT_MODEL_PRIMARY_OPTIONS: z.string().max(2000).default(""),
+    CONTENT_MODEL_FALLBACK_OPTIONS: z.string().max(2000).default(""),
+    CONTENT_CODE_MODEL_OPTIONS: z.string().max(2000).default(""),
+    // «<part of a model name>=<input>/<cached>/<output>» ₽ per 1000 tokens.
+    CONTENT_MODEL_PRICES_RUB: z.string().max(2000).default(""),
+    // An AI Studio API key (a secret: hosted.env/Lockbox, never the repository).
+    CONTENT_MODEL_API_KEY: unsetIfEmpty(z.string().max(4096)),
+    CONTENT_MODEL_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(8000),
+    // Send images (a single image, bundle images, data: images) to the primary.
+    CONTENT_MODEL_IMAGES: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    // Spend on the models per day; past it: rules only (and a new account's
+    // images wait), and one letter to the operator.
+    CONTENT_MODEL_DAILY_BUDGET_RUB: z.coerce.number().min(0).max(1000000).default(500),
+    // Yandex Vision's «moderation» classifier (adult, gruesome) as an extra
+    // image signal. Needs the ai.vision.user role for the key's account.
+    CONTENT_VISION_MODERATION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    // A model outside Russia (OpenRouter, OpenAI…) is a cross-border transfer
+    // of user content: only for development and benchmarks. Refused on a
+    // production install (MAIL_MODE=smtp and an https APP_ORIGIN).
+    CONTENT_MODEL_FOREIGN_DEV: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
     ACCOUNT_DELETION_ENABLED: z
       .enum(["true", "false"])
@@ -189,6 +271,34 @@ if (
 if (env.MAIL_MODE === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM))
   throw new Error("SMTP_HOST and MAIL_FROM are required");
 const viewerConfig = parseViewerConfig(env);
+// A model host this install may send user content to: its own machine or
+// private network, or Yandex Cloud (data stays with a Russian provider).
+const privateHost = (host: string) =>
+  ["127.0.0.1", "localhost", "[::1]"].includes(host) ||
+  /^(?:10|127)\.|^192\.168\.|^172\.(?:1[6-9]|2\d|3[01])\./.test(host) ||
+  host.endsWith(".internal") ||
+  !host.includes(".");
+const yandexHost = (host: string) =>
+  /(?:^|\.)(?:yandex\.net|yandexcloud\.net|cloud\.yandex\.ru|cloud\.yandex\.net)$/.test(host);
+if (env.CONTENT_MODEL_FOREIGN_DEV && env.MAIL_MODE === "smtp" && env.APP_ORIGIN.startsWith("https:"))
+  throw new Error(
+    "CONTENT_MODEL_FOREIGN_DEV is for development and benchmarks only, not a production install",
+  );
+if (env.CONTENT_MODEL_PROVIDER !== "off") {
+  if (!env.CONTENT_MODEL_PRIMARY)
+    throw new Error("CONTENT_MODEL_PRIMARY is required for the content model");
+  const host = new URL(env.CONTENT_MODEL_URL).hostname;
+  if (
+    env.CONTENT_MODEL_PROVIDER === "yandex"
+      ? !yandexHost(host)
+      : !privateHost(host) && !env.CONTENT_MODEL_FOREIGN_DEV
+  )
+    throw new Error(
+      env.CONTENT_MODEL_PROVIDER === "yandex"
+        ? "CONTENT_MODEL_URL is not a Yandex Cloud address"
+        : "CONTENT_MODEL_URL must be a self-hosted model; a foreign API only with CONTENT_MODEL_FOREIGN_DEV=true outside production",
+    );
+}
 
 const domainList = (value: string, name: string) =>
   value

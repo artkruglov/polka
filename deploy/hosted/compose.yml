@@ -51,6 +51,10 @@ x-runtime-env: &runtime-env
   # New shelves per day, whole installation and per client IP.
   EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
   EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
+  # Anti-spam at sign-up: new shelves per day per /24 network and per mail
+  # domain (not the large public providers). 0: no limit.
+  EMAIL_SIGNUP_DAILY_PER_SUBNET: ${EMAIL_SIGNUP_DAILY_PER_SUBNET:-0}
+  EMAIL_SIGNUP_DAILY_PER_DOMAIN: ${EMAIL_SIGNUP_DAILY_PER_DOMAIN:-0}
   # Sign-in rules (docs/specs/SIGN_IN_PROVIDERS.md). New shelves by an
   # emailed code only on Russian mail domains here; existing accounts keep
   # their codes unless EMAIL_LOGIN_DOMAINS=signup.
@@ -76,15 +80,36 @@ x-runtime-env: &runtime-env
   # on | owner-notes | off. owner-notes: only a work's owner writes notes,
   # recipients read them (no recipient comments, reactions or letters).
   COMMENTS_MODE: ${COMMENTS_MODE:-owner-notes}
-  # Abuse protection (docs/specs/ABUSE_PROTECTION.md). off | flagged |
+  # Abuse protection (docs/specs/ABUSE_PROTECTION.md). off | auto | flagged |
   # new-accounts | all: which new links wait for the operator.
   SHARE_MODERATION: ${SHARE_MODERATION:-flagged}
+  TRUST_MIN_CLEAN_SAVES: ${TRUST_MIN_CLEAN_SAVES:-3}
+  # Prohibited-content filter (docs/specs/CONTENT_FILTER.md).
+  CONTENT_FILTER_MODE: ${CONTENT_FILTER_MODE:-balanced}
+  CONTENT_FILTER_AUTOBLOCK: ${CONTENT_FILTER_AUTOBLOCK:-false}
+  MODERATION_RETENTION: ${MODERATION_RETENTION:-}
+  OPERATOR_CONTACT: ${OPERATOR_CONTACT:-}
+  CONTENT_MODEL_PROVIDER: ${CONTENT_MODEL_PROVIDER:-off}
+  CONTENT_MODEL_URL: ${CONTENT_MODEL_URL:-https://llm.api.cloud.yandex.net/v1/chat/completions}
+  CONTENT_MODEL_PRIMARY: ${CONTENT_MODEL_PRIMARY:-}
+  CONTENT_MODEL_FALLBACK: ${CONTENT_MODEL_FALLBACK:-}
+  CONTENT_CODE_MODEL: ${CONTENT_CODE_MODEL:-}
+  CONTENT_MODEL_PRIMARY_OPTIONS: ${CONTENT_MODEL_PRIMARY_OPTIONS:-}
+  CONTENT_MODEL_FALLBACK_OPTIONS: ${CONTENT_MODEL_FALLBACK_OPTIONS:-}
+  CONTENT_CODE_MODEL_OPTIONS: ${CONTENT_CODE_MODEL_OPTIONS:-}
+  CONTENT_MODEL_PRICES_RUB: ${CONTENT_MODEL_PRICES_RUB:-}
+  CONTENT_MODEL_API_KEY: ${CONTENT_MODEL_API_KEY:-}
+  CONTENT_MODEL_TIMEOUT_MS: ${CONTENT_MODEL_TIMEOUT_MS:-8000}
+  CONTENT_MODEL_IMAGES: ${CONTENT_MODEL_IMAGES:-true}
+  CONTENT_MODEL_DAILY_BUDGET_RUB: ${CONTENT_MODEL_DAILY_BUDGET_RUB:-500}
+  CONTENT_VISION_MODERATION: ${CONTENT_VISION_MODERATION:-false}
   # Moderation letters with one-click actions; empty: none (scripts only).
   # Needs MAIL_MODE=smtp.
   OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
   MODERATION_AUTOPAUSE_REPORTS: ${MODERATION_AUTOPAUSE_REPORTS:-3}
   NEW_ACCOUNT_DAYS: ${NEW_ACCOUNT_DAYS:-7}
   NEW_ACCOUNT_MAX_LINKS: ${NEW_ACCOUNT_MAX_LINKS:-5}
+  NEW_ACCOUNT_DAILY_LINKS: ${NEW_ACCOUNT_DAILY_LINKS:-10}
   # Operator status for an external monitor; empty keeps /api/ops/status off.
   # The app key only lists BACKUP_BUCKET to report the newest dump's age.
   OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}

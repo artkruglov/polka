@@ -21,9 +21,20 @@ import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
   looksLikeHtml,
+  scanTextBounded,
   type HtmlInspection,
 } from "./html.ts";
 import { SignalCollector, scanScript } from "./phishing-signals.ts";
+import {
+  fraudScore,
+  mergeResults,
+  type FilterResult,
+} from "./content-filter/scanner.ts";
+import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
+import {
+  blockRevisionInTransaction,
+  blockedHash,
+} from "./content-moderation.ts";
 import {
   createSingleHtmlRevisionManifest,
   isStaticSingleFileBundle,
@@ -95,6 +106,9 @@ export function shareDTO(s: any, latest: string): Share | null {
     number: s.number,
     status,
     moderation: s.moderation ?? "none",
+    ...(s.moderation === "blocked"
+      ? { appeal: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null }
+      : {}),
     expiresAt: new Date(s.expires_at).toISOString(),
     url: ["active", "behind"].includes(status)
       ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}`
@@ -401,6 +415,99 @@ export async function uploadBytesInTransaction(
   ]);
   return { stored: true };
 }
+/**
+ * The content filter at save time (docs/specs/CONTENT_FILTER.md): a re-upload
+ * of blocked bytes, CSAM at its block score, and in strict mode a severe
+ * category at its high score block the new revision at once, in this
+ * transaction, and disable the author (CSAM, strict). Everything else is
+ * decided when a link is made.
+ */
+async function screenSavedRevision(
+  c: PoolClient,
+  actor: Actor,
+  saved: {
+    artifactId: string;
+    revisionId: string;
+    sha256: string;
+    filter: FilterResult;
+    /** A bundle's files: each one is checked against the stop list too. */
+    fileHashes?: string[];
+  },
+) {
+  if (config.CONTENT_FILTER_MODE === "off") return;
+  let known = await blockedHash(c, saved.sha256);
+  for (const hash of saved.fileHashes ?? []) {
+    if (known) break;
+    known = await blockedHash(c, hash);
+  }
+  // The SHA-256 stop list: blocked bytes are not saved again by anyone. For
+  // CSAM the save goes through and is blocked at once (the author is
+  // disabled, the attempt is evidence); anything else is refused.
+  if (known && known !== "csam")
+    throw new Problem(
+      403,
+      "forbidden",
+      "Этот файл заблокирован модератором Полки и не может быть сохранён.",
+    );
+  const decision = known
+    ? null
+    : decideContent({
+        filter: saved.filter,
+        standing: { trusted: true, operatorCreated: false },
+        mode: config.CONTENT_FILTER_MODE,
+        autoblock: config.CONTENT_FILTER_AUTOBLOCK,
+        fraud: false,
+      });
+  // The models read it after this save commits; the save never waits.
+  const { afterCommit } = await import("./db.ts");
+  afterCommit(c, async () => {
+    const { queueReview } = await import("./content-moderation.ts");
+    queueReview(saved.revisionId);
+  });
+  const category = known ?? (decision?.action === "block" ? decision.category : null);
+  if (!category) return;
+  const freeze = known
+    ? known === "csam" || config.CONTENT_FILTER_MODE === "strict"
+    : !!decision?.freeze;
+  const outcome = await blockRevisionInTransaction(c, {
+    tenantId: actor.tenant,
+    accountId: actor.id,
+    artifactId: saved.artifactId,
+    revisionId: saved.revisionId,
+    category,
+    actor: "filter",
+    reason: known
+      ? "повторная загрузка заблокированного содержимого (тот же sha256)"
+      : `фильтр содержимого при сохранении: ${CATEGORY_LABEL[category]}`,
+    freeze,
+    details: decision
+      ? {
+          findings: decision.findings.map((finding) =>
+            finding.category === "csam"
+              ? { category: "csam", score: finding.score }
+              : finding,
+          ),
+        }
+      : { knownHash: true },
+  });
+  if (outcome.created) {
+    afterCommit(c, async () => {
+      const { dispatchModerationNotices } = await import("./moderation-mail.ts");
+      await dispatchModerationNotices([
+        {
+          kind: "blocked",
+          shareId: outcome.shareIds[0] ?? null,
+          revisionId: saved.revisionId,
+          category,
+          frozen: outcome.frozen,
+          by: "filter",
+          ...(decision ? { content: decision } : {}),
+        },
+      ]);
+    });
+  }
+}
+
 export async function finalizeUpload(actor: Actor, id: string) {
   return transaction((c) => finalizeUploadInTransaction(c, actor, id));
 }
@@ -421,6 +528,14 @@ export async function finalizeUploadInTransaction(
   const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
   const inspection = await validateBytes(bytes, input);
   const htmlProfile = inspection?.profile ?? null;
+  // The content filter: a page's findings come with its inspection; a text
+  // file is read the same way; an image has no text (the model sees it when
+  // a link is made).
+  const contentFilter: FilterResult =
+    inspection?.filter ??
+    (input.mime === "text/plain"
+      ? await scanTextBounded(bytes.toString("utf8"))
+      : { v: 1, hits: {} });
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
   > | null = null;
@@ -470,7 +585,7 @@ export async function finalizeUploadInTransaction(
   }
   const revisionId = randomUUID();
   await c.query(
-    "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'single',$15,$16)",
+    "INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'single',$15,$16,$17)",
     [
       revisionId,
       actor.tenant,
@@ -488,8 +603,15 @@ export async function finalizeUploadInTransaction(
       revisionManifest?.manifestSha256 ?? null,
       input.size,
       inspection?.signals ?? [],
+      contentFilter,
     ],
   );
+  await screenSavedRevision(c, actor, {
+    artifactId,
+    revisionId,
+    sha256: input.sha256,
+    filter: contentFilter,
+  });
   await c.query(
     "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
     [artifactId, revisionId],
@@ -837,9 +959,11 @@ export async function finalizeBundleUploadInTransaction(
   // Phishing signals of every page and script of the bundle. Pages go through
   // the same bounded (off-thread, deadline) parse as the profile.
   const signals = new SignalCollector();
+  const pageFilters: FilterResult[] = [];
   const inspectPage = async (bytes: Buffer) => {
     const inspection = await inspectHtmlBounded(bytes.toString("utf8"));
     for (const signal of inspection.signals) signals.add(signal);
+    pageFilters.push(inspection.filter);
     return inspection.profile;
   };
   for (const [index, file] of input.manifest.files.entries()) {
@@ -886,9 +1010,21 @@ export async function finalizeBundleUploadInTransaction(
   const { artifactId, number } = await lockBundleArtifact(c, actor, input);
   const revisionId = randomUUID();
   const manifestSha256 = sha256(JSON.stringify(input.manifest));
+  // Every page's findings and the scripts' (read by `signals`), with fraud
+  // counted once from all the phishing signals together.
+  const withoutFraud = (filter: FilterResult): FilterResult => {
+    const { fraud: _fraud, ...hits } = filter.hits;
+    return { ...filter, hits };
+  };
+  const contentFilter = mergeResults(
+    withoutFraud(signals.content.result()),
+    ...pageFilters.map(withoutFraud),
+  );
+  const fraud = fraudScore(signals.list());
+  if (fraud) contentFilter.hits.fraud = fraud;
   await c.query(
-    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals)
-       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15)`,
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter)
+       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
     [
       revisionId,
       actor.tenant,
@@ -905,8 +1041,16 @@ export async function finalizeBundleUploadInTransaction(
       input.size,
       htmlProfile,
       signals.list(),
+      contentFilter,
     ],
   );
+  await screenSavedRevision(c, actor, {
+    artifactId,
+    revisionId,
+    sha256: entry.file.sha256,
+    filter: contentFilter,
+    fileHashes: input.manifest.files.map((file) => file.sha256),
+  });
   for (const [index, stored] of verified.entries())
     await c.query(
       `INSERT INTO revision_files(revision_id,file_index,path,mime,size,sha256,object_key,object_version)

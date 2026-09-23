@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations WHERE version<>31)<>32
+     OR (SELECT count(*) FROM public.schema_migrations)<>33
      OR (SELECT min(version) FROM public.schema_migrations)<>1
      OR (SELECT max(version) FROM public.schema_migrations)<>33 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033 (031 optional)';
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033';
   END IF;
 END $$;
 
@@ -136,6 +136,12 @@ TO :"runtime_role";
 -- and toggles reactions (DELETE). Terminal purge erases both in its function.
 GRANT SELECT, INSERT, UPDATE ON TABLE public.comments TO :"runtime_role";
 GRANT SELECT, INSERT, DELETE ON TABLE public.comment_reactions TO :"runtime_role";
+-- Content filter (031): the journal is append-only for the runtime. UPDATE is
+-- not granted; DELETE is granted for the 3-year retention in maintenance and
+-- the table's trigger refuses it for any younger event. Blocks are updated
+-- (legal hold, purge, release) and removed after the retention.
+GRANT SELECT, INSERT, DELETE ON TABLE public.moderation_events TO :"runtime_role";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.moderation_blocks TO :"runtime_role";
 -- Requests from /enterprise (033): the application records a request and marks
 -- the operator letter sent; maintenance deletes requests older than a year.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.enterprise_requests TO :"runtime_role";

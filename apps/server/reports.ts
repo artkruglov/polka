@@ -1,3 +1,5 @@
+import { URGENT_REPORT_REASONS } from "../../packages/contracts/constants.ts";
+import { recordEvent } from "./content-moderation.ts";
 import { createHmac, randomUUID } from "node:crypto";
 import { reportSchema } from "../../packages/contracts/index.ts";
 import { transaction } from "./db.ts";
@@ -33,7 +35,7 @@ export async function reportShare(body: unknown, ip: string) {
     const {
       rows: [s],
     } = await c.query(
-      `SELECT id,tenant_id,revision_id FROM shares
+      `SELECT id,tenant_id,artifact_id,revision_id FROM shares
        WHERE token_hash=$1 AND NOT revoked AND expires_at>now()`,
       [sha256(input.token)],
     );
@@ -59,6 +61,7 @@ export async function reportShare(body: unknown, ip: string) {
            JOIN accounts author ON author.id=comment.author_account_id
            WHERE comment.id=$1 AND comment.share_id=$2
              AND comment.deleted_at IS NULL AND comment.held_at IS NULL
+             AND comment.blocked_at IS NULL
              AND NOT author.disabled AND author.deletion_requested_at IS NULL`,
           [commentId, s.id],
         )
@@ -111,7 +114,10 @@ export async function reportShare(body: unknown, ip: string) {
       return { ok: true };
     }
     let paused = false;
-    const threshold = config.MODERATION_AUTOPAUSE_REPORTS;
+    // The gravest reasons pause the link at the first report
+    // (docs/specs/CONTENT_FILTER.md, «Жалобы»).
+    const urgent = URGENT_REPORT_REASONS.includes(input.reason);
+    const threshold = urgent ? 1 : config.MODERATION_AUTOPAUSE_REPORTS;
     const {
       rows: [current],
     } = await c.query("SELECT moderation FROM shares WHERE id=$1", [s.id]);
@@ -134,6 +140,16 @@ export async function reportShare(body: unknown, ip: string) {
           [s.id],
         );
         paused = !!updated.rowCount;
+        if (paused)
+          await recordEvent(c, {
+            actor: "reports",
+            action: "share.paused",
+            tenantId: s.tenant_id,
+            artifactId: s.artifact_id,
+            revisionId: s.revision_id,
+            shareId: s.id,
+            reason: urgent ? `срочная жалоба: ${input.reason}` : `жалоб: ${reporters}`,
+          });
       }
     }
     notices.push({ kind: "report", shareId: s.id, reportId, paused });

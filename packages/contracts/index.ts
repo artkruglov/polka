@@ -148,8 +148,13 @@ export interface Share {
   revisionId: string;
   number: number;
   status: "active" | "behind" | "expired" | "revoked";
-  /** held: waits for the operator before its first open; paused: after reports. */
+  /**
+   * held: waits for the operator before its first open; paused: after
+   * reports; blocked: closed by the operator or the content filter.
+   */
   moderation?: ShareModeration;
+  /** Blocked: where the owner may appeal (an e-mail address). */
+  appeal?: string | null;
   url: string | null;
   expiresAt: string;
 }
@@ -195,7 +200,7 @@ export interface ImportPreview {
   htmlProfile: HtmlProfile | null;
   provenance: ImportProvenance | null;
 }
-export type ShareModeration = "none" | "held" | "paused";
+export type ShareModeration = "none" | "held" | "paused" | "blocked";
 export interface Viewer {
   title: string;
   revision: Revision;
@@ -210,7 +215,11 @@ export interface Viewer {
 export interface ViewerUnderReview {
   review: true;
 }
-export type Resolved = Viewer | ViewerUnderReview;
+/** A blocked link: «Ссылка недоступна», nothing about the work. */
+export interface ViewerBlocked {
+  blocked: true;
+}
+export type Resolved = Viewer | ViewerUnderReview | ViewerBlocked;
 export interface Account {
   id: string;
   name: string;

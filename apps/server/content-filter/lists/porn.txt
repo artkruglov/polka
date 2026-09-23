@@ -1,0 +1,30 @@
+# Порнография и интим-услуги (ст. 242 УК РФ, ст. 6.11 КоАП РФ).
+#
+# Слово «порнография» пишут юристы, поэтому оно весит 2. Срабатывают слова
+# рядом с «смотреть / скачать / бесплатно / онлайн» (окно 5 слов).
+@threshold 6
+@high 10
+@pair explicit watch 5 3
+
+2 порн* | explicit
+2 porn* | explicit
+2 xxx | explicit
+2 хентай | explicit
+2 hentai | explicit
+2 onlyfans | explicit
+3 секс* видео | explicit
+3 sex video* | explicit
+3 голые девушки | explicit
+2 проститутк* | explicit
+3 индивидуалк*
+4 интим услуг*
+3 эскорт услуг*
+
+0 смотреть | watch
+0 скачать | watch
+0 бесплатно | watch
+0 онлайн | watch
+0 без регистрации | watch
+0 watch | watch
+0 free | watch
+0 download | watch
