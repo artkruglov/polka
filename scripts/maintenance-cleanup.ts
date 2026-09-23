@@ -227,6 +227,8 @@ export async function runMaintenanceCleanup(
       `DELETE FROM moderation_blocks
        WHERE (purged_at IS NOT NULL OR released_at IS NOT NULL)
          AND blocked_at<now()-interval '3 years'`,
+      // Requests from /enterprise: one year, as the privacy policy says.
+      "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
       `DELETE FROM oauth_clients client
        WHERE client.created_at<now()-interval '30 days'
          AND NOT EXISTS(SELECT 1 FROM agent_connections connection

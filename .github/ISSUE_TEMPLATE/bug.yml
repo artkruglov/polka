@@ -1,0 +1,73 @@
+name: Ошибка / Bug report
+description: Что-то работает не так, как описано / Something doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Можно писать по-русски или по-английски. / Russian or English is fine.
+
+        **Не прикладывайте** токены, cookies, содержимое `.env`, ссылки `/s#…` и приватные материалы. Об уязвимостях сообщайте приватно, см. [SECURITY.md](https://github.com/artkruglov/polka/blob/main/SECURITY.md).
+        **Don't attach** tokens, cookies, `.env` contents, `/s#…` links or private material. Report vulnerabilities privately, see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло / What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидалось / What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как воспроизвести / Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Где / Where
+      options:
+        - https://polochka.app
+        - Локальный запуск / local dev
+        - Своя установка / self-hosted
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Откуда сохраняли / Saved from
+      multiple: true
+      options:
+        - Claude.ai
+        - ChatGPT
+        - Claude Code
+        - Codex
+        - Другой MCP-клиент / other MCP client
+        - HTTP API / CLI
+        - Вручную (файл, «Вставить код») / by hand
+        - Не относится / not applicable
+  - type: input
+    id: version
+    attributes:
+      label: Версия или commit / Version or commit
+      placeholder: v0.1.0-rc.5, 1cc38f4
+  - type: textarea
+    id: env
+    attributes:
+      label: Окружение / Environment
+      description: ОС, Node.js, браузер, версия агента или MCP-клиента / OS, Node.js, browser, agent or MCP client version
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи / Logs
+      description: Уберите токены и ссылки `/s#…`. / Strip tokens and `/s#…` links.
+      render: text

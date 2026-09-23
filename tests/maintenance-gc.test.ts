@@ -179,6 +179,11 @@ test("one guarded run reconciles exact upload and derivative versions before com
       "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
     ),
   );
+  assert.ok(
+    database.calls.includes(
+      "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
+    ),
+  );
 });
 
 test("abort after one exact delete rolls back metadata and a later run finishes reconciliation", async () => {

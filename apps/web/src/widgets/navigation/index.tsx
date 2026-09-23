@@ -231,7 +231,7 @@ export function LegalLinks() {
       <nav aria-label="Документы">
         <a href="/privacy">Политика</a>
         <a href="/terms">Соглашение</a>
-        <a href="/pricing">Для компаний</a>
+        <a href="/enterprise">Для компаний</a>
         <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
           {onGitHub ? "Открытый код на GitHub" : "Открытый код"}
         </a>

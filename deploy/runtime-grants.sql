@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 031.
+-- Operator-reviewed recipe for the Polka schema through migration 033.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>31
+     OR (SELECT count(*) FROM public.schema_migrations WHERE version<>32)<>32
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>31 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 031';
+     OR (SELECT max(version) FROM public.schema_migrations)<>33 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033 (032 optional)';
   END IF;
 END $$;
 
@@ -142,5 +142,8 @@ GRANT SELECT, INSERT, DELETE ON TABLE public.comment_reactions TO :"runtime_role
 -- (legal hold, purge, release) and removed after the retention.
 GRANT SELECT, INSERT, DELETE ON TABLE public.moderation_events TO :"runtime_role";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.moderation_blocks TO :"runtime_role";
+-- Requests from /enterprise (033): the application records a request and marks
+-- the operator letter sent; maintenance deletes requests older than a year.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.enterprise_requests TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 031
+\echo Runtime grants installed for the reviewed schema through migration 033

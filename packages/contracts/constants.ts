@@ -42,3 +42,25 @@ export const AGENT_SCOPES = [
   "share",
   "manage",
 ] as const;
+/** «Для компаний» (/enterprise): the request form's choices and limits. */
+export const ENTERPRISE_TEAM_SIZES = [
+  "1-10",
+  "11-50",
+  "51-200",
+  "201-1000",
+  "1000+",
+] as const;
+export type EnterpriseTeamSize = (typeof ENTERPRISE_TEAM_SIZES)[number];
+export const ENTERPRISE_INTERESTS = [
+  "cloud",
+  "self-hosted",
+  "commercial-license",
+  "other",
+] as const;
+export type EnterpriseInterest = (typeof ENTERPRISE_INTERESTS)[number];
+export const ENTERPRISE_LIMITS = {
+  name: 100,
+  company: 200,
+  email: 254,
+  comment: 2000,
+} as const;
