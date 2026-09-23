@@ -45,7 +45,7 @@ function requireEnabled() {
   if (!config.ACCOUNT_DELETION_ENABLED) throw unavailable();
 }
 
-async function lockTenantAccount(c: PoolClient, actor: Actor) {
+export async function lockTenantAccount(c: PoolClient, actor: Actor) {
   const tenant = (
     await c.query(
       "SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE",

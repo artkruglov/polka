@@ -853,6 +853,7 @@ let purgeRestoreS3Passed = false;
 let restoreTargetOperationalPassed = false;
 let ledgerReaderResidueRemoved = false;
 let appFlowPassed = false;
+let moderationPassed = false;
 let residueRemoved = false;
 let failed = false;
 let failureStage = "setup";
@@ -1097,6 +1098,21 @@ try {
   );
   appFlowPassed = appCode === 0;
   if (!appFlowPassed) throw new Error("Runtime app flow failed");
+  // Operator moderation scripts run as the runtime role on the hosted VM.
+  failureStage = "runtime-moderation";
+  const moderationCode = await spawnTestWithEnv(
+    "../tests/moderation.test.ts",
+    {
+      ...common,
+      S3_BUCKET: targetBucket,
+      LINK_KEY: randomBytes(64).toString("base64url"),
+      MAIL_MODE: "disabled",
+      RUNTIME_GRANTS_EXPECT_ROLE: runtimeRole,
+    },
+    60_000,
+  );
+  moderationPassed = moderationCode === 0;
+  if (!moderationPassed) throw new Error("Runtime moderation failed");
 } catch {
   failed = true;
 } finally {
@@ -1182,6 +1198,7 @@ const evidence = {
   ledgerReaderResidueRemoved,
   defaultAclDenials: roleAssertionsPassed,
   appFlowPassed,
+  moderationPassed,
   triggerAndCascadePassed: roleAssertionsPassed && appFlowPassed,
   syntheticResidueRemoved: residueRemoved,
   workingResourcesUsed: false,
