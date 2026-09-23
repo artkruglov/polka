@@ -13,7 +13,11 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import { PUBLISH_API_LIMITS } from "../apps/server/publish-api.ts";
+import {
+  PUBLISH_API_LIMITS,
+  publishResponseSchema,
+  statusResponseSchema,
+} from "../apps/server/publish-api.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
@@ -94,7 +98,9 @@ test("publishes without an Origin header and returns the link", async () => {
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.cookies.length, 0);
   assert.equal(response.headers["cache-control"], "no-store");
+  // /openapi.json publishes these schemas.
   const body = response.json();
+  publishResponseSchema.parse(body);
   assert.deepEqual(Object.keys(body).sort(), [
     "artifactId",
     "expiresAt",
@@ -196,6 +202,7 @@ test("scopes: capture is required, the link needs share", async () => {
   );
   assert.equal(saved.statusCode, 200, saved.body);
   const body = saved.json();
+  publishResponseSchema.parse(body);
   assert.equal(body.state, "saved");
   assert.equal(body.url, null);
   assert.equal(body.expiresAt, null);
@@ -306,6 +313,7 @@ test("status shows works this connection saved; read sees the whole shelf", asyn
     });
   const own = await status(publisher.secret);
   assert.equal(own.statusCode, 200, own.body);
+  statusResponseSchema.parse(own.json());
   assert.equal(own.json().id, published.artifactId);
   assert.equal(own.json().title, "Status");
   assert.equal(own.json().revision.id, published.revisionId);

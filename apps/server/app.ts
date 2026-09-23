@@ -1,5 +1,6 @@
 import { registerAgentContext } from "./agent-context.ts";
 import { connectGuide } from "./connect-guide.ts";
+import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
@@ -208,6 +209,8 @@ export async function createApp() {
       .type("text/plain; charset=utf-8")
       .send(connectGuide(config.APP_ORIGIN)),
   );
+  // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
+  registerAgentDiscovery(app);
   app.get("/api/health", async () => {
     await db.query("SELECT 1");
     return { ok: true };

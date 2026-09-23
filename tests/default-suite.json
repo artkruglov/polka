@@ -47,6 +47,7 @@
   "tests/single-file-bundle-share.test.ts",
   "tests/mcp-oauth.test.ts",
   "tests/publish-api.test.ts",
+  "tests/agent-discovery.test.ts",
   "tests/integration.test.ts",
   "tests/url-import-fetch.test.ts",
   "tests/url-import-html.test.ts",
