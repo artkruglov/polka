@@ -53,7 +53,7 @@
 
 ## Прочее
 
-- [screenshots/](screenshots/) — снимки polochka.app для README.
+- [screenshots/](screenshots/) — снимки polochka.app для README, [assets/](assets/) — логотип и картинка для соцсетей. Перерисовка: `node scripts/render-readme-assets.mjs`; почему README устроен так и настройки репозитория — [reviews/2026-09-24-readme](reviews/2026-09-24-readme/README.md).
 - `reviews/2026-09-2*-editorial-*` — протоколы приёмки материалов «Интересного». На них ссылаются манифесты каталога (`evidencePath`), поэтому они остаются в репозитории.
 
 ## Правила
