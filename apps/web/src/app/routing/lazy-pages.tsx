@@ -51,6 +51,9 @@ const PrivacyPage = page(() =>
 const TermsPage = page(() =>
   import("../../pages/legal/index.tsx").then((m) => m.TermsPage),
 );
+const Pricing = page(() =>
+  import("../../pages/pricing/index.tsx").then((m) => m.Pricing),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -119,4 +122,5 @@ export {
   MailOff,
   PrivacyPage,
   TermsPage,
+  Pricing,
 };
