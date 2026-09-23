@@ -92,4 +92,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.
 
 ## License
 
-[Apache-2.0](LICENSE). See also [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The project grew out of [Lanka](https://github.com/artkruglov/lanka); see [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+[GNU AGPL-3.0](LICENSE) or a [commercial license](COMMERCIAL.md) (dual licensing). «С версии 0.1.0 — AGPL-3.0; версии до v0.1.0-rc.5 включительно — Apache-2.0»: **from version 0.1.0 on, Полка is AGPL-3.0; releases up to and including v0.1.0-rc.5 remain Apache-2.0**, and that does not change.
+
+Running Полка unmodified, including as a service for your team, and modifying it in the open are free under the AGPL-3.0. If you let people use a modified Полка over a network, you must offer them its source: set `SOURCE_URL` to it ([deploy/hosted](deploy/hosted/README.md#исходный-код-изменённой-версии)). A commercial license is for keeping your changes private, embedding Полка in a proprietary product, or getting support and an SLA; see [COMMERCIAL.md](COMMERCIAL.md). Pull requests are accepted under the [CLA](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md#лицензия-и-cla).
+
+See also [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The project grew out of [Lanka](https://github.com/artkruglov/lanka); see [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).

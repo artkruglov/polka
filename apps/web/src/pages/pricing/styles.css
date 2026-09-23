@@ -1,0 +1,119 @@
+/* «Для компаний»: a short lead and three equal plans. */
+.pricing-page {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px var(--gutter) 96px;
+}
+.pricing-head {
+  max-width: 720px;
+  margin-bottom: 40px;
+}
+.pricing-head .eyebrow {
+  margin-bottom: 18px;
+}
+.pricing-head h1 {
+  margin-bottom: 16px;
+  font-size: clamp(32px, 4.4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: var(--tracking-tight);
+}
+.pricing-head p {
+  color: var(--muted);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+}
+.pricing-plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.pricing-plans article {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 28px 24px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--canvas);
+}
+.pricing-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pricing-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.6;
+}
+.pricing-plans h2 {
+  margin-bottom: 6px;
+  font-size: var(--text-2xl);
+  letter-spacing: -0.03em;
+}
+.pricing-price {
+  margin-bottom: 14px;
+  color: var(--accent);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.pricing-plans p {
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+.pricing-plans code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+.pricing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: auto;
+}
+.pricing-actions > a:not(.ui-button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--accent);
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+.pricing-actions > a:not(.ui-button):hover {
+  color: var(--accent-strong);
+}
+.pricing-fine {
+  max-width: 720px;
+  margin-top: 28px;
+  color: var(--muted-2);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .pricing-plans {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .pricing-page {
+    padding: 28px var(--gutter-mobile) 48px;
+  }
+  .pricing-plans article {
+    padding: 24px 20px 20px;
+  }
+  .pricing-actions,
+  .pricing-actions .ui-button {
+    width: 100%;
+  }
+}

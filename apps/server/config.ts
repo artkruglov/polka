@@ -19,6 +19,14 @@ const env = z
     S3_BUCKET: z.string().min(3),
     LINK_KEY: z.string().min(64),
     APP_ORIGIN: z.string().url(),
+    // Where users of this installation get its source code (AGPL-3.0 § 13).
+    // Operators of a modified Полка point it at their modified source.
+    SOURCE_URL: unsetIfEmpty(
+      z
+        .string()
+        .url()
+        .refine((value) => new URL(value).protocol === "https:", "an https URL"),
+    ).transform((value) => value ?? "https://github.com/artkruglov/polka"),
     HOST: z.string().default("127.0.0.1"),
     PORT: z.coerce.number().int().min(1).max(65535).default(4390),
     // Comma-separated addresses/CIDRs of reverse proxies whose X-Forwarded-For
