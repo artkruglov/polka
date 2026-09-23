@@ -7,7 +7,7 @@
 | Сервис | Назначение |
 |---|---|
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
-| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 030), `deploy/runtime-grants.sql`, проверка versioned S3 |
+| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 032; 031 — из параллельной ветки), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
@@ -181,6 +181,39 @@ rm polka.dump
 1. В консоли Postbox создайте адрес (домен приложения, DKIM «Простой») и добавьте у DNS-провайдера показанные две CNAME-записи DKIM, а также SPF в корне домена (`TXT "v=spf1 include:spf.postbox.yandexcloud.net ~all"`; если SPF уже есть, добавьте `include:spf.postbox.yandexcloud.net` перед `all`) и DMARC (`TXT _dmarc "v=DMARC1;p=none"`). Записи — по [документации Postbox](https://yandex.cloud/ru/docs/postbox/concepts/dns-records). Дождитесь статуса «Success».
 2. Сервисный аккаунт с ролью `postbox.sender` и его API-ключ со scope `yc.postbox.send`.
 3. В `hosted.env`: `MAIL_MODE=smtp`, `SMTP_HOST=postbox.cloud.yandex.net`, `SMTP_PORT=587`, `SMTP_USER=<ID API-ключа>`, `SMTP_PASS=<секрет API-ключа>`, `MAIL_FROM=no-reply@<APP_HOST>`, затем `docker compose --env-file hosted.env up -d`.
+
+**Домены почты для новых полок.** В этой форме установки `EMAIL_SIGNUP_DOMAINS=ru-only`: новую полку по коду можно открыть только на адресах Яндекса, Mail.ru, Рамблера, VK и на домене самой установки. Причина — ч. 10 ст. 8 149-ФЗ. Существующие аккаунты на других доменах входят по коду, пока `EMAIL_LOGIN_DOMAINS=any`. Подробности — [SIGN_IN_PROVIDERS.md](../../docs/specs/SIGN_IN_PROVIDERS.md).
+
+## Вход через Яндекс ID и VK ID
+
+Кнопки появляются, когда задан клиент поставщика. Токены поставщика Полка не хранит.
+
+**Яндекс ID** — [oauth.yandex.ru](https://oauth.yandex.ru/client/new), платформа «Веб-сервисы»:
+- Redirect URI: `https://<APP_HOST>/api/auth/idp/yandex/callback`;
+- доступы: «Доступ к адресу электронной почты» (`login:email`) и «Доступ к логину, имени и фамилии, полу» (`login:info`);
+- в `hosted.env`: `YANDEX_CLIENT_ID=<ClientID>`, `YANDEX_CLIENT_SECRET=<Client secret>`.
+
+**VK ID** — [id.vk.ru/about/business/go](https://id.vk.ru/about/business/go), приложение типа «Веб»:
+- базовый домен `<APP_HOST>`;
+- доверенный Redirect URL `https://<APP_HOST>/api/auth/idp/vk/callback`;
+- доступ к почте (scope `email`);
+- в `hosted.env`: `VK_CLIENT_ID=<ID приложения>`. Защищённый ключ не нужен: код защищён PKCE.
+
+**Доступ компании:** `ORG_DOMAINS=company.ru=<id библиотеки шаблонов>:reader`. Сотрудник с подтверждённой почтой `@company.ru`, вошедший через Яндекс ID (у Яндекс 360 это аккаунт организации), становится читателем библиотеки. Исключённого администратором домен обратно не добавит.
+
+После изменения — `docker compose --env-file hosted.env up -d`.
+
+## Комментарии
+
+`COMMENTS_MODE=owner-notes` (по умолчанию здесь):
+- к работе пишет только её владелец и его агент — это заметки к фрагментам;
+- получатели ссылки их читают, но не отвечают;
+- реакций и писем нет;
+- комментарии получателей, оставленные раньше, скрыты, но не удалены.
+
+Другие значения:
+- `on` — комментарии получателей ([COMMENTS.md](../../docs/specs/COMMENTS.md));
+- `off` — обсуждений нет вовсе.
 
 ## Модерация
 

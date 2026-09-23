@@ -51,6 +51,31 @@ x-runtime-env: &runtime-env
   # New shelves per day, whole installation and per client IP.
   EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
   EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
+  # Sign-in rules (docs/specs/SIGN_IN_PROVIDERS.md). New shelves by an
+  # emailed code only on Russian mail domains here; existing accounts keep
+  # their codes unless EMAIL_LOGIN_DOMAINS=signup.
+  EMAIL_SIGNUP_DOMAINS: ${EMAIL_SIGNUP_DOMAINS:-ru-only}
+  EMAIL_LOGIN_DOMAINS: ${EMAIL_LOGIN_DOMAINS:-any}
+  # Яндекс ID and VK ID: a provider is off until its client is set.
+  YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+  YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+  YANDEX_EMAIL_VERIFIED: ${YANDEX_EMAIL_VERIFIED:-true}
+  VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+  VK_EMAIL_VERIFIED: ${VK_EMAIL_VERIFIED:-false}
+  # A company's own IdP (OpenID Connect) and organisation access.
+  OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_SCOPES: ${OIDC_SCOPES:-openid email profile}
+  OIDC_NAME: ${OIDC_NAME:-}
+  OIDC_ALLOWED_DOMAINS: ${OIDC_ALLOWED_DOMAINS:-}
+  OIDC_ORG_CLAIM: ${OIDC_ORG_CLAIM:-}
+  OIDC_ORG_VALUE: ${OIDC_ORG_VALUE:-}
+  OIDC_ORG_LIBRARY: ${OIDC_ORG_LIBRARY:-}
+  ORG_DOMAINS: ${ORG_DOMAINS:-}
+  # on | owner-notes | off. owner-notes: only a work's owner writes notes,
+  # recipients read them (no recipient comments, reactions or letters).
+  COMMENTS_MODE: ${COMMENTS_MODE:-owner-notes}
   # Abuse protection (docs/specs/ABUSE_PROTECTION.md). off | flagged |
   # new-accounts | all: which new links wait for the operator.
   SHARE_MODERATION: ${SHARE_MODERATION:-flagged}

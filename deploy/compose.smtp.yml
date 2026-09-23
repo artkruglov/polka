@@ -13,3 +13,7 @@ services:
       EMAIL_SIGNUP_ALLOW: ${EMAIL_SIGNUP_ALLOW:-}
       EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
       EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
+      # any | ru-only | domains: where a NEW shelf opens by an emailed code.
+      EMAIL_SIGNUP_DOMAINS: ${EMAIL_SIGNUP_DOMAINS:-any}
+      # any | signup: signup also stops codes to existing accounts elsewhere.
+      EMAIL_LOGIN_DOMAINS: ${EMAIL_LOGIN_DOMAINS:-any}

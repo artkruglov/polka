@@ -62,10 +62,7 @@ async function createShelf(
     if (error instanceof Problem) throw new IdpError("signup");
     throw error;
   }
-  const email =
-    profile.email && profile.emailVerified
-      ? profile.email
-      : null;
+  const email = profile.email && profile.emailVerified ? profile.email : null;
   const taken =
     email &&
     (await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount;
@@ -81,7 +78,11 @@ async function createShelf(
       `${profile.provider}-${id}`,
       password,
       taken ? null : email,
-      (profile.name ?? profile.email?.split("@")[0] ?? PROVIDER_NAMES[profile.provider]()).slice(0, 40),
+      (
+        profile.name ??
+        profile.email?.split("@")[0] ??
+        PROVIDER_NAMES[profile.provider]()
+      ).slice(0, 40),
     ],
   );
   await c.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
@@ -195,7 +196,12 @@ export async function completeProviderSignIn(
 
 /** Linked providers of the signed-in person (settings). */
 export async function listIdentities(actor: Account) {
-  const [{ rows }, { rows: [account] }] = await Promise.all([
+  const [
+    { rows },
+    {
+      rows: [account],
+    },
+  ] = await Promise.all([
     db.query(
       `SELECT provider,email,created_at,last_used_at FROM account_identities
         WHERE account_id=$1 ORDER BY created_at`,

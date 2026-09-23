@@ -223,9 +223,7 @@ const basic = (id: string, secret: string) =>
   `Basic ${Buffer.from(`${encodeURIComponent(id)}:${encodeURIComponent(secret)}`).toString("base64")}`;
 
 const text = (value: unknown, max: number) =>
-  typeof value === "string" && value.trim()
-    ? value.trim().slice(0, max)
-    : null;
+  typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
 
 const EMAIL = /^[^@\s]{1,64}@[^@\s]{1,253}\.[^@\s]{2,63}$/;
 const cleanEmail = (value: unknown) => {
@@ -251,9 +249,12 @@ type Discovery = {
   token_endpoint: string;
   jwks_uri: string;
 };
-let discoveryCache: { url: string; at: number; value: Discovery } | null =
-  null;
-let jwksCache: { url: string; at: number; keys: Array<Record<string, any>> } | null = null;
+let discoveryCache: { url: string; at: number; value: Discovery } | null = null;
+let jwksCache: {
+  url: string;
+  at: number;
+  keys: Array<Record<string, any>>;
+} | null = null;
 const CACHE_MS = 60 * 60 * 1000;
 
 /** Tests switch installations; production reads config once per hour. */
@@ -292,7 +293,11 @@ async function discovery(): Promise<Discovery> {
 }
 
 async function jwks(url: string, refresh: boolean) {
-  if (!refresh && jwksCache?.url === url && Date.now() - jwksCache.at < CACHE_MS)
+  if (
+    !refresh &&
+    jwksCache?.url === url &&
+    Date.now() - jwksCache.at < CACHE_MS
+  )
     return jwksCache.keys;
   const body = await fetchJson(url);
   if (!Array.isArray(body.keys)) throw new IdpError("provider");
@@ -320,7 +325,12 @@ const decodePart = (part: string) => {
 /** OIDC Core § 3.1.3.7: signature, issuer, audience, time, nonce. */
 export async function verifyIdToken(
   token: unknown,
-  expected: { issuer: string; audience: string; nonce: string; jwksUri: string },
+  expected: {
+    issuer: string;
+    audience: string;
+    nonce: string;
+    jwksUri: string;
+  },
   now = Date.now(),
 ) {
   if (typeof token !== "string" || token.length > 16384)
@@ -344,7 +354,12 @@ export async function verifyIdToken(
       try {
         const key = createPublicKey({ key: jwk as any, format: "jwk" });
         if (
-          verifySignature(algorithm.hash, signed, { key, ...algorithm.options }, signature)
+          verifySignature(
+            algorithm.hash,
+            signed,
+            { key, ...algorithm.options },
+            signature,
+          )
         )
           return true;
       } catch {
@@ -454,7 +469,10 @@ async function yandexProfile(
     }),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      authorization: basic(config.YANDEX_CLIENT_ID!, config.YANDEX_CLIENT_SECRET!),
+      authorization: basic(
+        config.YANDEX_CLIENT_ID!,
+        config.YANDEX_CLIENT_SECRET!,
+      ),
     },
   });
   const accessToken = text(token.access_token, 4096);
@@ -542,7 +560,9 @@ async function oidcProfile(code: string, flow: Flow): Promise<ProviderProfile> {
     !(
       email &&
       emailVerified &&
-      config.OIDC_ALLOWED_DOMAINS.includes(email.slice(email.lastIndexOf("@") + 1))
+      config.OIDC_ALLOWED_DOMAINS.includes(
+        email.slice(email.lastIndexOf("@") + 1),
+      )
     )
   )
     throw new IdpError("domain");

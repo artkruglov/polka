@@ -53,7 +53,20 @@ async function askCode(email: string) {
 test("ru-only is the curated Russian list plus the installation's domain", () => {
   const domains = parseSignupDomains("ru-only", "https://app.polochka.app");
   assert.ok(Array.isArray(domains));
-  for (const domain of ["yandex.ru", "ya.ru", "mail.ru", "bk.ru", "list.ru", "inbox.ru", "internet.ru", "rambler.ru", "ro.ru", "vk.com", "app.polochka.app", "polochka.app"])
+  for (const domain of [
+    "yandex.ru",
+    "ya.ru",
+    "mail.ru",
+    "bk.ru",
+    "list.ru",
+    "inbox.ru",
+    "internet.ru",
+    "rambler.ru",
+    "ro.ru",
+    "vk.com",
+    "app.polochka.app",
+    "polochka.app",
+  ])
     assert.ok((domains as string[]).includes(domain), domain);
   assert.equal(domainAllowed("someone@gmail.com", domains), false);
   assert.equal(domainAllowed("someone@Yandex.RU", domains), true);
@@ -63,8 +76,12 @@ test("ru-only is the curated Russian list plus the installation's domain", () =>
     [...RU_MAIL_DOMAINS, "company.ru"].sort(),
   );
   assert.deepEqual(installationDomains("http://127.0.0.1:4390"), []);
-  assert.throws(() => parseSignupDomains("any,ru-only", "https://polochka.app"));
-  assert.throws(() => parseSignupDomains("not a domain", "https://polochka.app"));
+  assert.throws(() =>
+    parseSignupDomains("any,ru-only", "https://polochka.app"),
+  );
+  assert.throws(() =>
+    parseSignupDomains("not a domain", "https://polochka.app"),
+  );
   // Organisation rules may never name a public mail service.
   for (const domain of ["gmail.com", "yandex.ru", "mail.ru"])
     assert.ok(PUBLIC_MAIL_DOMAINS.includes(domain));
@@ -90,7 +107,9 @@ test("a new shelf opens only on allowed domains; the answer looks the same", asy
   assert.equal((await askCode(`invited-${tag}@foreign.test`)).stored, true);
   config.EMAIL_SIGNUP_ALLOW = [];
   // The interface learns the rule from capabilities.
-  const capabilities = (await app.inject({ method: "GET", url: "/api/capabilities" })).json();
+  const capabilities = (
+    await app.inject({ method: "GET", url: "/api/capabilities" })
+  ).json();
   assert.deepEqual(capabilities.emailSignupDomains, ["allowed.test"]);
   assert.equal(capabilities.emailLoginDomains, "any");
 });
@@ -103,7 +122,10 @@ test("an existing account outside the list keeps its code unless EMAIL_LOGIN_DOM
     "INSERT INTO accounts(id,name,password_hash,email) VALUES($1,$2,'unused',$3)",
     [id, `email-${id}`, email],
   );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [randomUUID(), id]);
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
+    randomUUID(),
+    id,
+  ]);
   config.EMAIL_LOGIN_DOMAINS = "any";
   assert.equal((await askCode(email)).stored, true);
   await db.query("DELETE FROM login_challenges WHERE email=$1", [email]);
@@ -128,11 +150,15 @@ test("a code issued before the rule changed opens no new shelf", async () => {
     payload: { email },
   });
   assert.equal(asked.statusCode, 200, asked.body);
-  const browser = asked.cookies.find((cookie) => cookie.name === "polka_email_challenge")!.value;
+  const browser = asked.cookies.find(
+    (cookie) => cookie.name === "polka_email_challenge",
+  )!.value;
   const { readFile } = await import("node:fs/promises");
   const { LOCAL_MAIL_DIRECTORY } = await import("../apps/server/mailer.ts");
   const { id } = asked.json();
-  const letter = JSON.parse(await readFile(`${LOCAL_MAIL_DIRECTORY}/${id}.json`, "utf8"));
+  const letter = JSON.parse(
+    await readFile(`${LOCAL_MAIL_DIRECTORY}/${id}.json`, "utf8"),
+  );
   config.EMAIL_SIGNUP_DOMAINS = ["allowed.test"];
   try {
     const verify = await app.inject({
@@ -144,7 +170,8 @@ test("a code issued before the rule changed opens no new shelf", async () => {
     });
     assert.equal(verify.statusCode, 401);
     assert.equal(
-      (await db.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount,
+      (await db.query("SELECT 1 FROM accounts WHERE email=$1", [email]))
+        .rowCount,
       0,
     );
   } finally {
