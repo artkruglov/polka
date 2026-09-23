@@ -1,20 +1,51 @@
-/* Recipient view: the material in the reader's typography, with provenance and a report action. */
-.recipient-main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 28px var(--gutter) 64px; }
-.recipient-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--muted); font-size: var(--text-sm); }
-.recipient-bar .ui-badge { padding: 4px 9px; }
-.recipient-reader-profile { padding-left: 14px; border-left: 1px solid var(--line-strong); }
-.recipient-heading { padding: 18px 0 20px; }
-.recipient-heading h1 { max-width: 24ch; font-size: clamp(30px, 3.4vw, 46px); line-height: 1.08; letter-spacing: -.045em; overflow-wrap: anywhere; }
-.recipient-main > .stage { margin-top: 0; }
-.recipient-main > .stage[data-kind="text"] { margin-top: 8px; }
-.recipient-reader-footer { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 18px 28px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
-.recipient-reader-provenance { max-width: 720px; min-width: 0; }
-.recipient-reader-provenance p { margin-bottom: 6px; font-size: var(--text-base); line-height: 1.55; color: var(--ink-2); }
-.recipient-reader-provenance small { font-size: var(--text-sm); line-height: 1.5; }
-.recipient-reader-footer-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; }
-.recipient-reader-footer-actions a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--accent); font-size: var(--text-base); font-weight: 500; }
-.recipient-reader-footer-actions .report-button { min-height: 40px; color: var(--muted); padding: 8px 4px; }
-.report-sent { color: var(--success); font-size: var(--text-base); }
+/* Recipient view, document first: a thin bar (title, actions, one line about the page),
+   then the work filling the rest of the viewport. Guests get no app navigation at all. */
+.recipient-frame { display: flex; flex-direction: column; min-height: 100dvh; }
+
+/* Top bar: two rows, both thin. */
+.recipient-topbar { flex: 0 0 auto; border-bottom: 1px solid var(--line); background: var(--canvas); }
+.recipient-topbar-row { display: flex; align-items: center; gap: 8px 12px; min-height: 48px; padding: 4px var(--gutter); }
+.recipient-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 600 var(--text-md) / 1.3 var(--font-sans); letter-spacing: var(--tracking-snug); }
+.recipient-topbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.recipient-topbar-actions .ui-button { min-height: 36px; padding: 6px 10px; font-size: var(--text-sm); color: var(--ink-2); }
+.recipient-topbar-actions .ui-button svg { width: 16px; height: 16px; }
+.recipient-comments-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.report-sent { color: var(--success); font-size: var(--text-sm); white-space: nowrap; }
+
+/* Second row: the note about the page and the link home. */
+.recipient-topbar-row--note { min-height: 32px; padding-top: 0; padding-bottom: 6px; }
+.recipient-note { flex: 1 1 auto; min-width: 0; }
+.recipient-note-line { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.4; }
+.recipient-note-line > svg { flex: 0 0 15px; width: 15px; height: 15px; color: var(--warning); }
+.recipient-note[data-tone="editorial"] .recipient-note-line > svg { color: var(--muted); }
+.recipient-note[data-tone="editorial"] .recipient-note-line { color: var(--muted); font-weight: 500; }
+.recipient-note-line > span { min-width: 0; }
+.recipient-note-more { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; min-height: 28px; margin: -4px 0; padding: 2px 6px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--accent); font: 500 var(--text-sm) / 1.4 var(--font-sans); cursor: pointer; }
+.recipient-note-more:hover { background: var(--accent-soft); }
+.recipient-note-more svg { width: 14px; height: 14px; }
+.recipient-note-details { display: grid; gap: 6px; max-width: 72ch; padding: 6px 0 4px 23px; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.5; }
+.recipient-note-details[hidden] { display: none; }
+.recipient-note-details strong { color: var(--warning); }
+.recipient-note-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.recipient-note-links a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--accent); font-weight: 500; }
+.recipient-made { flex: 0 0 auto; align-self: flex-start; margin-top: 3px; color: var(--muted); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
+.recipient-made:hover { color: var(--accent); }
+
+/* The work takes what is left; a comments rail (stage 3) may sit to its right. */
+.recipient-body { display: flex; flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.recipient-body > .empty { flex: 1 1 auto; }
+.recipient-stage { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
+.recipient-stage .html-preview { flex: 1 1 auto; height: auto; min-height: 420px; }
+.recipient-stage .html-preview-expanded { flex: none; }
+.recipient-stage .html-preview-note { border-top: 1px solid var(--line); }
+.recipient-stage .html-preview-toolbar { border-top: 0; border-bottom: 1px solid var(--line); padding: 6px var(--gutter); }
+.recipient-stage .html-preview-toolbar > .ui-button { min-height: 32px; padding: 4px 8px; font-size: var(--text-sm); }
+.recipient-stage .preview-error { padding: 32px var(--gutter); }
+.recipient-stage[data-kind="image"] { background: var(--soft); }
+.recipient-stage[data-kind="image"] .work-image { flex: 1 1 0; width: 100%; height: auto; min-height: 0; max-height: none; object-fit: contain; background: none; }
+.recipient-stage[data-kind="text"] { display: block; padding: 8px var(--gutter) 64px; }
+.recipient-stage[data-kind="text"] .work-text { padding-top: 32px; }
+.recipient-comments { display: flex; flex: 0 0 360px; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--canvas); overflow: auto; }
 
 /* Denied: no hint whether a work ever existed here. */
 .recipient-denied { max-width: 620px; margin: 0 auto; padding: 72px var(--gutter) 96px; }
@@ -26,31 +57,28 @@
 .recipient-explore { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink-2); font-size: var(--text-base); }
 .recipient-explore:hover { color: var(--accent); }
 .recipient-explore svg { width: 18px; height: 18px; }
-
-@media (max-width: 760px) {
-  .recipient-main { padding: 20px var(--gutter-mobile) 48px; }
-  .recipient-bar { gap: 6px 12px; }
-  .recipient-reader-profile { padding-left: 0; border-left: 0; flex-basis: 100%; }
-  .recipient-heading { padding: 12px 0 16px; }
-  .recipient-heading h1 { font-size: 30px; }
-  .recipient-reader-footer { margin-top: 20px; gap: 12px; }
-  .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
-}
-
-/* Above the page, before its content: who published it and what not to type in. */
-.recipient-notice { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--warning-line, var(--line-strong)); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); }
-.recipient-notice > svg { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 2px; }
-.recipient-notice-text { flex: 1 1 auto; min-width: 0; }
-.recipient-notice-text p { color: var(--ink); font-size: var(--text-base); line-height: 1.5; }
-.recipient-notice-text small { display: block; margin-top: 4px; color: var(--warning); font-size: var(--text-sm); font-weight: 500; }
-.recipient-notice .report-button { flex: 0 0 auto; min-height: 40px; padding: 8px 10px; color: var(--ink-2); }
-.recipient-notice .report-sent { flex: 0 0 auto; align-self: center; }
-.recipient-notice--editorial { align-items: center; gap: 8px; padding: 6px 0 0; border: 0; background: none; color: var(--muted); font-size: var(--text-sm); font-weight: 500; }
-.recipient-notice--editorial > svg { width: 16px; height: 16px; margin-top: 0; }
 .recipient-review p { max-width: 52ch; }
 .recipient-review-hint { color: var(--muted); }
 
 @media (max-width: 760px) {
-  .recipient-notice { flex-wrap: wrap; gap: 8px 10px; }
-  .recipient-notice .report-button { margin-left: 30px; padding-left: 0; }
+  /* Under the app shell the sticky header takes 60px; the tab bar is padding on the shell. */
+  .recipient:not(.app-shell--bare) .recipient-frame { min-height: calc(100dvh - 60px); }
+  .recipient-topbar-row { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  .recipient-stage .html-preview { min-height: 360px; }
+  .recipient-stage .html-preview-toolbar { padding: 4px var(--gutter-mobile); gap: 4px 6px; }
+  .recipient-stage[data-kind="text"] { padding: 4px var(--gutter-mobile) 48px; }
+  .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
+  /* The note wraps as text; the link home follows it in the flow. */
+  .recipient-topbar-row--note { display: block; padding-bottom: 8px; }
+  .recipient-note-line { display: inline; }
+  .recipient-note-line > svg { display: inline-block; vertical-align: -3px; margin-right: 4px; }
+  .recipient-note-more { margin: 0 0 0 2px; vertical-align: -2px; }
+  .recipient-made { display: inline-block; margin: 0 0 0 10px; }
+  .recipient-note-details { padding-left: 0; }
+  /* The comments rail becomes a bottom sheet. */
+  .recipient-comments { position: fixed; inset: auto 0 0; z-index: 70; flex: none; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }
+}
+@media (max-width: 560px) {
+  .report-button > span, .recipient-note-more > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .recipient-topbar-actions .ui-button { min-width: 36px; padding: 6px 8px; }
 }
