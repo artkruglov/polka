@@ -321,11 +321,15 @@ export async function sharedComments(
     const isOwner = viewer?.id === context.ownerId;
     return {
       ...(await discussion(c, context, viewer?.id ?? null, isOwner)),
-      viewer: {
-        signedIn: !!viewer,
-        name: viewer?.name ?? null,
-        owner: isOwner,
-      },
+      viewer: viewer
+        ? { signedIn: true, owner: isOwner, ...(await viewerSettings(c, viewer.id)) }
+        : {
+            signedIn: false,
+            name: null,
+            owner: false,
+            nameChosen: false,
+            commentMail: true,
+          },
     };
   });
 }
@@ -379,7 +383,16 @@ export async function workCommentsInTransaction(
        AND comment.created_at>COALESCE($4::timestamptz,'-infinity')`,
     [artifactId, owner.tenant, owner.id, artifact.comments_seen_at],
   );
-  return { artifactId, unread: unread.n, shares: result };
+  return {
+    artifactId,
+    unread: unread.n,
+    shares: result,
+    viewer: {
+      signedIn: true,
+      owner: true,
+      ...(await viewerSettings(c, owner.id)),
+    },
+  };
 }
 
 export function workComments(owner: Actor, artifactId: string) {
@@ -406,7 +419,58 @@ type CreateInput = {
   body: string;
   anchor?: CommentAnchor | null;
   parentId?: string;
+  displayName?: string;
 };
+
+export const nameRequired = () =>
+  new Problem(
+    400,
+    "invalid",
+    "Выберите имя, которое увидят под вашими комментариями.",
+    { nameRequired: true },
+  );
+
+/** The writer's name and letters settings, as the rail shows them. */
+async function viewerSettings(c: Queryable, accountId: string) {
+  const {
+    rows: [row],
+  } = await c.query(
+    `SELECT COALESCE(display_name,name) AS name,
+       comment_name_chosen_at IS NOT NULL AS chosen,comment_mail
+     FROM accounts WHERE id=$1`,
+    [accountId],
+  );
+  return {
+    name: (row?.name as string | undefined) ?? null,
+    nameChosen: !!row?.chosen,
+    commentMail: row ? !!row.comment_mail : true,
+  };
+}
+
+/**
+ * Everyone with the link sees the name under a comment, so it is chosen by
+ * the person before their first one (not taken silently from their address).
+ */
+async function lockWriterWithName(
+  c: PoolClient,
+  writer: Viewer,
+  displayName: string | undefined,
+) {
+  const {
+    rows: [account],
+  } = await c.query(
+    "SELECT comment_name_chosen_at IS NOT NULL AS chosen FROM accounts WHERE id=$1",
+    [writer.id],
+  );
+  if (account?.chosen) return lockWriter(c, writer);
+  if (!displayName) throw nameRequired();
+  const updated = await c.query(
+    `UPDATE accounts SET display_name=$2,comment_name_chosen_at=clock_timestamp()
+     WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL`,
+    [writer.id, displayName],
+  );
+  if (!updated.rowCount) throw signInToComment();
+}
 
 async function createInContext(
   c: PoolClient,
@@ -416,7 +480,7 @@ async function createInContext(
   notices: CommentNotice[],
 ) {
   if (!context.open) throw closed();
-  await lockWriter(c, writer);
+  await lockWriterWithName(c, writer, input.displayName);
   const { share } = context;
   // Concurrent comments on one link take turns, so the daily count is exact.
   // An advisory lock, as for reports: the share row is held FOR SHARE only.
@@ -552,7 +616,7 @@ async function deleteInContext(
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
   if (comment.deleted_at) return { ok: true };
   await c.query(
-    `UPDATE comments SET body='',signals='{}',held_at=NULL,
+    `UPDATE comments SET body='',anchor=NULL,signals='{}',held_at=NULL,
        deleted_at=clock_timestamp() WHERE id=$1`,
     [id],
   );
@@ -754,6 +818,26 @@ export async function resolveOwnerComment(
   return transaction((c) =>
     resolveCommentInTransaction(c, owner, id, resolved),
   );
+}
+
+/** The name under one's comments and letters about them. */
+export async function updateCommentSettings(
+  actor: Actor,
+  input: { displayName?: string; commentMail?: boolean },
+) {
+  return transaction(async (c) => {
+    await lockActiveOwnerTenant(c, actor);
+    await c.query(
+      `UPDATE accounts SET
+         display_name=COALESCE($2,display_name),
+         comment_name_chosen_at=CASE WHEN $2::text IS NULL THEN comment_name_chosen_at
+           ELSE clock_timestamp() END,
+         comment_mail=COALESCE($3,comment_mail)
+       WHERE id=$1`,
+      [actor.id, input.displayName ?? null, input.commentMail ?? null],
+    );
+    return viewerSettings(c, actor.id);
+  });
 }
 
 // Operator ------------------------------------------------------------------

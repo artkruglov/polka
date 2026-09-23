@@ -9,6 +9,7 @@
 // letter quotes at most COMMENT_MAIL_EXCERPT characters, names people by
 // display name and carries no one else's address. Addresses in a comment are
 // defanged (example[.]com), so a mail client does not make them links.
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   COMMENT_MAIL_EXCERPT,
   COMMENT_MAIL_PER_ADDRESS_PER_DAY,
@@ -23,6 +24,48 @@ export type CommentNotice =
   | { kind: "comment"; commentId: string }
   | { kind: "suspicious"; commentId: string; held: boolean }
   | { kind: "report"; commentId: string; reportId: string };
+
+// «Не присылать такие письма»: a signed link in every letter,
+// APP_ORIGIN/mail-off#<token>. The token is in the fragment (no logs); the
+// page asks before it acts (mail scanners open links), and only a POST turns
+// the letters off. It names one account and lasts a year.
+const OFF_PURPOSE = "polka/comment-mail-off/v1";
+const OFF_TTL_S = 365 * 24 * 60 * 60;
+const offKey = () =>
+  createHmac("sha256", config.LINK_KEY).update(OFF_PURPOSE).digest();
+
+export function commentMailOffToken(accountId: string, now = Date.now()) {
+  const payload = Buffer.from(
+    JSON.stringify({ a: accountId, e: Math.floor(now / 1000) + OFF_TTL_S }),
+  ).toString("base64url");
+  return `${payload}.${createHmac("sha256", offKey()).update(payload).digest("base64url")}`;
+}
+
+/** The account a valid, unexpired token names; null otherwise. */
+export function verifyCommentMailOffToken(token: string, now = Date.now()) {
+  const match = /^([A-Za-z0-9_-]{10,200})\.([A-Za-z0-9_-]{43})$/.exec(token);
+  if (!match) return null;
+  const expected = createHmac("sha256", offKey()).update(match[1]!).digest();
+  const given = Buffer.from(match[2]!, "base64url");
+  if (given.length !== expected.length || !timingSafeEqual(given, expected))
+    return null;
+  try {
+    const value = JSON.parse(Buffer.from(match[1]!, "base64url").toString("utf8"));
+    if (
+      typeof value.a !== "string" ||
+      !/^[0-9a-f-]{36}$/.test(value.a) ||
+      typeof value.e !== "number" ||
+      value.e * 1000 <= now
+    )
+      return null;
+    return value.a as string;
+  } catch {
+    return null;
+  }
+}
+
+const offLine = (accountId: string) =>
+  `Не присылать письма о комментариях: ${config.APP_ORIGIN}/mail-off#${commentMailOffToken(accountId)}`;
 
 /** example.com → example[.]com, https://x → https[:]//x: text, not a link. */
 export function defang(text: string) {
@@ -68,7 +111,8 @@ async function facts(commentId: string) {
        author.name AS author_login,
        artifact.title,artifact.trashed_at,
        owner.id AS owner_id,owner.email AS owner_email,
-       (NOT owner.disabled AND owner.deletion_requested_at IS NULL) AS owner_active,
+       (NOT owner.disabled AND owner.deletion_requested_at IS NULL
+         AND owner.comment_mail) AS owner_active,
        (NOT share.revoked AND share.expires_at>now() AND share.moderation='none'
          AND artifact.trashed_at IS NULL) AS share_open,
        revision.number AS revision_number
@@ -125,6 +169,7 @@ async function sendCommentLetters(commentId: string) {
           `Открыть работу: ${workUrl(row.artifact_id)}`,
           "",
           `Писем о комментариях \u2014 не больше ${COMMENT_MAIL_PER_ADDRESS_PER_DAY} в сутки на адрес.`,
+          offLine(row.owner_id),
         ].join("\n"),
       ),
     );
@@ -132,13 +177,13 @@ async function sendCommentLetters(commentId: string) {
   // the author of the reply, not the owner (told above), each address once.
   if (reply && row.share_open) {
     const { rows: people } = await db.query(
-      `SELECT DISTINCT account.email
+      `SELECT DISTINCT account.email,account.id
        FROM comments comment
        JOIN accounts account ON account.id=comment.author_account_id
        WHERE (comment.id=$1 OR comment.parent_id=$1)
          AND comment.share_id=$2 AND comment.deleted_at IS NULL
          AND comment.author_account_id<>$3 AND comment.author_account_id<>$4
-         AND account.email IS NOT NULL
+         AND account.email IS NOT NULL AND account.comment_mail
          AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
       [row.parent_id, row.share_id, row.author_account_id, row.owner_id],
     );
@@ -155,6 +200,7 @@ async function sendCommentLetters(commentId: string) {
             "Откройте работу по ссылке, которую вам прислали: ответ будет в обсуждении справа от текста.",
             "",
             `Писем о комментариях \u2014 не больше ${COMMENT_MAIL_PER_ADDRESS_PER_DAY} в сутки на адрес.`,
+            offLine(person.id),
           ].join("\n"),
         ),
       );

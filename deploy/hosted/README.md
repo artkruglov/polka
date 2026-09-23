@@ -255,7 +255,22 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts enable <логин|почта>
 ```
 
-Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`.
+Комментарии к ссылкам ([COMMENTS](../../docs/specs/COMMENTS.md#модерация)):
+
+```sh
+# все комментарии ссылки, скрытые тоже: состояние (open/held/resolved/deleted/author-disabled), жалобы, автор, признаки
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts comments <shareId>
+
+# удалить комментарий: текст и цитата стираются, жалобы на него отмечаются рассмотренными
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts delete-comment <commentId>
+
+# показать всем подозрительный комментарий, который ждёт проверки
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts release-comment <commentId>
+```
+
+Подозрительный комментарий нового автора (просит пароль или код рядом с брендом, срочностью или адресом) виден только автору и владельцу работы, пока оператор не решит; о нём и о каждой жалобе на комментарий приходит письмо на `OPERATOR_EMAIL` с этими командами. `disable` скрывает все комментарии и реакции автора (`enable` возвращает).
+
+Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`, `moderation:comments`, `moderation:delete-comment`, `moderation:release-comment`.
 
 ## Мониторинг
 

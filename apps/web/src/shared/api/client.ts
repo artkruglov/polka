@@ -23,6 +23,7 @@ export type NewComment = {
   body: string;
   anchor?: CommentAnchor | null;
   parentId?: string;
+  displayName?: string;
 };
 export type ModerationInspection = {
   action: string;
@@ -280,6 +281,10 @@ export const client = {
       request<{ ok: true }>(`/comments/${commentId}/delete`, {}),
     ownerResolve: (commentId: string, resolved: boolean) =>
       request<{ ok: true }>(`/comments/${commentId}/resolve`, { resolved }),
+    settings: (input: { displayName?: string; commentMail?: boolean }) =>
+      request<unknown>("/account/comment-settings", input),
+    mailOff: (token: string) =>
+      request<{ ok: true }>("/comment-mail/off", { token }),
   },
   agentConnections: {
     list: (signal?: AbortSignal) =>

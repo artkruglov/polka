@@ -12,7 +12,8 @@
 --                    pages); held_at hides a suspicious comment of an
 --                    untrusted author from everyone but its author and the
 --                    owner until the operator releases it. deleted_at empties
---                    the body; the row stays while replies need a parent.
+--                    the body and the quote; the row stays while replies need
+--                    a parent.
 -- comment_reactions  A fixed set of emoji on a fragment (anchor_sig is the
 --                    SHA-256 of prefix|exact|suffix) or on the whole work
 --                    (anchor_sig ''). One per author, link, fragment, emoji:
@@ -55,7 +56,7 @@ CREATE TABLE comments (
   FOREIGN KEY (share_id, parent_id) REFERENCES comments(share_id, id),
   CHECK (parent_id IS NULL OR parent_id <> id),
   CHECK (parent_id IS NULL OR anchor IS NULL),
-  CHECK (deleted_at IS NULL OR body = '')
+  CHECK (deleted_at IS NULL OR (body = '' AND anchor IS NULL))
 );
 CREATE INDEX comments_share ON comments(share_id, created_at);
 CREATE INDEX comments_artifact ON comments(tenant_id, artifact_id, created_at);
@@ -96,6 +97,13 @@ ALTER TABLE agent_operations
   ADD CONSTRAINT agent_operations_operation_check
     CHECK(operation IN ('share','metadata','share-move'));
 ALTER TABLE artifacts ADD COLUMN comments_seen_at timestamptz;
+-- accounts.comment_name_chosen_at  When the person chose the name shown under
+--                    their comments (everyone with the link sees it); a
+--                    first comment asks for it. NULL: never chosen.
+-- accounts.comment_mail  Letters about comments; the person can turn them off.
+ALTER TABLE accounts
+  ADD COLUMN comment_name_chosen_at timestamptz,
+  ADD COLUMN comment_mail boolean NOT NULL DEFAULT true;
 ALTER TABLE viewer_grants ADD COLUMN comments boolean NOT NULL DEFAULT false;
 
 -- Terminal purge also erases comments and reactions. Same body as 028 plus
@@ -185,7 +193,7 @@ BEGIN
     AND parent_id IS NOT NULL;
   DELETE FROM public.comments root WHERE root.author_account_id=job.account_id
     AND NOT EXISTS(SELECT 1 FROM public.comments reply WHERE reply.parent_id=root.id);
-  UPDATE public.comments SET body='',signals='{}',held_at=NULL,
+  UPDATE public.comments SET body='',anchor=NULL,signals='{}',held_at=NULL,
     deleted_at=COALESCE(deleted_at,clock_timestamp())
    WHERE author_account_id=job.account_id;
   UPDATE public.comments SET resolved_by=NULL WHERE resolved_by=job.account_id;

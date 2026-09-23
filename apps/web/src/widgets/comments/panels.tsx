@@ -101,6 +101,8 @@ export function useSharedComments({
       onReport={onReport}
       layout={wide ? "rail" : "sheet"}
       onClose={() => setOpen(false)}
+      viewer={data.viewer}
+      onSettings={actions.settings}
     />
   ) : (
     <p className="comments-empty" role="status">
@@ -187,6 +189,8 @@ export function useWorkComments({
         layout={wide ? "rail" : "sheet"}
         readOnly={!writable}
         onClose={() => setOpen(false)}
+        viewer={data?.viewer}
+        onSettings={actions.settings}
         header={
           <>
           {fresh > 0 && (
