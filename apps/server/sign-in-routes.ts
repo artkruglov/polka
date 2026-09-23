@@ -11,7 +11,11 @@
 // the browser's history.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { completeProviderSignIn, listIdentities, unlinkIdentity } from "./account-identities.ts";
+import {
+  completeProviderSignIn,
+  listIdentities,
+  unlinkIdentity,
+} from "./account-identities.ts";
 import { identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { missing, Problem } from "./errors.ts";
@@ -33,7 +37,8 @@ const providerParam = z.object({ provider: z.enum(PROVIDER_IDS) });
 
 function enabledProvider(req: FastifyRequest): ProviderId {
   const parsed = providerParam.safeParse(req.params);
-  if (!parsed.success || !providerEnabled(parsed.data.provider)) throw missing();
+  if (!parsed.success || !providerEnabled(parsed.data.provider))
+    throw missing();
   return parsed.data.provider;
 }
 
@@ -73,26 +78,34 @@ export function registerSignInRoutes(app: FastifyInstance) {
 
   // Linking needs the session and the Origin check (a POST); the browser
   // then leaves for the provider itself.
-  app.post("/api/auth/idp/:provider/link", { bodyLimit: 1024 }, async (req, reply) => {
-    const provider = enabledProvider(req);
-    const actor = await identity(req);
-    await limitAttempts(`idp-link:${actor.id}`, 20);
-    try {
-      const { location, cookie } = await startFlow(
-        provider,
-        "/settings/agents?linked=1#sign-in",
-        actor.id,
-      );
-      reply.setCookie(FLOW_COOKIE, cookie, {
-        ...flowCookie,
-        secure: secure(),
-        maxAge: FLOW_TTL_SECONDS,
-      });
-      return { location };
-    } catch {
-      throw new Problem(503, "invalid", "Поставщик входа сейчас недоступен. Попробуйте позже.");
-    }
-  });
+  app.post(
+    "/api/auth/idp/:provider/link",
+    { bodyLimit: 1024 },
+    async (req, reply) => {
+      const provider = enabledProvider(req);
+      const actor = await identity(req);
+      await limitAttempts(`idp-link:${actor.id}`, 20);
+      try {
+        const { location, cookie } = await startFlow(
+          provider,
+          "/settings/agents?linked=1#sign-in",
+          actor.id,
+        );
+        reply.setCookie(FLOW_COOKIE, cookie, {
+          ...flowCookie,
+          secure: secure(),
+          maxAge: FLOW_TTL_SECONDS,
+        });
+        return { location };
+      } catch {
+        throw new Problem(
+          503,
+          "invalid",
+          "Поставщик входа сейчас недоступен. Попробуйте позже.",
+        );
+      }
+    },
+  );
 
   app.get("/api/auth/idp/:provider/callback", async (req, reply) => {
     const provider = enabledProvider(req);
@@ -106,7 +119,8 @@ export function registerSignInRoutes(app: FastifyInstance) {
     } catch {
       return failure(reply, "provider", failTo);
     }
-    if (!flow || flow.provider !== provider) return failure(reply, "state", null);
+    if (!flow || flow.provider !== provider)
+      return failure(reply, "state", null);
     try {
       const profile = await finishFlow(
         flow,
@@ -133,9 +147,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
         }
         return failure(reply, error.code, failTo);
       }
-      console.error(
-        JSON.stringify({ event: "idp.callback_failed", provider }),
-      );
+      console.error(JSON.stringify({ event: "idp.callback_failed", provider }));
       return failure(reply, "provider", failTo);
     }
   });

@@ -16,14 +16,34 @@ function Mark({ id }: { id: SignInProvider["id"] }) {
     return (
       <svg className="idp-mark" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="12" fill="#FC3F1D" />
-        <text x="12" y="17" textAnchor="middle" fontSize="15" fontWeight="700" fill="#fff" fontFamily="Arial, sans-serif">Я</text>
+        <text
+          x="12"
+          y="17"
+          textAnchor="middle"
+          fontSize="15"
+          fontWeight="700"
+          fill="#fff"
+          fontFamily="Arial, sans-serif"
+        >
+          Я
+        </text>
       </svg>
     );
   if (id === "vk")
     return (
       <svg className="idp-mark" viewBox="0 0 24 24" aria-hidden="true">
         <rect width="24" height="24" rx="7" fill="#fff" />
-        <text x="12" y="16.5" textAnchor="middle" fontSize="10.5" fontWeight="800" fill="#0077FF" fontFamily="Arial, sans-serif">VK</text>
+        <text
+          x="12"
+          y="16.5"
+          textAnchor="middle"
+          fontSize="10.5"
+          fontWeight="800"
+          fill="#0077FF"
+          fontFamily="Arial, sans-serif"
+        >
+          VK
+        </text>
       </svg>
     );
   return <Building2 className="idp-mark" aria-hidden="true" />;
@@ -42,7 +62,11 @@ export function ProviderButtons({
 }) {
   if (!providers.length) return null;
   return (
-    <div className="idp-buttons" role="group" aria-label="Войти через другой сервис">
+    <div
+      className="idp-buttons"
+      role="group"
+      aria-label="Войти через другой сервис"
+    >
       {providers.map((provider) => (
         <a
           key={provider.id}
@@ -134,14 +158,20 @@ export function SignInMethods() {
       await load();
     } catch (e) {
       setError(
-        e instanceof ApiError ? e.message : "Не удалось отвязать. Повторите попытку.",
+        e instanceof ApiError
+          ? e.message
+          : "Не удалось отвязать. Повторите попытку.",
       );
     } finally {
       setBusy(null);
     }
   };
   return (
-    <section className="idp-methods" id="sign-in" aria-labelledby="idp-methods-title">
+    <section
+      className="idp-methods"
+      id="sign-in"
+      aria-labelledby="idp-methods-title"
+    >
       <h2 id="idp-methods-title">Способы входа</h2>
       <p className="idp-methods-lead">
         {data.email ? `Код на почту ${data.email}. ` : ""}
