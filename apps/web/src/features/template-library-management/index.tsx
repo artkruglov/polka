@@ -28,6 +28,7 @@ const eventActionLabel: Record<string, string> = {
   "template_library.created": "создал библиотеку",
   "template_library.invitation_created": "создал приглашение",
   "template_library.invitation_accepted": "принял приглашение",
+  "template_library.domain_joined": "вошёл через домен компании",
   "template_library.invitation_revoked": "отозвал приглашение",
   "template_library.member_revoked": "отозвал участника",
   "template_library.member_role_changed": "изменил роль участника",
