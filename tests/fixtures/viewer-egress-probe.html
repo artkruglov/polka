@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>running</title>
+<style>body{font:14px/1.4 system-ui;margin:20px}pre{white-space:pre-wrap}</style></head>
+<body>
+<h1>Проверка изоляции просмотра</h1>
+<pre id="out">running…</pre>
+<script>
+// Tries every way out of the viewer and writes what happened. Publish it to
+// an installation, then run scripts/viewer-egress-probe.mjs on its link.
+(async () => {
+  const r = {};
+  const t = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const tryIt = async (name, fn) => { try { r[name] = await fn(); } catch (e) { r[name] = "blocked: " + (e && e.name ? e.name : String(e)); } };
+  await tryIt("fetch_own_viewer", async () => { const x = await fetch("/"); return "ALLOWED " + x.status; });
+  await tryIt("fetch_external", async () => { const x = await fetch("https://example.com/"); return "ALLOWED " + x.status; });
+  await tryIt("xhr_external", () => new Promise((ok) => { const x = new XMLHttpRequest(); x.onload = () => ok("ALLOWED " + x.status); x.onerror = () => ok("error (blocked or failed)"); try { x.open("GET", "https://example.com/xhr"); x.send(); } catch (e) { ok("blocked: " + e.name); } setTimeout(() => ok("timeout"), 4000); }));
+  await tryIt("image_external", () => new Promise((ok) => { const i = new Image(); i.onload = () => ok("ALLOWED load"); i.onerror = () => ok("error (blocked or failed)"); i.src = "https://example.com/probe.png?img"; setTimeout(() => ok("timeout"), 4000); }));
+  await tryIt("beacon", async () => "sendBeacon returned " + navigator.sendBeacon("https://example.com/beacon", "x"));
+  await tryIt("websocket", () => new Promise((ok) => { let ws; try { ws = new WebSocket("wss://echo.websocket.events/"); } catch (e) { return ok("blocked: " + e.name); } ws.onopen = () => ok("ALLOWED open"); ws.onerror = () => ok("error (blocked or failed)"); setTimeout(() => ok("timeout"), 5000); }));
+  await tryIt("webrtc", () => new Promise((ok) => {
+    if (!window.RTCPeerConnection) return ok("no RTCPeerConnection");
+    const types = new Set(); let pc;
+    try { pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }); } catch (e) { return ok("blocked: " + e.name); }
+    pc.createDataChannel("x");
+    pc.onicecandidate = (e) => { if (e.candidate) types.add(e.candidate.type || (e.candidate.candidate.match(/ typ (\w+)/) || [])[1]); else ok("gathering done, candidate types: " + ([...types].join(",") || "none")); };
+    pc.createOffer().then((o) => pc.setLocalDescription(o)).catch((e) => ok("blocked: " + e.name));
+    setTimeout(() => ok("timeout, candidate types so far: " + ([...types].join(",") || "none")), 8000);
+  }));
+  await tryIt("cookie", () => "cookie=" + JSON.stringify(document.cookie));
+  await tryIt("localStorage", () => { localStorage.setItem("k", "v"); return "works in page: " + localStorage.getItem("k"); });
+  await tryIt("window_open", () => { const w = window.open("https://example.com/popup"); return w ? "ALLOWED popup" : "null (blocked)"; });
+  await tryIt("top_navigation", () => { top.location.href = "https://example.com/top"; return "no exception"; });
+  await tryIt("prefetch_link", async () => { const l = document.createElement("link"); l.rel = "prefetch"; l.href = "https://example.com/prefetch"; document.head.appendChild(l); await t(1500); return "inserted"; });
+  document.getElementById("out").textContent = JSON.stringify(r, null, 2);
+  console.log("PROBE_REPORT " + JSON.stringify(r));
+  document.title = "done";
+  await t(3000);
+  // Last, because a successful submission would navigate this frame away.
+  const f = document.createElement("form"); f.action = "https://example.com/form"; f.method = "post"; document.body.appendChild(f);
+  try { f.submit(); } catch (e) { console.log("PROBE_FORM blocked: " + e.name); }
+})();
+</script>
+</body></html>
