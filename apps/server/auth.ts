@@ -23,7 +23,8 @@ export async function createAccount(name: string, password: string) {
   return transaction(async (c) => {
     const id = randomUUID();
     await c.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,$3)",
+      // An account the operator creates is trusted from the start.
+      "INSERT INTO accounts(id,name,password_hash,trusted_at) VALUES($1,$2,$3,now())",
       [id, name, hash],
     );
     const tenant = randomUUID();

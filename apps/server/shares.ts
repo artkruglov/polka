@@ -22,6 +22,14 @@ import {
 } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { dispatchModerationNotices } from "./moderation-mail.ts";
+import {
+  MODERATION_MESSAGE,
+  assertNewAccountLimits,
+  authorStanding,
+  decideModeration,
+  type ModerationNotice,
+} from "./share-moderation.ts";
 
 type ShareInput = z.infer<typeof shareSchema>;
 type PublishInput = z.infer<typeof publishSchema>;
@@ -54,12 +62,28 @@ async function lockArtifact(
   return artifact;
 }
 
+async function revisionSignals(c: PoolClient, revisionId: string) {
+  const {
+    rows: [row],
+  } = await c.query("SELECT phishing_signals FROM revisions WHERE id=$1", [
+    revisionId,
+  ]);
+  return (row?.phishing_signals ?? []) as string[];
+}
+
+/**
+ * The single place a link is created. New accounts meet their limits here,
+ * and SHARE_MODERATION decides whether the link waits for the operator
+ * (docs/specs/ABUSE_PROTECTION.md). Letters to the operator are collected in
+ * `notices` and sent by the caller after commit.
+ */
 async function enableShareInTransaction(
   c: PoolClient,
   actor: Actor,
   artifactId: string,
   input: ShareInput,
   existingPolicy: ExistingPolicy,
+  notices: ModerationNotice[] = [],
 ) {
   const artifact = await lockArtifact(c, actor, artifactId);
   if (artifact.latest_revision_id !== input.expectedRevisionId)
@@ -95,6 +119,12 @@ async function enableShareInTransaction(
     return existing;
   }
   const derivativeId = await assertLinkable(c, artifact.latest_revision_id);
+  const standing = await authorStanding(c, actor.tenant);
+  await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
+  const decision = decideModeration(
+    standing,
+    await revisionSignals(c, artifact.latest_revision_id),
+  );
   await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1", [
     artifactId,
   ]);
@@ -103,8 +133,11 @@ async function enableShareInTransaction(
     rows: [created],
   } = await c.query(
     `INSERT INTO shares(
-       id,tenant_id,artifact_id,revision_id,derivative_id,token_hash,expires_at
-     ) VALUES($1,$2,$3,$4,$5,$6,now()+$7*interval '1 day')
+       id,tenant_id,artifact_id,revision_id,derivative_id,token_hash,expires_at,
+       moderation,moderation_reason,moderated_at
+     ) VALUES($1,$2,$3,$4,$5,$6,now()+$7*interval '1 day',
+       CASE WHEN $8::text IS NULL THEN 'none' ELSE 'held' END,$8,
+       CASE WHEN $8::text IS NULL THEN NULL ELSE now() END)
      RETURNING *`,
     [
       shareId,
@@ -114,9 +147,12 @@ async function enableShareInTransaction(
       derivativeId,
       sha256(tokenFor(shareId)),
       input.expiresInDays,
+      decision.hold,
     ],
   );
   await audit(c, actor, "share.enabled", shareId);
+  if (decision.hold) notices.push({ kind: "held", shareId });
+  else if (decision.notify) notices.push({ kind: "suspicious", shareId });
   return created;
 }
 
@@ -168,6 +204,7 @@ async function publishShareInTransaction(
   actor: Actor,
   shareId: string,
   input: PublishInput,
+  notices: ModerationNotice[] = [],
 ) {
   const artifactId = await artifactIdForShare(c, actor, shareId);
   if (!artifactId) throw missing();
@@ -209,10 +246,25 @@ async function publishShareInTransaction(
   )
     throw missing();
   const derivativeId = await assertLinkable(c, input.revisionId);
+  // A new version is new content: an approved link of an untrusted author
+  // waits again, and a suspicious version is reported like a new link.
+  const decision =
+    share.moderation === "none"
+      ? decideModeration(
+          await authorStanding(c, actor.tenant),
+          await revisionSignals(c, input.revisionId),
+        )
+      : { hold: null, notify: false };
   await c.query(
-    "UPDATE shares SET revision_id=$2,derivative_id=$3 WHERE id=$1",
-    [shareId, input.revisionId, derivativeId],
+    `UPDATE shares SET revision_id=$2,derivative_id=$3,
+       moderation=CASE WHEN $4::text IS NULL THEN moderation ELSE 'held' END,
+       moderation_reason=COALESCE($4,moderation_reason),
+       moderated_at=CASE WHEN $4::text IS NULL THEN moderated_at ELSE now() END
+     WHERE id=$1`,
+    [shareId, input.revisionId, derivativeId, decision.hold],
   );
+  if (decision.hold) notices.push({ kind: "held", shareId });
+  else if (decision.notify) notices.push({ kind: "suspicious", shareId });
   await audit(c, actor, "share.published", shareId);
   return { ok: true };
 }
@@ -223,10 +275,12 @@ export async function enableOwnerShare(
   body: unknown,
 ) {
   const input = shareSchema.parse(body);
+  const notices: ModerationNotice[] = [];
   await transaction(async (c) => {
     await lockActiveOwnerTenant(c, actor);
-    await enableShareInTransaction(c, actor, artifactId, input, "web");
+    await enableShareInTransaction(c, actor, artifactId, input, "web", notices);
   });
+  void dispatchModerationNotices(notices);
   return getArtifact(actor, artifactId);
 }
 
@@ -243,10 +297,13 @@ export async function publishOwnerShare(
   body: unknown,
 ) {
   const input = publishSchema.parse(body);
-  return transaction(async (c) => {
+  const notices: ModerationNotice[] = [];
+  const result = await transaction(async (c) => {
     await lockActiveOwnerTenant(c, actor);
-    return publishShareInTransaction(c, actor, shareId, input);
+    return publishShareInTransaction(c, actor, shareId, input, notices);
   });
+  void dispatchModerationNotices(notices);
+  return result;
 }
 
 type AgentShareResult = {
@@ -296,10 +353,19 @@ async function agentShareResponse(
     new Date(share.expires_at).getTime() > Date.now() &&
     share.revision_id === result.revisionId &&
     share.derivative_id === result.derivativeId;
+  const moderation = (active ? share.moderation : "none") as
+    | "none"
+    | "held"
+    | "paused";
   return {
     ...result,
     state: active ? ("active" as const) : ("closed" as const),
     url: active ? `${config.APP_ORIGIN}/s#${tokenFor(result.shareId)}` : null,
+    // A waiting link is not a finished one: the agent must say so. Present
+    // only while the link waits, so ordinary answers keep their shape.
+    ...(moderation !== "none"
+      ? { moderation, moderationMessage: MODERATION_MESSAGE[moderation] }
+      : {}),
   };
 }
 
@@ -307,7 +373,11 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
   const input = agentShareSchema.parse(body);
   const request = canonicalAgentShareRequest(input);
   const requestHash = sha256(JSON.stringify(request));
-  return withServiceActorTransaction(actor, "share", async (c, verified) => {
+  const notices: ModerationNotice[] = [];
+  const response = await withServiceActorTransaction(
+    actor,
+    "share",
+    async (c, verified) => {
     const {
       rows: [old],
     } = await c.query(
@@ -351,6 +421,7 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
       input.artifactId,
       input,
       "agent-exact",
+      notices,
     );
     const result: AgentShareResult = {
       shareId: share.id,
@@ -376,7 +447,10 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
       ],
     );
     return agentShareResponse(c, verified, result);
-  });
+    },
+  );
+  void dispatchModerationNotices(notices);
+  return response;
 }
 
 export async function revokeShareFromAgent(actor: ServiceActor, body: unknown) {

@@ -146,6 +146,8 @@ export interface Share {
   revisionId: string;
   number: number;
   status: "active" | "behind" | "expired" | "revoked";
+  /** held: waits for the operator before its first open; paused: after reports. */
+  moderation?: ShareModeration;
   url: string | null;
   expiresAt: string;
 }
@@ -191,12 +193,22 @@ export interface ImportPreview {
   htmlProfile: HtmlProfile | null;
   provenance: ImportProvenance | null;
 }
+export type ShareModeration = "none" | "held" | "paused";
 export interface Viewer {
   title: string;
   revision: Revision;
   grant: string;
   expiresAt: string;
+  /** editorial: «Редакция Полки»; user: a page someone published. */
+  publisher: "editorial" | "user";
+  /** The author's account is younger than NEW_ACCOUNT_DAYS. Never the name. */
+  authorIsNew: boolean;
 }
+/** A held or paused link: no title, no content, no grant. */
+export interface ViewerUnderReview {
+  review: true;
+}
+export type Resolved = Viewer | ViewerUnderReview;
 export interface Account {
   id: string;
   name: string;

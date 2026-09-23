@@ -67,6 +67,21 @@ const env = z
           z.string().regex(/^(?:[^@\s]+)?@[^@\s]+\.[^@\s]+$/, "an address or @domain"),
         ),
       ),
+    // Abuse protection (docs/specs/ABUSE_PROTECTION.md). When a new link
+    // waits for the operator: off, flagged (looks like phishing and the
+    // author is not trusted), new-accounts (any link of an untrusted
+    // account), all (any link of an account the operator did not create).
+    SHARE_MODERATION: z
+      .enum(["off", "flagged", "new-accounts", "all"])
+      .default("flagged"),
+    // Where moderation mail goes. Unset or empty: no mail, scripts only.
+    OPERATOR_EMAIL: unsetIfEmpty(z.string().email()),
+    // Distinct reporters of one link within 7 days that pause it. 0: never.
+    MODERATION_AUTOPAUSE_REPORTS: z.coerce.number().int().min(0).max(1000).default(3),
+    // An account younger than this (and not approved) is new: it may hold at
+    // most NEW_ACCOUNT_MAX_LINKS live links, each for at most 7 days.
+    NEW_ACCOUNT_DAYS: z.coerce.number().int().min(0).max(365).default(7),
+    NEW_ACCOUNT_MAX_LINKS: z.coerce.number().int().min(0).max(10000).default(5),
     COOKIE_SECURE: z.enum(["true", "false"]).default("true"),
     ACCOUNT_DELETION_ENABLED: z
       .enum(["true", "false"])

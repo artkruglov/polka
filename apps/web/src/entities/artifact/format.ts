@@ -12,8 +12,17 @@ export const size = (n: number) =>
       : `${(n / 1024 / 1024).toFixed(1)} МБ`;
 export const status = (a: Artifact) =>
   a.share && ["active", "behind"].includes(a.share.status)
-    ? `По ссылке · v${a.share.number}`
+    ? a.share.moderation === "held" || a.share.moderation === "paused"
+      ? `Ссылка на проверке · v${a.share.number}`
+      : `По ссылке · v${a.share.number}`
     : "Только вы";
+/** What the owner is told while a link waits for the Полка moderator. */
+export const moderationNote = (a: Artifact) =>
+  a.share?.moderation === "held"
+    ? "Ссылка на проверке у модератора Полки. Получатели увидят работу после одобрения; до этого по ссылке открывается экран «на проверке»."
+    : a.share?.moderation === "paused"
+      ? "Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки. Получатели сейчас видят экран «на проверке»."
+      : null;
 export const isImage = (r: Revision) => r.mime.startsWith("image/");
 /** Mirrors the server: a lone static HTML entrypoint needs no runtime. */
 export const isStaticSingleFileBundle = (r: Revision) =>

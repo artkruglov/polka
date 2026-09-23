@@ -9,6 +9,7 @@ import {
   Landing,
   Lazy,
   LibraryInvite,
+  Moderation,
   OAuthConsent,
   Recipient,
   Signup,
@@ -30,6 +31,7 @@ function Route({ path }: { path: string }) {
   if (path === "/templates") return <Templates />;
   if (path === "/library-invite") return <LibraryInvite />;
   if (path === "/oauth/consent") return <OAuthConsent />;
+  if (path === "/moderation") return <Moderation />;
   if (path === "/signup") return <Signup />;
   if (path === "/start") return <FirstSave />;
   if (path === "/settings/agents" || path === "/connections")

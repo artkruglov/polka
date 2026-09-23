@@ -6,11 +6,41 @@ import type {
   Revision,
   UploadInput,
   Viewer,
+  Resolved,
   AgentConnection,
   AgentScope,
   OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
 import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
+export type ModerationInspection = {
+  action: string;
+  actionLabel: string;
+  effect: string;
+  tokenExpiresAt: string;
+  share: {
+    id: string;
+    title: string;
+    mime: string;
+    htmlProfile: string | null;
+    version: number;
+    state: "none" | "held" | "paused" | "closed";
+    reason: string | null;
+    signals: string | null;
+  };
+  author: {
+    label: string;
+    operatorCreated: boolean;
+    createdAt: string | null;
+    trusted: boolean;
+    disabled: boolean;
+  };
+  reports: Array<{
+    reason: string;
+    comment: string | null;
+    settled: boolean;
+    createdAt: string;
+  }>;
+};
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -159,7 +189,19 @@ export const client = {
       revisionId: a.revision.id,
       expectedPublishedRevisionId: a.share!.revisionId,
     }),
-  resolve: (token: string) => request<Viewer>("/resolve", { token }),
+  resolve: (token: string) => request<Resolved>("/resolve", { token }),
+  /** One-click moderation from the operator's mail: the token is the capability. */
+  moderation: {
+    inspect: (token: string) =>
+      request<ModerationInspection>("/moderation/inspect", { token }),
+    preview: (token: string) =>
+      request<Viewer>("/moderation/preview", { token }),
+    act: (token: string) =>
+      request<{ action: string; shareId: string; changed: boolean; message: string }>(
+        "/moderation/act",
+        { token },
+      ),
+  },
   report: (
     token: string,
     reason: ReportReason,

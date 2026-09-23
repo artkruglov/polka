@@ -1,0 +1,23 @@
+/* Operator confirmation for a moderation letter: one card, then the page as a recipient sees it. */
+.moderation { width: 100%; max-width: 1100px; margin: 0 auto; padding: 48px var(--gutter) 96px; }
+.moderation-card { display: grid; gap: 16px; max-width: 720px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+.moderation-card h1 { font-size: clamp(24px, 3vw, 32px); line-height: 1.15; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.moderation-eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--text-sm); font-weight: 500; }
+.moderation-eyebrow svg { width: 16px; height: 16px; color: var(--warning); }
+.moderation-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: var(--text-base); line-height: 1.5; }
+.moderation-facts dt { color: var(--muted); }
+.moderation-facts dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.moderation-reports { display: grid; gap: 6px; margin: 0; padding-left: 18px; }
+.moderation-reports small { color: var(--muted); }
+.moderation-effect { padding: 12px 14px; border-radius: var(--radius); background: var(--soft); color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
+.moderation-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.moderation-fine { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.moderation-card > .ui-notice { margin: 0; }
+.moderation-preview { margin-top: 24px; }
+@media (max-width: 760px) {
+  .moderation { padding: 24px var(--gutter-mobile) 48px; }
+  .moderation-card { padding: 20px 16px; }
+  .moderation-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .moderation-facts dd { margin-bottom: 8px; }
+  .moderation-actions > .ui-button { flex: 1 1 160px; }
+}

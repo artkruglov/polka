@@ -5,13 +5,17 @@ import {
   createHmac,
   timingSafeEqual,
 } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import nodemailer from "nodemailer";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { limitAttempts, passwordHash } from "./auth.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
+import {
+  LOCAL_MAIL_DIRECTORY,
+  LOCAL_MAIL_NOTICE,
+  sendSmtpMail,
+  writeLocalMailFile,
+} from "./mailer.ts";
 
 const fingerprint = (id: string, code: string) =>
   createHmac("sha256", config.LINK_KEY)
@@ -88,12 +92,7 @@ export async function deliverLocalEmailChallenge(
   const run =
     dependencies.runTransaction ??
     ((operation) => transaction(operation as any));
-  const write =
-    dependencies.write ??
-    (async (path, body) => {
-      await mkdir(".local/mail", { recursive: true, mode: 0o700 });
-      await writeFile(path, body, { flag: "wx", mode: 0o600 });
-    });
+  const write = dependencies.write ?? writeLocalMailFile;
   return run(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
       input.email,
@@ -113,13 +112,13 @@ export async function deliverLocalEmailChallenge(
     // so account purge cannot certify local mail as cleared while a late file
     // writer is still in flight.
     await write(
-      `.local/mail/${input.id}.json`,
+      `${LOCAL_MAIL_DIRECTORY}/${input.id}.json`,
       JSON.stringify(
         {
           email: input.email,
           code: input.code,
           expiresInSeconds: 600,
-          notice: "LOCAL TEST ONLY — not delivered",
+          notice: LOCAL_MAIL_NOTICE,
         },
         null,
         2,
@@ -188,29 +187,11 @@ export async function beginEmailLogin(email: string, ip: string) {
           expiresInSeconds: 600,
         };
     } else {
-      const transport = nodemailer.createTransport({
-        host: config.SMTP_HOST,
-        port: config.SMTP_PORT,
-        secure: config.SMTP_PORT === 465,
-        requireTLS: true,
-        auth: config.SMTP_USER
-          ? { user: config.SMTP_USER, pass: config.SMTP_PASS }
-          : undefined,
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        disableFileAccess: true,
-        disableUrlAccess: true,
-        logger: false,
-        debug: false,
-      });
-      const result = await transport.sendMail({
-        from: config.MAIL_FROM,
+      await sendSmtpMail({
         to: email,
         subject: "Код для входа в Полку",
         text: `Ваш код: ${code.slice(0, 4)} ${code.slice(4)}\nОн действует 10 минут. Если вы не запрашивали вход, проигнорируйте это письмо.`,
       });
-      if (!result.accepted.length) throw new Error("Mail not accepted");
     }
   } catch {
     await db.query(

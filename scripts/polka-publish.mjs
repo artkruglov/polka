@@ -257,6 +257,11 @@ export async function main(
         `Saved privately, no link: ${result.linkUnavailableReason ?? "the token cannot manage links"}\n`,
       );
     }
+    if (result.moderation)
+      stderr.write(
+        `Under review (${result.moderation}): ${result.moderationMessage ?? "recipients see a review screen until a Полка moderator approves the link."}\n`,
+      );
+    if (result.expiresNote) stderr.write(`${result.expiresNote}\n`);
     if (result.interactiveUnavailableReason)
       stderr.write(
         `Scripts will not run: ${result.interactiveUnavailableReason}\n`,

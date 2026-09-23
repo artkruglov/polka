@@ -11,10 +11,16 @@ import {
   enableAccount,
   formatDisabled,
   formatEnabled,
+  formatModerationQueue,
   formatReports,
   formatRevokedShare,
+  formatTrusted,
+  listModerationQueue,
   listReports,
   revokeShareAsOperator,
+  trustAccount,
+  unpauseShareAsOperator,
+  approveShareAsOperator,
 } from "../apps/server/moderation.ts";
 import {
   assertActiveOwner,
@@ -466,4 +472,64 @@ test("enable lifts the disable but leaves shares and connections closed", async 
   );
   await assert.rejects(enableAccount(leaving.name), /being deleted/);
   await assert.rejects(disableAccount(leaving.name), /being deleted/);
+});
+
+test("queue, approve, unpause and trust act once and repeat harmlessly", async () => {
+  const owner = await account("mod-queue");
+  // A password account is trusted from creation; take that away to see trust granted.
+  await db.query("UPDATE accounts SET trusted_at=NULL WHERE id=$1", [owner.id]);
+  const held = await sharedArtifact(owner, "Held page");
+  const paused = await sharedArtifact(owner, "Paused page");
+  await db.query(
+    "UPDATE shares SET moderation='held',moderation_reason='new-account',moderated_at=now() WHERE id=$1",
+    [held.shareId],
+  );
+  await db.query(
+    "UPDATE shares SET moderation='paused',moderation_reason='reports',moderated_at=now() WHERE id=$1",
+    [paused.shareId],
+  );
+  await report(paused.token, "phishing", "fake bank");
+  const mine = (await listModerationQueue()).filter((item) =>
+    item.shareId === held.shareId || item.shareId === paused.shareId,
+  );
+  assert.deepEqual(mine.map((item) => item.state).sort(), ["held", "paused"]);
+  assert.match(formatModerationQueue(mine), /HELD/);
+  assert.match(formatModerationQueue(mine), /PAUSED/);
+
+  // unpause refuses a held link and lifts a paused one, once.
+  assert.equal((await unpauseShareAsOperator(held.shareId)).changed, false);
+  assert.equal((await unpauseShareAsOperator(paused.shareId)).changed, true);
+  assert.equal((await unpauseShareAsOperator(paused.shareId)).changed, false);
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM share_reports WHERE share_id=$1 AND status='new'",
+        [paused.shareId],
+      )
+    ).rows[0].n,
+    0,
+  );
+
+  const approved = await approveShareAsOperator(held.shareId, true);
+  assert.equal(approved.changed, true);
+  assert.match(approved.message, /доверенный/);
+  const state = await db.query(
+    "SELECT share.moderation,account.trusted_at FROM shares share JOIN accounts account ON account.id=$2 WHERE share.id=$1",
+    [held.shareId, owner.id],
+  );
+  assert.equal(state.rows[0].moderation, "none");
+  assert.notEqual(state.rows[0].trusted_at, null);
+  assert.equal((await approveShareAsOperator(held.shareId, true)).changed, false);
+  const audited = (
+    await db.query("SELECT action FROM audit_outbox WHERE tenant_id=$1", [
+      owner.tenant,
+    ])
+  ).rows.map((row) => row.action);
+  assert.ok(audited.includes("share.approved"));
+  assert.ok(audited.includes("account.trusted"));
+
+  const other = await account("mod-trust");
+  await db.query("UPDATE accounts SET trusted_at=NULL WHERE id=$1", [other.id]);
+  assert.equal((await trustAccount(other.name)).alreadyTrusted, false);
+  assert.match(formatTrusted(await trustAccount(other.name)), /already trusted/);
 });
