@@ -68,6 +68,20 @@ try {
   throw error;
 }
 console.log(`Polka is available at ${config.APP_ORIGIN}`);
+// The moderation sweep (docs/specs/CONTENT_FILTER.md, «Изоляция и удаление»):
+// reminders a day before a scheduled deletion, deletions that are due, and
+// revisions the models could not check yet. Hourly, and once after start.
+const sweep = async () => {
+  try {
+    const { sweepBlocks, retryUnchecked } = await import("./content-moderation.ts");
+    await sweepBlocks();
+    await retryUnchecked();
+  } catch {
+    console.error(JSON.stringify({ event: "moderation.sweep_failed" }));
+  }
+};
+setTimeout(sweep, 30_000).unref();
+setInterval(sweep, 60 * 60 * 1000).unref();
 if (viewer)
   console.log(`Experimental ${config.HTML_LIVE_MODE} HTML viewer is enabled.`);
 let closing = false;

@@ -14,6 +14,7 @@ export const MODERATION_ACTIONS = [
   "unpause",
   "close",
   "close-disable",
+  "block",
 ] as const;
 export type ModerationAction = (typeof MODERATION_ACTIONS)[number];
 
