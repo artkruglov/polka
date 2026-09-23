@@ -549,7 +549,7 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "Create an unlisted revision link",
         description:
-          "Create or recover one explicit revision-bound share. A changed idempotency request or an active share for another revision is a conflict. A refusal (code unsupported) states why the revision cannot be shown to a recipient on this installation and what to change.",
+          "Create or recover one explicit revision-bound share. A changed idempotency request or an active share for another revision is a conflict. A refusal (code unsupported) states why the revision cannot be shown to a recipient on this installation and what to change; a refusal with code quota states a new-account limit (at most 7 days, a few live links) in words to relay. If the result has moderation \"held\" or \"paused\", recipients see a review screen until a Polka moderator approves the link: tell the user so (moderationMessage) instead of presenting the link as ready.",
         inputSchema: agentShareSchema,
         annotations: {
           readOnlyHint: false,

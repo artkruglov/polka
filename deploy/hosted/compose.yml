@@ -48,6 +48,15 @@ x-runtime-env: &runtime-env
   # New shelves per day, whole installation and per client IP.
   EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
   EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
+  # Abuse protection (docs/specs/ABUSE_PROTECTION.md). off | flagged |
+  # new-accounts | all: which new links wait for the operator.
+  SHARE_MODERATION: ${SHARE_MODERATION:-flagged}
+  # Moderation letters with one-click actions; empty: none (scripts only).
+  # Needs MAIL_MODE=smtp.
+  OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+  MODERATION_AUTOPAUSE_REPORTS: ${MODERATION_AUTOPAUSE_REPORTS:-3}
+  NEW_ACCOUNT_DAYS: ${NEW_ACCOUNT_DAYS:-7}
+  NEW_ACCOUNT_MAX_LINKS: ${NEW_ACCOUNT_MAX_LINKS:-5}
   # Operator status for an external monitor; empty keeps /api/ops/status off.
   # The app key only lists BACKUP_BUCKET to report the newest dump's age.
   OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}

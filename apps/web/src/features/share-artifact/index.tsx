@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   Globe,
+  Hourglass,
   Link as LinkIcon,
   LockKeyhole,
   Send,
@@ -13,7 +14,12 @@ import {
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
-import { dateLong, kindOf, size } from "../../entities/artifact/format.ts";
+import {
+  dateLong,
+  kindOf,
+  moderationNote,
+  size,
+} from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
 
@@ -157,6 +163,12 @@ export function SharePanel({
               <LinkButton href={telegram} target="_blank" rel="noopener" className="ui-button--lg share-telegram">
                 <Send /> Отправить в Telegram
               </LinkButton>
+            )}
+            {moderationNote(a) && (
+              <p className="share-moderation" role="status">
+                <Hourglass aria-hidden="true" />
+                <span>{moderationNote(a)}</span>
+              </p>
             )}
             <p className="fine">
               Получатель видит версию {a.share!.number}. Действует до {dateLong(a.share!.expiresAt)}. Поисковикам передаётся запрет индексации.
