@@ -1,0 +1,32 @@
+# Пиратство: торренты, «бесплатно в хорошем качестве», взлом программ
+# (ст. 146 УК РФ; ст. 15.2 149-ФЗ). Пиратские сайты — в domains.txt.
+@threshold 6
+@high 10
+@pair content free 5 2
+
+2 торрент*
+2 torrent*
+3 скачать торрент
+3 смотреть онлайн бесплатно
+2 в хорошем качестве
+3 без регистрации и смс
+3 кряк
+3 крякнут*
+3 keygen
+3 взломанн* верси*
+2 repack
+3 warez
+3 активатор windows
+3 kmsauto
+
+0 фильм* | content
+0 сериал* | content
+0 мультфильм* | content
+0 книг* | content
+0 movie* | content
+0 film* | content
+
+0 бесплатно | free
+0 скачать | free
+0 free | free
+0 download | free

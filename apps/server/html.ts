@@ -2,6 +2,11 @@ import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 import {
+  fraudScore,
+  scanText,
+  type FilterResult,
+} from "./content-filter/scanner.ts";
+import {
   SCAN_INCOMPLETE,
   SECRET_AUTOCOMPLETE,
   SignalCollector,
@@ -391,7 +396,35 @@ const SHOWN_ATTRIBUTES = new Set([
   "value",
 ]);
 
-export type HtmlInspection = { profile: HtmlProfile; signals: string[] };
+// Attributes that hold an address the page links to or loads.
+const URL_ATTRIBUTES = new Set([
+  "href",
+  "src",
+  "action",
+  "formaction",
+  "poster",
+  "data",
+  "background",
+  "xlink:href",
+  "cite",
+]);
+// Text a reader cannot see: a link farm hides its links this way. Bounded
+// alternatives, matched against one style attribute at a time.
+const CONCEALING_STYLE =
+  /display\s{0,3}:\s{0,3}none|visibility\s{0,3}:\s{0,3}hidden|font-size\s{0,3}:\s{0,3}0(?![.\d])|text-indent\s{0,3}:\s{0,3}-\d{3,}|(?:left|top)\s{0,3}:\s{0,3}-\d{3,}px|opacity\s{0,3}:\s{0,3}0(?![.\d])/i;
+
+export type HtmlInspection = {
+  profile: HtmlProfile;
+  signals: string[];
+  /** The content filter's findings (docs/specs/CONTENT_FILTER.md). */
+  filter: FilterResult;
+  /** With { sample: true }: the start of the visible text, for the model. */
+  sample?: string;
+  /** With { images: true }: a few data: images of the page. */
+  images?: string[];
+  /** With { scripts: true }: the page's scripts (bounded), for the code model. */
+  scripts?: string[];
+};
 
 // A conservative heuristic, not a safety verdict: it only decides how honestly
 // the page can be shown without a runtime. Isolation comes from the CSP above.
@@ -417,20 +450,57 @@ export function inspectHtml(
   // An explicit stack, not recursion: a deeply nested page would overflow
   // the call stack. The order of visits does not matter for these checks.
   // The walk goes on after the page is found unsafe: signals still count.
-  const stack: [Node, boolean, string | undefined][] = [
-    [parse(source) as unknown as Node, false, undefined],
+  // [node, inside script/style/template, parent tag, hidden by CSS]
+  const stack: [Node, boolean, string | undefined, boolean][] = [
+    [parse(source) as unknown as Node, false, undefined, false],
   ];
+  const content = collector.content;
   while (stack.length) {
-    const [node, hidden, parent] = stack.pop()!;
+    const [node, hidden, parent, concealedAbove] = stack.pop()!;
+    let concealed = concealedAbove;
     if (node.nodeName === "#text") {
       const value = node.value ?? "";
       if (parent === "script") scanScript(value, collector);
-      else if (parent !== "style") collector.context(value);
+      else if (parent === "style") content.css(value);
+      else {
+        collector.context(value);
+        if (concealed) content.hidden(value.trim().length);
+      }
       if (!hidden && !unsafe) text.push(value);
       continue;
     }
     const tag = node.tagName?.toLowerCase();
     if (tag) {
+      const attrs = node.attrs ?? [];
+      for (const { name, value } of attrs) {
+        const attr = name.toLowerCase();
+        if (
+          attr === "hidden" ||
+          (attr === "style" && CONCEALING_STYLE.test(value))
+        )
+          concealed = true;
+      }
+      for (const { name, value } of attrs) {
+        const attr = name.toLowerCase();
+        if (attr.startsWith("on")) content.code(value);
+        if (tag === "a" && attr === "download")
+          content.download(
+            attrs.find((item) => item.name.toLowerCase() === "href")?.value ?? "",
+            value,
+          );
+        if ((tag === "a" || tag === "area") && attr === "href") {
+          content.link(value);
+          if (concealed) content.hidden(0, true);
+          if (SCRIPT_URL.test(url(value))) content.code(url(value).slice(11));
+        } else if (URL_ATTRIBUTES.has(attr)) content.url(value);
+        else if (attr === "srcset")
+          for (const candidate of value.split(",").slice(0, 50))
+            content.url(candidate.trim().split(/\s/)[0] ?? "");
+        else if (attr === "style") content.css(value);
+        else if (tag === "meta" && attr === "content") content.text(value);
+        if (tag === "img" && attr === "src" && value.startsWith("data:"))
+          content.image(value);
+      }
       if (tag === "form") unsafe = true;
       if (ACTIVE_ELEMENTS.has(tag)) interactive = true;
       for (const { name, value } of node.attrs ?? []) {
@@ -455,8 +525,10 @@ export function inspectHtml(
           tag === "meta" &&
           attr === "http-equiv" &&
           value.trim().toLowerCase() === "refresh"
-        )
+        ) {
           unsafe = true;
+          content.metaRefresh();
+        }
         if (FIELD_NAMING.has(attr)) collector.secret(value);
         if (SHOWN_ATTRIBUTES.has(attr)) collector.context(value);
         if (
@@ -472,17 +544,24 @@ export function inspectHtml(
     const inner = hidden || (tag !== undefined && HIDDEN_TEXT.has(tag));
     // Children in reverse so text is collected in document order.
     const children = node.childNodes ?? [];
-    if (node.content) stack.push([node.content, true, tag]);
+    if (node.content) stack.push([node.content, true, tag, concealed]);
     for (let i = children.length - 1; i >= 0; i--)
-      stack.push([children[i]!, inner, tag]);
+      stack.push([children[i]!, inner, tag, concealed]);
   }
   const signals = collector.list();
-  if (unsafe) return { profile: "unsupported", signals };
-  if (!interactive) return { profile: "static", signals };
+  const findings = {
+    signals,
+    filter: content.result(signals),
+    ...(content.sampleWanted ? { sample: content.sample() } : {}),
+    ...(content.imagesWanted ? { images: content.images } : {}),
+    ...(content.scriptsWanted ? { scripts: content.scripts } : {}),
+  };
+  if (unsafe) return { profile: "unsupported", ...findings };
+  if (!interactive) return { profile: "static", ...findings };
   const visible = text.join(" ").replace(/\s+/g, " ").trim();
   return {
     profile: visible.length >= 80 ? "limited" : "unsupported",
-    signals,
+    ...findings,
   };
 }
 
@@ -502,15 +581,19 @@ export function classifyHtml(source: string): HtmlProfile {
  */
 export const CLASSIFY_INLINE_BYTES = 16 * 1024;
 export const CLASSIFY_DEADLINE_MS = 2_000;
-const UNREAD: HtmlInspection = {
+export const UNREAD: HtmlInspection = {
   profile: "unsupported",
   signals: [SCAN_INCOMPLETE],
+  filter: { v: 1, hits: { fraud: fraudScore([SCAN_INCOMPLETE])! } },
 };
+export type InspectOptions = { images?: boolean; sample?: boolean; scripts?: boolean };
 export async function inspectHtmlBounded(
   source: string,
   deadlineMs = CLASSIFY_DEADLINE_MS,
+  options: InspectOptions = {},
 ): Promise<HtmlInspection> {
-  if (source.length <= CLASSIFY_INLINE_BYTES) return inspectHtml(source);
+  if (source.length <= CLASSIFY_INLINE_BYTES)
+    return inspectHtml(source, new SignalCollector(options));
   const { Worker } = await import("node:worker_threads");
   const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
     resourceLimits: { maxOldGenerationSizeMb: 256 },
@@ -526,7 +609,40 @@ export async function inspectHtmlBounded(
         clearTimeout(timer);
         resolve(UNREAD);
       });
-      worker.postMessage(source);
+      worker.postMessage({ source, options });
+    });
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/**
+ * The content filter over a plain text file, off the request thread for a
+ * large one (the same worker and deadline as a page). A text that cannot be
+ * read in time comes back with no findings and `incomplete`.
+ */
+export async function scanTextBounded(
+  source: string,
+  deadlineMs = CLASSIFY_DEADLINE_MS,
+): Promise<FilterResult & { incomplete?: true }> {
+  if (source.length <= CLASSIFY_INLINE_BYTES) return scanText(source);
+  const { Worker } = await import("node:worker_threads");
+  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
+    resourceLimits: { maxOldGenerationSizeMb: 256 },
+  });
+  const unread = { v: 1 as const, hits: {}, incomplete: true as const };
+  try {
+    return await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(unread), deadlineMs);
+      worker.once("message", (filter: FilterResult) => {
+        clearTimeout(timer);
+        resolve(filter);
+      });
+      worker.once("error", () => {
+        clearTimeout(timer);
+        resolve(unread);
+      });
+      worker.postMessage({ source, text: true });
     });
   } finally {
     await worker.terminate();
