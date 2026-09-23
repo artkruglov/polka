@@ -15,6 +15,7 @@ import { db, transaction } from "./db.ts";
 import { identity, limitAttempts, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
+import { registerEnterpriseRequests } from "./enterprise-requests.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
@@ -948,6 +949,7 @@ export async function createApp() {
   );
   registerModerationRoutes(app);
   registerCommentRoutes(app);
+  registerEnterpriseRequests(app);
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);

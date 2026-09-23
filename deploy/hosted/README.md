@@ -7,7 +7,7 @@
 | Сервис | Назначение |
 |---|---|
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
-| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 031), `deploy/runtime-grants.sql`, проверка versioned S3 |
+| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 033), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
@@ -110,7 +110,7 @@ sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' deploy/hosted/hosted.e
 cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 ```
 
-`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 031): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
+`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 033): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
 
 ## Откат
 
@@ -193,7 +193,7 @@ rm polka.dump
 | Переменная | На запуск polochka.app | Что делает |
 |---|---|---|
 | `SHARE_MODERATION` | `auto` | Какие новые ссылки ждут проверки из-за автора: `off` — никакие; `auto` — никакие, решает фильтр содержимого, доверие автоматическое, ждут только изображения новых аккаунтов, которые ещё не видела модель; `flagged` (значение по умолчанию в коде) — похожие на фишинг от недоверенного автора; `new-accounts` — любая ссылка недоверенного автора; `all` — любая ссылка аккаунта, зарегистрированного по почте |
-| `OPERATOR_EMAIL` | адрес оператора | Куда идут письма. Нужен `MAIL_MODE=smtp`. Пусто — писем нет, только скрипты |
+| `OPERATOR_EMAIL` | адрес оператора | Куда идут письма о модерации и заявки со страницы `/enterprise`. Нужен `MAIL_MODE=smtp`. Пусто — писем нет: модерация — скриптами, заявки — в таблице `enterprise_requests` |
 | `MODERATION_AUTOPAUSE_REPORTS` | `3` | Столько разных жалобщиков за 7 дней ставят ссылку на паузу. `0` — никогда |
 | `NEW_ACCOUNT_DAYS` | `7` | Сколько дней аккаунт считается новым (если оператор его не одобрил) |
 | `NEW_ACCOUNT_MAX_LINKS` | `5` | Сколько открытых ссылок у нового аккаунта. `0` — без ограничения. Срок ссылки нового аккаунта — не больше 7 дней |

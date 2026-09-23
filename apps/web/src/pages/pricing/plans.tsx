@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUpRight, Cloud, Mail, Server } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Cloud, Mail, Server } from "lucide-react";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
 
@@ -85,10 +85,15 @@ export function PricingPlans() {
           <div className="pricing-actions">
             <LinkButton
               variant="primary"
+              href="/enterprise?interest=commercial-license#request"
+            >
+              Оставить заявку <ArrowRight size={18} />
+            </LinkButton>
+            <a
               href={`mailto:${CONTACT}?subject=${encodeURIComponent("Коммерческая лицензия Полки")}`}
             >
-              Написать <Mail size={18} />
-            </LinkButton>
+              Написать
+            </a>
             <a
               href={`${SOURCE_URL}/blob/main/COMMERCIAL.md`}
               target="_blank"
@@ -99,6 +104,19 @@ export function PricingPlans() {
           </div>
         </article>
       </div>
+
+      <section className="pricing-company" aria-labelledby="pricing-company-title">
+        <div>
+          <h2 id="pricing-company-title">Полка для команды</h2>
+          <p>
+            Что получает компания, как устроены данные и доступ, ответы на
+            частые вопросы и форма заявки.
+          </p>
+        </div>
+        <LinkButton variant="primary" href="/enterprise">
+          Для компаний <ArrowRight size={18} />
+        </LinkButton>
+      </section>
 
       <p className="pricing-fine">
         Версии до v0.1.0-rc.5 включительно остаются доступны и на условиях
