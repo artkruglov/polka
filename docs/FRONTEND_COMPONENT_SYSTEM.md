@@ -16,6 +16,8 @@
 | features/import-url | форма, очередь, восстановление задания | bring |
 | features/capture-file, share-artifact, upload-artifact | отдельные пользовательские действия | страницы и reader |
 | features/paste-code | вставка кода артефакта из чата; квитанцию (`SavedWork` из capture-file) подставляет страница | bring, provider-guide через bring |
+| features/first-run | чек-лист первых шагов (агент, работа, ссылка) и сохранение страницы-примера; CSS подключается из main.tsx, потому что `FirstRunSteps` рендерят Node-тесты | shelf, start |
+| entities/onboarding | вывод шагов из подключений и списка работ (`steps.ts`), фраза и подсказки клиентов, страница-пример, скрытие в localStorage | features/first-run, shelf |
 | widgets/navigation | единая глобальная навигация desktop/mobile | страницы |
 | widgets/shelf-navigation | папки и корзина; одинаковые пункты на desktop/mobile | app/workspace |
 | widgets/artifact-reader, artifact-preview | материал, версии и изолированный просмотр | app/workspace, recipient |

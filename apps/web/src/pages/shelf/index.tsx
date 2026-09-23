@@ -20,10 +20,13 @@ import {
   X,
 } from "lucide-react";
 import type {
+  Account,
   Artifact,
   Folder,
 } from "../../../../../packages/contracts/index.ts";
 import { Preview, TextCover } from "../../widgets/artifact-preview/index.ts";
+import { FirstRunChecklist } from "../../features/first-run/index.tsx";
+import { readDismissed } from "../../entities/onboarding/dismissal.ts";
 import {
   accessLabel,
   categoryLabel,
@@ -38,6 +41,7 @@ import {
 export type ShelfSort = "newest" | "oldest" | "title";
 export type CardAction = "share" | "metadata" | "trash";
 type Props = {
+  account: Account;
   activeFolder: Folder | undefined;
   folderId: string | null;
   items: Artifact[];
@@ -54,6 +58,8 @@ type Props = {
   setPanel: (panel: "upload" | "folder") => void;
   open: (id: string, panel?: CardAction) => void;
   loadMore: () => void;
+  /** The first-run example was saved: reload the list. */
+  onSaved: () => void;
 };
 
 const categories: Category[] = ["pages", "documents", "images", "other"];
@@ -126,6 +132,7 @@ function CoverLink({
 }
 
 export function ShelfPage({
+  account,
   activeFolder,
   folderId,
   items,
@@ -142,9 +149,14 @@ export function ShelfPage({
   setPanel,
   open,
   loadMore,
+  onSaved,
 }: Props) {
   const [category, setCategory] = useState<Category | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const libraryHeading = useRef<HTMLHeadingElement>(null);
+  // Hidden only in this browser; the steps themselves come from the API.
+  const [firstRunHidden, setFirstRunHidden] = useState(() => readDismissed(account.id));
+  const firstRun = !activeFolder && !query && !firstRunHidden;
   useEffect(() => {
     if (focusSearch) searchRef.current?.focus();
   }, [focusSearch]);
@@ -177,6 +189,19 @@ export function ShelfPage({
             </IconButton>
           </div>
           <h1>Сохраняйте. Делитесь. Возвращайтесь.</h1>
+          {firstRun ? (
+            <FirstRunChecklist
+              account={account}
+              works={{ items, loading }}
+              variant="card"
+              onSaved={onSaved}
+              onShare={(work) => open(work.id, "share")}
+              onDismiss={() => {
+                setFirstRunHidden(true);
+                requestAnimationFrame(() => libraryHeading.current?.focus());
+              }}
+            />
+          ) : (
           <form
             className="shelf-hero-entry"
             action="/bring"
@@ -208,13 +233,16 @@ export function ShelfPage({
               <span>Агент сохранит работу на полку, когда вы попросите</span>
             </div>
           </form>
-          <p className="shelf-hero-fine">
-            Или{" "}
-            <button type="button" className="text-button" onClick={() => setPanel("upload")}>
-              загрузите файл с компьютера
-            </button>
-            : HTML, текст или изображение до 5 МБ.
-          </p>
+          )}
+          {!firstRun && (
+            <p className="shelf-hero-fine">
+              Или{" "}
+              <button type="button" className="text-button" onClick={() => setPanel("upload")}>
+                загрузите файл с компьютера
+              </button>
+              : HTML, текст или изображение до 5 МБ.
+            </p>
+          )}
         </section>
       )}
 
@@ -224,7 +252,9 @@ export function ShelfPage({
         aria-busy={loading}
       >
         <div className="shelf-library-head">
-          <h2>{query ? "Результаты поиска" : activeFolder ? "В этой папке" : "Моя полка"}</h2>
+          <h2 ref={libraryHeading} tabIndex={-1}>
+            {query ? "Результаты поиска" : activeFolder ? "В этой папке" : "Моя полка"}
+          </h2>
           <div className="shelf-tools">
             <label className="ui-search ui-search--quiet shelf-search">
               <Search aria-hidden="true" />
@@ -349,6 +379,11 @@ export function ShelfPage({
               </p>
             )}
           </>
+        ) : firstRun ? (
+          <p className="shelf-empty-quiet" role="note">
+            Здесь появятся ваши работы: страницы, отчёты, прототипы и изображения. Каждая хранится
+            версиями, а кто может её открыть, решаете вы. Первые шаги — выше.
+          </p>
         ) : (
           <div className="shelf-empty">
             <div className="empty-icon">{query ? <Search /> : <FolderIcon />}</div>
@@ -357,14 +392,14 @@ export function ShelfPage({
                 ? "Ничего не нашлось"
                 : activeFolder
                   ? "В этой папке пока пусто"
-                  : "Сохраните то, к чему хочется вернуться"}
+                  : "На полке пока пусто"}
             </h2>
             <p>
               {query
                 ? "Попробуйте другое название."
                 : activeFolder
                   ? "Загрузите файл сюда или перенесите сохранённую работу через её меню «Название и папка»."
-                  : "Отчёт, заметку или страницу из чата. Она останется на вашей полке вместе с новыми версиями, а ссылку вы включите сами."}
+                  : "Здесь появятся страницы, отчёты и прототипы, которые сохраните вы или ваш агент. Каждая хранится версиями; сначала её видите только вы, ссылку включаете сами."}
             </p>
             {query ? (
               <Button onClick={() => setQuery("")}>Сбросить поиск</Button>
