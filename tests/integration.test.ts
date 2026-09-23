@@ -827,6 +827,7 @@ test("Frontend rebuild serves newly created assets; missing assets never return 
       "/privacy",
       "/terms",
       "/pricing",
+      "/enterprise",
     ])
       assert.match((await web.inject(route)).body, /Polka shell/, route);
   } finally {
