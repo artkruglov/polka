@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { HTML_PROFILES, uuid } from "../../packages/contracts/index.ts";
 import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
 import { reviseWithEdits } from "./agent-edits.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
-import { uuid } from "../../packages/contracts/index.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { artifactStatusForAgent } from "./agent-management.ts";
@@ -40,7 +40,66 @@ const editsBodySchema = z
   })
   .strict();
 export const PUBLISH_API_LIMITS = { perIp: 300, perConnection: 120 };
-const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
+export const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
+
+/**
+ * Response shapes. /openapi.json is generated from these and from the input
+ * schemas the routes parse; tests/publish-api.test.ts checks real responses
+ * against them, so the published spec cannot drift from the routes.
+ */
+export const problemSchema = z
+  .object({ code: z.string(), message: z.string() })
+  .strict();
+
+export const publishResponseSchema = z
+  .object({
+    artifactId: uuid,
+    revisionId: uuid,
+    state: z.enum(["shared", "saved"]),
+    url: z.string().url().nullable(),
+    expiresAt: z.iso.datetime().nullable(),
+    shelfUrl: z.string().url(),
+    interactiveReady: z.boolean(),
+    scriptsRunForRecipients: z.boolean(),
+    moderation: z.enum(["held", "paused"]).optional(),
+    moderationMessage: z.string().optional(),
+    expiresNote: z.string().optional(),
+    linkUnavailableReason: z.string().optional(),
+    interactiveUnavailableReason: z.string().optional(),
+  })
+  .strict();
+
+export const statusResponseSchema = z
+  .object({
+    id: uuid,
+    title: z.string(),
+    folderId: uuid.nullable(),
+    updatedAt: z.iso.datetime(),
+    trashedAt: z.iso.datetime().nullable(),
+    lifecycleVersion: z.number().int(),
+    revision: z
+      .object({
+        id: uuid,
+        number: z.number().int(),
+        filename: z.string(),
+        mime: z.string(),
+        size: z.number().int(),
+        totalSize: z.number().int(),
+        storageKind: z.enum(["single", "bundle"]),
+        htmlProfile: z.enum(HTML_PROFILES).nullable(),
+        inlineBuild: z
+          .object({
+            state: z.enum(["pending", "ready", "unsupported", "failed"]),
+            runtimeProfile: z.string().nullable(),
+          })
+          .strict()
+          .nullable(),
+        createdAt: z.iso.datetime(),
+      })
+      .strict(),
+    shelfUrl: z.string().url(),
+  })
+  .strict();
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {

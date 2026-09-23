@@ -5,6 +5,14 @@
 .landing-hero h1 { margin-bottom: 22px; font-size: clamp(40px, 6.2vw, 84px); line-height: 1; letter-spacing: -.05em; overflow-wrap: anywhere; }
 .landing-hero h1 span { color: var(--accent); }
 .landing-hero > p { max-width: 640px; margin-bottom: 32px; color: var(--muted); font-size: clamp(16px, 1.4vw, 20px); line-height: 1.55; }
+/* The one phrase for an agent, first: copy it, paste it in the chat. */
+.landing-agent { display: grid; gap: 10px; max-width: 760px; margin-bottom: 28px; padding: 18px 20px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--soft-3); }
+.landing-agent-title { color: var(--ink); font-size: var(--text-md); font-weight: 600; letter-spacing: var(--tracking-snug); }
+.landing-agent-phrase { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.landing-agent-phrase > code { flex: 1 1 280px; min-width: 0; padding: 11px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 500 var(--text-lg) / 1.4 var(--font-sans); color: var(--ink); overflow-wrap: anywhere; user-select: all; }
+.landing-agent-phrase .ui-button { min-height: 46px; }
+.landing-agent-phrase .field-note { flex-basis: 100%; }
+.landing-agent > small { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
 .landing-paths { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .landing-paths .ui-button { min-height: 52px; padding: 12px 22px; font-size: var(--text-lg); border-radius: var(--radius-md); }
 .landing-paths .ui-button svg { width: 20px; height: 20px; }
@@ -46,6 +54,9 @@
   .landing-hero h1 { font-size: clamp(36px, 11vw, 44px); }
   .landing-hero > p { font-size: var(--text-lg); }
   .landing-paths { flex-direction: column; align-items: stretch; }
+  .landing-agent { padding: 16px 16px 14px; margin-bottom: 22px; }
+  .landing-agent-phrase > code { font-size: var(--text-md); }
+  .landing-agent-phrase .ui-button { width: 100%; }
   .landing-entry { flex-wrap: wrap; padding: 10px; }
   .landing-entry > svg { display: none; }
   .landing-entry .ui-button { width: 100%; }
