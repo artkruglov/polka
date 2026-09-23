@@ -5,6 +5,7 @@ import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
 import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
 import { ArtifactReader } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
+import { CompareRevisions } from "../../features/compare-revisions/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Maximize2, Menu, Share2 } from "lucide-react";
@@ -437,6 +438,11 @@ export function App() {
                 setViewed={setViewed}
                 setPanel={setPanel}
                 stageRef={stageRef}
+                compare={
+                  history ? (
+                    <CompareRevisions revisions={revisions} shown={shown} />
+                  ) : null
+                }
                 onDownload={() => {
                   void downloadRevision(shown).catch((e) =>
                     setError(
