@@ -483,6 +483,7 @@ test("official client captures, prepares, shares, revises, isolates connections,
     [
       "polka_capture",
       "polka_context",
+      "polka_note",
       "polka_prepare_preview",
       "polka_publish",
       "polka_resolve_comment",
