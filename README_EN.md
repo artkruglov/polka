@@ -166,7 +166,7 @@ A deployment is one Docker image plus external PostgreSQL and versioned S3 stora
 | Your code changes | — | If people use your modified Полка, publish them under the AGPL-3.0 | May stay private |
 | Support and SLA | — | — | By contract |
 
-More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). There are no team accounts or SSO/SCIM yet ([roadmap](docs/roadmap.md)).
+More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). Sign-in through a company IdP (OpenID Connect), Yandex ID and VK ID, and template-library access by e-mail domain already work; there are no team accounts, SAML or SCIM yet ([roadmap](docs/roadmap.md)).
 
 ## Limitations
 
@@ -174,7 +174,7 @@ More on the [For companies](https://polochka.app/enterprise) page and in [COMMER
 - **Interactive mode needs a separate viewer domain.** Without one (`HTML_LIVE_MODE=disabled`), recipients see a static page with scripts off.
 - **Claude/ChatGPT links can't be imported.** Save through the connector, download the file or paste the code.
 - **Downloaded copies can't be revoked.** Revoking a link closes it, but it can't delete what a recipient already downloaded.
-- **Sign-in is by e-mailed code** (SMTP required) or by an operator-issued password. Sign-up can be open, limited to listed addresses, or capped per day. There's no SSO/SCIM.
+- **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. There's no SAML or SCIM.
 - **URL import** (`URL_IMPORT_ENABLED`) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
 
 More: [docs/faq.md](docs/faq.md) (Russian).
