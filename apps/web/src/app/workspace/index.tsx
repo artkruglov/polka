@@ -426,7 +426,7 @@ export function App() {
                   className="topbar-comments"
                   aria-pressed={workComments.open}
                   aria-controls="work-comments"
-                  aria-label={`Комментарии: ${workComments.count}${workComments.unread ? `, новых ${workComments.unread}` : ""}`}
+                  aria-label={`${workComments.label}: ${workComments.count}${workComments.unread ? `, новых ${workComments.unread}` : ""}`}
                   onClick={workComments.onToggle}
                 >
                   <MessageCircle /> {workComments.count}
@@ -557,7 +557,7 @@ export function App() {
         </main>
       </div>
       {selected && workComments.available && workComments.open && (
-        <aside id="work-comments" className="work-comments" aria-label="Комментарии">
+        <aside id="work-comments" className="work-comments" aria-label={workComments.label}>
           {workComments.panel}
         </aside>
       )}

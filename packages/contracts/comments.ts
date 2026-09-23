@@ -21,6 +21,14 @@ export const COMMENT_MAIL_EXCERPT = 300;
 export const ANCHOR_CONTEXT_CHARS = 32;
 export const ANCHOR_EXACT_MAX = 2000;
 
+/**
+ * The installation's comment mode (COMMENTS_MODE): on — recipients comment
+ * and react; owner-notes — only the work's owner (and their agent) writes,
+ * recipients read; off — no discussions.
+ */
+export const COMMENTS_MODES = ["on", "owner-notes", "off"] as const;
+export type CommentsMode = (typeof COMMENTS_MODES)[number];
+
 export const REACTIONS = ["👍", "👎", "🎉", "🤔", "❤️", "👀", "✅"] as const;
 export type Reaction = (typeof REACTIONS)[number];
 
@@ -168,6 +176,8 @@ export type ReactionGroup = {
 };
 
 export type ShareDiscussion = {
+  /** The installation's mode; owner-notes: only the owner writes. */
+  mode: CommentsMode;
   shareId: string;
   /** The version the link shows now; anchors of other versions may be lost. */
   revisionId: string;
@@ -193,6 +203,7 @@ export type SharedComments = ShareDiscussion & { viewer: CommentViewer };
 
 /** What the owner gets on the work page: every link of the work. */
 export type WorkComments = {
+  mode: CommentsMode;
   artifactId: string;
   unread: number;
   shares: ShareDiscussion[];

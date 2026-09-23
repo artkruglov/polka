@@ -261,8 +261,11 @@ test("/enterprise: value, deployment, questions and the request form", () => {
     "SHA-256",
   ])
     assert.ok(html.includes(text), text);
-  // SSO and automatic moderation are not on main: said, not promised.
-  assert.ok((html.match(/в разработке/g) ?? []).length >= 2);
+  // Automatic moderation is not on main: said, not promised. SSO works
+  // (OpenID Connect, Яндекс ID, domain access), SAML and SCIM do not.
+  assert.ok((html.match(/в разработке/g) ?? []).length >= 1);
+  assert.ok(html.includes("OpenID Connect"));
+  assert.ok(html.includes("SAML и SCIM пока"));
   assert.ok(html.includes('id="deploy"'));
   assert.ok(html.includes('id="request"'));
   const questions = (html.match(/<details>/g) ?? []).length;
