@@ -154,7 +154,8 @@ test("runtime has exact current grants and denied administrative paths", async (
   const privileges = (
     await client.query(
       `SELECT table_name,privilege_type FROM information_schema.role_table_grants
-       WHERE grantee=current_user AND table_name IN ('comments','comment_reactions','account_identities')
+       WHERE grantee=current_user
+         AND table_name IN ('comments','comment_reactions','account_identities','enterprise_requests')
        ORDER BY table_name,privilege_type`,
     )
   ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
@@ -169,7 +170,31 @@ test("runtime has exact current grants and denied administrative paths", async (
     "comments:INSERT",
     "comments:SELECT",
     "comments:UPDATE",
+    "enterprise_requests:DELETE",
+    "enterprise_requests:INSERT",
+    "enterprise_requests:SELECT",
+    "enterprise_requests:UPDATE",
   ]);
+  await client.query("BEGIN");
+  try {
+    // Requests from /enterprise (033): the form, the letter mark, maintenance.
+    const requestId = randomUUID();
+    await client.query(
+      `INSERT INTO enterprise_requests(id,idempotency_key,name,company,email,team_size,interest,comment)
+       VALUES($1,$2,'Имя','Компания','a@example.test','11-50','cloud',NULL)`,
+      [requestId, randomUUID()],
+    );
+    await client.query(
+      "UPDATE enterprise_requests SET notified_at=clock_timestamp() WHERE id=$1",
+      [requestId],
+    );
+    await client.query(
+      "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
+    );
+    await denied("TRUNCATE TABLE enterprise_requests");
+  } finally {
+    await client.query("ROLLBACK");
+  }
   await client.query("BEGIN");
   try {
     await denied("INSERT INTO schema_migrations(version) VALUES(1000)");

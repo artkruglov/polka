@@ -8,10 +8,10 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete schema 32 set (031 from a concurrent branch optional)", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 32);
-  // 031_content_filter.sql lands from a concurrent branch; until both are on
-  // main the catalog is 1..32 with or without 31, never with another gap.
+test("migration catalog is the complete schema 33 set (031 from a concurrent branch optional)", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 33);
+  // 031_content_filter.sql lands from a concurrent branch; until it is on
+  // main the catalog is 1..33 with or without it, never with another gap.
   const with31 = EXPECTED_MIGRATION_VERSIONS.includes(31);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
