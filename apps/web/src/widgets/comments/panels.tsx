@@ -30,6 +30,8 @@ function useWide() {
 /** What a page places: the toggle's count, the panel, the frame hook, the floating button. */
 export type CommentsPlacement = {
   available: boolean;
+  /** «Комментарии», «Заметки» (owner) or «Заметки автора» (recipient). */
+  label: string;
   count: number;
   open: boolean;
   onToggle: () => void;
@@ -71,6 +73,9 @@ export function useSharedComments({
   const [open, setOpen] = useOpenState(wide, data ? count : null);
   const [pending, setPending] = useState<PendingComment>(null);
   const signedIn = !!data?.viewer.signedIn;
+  // owner-notes: a recipient reads the owner's notes and writes nothing.
+  const notes = data?.mode === "owner-notes";
+  const readOnly = notes && !data?.viewer.owner;
   useEffect(() => {
     if (data) bridge.setAnchors(anchorsOf(data));
   });
@@ -103,6 +108,7 @@ export function useSharedComments({
       onClose={() => setOpen(false)}
       viewer={data.viewer}
       onSettings={actions.settings}
+      readOnly={readOnly}
     />
   ) : (
     <p className="comments-empty" role="status">
@@ -110,18 +116,25 @@ export function useSharedComments({
     </p>
   );
   return {
-    available: enabled && !unavailable,
+    // A recipient with nothing to read gets no toggle at all.
+    available:
+      enabled &&
+      !unavailable &&
+      data?.mode !== "off" &&
+      !(readOnly && !data?.threads.length),
+    label: notes ? (readOnly ? "Заметки автора" : "Заметки") : "Комментарии",
     count,
     open,
     onToggle: () => setOpen(!open),
     panel,
     overlay: bridge.overlay,
     floating:
-      enabled && !unavailable && bridge.state.selection ? (
+      enabled && !unavailable && !readOnly && bridge.state.selection ? (
         <SelectionButton
           selection={bridge.state.selection}
           onComment={comment}
           onReact={react}
+          notes={notes}
         />
       ) : null,
   };
@@ -171,6 +184,7 @@ export function useWorkComments({
     if (bridge.state.focus) setOpen(true);
   }, [bridge.state.focus, setOpen]);
   const writable = share?.state === "active";
+  const notes = data?.mode === "owner-notes";
   const comment = (anchor: CommentAnchor) => {
     setPending({ anchor });
     setOpen(true);
@@ -225,12 +239,15 @@ export function useWorkComments({
     ) : (
       <p className="comments-empty" role="status">
         {data
-          ? "Комментарии появятся, когда вы отправите ссылку: получатели выделяют фрагмент и пишут замечание."
+          ? notes
+            ? "Заметки живут на ссылке: отправьте ссылку, затем выделите фрагмент и оставьте заметку — получатели её прочитают."
+            : "Комментарии появятся, когда вы отправите ссылку: получатели выделяют фрагмент и пишут замечание."
           : "Загружаем комментарии…"}
       </p>
     );
   return {
-    available: enabled,
+    available: enabled && data?.mode !== "off",
+    label: notes ? "Заметки" : "Комментарии",
     count,
     unread: data?.unread ?? 0,
     open,
@@ -246,6 +263,7 @@ export function useWorkComments({
             bridge.clearSelection();
             void actions?.react(emoji, anchor).catch(() => {});
           }}
+          notes={notes}
         />
       ) : null,
   };

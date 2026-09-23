@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations WHERE version NOT IN (31,32))<>31
+     OR (SELECT count(*) FROM public.schema_migrations WHERE version<>31)<>32
      OR (SELECT min(version) FROM public.schema_migrations)<>1
      OR (SELECT max(version) FROM public.schema_migrations)<>33 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033 (031 and 032 optional)';
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033 (031 optional)';
   END IF;
 END $$;
 
@@ -139,5 +139,8 @@ GRANT SELECT, INSERT, DELETE ON TABLE public.comment_reactions TO :"runtime_role
 -- Requests from /enterprise (033): the application records a request and marks
 -- the operator letter sent; maintenance deletes requests older than a year.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.enterprise_requests TO :"runtime_role";
+-- Sign-in providers (032): the application links identities, stamps their
+-- last use and unlinks them from settings. Erasure is a protected trigger.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.account_identities TO :"runtime_role";
 COMMIT;
 \echo Runtime grants installed for the reviewed schema through migration 033

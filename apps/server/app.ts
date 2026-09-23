@@ -19,6 +19,8 @@ import { registerEnterpriseRequests } from "./enterprise-requests.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
+import { registerSignInRoutes } from "./sign-in-routes.ts";
+import { PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
   isStaticSingleFileBundle,
@@ -206,11 +208,14 @@ export async function createApp() {
   const id = (req: any) => uuid.parse(req.params.id);
   // The shell asks for the comment overlay when it issues a view grant; the
   // flag lives in the grant, never in a URL anyone could open.
+  // COMMENTS_MODE=off: no overlay at all, whatever the shell asks.
   const withComments = (req: any) =>
-    viewOptions.parse(req.body ?? {}).comments === true;
+    viewOptions.parse(req.body ?? {}).comments === true &&
+    config.COMMENTS_MODE !== "off";
   registerUrlImports(app, identity);
   registerAgentContext(app, identity);
   registerTemplateLibraryRoutes(app, identity);
+  registerSignInRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
   app.get("/connect", async (_req, reply) =>
     reply
@@ -246,6 +251,15 @@ export async function createApp() {
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,
     emailSignup: config.EMAIL_SIGNUP,
+    // Where a new shelf may open by an emailed code: "any" or the domains.
+    emailSignupDomains: config.EMAIL_SIGNUP_DOMAINS,
+    // Existing accounts outside those domains still get codes ("any").
+    emailLoginDomains: config.EMAIL_LOGIN_DOMAINS,
+    signInProviders: config.SIGN_IN_PROVIDERS.map((id) => ({
+      id,
+      name: PROVIDER_NAMES[id](),
+    })),
+    commentsMode: config.COMMENTS_MODE,
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));

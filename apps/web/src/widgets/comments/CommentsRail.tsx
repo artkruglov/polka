@@ -125,6 +125,10 @@ export function CommentsRail({
 }: Props) {
   const [showResolved, setShowResolved] = useState(false);
   const [active, setActive] = useState<string | null>(null);
+  // COMMENTS_MODE=owner-notes: the owner's notes, read-only for recipients,
+  // no reactions (docs/specs/SIGN_IN_PROVIDERS.md § 4).
+  const notes = discussion.mode === "owner-notes";
+  const canReact = discussion.mode === "on";
   const [error, setError] = useState("");
   const state = bridge?.state;
   const resolvedCount = discussion.threads.filter((t) => t.resolvedAt).length;
@@ -299,6 +303,7 @@ export function CommentsRail({
         onActivate={() => focusThread(thread.id)}
         signedIn={signedIn}
         readOnly={readOnly}
+        canReact={canReact}
         actions={actions}
         run={run}
         onReport={onReport}
@@ -318,14 +323,15 @@ export function CommentsRail({
     <section className="comments" data-layout={layout} aria-label="Обсуждение">
       <header className="comments-head">
         <h2>
-          Комментарии <span className="comments-count">{count}</span>
+          {notes ? (viewer?.owner ? "Заметки" : "Заметки автора") : "Комментарии"}{" "}
+          <span className="comments-count">{count}</span>
         </h2>
         {!readOnly && (
           <Button
             variant="quiet"
             className="comments-new"
             onClick={() => onPendingChange({ anchor: null })}
-            title="Комментарий ко всей работе"
+            title={notes ? "Заметка ко всей работе" : "Комментарий ко всей работе"}
           >
             <MessageSquarePlus /> <span>Ко всей работе</span>
           </Button>
@@ -354,7 +360,11 @@ export function CommentsRail({
       )}
       {items.length === 0 && (
         <p className="comments-empty">
-          {readOnly
+          {notes
+            ? readOnly
+              ? "Автор пока не оставил заметок."
+              : "Выделите фрагмент текста, чтобы оставить заметку, или напишите заметку ко всей работе. Получатели ссылки читают заметки, но не отвечают на них."
+            : readOnly
             ? "Здесь пока нет комментариев."
             : state?.ready
               ? "Выделите фрагмент текста, чтобы прокомментировать его, или оставьте комментарий ко всей работе."
@@ -531,11 +541,11 @@ function Composer({
     return (
       <Tag ref={cardRef as any} style={style} className="comment-card comment-card--composer">
         {anchor && <blockquote className="comment-quote">{quote(anchor.exact)}</blockquote>}
-        <p className="comment-signin">Войдите по почте, чтобы оставить комментарий.</p>
+        <p className="comment-signin">Войдите, чтобы оставить комментарий.</p>
         <div className="comment-actions">
           {onSignIn && (
             <Button variant="primary" onClick={onSignIn}>
-              <LogIn /> Войти по почте
+              <LogIn /> Войти
             </Button>
           )}
           <Button variant="quiet" onClick={onCancel}>
@@ -646,6 +656,7 @@ function ThreadCard({
   onActivate,
   signedIn,
   readOnly,
+  canReact,
   actions,
   run,
   onReport,
@@ -653,6 +664,7 @@ function ThreadCard({
   cardRef,
   style,
 }: {
+  canReact: boolean;
   thread: CommentThread;
   reactions: ReactionGroup[];
   missing: string | null;
@@ -696,7 +708,7 @@ function ThreadCard({
               <CornerDownRight /> Ответить
             </Button>
           )}
-          {root && thread.anchor && !readOnly && !thread.deleted && (
+          {root && thread.anchor && canReact && !readOnly && !thread.deleted && (
             <Button
               variant="quiet"
               aria-label="Реакция"

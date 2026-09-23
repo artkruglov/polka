@@ -3,14 +3,20 @@
 // polka_resolve_comment (scope revise). Same services as the owner's page;
 // no share secrets, addresses or author accounts are returned.
 import { z } from "zod";
-import type {
-  CommentThread,
-  CommentView,
-  ReactionGroup,
+import {
+  anchorSchema,
+  commentBody,
+  commentName,
+  type CommentThread,
+  type CommentView,
+  type ReactionGroup,
 } from "../../packages/contracts/comments.ts";
 import { uuid } from "../../packages/contracts/index.ts";
 import {
   anchorSignature,
+  commentsMode,
+  createOwnerNoteInTransaction,
+  dispatchCommentNotices,
   resolveCommentInTransaction,
   workCommentsInTransaction,
 } from "./comments.ts";
@@ -60,6 +66,9 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
       input.artifactId,
     ]);
     return {
+      // on: recipients comment; owner-notes: only the owner (and you) write
+      // notes that recipients read; off: no discussions.
+      mode: work.mode,
       artifactId: work.artifactId,
       latestRevisionId: artifact.latest_revision_id as string,
       shares: work.shares.map((share) => ({
@@ -89,6 +98,55 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
       })),
     };
   });
+}
+
+export const agentNoteInputSchema = z
+  .object({
+    artifactId: uuid,
+    /** The link the note belongs to; the newest open link when omitted. */
+    shareId: uuid.optional(),
+    body: commentBody,
+    anchor: anchorSchema.nullable().optional(),
+    parentId: uuid.optional(),
+    /** The owner's name under notes, needed once if never chosen. */
+    displayName: commentName.optional(),
+  })
+  .strict()
+  .refine((value) => !(value.parentId && value.anchor), {
+    message: "A reply has no quote of its own",
+  });
+
+/**
+ * polka_note (scope revise): the owner's agent writes a note — an anchored
+ * remark on a fragment or on the whole work — that the link's recipients
+ * read. In COMMENTS_MODE=on it is an ordinary comment of the owner.
+ */
+export async function noteFromAgent(actor: ServiceActor, raw: unknown) {
+  const input = agentNoteInputSchema.parse(raw);
+  const { artifactId, shareId, ...note } = input;
+  const result = await withServiceActorTransaction(
+    actor,
+    "revise",
+    (c, verified) =>
+      createOwnerNoteInTransaction(
+        c,
+        {
+          id: verified.accountId,
+          tenant: verified.tenantId,
+          connectionId: verified.connectionId,
+        },
+        artifactId,
+        shareId,
+        note,
+      ),
+  );
+  void dispatchCommentNotices(result.notices);
+  return {
+    artifactId,
+    shareId: result.shareId,
+    commentId: result.id,
+    mode: commentsMode(),
+  };
 }
 
 export async function resolveCommentFromAgent(
