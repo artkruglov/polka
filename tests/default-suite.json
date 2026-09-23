@@ -71,5 +71,8 @@
   "tests/onboarding-first-run.test.ts",
   "tests/service-auth.test.ts",
   "tests/moderation.test.ts",
-  "tests/abuse-protection.test.ts"
+  "tests/abuse-protection.test.ts",
+  "tests/line-diff.test.ts",
+  "tests/compare-revisions.test.ts",
+  "tests/link-preview.test.ts"
 ]

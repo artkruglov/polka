@@ -1,4 +1,5 @@
 import { Button } from "../../shared/ui/controls.tsx";
+import { CircleStop, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
@@ -432,7 +433,11 @@ export function LivePreview({
         className={`html-preview${expanded ? " html-preview-expanded" : ""}`}
         ref={expandedContainer}
       >
-        <div className="html-preview-note html-preview-toolbar">
+        {/* A recipient's toolbar stays one row on a phone: the buttons keep
+            their icons and accessible names, the words show from 761px. */}
+        <div
+          className={`html-preview-note html-preview-toolbar${grant ? " html-preview-toolbar--compact" : ""}`}
+        >
           <span title="Код страницы выполняется в изолированной песочнице на отдельном домене, без сети. Не вводите здесь конфиденциальные данные.">
             {isLive(capability) ? modeLabel[capability] : ""}
           </span>{" "}
@@ -440,25 +445,34 @@ export function LivePreview({
             type="button"
             variant="quiet"
             ref={collapseButton}
+            aria-label={expanded ? "Свернуть" : "Развернуть"}
             onClick={() => setExpanded((value) => !value)}
           >
-            {expanded ? "Свернуть" : "Развернуть"}
+            {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+            <span className="html-preview-toolbar-label">
+              {expanded ? "Свернуть" : "Развернуть"}
+            </span>
           </Button>
           <Button
             type="button"
             variant="quiet"
             onClick={stop}
+            aria-label="Остановить"
             title="Остановить и показать сохранённую статичную версию"
           >
-            Остановить
+            <CircleStop aria-hidden="true" />
+            <span className="html-preview-toolbar-label">Остановить</span>
           </Button>
           {grant && (
             <Button
               type="button"
               variant="quiet"
+              aria-label="Обновить доступ"
+              title="Обновить доступ к просмотру"
               onClick={() => location.reload()}
             >
-              Обновить доступ
+              <RotateCw aria-hidden="true" />
+              <span className="html-preview-toolbar-label">Обновить доступ</span>
             </Button>
           )}
         </div>
