@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// External check of a running installation, for a scheduled CI job: the app
-// answers, the viewer domain answers over TLS, neither certificate is close to
-// expiry, and (with OPS_STATUS_TOKEN) the operator status is green. Exits 1
-// when anything is wrong, so the CI failure notification is the alert.
+// External check of a running installation, to run on a schedule from a
+// machine outside it: the app answers, the viewer domain answers over TLS,
+// neither certificate is close to expiry, and (with OPS_STATUS_TOKEN) the
+// operator status is green. Exits 1 when anything is wrong.
 //
-// The job log of a public repository is public: print only check names and
-// ok/fail, never status details or response bodies.
+// Output may land in shared logs: print only check names and ok/fail, never
+// status details or response bodies.
 //
 // Env: APP_ORIGIN (required), VIEWER_ORIGIN, OPS_STATUS_TOKEN.
 import { connect } from "node:tls";
