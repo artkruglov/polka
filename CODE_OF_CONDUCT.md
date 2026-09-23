@@ -1,6 +1,6 @@
 # Кодекс поведения / Code of Conduct
 
-Проект Полка следует Contributor Covenant 2.1. Ниже приведён официальный английский текст. Коротко: уважайте других участников, не допускайте оскорблений и преследований, а о нарушениях сообщайте приватно способом, описанным в разделе «Enforcement».
+Проект Полка следует Contributor Covenant 2.1. Ниже приведён официальный английский текст. Коротко: уважайте других участников, не допускайте оскорблений и преследований, а о нарушениях сообщайте приватно на hello@polochka.app или через приватный отчёт на GitHub (раздел «Enforcement»).
 
 Полка follows the Contributor Covenant, version 2.1, reproduced below.
 
@@ -63,8 +63,8 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement privately through
-GitHub: open a private report at
+reported to the community leaders responsible for enforcement at
+<hello@polochka.app>, or privately through GitHub: open a private report at
 <https://github.com/artkruglov/polka/security/advisories/new> and start its title
 with "Code of conduct". If a public discussion is appropriate, you may instead
 open an issue in the repository.
