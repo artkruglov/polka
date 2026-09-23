@@ -29,6 +29,7 @@ import {
   authorStanding,
   decideModeration,
 } from "../apps/server/share-moderation.ts";
+import { publishResponseSchema } from "../apps/server/publish-api.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
@@ -581,6 +582,7 @@ test("agents are told when a link waits, and a new account's link is shortened t
   });
   assert.equal(publish.statusCode, 200, publish.body);
   const body = publish.json();
+  publishResponseSchema.parse(body);
   assert.equal(body.state, "shared");
   assert.equal(body.moderation, "held");
   assert.match(body.moderationMessage, /на проверке у модератора Полки/);

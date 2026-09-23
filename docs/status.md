@@ -19,6 +19,7 @@
 | MCP для Claude Code и Codex | работает | Одной командой через OAuth: Codex CLI 0.153.4 проверен на polochka.app 23.09.2026 (вход и вызов `polka_context`); Claude Code — команда добавлена, вход не проверен. По токену — для остальных клиентов |
 | Коннектор Claude.ai / ChatGPT (OAuth 2.1, `polka_publish`) | работает | Покрыт интеграционными тестами. Claude.ai: сохранение и ссылка проверены 22.09.2026; отзыв подключения и ChatGPT ещё не проверены ([приёмка](MCP_CONNECTOR.md#приёмка-после-выкладки)) |
 | HTTP API `POST /api/v1/publish` и CLI | работает | Копия CLI из репозитория требует `POLKA_ENDPOINT` или `--endpoint` |
+| Обнаружение агентом: `/llms.txt`, `/openapi.json`, `/.well-known/agent-skills`, скилл `polka` | в коде | [connect-agents](connect-agents.md#агенту-без-подсказок-llmstxt-openapi-скилл). `npx skills add artkruglov/polka` заработает после попадания `skills/polka` в `main` на GitHub; адреса на polochka.app — после выкладки |
 | Библиотеки шаблонов: роли, приглашения, журнал | работает | Приглашение пересылается вручную (письма нет) |
 | «Интересное»: 12 интерактивных материалов Редакции | работает | Каталог курирует оператор; авторских публикаций нет |
 | Импорт по URL (standalone HTML) | в коде | `URL_IMPORT_ENABLED`, выключен по умолчанию и на polochka.app |
