@@ -128,12 +128,18 @@ async function saveBundle(
 }
 
 const tokenFrom = (url: string) => new URL(url).pathname.split("/").at(-1)!;
-const embedded = (token: string) =>
+const embedded = (token: string, route = "document") =>
   viewer.inject({
     method: "GET",
-    url: `/document/${token}`,
+    url: `/${route}/${token}`,
     headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" },
   });
+/** The recipient's static view: with a viewer it is served there, not by the app. */
+const staticDocument = async (grant: string) => {
+  const issued = await call("POST", "/api/view/static-view", undefined, "", grant);
+  if (issued.statusCode !== 200) return issued;
+  return embedded(tokenFrom(issued.json().url), "static");
+};
 
 before(async () => {
   originalFiles = new Map(
@@ -552,12 +558,12 @@ test("a static single-file bundle links statically until a ready derivative exis
   // No derivative yet: the static sandbox serves the page, as with live off.
   const before = await shareOnce();
   assert.equal(before.derivativeId, null);
-  const document = await call(
-    "GET",
-    `/api/view/${before.grant}/document`,
-    undefined,
-    "",
+  assert.equal(
+    (await call("GET", `/api/view/${before.grant}/document`, undefined, ""))
+      .statusCode,
+    404,
   );
+  const document = await staticDocument(before.grant);
   assert.equal(document.statusCode, 200, document.body);
   assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox;/);
   // The static view (not the download) opens links in a new tab.
@@ -889,6 +895,7 @@ test("an unsupported single upload is linked only through its built interactive 
       .statusCode,
     404,
   );
+  assert.equal((await staticDocument(opened.viewer.grant)).statusCode, 404);
   // The owner sees what the recipient sees: the built version, not the upload.
   const ownerView = await call(
     "POST",
@@ -959,8 +966,7 @@ test("a limited single upload links statically until its interactive version is 
     404,
   );
   assert.equal(
-    (await call("GET", `/api/view/${staticLink.grant}/document`, undefined, ""))
-      .statusCode,
+    (await staticDocument(staticLink.grant)).statusCode,
     200,
   );
   assert.equal(

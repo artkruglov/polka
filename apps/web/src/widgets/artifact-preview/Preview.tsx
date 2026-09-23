@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
-import { bytes } from "../../shared/api/client.ts";
+import { bytes, staticView } from "../../shared/api/client.ts";
 import {
   isImage,
   isStaticSingleFileBundle,
@@ -129,11 +129,8 @@ export function Preview({
       <div className="html-preview">
         <SandboxFrame
           title={revision.filename}
-          src={
-            grant
-              ? `/api/view/${grant}/document`
-              : `/api/revisions/${revision.id}/document`
-          }
+          revisionId={revision.id}
+          grant={grant}
         />
         {revision.htmlProfile === "limited" && (
           <p className="html-preview-note">
@@ -194,8 +191,34 @@ export function Preview({
 }
 
 /** The sandboxed document can take seconds to arrive; say so instead of showing a blank frame. */
-function SandboxFrame({ src, title }: { src: string; title: string }) {
+function SandboxFrame({
+  revisionId,
+  grant,
+  title,
+}: {
+  revisionId: string;
+  grant?: string;
+  title: string;
+}) {
   const [loaded, setLoaded] = useState(false);
+  const [src, setSrc] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const abort = new AbortController();
+    setSrc("");
+    setLoaded(false);
+    setError("");
+    // With a viewer domain the page never loads from Полка's own origin.
+    staticView(revisionId, grant, abort.signal)
+      .then((url) => {
+        if (!abort.signal.aborted) setSrc(url);
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setError(e.message);
+      });
+    return () => abort.abort();
+  }, [revisionId, grant]);
+  if (error) return <div className="preview-error">{error}</div>;
   return (
     <div className="html-preview-frame" data-loaded={loaded || undefined}>
       {!loaded && (
@@ -204,16 +227,18 @@ function SandboxFrame({ src, title }: { src: string; title: string }) {
           Загружаем безопасный просмотр…
         </div>
       )}
-      <iframe
-        className="work-html"
-        title={title}
-        src={src}
-        // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open
-        // only in a new tab, never over this one (no top navigation).
-        sandbox="allow-popups allow-popups-to-escape-sandbox"
-        referrerPolicy="no-referrer"
-        onLoad={() => setLoaded(true)}
-      />
+      {src && (
+        <iframe
+          className="work-html"
+          title={title}
+          src={src}
+          // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open
+          // only in a new tab, never over this one (no top navigation).
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
+        />
+      )}
     </div>
   );
 }

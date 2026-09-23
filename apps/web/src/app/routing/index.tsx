@@ -2,6 +2,7 @@ import React from "react";
 import { App } from "../workspace/index.tsx";
 import {
   AgentConnections,
+  Away,
   Bring,
   EditorialPage,
   FirstSave,
@@ -34,6 +35,7 @@ function Route({ path }: { path: string }) {
   if (path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
   if (path === "/s") return <Recipient />;
+  if (path === "/away") return <Away />;
   // The guest landing, also for people who are signed in.
   if (path === "/landing") return <Landing />;
   if (path.startsWith("/discover")) return <EditorialPage />;
