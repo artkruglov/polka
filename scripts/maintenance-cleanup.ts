@@ -221,6 +221,8 @@ export async function runMaintenanceCleanup(
       "DELETE FROM oauth_refresh_tokens WHERE expires_at<now()",
       // The privacy policy keeps a report for one year.
       "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
+      // Requests from /enterprise: one year, as the privacy policy says.
+      "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
       `DELETE FROM oauth_clients client
        WHERE client.created_at<now()-interval '30 days'
          AND NOT EXISTS(SELECT 1 FROM agent_connections connection

@@ -8,11 +8,17 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 30 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 30);
+test("migration catalog is the complete schema 33 set (031 and 032 from concurrent branches optional)", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 33);
+  // 031_content_filter.sql and 032_account_identities.sql land from
+  // concurrent branches; until they are on main the catalog is 1..33 with or
+  // without each of them, never with another gap.
+  const present = new Set(EXPECTED_MIGRATION_VERSIONS);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
-    Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
+    Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1).filter(
+      (version) => (version !== 31 && version !== 32) || present.has(version),
+    ),
   );
 
   const catalogFiles = SCHEMA_MIGRATIONS.map(({ version, file }) => {
