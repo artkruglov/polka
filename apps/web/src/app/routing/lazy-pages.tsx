@@ -39,6 +39,9 @@ const LibraryInvite = page(() =>
 const Moderation = page(() =>
   import("../../pages/moderation/index.tsx").then((m) => m.Moderation),
 );
+const Away = page(() =>
+  import("../../pages/away/index.tsx").then((m) => m.Away),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -103,4 +106,5 @@ export {
   LibraryInvite,
   Moderation,
   OAuthConsent,
+  Away,
 };

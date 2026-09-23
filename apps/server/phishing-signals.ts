@@ -170,11 +170,19 @@ export class SignalCollector {
   }
 }
 
+/**
+ * A page too deeply nested to read within the deadline (html.ts,
+ * inspectHtmlBounded). It cannot be checked, so it counts as suspicious:
+ * otherwise nesting would be a way around the check.
+ */
+export const SCAN_INCOMPLETE = "scan:incomplete";
+
 export const isSuspicious = (signals: readonly string[]) =>
-  signals.some((signal) => signal.startsWith("secret:")) &&
-  signals.some(
-    (signal) => signal.startsWith("brand:") || signal.startsWith("urgency:"),
-  );
+  signals.includes(SCAN_INCOMPLETE) ||
+  (signals.some((signal) => signal.startsWith("secret:")) &&
+    signals.some(
+      (signal) => signal.startsWith("brand:") || signal.startsWith("urgency:"),
+    ));
 
 /** Human wording of stored signals, for the operator's mail. */
 export function describeSignals(signals: readonly string[]) {
@@ -194,6 +202,9 @@ export function describeSignals(signals: readonly string[]) {
     return names.length ? `${title}: ${names.join(", ")}` : null;
   };
   return [
+    signals.includes(SCAN_INCOMPLETE)
+      ? "страницу не удалось прочитать за отведённое время (глубокая вложенность)"
+      : null,
     part("secret", "просит секрет"),
     part("brand", "бренд"),
     part("urgency", "срочность"),

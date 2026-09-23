@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { classify } from "../apps/web/src/features/import-url/classify-link.ts";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
-import { STATIC_HTML_CSP, VIEWER_GUARD, classifyHtml, withNewTabLinks, withViewerGuard } from "../apps/server/html.ts";
+import { STATIC_HTML_CSP, VIEWER_GUARD, classifyHtml, classifyHtmlBounded, withNewTabLinks, withViewerGuard } from "../apps/server/html.ts";
 
 const prose =
   "Отчёт за квартал: выручка выросла, расходы снизились, команда закрыла все ключевые задачи и подготовила план на следующий период.";
@@ -258,4 +258,20 @@ test("The viewer's WebRTC guard runs before anything the page runs", () => {
   // Bytes after the guard are untouched.
   const bytes = Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("<!doctype html>é")]);
   assert.deepEqual(withViewerGuard(bytes).subarray(-2), Buffer.from("é"));
+});
+
+test("Deeply nested pages are classified off the request thread within a deadline", async () => {
+  // parse5 is quadratic on deep nesting: this page alone would take minutes.
+  const nested = "<div>".repeat(200_000);
+  const started = performance.now();
+  assert.equal(await classifyHtmlBounded(nested, 1_000), "unsupported");
+  assert.ok(performance.now() - started < 3_000, `${Math.round(performance.now() - started)} ms`);
+  // Deep but small: no call-stack overflow in the walk.
+  assert.equal(classifyHtml("<div>".repeat(3_000) + "<p>hi</p>"), "static");
+  // An honest large page still gets its real profile through the worker.
+  const article = `<!doctype html><h1>Отчёт</h1>${"<p>Текст отчёта, достаточно длинный абзац.</p>".repeat(3_000)}`;
+  assert.ok(article.length > 16 * 1024);
+  assert.equal(await classifyHtmlBounded(article), "static");
+  const scripted = `${article}<button onclick="go()">Далее</button><script>function go(){}</script>`;
+  assert.equal(await classifyHtmlBounded(scripted), "limited");
 });

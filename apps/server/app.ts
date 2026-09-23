@@ -21,6 +21,11 @@ import {
   isStaticSingleFileBundle,
   staticSingleFileBundleSql,
 } from "./revision-manifest.ts";
+import { verifyAwayToken, withSignedAwayLinks } from "./away-links.ts";
+import {
+  issueOwnerStaticView,
+  issueRecipientStaticView,
+} from "./static-viewer.ts";
 import {
   issueOwnerLiveView,
   issueRecipientLiveView,
@@ -124,7 +129,9 @@ export async function createApp() {
       "referrer-policy": "no-referrer",
       // frame-src is load-bearing: it is what keeps a saved page from
       // navigating the reader's tab to a look-alike site. Do not widen it.
-      "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-src 'self'${config.HTML_LIVE_ENABLED ? ` ${config.VIEWER_ORIGIN}` : ""}; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
+      // With a viewer every frame (static and interactive) comes from it and
+      // the app frames nothing of its own.
+      "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-src ${config.HTML_LIVE_ENABLED ? config.VIEWER_ORIGIN : "'self'"}; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
     });
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
     // /mcp, the OAuth machine endpoints and the HTTP publish API are
@@ -671,12 +678,16 @@ export async function createApp() {
     if (result.concurrent) reply.code(202);
     return result.status;
   });
-  // Saved HTML is never rendered in the app origin: the response itself carries
-  // a sandbox CSP, so even a direct navigation runs no scripts and has no network.
+  // Only a single-domain install (no viewer) shows saved HTML on the app
+  // origin; with a viewer the static view is served there (static-viewer.ts)
+  // and these routes answer 404. Even here the page never runs as the app:
+  // the response itself carries a sandbox CSP, so even a direct navigation
+  // runs no scripts and has no network.
   // A browser that says it is opening the page top-level is refused too: the
   // page belongs inside Полка's frame, and on its own at a Полка URL it could
   // pose as a Полка screen. Browsers without Fetch Metadata still get the frame.
   const sendHtml = async (req: any, reply: any, r: any) => {
+    if (config.HTML_LIVE_ENABLED) throw missing();
     if (req.headers["sec-fetch-dest"] === "document") throw missing();
     if (
       !r ||
@@ -689,8 +700,48 @@ export async function createApp() {
       .type("text/html; charset=utf-8")
       .header("content-security-policy", STATIC_HTML_CSP)
       .header("cross-origin-resource-policy", "same-origin");
-    return withNewTabLinks(await readBlob(r.object_key, r.object_version));
+    return withNewTabLinks(
+      withSignedAwayLinks(
+        await readBlob(r.object_key, r.object_version),
+        new URL(req.url, config.APP_ORIGIN).href,
+      ),
+    );
   };
+  // Where the static frame loads from: the viewer (a 60-second grant) when
+  // there is one, else the app routes below. The web app asks here first.
+  app.post("/api/revisions/:id/static-view", async (req) => {
+    const actor = await identity(req);
+    const revisionId = id(req);
+    if (!config.HTML_LIVE_ENABLED)
+      return { url: `/api/revisions/${revisionId}/document` };
+    return issueOwnerStaticView(
+      actor,
+      req.cookies.polka_session ?? "",
+      revisionId,
+    );
+  });
+  app.post("/api/view/static-view", async (req) => {
+    const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
+    if (config.HTML_LIVE_ENABLED) return issueRecipientStaticView(grant);
+    if (!/^[A-Za-z0-9_-]{43}$/.test(grant)) throw missing();
+    return { url: `/api/view/${grant}/document` };
+  });
+  // The "you are leaving Полка" page asks what a signed link points to. It
+  // never redirects: the page names the address and the reader clicks.
+  app.post("/api/away", { bodyLimit: 32 * 1024 }, async (req) => {
+    const { token } = z
+      .object({ token: z.string().max(20000) })
+      .strict()
+      .parse(req.body);
+    const target = verifyAwayToken(token);
+    if (!target)
+      throw new Problem(
+        404,
+        "not_found",
+        "Ссылка устарела или повреждена. Полка открывает внешний адрес только по ссылке из страницы на Полке.",
+      );
+    return target;
+  });
   app.get("/api/revisions/:id/document", async (req, reply) => {
     const actor = await identity(req);
     const {

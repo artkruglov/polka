@@ -1,6 +1,8 @@
+import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 import {
+  SCAN_INCOMPLETE,
   SECRET_AUTOCOMPLETE,
   SignalCollector,
   scanScript,
@@ -13,7 +15,10 @@ import {
 // could otherwise replace the Полка tab with a look-alike page.
 export const STATIC_HTML_SANDBOX =
   "allow-popups allow-popups-to-escape-sandbox";
-export const STATIC_HTML_CSP = `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
+export const staticHtmlCsp = (frameAncestors: string) =>
+  `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
+/** The static view on the app origin: only a single-domain install uses it. */
+export const STATIC_HTML_CSP = staticHtmlCsp("'self'");
 
 /**
  * The interactive viewer's sandbox, shared by its CSP and the app's iframe.
@@ -103,6 +108,225 @@ export function withNewTabLinks(html: Buffer): Buffer {
   return Buffer.concat([LINK_TARGET, html]);
 }
 
+// ---------------------------------------------------------------------------
+// External links in the static view (view-only, downloads stay byte-exact).
+//
+// Every <a>/<area> href that leaves the serving origin over http(s) becomes a
+// link to Полка's signed "you are leaving" page. The scan follows the HTML
+// tokenizer closely enough to find each href the browser would see (comments
+// ending in "--!>", raw-text elements, quoted ">" in attributes, the first of
+// duplicate attributes, character references) and changes nothing else: every
+// other byte is copied as is. Where it has to approximate (foreign content,
+// script escapes) it errs towards reading more markup, so a link is rewritten
+// rather than missed.
+//
+// Linear in the page size: each byte is looked at a bounded number of times;
+// an unterminated comment, tag or raw-text element ends the scan, as it ends
+// markup in the browser. parse5's tree builder is not used here: deep nesting
+// makes it quadratic, and this runs on each view of a shared page.
+
+const RAW_TEXT_END: Record<string, RegExp> = Object.fromEntries(
+  [
+    "script",
+    "style",
+    "textarea",
+    "title",
+    "xmp",
+    "iframe",
+    "noembed",
+    "noframes",
+  ].map((name) => [name, new RegExp(`</${name}[\\t\\n\\f\\r />]`, "gi")]),
+);
+// "-->" and "--!>" both close a comment; "<!-->" and "<!--->" are empty ones.
+const COMMENT_END = /--!?>/g;
+const isSpace = (c: number) =>
+  c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+const isAlpha = (c: number) => (c | 32) >= 97 && (c | 32) <= 122;
+
+type Tag = {
+  name: string;
+  end: number;
+  selfClosing: boolean;
+  /** First href and xlink:href values: [start, end, quoted]. */
+  links: [number, number, boolean][];
+};
+
+/** Reads a tag from its name to past ">"; null when the input ends inside it. */
+function readTag(text: string, from: number): Tag | null {
+  const n = text.length;
+  let i = from;
+  let c = 0;
+  while (i < n && !isSpace((c = text.charCodeAt(i))) && c !== 47 && c !== 62)
+    i++;
+  if (i >= n) return null;
+  const name = text.slice(from, i).toLowerCase();
+  const links: Tag["links"] = [];
+  const seen = new Set<string>();
+  for (;;) {
+    while (i < n && isSpace(text.charCodeAt(i))) i++;
+    if (i >= n) return null;
+    c = text.charCodeAt(i);
+    if (c === 62) return { name, end: i + 1, selfClosing: false, links };
+    if (c === 47) {
+      if (text.charCodeAt(i + 1) === 62)
+        return { name, end: i + 2, selfClosing: true, links };
+      i++;
+      continue;
+    }
+    // The first character of a name may be "=", as in the tokenizer.
+    const nameStart = i++;
+    while (
+      i < n &&
+      !isSpace((c = text.charCodeAt(i))) &&
+      c !== 47 &&
+      c !== 62 &&
+      c !== 61
+    )
+      i++;
+    const attr = text.slice(nameStart, i).toLowerCase();
+    while (i < n && isSpace(text.charCodeAt(i))) i++;
+    if (i >= n) return null;
+    let value: [number, number, boolean] | null = null;
+    if (text.charCodeAt(i) === 61) {
+      i++;
+      while (i < n && isSpace(text.charCodeAt(i))) i++;
+      if (i >= n) return null;
+      c = text.charCodeAt(i);
+      if (c === 34 || c === 39) {
+        const close = text.indexOf(c === 34 ? '"' : "'", i + 1);
+        if (close === -1) return null;
+        value = [i, close + 1, true];
+        i = close + 1;
+      } else if (c !== 62) {
+        const start = i;
+        while (i < n && !isSpace((c = text.charCodeAt(i))) && c !== 62) i++;
+        if (i >= n) return null;
+        value = [start, i, false];
+      }
+    }
+    // A repeated attribute is dropped by the browser: only the first counts.
+    if ((attr === "href" || attr === "xlink:href") && !seen.has(attr)) {
+      seen.add(attr);
+      if (value) links.push(value);
+    }
+  }
+}
+
+/** The absolute http(s) address an href leaves `base` for, or null. */
+function externalTarget(value: string, base: URL) {
+  let target: URL;
+  try {
+    // The URL parser drops tabs and newlines and trims C0 and spaces, as
+    // browsers do, and resolves "//host" and "/\host" against the base.
+    target = new URL(value, base);
+  } catch {
+    return null;
+  }
+  if (target.protocol !== "http:" && target.protocol !== "https:") return null;
+  return target.origin === base.origin ? null : target.href;
+}
+
+/**
+ * Rewrites the value of each external <a>/<area> href to `away(url)` (an
+ * ASCII URL without quotes). `documentUrl` is where the page is served, the
+ * base its relative links resolve against. Returns the input when nothing
+ * changes.
+ */
+export function withAwayLinks(
+  html: Buffer,
+  documentUrl: string,
+  away: (url: string) => string,
+): Buffer {
+  const text = html.toString("latin1");
+  if (!/href/i.test(text)) return html;
+  const base = new URL(documentUrl);
+  const edits: [number, number, string][] = [];
+  const signed = new Map<string, string>();
+  const n = text.length;
+  // Inside <svg>/<math> the raw-text names are ordinary elements.
+  let foreign = 0;
+  let at = 0;
+  const skipTo = (from: number, char: string) => {
+    const end = text.indexOf(char, from);
+    return end === -1 ? -1 : end + 1;
+  };
+  while (at < n) {
+    const lt = text.indexOf("<", at);
+    if (lt === -1) break;
+    const c = text.charCodeAt(lt + 1);
+    if (c === 33) {
+      // <!-- comment -->, or <!doctype>, <![CDATA[...]]> and other bogus
+      // comments, which end at the first ">" (CDATA may end later: reading
+      // on from there only reads more).
+      if (text.startsWith("--", lt + 2)) {
+        COMMENT_END.lastIndex = lt + 2;
+        const m = COMMENT_END.exec(text);
+        if (!m) break;
+        at = m.index + m[0].length;
+      } else if ((at = skipTo(lt + 2, ">")) === -1) break;
+      continue;
+    }
+    if (c === 63) {
+      if ((at = skipTo(lt + 2, ">")) === -1) break;
+      continue;
+    }
+    if (c === 47) {
+      const next = text.charCodeAt(lt + 2);
+      if (isAlpha(next)) {
+        const tag = readTag(text, lt + 2);
+        if (!tag) break;
+        if ((tag.name === "svg" || tag.name === "math") && foreign > 0)
+          foreign--;
+        at = tag.end;
+      } else if (next === 62) at = lt + 3;
+      else if ((at = skipTo(lt + 2, ">")) === -1) break;
+      continue;
+    }
+    if (!isAlpha(c)) {
+      at = lt + 1;
+      continue;
+    }
+    const tag = readTag(text, lt + 1);
+    // The input ends inside a tag: the browser drops it, and there is no
+    // markup after it.
+    if (!tag) break;
+    at = tag.end;
+    if (tag.name === "a" || tag.name === "area")
+      for (const [start, end, quoted] of tag.links) {
+        const raw = html
+          .subarray(quoted ? start + 1 : start, quoted ? end - 1 : end)
+          .toString("utf8");
+        const target = externalTarget(decodeHTMLAttribute(raw), base);
+        if (!target) continue;
+        let href = signed.get(target);
+        if (href === undefined) signed.set(target, (href = away(target)));
+        edits.push([start, end, `"${href}"`]);
+      }
+    if (tag.name === "svg" || tag.name === "math") {
+      if (!tag.selfClosing) foreign++;
+    } else if (foreign === 0) {
+      // Scripts never run in the static view, so <noscript> is markup.
+      if (tag.name === "plaintext") break;
+      const close = RAW_TEXT_END[tag.name];
+      if (close) {
+        close.lastIndex = at;
+        const m = close.exec(text);
+        if (!m) break;
+        at = m.index;
+      }
+    }
+  }
+  if (!edits.length) return html;
+  const parts: Buffer[] = [];
+  let copied = 0;
+  for (const [start, end, value] of edits) {
+    parts.push(html.subarray(copied, start), Buffer.from(value, "latin1"));
+    copied = end;
+  }
+  parts.push(html.subarray(copied));
+  return Buffer.concat(parts);
+}
+
 type Node = {
   nodeName: string;
   tagName?: string;
@@ -162,13 +386,20 @@ export function inspectHtml(
   let unsafe = false;
   let interactive = false;
   const text: string[] = [];
-  const walk = (node: Node, hidden: boolean, parent?: string) => {
+  // An explicit stack, not recursion: a deeply nested page would overflow
+  // the call stack. The order of visits does not matter for these checks.
+  // The walk goes on after the page is found unsafe: signals still count.
+  const stack: [Node, boolean, string | undefined][] = [
+    [parse(source) as unknown as Node, false, undefined],
+  ];
+  while (stack.length) {
+    const [node, hidden, parent] = stack.pop()!;
     if (node.nodeName === "#text") {
       const value = node.value ?? "";
       if (parent === "script") scanScript(value, collector);
       else if (parent !== "style") collector.context(value);
       if (!hidden && !unsafe) text.push(value);
-      return;
+      continue;
     }
     const tag = node.tagName?.toLowerCase();
     if (tag) {
@@ -211,10 +442,12 @@ export function inspectHtml(
       }
     }
     const inner = hidden || (tag !== undefined && HIDDEN_TEXT.has(tag));
-    for (const child of node.childNodes ?? []) walk(child, inner, tag);
-    if (node.content) walk(node.content, true, tag);
-  };
-  walk(parse(source) as unknown as Node, false);
+    // Children in reverse so text is collected in document order.
+    const children = node.childNodes ?? [];
+    if (node.content) stack.push([node.content, true, tag]);
+    for (let i = children.length - 1; i >= 0; i--)
+      stack.push([children[i]!, inner, tag]);
+  }
   const signals = collector.list();
   if (unsafe) return { profile: "unsupported", signals };
   if (!interactive) return { profile: "static", signals };
@@ -227,6 +460,56 @@ export function inspectHtml(
 
 export function classifyHtml(source: string): HtmlProfile {
   return inspectHtml(source).profile;
+}
+
+/**
+ * inspectHtml off the request thread, with a deadline. parse5's tree builder
+ * is quadratic on deeply nested markup (200 KB of nested <div> takes ~4 s,
+ * the 5 MB upload limit ~40 min), and saving runs on the server's request
+ * thread. Small pages are inspected inline; larger ones in a worker that is
+ * terminated at the deadline. A page that cannot be read in time gets no
+ * static link ("unsupported"; the owner still sees and downloads it) and the
+ * signal SCAN_INCOMPLETE, so an interactive link to it waits for review
+ * instead of escaping the phishing check by nesting.
+ */
+export const CLASSIFY_INLINE_BYTES = 16 * 1024;
+export const CLASSIFY_DEADLINE_MS = 2_000;
+const UNREAD: HtmlInspection = {
+  profile: "unsupported",
+  signals: [SCAN_INCOMPLETE],
+};
+export async function inspectHtmlBounded(
+  source: string,
+  deadlineMs = CLASSIFY_DEADLINE_MS,
+): Promise<HtmlInspection> {
+  if (source.length <= CLASSIFY_INLINE_BYTES) return inspectHtml(source);
+  const { Worker } = await import("node:worker_threads");
+  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
+    resourceLimits: { maxOldGenerationSizeMb: 256 },
+  });
+  try {
+    return await new Promise<HtmlInspection>((resolve) => {
+      const timer = setTimeout(() => resolve(UNREAD), deadlineMs);
+      worker.once("message", (inspection: HtmlInspection) => {
+        clearTimeout(timer);
+        resolve(inspection);
+      });
+      worker.once("error", () => {
+        clearTimeout(timer);
+        resolve(UNREAD);
+      });
+      worker.postMessage(source);
+    });
+  } finally {
+    await worker.terminate();
+  }
+}
+
+export async function classifyHtmlBounded(
+  source: string,
+  deadlineMs = CLASSIFY_DEADLINE_MS,
+): Promise<HtmlProfile> {
+  return (await inspectHtmlBounded(source, deadlineMs)).profile;
 }
 
 // Shared with the web app, which decides whether pasted code is saved as HTML.
