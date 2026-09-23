@@ -124,6 +124,8 @@ export const reportSchema = z
     token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     reason: z.enum(REPORT_REASONS),
     comment: z.string().trim().max(1000).optional(),
+    // A report about one comment of the link rather than the page.
+    commentId: uuid.optional(),
   })
   .strict();
 export interface Revision {

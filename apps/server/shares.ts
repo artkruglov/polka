@@ -453,6 +453,118 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
   return response;
 }
 
+/**
+ * Point an existing link at the work's newest version (docs/specs/COMMENTS.md:
+ * after a patch, the discussion moves with the link). The link keeps its
+ * token, expiry and threads; a new version is new content, so moderation
+ * decides again, as for the owner's «Обновить ссылку». Idempotent by key.
+ */
+export const agentMoveShareSchema = z
+  .object({
+    key: uuid,
+    artifactId: uuid,
+    shareId: uuid,
+    expectedRevisionId: uuid,
+  })
+  .strict();
+
+export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
+  const input = agentMoveShareSchema.parse(body);
+  const request = { ...input };
+  const requestHash = sha256(JSON.stringify(request));
+  const notices: ModerationNotice[] = [];
+  const response = await withServiceActorTransaction(
+    actor,
+    "share",
+    async (c, verified) => {
+      const {
+        rows: [old],
+      } = await c.query(
+        `SELECT * FROM agent_operations
+         WHERE tenant_id=$1 AND operation='share-move' AND idempotency_key=$2
+         FOR UPDATE`,
+        [verified.tenantId, input.key],
+      );
+      if (old) {
+        if (
+          old.connection_id !== verified.connectionId ||
+          old.request_hash !== requestHash
+        )
+          throw new Problem(
+            409,
+            "conflict",
+            "Ключ уже относится к другой операции.",
+          );
+        return agentShareResponse(
+          c,
+          verified,
+          agentShareResultSchema.parse(old.result),
+        );
+      }
+      const owner: Actor = {
+        id: verified.accountId,
+        tenant: verified.tenantId,
+        connectionId: verified.connectionId,
+      };
+      const artifact = await lockArtifact(c, owner, input.artifactId);
+      if (artifact.latest_revision_id !== input.expectedRevisionId)
+        throw new Problem(
+          409,
+          "conflict",
+          `Работа изменилась: последняя версия ${artifact.latest_revision_id}. Переносите ссылку на неё.`,
+        );
+      const {
+        rows: [share],
+      } = await c.query(
+        `SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 AND artifact_id=$3
+         FOR UPDATE`,
+        [input.shareId, owner.tenant, input.artifactId],
+      );
+      if (!share) throw missing();
+      if (share.revision_id !== input.expectedRevisionId)
+        await publishShareInTransaction(
+          c,
+          owner,
+          input.shareId,
+          {
+            revisionId: input.expectedRevisionId,
+            expectedPublishedRevisionId: share.revision_id,
+          },
+          notices,
+        );
+      const {
+        rows: [moved],
+      } = await c.query("SELECT * FROM shares WHERE id=$1", [input.shareId]);
+      const result: AgentShareResult = {
+        shareId: moved.id,
+        artifactId: moved.artifact_id,
+        revisionId: moved.revision_id,
+        derivativeId: moved.derivative_id ?? null,
+        expiresAt: new Date(moved.expires_at).toISOString(),
+      };
+      await c.query(
+        `INSERT INTO agent_operations(
+           id,tenant_id,account_id,connection_id,operation,idempotency_key,
+           request,request_hash,result
+         ) VALUES($1,$2,$3,$4,'share-move',$5,$6,$7,$8)`,
+        [
+          randomUUID(),
+          verified.tenantId,
+          verified.accountId,
+          verified.connectionId,
+          input.key,
+          request,
+          requestHash,
+          result,
+        ],
+      );
+      return agentShareResponse(c, verified, result);
+    },
+  );
+  void dispatchModerationNotices(notices);
+  return response;
+}
+
 export async function revokeShareFromAgent(actor: ServiceActor, body: unknown) {
   const { shareId } = agentRevokeShareSchema.parse(body);
   return withServiceActorTransaction(actor, "share", (c, verified) =>

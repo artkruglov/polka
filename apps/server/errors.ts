@@ -4,6 +4,8 @@ export class Problem extends Error {
     public status: number,
     public code: ErrorCode,
     message: string,
+    /** Extra fields of the JSON answer (a patch edit names its failing edit). */
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }
