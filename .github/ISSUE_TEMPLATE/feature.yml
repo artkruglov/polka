@@ -1,0 +1,34 @@
+name: Предложение / Feature request
+description: Идея или недостающая возможность / An idea or a missing capability
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Можно писать по-русски или по-английски. / Russian or English is fine.
+
+        Сначала посмотрите [состояние](https://github.com/artkruglov/polka/blob/main/docs/status.md) и [дорожную карту](https://github.com/artkruglov/polka/blob/main/docs/roadmap.md): возможно, это уже сделано или запланировано. В дорожной карте есть и раздел «Чего не делаем».
+        Check the status and the roadmap first (including "what we don't do").
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу это решает / What problem does this solve
+      description: Кто вы и что пытаетесь сделать. / Who you are and what you're trying to do.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: Как вы решаете её сейчас / How you solve it today
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое поведение / Proposed behaviour
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Участие / Contributing
+      options:
+        - label: Готов(а) сделать pull request (по CLA) / I'd like to send a pull request (under the CLA)

@@ -36,7 +36,7 @@ test("every page shell offers the source code and the page for companies", () =>
       `<a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">Открытый код на GitHub</a>`,
     ),
   );
-  assert.match(html, /<a href="\/pricing">Для компаний<\/a>/);
+  assert.match(html, /<a href="\/enterprise">Для компаний<\/a>/);
   // The pages outside AppShell carry the footer themselves.
   for (const page of ["away", "mail-off"])
     assert.match(read(`apps/web/src/pages/${page}/index.tsx`), /<LegalLinks \/>/, page);
@@ -56,12 +56,15 @@ test("/pricing: the cloud, self-hosting under the AGPL and a commercial license"
   assert.ok(html.includes(`href="${SOURCE_URL}"`));
   assert.ok(html.includes(`href="${SOURCE_URL}/blob/main/deploy/hosted/README.md"`));
   assert.match(html, /href="mailto:hello@polochka\.app\?subject=[^"]+"[^>]*>Написать/);
+  // The commercial license and the new call to action lead to /enterprise.
+  assert.match(html, /href="\/enterprise\?interest=commercial-license#request"[^>]*>Оставить заявку/);
+  assert.match(html, /href="\/enterprise"[^>]*>Для компаний/);
   // No price is invented.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   const routes = read("apps/web/src/app/routing/index.tsx");
   assert.match(routes, /path === "\/pricing"\) return <Pricing \/>/);
   assert.match(read("apps/server/frontend.ts"), /path === "\/pricing" \|\|/);
-  assert.match(read("apps/web/src/pages/landing/index.tsx"), /href="\/pricing"/);
+  assert.match(read("apps/web/src/pages/landing/index.tsx"), /href="\/enterprise"/);
 });
 
 function sourceUrlConfig(value: string | undefined) {

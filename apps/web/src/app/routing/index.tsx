@@ -5,6 +5,7 @@ import {
   Away,
   Bring,
   EditorialPage,
+  Enterprise,
   FirstSave,
   Landing,
   Lazy,
@@ -40,6 +41,7 @@ function Route({ path }: { path: string }) {
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/pricing") return <Pricing />;
+  if (path === "/enterprise") return <Enterprise />;
   if (path === "/start") return <FirstSave />;
   if (path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
