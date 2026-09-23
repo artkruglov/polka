@@ -221,6 +221,12 @@ export async function runMaintenanceCleanup(
       "DELETE FROM oauth_refresh_tokens WHERE expires_at<now()",
       // The privacy policy keeps a report for one year.
       "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
+      // The moderation journal is kept for 3 years (its trigger refuses any
+      // younger event), and so are closed blocks: the SHA-256 stop list.
+      "DELETE FROM moderation_events WHERE created_at<now()-interval '3 years'",
+      `DELETE FROM moderation_blocks
+       WHERE (purged_at IS NOT NULL OR released_at IS NOT NULL)
+         AND blocked_at<now()-interval '3 years'`,
       `DELETE FROM oauth_clients client
        WHERE client.created_at<now()-interval '30 days'
          AND NOT EXISTS(SELECT 1 FROM agent_connections connection

@@ -6,6 +6,8 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectVersionsCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { createHash } from "node:crypto";
@@ -89,5 +91,49 @@ export function createS3Store(config: {
     return Buffer.from(await object.Body!.transformToByteArray());
   }
 
-  return { s3, bucket, prepareBucket, putImmutable, readBlob };
+  /**
+   * Delete every version and delete marker of the keys under `prefix` that
+   * `keep` does not keep: the only way an object leaves a versioned bucket
+   * for good. Returns how many versions were removed.
+   */
+  async function deleteAllVersions(
+    prefix: string,
+    matches: (key: string) => boolean = () => true,
+  ) {
+    let deleted = 0;
+    let keyMarker: string | undefined;
+    let versionIdMarker: string | undefined;
+    for (let page = 0; page < 1000; page++) {
+      const result = await s3.send(
+        new ListObjectVersionsCommand({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: 500,
+          KeyMarker: keyMarker,
+          VersionIdMarker: versionIdMarker,
+        }),
+      );
+      for (const version of [
+        ...(result.Versions ?? []),
+        ...(result.DeleteMarkers ?? []),
+      ]) {
+        if (!version.Key || !version.VersionId || !matches(version.Key))
+          continue;
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: version.Key,
+            VersionId: version.VersionId,
+          }),
+        );
+        deleted++;
+      }
+      if (!result.IsTruncated) return deleted;
+      keyMarker = result.NextKeyMarker;
+      versionIdMarker = result.NextVersionIdMarker;
+    }
+    throw new Error("Too many object versions to delete");
+  }
+
+  return { s3, bucket, prepareBucket, putImmutable, readBlob, deleteAllVersions };
 }

@@ -22,8 +22,17 @@ export const REPORT_REASONS = [
   "personal_data",
   "illegal",
   "other",
+  "child_sexual",
+  "intimate_nonconsensual",
+  "threat_to_life",
 ] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
+/** A single report of one of these pauses the link at once. */
+export const URGENT_REPORT_REASONS: readonly ReportReason[] = [
+  "child_sexual",
+  "intimate_nonconsensual",
+  "threat_to_life",
+];
 export const AGENT_SCOPES = [
   "context",
   "read",

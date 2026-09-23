@@ -19,6 +19,7 @@ import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { LOCAL_COMMENT_MAIL_DIRECTORY, sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
+import { describeFindings, findingsOf } from "./content-filter/policy.ts";
 
 export type CommentNotice =
   | { kind: "comment"; commentId: string }
@@ -106,7 +107,8 @@ async function facts(commentId: string) {
   } = await db.query(
     `SELECT comment.id,comment.body,comment.anchor,comment.parent_id,
        comment.author_account_id,comment.share_id,comment.artifact_id,
-       comment.held_at,comment.deleted_at,comment.signals,
+       comment.held_at,comment.deleted_at,comment.signals,comment.blocked_at,
+       comment.content_filter,
        COALESCE(author.display_name,author.name) AS author_name,
        author.name AS author_login,
        artifact.title,artifact.trashed_at,
@@ -147,7 +149,7 @@ async function send(to: string, subject: string, text: string) {
 /** A new comment: the owner, then the other people of the thread. */
 async function sendCommentLetters(commentId: string) {
   const row = await facts(commentId);
-  if (!row || row.deleted_at || row.held_at) return [];
+  if (!row || row.deleted_at || row.held_at || row.blocked_at) return [];
   const sent: Array<string | boolean | null> = [];
   const who = clean(row.author_name, 60) || "Читатель";
   const reply = !!row.parent_id;
@@ -213,11 +215,33 @@ async function sendOperatorLetter(notice: CommentNotice) {
   if (!config.OPERATOR_EMAIL) return null;
   const row = await facts(notice.commentId);
   if (!row) return null;
+  const findings = findingsOf(row.content_filter);
+  const found = findings.length ? describeFindings(findings) : "";
+  // CSAM: the letter carries ids only, never the text or the work's title.
+  if (row.blocked_at) {
+    return sendMail({
+      to: config.OPERATOR_EMAIL,
+      subject: "Полка: комментарий заблокирован фильтром",
+      text: [
+        "Фильтр содержимого заблокировал комментарий: его не видит никто, текст будет удалён по сроку категории. Автор отключён, если сработал признак CSAM.",
+        "",
+        `Комментарий: ${row.id}`,
+        `Ссылка: ${row.share_id}`,
+        `Автор комментария: ${clean(row.author_login, 60)}`,
+        `Категория: ${found.replace(/:.*$/, "") || "—"}`,
+        "",
+        `Журнал: npm run moderation:events -- ${row.id}`,
+        `Снять блокировку: npm run moderation:unblock -- ${row.id}`,
+      ].join("\n"),
+    });
+  }
   let reason = "";
   if (notice.kind === "suspicious")
-    reason = notice.held
-      ? "похоже на фишинг, автор новый: комментарий скрыт от всех, кроме автора и владельца работы"
-      : "похоже на фишинг, автор доверенный: комментарий виден";
+    reason = found
+      ? `фильтр содержимого: ${found}; ${notice.held ? "комментарий скрыт от всех, кроме автора (и владельца работы, если это не спам)" : "комментарий виден"}`
+      : notice.held
+        ? "похоже на фишинг, автор новый: комментарий скрыт от всех, кроме автора и владельца работы"
+        : "похоже на фишинг, автор доверенный: комментарий виден";
   else if (notice.kind === "report") {
     const {
       rows: [report],
@@ -230,7 +254,9 @@ async function sendOperatorLetter(notice: CommentNotice) {
   const text = [
     notice.kind === "report"
       ? "Получатель пожаловался на комментарий."
-      : "Комментарий похож на попытку выманить данные.",
+      : found
+        ? "Фильтр содержимого отметил комментарий."
+        : "Комментарий похож на попытку выманить данные.",
     "",
     `Работа: \u00ab${title(row)}\u00bb, версия ${row.revision_number}`,
     `Автор комментария: ${clean(row.author_login, 60)}`,

@@ -25,11 +25,27 @@ import { lockActiveOwnerTenant } from "./owner-state.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
 import {
   MODERATION_MESSAGE,
+  SIGNED_UP_SQL,
   assertNewAccountLimits,
   authorStanding,
   decideModeration,
+  type AuthorStanding,
+  type ModerationDecision,
   type ModerationNotice,
 } from "./share-moderation.ts";
+import { db } from "./db.ts";
+import {
+  blockRevisionInTransaction,
+  modelView,
+  recordEvent,
+  revisionBlocked,
+} from "./content-moderation.ts";
+import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
+import {
+  mergeResults,
+  scanText,
+  type FilterResult,
+} from "./content-filter/scanner.ts";
 
 type ShareInput = z.infer<typeof shareSchema>;
 type PublishInput = z.infer<typeof publishSchema>;
@@ -71,6 +87,273 @@ async function revisionSignals(c: PoolClient, revisionId: string) {
   return (row?.phishing_signals ?? []) as string[];
 }
 
+/** Where an owner appeals a block. */
+export const appealContact = () =>
+  config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null;
+
+const blockedRefusal = () =>
+  new Problem(
+    403,
+    "forbidden",
+    `Эта работа заблокирована модератором Полки: ссылку на неё создать нельзя.${
+      appealContact()
+        ? ` Если считаете решение ошибочным, напишите на ${appealContact()}.`
+        : ""
+    }`,
+  );
+
+/**
+ * The same content (sha256, or a near-duplicate text by SimHash) saved by
+ * other accounts that signed up by email within a day: a spam run. Two other
+ * accounts make three in all.
+ */
+async function duplicates(
+  c: PoolClient,
+  tenantId: string,
+  revision: { sha256: string; size: number; content_filter: FilterResult },
+) {
+  const simhash = revision.content_filter?.simhash ?? null;
+  const { rows } = await c.query(
+    `SELECT revision.id,revision.tenant_id FROM revisions revision
+     JOIN tenants tenant ON tenant.id=revision.tenant_id
+     JOIN accounts account ON account.id=tenant.owner_id
+     WHERE revision.created_at>now()-interval '1 day'
+       AND revision.tenant_id<>$1 AND ${SIGNED_UP_SQL("account")}
+       AND ((revision.sha256=$2 AND $3::bigint>=512)
+         OR ($4::text IS NOT NULL AND revision.content_filter ? 'simhash'
+             AND bit_count(('x'||(revision.content_filter->>'simhash'))::bit(64)
+                   # ('x'||$4::text)::bit(64))<=3))
+     LIMIT 200`,
+    [tenantId, revision.sha256, revision.size, simhash],
+  );
+  const tenants = new Set(rows.map((row) => row.tenant_id));
+  return tenants.size >= 2
+    ? {
+        revisionIds: rows.map((row) => row.id as string),
+        filter: {
+          v: 1,
+          hits: {
+            spam: {
+              score: 6,
+              terms: [`то же содержимое ещё у ${tenants.size} аккаунтов за сутки`],
+            },
+          },
+        } satisfies FilterResult,
+      }
+    : null;
+}
+
+/**
+ * What the content filter says about linking this revision: its save-time
+ * findings, the work's title, duplicates across accounts and the model's
+ * verdicts. Other accounts' links to the same spam are held too.
+ */
+async function moderationFor(
+  c: PoolClient,
+  standing: AuthorStanding,
+  tenantId: string,
+  artifactTitle: string | null,
+  revisionId: string,
+  notices: ModerationNotice[],
+): Promise<ModerationDecision> {
+  const {
+    rows: [revision],
+  } = await c.query(
+    `SELECT phishing_signals,content_filter,sha256,size,mime,
+       EXISTS(SELECT 1 FROM revision_files file
+              WHERE file.revision_id=revisions.id AND file.mime LIKE 'image/%') AS bundle_images
+     FROM revisions WHERE id=$1
+     -- The models' verdict is written to this row after a save: either it is
+     -- here now, or its writer waits for this link to commit and then
+     -- reconsiders it (content-moderation.ts, reconsiderLinks).
+     FOR SHARE OF revisions`,
+    [revisionId],
+  );
+  const stored = (revision?.content_filter ?? {}) as FilterResult;
+  const model = modelView(stored);
+  const spam =
+    config.CONTENT_FILTER_MODE !== "off" && !standing.operatorCreated && revision
+      ? await duplicates(c, tenantId, { ...revision, size: Number(revision.size) })
+      : null;
+  const content = decideContent({
+    filter: mergeResults(stored, scanText(artifactTitle ?? ""), spam?.filter),
+    model,
+    standing,
+    mode: config.CONTENT_FILTER_MODE,
+    autoblock: config.CONTENT_FILTER_AUTOBLOCK,
+    fraud: config.SHARE_MODERATION !== "off",
+  });
+  if (spam) {
+    const held = await c.query(
+      `UPDATE shares share SET moderation='held',moderation_reason='spam:duplicate',
+         moderated_at=now()
+       FROM tenants tenant JOIN accounts account ON account.id=tenant.owner_id
+       WHERE share.revision_id=ANY($1::uuid[]) AND share.moderation='none'
+         AND NOT share.revoked AND share.expires_at>now()
+         AND tenant.id=share.tenant_id AND ${SIGNED_UP_SQL("account")}
+       RETURNING share.id,share.tenant_id,share.revision_id`,
+      [spam.revisionIds],
+    );
+    for (const row of held.rows) {
+      notices.push({ kind: "held", shareId: row.id });
+      await recordEvent(c, {
+        actor: "filter",
+        action: "share.held",
+        category: "spam",
+        tenantId: row.tenant_id,
+        revisionId: row.revision_id,
+        shareId: row.id,
+        reason: "то же содержимое опубликовано с нескольких аккаунтов",
+      });
+    }
+  }
+  // Images no model has looked at: none configured, not yet, failed, out of
+  // budget, or images not sent (CONTENT_MODEL_IMAGES=false).
+  const images =
+    !!revision &&
+    (String(revision.mime).startsWith("image/") ||
+      revision.bundle_images ||
+      (stored.images ?? 0) > 0) &&
+    !(model.state === "checked" && config.CONTENT_MODEL_IMAGES);
+  return decideModeration(
+    standing,
+    (revision?.phishing_signals ?? []) as string[],
+    config.SHARE_MODERATION,
+    content,
+    images,
+  );
+}
+
+/**
+ * Act on a decision for a link that now exists: block (and maybe disable),
+ * hold or report; journal it; queue the operator's letter.
+ */
+async function applyDecision(
+  c: PoolClient,
+  actor: Actor,
+  share: { id: string; artifact_id: string; revision_id: string },
+  decision: ModerationDecision,
+  notices: ModerationNotice[],
+) {
+  const base = {
+    accountId: actor.id,
+    tenantId: actor.tenant,
+    artifactId: share.artifact_id,
+    revisionId: share.revision_id,
+    shareId: share.id,
+  };
+  const details = decision.content
+    ? { findings: decision.content.findings.map((finding) =>
+        finding.category === "csam"
+          ? { category: finding.category, score: finding.score, source: finding.source }
+          : finding) }
+    : {};
+  if (decision.block) {
+    const outcome = await blockRevisionInTransaction(c, {
+      tenantId: actor.tenant,
+      accountId: actor.id,
+      artifactId: share.artifact_id,
+      revisionId: share.revision_id,
+      category: decision.block,
+      actor: "filter",
+      reason: `фильтр содержимого: ${CATEGORY_LABEL[decision.block]}`,
+      freeze: !!decision.freeze,
+      details,
+    });
+    notices.push({
+      kind: "blocked",
+      shareId: share.id,
+      revisionId: share.revision_id,
+      category: decision.block,
+      frozen: outcome.frozen,
+      by: "filter",
+      content: decision.content,
+    });
+    return "blocked" as const;
+  }
+  if (decision.hold) {
+    await recordEvent(c, {
+      actor: "filter",
+      action: "share.held",
+      category: decision.content?.category ?? null,
+      reason: decision.hold,
+      details,
+      ...base,
+    });
+    notices.push({ kind: "held", shareId: share.id, content: decision.content });
+  } else if (decision.notify) {
+    await recordEvent(c, {
+      actor: "filter",
+      action: "share.flagged",
+      category: decision.content?.category ?? "fraud",
+      details,
+      ...base,
+    });
+    notices.push({ kind: "suspicious", shareId: share.id, content: decision.content });
+  }
+  return null;
+}
+
+/**
+ * The models answered about a revision after links to it were made: decide
+ * those links again, only ever more strictly (an open link may be held or
+ * blocked; nothing held is opened by a model).
+ */
+export async function reconsiderLinks(revisionId: string) {
+  const { rows } = await db.query(
+    `SELECT share.id,share.tenant_id,tenant.owner_id FROM shares share
+     JOIN tenants tenant ON tenant.id=share.tenant_id
+     WHERE share.revision_id=$1 AND NOT share.revoked AND share.expires_at>now()
+       AND share.moderation IN ('none','held')`,
+    [revisionId],
+  );
+  const notices: ModerationNotice[] = [];
+  for (const row of rows) {
+    const actor: Actor = { id: row.owner_id, tenant: row.tenant_id };
+    await transaction(async (c) => {
+      await lockActiveOwnerTenant(c, actor).catch(() => null);
+      const {
+        rows: [share],
+      } = await c.query(
+        `SELECT share.*,artifact.title FROM shares share
+         JOIN artifacts artifact ON artifact.id=share.artifact_id
+         WHERE share.id=$1 AND NOT share.revoked FOR UPDATE OF share`,
+        [row.id],
+      );
+      if (!share || share.moderation === "blocked") return;
+      const decision = await moderationFor(
+        c,
+        await authorStanding(c, actor.tenant),
+        actor.tenant,
+        share.title,
+        revisionId,
+        notices,
+      );
+      if (decision.block) {
+        await c.query(
+          "UPDATE shares SET moderation_reason=$2 WHERE id=$1",
+          [share.id, `blocked:${decision.block}`],
+        );
+        await applyDecision(c, actor, share, decision, notices);
+      } else if (share.moderation === "none" && decision.content?.action === "hold") {
+        await c.query(
+          `UPDATE shares SET moderation='held',moderation_reason=$2,moderated_at=now()
+           WHERE id=$1`,
+          [share.id, decision.hold],
+        );
+        await applyDecision(c, actor, share, decision, notices);
+      } else if (share.moderation === "none" && decision.content?.action === "notify")
+        await applyDecision(c, actor, share, { ...decision, hold: null, notify: true }, notices);
+    });
+  }
+  void dispatchModerationNotices(notices);
+}
+
+/** A link the filter blocked: the caller learns it after the block commits. */
+function throwIfBlocked(notices: ModerationNotice[]) {
+  if (notices.some((notice) => notice.kind === "blocked")) throw blockedRefusal();
+}
+
 /**
  * The single place a link is created. New accounts meet their limits here,
  * and SHARE_MODERATION decides whether the link waits for the operator
@@ -101,6 +384,8 @@ async function enableShareInTransaction(
     [artifactId],
   );
   if (existing) {
+    // A blocked link is not handed out again, to the owner or an agent.
+    if (existing.moderation === "blocked") throw blockedRefusal();
     if (existingPolicy === "agent-exact") {
       if (existing.revision_id !== input.expectedRevisionId)
         throw new Problem(
@@ -118,13 +403,19 @@ async function enableShareInTransaction(
     }
     return existing;
   }
+  if (await revisionBlocked(c, artifact.latest_revision_id)) throw blockedRefusal();
   const derivativeId = await assertLinkable(c, artifact.latest_revision_id);
   const standing = await authorStanding(c, actor.tenant);
   await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
-  const decision = decideModeration(
+  const decision = await moderationFor(
+    c,
     standing,
-    await revisionSignals(c, artifact.latest_revision_id),
+    actor.tenant,
+    artifact.title,
+    artifact.latest_revision_id,
+    notices,
   );
+  const holdReason = decision.block ? `blocked:${decision.block}` : decision.hold;
   await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1", [
     artifactId,
   ]);
@@ -147,12 +438,11 @@ async function enableShareInTransaction(
       derivativeId,
       sha256(tokenFor(shareId)),
       input.expiresInDays,
-      decision.hold,
+      holdReason,
     ],
   );
   await audit(c, actor, "share.enabled", shareId);
-  if (decision.hold) notices.push({ kind: "held", shareId });
-  else if (decision.notify) notices.push({ kind: "suspicious", shareId });
+  await applyDecision(c, actor, created, decision, notices);
   return created;
 }
 
@@ -218,6 +508,7 @@ async function publishShareInTransaction(
   if (!share) throw missing();
   if (share.revoked || new Date(share.expires_at).getTime() <= Date.now())
     throw new Problem(410, "expired", "Ссылка уже закрыта или истекла.");
+  if (share.moderation === "blocked") throw blockedRefusal();
   if (
     (
       await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [
@@ -245,26 +536,42 @@ async function publishShareInTransaction(
     ).rowCount
   )
     throw missing();
+  if (await revisionBlocked(c, input.revisionId)) throw blockedRefusal();
   const derivativeId = await assertLinkable(c, input.revisionId);
   // A new version is new content: an approved link of an untrusted author
-  // waits again, and a suspicious version is reported like a new link.
-  const decision =
-    share.moderation === "none"
-      ? decideModeration(
-          await authorStanding(c, actor.tenant),
-          await revisionSignals(c, input.revisionId),
-        )
-      : { hold: null, notify: false };
+  // waits again, and a suspicious version is reported like a new link. The
+  // content filter decides again even for a waiting link (it may block).
+  const {
+    rows: [artifact],
+  } = await c.query("SELECT title FROM artifacts WHERE id=$1", [share.artifact_id]);
+  const decision = await moderationFor(
+    c,
+    await authorStanding(c, actor.tenant),
+    actor.tenant,
+    artifact?.title ?? null,
+    input.revisionId,
+    notices,
+  );
+  if (share.moderation !== "none" && !decision.block) {
+    decision.hold = null;
+    decision.notify = false;
+  }
+  const holdReason = decision.block ? `blocked:${decision.block}` : decision.hold;
   await c.query(
     `UPDATE shares SET revision_id=$2,derivative_id=$3,
        moderation=CASE WHEN $4::text IS NULL THEN moderation ELSE 'held' END,
        moderation_reason=COALESCE($4,moderation_reason),
        moderated_at=CASE WHEN $4::text IS NULL THEN moderated_at ELSE now() END
      WHERE id=$1`,
-    [shareId, input.revisionId, derivativeId, decision.hold],
+    [shareId, input.revisionId, derivativeId, holdReason],
   );
-  if (decision.hold) notices.push({ kind: "held", shareId });
-  else if (decision.notify) notices.push({ kind: "suspicious", shareId });
+  await applyDecision(
+    c,
+    actor,
+    { id: shareId, artifact_id: share.artifact_id, revision_id: input.revisionId },
+    decision,
+    notices,
+  );
   await audit(c, actor, "share.published", shareId);
   return { ok: true };
 }
@@ -278,9 +585,17 @@ export async function enableOwnerShare(
   const notices: ModerationNotice[] = [];
   await transaction(async (c) => {
     await lockActiveOwnerTenant(c, actor);
-    await enableShareInTransaction(c, actor, artifactId, input, "web", notices);
+    await enableShareInTransaction(
+      c,
+      actor,
+      artifactId,
+      input,
+      "web",
+      notices,
+    );
   });
   void dispatchModerationNotices(notices);
+  throwIfBlocked(notices);
   return getArtifact(actor, artifactId);
 }
 
@@ -303,6 +618,7 @@ export async function publishOwnerShare(
     return publishShareInTransaction(c, actor, shareId, input, notices);
   });
   void dispatchModerationNotices(notices);
+  throwIfBlocked(notices);
   return result;
 }
 
@@ -353,10 +669,9 @@ async function agentShareResponse(
     new Date(share.expires_at).getTime() > Date.now() &&
     share.revision_id === result.revisionId &&
     share.derivative_id === result.derivativeId;
-  const moderation = (active ? share.moderation : "none") as
-    | "none"
-    | "held"
-    | "paused";
+  const moderation = (
+    share?.moderation === "blocked" ? "blocked" : active ? share.moderation : "none"
+  ) as "none" | "held" | "paused" | "blocked";
   return {
     ...result,
     state: active ? ("active" as const) : ("closed" as const),
@@ -374,6 +689,7 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
   const request = canonicalAgentShareRequest(input);
   const requestHash = sha256(JSON.stringify(request));
   const notices: ModerationNotice[] = [];
+
   const response = await withServiceActorTransaction(
     actor,
     "share",
@@ -450,6 +766,7 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
     },
   );
   void dispatchModerationNotices(notices);
+  throwIfBlocked(notices);
   return response;
 }
 
@@ -473,6 +790,7 @@ export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
   const request = { ...input };
   const requestHash = sha256(JSON.stringify(request));
   const notices: ModerationNotice[] = [];
+
   const response = await withServiceActorTransaction(
     actor,
     "share",
@@ -562,6 +880,7 @@ export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
     },
   );
   void dispatchModerationNotices(notices);
+  throwIfBlocked(notices);
   return response;
 }
 

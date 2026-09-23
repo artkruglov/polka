@@ -61,7 +61,7 @@ export const publishResponseSchema = z
     shelfUrl: z.string().url(),
     interactiveReady: z.boolean(),
     scriptsRunForRecipients: z.boolean(),
-    moderation: z.enum(["held", "paused"]).optional(),
+    moderation: z.enum(["held", "paused", "blocked"]).optional(),
     moderationMessage: z.string().optional(),
     expiresNote: z.string().optional(),
     linkUnavailableReason: z.string().optional(),
@@ -121,7 +121,7 @@ export const editsResponseSchema = z
         expiresAt: z.iso.datetime().optional(),
         state: z.enum(["active", "closed"]).optional(),
         url: z.string().url().nullable().optional(),
-        moderation: z.enum(["held", "paused"]).optional(),
+        moderation: z.enum(["held", "paused", "blocked"]).optional(),
         moderationMessage: z.string().optional(),
       })
       .strict()
