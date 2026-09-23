@@ -25,7 +25,7 @@
 
 ## Как получить
 
-Напишите на [artkruglov@gmail.com](mailto:artkruglov@gmail.com): кто вы, как собираетесь использовать Полку, нужны ли поддержка и SLA. Цена пока обсуждается в каждом случае отдельно, фиксированного прайса нет.
+Напишите на [hello@polochka.app](mailto:hello@polochka.app): кто вы, как собираетесь использовать Полку, нужны ли поддержка и SLA. Цена пока обсуждается в каждом случае отдельно, фиксированного прайса нет.
 
 ## Лицензионного ключа нет
 
@@ -43,4 +43,4 @@
 
 **You need one** to run a modified Полка as a network service without publishing your changes under the AGPL-3.0, to embed Полка in a proprietary product, or to get a warranty, support or an SLA under contract.
 
-**To get one**, write to [artkruglov@gmail.com](mailto:artkruglov@gmail.com). Pricing is agreed case by case; there is no price list yet. There is no license key: the commercial edition is the same code, and the boundary is legal, not technical. This file is an explanation, not the license; the LICENSE text or the signed agreement prevails.
+**To get one**, write to [hello@polochka.app](mailto:hello@polochka.app). Pricing is agreed case by case; there is no price list yet. There is no license key: the commercial edition is the same code, and the boundary is legal, not technical. This file is an explanation, not the license; the LICENSE text or the signed agreement prevails.
