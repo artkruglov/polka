@@ -36,6 +36,7 @@ npm run build
 npm test               # основной набор (нужны запущенные infra:up и .env)
 npm test -- --live     # наборы с включённым локальным viewer
 npm test -- --live tests/trash.test.ts   # один файл из live-набора
+npm run verify         # все проверки перед push и деплоем (облачного CI нет), около минуты
 ```
 
 `npm test` запускает `scripts/test-isolated.ts`. Раннер создаёт случайную базу PostgreSQL и отдельный versioned bucket, применяет миграции, прогоняет `tests/default-suite.json` (с `--live` — `tests/live-suite.json`) и удаляет только созданные им ресурсы. В конце он печатает `test-suite.cleanup`, и ошибка очистки считается падением прогона. Рабочие `DATABASE_URL` и `S3_BUCKET` тестам не передаются.

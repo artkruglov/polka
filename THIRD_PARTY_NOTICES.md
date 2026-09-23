@@ -28,7 +28,7 @@ IBM Plex Sans (`apps/web/public/fonts/`), © 2017 IBM Corp., Reserved Font Name 
 
 ## Production-зависимости
 
-Сводка создана командой `npx --yes license-checker-rseidelsohn@4 --production` 22.09.2026 для зависимостей из `package.json` (сама Полка в список не входит). CI проверяет, что новые зависимости используют разрешённые лицензии.
+Сводка создана командой `npx --yes license-checker-rseidelsohn@4 --production` 22.09.2026 для зависимостей из `package.json` (сама Полка в список не входит). `npm run verify` проверяет, что новые зависимости используют разрешённые лицензии.
 
 Сводка снята на macOS arm64. Платформенные пакеты зависят от машины: `@esbuild/darwin-arm64` и `fsevents` (только macOS) есть в этом списке, а в Linux-образе вместо них стоит `@esbuild/linux-*` той же версии и лицензии (MIT).
 

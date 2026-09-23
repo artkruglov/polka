@@ -35,7 +35,7 @@ npm test -- --live     # файлы из tests/live-suite.json с включён
 
 `npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Интересного». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
 
-CI повторяет `check`, `build`, `npm test` и `npm test -- --live`, проверяет права ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензии production-зависимостей и секреты в истории, собирает Docker-образы приложения и бэкапа, рендерит `deploy/hosted/compose.yml` и прогоняет smoke-тест образа.
+Облачного CI у репозитория нет: перед pull request запустите `npm run verify`. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов.
 
 ## Правила
 
@@ -43,7 +43,7 @@ CI повторяет `check`, `build`, `npm test` и `npm test -- --live`, пр
 - **Контракты.** Схемы и лимиты, общие для сервера и клиента, живут в `packages/contracts` (zod).
 - **Один сервис на действие.** Web, MCP и publish API вызывают одни и те же сервисы в `apps/server`. Не дублируйте проверки tenant, scope и идемпотентности в транспорте.
 - **Схема.** Схема меняется только новой миграцией в `deploy/migrations/` (существующие миграции не редактируются) и обновлением `packages/migrations.ts`. Новые права runtime-роли добавляются в `deploy/runtime-grants.sql`.
-- **Runtime.** Новая библиотека в `packages/contracts/runtime.ts` требует записи в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) и лицензии из списка, который разрешает CI.
+- **Runtime.** Новая библиотека в `packages/contracts/runtime.ts` требует записи в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) и лицензии из списка, который разрешает `npm run verify`.
 - **Секреты.** Не коммитьте `.env`, `.local/`, дампы, пользовательские файлы, токены и ключи.
 - **Документация.** Изменение поведения обновляет нужный документ в `docs/`, [docs/status.md](docs/status.md) и раздел `Unreleased` в [CHANGELOG.md](CHANGELOG.md).
 - **Форматирование:** `npm run format`.
