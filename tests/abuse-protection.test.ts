@@ -423,7 +423,9 @@ test("operator letter: GET and inspect change nothing, POST acts once, a repeat 
   assert.ok(letter, "held letter written in MAIL_MODE=local");
   assert.match(letter.subject, /ссылка ждёт проверки/);
   assert.match(letter.text, /Вход в банк/);
-  assert.match(letter.text, /new-[0-9a-f]{8}@example\.test/);
+  // The letter names the account, never its e-mail address.
+  assert.match(letter.text, /аккаунт email-[0-9a-f-]{36} \(регистрация по почте\)/);
+  assert.doesNotMatch(letter.text + letter.html, /@example\.test/);
   assert.match(letter.text, /похоже на фишинг/);
   assert.match(letter.text, /номер карты/);
   assert.match(letter.text, /Сбер/);

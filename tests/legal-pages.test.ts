@@ -38,12 +38,14 @@ for (const [name, title] of [
   ["privacy", "Политика обработки персональных данных"],
   ["terms", "Пользовательское соглашение"],
 ] as const)
-  test(`${name} text renders as a draft with visible placeholders`, () => {
+  test(`${name} text names the operator and has no unfilled fields`, () => {
     const html = render(React.createElement(Markdown, { source: doc(name) }));
     assert.match(html, new RegExp(`^<h1>${title}</h1>`));
-    assert.match(html, /<aside class="legal-note" role="note"><strong>Черновик для проверки юристом\.<\/strong>/);
-    assert.match(html, /<mark class="legal-placeholder">\[ИМЯ ОПЕРАТОРА\]<\/mark>/);
-    assert.match(html, /<mark class="legal-placeholder">\[КОНТАКТНЫЙ E-MAIL\]<\/mark>/);
+    assert.match(html, /Круглов Артем Игоревич/);
+    assert.match(html, /artkruglov@gmail\.com/);
+    assert.match(html, /<aside class="legal-note" role="note">/);
+    // Every field is filled: no placeholder is left for readers to see.
+    assert.doesNotMatch(html, /legal-placeholder|\[[А-ЯЁ][А-ЯЁ ,.…—-]*\]/);
     assert.ok((html.match(/<h2>/g) ?? []).length >= 8);
     // No Markdown syntax leaks into the page.
     assert.doesNotMatch(html, /\*\*|\]\(|^- |<p>- /m);

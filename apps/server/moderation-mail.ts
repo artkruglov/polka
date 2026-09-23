@@ -156,9 +156,12 @@ async function letterFor(notice: ModerationNotice, facts: any): Promise<Letter> 
 
 function compose(notice: ModerationNotice, facts: any, letter: Letter) {
   const title = clean(facts.title, 120) || "Без названия";
+  // No e-mail address in the letter: it may travel through a mail provider
+  // abroad. The login identifies the account; moderation.ts shows the address
+  // on the server when the operator needs it.
   const author = facts.signed_up
-    ? clean(facts.email ?? "адрес не указан", 120)
-    : `логин ${clean(facts.name, 60)}${facts.email ? ` <${clean(facts.email, 120)}>` : ""} (создан оператором)`;
+    ? `аккаунт ${clean(facts.name, 60)} (регистрация по почте)`
+    : `логин ${clean(facts.name, 60)} (создан оператором)`;
   const standing = facts.standing.trusted ? "доверенный" : "новый";
   const rows: Array<[string, string]> = [
     ["Работа", `«${title}», версия ${facts.number}`],
