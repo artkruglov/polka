@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.1.0-rc.5] — 2026-09-23
+
+Подготовка к открытому запуску: вход в продукт одной фразой агенту, открытая регистрация с потолком, онбординг, модерация и закрытый выход страниц через WebRTC.
+
 ### Added
 
 - **Статус оператора** `GET /api/ops/status` (по токену `OPS_STATUS_TOKEN`, без него маршрута нет): БД, работает ли обслуживание, возраст свежего бэкапа, свободный диск; 503, если проверка не прошла. Скрипт `scripts/ci/uptime.mjs` проверяет снаружи доступность, TLS-сертификаты и этот статус — для запуска по расписанию вне VM.
@@ -119,7 +123,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.4...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...HEAD
+[0.1.0-rc.5]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.5
 [0.1.0-rc.4]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.4
 [0.1.0-rc.3]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.3
 [0.1.0-rc.2]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.2
