@@ -54,6 +54,9 @@ const TermsPage = page(() =>
 const Pricing = page(() =>
   import("../../pages/pricing/index.tsx").then((m) => m.Pricing),
 );
+const Enterprise = page(() =>
+  import("../../pages/enterprise/index.tsx").then((m) => m.Enterprise),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -123,4 +126,5 @@ export {
   PrivacyPage,
   TermsPage,
   Pricing,
+  Enterprise,
 };
