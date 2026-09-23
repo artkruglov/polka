@@ -14,10 +14,14 @@ import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts"
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { Button, LinkButton } from "../../shared/ui/controls.tsx";
+import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
+import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
 
 export function Landing() {
   const account = useAccount();
+  // The same phrase the first-run steps show; GET /connect explains the rest to the agent.
+  const phrase = connectPhrase(location.origin);
   const [retry, setRetry] = useState(0);
   const catalog = useEditorialList(retry);
   const imports = useCapabilities();
@@ -38,6 +42,25 @@ export function Landing() {
             Сохраните отчёт, страницу или прототип из чата. Отправьте ссылку —
             получателю не нужен аккаунт в Claude или ChatGPT.
           </p>
+
+          <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
+            <span id="landing-agent-title" className="landing-agent-title">
+              Скопируйте своему агенту
+            </span>
+            <div className="landing-agent-phrase">
+              <code>{phrase}</code>
+              <CopyButton
+                value={phrase}
+                label="Скопировать"
+                successText="Скопировано"
+                variant="primary"
+              />
+            </div>
+            <small>
+              Работает с Codex, Claude Code, Claude.ai и ChatGPT: агент выполнит
+              одну команду, Полка откроется в браузере, токен не нужен.
+            </small>
+          </div>
 
           {canImport ? (
             <>
