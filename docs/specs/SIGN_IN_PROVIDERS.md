@@ -62,7 +62,7 @@
 
 ### VK ID
 
-VK ID работает по OAuth 2.1 с обязательным PKCE. В 2026 году рабочие адреса переехали на домен `id.vk.ru`: `id.vk.com` отвечает переадресацией. Полка использует `id.vk.ru`.
+VK ID работает по OAuth 2.1 с обязательным PKCE. Актуальная документация VK ID (2026) указывает адреса на домене `id.vk.ru` (раньше — `id.vk.com`). Полка использует `id.vk.ru`; адреса можно переопределить для тестов.
 
 - Авторизация: `https://id.vk.ru/authorize`. Параметры: `response_type=code`, `client_id`, `redirect_uri`, `state` (не короче 32 символов), `code_challenge`, `code_challenge_method=S256`, `scope=email`.
 - Возврат: `code`, `state`, `device_id`.

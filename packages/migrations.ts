@@ -34,6 +34,9 @@ const catalog = [
   { version: 28, file: "028_mcp_oauth.sql" },
   { version: 29, file: "029_abuse_protection.sql" },
   { version: 30, file: "030_comments.sql" },
+  // 031 is taken by a concurrent branch (031_content_filter.sql); the catalog
+  // and every recipe accept the set with or without it until both land.
+  { version: 32, file: "032_account_identities.sql" },
 ] as const satisfies readonly SchemaMigration[];
 
 export const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = Object.freeze(
