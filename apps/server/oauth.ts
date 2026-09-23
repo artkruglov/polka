@@ -612,7 +612,7 @@ export async function decideAuthorization(
 
 type TokenAnswer = Record<string, unknown>;
 
-async function revokeConnectionInTransaction(
+export async function revokeConnectionInTransaction(
   c: PoolClient,
   connection: { id: string; tenant_id: string; account_id: string },
 ) {
