@@ -1,4 +1,3 @@
-import "./styles.css";
 import React, { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
