@@ -15,6 +15,7 @@
 | entities/account, folder, artifact | состояние пользователя, папки, форматирование материала | features и выше |
 | features/import-url | форма, очередь, восстановление задания | bring |
 | features/capture-file, share-artifact, upload-artifact | отдельные пользовательские действия | страницы и reader |
+| features/compare-revisions | сравнение двух версий: загрузка исходника, diff в Web Worker (`shared/lib/line-diff*.ts`), `DiffView` без CSS-импорта для Node-тестов | app/workspace передаёт в reader слотом `compare` |
 | features/paste-code | вставка кода артефакта из чата; квитанцию (`SavedWork` из capture-file) подставляет страница | bring, provider-guide через bring |
 | features/first-run | чек-лист первых шагов (агент, работа, ссылка) и сохранение страницы-примера; CSS подключается из main.tsx, потому что `FirstRunSteps` рендерят Node-тесты | shelf, start |
 | entities/onboarding | вывод шагов из подключений и списка работ (`steps.ts`), фраза и подсказки клиентов, страница-пример, скрытие в localStorage | features/first-run, shelf |
