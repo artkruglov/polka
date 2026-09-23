@@ -964,6 +964,58 @@ test(
   },
 );
 
+test("Agents get plain-text setup instructions at /connect", async () => {
+  const guide = await call("GET", "/connect", undefined, "");
+  assert.equal(guide.statusCode, 200);
+  assert.match(String(guide.headers["content-type"]), /^text\/plain/);
+  const mcp = `${config.APP_ORIGIN}/mcp`;
+  assert.ok(guide.body.includes(`codex mcp add polka --url ${mcp}`));
+  assert.ok(guide.body.includes(`claude mcp add --transport http --scope user polka ${mcp}`));
+  // The setup never asks the agent for a token or a password.
+  assert.doesNotMatch(guide.body, /Bearer|POLKA_MCP_TOKEN|пароль/i);
+});
+
+test(
+  "Email identity: new shelves per day are capped for the installation and per IP",
+  { skip: config.MAIL_MODE !== "local" },
+  async () => {
+    const { readFile } = await import("node:fs/promises");
+    const mutable = config as { EMAIL_SIGNUP_DAILY_LIMIT: number; EMAIL_SIGNUP_DAILY_PER_IP: number };
+    const prior = { day: mutable.EMAIL_SIGNUP_DAILY_LIMIT, ip: mutable.EMAIL_SIGNUP_DAILY_PER_IP };
+    const ip = `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+    const post = (url: string, body: unknown, cookie = "") =>
+      app.inject({ remoteAddress: ip, method: "POST", url, headers: { origin, ...(cookie ? { cookie } : {}) }, payload: body as object });
+    const run = randomUUID().slice(0, 8);
+    const signIn = async (email: string) => {
+      const start = await post("/api/auth/email/start", { email });
+      assert.equal(start.statusCode, 200, start.body);
+      const id = start.json().id as string;
+      const { code } = JSON.parse(await readFile(`.local/mail/${id}.json`, "utf8"));
+      return post("/api/auth/email/verify", { id, code }, `polka_email_challenge=${start.cookies[0].value}`);
+    };
+    mutable.EMAIL_SIGNUP_DAILY_PER_IP = 1;
+    try {
+      const first = await signIn(`cap-a-${run}@example.test`);
+      assert.equal(first.statusCode, 200, first.body);
+      // A second new shelf from the same IP is refused before any code is sent.
+      const second = await post("/api/auth/email/start", { email: `cap-b-${run}@example.test` });
+      assert.equal(second.statusCode, 429, second.body);
+      assert.match(second.json().message, /подключения/);
+      // An existing account still signs in from this IP.
+      assert.equal((await signIn(`cap-a-${run}@example.test`)).statusCode, 200);
+      // A full day for the whole installation refuses new shelves from anywhere.
+      mutable.EMAIL_SIGNUP_DAILY_PER_IP = prior.ip;
+      mutable.EMAIL_SIGNUP_DAILY_LIMIT = 0;
+      const full = await call("POST", "/api/auth/email/start", { email: `cap-c-${run}@example.test` }, "");
+      assert.equal(full.statusCode, 429, full.body);
+      assert.match(full.json().message, /завтра/);
+    } finally {
+      mutable.EMAIL_SIGNUP_DAILY_LIMIT = prior.day;
+      mutable.EMAIL_SIGNUP_DAILY_PER_IP = prior.ip;
+    }
+  },
+);
+
 test(
   "Email identity: an invite-only installation sends codes only to invited addresses",
   { skip: config.MAIL_MODE !== "local" },

@@ -26,6 +26,38 @@ const fingerprint = (id: string, code: string) =>
 // in the owner's inbox.
 const CODE_DIGITS = 8;
 
+// New shelves per day: counted when an account is created, in its transaction,
+// so a refused attempt does not spend the budget. Starting a sign-in only
+// looks, so a new visitor learns about a full day before waiting for a code.
+const signupKeys = (ip: string) => [
+  { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
+  { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
+];
+
+async function signupRoomLeft(
+  c: Pick<LocalDeliveryClient, "query">,
+  ip: string,
+  count: boolean,
+) {
+  for (const { key, max, message } of signupKeys(ip)) {
+    const { rows } = count
+      ? await c.query(
+          `INSERT INTO login_limits VALUES($1,1,now()+interval '24 hours')
+           ON CONFLICT(key) DO UPDATE SET
+             attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END,
+             reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+interval '24 hours' ELSE login_limits.reset_at END
+           RETURNING attempts`,
+          [sha256(key)],
+        )
+      : await c.query(
+          "SELECT attempts+1 AS attempts FROM login_limits WHERE key=$1 AND reset_at>now()",
+          [sha256(key)],
+        );
+    if (Number(rows[0]?.attempts ?? 1) > max())
+      throw new Problem(429, "quota", message);
+  }
+}
+
 /** In invite mode, an address listed exactly or by its @domain. */
 export function emailInvited(email: string) {
   const domain = email.slice(email.lastIndexOf("@"));
@@ -130,11 +162,12 @@ export async function beginEmailLogin(email: string, ip: string) {
     // Invite-only installations send codes to existing accounts and invited
     // addresses. The answer is the same either way, so the form does not tell
     // a stranger which addresses are invited.
-    if (config.EMAIL_SIGNUP === "invite" && !emailInvited(email)) {
-      const known = await c.query("SELECT 1 FROM accounts WHERE email=$1", [
-        email,
-      ]);
-      if (!known.rowCount) return false;
+    const known = (
+      await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])
+    ).rowCount;
+    if (!known) {
+      if (config.EMAIL_SIGNUP === "invite" && !emailInvited(email)) return false;
+      await signupRoomLeft(c, ip, false);
     }
     await c.query(
       `INSERT INTO login_challenges(id,email,code_hash,browser_hash,delivery,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes')`,
@@ -253,6 +286,7 @@ export async function verifyEmailLogin(
       if (!tenant || !account) return null;
     }
     if (!account) {
+      await signupRoomLeft(c, ip, true);
       const accountId = randomUUID();
       // Unused random password keeps legacy password login separate from email identities.
       const password = await passwordHash(randomBytes(32).toString("hex"));

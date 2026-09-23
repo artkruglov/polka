@@ -82,12 +82,18 @@ export function Signup() {
     }
   }
   const passwordOnly = mode === "disabled";
+  // Sent here by an agent's connection request (Codex, Claude Code, Claude.ai…).
+  const forAgent = next.startsWith("/oauth/consent");
   return (
     <AppShell current="shelf" account={account}>
       <main className="onboard">
         <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
         <span className="eyebrow">
-          {passwordOnly ? "Вход в Полку" : "Своя полка за пару шагов"}
+          {forAgent
+            ? "Агент просит доступ к Полке"
+            : passwordOnly
+              ? "Вход в Полку"
+              : "Своя полка за пару шагов"}
         </span>
         <h1>
           {mode === "loading"
@@ -111,6 +117,12 @@ export function Signup() {
                 ? "Вход по приглашению. Введите почту, на которую вас пригласили, — пришлём код."
                 : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
         </p>
+        {forAgent && !challenge && !passwordOnly && mode !== "loading" && (
+          <aside className="onboard-note">
+            Войдите или создайте полку по почте. Сразу после этого Полка
+            спросит, что разрешить агенту, — и подключение готово.
+          </aside>
+        )}
         {mode === "loading" && (
           <p className="entry-loading" role="status">
             Проверяем способы входа…

@@ -49,6 +49,10 @@ const env = z
     // shelf. invite: only addresses that already have an account or match
     // EMAIL_SIGNUP_ALLOW (addresses and @domains, comma- or space-separated).
     EMAIL_SIGNUP: z.enum(["open", "invite"]).default("open"),
+    // New shelves created by email sign-in per day: for the whole installation,
+    // and per client IP. 0 stops new shelves; existing accounts sign in as usual.
+    EMAIL_SIGNUP_DAILY_LIMIT: z.coerce.number().int().min(0).max(100000).default(50),
+    EMAIL_SIGNUP_DAILY_PER_IP: z.coerce.number().int().min(0).max(1000).default(3),
     EMAIL_SIGNUP_ALLOW: z
       .string()
       .default("")
