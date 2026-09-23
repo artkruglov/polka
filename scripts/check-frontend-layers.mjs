@@ -9,7 +9,7 @@ export function checkSource(file,source,root){
  const [layer,slice]=relative(root,file).split(sep);
  if(!layers.includes(layer))return [];
  const failures=[];
- const contracts=resolve(root,'../../../packages/contracts'),editorial=resolve(root,'../../../packages/editorial.ts');
+ const contracts=resolve(root,'../../../packages/contracts'),editorial=resolve(root,'../../../packages/editorial.ts'),legal=resolve(root,'../../../docs/legal');
  const fail=message=>failures.push(`${relative(root,file)}: ${message}`);
  let parsed;
  try{parsed=parseSync(file,source);}catch{fail('Cannot parse module');return failures;}
@@ -23,7 +23,9 @@ export function checkSource(file,source,root){
   }
   const target=resolve(dirname(file),specifier.split(/[?#]/)[0]);
   if(!inside(root,target)){
-   if(!inside(contracts,target)&&target!==editorial)fail(`Outside frontend contracts: ${specifier}`);
+   // Legal texts are reviewed as Markdown in docs/legal and bundled as raw strings.
+   const legalText=inside(legal,target)&&target.endsWith('.md')&&specifier.endsWith('?raw');
+   if(!inside(contracts,target)&&target!==editorial&&!legalText)fail(`Outside frontend contracts: ${specifier}`);
    return;
   }
   const [to,toSlice]=relative(root,target).split(sep);

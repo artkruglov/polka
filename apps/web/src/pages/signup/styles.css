@@ -13,6 +13,9 @@
 .onboard-secondary { display: flex; flex-wrap: wrap; gap: 10px; }
 .onboard-password { display: grid; gap: 20px; }
 .onboard-fine { color: var(--muted-2); font-size: var(--text-sm); line-height: 1.6; }
+.onboard-consent { margin-top: 16px; }
+.onboard-consent a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.onboard-consent a:hover { color: var(--accent); }
 .onboard-legacy { display: inline-flex; align-items: center; gap: 8px; width: 100%; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: var(--text-base); }
 .onboard-legacy:hover { color: var(--accent); }
 @media (max-width: 720px) {

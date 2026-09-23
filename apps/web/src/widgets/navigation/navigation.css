@@ -53,6 +53,12 @@
 
 .site-tabbar { display: none; }
 
+/* Quiet document links under every page. */
+.site-footer { padding: 20px var(--gutter) 24px; }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.site-footer a { color: var(--muted-2); font-size: var(--text-sm); }
+.site-footer a:hover { color: var(--accent); }
+
 /* Mobile navigation drawer (folders) */
 .mobile-nav { display: grid; gap: 2px; padding: 12px 8px 20px; }
 
@@ -80,4 +86,6 @@
   .site-tabbar svg { width: 22px; height: 22px; stroke-width: 1.7; }
   .site-tabbar a[data-primary] svg { width: 30px; height: 30px; padding: 5px; border-radius: 50%; background: var(--accent); color: #fff; stroke-width: 2.2; }
   .site-tabbar a[data-primary][aria-current="page"] svg { background: var(--accent-strong); }
+  .site-footer { padding: 16px var(--gutter-mobile); }
+  .site-footer a { display: inline-flex; align-items: center; min-height: 40px; }
 }

@@ -42,6 +42,12 @@ const Moderation = page(() =>
 const Away = page(() =>
   import("../../pages/away/index.tsx").then((m) => m.Away),
 );
+const PrivacyPage = page(() =>
+  import("../../pages/legal/index.tsx").then((m) => m.PrivacyPage),
+);
+const TermsPage = page(() =>
+  import("../../pages/legal/index.tsx").then((m) => m.TermsPage),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -107,4 +113,6 @@ export {
   Moderation,
   OAuthConsent,
   Away,
+  PrivacyPage,
+  TermsPage,
 };

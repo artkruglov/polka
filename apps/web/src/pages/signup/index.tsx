@@ -7,6 +7,7 @@ import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
+import { SignupConsent } from "./consent.tsx";
 export function Signup() {
   const account = useAccount();
   const sending = useRef(false);
@@ -243,6 +244,9 @@ export function Signup() {
             )}
           </form>
         ) : null}
+        {!passwordOnly && mode !== "loading" && mode !== "error" && (
+          <SignupConsent />
+        )}
         {!passwordOnly && mode !== "loading" && (
           <a
             className="onboard-legacy"
