@@ -5,7 +5,7 @@
  * else (account, consent) happens in the user's browser over OAuth, so no
  * token or password passes through the agent or the chat.
  */
-export function connectGuide(origin: string) {
+export function connectGuide(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
   return `# Подключить Полку
 
@@ -25,7 +25,7 @@ export function connectGuide(origin: string) {
 Когда Полка подключена, сохраняй работу инструментом \`polka_publish\`: он вернёт ссылку ${origin}/s#…, которую можно отправить кому угодно.
 
 Полный справочник для агентов (инструменты, HTTP API, лимиты): ${origin}/llms.txt.
-
+${sourceUrl ? `\nИсходный код этой установки (AGPL-3.0): ${sourceUrl}\n` : ""}
 ---
 
 # Connect Полка
@@ -46,5 +46,5 @@ Tell the user: "Полка will open. Sign in or create a shelf with your email 
 Once connected, save work with the \`polka_publish\` tool: it returns a link ${origin}/s#… you can send to anyone.
 
 Full agent reference (tools, HTTP API, limits): ${origin}/llms.txt.
-`;
+${sourceUrl ? `\nSource code of this installation (AGPL-3.0): ${sourceUrl}\n` : ""}`;
 }

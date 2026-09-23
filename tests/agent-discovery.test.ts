@@ -53,12 +53,12 @@ function assertPublic(response: Awaited<ReturnType<typeof get>>, type: string) {
   assert.equal(response.cookies.length, 0);
 }
 
-/** Every absolute URL in the text belongs to the given origin. */
-function onlyOrigin(text: string, expected: string) {
+/** Every absolute URL in the text belongs to the given origin (or is the source link). */
+function onlyOrigin(text: string, expected: string, source?: string) {
   const urls = text.match(/https?:\/\/[^\s"'`)<>,;]+/g) ?? [];
   assert.ok(urls.length > 0);
   for (const url of urls)
-    if (!url.startsWith("https://schemas.agentskills.io/"))
+    if (!url.startsWith("https://schemas.agentskills.io/") && url !== source)
       assert.ok(url.startsWith(expected), `${url} is not on ${expected}`);
 }
 
@@ -87,7 +87,11 @@ test("GET /llms.txt: plain text with every section, on APP_ORIGIN", async () => 
   assert.match(text, /`moderation`: "held"/);
   assert.match(text, /signs in or creates a shelf in their own browser/);
   assert.match(text, /Never print tokens/);
-  onlyOrigin(text, origin);
+  // AGPL-3.0 § 13: agents can point their users at this installation's source.
+  assert.ok(
+    text.includes(`Source code of this installation (AGPL-3.0): ${config.SOURCE_URL}\n`),
+  );
+  onlyOrigin(text, origin, config.SOURCE_URL);
   // The tools are the ones the MCP server registers, with their scopes.
   for (const tool of mcpToolCatalog())
     assert.ok(
@@ -270,4 +274,14 @@ test("another APP_ORIGIN is substituted everywhere", () => {
     onlyOrigin(text, OTHER);
   }
   assert.ok(connectGuide(OTHER).includes(`${OTHER}/llms.txt`));
+});
+
+test("a fork's SOURCE_URL is what /llms.txt and /connect offer", () => {
+  const source = "https://git.example.org/team/polka-fork";
+  for (const text of [llmsText(OTHER, source), connectGuide(OTHER, source)]) {
+    assert.ok(text.includes(source));
+    assert.doesNotMatch(text, /github\.com\/artkruglov/);
+    onlyOrigin(text, OTHER, source);
+  }
+  assert.doesNotMatch(connectGuide(OTHER), /AGPL/);
 });

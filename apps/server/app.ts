@@ -214,7 +214,7 @@ export async function createApp() {
   app.get("/connect", async (_req, reply) =>
     reply
       .type("text/plain; charset=utf-8")
-      .send(connectGuide(config.APP_ORIGIN)),
+      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL)),
   );
   // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
   registerAgentDiscovery(app);
@@ -245,6 +245,8 @@ export async function createApp() {
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,
     emailSignup: config.EMAIL_SIGNUP,
+    // AGPL-3.0 § 13: the interface links users to this installation's source.
+    sourceUrl: config.SOURCE_URL,
   }));
   app.get("/api/editorial", listEditorial);
   app.get("/api/editorial/:slug", async (req) => {
