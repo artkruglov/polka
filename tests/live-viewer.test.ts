@@ -410,7 +410,9 @@ test("app capabilities and frame policy expose only the enabled experiment mode"
   assert.match(
     capabilities.headers["content-security-policy"] as string,
     new RegExp(
-      `frame-src 'self' ${config.VIEWER_ORIGIN.replaceAll(".", "\\.")}`,
+      // Static and interactive views both come from the viewer: the app
+      // frames nothing of its own.
+      `frame-src ${config.VIEWER_ORIGIN.replaceAll(".", "\\.")};`,
     ),
   );
 });

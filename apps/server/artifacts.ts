@@ -18,7 +18,11 @@ import { db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-import { inspectHtml, looksLikeHtml, type HtmlInspection } from "./html.ts";
+import {
+  inspectHtmlBounded,
+  looksLikeHtml,
+  type HtmlInspection,
+} from "./html.ts";
 import { SignalCollector, scanScript } from "./phishing-signals.ts";
 import {
   createSingleHtmlRevisionManifest,
@@ -250,10 +254,10 @@ export async function beginUploadInTransaction(
   );
   return { uploadId: id, receipt: null };
 }
-function validateBytes(
+async function validateBytes(
   bytes: Buffer,
   input: ReturnType<typeof beginUploadSchema.parse>,
-): HtmlInspection | null {
+): Promise<HtmlInspection | null> {
   if (bytes.length !== input.size || sha256(bytes) !== input.sha256)
     throw new Problem(
       422,
@@ -296,7 +300,7 @@ function validateBytes(
           "invalid",
           "Это не похоже на HTML-страницу. Сохраните её как текст или выберите файл .html.",
         );
-      return inspectHtml(source);
+      return inspectHtmlBounded(source);
     }
   }
   return null;
@@ -387,7 +391,7 @@ export async function uploadBytesInTransaction(
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   const input = beginUploadSchema.parse(u.request);
-  validateBytes(bytes, input);
+  await validateBytes(bytes, input);
   if (u.receipt) return { stored: true };
   await validateUploadTarget(c, actor, input);
   const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
@@ -415,7 +419,7 @@ export async function finalizeUploadInTransaction(
   const input = beginUploadSchema.parse(u.request);
   await validateUploadTarget(c, actor, input);
   const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
-  const inspection = validateBytes(bytes, input);
+  const inspection = await validateBytes(bytes, input);
   const htmlProfile = inspection?.profile ?? null;
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
@@ -830,7 +834,14 @@ export async function finalizeBundleUploadInTransaction(
     object_version: string;
   }> = [];
   let entryBytes: Buffer | null = null;
+  // Phishing signals of every page and script of the bundle. Pages go through
+  // the same bounded (off-thread, deadline) parse as the profile.
   const signals = new SignalCollector();
+  const inspectPage = async (bytes: Buffer) => {
+    const inspection = await inspectHtmlBounded(bytes.toString("utf8"));
+    for (const signal of inspection.signals) signals.add(signal);
+    return inspection.profile;
+  };
   for (const [index, file] of input.manifest.files.entries()) {
     const stored = staged.find((row) => row.file_index === index);
     if (
@@ -844,8 +855,7 @@ export async function finalizeBundleUploadInTransaction(
     if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     // Phishing signals of every page and script (a lone entrypoint is read
     // below, in the same walk as its profile).
-    else if (file.mime === "text/html")
-      inspectHtml(bytes.toString("utf8"), signals);
+    else if (file.mime === "text/html") await inspectPage(bytes);
     else if (file.mime === "text/javascript")
       scanScript(bytes.toString("utf8"), signals);
     verified.push({ file, ...stored });
@@ -858,10 +868,10 @@ export async function finalizeBundleUploadInTransaction(
   // multi-file bundle stays runtime-only until a derivative is prepared.
   const htmlProfile: HtmlProfile =
     input.manifest.files.length === 1 && entryBytes
-      ? inspectHtml(entryBytes.toString("utf8"), signals).profile
+      ? await inspectPage(entryBytes)
       : "unsupported";
   if (input.manifest.files.length !== 1 && entryBytes)
-    inspectHtml(entryBytes.toString("utf8"), signals);
+    await inspectPage(entryBytes);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
   if (

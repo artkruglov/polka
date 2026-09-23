@@ -13,13 +13,14 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { registerFrontend } from "../apps/server/frontend.ts";
-import { inspectHtml } from "../apps/server/html.ts";
+import { inspectHtml, inspectHtmlBounded } from "../apps/server/html.ts";
 import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import {
   signModerationToken,
   verifyModerationToken,
 } from "../apps/server/moderation-tokens.ts";
 import {
+  SCAN_INCOMPLETE,
   SignalCollector,
   isSuspicious,
   scanScript,
@@ -653,6 +654,22 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
     ),
     false,
   );
+});
+
+test("signals of a large page come back from the bounded worker; an unreadable page counts as suspicious", async () => {
+  const padding = `<p>${"Обычный абзац текста страницы. ".repeat(1_000)}</p>`;
+  const large = PHISHING.replace("</body>", `${padding}</body>`);
+  assert.ok(large.length > 16 * 1024);
+  const read = await inspectHtmlBounded(large);
+  assert.equal(read.profile, "static");
+  assert.equal(isSuspicious(read.signals), true, read.signals.join());
+  const honest = await inspectHtmlBounded(HONEST.replace("</body>", `${padding}</body>`));
+  assert.equal(isSuspicious(honest.signals), false, honest.signals.join());
+  // Deep nesting cannot hide a page from the check: past the deadline it is
+  // "unsupported" (no static link) and suspicious (a live link would wait).
+  const nested = await inspectHtmlBounded("<div>".repeat(200_000), 1_000);
+  assert.deepEqual(nested, { profile: "unsupported", signals: [SCAN_INCOMPLETE] });
+  assert.equal(isSuspicious(nested.signals), true);
 });
 
 test("the phishing scan stays linear in the page size", () => {
