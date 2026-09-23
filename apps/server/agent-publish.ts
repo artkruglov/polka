@@ -90,11 +90,12 @@ type InteractiveOutcome = { ready: boolean; reason: string | null };
  * link is bound to it. Build refusals are reported, never thrown: the save
  * and a static link stand on their own.
  */
-async function prepareInteractive(
+export async function prepareInteractive(
   actor: ServiceActor,
   key: string,
   revisionId: string,
   htmlProfile: string | null,
+  scope: "capture" | "revise" = "capture",
 ): Promise<InteractiveOutcome | null> {
   if (!config.HTML_LIVE_ENABLED || htmlProfile === "static") return null;
   let status: InlineBuildStatus | null;
@@ -105,7 +106,7 @@ async function prepareInteractive(
     const deadline = Date.now() + DERIVATIVE_BUILD_TIMEOUT_MS + 1_000;
     while (status?.state === "pending" && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 250));
-      status = await withServiceActorTransaction(actor, "capture", (c) =>
+      status = await withServiceActorTransaction(actor, scope, (c) =>
         previewStatusInTransaction(c, actor.tenantId, revisionId),
       );
     }

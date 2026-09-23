@@ -15,8 +15,18 @@ import {
 // could otherwise replace the Полка tab with a look-alike page.
 export const STATIC_HTML_SANDBOX =
   "allow-popups allow-popups-to-escape-sandbox";
-export const staticHtmlCsp = (frameAncestors: string) =>
-  `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
+/**
+ * With comments (docs/specs/COMMENTS.md) the static view runs exactly one
+ * script of Полка's, the comment overlay: the sandbox gains allow-scripts
+ * and script-src admits only this response's random nonce. The page's own
+ * <script>, inline handlers and javascript: URLs stay blocked (no
+ * 'unsafe-inline'), and so does the network, for the overlay too.
+ */
+export const STATIC_OVERLAY_SANDBOX = `allow-scripts ${STATIC_HTML_SANDBOX}`;
+export const staticHtmlCsp = (frameAncestors: string, scriptNonce?: string) =>
+  scriptNonce
+    ? `sandbox ${STATIC_OVERLAY_SANDBOX}; default-src 'none'; script-src 'nonce-${scriptNonce}'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}; child-src 'none'; worker-src 'none'; manifest-src 'none'; object-src 'none'`
+    : `sandbox ${STATIC_HTML_SANDBOX}; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; form-action 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}; child-src 'none'; worker-src 'none'; manifest-src 'none'`;
 /** The static view on the app origin: only a single-domain install uses it. */
 export const STATIC_HTML_CSP = staticHtmlCsp("'self'");
 
@@ -49,17 +59,35 @@ const VIEWER_GUARD_BYTES = Buffer.from(VIEWER_GUARD);
  * script before its head, and that script would run first.
  */
 export function withViewerGuard(html: Buffer): Buffer {
+  return withLeadingMarkup(html, VIEWER_GUARD_BYTES);
+}
+
+/**
+ * Viewer-added scripts go at the very start of the document, after a
+ * leading doctype only. Nothing of the page comes before them, so no
+ * unfinished tag of the page can swallow them (or their nonce).
+ */
+export function withLeadingMarkup(html: Buffer, markup: Buffer): Buffer {
   const text = html.toString("latin1");
   let at = 0;
-  // Skip a byte-order mark, whitespace and comments before a doctype.
+  // Skip a byte-order mark, whitespace and comments before a doctype. A
+  // comment ends where the tokenizer ends it ("<!-->", "<!--->", the first
+  // "-->" or "--!>"): a scan that read past the real end could place the
+  // markup inside the page's own unfinished tag. When unsure, the markup
+  // goes at byte 0, before everything.
   for (;;) {
     const rest = text.slice(at, at + 4);
     if (at === 0 && text.startsWith("\u00ef\u00bb\u00bf")) at = 3;
     else if (/^\s/.test(rest)) at += 1;
     else if (rest === "<!--") {
-      const end = text.indexOf("-->", at + 4);
-      if (end === -1) break;
-      at = end + 3;
+      if (text.startsWith(">", at + 4)) at += 5;
+      else if (text.startsWith("->", at + 4)) at += 6;
+      else {
+        COMMENT_END.lastIndex = at + 4;
+        const end = COMMENT_END.exec(text);
+        if (!end) return Buffer.concat([markup, html]);
+        at = end.index + end[0].length;
+      }
     } else break;
   }
   if (text.slice(at, at + 9).toLowerCase() === "<!doctype") {
@@ -67,11 +95,11 @@ export function withViewerGuard(html: Buffer): Buffer {
     if (end !== -1)
       return Buffer.concat([
         html.subarray(0, end + 1),
-        VIEWER_GUARD_BYTES,
+        markup,
         html.subarray(end + 1),
       ]);
   }
-  return Buffer.concat([VIEWER_GUARD_BYTES, html]);
+  return Buffer.concat([markup, html]);
 }
 
 // View-only transform (downloads stay byte-exact): a plain link would try to

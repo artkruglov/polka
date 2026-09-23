@@ -74,5 +74,9 @@
   "tests/abuse-protection.test.ts",
   "tests/line-diff.test.ts",
   "tests/compare-revisions.test.ts",
-  "tests/link-preview.test.ts"
+  "tests/link-preview.test.ts",
+  "tests/comments.test.ts",
+  "tests/edit-patch.test.ts",
+  "tests/comment-overlay-dom.test.ts",
+  "tests/share-return.test.ts"
 ]

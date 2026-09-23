@@ -557,3 +557,149 @@ export function formatModerationQueue(
     `${queue.length} link(s) wait. Approve: moderation:approve -- <shareId> [--trust]; unpause: moderation:unpause -- <shareId>; close: moderation:revoke-share -- <shareId>.`,
   ].join("\n");
 }
+
+// Comments (docs/specs/COMMENTS.md, «Модерация»). Disabling an author hides
+// all their comments and reactions (every read filters on accounts.disabled);
+// these act on one link's comments or on one comment.
+
+const commentId = (value: string) => {
+  if (!z.string().uuid().safeParse(value).success)
+    throw new ModerationError(`Not a comment id: ${clean(value, 60)}`);
+  return value;
+};
+
+/** Every comment of one link, hidden ones included, oldest first. */
+export async function listShareComments(shareId: string) {
+  if (!z.string().uuid().safeParse(shareId).success)
+    throw new ModerationError(`Not a share id: ${clean(shareId, 60)}`);
+  const { rows } = await db.query(
+    `SELECT comment.id,comment.parent_id,comment.body,comment.anchor,
+       comment.signals,comment.held_at,comment.deleted_at,comment.resolved_at,
+       comment.created_at,author.name,author.email,author.disabled,
+       (SELECT count(*) FROM share_reports report
+        WHERE report.comment_id=comment.id AND report.status='new') AS open_reports
+     FROM comments comment
+     JOIN accounts author ON author.id=comment.author_account_id
+     WHERE comment.share_id=$1
+     ORDER BY comment.created_at,comment.id
+     LIMIT $2`,
+    [shareId, REPORT_LIMIT],
+  );
+  return rows.map((row) => ({
+    id: row.id as string,
+    parentId: row.parent_id as string | null,
+    body: row.body as string,
+    quote: (row.anchor?.exact as string | undefined) ?? null,
+    signals: row.signals as string[],
+    state: row.deleted_at
+      ? "deleted"
+      : row.disabled
+        ? "author-disabled"
+        : row.held_at
+          ? "held"
+          : row.resolved_at
+            ? "resolved"
+            : "open",
+    createdAt: new Date(row.created_at),
+    author: row.name as string,
+    authorEmail: row.email as string | null,
+    openReports: Number(row.open_reports),
+  }));
+}
+
+export function formatShareComments(
+  comments: Awaited<ReturnType<typeof listShareComments>>,
+) {
+  if (!comments.length) return "No comments on this link.";
+  return [
+    ...comments.map((comment) =>
+      [
+        time(comment.createdAt),
+        comment.state.toUpperCase(),
+        comment.id,
+        comment.parentId ? `reply to ${comment.parentId}` : "thread",
+        `reports ${comment.openReports}`,
+        clean(
+          comment.author +
+            (comment.authorEmail ? ` <${comment.authorEmail}>` : ""),
+          60,
+        ),
+        comment.signals.length ? `[${comment.signals.join(",")}]` : "",
+        comment.quote ? `«${clean(comment.quote, 40)}»` : "",
+        clean(comment.body, 120),
+      ]
+        .filter(Boolean)
+        .join("  "),
+    ),
+    "",
+    `${comments.length} comment(s). Delete: moderation:delete-comment -- <id>; show a held one: moderation:release-comment -- <id>; hide all of an author's: moderation:disable -- <login>.`,
+  ].join("\n");
+}
+
+/** Empty and hide one comment; its reports are settled. Idempotent. */
+export async function deleteCommentAsOperator(id: string) {
+  commentId(id);
+  return transaction(async (c) => {
+    const {
+      rows: [comment],
+    } = await c.query(
+      "SELECT id,deleted_at FROM comments WHERE id=$1 FOR UPDATE",
+      [id],
+    );
+    if (!comment) throw new ModerationError(`No comment ${id}`);
+    await c.query(
+      "UPDATE share_reports SET status='actioned' WHERE comment_id=$1 AND status='new'",
+      [id],
+    );
+    if (comment.deleted_at)
+      return { id, changed: false, message: "Комментарий уже удалён." };
+    await c.query(
+      `UPDATE comments SET body='',anchor=NULL,signals='{}',held_at=NULL,
+         deleted_at=clock_timestamp() WHERE id=$1`,
+      [id],
+    );
+    return { id, changed: true, message: "Комментарий удалён." };
+  });
+}
+
+/** Show a held comment to every reader; the owner then gets the letter. */
+export async function releaseCommentAsOperator(id: string) {
+  commentId(id);
+  const result = await transaction(async (c) => {
+    const {
+      rows: [comment],
+    } = await c.query(
+      "SELECT id,held_at,deleted_at FROM comments WHERE id=$1 FOR UPDATE",
+      [id],
+    );
+    if (!comment) throw new ModerationError(`No comment ${id}`);
+    if (comment.deleted_at)
+      return {
+        id,
+        changed: false,
+        message: "Комментарий удалён; показывать нечего.",
+      };
+    if (!comment.held_at)
+      return {
+        id,
+        changed: false,
+        message: "Комментарий не скрыт; ничего не изменилось.",
+      };
+    await c.query("UPDATE comments SET held_at=NULL WHERE id=$1", [id]);
+    await c.query(
+      "UPDATE share_reports SET status='dismissed' WHERE comment_id=$1 AND status='new'",
+      [id],
+    );
+    return {
+      id,
+      changed: true,
+      message: "Комментарий виден всем читателям ссылки.",
+    };
+  });
+  if (result.changed) {
+    // Loaded here: comment-mail.ts itself uses this module's clean().
+    const { dispatchCommentNotices } = await import("./comment-mail.ts");
+    await dispatchCommentNotices([{ kind: "comment", commentId: id }]);
+  }
+  return result;
+}

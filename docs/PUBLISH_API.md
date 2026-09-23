@@ -85,6 +85,27 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
   -H "Authorization: Bearer $POLKA_TOKEN"
 ```
 
+## `POST /api/v1/works/:artifactId/edits`
+
+Правка сохранённой работы патчем — те же правила и путь сохранения, что у `polka_revise` с `edits` (scope `revise`; для `moveLink` — ещё `share`).
+
+```json
+{
+  "key": "<новый UUID>",
+  "baseRevisionId": "<последняя версия>",
+  "edits": [{ "oldText": "выручка выросла на 12%", "newText": "выручка выросла на 14%" }],
+  "path": "index.html",
+  "moveLink": true
+}
+```
+
+- Каждый `oldText` должен встречаться в файле (по умолчанию — HTML-странице) ровно один раз: сначала точно, затем после нормализации (NFKC по символу, типографские кавычки и тире, особые пробелы, CRLF и пробелы в конце строк). Меняются только найденные места; остальные байты файла сохраняются.
+- `200`: `revisionId`, `number`, `previousRevisionId`, `htmlProfile`, `shelfUrl`; для страницы со скриптами — `interactiveReady` (сборка запускается в том же вызове); с `moveLink` — `link`: `moved` и новая ссылка или причина, почему не перенесена. Ссылка переносится вместе с её обсуждением.
+- `422` `{"code": "edit_failed", "editIndex", "reason", "message"}`, `reason` — `not_found`, `ambiguous` (+ `occurrences`), `overlap` (+ `otherEditIndex`), `empty_old_text`, `no_change`.
+- `409` `{"code": "conflict", "currentRevisionId"}` — правки написаны к другой версии. Тот же `key` с другим телом — `409` без `currentRevisionId`. Повтор с тем же `key` и телом возвращает ту же версию.
+
+Прочитать замечания получателей можно инструментом MCP `polka_comments`.
+
 ## Ошибки
 
 Всегда JSON `{"code": "…", "message": "…"}`; `message` — по-русски, для человека.
@@ -94,8 +115,9 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
 | 400 | `invalid` | Поля не прошли проверку (`message` перечисляет их), некорректный UTF-8 или `html` длиннее 7 000 000 символов |
 | 401 | `unauthorized` | Нет заголовка `Authorization`, токен неверный, истёк или отозван (`WWW-Authenticate: Bearer`) |
 | 403 | `forbidden` | Нет разрешения (`capture`), или запрос пришёл из браузера с чужим `Origin` |
-| 404 | `not_found` | Статус: работы нет или она не ваша |
-| 409 | `conflict` | Тот же `key` уже использован для другого содержимого |
+| 404 | `not_found` | Статус или правка: работы (или файла) нет, она не ваша или в корзине |
+| 409 | `conflict` | Тот же `key` уже использован для другого содержимого; у правок — ещё и другая базовая версия (`currentRevisionId`) |
+| 422 | `edit_failed` | Правку не применить: `editIndex` и `reason` называют её |
 | 413 | `quota` / `invalid` | Страница больше 5 МБ, тело запроса больше 8 МБ или закончилось место на полке |
 | 422 | `invalid` | Не похоже на HTML или содержит NUL |
 | 422 | `unsupported` | Прислан `component`, а интерактивный просмотр на установке выключен |

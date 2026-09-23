@@ -1,5 +1,6 @@
 // The one place Полка sends mail from: sign-in codes (email-auth.ts) and
-// operator moderation (moderation-mail.ts). MAIL_MODE=smtp sends through
+// operator moderation (moderation-mail.ts), comment letters (comment-mail.ts).
+// MAIL_MODE=smtp sends through
 // SMTP_*; MAIL_MODE=local never sends and writes a JSON file under
 // .local/mail instead (loopback installations and tests read it there).
 import { randomUUID } from "node:crypto";
@@ -18,6 +19,8 @@ export type Mail = {
 export const LOCAL_MAIL_DIRECTORY = ".local/mail";
 /** Operator mail in local mode: one JSON file per message. */
 export const LOCAL_OPERATOR_MAIL_DIRECTORY = ".local/mail/operator";
+/** Letters about comments to owners and thread participants, local mode. */
+export const LOCAL_COMMENT_MAIL_DIRECTORY = ".local/mail/comments";
 
 export const LOCAL_MAIL_NOTICE = "LOCAL TEST ONLY — not delivered";
 
@@ -62,10 +65,13 @@ export async function sendSmtpMail(mail: Mail) {
  * Sends one message the way this installation is configured. Returns false
  * when mail is disabled. Local mode returns the written file's path.
  */
-export async function sendMail(mail: Mail): Promise<string | boolean> {
+export async function sendMail(
+  mail: Mail,
+  localDirectory = LOCAL_OPERATOR_MAIL_DIRECTORY,
+): Promise<string | boolean> {
   if (config.MAIL_MODE === "disabled") return false;
   if (config.MAIL_MODE === "local") {
-    const path = `${LOCAL_OPERATOR_MAIL_DIRECTORY}/${Date.now()}-${randomUUID()}.json`;
+    const path = `${localDirectory}/${Date.now()}-${randomUUID()}.json`;
     await writeLocalMailFile(
       path,
       JSON.stringify({ ...mail, notice: LOCAL_MAIL_NOTICE }, null, 2),

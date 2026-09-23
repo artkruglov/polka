@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { HTML_PROFILES, uuid } from "../../packages/contracts/index.ts";
-import { publishFromAgent } from "./agent-publish.ts";
+import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
+import { reviseWithEdits } from "./agent-edits.ts";
+import { editsSchema } from "../../packages/contracts/comments.ts";
+import { db } from "./db.ts";
+import { moveShareFromAgent } from "./shares.ts";
 import { artifactStatusForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
@@ -10,6 +14,7 @@ import { Problem } from "./errors.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
+  recheckServiceActor,
   type ServiceActor,
 } from "./service-auth.ts";
 
@@ -19,6 +24,21 @@ import {
  * scopes as /mcp, the same publishFromAgent, no cookies.
  */
 export const PUBLISH_API_PATHS = new Set(["/api/v1/publish"]);
+/** The machine routes of this API: bearer only, exempt from the browser Origin rule. */
+export const isPublishApiPath = (pathname: string) =>
+  PUBLISH_API_PATHS.has(pathname) ||
+  /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
+
+export const editsBodySchema = z
+  .object({
+    key: uuid,
+    baseRevisionId: uuid,
+    edits: editsSchema,
+    path: z.string().min(1).max(200).optional(),
+    /** Point the work's open link at the new version (needs link permission). */
+    moveLink: z.boolean().default(false),
+  })
+  .strict();
 export const PUBLISH_API_LIMITS = { perIp: 300, perConnection: 120 };
 export const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
 
@@ -80,6 +100,62 @@ export const statusResponseSchema = z
     shelfUrl: z.string().url(),
   })
   .strict();
+export const editsResponseSchema = z
+  .object({
+    artifactId: uuid,
+    previousRevisionId: uuid,
+    revisionId: uuid,
+    number: z.number().int(),
+    htmlProfile: z.enum(HTML_PROFILES).nullable(),
+    shelfUrl: z.string().url(),
+    interactiveReady: z.boolean().optional(),
+    interactiveUnavailableReason: z.string().optional(),
+    link: z
+      .object({
+        moved: z.boolean(),
+        reason: z.string().optional(),
+        shareId: uuid.optional(),
+        artifactId: uuid.optional(),
+        revisionId: uuid.optional(),
+        derivativeId: uuid.nullable().optional(),
+        expiresAt: z.iso.datetime().optional(),
+        state: z.enum(["active", "closed"]).optional(),
+        url: z.string().url().nullable().optional(),
+        moderation: z.enum(["held", "paused"]).optional(),
+        moderationMessage: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/** 422: the patch cannot be applied; editIndex names the failing edit. */
+export const editProblemSchema = z
+  .object({
+    code: z.literal("edit_failed"),
+    message: z.string(),
+    editIndex: z.number().int().min(0),
+    otherEditIndex: z.number().int().min(0).optional(),
+    reason: z.enum([
+      "empty_old_text",
+      "not_found",
+      "ambiguous",
+      "overlap",
+      "no_change",
+    ]),
+    occurrences: z.number().int().optional(),
+  })
+  .strict();
+
+/** 409: the edits were written against an older version. */
+export const baseMismatchSchema = z
+  .object({
+    code: z.literal("conflict"),
+    message: z.string(),
+    currentRevisionId: uuid,
+  })
+  .strict();
+
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
@@ -203,6 +279,86 @@ export async function registerPublishApi(app: FastifyInstance) {
       shelfUrl: `${config.APP_ORIGIN}/works/${artifact.id}`,
     };
   });
+  // Patch edits (docs/specs/COMMENTS.md): the same engine and revise path as
+  // polka_revise with edits. 422 names the failing edit, 409 the latest
+  // version. With moveLink the open link follows, keeping its discussion.
+  app.post(
+    "/api/v1/works/:artifactId/edits",
+    { bodyLimit: PUBLISH_BODY_LIMIT },
+    async (req, reply) => {
+      const actor = await bearerActor(req, reply);
+      const artifactId = uuid.parse(
+        (req.params as { artifactId: string }).artifactId,
+      );
+      const input = await withFieldErrors(async () =>
+        editsBodySchema.parse(req.body ?? {}),
+      );
+      const receipt = await reviseWithEdits(actor, {
+        key: input.key,
+        artifactId,
+        baseRevisionId: input.baseRevisionId,
+        edits: input.edits,
+        ...(input.path ? { path: input.path } : {}),
+      });
+      const interactive = await prepareInteractive(
+        actor,
+        input.key,
+        receipt.revisionId,
+        receipt.htmlProfile ?? null,
+        "revise",
+      );
+      let link: Record<string, unknown> | null = null;
+      if (input.moveLink) {
+        const verified = await recheckServiceActor(actor, "context");
+        const {
+          rows: [open],
+        } = await db.query(
+          `SELECT id FROM shares WHERE artifact_id=$1 AND tenant_id=$2
+             AND NOT revoked AND expires_at>now()`,
+          [artifactId, verified.tenantId],
+        );
+        if (!verified.scopes.includes("share"))
+          link = {
+            moved: false,
+            reason:
+              "The token cannot manage links (Управлять ссылками); the link still shows the previous version.",
+          };
+        else if (!open)
+          link = { moved: false, reason: "The work has no open link." };
+        else {
+          try {
+            const moved = await moveShareFromAgent(verified, {
+              key: input.key,
+              artifactId,
+              shareId: open.id,
+              expectedRevisionId: receipt.revisionId,
+            });
+            link = { moved: moved.state === "active", ...moved };
+          } catch (error) {
+            if (!(error instanceof Problem) || error.status >= 500) throw error;
+            link = { moved: false, reason: error.message };
+          }
+        }
+      }
+      return {
+        artifactId,
+        previousRevisionId: input.baseRevisionId,
+        revisionId: receipt.revisionId,
+        number: receipt.number,
+        htmlProfile: receipt.htmlProfile ?? null,
+        shelfUrl: `${config.APP_ORIGIN}/works/${artifactId}`,
+        ...(interactive
+          ? {
+              interactiveReady: interactive.ready,
+              ...(interactive.reason
+                ? { interactiveUnavailableReason: interactive.reason }
+                : {}),
+            }
+          : {}),
+        ...(link ? { link } : {}),
+      };
+    },
+  );
   // The dependency-free CLI, downloadable from the installation it talks to
   // and pointed at it by default.
   const cli = (await readFile(CLI_SOURCE, "utf8")).replace(

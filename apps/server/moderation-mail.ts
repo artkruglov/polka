@@ -80,7 +80,7 @@ async function shareFacts(shareId: string) {
        EXISTS(SELECT 1 FROM editorial_publications publication
               WHERE publication.share_id=share.id) AS editorial,
        (SELECT count(DISTINCT report.reporter_hash) FROM share_reports report
-        WHERE report.share_id=share.id
+        WHERE report.share_id=share.id AND report.comment_id IS NULL
           AND report.created_at>now()-interval '7 days') AS reporters
      FROM shares share
      JOIN artifacts artifact ON artifact.id=share.artifact_id

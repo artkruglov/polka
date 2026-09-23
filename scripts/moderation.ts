@@ -7,6 +7,9 @@
 //   npm run moderation:approve -- <shareId> [--trust]
 //   npm run moderation:unpause -- <shareId>
 //   npm run moderation:trust -- <login|email>
+//   npm run moderation:comments -- <shareId>
+//   npm run moderation:delete-comment -- <commentId>
+//   npm run moderation:release-comment -- <commentId>
 import { parseArgs } from "node:util";
 import { db } from "../apps/server/db.ts";
 import {
@@ -20,6 +23,10 @@ import {
   formatModerationQueue,
   formatRevokedShare,
   formatTrusted,
+  formatShareComments,
+  listShareComments,
+  deleteCommentAsOperator,
+  releaseCommentAsOperator,
   listModerationQueue,
   listReports,
   revokeShareAsOperator,
@@ -35,7 +42,10 @@ const USAGE = `Usage:
   moderation.ts queue
   moderation.ts approve <shareId> [--trust]
   moderation.ts unpause <shareId>
-  moderation.ts trust <login|email>`;
+  moderation.ts trust <login|email>
+  moderation.ts comments <shareId>
+  moderation.ts delete-comment <commentId>
+  moderation.ts release-comment <commentId>`;
 
 try {
   const { positionals, values } = parseArgs({
@@ -72,6 +82,12 @@ try {
     console.log((await unpauseShareAsOperator(one())).message);
   else if (command === "trust")
     console.log(formatTrusted(await trustAccount(one())));
+  else if (command === "comments")
+    console.log(formatShareComments(await listShareComments(one())));
+  else if (command === "delete-comment")
+    console.log((await deleteCommentAsOperator(one())).message);
+  else if (command === "release-comment")
+    console.log((await releaseCommentAsOperator(one())).message);
   else throw new ModerationError(USAGE);
 } catch (error) {
   const message = (error as Error).message;

@@ -7,7 +7,7 @@
 | Сервис | Назначение |
 |---|---|
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
-| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 029), `deploy/runtime-grants.sql`, проверка versioned S3 |
+| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 030), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
@@ -110,7 +110,7 @@ sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' deploy/hosted/hosted.e
 cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 ```
 
-`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 029): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
+`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 030): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
 
 ## Откат
 
@@ -255,7 +255,22 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts enable <логин|почта>
 ```
 
-Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`.
+Комментарии к ссылкам ([COMMENTS](../../docs/specs/COMMENTS.md#модерация)):
+
+```sh
+# все комментарии ссылки, скрытые тоже: состояние (open/held/resolved/deleted/author-disabled), жалобы, автор, признаки
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts comments <shareId>
+
+# удалить комментарий: текст и цитата стираются, жалобы на него отмечаются рассмотренными
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts delete-comment <commentId>
+
+# показать всем подозрительный комментарий, который ждёт проверки
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts release-comment <commentId>
+```
+
+Подозрительный комментарий нового автора (просит пароль или код рядом с брендом, срочностью или адресом) виден только автору и владельцу работы, пока оператор не решит; о нём и о каждой жалобе на комментарий приходит письмо на `OPERATOR_EMAIL` с этими командами. `disable` скрывает все комментарии и реакции автора (`enable` возвращает).
+
+Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`, `moderation:comments`, `moderation:delete-comment`, `moderation:release-comment`.
 
 ## Мониторинг
 

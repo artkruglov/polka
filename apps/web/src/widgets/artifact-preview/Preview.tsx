@@ -11,18 +11,28 @@ import { LivePreview } from "./LivePreview.tsx";
 import { liveKind } from "./live-plan.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
+/**
+ * Comments on the text (docs/specs/COMMENTS.md): the frame is asked for with
+ * the comment overlay, and the caller gets the iframe to talk to it.
+ */
+export type FrameOverlay = {
+  onFrame: (frame: HTMLIFrameElement | null) => void;
+};
+
 export function Preview({
   revision,
   grant,
   compact = false,
   readingTitle,
   onInlineBuildChange,
+  overlay,
 }: {
   revision: Revision;
   grant?: string;
   compact?: boolean;
   readingTitle?: string;
   onInlineBuildChange?: () => Promise<void>;
+  overlay?: FrameOverlay;
 }) {
   const [content, setContent] = useState<{ url?: string; text?: string }>({}),
     [error, setError] = useState("");
@@ -93,6 +103,7 @@ export function Preview({
         grant={grant}
         requiresBuild
         onInlineBuildChange={onInlineBuildChange}
+        overlay={overlay}
       >
         {fallback}
       </LivePreview>
@@ -119,6 +130,7 @@ export function Preview({
         // Runs as uploaded for the owner; a link needs the built version.
         buildForLink={kind === "direct"}
         onInlineBuildChange={onInlineBuildChange}
+        overlay={overlay}
       >
         {fallback}
       </LivePreview>
@@ -131,6 +143,7 @@ export function Preview({
           title={revision.filename}
           revisionId={revision.id}
           grant={grant}
+          overlay={compact ? undefined : overlay}
         />
         {revision.htmlProfile === "limited" && (
           <p className="html-preview-note">
@@ -153,6 +166,7 @@ export function Preview({
         // Runs as uploaded for the owner; a link needs the built version.
         buildForLink={kind === "direct"}
         onInlineBuildChange={onInlineBuildChange}
+        overlay={overlay}
       >
         {fallback}
       </LivePreview>
@@ -195,10 +209,12 @@ function SandboxFrame({
   revisionId,
   grant,
   title,
+  overlay,
 }: {
   revisionId: string;
   grant?: string;
   title: string;
+  overlay?: FrameOverlay;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [src, setSrc] = useState("");
@@ -209,7 +225,7 @@ function SandboxFrame({
     setLoaded(false);
     setError("");
     // With a viewer domain the page never loads from Полка's own origin.
-    staticView(revisionId, grant, abort.signal)
+    staticView(revisionId, grant, abort.signal, { comments: !!overlay })
       .then((url) => {
         if (!abort.signal.aborted) setSrc(url);
       })
@@ -217,7 +233,11 @@ function SandboxFrame({
         if (!abort.signal.aborted) setError(e.message);
       });
     return () => abort.abort();
-  }, [revisionId, grant]);
+  }, [revisionId, grant, !!overlay]);
+  // The overlay is the one script of a static view, and only on the viewer's
+  // own domain: a same-origin frame (single-domain install) gets none.
+  const scripted =
+    !!overlay && !!src && new URL(src, location.href).origin !== location.origin;
   if (error) return <div className="preview-error">{error}</div>;
   return (
     <div className="html-preview-frame" data-loaded={loaded || undefined}>
@@ -232,9 +252,15 @@ function SandboxFrame({
           className="work-html"
           title={title}
           src={src}
-          // Keep in sync with STATIC_HTML_SANDBOX on the server: no scripts; links open
-          // only in a new tab, never over this one (no top navigation).
-          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          // Keep in sync with STATIC_HTML_SANDBOX / STATIC_OVERLAY_SANDBOX on
+          // the server: no page scripts (with comments the CSP nonce admits
+          // only Полка's overlay); links open only in a new tab.
+          sandbox={
+            scripted
+              ? "allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              : "allow-popups allow-popups-to-escape-sandbox"
+          }
+          ref={scripted ? overlay!.onFrame : undefined}
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
         />

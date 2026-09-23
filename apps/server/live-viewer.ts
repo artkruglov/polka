@@ -16,6 +16,7 @@ import { assertEditorialShareAccessible } from "./editorial.ts";
 import { isLiveRevisionEligible } from "./viewer-config.ts";
 import { readLibraryLiveDocument } from "./template-library-viewer.ts";
 import { registerStaticViewerRoutes } from "./static-viewer.ts";
+import { withLiveOverlay } from "./comment-overlay.ts";
 
 export const LIVE_HTML_PROFILE = "inline-live-experimental-v1" as const;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -42,6 +43,7 @@ export async function issueOwnerLiveView(
   actor: Actor,
   sessionToken: string,
   revisionId: string,
+  comments = false,
 ) {
   if (!isLiveRevisionEligible(config, revisionId)) throw missing();
   const token = randomBytes(32).toString("base64url");
@@ -72,8 +74,8 @@ export async function issueOwnerLiveView(
     if (!artifact.rowCount) throw missing();
     const inserted = (
       await c.query(
-        `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at)
-         SELECT $1,r.id,$2,d.id,LEAST(now()+interval '60 seconds',session.expires_at)
+        `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at,comments)
+         SELECT $1,r.id,$2,d.id,LEAST(now()+interval '60 seconds',session.expires_at),$6
          FROM revisions r
          JOIN sessions session ON session.hash=$2 AND session.account_id=$3
          JOIN accounts account ON account.id=session.account_id
@@ -92,7 +94,7 @@ export async function issueOwnerLiveView(
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
          RETURNING expires_at,derivative_id`,
-        [sha256(token), sessionHash, actor.id, revisionId, actor.tenant],
+        [sha256(token), sessionHash, actor.id, revisionId, actor.tenant, comments],
       )
     ).rows[0];
     return (
@@ -106,7 +108,10 @@ export async function issueOwnerLiveView(
   return liveViewResult(token, grant.expires_at, grant.profile);
 }
 
-export async function issueRecipientLiveView(sourceGrant: string) {
+export async function issueRecipientLiveView(
+  sourceGrant: string,
+  comments = false,
+) {
   if (!config.HTML_LIVE_ENABLED || !TOKEN.test(sourceGrant)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sourceGrantHash = sha256(sourceGrant);
@@ -139,8 +144,8 @@ export async function issueRecipientLiveView(sourceGrant: string) {
     await assertEditorialShareAccessible(c, candidate.share_id);
     const inserted = (
       await c.query(
-        `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at)
-         SELECT $1,r.id,s.id,g.hash,g.derivative_id,LEAST(now()+interval '60 seconds',g.expires_at)
+        `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at,comments)
+         SELECT $1,r.id,s.id,g.hash,g.derivative_id,LEAST(now()+interval '60 seconds',g.expires_at),$3
          FROM grants g
          JOIN shares s ON s.id=g.share_id
          JOIN revisions r ON r.id=g.revision_id
@@ -155,7 +160,7 @@ export async function issueRecipientLiveView(sourceGrant: string) {
                AND d.builder_version IN ${SERVED_BUILDER_VERSIONS_SQL}
                AND d.runtime_profile IN ${SERVED_RUNTIME_PROFILES_SQL})
          RETURNING expires_at,derivative_id`,
-        [sha256(token), sourceGrantHash],
+        [sha256(token), sourceGrantHash, comments],
       )
     ).rows[0];
     return (
@@ -175,7 +180,7 @@ async function authorizedRevision(token: string) {
     rows: [revision],
   } = await db.query(
     `SELECT r.*,
-       vg.share_id AS authorized_share_id,
+       vg.share_id AS authorized_share_id,vg.comments AS comment_overlay,
        COALESCE(d.object_key,r.object_key) AS served_object_key,
        COALESCE(d.object_version,r.object_version) AS served_object_version
      FROM viewer_grants vg
@@ -279,10 +284,15 @@ export async function createLiveViewerApp() {
     if (!revision) throw missing();
     reply.type("text/html; charset=utf-8");
     // The pinned blob plus the static WebRTC guard (html.ts); never inject
-    // capabilities, sessions or API data.
-    return withViewerGuard(
-      await readBlob(revision.served_object_key, revision.served_object_version),
+    // capabilities, sessions or API data. The comment overlay only when the
+    // shell asked for it when the grant was issued.
+    const bytes = await readBlob(
+      revision.served_object_key,
+      revision.served_object_version,
     );
+    return revision.comment_overlay
+      ? withLiveOverlay(bytes, config.APP_ORIGIN)
+      : withViewerGuard(bytes);
   });
   viewer.get("/library-document/:token", async (req, reply) => {
     if (

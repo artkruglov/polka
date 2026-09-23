@@ -59,6 +59,12 @@ const ids = {
   colleagueRevision: randomUUID(),
   colleagueRelease: randomUUID(),
   sharedPublication: randomUUID(),
+  colleagueShare: randomUUID(),
+  rootByPurged: randomUUID(),
+  answeredByColleague: randomUUID(),
+  loneByPurged: randomUUID(),
+  colleagueRoot: randomUUID(),
+  replyByPurged: randomUUID(),
   acceptedInvite: randomUUID(),
   pendingInvite: randomUUID(),
   issuedInvite: randomUUID(),
@@ -200,6 +206,30 @@ before(async () => {
         `purge-library/${ids.colleagueRevision}`,
       ],
     );
+    // Comments the purged account wrote on a colleague's link (030).
+    await owner.query(
+      `INSERT INTO shares(id,tenant_id,artifact_id,revision_id,token_hash,expires_at)
+       VALUES($1,$2,$3,$4,$5,now()+interval '1 day')`,
+      [ids.colleagueShare, ids.colleagueTenant, ids.colleagueArtifact, ids.colleagueRevision, hash("share-" + runId)],
+    );
+    for (const [id, author, parent, body] of [
+      [ids.rootByPurged, ids.account, null, "purged root"],
+      [ids.answeredByColleague, ids.colleague, ids.rootByPurged, "colleague answer"],
+      [ids.loneByPurged, ids.account, null, "purged lone"],
+      [ids.colleagueRoot, ids.colleague, null, "colleague root"],
+      [ids.replyByPurged, ids.account, ids.colleagueRoot, "purged reply"],
+    ] as const)
+      await owner.query(
+        `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,parent_id,body,resolved_at,resolved_by)
+         VALUES($1,$2,$3,$4,$5,$6::uuid,$7,$8,CASE WHEN $6::uuid=$9::uuid THEN NULL ELSE now() END,CASE WHEN $6::uuid=$9::uuid THEN NULL ELSE $9::uuid END)`,
+        [id, ids.colleagueTenant, ids.colleagueArtifact, ids.colleagueShare, ids.colleagueRevision, author, parent, body, ids.account],
+      );
+    for (const author of [ids.account, ids.colleague])
+      await owner.query(
+        `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,emoji)
+         VALUES($1,$2,$3,$4,$5,$6,'',$7)`,
+        [randomUUID(), ids.colleagueTenant, ids.colleagueArtifact, ids.colleagueShare, ids.colleagueRevision, author, "👀"],
+      );
     await owner.query(
       "INSERT INTO template_releases(id,artifact_id,revision_id,title,summary,rules,questions) VALUES($1,$2,$3,'Template','Synthetic summary','Synthetic rules','')",
       [ids.colleagueRelease, ids.colleagueArtifact, ids.colleagueRevision],
@@ -606,6 +636,35 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
     connections: 0,
     clients: 1,
   });
+  // The account's comments and reactions go; a root a colleague answered
+  // stays as an empty placeholder so the answer keeps its thread.
+  const comments = Object.fromEntries(
+    (
+      await owner.query(
+        "SELECT id,body,deleted_at IS NOT NULL AS deleted,resolved_by FROM comments WHERE share_id=$1",
+        [ids.colleagueShare],
+      )
+    ).rows.map((row) => [row.id, row]),
+  );
+  assert.deepEqual(Object.keys(comments).sort(), [
+    ids.answeredByColleague,
+    ids.colleagueRoot,
+    ids.rootByPurged,
+  ].sort());
+  assert.equal(comments[ids.rootByPurged].body, "");
+  assert.equal(comments[ids.rootByPurged].deleted, true);
+  assert.equal(comments[ids.answeredByColleague].body, "colleague answer");
+  assert.equal(comments[ids.colleagueRoot].body, "colleague root");
+  assert.equal(comments[ids.colleagueRoot].resolved_by, null);
+  assert.deepEqual(
+    (
+      await owner.query(
+        "SELECT author_account_id FROM comment_reactions WHERE share_id=$1",
+        [ids.colleagueShare],
+      )
+    ).rows.map((row) => row.author_account_id),
+    [ids.colleague],
+  );
   await worker.query(
     "SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)",
     [

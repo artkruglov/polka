@@ -37,13 +37,14 @@ export async function createAccount(name: string, password: string) {
 }
 const RETRY_AFTER = {
   "10 minutes": "через 10 минут",
+  "1 hour": "через час",
   "24 hours": "через сутки",
 } as const;
 // Fixed window per hashed key (10 minutes unless stated); shared by login and anonymous actions.
 export async function limitAttempts(
   key: string,
   max: number,
-  window: "10 minutes" | "24 hours" = "10 minutes",
+  window: keyof typeof RETRY_AFTER = "10 minutes",
 ) {
   const {
     rows: [limit],
