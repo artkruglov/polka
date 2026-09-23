@@ -29,7 +29,7 @@ export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
   /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
 
-const editsBodySchema = z
+export const editsBodySchema = z
   .object({
     key: uuid,
     baseRevisionId: uuid,
@@ -100,6 +100,62 @@ export const statusResponseSchema = z
     shelfUrl: z.string().url(),
   })
   .strict();
+export const editsResponseSchema = z
+  .object({
+    artifactId: uuid,
+    previousRevisionId: uuid,
+    revisionId: uuid,
+    number: z.number().int(),
+    htmlProfile: z.enum(HTML_PROFILES).nullable(),
+    shelfUrl: z.string().url(),
+    interactiveReady: z.boolean().optional(),
+    interactiveUnavailableReason: z.string().optional(),
+    link: z
+      .object({
+        moved: z.boolean(),
+        reason: z.string().optional(),
+        shareId: uuid.optional(),
+        artifactId: uuid.optional(),
+        revisionId: uuid.optional(),
+        derivativeId: uuid.nullable().optional(),
+        expiresAt: z.iso.datetime().optional(),
+        state: z.enum(["active", "closed"]).optional(),
+        url: z.string().url().nullable().optional(),
+        moderation: z.enum(["held", "paused"]).optional(),
+        moderationMessage: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/** 422: the patch cannot be applied; editIndex names the failing edit. */
+export const editProblemSchema = z
+  .object({
+    code: z.literal("edit_failed"),
+    message: z.string(),
+    editIndex: z.number().int().min(0),
+    otherEditIndex: z.number().int().min(0).optional(),
+    reason: z.enum([
+      "empty_old_text",
+      "not_found",
+      "ambiguous",
+      "overlap",
+      "no_change",
+    ]),
+    occurrences: z.number().int().optional(),
+  })
+  .strict();
+
+/** 409: the edits were written against an older version. */
+export const baseMismatchSchema = z
+  .object({
+    code: z.literal("conflict"),
+    message: z.string(),
+    currentRevisionId: uuid,
+  })
+  .strict();
+
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {

@@ -71,5 +71,7 @@
   "tests/service-auth.test.ts",
   "tests/moderation.test.ts",
   "tests/abuse-protection.test.ts",
-  "tests/comments.test.ts"
+  "tests/comments.test.ts",
+  "tests/edit-patch.test.ts",
+  "tests/comment-overlay-dom.test.ts"
 ]

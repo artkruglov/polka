@@ -380,3 +380,68 @@ test("a link bound to an interactive version gets no static view", async () => {
   );
   assert.equal(live.statusCode, 200, live.body);
 });
+
+test("the comment overlay rides only on a grant issued for it", async () => {
+  const saved = await save(PAGE);
+  const link = await share(saved);
+  // A grant the shell asked for comments: the overlay and a per-response
+  // nonce; the page is otherwise the ordinary static view.
+  const withComments = await call(
+    "POST",
+    "/api/view/static-view",
+    { comments: true },
+    "",
+    `Bearer ${link.grant}`,
+  );
+  assert.equal(withComments.statusCode, 200, withComments.body);
+  const path = pathOf(withComments.json().url);
+  const first = await embedded(path);
+  assert.equal(first.statusCode, 200, first.body);
+  const csp = first.headers["content-security-policy"] as string;
+  const nonce = /script-src 'nonce-([A-Za-z0-9_-]+)'/.exec(csp)?.[1];
+  assert.ok(nonce, csp);
+  assert.equal(csp, staticHtmlCsp(config.APP_ORIGIN, nonce));
+  assert.match(csp, /^sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox;/);
+  assert.doesNotMatch(csp, /unsafe-inline'[^;]*script|'unsafe-eval'|allow-same-origin/);
+  assert.match(csp, /connect-src 'none'/);
+  const scripts = [...first.body.matchAll(/<script([^>]*)>/g)].map((m) => m[1]);
+  assert.deepEqual(scripts, [` nonce="${nonce}"`, ` nonce="${nonce}"`]);
+  assert.ok(first.body.includes(JSON.stringify(config.APP_ORIGIN)));
+  // The page after the injected scripts is exactly the ordinary view.
+  const injectedEnd = first.body.lastIndexOf("</script>") + "</script>".length;
+  const ordinary = await embedded(
+    pathOf(
+      (await call("POST", "/api/view/static-view", undefined, "", `Bearer ${link.grant}`)).json().url,
+    ),
+  );
+  assert.equal(
+    first.body.slice(0, "<!doctype html>".length) +
+      first.body.slice(injectedEnd),
+    ordinary.body,
+  );
+  assertStaticBody(ordinary.body, PAGE);
+  // A new nonce on every response.
+  const again = await embedded(path);
+  assert.notEqual(
+    /nonce-([A-Za-z0-9_-]+)/.exec(again.headers["content-security-policy"] as string)?.[1],
+    nonce,
+  );
+  // The download stays the stored bytes.
+  const bytes = await call("GET", "/api/view/bytes", undefined, "", `Bearer ${link.grant}`);
+  assert.equal(bytes.body, PAGE);
+  // Only a boolean is accepted, and only from Полка's own pages.
+  assert.equal(
+    (
+      await call("POST", "/api/view/static-view", { comments: "yes" }, "", `Bearer ${link.grant}`)
+    ).statusCode,
+    400,
+  );
+  // The owner's grant takes the flag the same way.
+  const owner = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/static-view`,
+    { comments: true },
+  );
+  const ownerView = await embedded(pathOf(owner.json().url));
+  assert.match(ownerView.headers["content-security-policy"] as string, /script-src 'nonce-/);
+});
