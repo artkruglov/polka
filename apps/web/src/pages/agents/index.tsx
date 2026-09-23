@@ -270,7 +270,10 @@ export function AgentConnections() {
     }
   };
 
-  const endpoint = secret?.connection.audience ?? "";
+  // The MCP address is known before any token exists: the one-phrase OAuth
+  // commands must show it to someone who has not created a token.
+  const endpoint =
+    secret?.connection.audience ?? new URL("/mcp", location.origin).href;
   const tokenVariable = clientKind === "http" ? "POLKA_TOKEN" : "POLKA_MCP_TOKEN";
   // Placeholders only: the token itself never appears in a snippet.
   const cliCommands = useMemo(
