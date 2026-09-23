@@ -23,6 +23,7 @@ test('layer gate ignores comment/string decoys and permits lower-layer contracts
  const message='import x from "../../App.tsx"';
  import type {X} from '../../../../../packages/contracts/index.ts';
  import type {Y} from '../../../../../packages/editorial.ts';
+ import terms from '../../../../../docs/legal/terms.md?raw';
  import {Button} from '../../shared/ui/controls.tsx';
  const view=()=>import('../../entities/artifact/format.ts');
  const elem=<div>{message}</div>;`),[]);
@@ -31,6 +32,8 @@ test('layer gate rejects server escape, deceptive prefix, computed import and in
  for(const source of [
  'import {db} from "../../../../server/db.ts";',
  'import x from "../../../../../packages/contracts-private/index.ts";',
+ 'import x from "../../../../../docs/legal/terms.md";',
+ 'import x from "../../../../../docs/status.md?raw";',
  'const x=import(path);',
  'const x=import(`../../${name}/index.ts`);',
  'import fs from "node:fs";',

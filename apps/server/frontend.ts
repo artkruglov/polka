@@ -9,6 +9,8 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       path === "/" ||
       path === "/s" ||
       path === "/signup" ||
+      path === "/privacy" ||
+      path === "/terms" ||
       path === "/start" ||
       path === "/settings/agents" ||
       path === "/bring" ||
