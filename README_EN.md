@@ -6,7 +6,7 @@
 
 Полка ("the shelf") keeps the reports, pages, prototypes and other artifacts you made with Claude, ChatGPT, Claude Code or Codex outside the chat history. Every work gets versions and a clear link. Recipients don't need a Claude or ChatGPT account, and you can revoke a link at any time.
 
-- **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). Claude Code and Codex connect with one command and no token; other MCP clients use a token. Scripts and CI use the HTTP API.
+- **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). The simplest way is to tell your agent "Connect Полка: https://polochka.app/connect"; it sets itself up, and you sign in by email and allow access. Claude Code and Codex connect with one command and no token; other MCP clients use a token. Scripts and CI use the HTTP API.
 - **Interactive pages work for recipients.** React/JSX chat artifacts are compiled into one self-contained page, with libraries bundled in and no network access. The page opens in a sandbox on a separate domain (`polochka.page`).
 - **Exact versions.** Every save is immutable and has a SHA-256. A link shows the version you published, not your latest draft.
 - **Revocable links.** You can pick how long a link lasts (1, 7 or 30 days), revoke it, and receive reports from recipients. Private works stay out of the catalogue and search indexes.

@@ -11,3 +11,5 @@ services:
       # invite: codes only for existing accounts and EMAIL_SIGNUP_ALLOW entries.
       EMAIL_SIGNUP: ${EMAIL_SIGNUP:-invite}
       EMAIL_SIGNUP_ALLOW: ${EMAIL_SIGNUP_ALLOW:-}
+      EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
+      EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}

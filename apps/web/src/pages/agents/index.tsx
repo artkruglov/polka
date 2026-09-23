@@ -375,11 +375,18 @@ export function AgentConnections() {
         <div className="agent-workspace">
           <div className="agent-setup-column">
             <section className="agent-card" aria-labelledby="one-command-title">
-              <h2 id="one-command-title">Одной командой, без токена</h2>
+              <h2 id="one-command-title">Одной фразой, без токена</h2>
               <p className="agent-instruction">
-                Выполните команду в терминале. Откроется Полка: войдите и
-                нажмите «Разрешить». Токен нигде хранить не нужно.
+                Скажите это своему агенту. Он сам выполнит нужную команду,
+                откроется Полка: войдите и нажмите «Разрешить».
               </p>
+              <InstructionBlock
+                title="Codex, Claude Code, Claude.ai, ChatGPT"
+                value={`Подключи Полку: ${location.origin}/connect`}
+                copyLabel="Скопировать фразу"
+                copiedLabel="Фраза скопирована"
+              />
+              <p className="agent-instruction">Или выполните команду сами:</p>
               <InstructionBlock
                 title="Codex"
                 value={codexOAuthCommand}

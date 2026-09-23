@@ -45,6 +45,9 @@ x-runtime-env: &runtime-env
   # invite: codes only for existing accounts and EMAIL_SIGNUP_ALLOW entries.
   EMAIL_SIGNUP: ${EMAIL_SIGNUP:-invite}
   EMAIL_SIGNUP_ALLOW: ${EMAIL_SIGNUP_ALLOW:-}
+  # New shelves per day, whole installation and per client IP.
+  EMAIL_SIGNUP_DAILY_LIMIT: ${EMAIL_SIGNUP_DAILY_LIMIT:-50}
+  EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
   # Operator status for an external monitor; empty keeps /api/ops/status off.
   # The app key only lists BACKUP_BUCKET to report the newest dump's age.
   OPS_STATUS_TOKEN: ${OPS_STATUS_TOKEN:-}
