@@ -1,5 +1,6 @@
 import { test, before, after } from "node:test";
 import { withNewTabLinks } from "../apps/server/html.ts";
+import { verifyAwayToken } from "../apps/server/away-links.ts";
 import assert from "node:assert/strict";
 import { randomUUID, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -361,7 +362,17 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     document.headers["content-security-policy"] as string,
     /sandbox/,
   );
-  assert.equal(document.body, withNewTabLinks(Buffer.from(body)).toString());
+  // The static view copies the page as is, except that external links go
+  // through the signed "you are leaving" page.
+  const expectedView = withNewTabLinks(Buffer.from(body)).toString();
+  const viewed = (served: string) => {
+    const away = /href="([^"#]+)\/away#([^"]+)"/.exec(served);
+    assert.ok(away, served);
+    assert.equal(away[1], config.APP_ORIGIN);
+    assert.equal(verifyAwayToken(away[2])?.url, "https://example.org/source");
+    return served.replace(away[0], 'href="https://example.org/source"');
+  };
+  assert.equal(viewed(document.body), expectedView);
 
   const shared = (
     await call("POST", `/api/artifacts/${receipt.artifactId}/share`, {
@@ -378,10 +389,7 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     url: `/api/view/${viewer.grant}/document`,
   });
   assert.equal(grantedDocument.statusCode, 200);
-  assert.equal(
-    grantedDocument.body,
-    withNewTabLinks(Buffer.from(body)).toString(),
-  );
+  assert.equal(viewed(grantedDocument.body), expectedView);
   const report = await call(
     "POST",
     "/api/reports",

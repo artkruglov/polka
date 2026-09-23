@@ -15,6 +15,7 @@ import {
 import { assertEditorialShareAccessible } from "./editorial.ts";
 import { isLiveRevisionEligible } from "./viewer-config.ts";
 import { readLibraryLiveDocument } from "./template-library-viewer.ts";
+import { registerStaticViewerRoutes } from "./static-viewer.ts";
 
 export const LIVE_HTML_PROFILE = "inline-live-experimental-v1" as const;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -294,5 +295,6 @@ export async function createLiveViewerApp() {
     reply.type("text/html; charset=utf-8");
     return withViewerGuard(bytes);
   });
+  registerStaticViewerRoutes(viewer);
   return viewer;
 }

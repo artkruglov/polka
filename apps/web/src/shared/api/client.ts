@@ -252,6 +252,35 @@ export async function bytes(
   return response.blob();
 }
 
+/**
+ * Where the static (scriptless) view of saved HTML loads from: a short-lived
+ * address on the viewer domain when the install has one, else an app route.
+ */
+export async function staticView(
+  revisionId: string,
+  grant?: string,
+  signal?: AbortSignal,
+) {
+  const response = await send(
+    grant
+      ? "/api/view/static-view"
+      : `/api/revisions/${revisionId}/static-view`,
+    {
+      method: "POST",
+      headers: grant ? { Authorization: `Bearer ${grant}` } : {},
+      signal,
+    },
+  );
+  const result = (await response.json()) as { url?: unknown };
+  if (typeof result.url !== "string" || !result.url)
+    throw new ApiError(
+      response.status,
+      "invalid_response",
+      "Сервер вернул некорректный ответ. Повторите попытку.",
+    );
+  return result.url;
+}
+
 export type PendingUpload = { file: Blob; key: string; id?: string };
 /** begin → bytes → finalize. Reusing `op` after a failure retries the same upload key. */
 export async function saveUpload(
