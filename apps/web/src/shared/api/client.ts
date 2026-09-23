@@ -12,6 +12,18 @@ import type {
   OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
 import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
+import type {
+  CommentAnchor,
+  Reaction,
+  SharedComments,
+  WorkComments,
+} from "../../../../../packages/contracts/comments.ts";
+
+export type NewComment = {
+  body: string;
+  anchor?: CommentAnchor | null;
+  parentId?: string;
+};
 export type ModerationInspection = {
   action: string;
   actionLabel: string;
@@ -207,13 +219,68 @@ export const client = {
     reason: ReportReason,
     comment?: string,
     key: string = crypto.randomUUID(),
+    commentId?: string,
   ) =>
     request<{ ok: true }>("/reports", {
       key,
       token,
       reason,
       ...(comment?.trim() ? { comment: comment.trim() } : {}),
+      ...(commentId ? { commentId } : {}),
     }),
+  /**
+   * Comments (docs/specs/COMMENTS.md). A recipient's calls carry the link
+   * token in the POST body, never in a URL; the owner's are by work id.
+   */
+  comments: {
+    shared: (token: string, signal?: AbortSignal) =>
+      request<SharedComments>("/shared/comments", { token }, "POST", signal),
+    create: (token: string, input: NewComment) =>
+      request<{ id: string }>("/shared/comments/create", { token, ...input }),
+    react: (token: string, emoji: Reaction, anchor: CommentAnchor | null) =>
+      request<{ active: boolean }>("/shared/comments/react", {
+        token,
+        emoji,
+        anchor,
+      }),
+    remove: (token: string, commentId: string) =>
+      request<{ ok: true }>("/shared/comments/delete", { token, commentId }),
+    resolve: (token: string, commentId: string, resolved: boolean) =>
+      request<{ ok: true }>("/shared/comments/resolve", {
+        token,
+        commentId,
+        resolved,
+      }),
+    work: (artifactId: string, signal?: AbortSignal) =>
+      request<WorkComments>(
+        `/artifacts/${artifactId}/comments`,
+        undefined,
+        "GET",
+        signal,
+      ),
+    seen: (artifactId: string) =>
+      request<{ ok: true }>(`/artifacts/${artifactId}/comments/seen`, {}),
+    ownerCreate: (artifactId: string, shareId: string, input: NewComment) =>
+      request<{ id: string }>(`/artifacts/${artifactId}/comments`, {
+        shareId,
+        ...input,
+      }),
+    ownerReact: (
+      artifactId: string,
+      shareId: string,
+      emoji: Reaction,
+      anchor: CommentAnchor | null,
+    ) =>
+      request<{ active: boolean }>(`/artifacts/${artifactId}/reactions`, {
+        shareId,
+        emoji,
+        anchor,
+      }),
+    ownerRemove: (commentId: string) =>
+      request<{ ok: true }>(`/comments/${commentId}/delete`, {}),
+    ownerResolve: (commentId: string, resolved: boolean) =>
+      request<{ ok: true }>(`/comments/${commentId}/resolve`, { resolved }),
+  },
   agentConnections: {
     list: (signal?: AbortSignal) =>
       request<AgentConnection[]>(
@@ -302,6 +369,7 @@ export async function staticView(
   revisionId: string,
   grant?: string,
   signal?: AbortSignal,
+  options: { comments?: boolean } = {},
 ) {
   const response = await send(
     grant
@@ -309,7 +377,12 @@ export async function staticView(
       : `/api/revisions/${revisionId}/static-view`,
     {
       method: "POST",
-      headers: grant ? { Authorization: `Bearer ${grant}` } : {},
+      headers: {
+        ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
+        // The comment overlay rides on the grant; see staticHtmlCsp.
+        ...(options.comments ? { "Content-Type": "application/json" } : {}),
+      },
+      body: options.comments ? JSON.stringify({ comments: true }) : undefined,
       signal,
     },
   );

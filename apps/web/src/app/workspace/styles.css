@@ -23,3 +23,13 @@
   .topbar-actions .ui-button { flex: 1; }
   .topbar-fullscreen { display: none; }
 }
+
+/* The work's comments (all its links): a drawer on the right, a bottom sheet on phones. */
+.topbar-comments[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-ring); }
+.topbar-unread { margin-left: 2px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: var(--text-xs); font-weight: 600; }
+.work-comments { position: fixed; top: 60px; right: 0; bottom: 0; z-index: 30; display: flex; width: 360px; border-left: 1px solid var(--line); background: var(--canvas); box-shadow: var(--shadow-md); overflow: auto; }
+.workspace[data-comments="open"] > main { padding-right: calc(360px + var(--gutter)); }
+@media (max-width: 760px) {
+  .work-comments { top: auto; left: 0; width: auto; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }
+  .workspace[data-comments="open"] > main { padding-right: var(--gutter-mobile); }
+}
