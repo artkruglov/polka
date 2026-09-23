@@ -19,6 +19,7 @@ import {
   rememberAccount,
   useAccountState,
 } from "../../entities/account/model/useAccount.ts";
+import { SOURCE_URL } from "../../shared/lib/project-links.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
 
 export type Section =
@@ -225,6 +226,9 @@ export function LegalLinks() {
       <nav aria-label="Документы">
         <a href="/privacy">Политика</a>
         <a href="/terms">Соглашение</a>
+        <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
+          Открытый код на GitHub
+        </a>
       </nav>
     </footer>
   );

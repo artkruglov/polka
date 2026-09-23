@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bot,
+  CodeXml,
   FileUp,
   History,
   Link2,
@@ -17,6 +18,7 @@ import { Button, LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
+import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
 
 export function Landing() {
   const account = useAccount();
@@ -42,6 +44,15 @@ export function Landing() {
             Сохраните отчёт, страницу или прототип из чата. Отправьте ссылку —
             получателю не нужен аккаунт в Claude или ChatGPT.
           </p>
+          <a
+            className="landing-oss"
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <CodeXml size={16} aria-hidden="true" />
+            Открытый код на GitHub · {SOURCE_LICENSE}
+          </a>
 
           <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
             <span id="landing-agent-title" className="landing-agent-title">
@@ -175,14 +186,25 @@ export function Landing() {
               Общая среда команды — дальше.
             </h2>
             <p>
-              Полка — открытый код. Подключайте своего агента через MCP и
-              храните работы на своей установке или в облаке. Размещение
-              внутри компании требует отдельной настройки.
+              Полка — открытый код под лицензией {SOURCE_LICENSE}. Подключайте
+              своего агента через MCP и храните работы здесь или на
+              своей установке: код, инструкции по развёртыванию и документация —
+              на GitHub.
             </p>
           </div>
-          <LinkButton href="/settings/agents">
-            Подключить агента <ArrowUpRight size={18} />
-          </LinkButton>
+          <div className="landing-company-actions">
+            <LinkButton href="/settings/agents">
+              Подключить агента <ArrowUpRight size={18} />
+            </LinkButton>
+            <LinkButton
+              href={SOURCE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="secondary"
+            >
+              Код на GitHub <ArrowUpRight size={18} />
+            </LinkButton>
+          </div>
         </section>
       </main>
     </AppShell>
