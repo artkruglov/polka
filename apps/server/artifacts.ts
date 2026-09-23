@@ -18,7 +18,7 @@ import { db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-import { classifyHtml, looksLikeHtml } from "./html.ts";
+import { classifyHtmlBounded, looksLikeHtml } from "./html.ts";
 import {
   createSingleHtmlRevisionManifest,
   isStaticSingleFileBundle,
@@ -248,7 +248,7 @@ export async function beginUploadInTransaction(
   );
   return { uploadId: id, receipt: null };
 }
-function validateBytes(
+async function validateBytes(
   bytes: Buffer,
   input: ReturnType<typeof beginUploadSchema.parse>,
 ) {
@@ -294,7 +294,7 @@ function validateBytes(
           "invalid",
           "Это не похоже на HTML-страницу. Сохраните её как текст или выберите файл .html.",
         );
-      return classifyHtml(source);
+      return classifyHtmlBounded(source);
     }
   }
   return null;
@@ -385,7 +385,7 @@ export async function uploadBytesInTransaction(
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   const input = beginUploadSchema.parse(u.request);
-  validateBytes(bytes, input);
+  await validateBytes(bytes, input);
   if (u.receipt) return { stored: true };
   await validateUploadTarget(c, actor, input);
   const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
@@ -413,7 +413,7 @@ export async function finalizeUploadInTransaction(
   const input = beginUploadSchema.parse(u.request);
   await validateUploadTarget(c, actor, input);
   const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
-  const htmlProfile = validateBytes(bytes, input);
+  const htmlProfile = await validateBytes(bytes, input);
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
   > | null = null;
@@ -847,7 +847,7 @@ export async function finalizeBundleUploadInTransaction(
   // multi-file bundle stays runtime-only until a derivative is prepared.
   const htmlProfile: HtmlProfile =
     input.manifest.files.length === 1 && entryBytes
-      ? classifyHtml(entryBytes.toString("utf8"))
+      ? await classifyHtmlBounded(entryBytes.toString("utf8"))
       : "unsupported";
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");

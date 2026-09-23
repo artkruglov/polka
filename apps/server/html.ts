@@ -137,11 +137,14 @@ export function classifyHtml(source: string): HtmlProfile {
   let unsafe = false;
   let interactive = false;
   const text: string[] = [];
-  const walk = (node: Node, hidden: boolean) => {
-    if (unsafe) return;
+  // An explicit stack, not recursion: a deeply nested page would overflow
+  // the call stack. The order of visits does not matter for these checks.
+  const stack: [Node, boolean][] = [[parse(source) as unknown as Node, false]];
+  while (stack.length && !unsafe) {
+    const [node, hidden] = stack.pop()!;
     if (node.nodeName === "#text") {
       if (!hidden) text.push(node.value ?? "");
-      return;
+      continue;
     }
     const tag = node.tagName?.toLowerCase();
     if (tag) {
@@ -172,14 +175,52 @@ export function classifyHtml(source: string): HtmlProfile {
       }
     }
     const inner = hidden || (tag !== undefined && HIDDEN_TEXT.has(tag));
-    for (const child of node.childNodes ?? []) walk(child, inner);
-    if (node.content) walk(node.content, true);
-  };
-  walk(parse(source) as unknown as Node, false);
+    // Children in reverse so text is collected in document order.
+    const children = node.childNodes ?? [];
+    if (node.content) stack.push([node.content, true]);
+    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, inner]);
+  }
   if (unsafe) return "unsupported";
   if (!interactive) return "static";
   const visible = text.join(" ").replace(/\s+/g, " ").trim();
   return visible.length >= 80 ? "limited" : "unsupported";
+}
+
+/**
+ * classifyHtml off the request thread, with a deadline. parse5's tree builder
+ * is quadratic on deeply nested markup (200 KB of nested <div> takes ~4 s,
+ * the 5 MB upload limit ~40 min), and saving runs on the server's request
+ * thread. Small pages are classified inline; larger ones in a worker that is
+ * terminated at the deadline. A page that cannot be classified in time gets
+ * no link ("unsupported"): the owner still sees and downloads it.
+ */
+export const CLASSIFY_INLINE_BYTES = 16 * 1024;
+export const CLASSIFY_DEADLINE_MS = 2_000;
+export async function classifyHtmlBounded(
+  source: string,
+  deadlineMs = CLASSIFY_DEADLINE_MS,
+): Promise<HtmlProfile> {
+  if (source.length <= CLASSIFY_INLINE_BYTES) return classifyHtml(source);
+  const { Worker } = await import("node:worker_threads");
+  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
+    resourceLimits: { maxOldGenerationSizeMb: 256 },
+  });
+  try {
+    return await new Promise<HtmlProfile>((resolve) => {
+      const timer = setTimeout(() => resolve("unsupported"), deadlineMs);
+      worker.once("message", (profile: HtmlProfile) => {
+        clearTimeout(timer);
+        resolve(profile);
+      });
+      worker.once("error", () => {
+        clearTimeout(timer);
+        resolve("unsupported");
+      });
+      worker.postMessage(source);
+    });
+  } finally {
+    await worker.terminate();
+  }
 }
 
 // Shared with the web app, which decides whether pasted code is saved as HTML.
