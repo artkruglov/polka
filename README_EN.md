@@ -4,6 +4,12 @@
 
 [Русский](README.md) · [Live demo: polochka.app](https://polochka.app) · [Catalogue](https://polochka.app/discover) · [Docs (Russian)](docs/README.md)
 
+**Try it in a minute.** Tell your agent (Codex, Claude Code, Claude.ai or ChatGPT):
+
+> Connect Полка: https://polochka.app/connect
+
+The agent runs one command and Полка opens: sign in or create a shelf with your e-mail and press Allow. From then on, ask the agent to save your work to Полка; the reply contains a link.
+
 Полка ("the shelf") keeps the reports, pages, prototypes and other artifacts you made with Claude, ChatGPT, Claude Code or Codex outside the chat history. Every work gets versions and a clear link. Recipients don't need a Claude or ChatGPT account, and you can revoke a link at any time.
 
 - **The agent saves it for you.** In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link (checked by hand with Claude.ai, not yet with ChatGPT; see [status](docs/status.md)). The simplest way is to tell your agent "Connect Полка: https://polochka.app/connect"; it sets itself up, and you sign in by email and allow access. Claude Code and Codex connect with one command and no token; other MCP clients use a token. Scripts and CI use the HTTP API.
@@ -16,7 +22,7 @@
 |---|---|---|
 | ![Полка home page](docs/screenshots/landing.png) | ![The «Интересное» catalogue](docs/screenshots/discover.png) | ![An interactive page opened from a link](docs/screenshots/recipient.png) |
 
-> **Status: prerelease.** The latest tag is `v0.1.0-rc.4`. Changes since then are listed in the [CHANGELOG](CHANGELOG.md). A hosted pilot runs at https://polochka.app, and the operator creates the accounts. The API, database schema and UI may still change. What works and what doesn't: [docs/status.md](docs/status.md) (Russian).
+> **Status: prerelease.** The latest tag is `v0.1.0-rc.4`. Changes since then are listed in the [CHANGELOG](CHANGELOG.md). A hosted pilot runs at https://polochka.app; e-mail sign-up is open, up to 50 new shelves a day. The API, database schema and UI may still change. What works and what doesn't: [docs/status.md](docs/status.md) (Russian).
 
 The interface and most documentation are in Russian. Identifiers, commands and API fields are in English.
 
@@ -65,7 +71,7 @@ npm test -- --live     # suites that need the local viewer
 - **Interactive mode needs a separate viewer domain.** Without one (`HTML_LIVE_MODE=disabled`), recipients see a static page with scripts off.
 - **Claude/ChatGPT links can't be imported.** Save through the connector, download the file or paste the code.
 - **Downloaded copies can't be revoked.** Revoking a link closes it, but it can't delete what a recipient already downloaded.
-- **The operator creates accounts.** Sign-in is by password. E-mail sign-in works only with SMTP configured. There's no SSO/SCIM.
+- **Sign-in is by e-mailed code** (SMTP required) or by an operator-issued password. Sign-up can be open, limited to listed addresses, or capped per day. There's no SSO/SCIM.
 - **URL import** (`URL_IMPORT_ENABLED`) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
 
 More: [docs/faq.md](docs/faq.md) (Russian).
