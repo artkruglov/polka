@@ -10,6 +10,7 @@
 - `npm run check:links` проверяет относительные ссылки и якоря во всех Markdown-файлах.
 - **Вход по почте только по приглашению** (`EMAIL_SIGNUP=invite`, по умолчанию в hosted и в SMTP-оверлее base): код получают аккаунты с привязанным адресом (`npm run account:email -- <логин> <почта>`) и адреса или домены из `EMAIL_SIGNUP_ALLOW`; остальным форма отвечает так же, но письмо не уходит. `EMAIL_SIGNUP=open` оставляет открытую регистрацию.
 - Hosted compose передаёт приложению `SMTP_*` и `MAIL_FROM`; описана отправка через Yandex Cloud Postbox.
+- **Codex и Claude Code подключаются одной командой, без токена** — через OAuth, как Claude.ai: `codex mcp add polka --url <APP_ORIGIN>/mcp` или `claude mcp add --transport http polka <APP_ORIGIN>/mcp`. Команды — на странице «Агенты» и в `docs/connect-agents.md`; подключение по токену осталось для остальных клиентов.
 
 ### Changed
 

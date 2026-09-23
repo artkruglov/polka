@@ -293,6 +293,17 @@ export function AgentConnections() {
       ].join("\n"),
     [],
   );
+  // No token at all: the client registers itself (OAuth), opens the browser,
+  // the owner signs in and allows access. Nothing secret to copy.
+  const codexOAuthCommand = useMemo(
+    () => `codex mcp add polka --url ${shellQuote(endpoint)}`,
+    [endpoint],
+  );
+  const claudeOAuthCommand = useMemo(
+    () =>
+      `claude mcp add --transport http --scope user polka ${shellQuote(endpoint)}`,
+    [endpoint],
+  );
   const codexCommand = useMemo(
     () =>
       `read -r -s POLKA_MCP_TOKEN\nexport POLKA_MCP_TOKEN\ncodex mcp add polka --url ${shellQuote(endpoint)} --bearer-token-env-var POLKA_MCP_TOKEN`,
@@ -331,25 +342,26 @@ export function AgentConnections() {
             прямо на вашу полку — и только то, что вы разрешили.
           </p>
           <p className="agent-boundary">
-            <ShieldCheck size={17} /> Здесь выдаётся токен для CLI-клиентов.
-            Claude.ai и ChatGPT подключаются иначе: добавьте в них коннектор{" "}
-            {new URL("/mcp", location.origin).href} и подтвердите доступ на
-            Полке — такие подключения тоже появятся в списке.
+            <ShieldCheck size={17} /> Проще всего — одной командой ниже: токен
+            не нужен, клиент откроет Полку в браузере, вы войдёте и разрешите
+            доступ. Claude.ai и ChatGPT подключаются так же: добавьте в них
+            коннектор {new URL("/mcp", location.origin).href}. Все подключения
+            появятся в списке, и любое можно отозвать.
           </p>
         </header>
         <ol className="agent-steps" aria-label="Как подключить">
           <li>
             <span>1</span>
             <div>
-              <strong>Создайте подключение</strong>
-              <p>Назовите его, выберите клиента и разрешения.</p>
+              <strong>Подключите клиента</strong>
+              <p>Одной командой ниже или подключением с токеном.</p>
             </div>
           </li>
           <li>
             <span>2</span>
             <div>
-              <strong>Передайте токен клиенту</strong>
-              <p>Через переменную окружения — не через чат.</p>
+              <strong>Разрешите доступ</strong>
+              <p>На странице Полки, которую откроет клиент. Токен — только через переменную окружения, не через чат.</p>
             </div>
           </li>
           <li>
@@ -362,8 +374,31 @@ export function AgentConnections() {
         </ol>
         <div className="agent-workspace">
           <div className="agent-setup-column">
+            <section className="agent-card" aria-labelledby="one-command-title">
+              <h2 id="one-command-title">Одной командой, без токена</h2>
+              <p className="agent-instruction">
+                Выполните команду в терминале. Откроется Полка: войдите и
+                нажмите «Разрешить». Токен нигде хранить не нужно.
+              </p>
+              <InstructionBlock
+                title="Codex"
+                value={codexOAuthCommand}
+                copyLabel="Скопировать команду"
+                copiedLabel="Команда скопирована"
+              />
+              <InstructionBlock
+                title="Claude Code — затем в Claude Code: /mcp → polka → Authenticate"
+                value={claudeOAuthCommand}
+                copyLabel="Скопировать команду"
+                copiedLabel="Команда скопирована"
+              />
+              <p className="agent-instruction">
+                Клиент без входа через браузер? Создайте подключение с токеном
+                ниже.
+              </p>
+            </section>
             <section className="agent-card" aria-labelledby="new-agent-title">
-              <h2 id="new-agent-title">Новое подключение</h2>
+              <h2 id="new-agent-title">Подключение с токеном</h2>
               <form onSubmit={issue}>
                 <TextField
                   label="Имя подключения"
