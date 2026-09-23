@@ -9,6 +9,7 @@
 | [connect-agents.md](connect-agents.md) | Как подключить Claude.ai, ChatGPT, Claude Code, Codex, скрипты и CI |
 | [faq.md](faq.md) | Лимиты, сеть, отзыв ссылок, почему ссылки Claude/ChatGPT не импортируются |
 | [MCP_CONNECTOR.md](MCP_CONNECTOR.md) | Коннектор для Claude.ai и ChatGPT: OAuth 2.1, разрешения, отзыв, приёмка |
+| [legal/privacy.md](legal/privacy.md), [legal/terms.md](legal/terms.md) | Черновики политики обработки данных и пользовательского соглашения для polochka.app (не проверены юристом) |
 | [PUBLISH_API.md](PUBLISH_API.md) | `POST /api/v1/publish`, `GET /api/v1/status/:id`, ошибки, CLI |
 
 ## Разработчику и оператору

@@ -39,7 +39,7 @@ npm test -- --live     # файлы из tests/live-suite.json с включён
 
 ## Правила
 
-- **Слои frontend.** `apps/web/src` делится на слои `app → pages → widgets → features → entities → shared`, и импортировать можно только в сторону нижних слоёв. Срезы одного слоя (например, две страницы) друг друга не импортируют, исключение — `shared` и `app`. Из-за пределов `apps/web/src` разрешены только `packages/contracts` и `packages/editorial.ts`. Всё это проверяет `npm run check:layers`. Общие компоненты и токены лежат в `shared/ui`, подробности в [docs/FRONTEND_COMPONENT_SYSTEM.md](docs/FRONTEND_COMPONENT_SYSTEM.md).
+- **Слои frontend.** `apps/web/src` делится на слои `app → pages → widgets → features → entities → shared`, и импортировать можно только в сторону нижних слоёв. Срезы одного слоя (например, две страницы) друг друга не импортируют, исключение — `shared` и `app`. Из-за пределов `apps/web/src` разрешены только `packages/contracts`, `packages/editorial.ts` и тексты `docs/legal/*.md` через `?raw`. Всё это проверяет `npm run check:layers`. Общие компоненты и токены лежат в `shared/ui`, подробности в [docs/FRONTEND_COMPONENT_SYSTEM.md](docs/FRONTEND_COMPONENT_SYSTEM.md).
 - **Контракты.** Схемы и лимиты, общие для сервера и клиента, живут в `packages/contracts` (zod).
 - **Один сервис на действие.** Web, MCP и publish API вызывают одни и те же сервисы в `apps/server`. Не дублируйте проверки tenant, scope и идемпотентности в транспорте.
 - **Схема.** Схема меняется только новой миграцией в `deploy/migrations/` (существующие миграции не редактируются) и обновлением `packages/migrations.ts`. Новые права runtime-роли добавляются в `deploy/runtime-grants.sql`.

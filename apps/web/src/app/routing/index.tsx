@@ -11,9 +11,11 @@ import {
   LibraryInvite,
   Moderation,
   OAuthConsent,
+  PrivacyPage,
   Recipient,
   Signup,
   Templates,
+  TermsPage,
 } from "./lazy-pages.tsx";
 
 // The development inventory never enters the production bundle.
@@ -33,6 +35,8 @@ function Route({ path }: { path: string }) {
   if (path === "/oauth/consent") return <OAuthConsent />;
   if (path === "/moderation") return <Moderation />;
   if (path === "/signup") return <Signup />;
+  if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/terms") return <TermsPage />;
   if (path === "/start") return <FirstSave />;
   if (path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
