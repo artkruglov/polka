@@ -197,7 +197,7 @@ export function Landing() {
             </p>
           </div>
           <div className="landing-company-actions">
-            <LinkButton href="/pricing">
+            <LinkButton href="/enterprise">
               Для компаний <ArrowUpRight size={18} />
             </LinkButton>
             <LinkButton
