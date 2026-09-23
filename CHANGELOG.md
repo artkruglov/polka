@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-09-24
+
 ### Added
 
 - **Вход через Яндекс ID, VK ID и свой OIDC** ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md); миграция 032). Требование ч. 10 ст. 8 149-ФЗ: пользователей из России авторизует российская система.
@@ -211,7 +213,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...v0.1.0
 [0.1.0-rc.5]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.5
 [0.1.0-rc.4]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.4
 [0.1.0-rc.3]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.3
