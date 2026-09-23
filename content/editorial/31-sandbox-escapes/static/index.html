@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>31 попытка выбраться из песочницы — история Полки</title>
+<style>
+:root{--ink:#1f2428;--muted:#5c6a6f;--paper:#eef1f3;--card:#fff;--line:#d3dadf;--accent:#3b4f8a;--warm:#b3502e;--ok:#2d7350;--soft:#e7ebf3;--term:#1e232b;--termink:#e7ecf0;--l1:#3b4f8a;--l2:#2d7350;--l3:#8a5a1f;--shadow:#1b263312}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:940px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.1;letter-spacing:-.02em}
+h1{font-size:clamp(2.1rem,6vw,4.2rem);margin:14px 0 12px}
+h2{font-size:clamp(1.45rem,3vw,2rem);margin:0 0 12px}
+h3{font-size:1.1rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+code{font:.9em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.term{margin:10px 0 16px;padding:14px 16px;border-radius:12px;background:var(--term);color:var(--termink);font:.86rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.term b{color:#ffc790;font-weight:700}
+.layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
+.layer{padding:16px 18px;border-radius:14px;border:1px solid var(--line);border-top:5px solid var(--l1);background:#fbfcfd}
+.layer.l2{border-top-color:var(--l2)}.layer.l3{border-top-color:var(--l3)}
+.layer h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.layer p{margin:0;font-size:.95rem;color:var(--muted)}
+.filters{display:none;flex-wrap:wrap;gap:8px;margin:0 0 6px;align-items:center}
+.js .filters{display:flex}
+.filters .lbl{font-size:.82rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.chip{min-height:40px;border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:transparent;color:var(--ink);font:inherit;font-size:.92rem;font-weight:700;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.count{margin:8px 0 12px;color:var(--muted);font-size:.92rem}
+.grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.grid li{padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:#fbfcfd;display:flex;flex-direction:column;gap:6px}
+.grid li.hidden{display:none}
+.grid .cat{font-size:.74rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.grid h3{font-family:inherit;font-size:1rem;letter-spacing:0;margin:0}
+.grid pre{margin:0;padding:8px 10px;border-radius:8px;background:var(--term);color:var(--termink);font:.78rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.stop{margin-top:auto;padding-top:6px;font-size:.88rem}
+.stop b{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:.76rem;letter-spacing:.04em;margin-right:6px}
+.L1 .stop b{background:var(--l1)}.L2 .stop b{background:var(--l2)}.L0 .stop b{background:#6b7278}
+.stop span{color:var(--muted)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.93rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.no{color:var(--ok)}td.open{color:var(--warm);font-weight:700}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:16px}.foot{margin-top:28px}
+.facts{margin:0 0 14px;padding-left:20px}.facts li{margin-bottom:6px}
+@media(max-width:540px){table,thead,tbody,tr,th,td{display:block}thead{position:absolute;left:-9999px}tr{padding:8px 0;border-bottom:1px solid var(--line)}td{border:0;padding:3px 0}td::before{content:attr(data-th) ": ";font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Сделано с Claude · история Полки</div>
+<h1>31 попытка выбраться из песочницы</h1>
+<p class="dek">Полка компилирует на своём сервере React-код, который принесли из чата. Компилятор читает диск. Один экземпляр Claude писал ограждение, другой — в тот же день пытался через него прочитать файлы сервера тридцатью одним способом. Ниже: что было открыто в первой версии, какие три слоя держат теперь, и какую дыру нашла живая проверка на следующий день уже в другом месте.</p>
+</header>
+
+<section class="card" aria-labelledby="why">
+<h2 id="why">Зачем сборщику диск</h2>
+<p>Артефакт из чата часто написан на JSX и импортирует библиотеки. Чтобы получатель увидел его без сети и без CDN, Полка собирает страницу в один HTML: esbuild компилирует код, а десять библиотек — <code>react</code>, <code>react-dom</code>, <code>lucide-react</code>, <code>recharts</code>, <code>lodash</code>, <code>d3</code>, <code>three</code>, <code>papaparse</code>, <code>mathjs</code>, <code>chart.js</code> — берутся из собственных копий Полки в <code>node_modules</code>. Ещё Tailwind, сгенерированный под использованные классы.</p>
+<p>Значит, esbuild читает файлы на сервере, а что именно он читает, диктует чужой код. Вопрос ревью был простой: может ли страница из чата заставить его прочитать не библиотеку, а, скажем, файл с настройками сервера — и вернуть содержимое автору в его же собранной странице?</p>
+</section>
+
+<section class="card" aria-labelledby="first">
+<h2 id="first">Первая находка: да, могла</h2>
+<p>22 сентября 2026 ревью рантайма (отдельный экземпляр Claude, только чтение и пробы на подставных файлах в черновике, репозиторий не трогался) нашло критическую проблему. esbuild превращает импорт с шаблонной строкой вроде <code>require(`./${x}.json`)</code> в маску и сам обходит диск от корня сборки; такие файлы не проходят через проверку импортов плагина. Ведущий <code>../</code> выводит за корень, а <code>with {type:"text"}</code> подгружает файл любого расширения как строку.</p>
+<pre class="term">import(`./${n}.env`, { with: { type: "text" } })     → подставной SECRET попал в сборку
+import(`../../../../../etc/${n}hosts`, { with: { type: "text" } })   → /etc/hosts в сборке
+require(`./${n}.json`)                                → все .json под корнем, рекурсивно</pre>
+<p>Автор кода воспроизвёл утечку перед исправлением: <code>require(`./${n}.json`)</code> заставил esbuild обойти диск от корня репозитория, а сообщение об ошибке выдало путь внутри <code>node_modules</code>. Исправление — коммит <code>8001de3</code> в тот же день, следом <code>be65650</code> закрыл обходы через <code>require</code> и sloppy-mode. Уже тогда проверка была двойной: с временно выключенным первым слоем второй всё равно отказывал.</p>
+</section>
+
+<section class="card" aria-labelledby="layers">
+<h2 id="layers">Три независимых слоя</h2>
+<div class="layers">
+<div class="layer l1"><h3>Слой 1 · проверка импортов (acorn)</h3><p>Каждый файл страницы до сборки переводится в чистый JavaScript и разбирается в дерево. <code>import()</code> и <code>require()</code> — только с одной простой строкой, никаких атрибутов <code>with {…}</code>, любое упоминание <code>require</code> кроме прямого вызова — отказ. Не разобрался — тоже отказ.</p></div>
+<div class="layer l2"><h3>Слой 2 · ограда на файлы (resolve/load)</h3><p>Относительный импорт обязан быть файлом самой страницы. Всё, что esbuild берёт с диска, должно лежать внутри десяти библиотек или пакетов, до которых они резолвятся: 86 реальных каталогов по <code>realpath</code>, симлинки не помогают. URL и протоколы — «нужна сеть», прочее — «import not allowed», без путей сервера.</p></div>
+<div class="layer l3"><h3>Слой 3 · контроль после сборки (metafile)</h3><p>Когда esbuild закончил, список всех входных файлов сборки проверяется ещё раз тем же правилом. Если что-то прочиталось мимо первых двух слоёв, результат не отдаётся.</p></div>
+</div>
+<p class="note">Плюс окружение: воркер сборки и esbuild получают только <code>PATH</code>, две настройки памяти Go и пути к бинарникам — даже удачное чтение <code>/proc/self/environ</code> не вернуло бы секретов. Ошибки сборки не содержат путей сервера. Не больше 32 файлов и 2 МиБ исходников, одна runtime-сборка за раз, жёсткий лимит памяти 512 МБ для esbuild на Linux.</p>
+</section>
+
+<section class="card" aria-labelledby="attempts">
+<h2 id="attempts">31 попытка, 25 приёмов, 0 утечек</h2>
+<p>Вечером того же дня третье ревью (ещё один экземпляр Claude) прогнало через настоящий <code>buildDerivative</code> с настоящим esbuild 31 попытку побега. Все отклонены, ничего не утекло; вердикт — «три слоя держат независимо». В отчёте перечислены 25 приёмов. Перед публикацией Редакция повторила их на текущем коде и записала, какой слой остановил каждый.</p>
+<div class="filters" role="group" aria-label="Фильтр по категории">
+<span class="lbl">Категория</span>
+<button class="chip" type="button" data-cat="all" aria-pressed="true" disabled="">Все</button>
+<button class="chip" type="button" data-cat="path" aria-pressed="false" disabled="">Пути</button>
+<button class="chip" type="button" data-cat="proto" aria-pressed="false" disabled="">Протоколы и CDN</button>
+<button class="chip" type="button" data-cat="css" aria-pressed="false" disabled="">CSS</button>
+<button class="chip" type="button" data-cat="dyn" aria-pressed="false" disabled="">Динамические импорты</button>
+<button class="chip" type="button" data-cat="req" aria-pressed="false" disabled="">require и CommonJS</button>
+</div>
+<div class="filters" role="group" aria-label="Фильтр по слою">
+<span class="lbl">Остановил</span>
+<button class="chip" type="button" data-layer="all" aria-pressed="true" disabled="">Любой</button>
+<button class="chip" type="button" data-layer="L1" aria-pressed="false" disabled="">Слой 1</button>
+<button class="chip" type="button" data-layer="L2" aria-pressed="false" disabled="">Слой 2</button>
+<button class="chip" type="button" data-layer="L0" aria-pressed="false" disabled="">Собралось без чтения</button>
+</div>
+<p class="count" id="count" aria-live="polite">Показаны все 25 приёмов.</p>
+<ul class="grid" id="grid">
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Абсолютный путь</h3><pre>import x from "/etc/passwd"</pre><p class="stop"><b>Слой 2</b><span>module "/etc/passwd" is not available in the Полка runtime</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Выход из каталога страницы</h3><pre>import x from "../../.env"</pre><p class="stop"><b>Слой 2</b><span>import "../../.env" is not a file of this page</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Реэкспорт наверх</h3><pre>export * from "../../.."</pre><p class="stop"><b>Слой 2</b><span>import "../../.." is not a file of this page</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Через разрешённую библиотеку: three</h3><pre>import x from "three/addons/../../../package.json"</pre><p class="stop"><b>Слой 2</b><span>module … is not available in the Полка runtime</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Через разрешённую библиотеку: lodash</h3><pre>import x from "lodash/../../package.json"</pre><p class="stop"><b>Слой 2</b><span>module … is not available in the Полка runtime</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Через разрешённую библиотеку: react</h3><pre>import x from "react/../../.env"</pre><p class="stop"><b>Слой 2</b><span>module … is not available in the Полка runtime</span></p></li>
+<li class="L2" data-cat="path"><span class="cat">Пути</span><h3>Percent-encoded «..»</h3><pre>import x from "react/..%2f..%2fpackage.json"</pre><p class="stop"><b>Слой 2</b><span>module … is not available in the Полка runtime</span></p></li>
+<li class="L2" data-cat="proto"><span class="cat">Протоколы и CDN</span><h3>data: как модуль</h3><pre>import x from "data:text/javascript,export default 1"</pre><p class="stop"><b>Слой 2</b><span>import "data:…" needs the network; the Полка runtime is offline</span></p></li>
+<li class="L2" data-cat="proto"><span class="cat">Протоколы и CDN</span><h3>file: как модуль</h3><pre>import x from "file:///etc/passwd"</pre><p class="stop"><b>Слой 2</b><span>import "file:…" needs the network</span></p></li>
+<li class="L2" data-cat="proto"><span class="cat">Протоколы и CDN</span><h3>Встроенный модуль Node</h3><pre>import fs from "node:fs"</pre><p class="stop"><b>Слой 2</b><span>import "node:fs" needs the network</span></p></li>
+<li class="L2" data-cat="proto"><span class="cat">Протоколы и CDN</span><h3>URL CDN с «..» (esm)</h3><pre>import x from "https://…/react/../../../etc/passwd"</pre><p class="stop"><b>Слой 2</b><span>import "https://…" needs the network</span></p></li>
+<li class="L2" data-cat="proto"><span class="cat">Протоколы и CDN</span><h3>URL CDN с «..» (unpkg-стиль)</h3><pre>import x from "https://…/lodash/../../package.json"</pre><p class="stop"><b>Слой 2</b><span>import "https://…" needs the network</span></p></li>
+<li class="L2" data-cat="css"><span class="cat">CSS</span><h3>@import наверх</h3><pre>@import "../../.env";</pre><p class="stop"><b>Слой 2</b><span>import "../../.env" is not a file of this page</span></p></li>
+<li class="L2" data-cat="css"><span class="cat">CSS</span><h3>@import url()</h3><pre>@import url("../../package.json");</pre><p class="stop"><b>Слой 2</b><span>import "../../package.json" is not a file of this page</span></p></li>
+<li class="L2" data-cat="css"><span class="cat">CSS</span><h3>url() в свойстве</h3><pre>body { background: url("../../.env") }</pre><p class="stop"><b>Слой 2</b><span>import "../../.env" is not a file of this page</span></p></li>
+<li class="L2" data-cat="css"><span class="cat">CSS</span><h3>@import "tailwindcss"</h3><pre>@import "tailwindcss";</pre><p class="stop"><b>Слой 2</b><span>module "tailwindcss" is not available in the Полка runtime</span></p></li>
+<li class="L1" data-cat="dyn"><span class="cat">Динамические импорты</span><h3>Маска (glob) в import()</h3><pre>import(`../${n}.json`)</pre><p class="stop"><b>Слой 1</b><span>import() must name a module with a plain string</span></p></li>
+<li class="L1" data-cat="dyn"><span class="cat">Динамические импорты</span><h3>Вычисляемый путь</h3><pre>import("../../" + n)</pre><p class="stop"><b>Слой 1</b><span>import() must name a module with a plain string</span></p></li>
+<li class="L1" data-cat="dyn"><span class="cat">Динамические импорты</span><h3>Атрибуты импорта</h3><pre>import t from "../../.env" with { type: "text" }</pre><p class="stop"><b>Слой 1</b><span>import attributes (with {…}) are not allowed</span></p></li>
+<li class="L1" data-cat="req"><span class="cat">require и CommonJS</span><h3>Псевдоним require</h3><pre>const r = require; r("../../package.json")</pre><p class="stop"><b>Слой 1</b><span>require must be called directly with one plain string</span></p></li>
+<li class="L2" data-cat="req"><span class="cat">require и CommonJS</span><h3>TypeScript import = require</h3><pre>import x = require("../../package.json")</pre><p class="stop"><b>Слой 2</b><span>import "../../package.json" is not a file of this page</span></p></li>
+<li class="L1" data-cat="req"><span class="cat">require и CommonJS</span><h3>Sloppy-mode with</h3><pre>with (Math) { value = require(`./${n}.json`) }</pre><p class="stop"><b>Слой 1</b><span>require must be called directly with one plain string</span></p></li>
+<li class="L2" data-cat="req"><span class="cat">require и CommonJS</span><h3>CommonJS require наверх</h3><pre>const x = require("../../.env")</pre><p class="stop"><b>Слой 2</b><span>import "../../.env" is not a file of this page</span></p></li>
+<li class="L0" data-cat="req"><span class="cat">require и CommonJS</span><h3>module.require</h3><pre>module.require("../../package.json")</pre><p class="stop"><b>Без чтения</b><span>собралось как обычный код: esbuild не считает это импортом и ничего не читает; в результате нет ни путей, ни содержимого</span></p></li>
+<li class="L0" data-cat="req"><span class="cat">require и CommonJS</span><h3>new URL(…, import.meta.url)</h3><pre>new URL("../../.env", import.meta.url)</pre><p class="stop"><b>Без чтения</b><span>собралось как обычный код: адрес вычисляется в браузере получателя, где сети нет; файлов не читалось</span></p></li>
+</ul>
+<p class="note">Слой 3 в этих прогонах не срабатывал ни разу: до него ничего не дошло. Так и задумано — он страхует на случай, если esbuild однажды прочитает файл, минуя первые два. Отчёт ревью отметил и две «не-уязвимости» в комментариях кода; <code>module.require</code> с простой строкой проверка импортов пропускает намеренно, а ограда на файлы всё равно фильтрует адрес.</p>
+</section>
+
+<section class="card" aria-labelledby="webrtc">
+<h2 id="webrtc">На следующий день: дыра в другом месте</h2>
+<p>Сборка — не единственная граница. Собранная страница выполняется у получателя на отдельном домене <code>polochka.page</code> в <code>iframe</code> с песочницей и строгой CSP: <code>connect-src 'none'</code>, <code>form-action 'none'</code>, картинки и шрифты только <code>data:</code>. 23 сентября 2026 приёмочная проба на реальном polochka.app открыла как гость страницу, которая пробует все выходы наружу, и наблюдала за ней из headless Chrome 153 через DevTools.</p>
+<table>
+<thead><tr><th>Канал</th><th>До исправления</th><th>После (коммит 040be10)</th></tr></thead>
+<tbody>
+<tr><td data-th="Канал"><code>fetch</code>, XHR (свой домен и внешний)</td><td data-th="До исправления" class="no">заблокирован</td><td data-th="После (коммит 040be10)" class="no">заблокирован</td></tr>
+<tr><td data-th="Канал">Картинка, <code>prefetch</code></td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 040be10)" class="no">заблокированы CSP</td></tr>
+<tr><td data-th="Канал"><code>sendBeacon</code>, WebSocket</td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Отправка формы</td><td data-th="До исправления" class="no">заблокирована</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Всплывающее окно, переход верхнего окна</td><td data-th="До исправления" class="no">заблокированы песочницей</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Cookies</td><td data-th="До исправления" class="no">пусто</td><td data-th="После (коммит 040be10)" class="no">пусто</td></tr>
+<tr><td data-th="Канал"><strong>WebRTC (STUN)</strong></td><td data-th="До исправления" class="open">открыт: получен кандидат srflx от публичного STUN-сервера</td><td data-th="После (коммит 040be10)" class="no">нет <code>RTCPeerConnection</code></td></tr>
+<tr><td data-th="Канал">DNS prefetch</td><td data-th="До исправления">не проверялся</td><td data-th="После (коммит 040be10)" class="no">заголовок <code>X-DNS-Prefetch-Control: off</code></td></tr>
+</tbody>
+</table>
+<p>CSP не управляет WebRTC, а директиву <code>webrtc 'block'</code> Chrome 153 игнорирует (проверено: кандидаты приходят с ней и без неё). Страница могла отправить наружу IP читателя и всё, что он в неё ввёл, — ровно то, что <code>connect-src 'none'</code> должен был исключить.</p>
+<p>Исправление: просмотрщик при отдаче ставит первым в каждом документе маленький скрипт, который делает двенадцать конструкторов RTC неопределёнными, незаписываемыми и ненастраиваемыми. Он идёт сразу после <code>&lt;!doctype&gt;</code> (режим стандартов сохраняется), но никогда после <code>&lt;head&gt;</code> — скрипт страницы перед head выполнился бы раньше. Вставка при отдаче покрывает страницы любой версии сборщика (v3–v6) и документы библиотек без пересборки. Новый мир не вернёт конструкторы: iframe в песочнице — другой opaque origin (<code>SecurityError</code>, проверено в Chrome), воркеры запрещены CSP, окна — песочницей. Проверено тестом в настоящем Chrome. После исправления за пределы polochka.app и polochka.page не ушло ни одного запроса.</p>
+<ul class="facts">
+<li>Не сделано: Firefox и Safari не проверялись; нет независимого счётчика на стороннем сервере — отсутствие запросов подтверждено событиями браузера; DNS-запросы напрямую не наблюдались.</li>
+</ul>
+<p class="note">Две истории — один метод: агент, который написал защиту, не тот, кто её ломает; а «ничего не утекло» — это не мнение, а список попыток с исходом каждой. Что не проверено, записано рядом с тем, что проверено.</p>
+</section>
+
+<p class="foot">Автор: Редакция Полки · Источники: коммиты <code>8001de3</code>, <code>be65650</code>, <code>040be10</code>; <code>apps/server/runtime-guards.ts</code>, <code>apps/server/react-runtime.ts</code>, <code>tests/react-runtime.test.ts</code>; <code>docs/reviews/2026-09-23-viewer-egress/README.md</code>; отчёты ревью рантайма и сервера 22.09.2026 — github.com/artkruglov/polka.</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+</body></html>
