@@ -47,6 +47,8 @@ type Props = {
   onDownload: () => void;
   /** The page's «На весь экран» targets the stage. */
   stageRef?: React.Ref<HTMLElement>;
+  /** Version comparison, shown under the version list in «Версии». */
+  compare?: React.ReactNode;
 };
 /** Read-only composition. The page owns fetching, mutations and asynchronous races. */
 export function ArtifactReader({
@@ -62,6 +64,7 @@ export function ArtifactReader({
   preview,
   onDownload,
   stageRef,
+  compare,
 }: Props) {
   // Badge and explanation describe the version on screen, which may be an older one.
   const profile = profileView(shown);
@@ -158,6 +161,7 @@ export function ArtifactReader({
             ))}
           </div>
         )}
+        {history && compare}
         {viewed && viewed.id !== work.revision.id && (
           <p className="history-note" role="status">
             Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не
