@@ -369,7 +369,8 @@ const OVERLAY_SOURCE = String.raw`
       W.clearTimeout(selectionTimer);
       selectionTimer = W.setTimeout(selection, 180);
     });
-    listen.call(D, "click", function (event) { focusAt(event.clientX, event.clientY); }, true);
+    // A pointer click only: keyboard activation of a control has no position.
+    listen.call(D, "click", function (event) { if (event.detail > 0) focusAt(event.clientX, event.clientY); }, true);
     listen.call(W, "scroll", positions, { passive: true });
     listen.call(W, "resize", function () { positions(); });
     listen.call(W, "load", function () { dirty = true; paint(); });

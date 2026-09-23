@@ -253,6 +253,7 @@ async function discussion(
           },
       body: deleted ? "" : row.body,
       anchor: row.anchor ?? null,
+      sig: anchorSignature(row.anchor),
       revisionId: row.revision_id,
       revisionNumber: row.revision_number,
       createdAt: new Date(row.created_at).toISOString(),

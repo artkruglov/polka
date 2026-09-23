@@ -63,6 +63,7 @@ export function LivePreview({
   requiresBuild = false,
   buildForLink = false,
   onInlineBuildChange,
+  overlay,
   children,
 }: {
   revision: Revision;
@@ -70,6 +71,8 @@ export function LivePreview({
   requiresBuild?: boolean;
   buildForLink?: boolean;
   onInlineBuildChange?: () => Promise<void>;
+  /** Comments: the grant is asked for with the overlay; see Preview. */
+  overlay?: { onFrame: (frame: HTMLIFrameElement | null) => void };
   children: ReactNode;
 }) {
   const [capability, setCapability] = useState<CapabilityState>("loading");
@@ -327,7 +330,11 @@ export function LivePreview({
         {
           method: "POST",
           credentials: "same-origin",
-          headers: grant ? { Authorization: `Bearer ${grant}` } : undefined,
+          headers: {
+            ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
+            ...(overlay ? { "Content-Type": "application/json" } : {}),
+          },
+          body: overlay ? JSON.stringify({ comments: true }) : undefined,
           signal: abort.signal,
         },
       );
@@ -469,6 +476,7 @@ export function LivePreview({
           title={revision.filename}
           src={live.url}
           sandbox={LIVE_SANDBOX}
+          ref={overlay?.onFrame}
           referrerPolicy="no-referrer"
         />
       </div>

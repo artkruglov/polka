@@ -19,10 +19,13 @@ export function ReportArtifactPanel({
   token,
   onClose,
   onSent,
+  commentId,
 }: {
   token: string;
   onClose: () => void;
   onSent: () => void;
+  /** A report about one comment of the link, not about the page. */
+  commentId?: string;
 }) {
   const sending = useRef(false);
   // One key per report: a retry after a lost response must not file a second
@@ -35,7 +38,7 @@ export function ReportArtifactPanel({
   const [reportBusy, setReportBusy] = useState(false);
   return (
     <Dialog
-      title="Пожаловаться на работу"
+      title={commentId ? "Пожаловаться на комментарий" : "Пожаловаться на работу"}
       onClose={() => !reportBusy && onClose()}
       busy={reportBusy}
     >
@@ -55,6 +58,7 @@ export function ReportArtifactPanel({
               reportReason,
               reportComment,
               attempt.current.key,
+              commentId,
             );
             onSent();
             onClose();
@@ -72,8 +76,9 @@ export function ReportArtifactPanel({
       >
         <div className="dialog-body">
           <p>
-            Жалоба привязана к этой ссылке и версии. Владелец не увидит ваши
-            личные данные.
+            {commentId
+              ? "Жалоба на комментарий уйдёт модератору Полки. Автор комментария не узнает, кто пожаловался."
+              : "Жалоба привязана к этой ссылке и версии. Владелец не увидит ваши личные данные."}
           </p>
           <SelectField
             label="Причина"

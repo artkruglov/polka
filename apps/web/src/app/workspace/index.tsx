@@ -7,7 +7,15 @@ import { ArtifactReader } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Maximize2, Menu, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Maximize2,
+  Menu,
+  MessageCircle,
+  Share2,
+} from "lucide-react";
+import { useWorkComments } from "../../widgets/comments/index.ts";
 import type {
   Artifact,
   Folder,
@@ -292,6 +300,12 @@ export function App() {
   }, [account, selected, refresh]);
   const guestHome = location.pathname === "/" && !params.has("login");
   // The landing page is static: a guest (or an unreachable API) should still see it.
+  // Comments of the work's links (docs/specs/COMMENTS.md): only once a link
+  // was ever made, never in the trash.
+  const workComments = useWorkComments({
+    artifactId: work?.id ?? "",
+    enabled: !!selected && !!work && !work.trashedAt && !!work.share,
+  });
   if (guestHome && (account === null || authError)) return <LazyLanding />;
   if (authError)
     return (
@@ -386,7 +400,12 @@ export function App() {
         open(null);
       }}
     >
-      <div className="workspace">
+      <div
+        className="workspace"
+        data-comments={
+          workComments.available && workComments.open ? "open" : undefined
+        }
+      >
         {selected && <header className="topbar">
           <div className="top-start">
             <IconButton label="Назад на полку" onClick={() => open(null)}><ArrowLeft /></IconButton>
@@ -400,6 +419,21 @@ export function App() {
           </div>
           {work && !work.trashedAt && (
             <div className="topbar-actions">
+              {workComments.available && (
+                <Button
+                  variant="secondary"
+                  className="topbar-comments"
+                  aria-pressed={workComments.open}
+                  aria-controls="work-comments"
+                  aria-label={`Комментарии: ${workComments.count}${workComments.unread ? `, новых ${workComments.unread}` : ""}`}
+                  onClick={workComments.onToggle}
+                >
+                  <MessageCircle /> {workComments.count}
+                  {workComments.unread > 0 && (
+                    <span className="topbar-unread">+{workComments.unread}</span>
+                  )}
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 className="topbar-fullscreen"
@@ -449,6 +483,9 @@ export function App() {
                 preview={
                   <Preview
                     revision={shown}
+                    overlay={
+                      workComments.available ? workComments.overlay : undefined
+                    }
                     readingTitle={
                       shown.mime === "text/plain" ? work.title : undefined
                     }
@@ -513,6 +550,12 @@ export function App() {
           )}
         </main>
       </div>
+      {selected && workComments.available && workComments.open && (
+        <aside id="work-comments" className="work-comments" aria-label="Комментарии">
+          {workComments.panel}
+        </aside>
+      )}
+      {selected && workComments.floating}
       {mobile && (
         <Dialog title="Папки" onClose={() => setMobile(false)}>
           <nav className="mobile-nav" aria-label="Папки и корзина (меню)">{nav}</nav>

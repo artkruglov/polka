@@ -114,6 +114,8 @@ export type CommentView = {
   /** Plain text: shown as text, never as HTML; links are not clickable. */
   body: string;
   anchor: CommentAnchor | null;
+  /** The fragment signature (reactions on the same fragment share it); "" without a quote. */
+  sig: string;
   revisionId: string;
   revisionNumber: number;
   createdAt: string;
