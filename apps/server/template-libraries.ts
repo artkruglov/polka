@@ -844,3 +844,49 @@ export async function listTemplateLibraryPublications(
     return { items: rows.slice(0, 100), hasMore: rows.length > 100 };
   });
 }
+
+/**
+ * Organisation access (docs/specs/SIGN_IN_PROVIDERS.md § 2): the person who
+ * just signed in joins a library the operator configured for their verified
+ * domain or the installation's own IdP. The caller holds the person's tenant
+ * and account locks (the established account-before-library order). Nothing
+ * changes when the library is archived or the person was ever a member: an
+ * administrator's revocation is not undone by the next sign-in.
+ */
+export async function joinLibraryByOrganisation(
+  c: PoolClient,
+  actor: Actor,
+  libraryId: string,
+  role: "reader" | "curator",
+) {
+  const library = (
+    await c.query(
+      `SELECT id FROM template_libraries
+        WHERE id=$1 AND state='active' AND archived_at IS NULL FOR UPDATE`,
+      [libraryId],
+    )
+  ).rows[0];
+  if (!library) return false;
+  const ever = await c.query(
+    "SELECT 1 FROM template_library_members WHERE library_id=$1 AND account_id=$2 LIMIT 1",
+    [libraryId, actor.id],
+  );
+  if (ever.rowCount) return false;
+  await c.query(
+    `INSERT INTO template_library_members(library_id,account_id,role)
+     VALUES($1,$2,$3)`,
+    [libraryId, actor.id, role],
+  );
+  await audit(c, actor, "template_library.domain_joined", libraryId);
+  await libraryEvent(
+    c,
+    actor,
+    libraryId,
+    "template_library.domain_joined",
+    "account",
+    actor.id,
+    null,
+    role,
+  );
+  return true;
+}
