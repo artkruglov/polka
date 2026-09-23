@@ -48,7 +48,7 @@ export type AuthorStanding = {
   pausedLinks: boolean;
   /** A work of this author is blocked and the block is not lifted. */
   blockedContent: boolean;
-  /** Signed in with a verified identity (Yandex ID, VK ID), if recorded. */
+  /** Has a linked Яндекс ID or VK ID identity. */
   identityVerified: boolean;
   /** Saved revisions, none of them blocked. */
   cleanSaves: number;
@@ -88,10 +88,11 @@ export async function authorStanding(
        EXISTS(SELECT 1 FROM moderation_blocks block
               WHERE block.tenant_id=tenant.id AND block.released_at IS NULL)
          AS blocked_content,
-       -- Present once sign-in providers record a verified identity; absent
-       -- columns read as false.
-       COALESCE((to_jsonb(account)->>'identity_verified')::boolean, false)
-         AS identity_verified,
+       -- Signed in through Яндекс ID or VK ID: the provider knows the person
+       -- (docs/specs/SIGN_IN_PROVIDERS.md), a lower risk than a bare address.
+       EXISTS(SELECT 1 FROM account_identities identity
+              WHERE identity.account_id=account.id
+                AND identity.provider IN ('yandex','vk')) AS identity_verified,
        (SELECT count(*)::int FROM revisions revision
         WHERE revision.tenant_id=tenant.id
           AND NOT EXISTS(SELECT 1 FROM moderation_blocks block
