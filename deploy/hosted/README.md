@@ -181,6 +181,27 @@ rm polka.dump
 2. Сервисный аккаунт с ролью `postbox.sender` и его API-ключ со scope `yc.postbox.send`.
 3. В `hosted.env`: `MAIL_MODE=smtp`, `SMTP_HOST=postbox.cloud.yandex.net`, `SMTP_PORT=587`, `SMTP_USER=<ID API-ключа>`, `SMTP_PASS=<секрет API-ключа>`, `MAIL_FROM=no-reply@<APP_HOST>`, затем `docker compose --env-file hosted.env up -d`.
 
+## Модерация
+
+Жалобы получателей ссылок и блокировка — скриптами оператора, веб-интерфейса нет. Скрипты работают от runtime-роли БД и не печатают токены.
+
+```sh
+# жалобы за 7 дней (или --days N), новые сверху: причина, комментарий, ссылка и открыта ли она,
+# работа, владелец, число жалоб на ссылку и на владельца
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts reports --days 7
+
+# закрыть одну ссылку (id из колонки SHARE)
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts revoke-share <shareId>
+
+# заблокировать аккаунт: вход закрыт, сессии завершены, подключения агентов (и OAuth) отозваны, все ссылки закрыты
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts disable <логин|почта> --reason "фишинг"
+
+# снять блокировку; закрытые ссылки и отозванные подключения не возвращаются
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts enable <логин|почта>
+```
+
+Блокировка ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` только печатается в выводе, в БД не сохраняется — записывайте её в свой журнал. Локально те же команды: `npm run moderation:reports`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`.
+
 ## Мониторинг
 
 Внешней системы алертов в репозитории нет. Есть то, что к ней подключается:
