@@ -23,6 +23,9 @@ x-runtime-env: &runtime-env
   S3_BUCKET: ${S3_BUCKET:?}
   LINK_KEY: ${LINK_KEY:?}
   APP_ORIGIN: https://${APP_HOST:?}
+  # AGPL-3.0 § 13: where users get this installation's source. A modified
+  # Полка must point at its modified source. Empty: the upstream repository.
+  SOURCE_URL: ${SOURCE_URL:-}
   HOST: 127.0.0.1
   PORT: "4390"
   VIEWER_ORIGIN: https://${VIEWER_HOST_NAME:?}
