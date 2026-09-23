@@ -1,6 +1,8 @@
 /* One navigation for every route: a fixed light rail on desktop, a top bar plus tab bar on phones. */
 .app-shell { min-height: 100dvh; padding-left: var(--rail-width); }
 .app-shell > main, .app-shell > .workspace { min-width: 0; }
+/* No navigation at all: a guest reading a shared work. */
+.app-shell.app-shell--bare { padding: 0; }
 
 .site-rail {
   position: fixed; inset: 0 auto 0 0; z-index: 50;
@@ -64,6 +66,7 @@
 
 @media (max-width: 760px) {
   .app-shell { padding-left: 0; padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); }
+  .app-shell.app-shell--bare { padding-bottom: 0; }
   .site-rail { position: sticky; top: 0; inset: auto; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; height: 60px; padding: 0 var(--gutter-mobile); background: rgb(255 255 255 / 92%); backdrop-filter: blur(12px); border-right: 0; border-bottom: 1px solid var(--line); }
   .site-rail-top { flex: 1; padding: 0; }
   .site-rail .site-brand { font-size: 26px; }

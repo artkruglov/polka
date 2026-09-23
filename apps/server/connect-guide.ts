@@ -24,6 +24,8 @@ export function connectGuide(origin: string) {
 
 Когда Полка подключена, сохраняй работу инструментом \`polka_publish\`: он вернёт ссылку ${origin}/s#…, которую можно отправить кому угодно.
 
+Полный справочник для агентов (инструменты, HTTP API, лимиты): ${origin}/llms.txt.
+
 ---
 
 # Connect Полка
@@ -42,5 +44,7 @@ Your user asked to connect Полка. Work out which client you are, run the on
 Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow."
 
 Once connected, save work with the \`polka_publish\` tool: it returns a link ${origin}/s#… you can send to anyone.
+
+Full agent reference (tools, HTTP API, limits): ${origin}/llms.txt.
 `;
 }
