@@ -147,6 +147,21 @@ test("runtime has exact current grants and denied administrative paths", async (
     ).rows.map(({ version }) => version),
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
   );
+  const privileges = (
+    await client.query(
+      `SELECT table_name,privilege_type FROM information_schema.role_table_grants
+       WHERE grantee=current_user AND table_name IN ('comments','comment_reactions')
+       ORDER BY table_name,privilege_type`,
+    )
+  ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
+  assert.deepEqual(privileges, [
+    "comment_reactions:DELETE",
+    "comment_reactions:INSERT",
+    "comment_reactions:SELECT",
+    "comments:INSERT",
+    "comments:SELECT",
+    "comments:UPDATE",
+  ]);
   await client.query("BEGIN");
   try {
     await denied("INSERT INTO schema_migrations(version) VALUES(1000)");
@@ -159,6 +174,10 @@ test("runtime has exact current grants and denied administrative paths", async (
     await denied(`SET ROLE "${schemaOwner}"`);
     await denied("DELETE FROM account_deletions");
     await denied("DELETE FROM account_deletion_csrf");
+    // Comments (030): soft delete only; reactions toggle by DELETE, never change.
+    await denied("DELETE FROM comments");
+    await denied("TRUNCATE TABLE comment_reactions");
+    await denied("UPDATE comment_reactions SET emoji=emoji");
     await denied("UPDATE template_library_events SET action=action");
     await denied("DELETE FROM template_library_events");
     await denied("SELECT public.preserve_account_deletion_marker()");
@@ -202,6 +221,55 @@ test("runtime app DML, trigger enforcement and session CSRF cascade work", async
     await client.query(
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'runtime.synthetic',$3)",
       [tenantId, accountId, accountId],
+    );
+    // Comments (030): what the application does, as the runtime role.
+    const artifactId = randomUUID(),
+      revisionId = randomUUID(),
+      shareId = randomUUID(),
+      commentId = randomUUID();
+    await client.query(
+      "INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Runtime work')",
+      [artifactId, tenantId, accountId],
+    );
+    await client.query(
+      `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,storage_kind,total_size,html_profile)
+       VALUES($1,$2,$3,1,$4,'page.html','text/html',1,$5,$6,'v','single',1,'static')`,
+      [revisionId, tenantId, artifactId, accountId, "c".repeat(64), `${tenantId}/runtime-${testRunId}`],
+    );
+    await client.query(
+      `INSERT INTO shares(id,tenant_id,artifact_id,revision_id,token_hash,expires_at)
+       VALUES($1,$2,$3,$4,$5,now()+interval '1 day')`,
+      [shareId, tenantId, artifactId, revisionId, "d".repeat(64)],
+    );
+    await client.query(
+      `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor,body)
+       VALUES($1,$2,$3,$4,$5,$6,'{"exact":"x","prefix":"","suffix":""}','Замечание')`,
+      [commentId, tenantId, artifactId, shareId, revisionId, accountId],
+    );
+    await client.query(
+      "UPDATE comments SET resolved_at=clock_timestamp(),resolved_by=$2 WHERE id=$1",
+      [commentId, accountId],
+    );
+    await client.query(
+      "UPDATE comments SET body='',deleted_at=clock_timestamp() WHERE id=$1",
+      [commentId],
+    );
+    await client.query(
+      `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,anchor,emoji)
+       VALUES($1,$2,$3,$4,$5,$6,'',NULL,$7)`,
+      [randomUUID(), tenantId, artifactId, shareId, revisionId, accountId, "👍"],
+    );
+    assert.equal(
+      (
+        await client.query(
+          "DELETE FROM comment_reactions WHERE share_id=$1 AND author_account_id=$2",
+          [shareId, accountId],
+        )
+      ).rowCount,
+      1,
+    );
+    await client.query(
+      "UPDATE viewer_grants SET comments=comments WHERE false",
     );
     await client.query(
       "INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Runtime library',$2)",

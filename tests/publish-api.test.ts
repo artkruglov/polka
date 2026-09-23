@@ -15,6 +15,9 @@ import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import {
   PUBLISH_API_LIMITS,
+  baseMismatchSchema,
+  editProblemSchema,
+  editsResponseSchema,
   publishResponseSchema,
   statusResponseSchema,
 } from "../apps/server/publish-api.ts";
@@ -440,4 +443,176 @@ test("CLI publishes a file against a running server, retries idempotently", asyn
   } finally {
     await server.close();
   }
+});
+
+function edits(
+  artifactId: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
+  return app.inject({
+    method: "POST",
+    url: `/api/v1/works/${artifactId}/edits`,
+    remoteAddress: address(),
+    headers: { "content-type": "application/json", ...headers },
+    payload: JSON.stringify(body),
+  });
+}
+
+test("patch edits: a new revision, the link moved, structured refusals", async () => {
+  const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
+  const published = await publish(
+    { key: randomUUID(), title: "Patchable", html: page("Patchable"), expiresInDays: 7 },
+    bearer(secret),
+  );
+  assert.equal(published.statusCode, 200, published.body);
+  const work = published.json();
+  const key = randomUUID();
+  const request = {
+    key,
+    baseRevisionId: work.revisionId,
+    edits: [
+      {
+        // Typographic apostrophe in the edit, ASCII in the page: normalized.
+        oldText: "produced by a company agent for the account owner’s",
+        newText: "produced by a company agent for the account owner's",
+      },
+    ],
+  };
+  // Not found after normalization either: 422 naming the edit.
+  const missing = await edits(
+    work.artifactId,
+    { ...request, edits: [{ oldText: "no such text", newText: "x" }] },
+    bearer(secret),
+  );
+  assert.equal(missing.statusCode, 422, missing.body);
+  editProblemSchema.parse(missing.json());
+  assert.equal(missing.json().editIndex, 0);
+  assert.equal(missing.json().reason, "not_found");
+  const saved = await edits(
+    work.artifactId,
+    {
+      key,
+      baseRevisionId: work.revisionId,
+      edits: [
+        {
+          oldText: "A self-contained report",
+          newText: "A patched report",
+        },
+      ],
+      moveLink: true,
+    },
+    bearer(secret),
+  );
+  assert.equal(saved.statusCode, 200, saved.body);
+  const body = editsResponseSchema.parse(saved.json());
+  assert.notEqual(body.revisionId, work.revisionId);
+  assert.equal(body.previousRevisionId, work.revisionId);
+  assert.equal(body.number, 2);
+  assert.equal(body.link?.moved, true);
+  assert.equal(body.link?.revisionId, body.revisionId);
+  // The link, its token and its discussion now show the new version.
+  const share = await db.query(
+    "SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
+    [work.artifactId],
+  );
+  assert.equal(share.rows[0].revision_id, body.revisionId);
+  const bytes = await db.query(
+    "SELECT r.size,r.sha256 FROM revisions r WHERE r.id=$1",
+    [body.revisionId],
+  );
+  const expected = Buffer.from(
+    page("Patchable").replace("A self-contained report", "A patched report"),
+  );
+  assert.equal(Number(bytes.rows[0].size), expected.length);
+  assert.equal(bytes.rows[0].sha256, sha256(expected));
+  // The same key replays the receipt, even though the base moved on.
+  const replay = await edits(
+    work.artifactId,
+    {
+      key,
+      baseRevisionId: work.revisionId,
+      edits: [{ oldText: "A self-contained report", newText: "A patched report" }],
+      moveLink: true,
+    },
+    bearer(secret),
+  );
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.equal(replay.json().revisionId, body.revisionId);
+  // A new key against the old base: 409 with the latest revision.
+  const stale = await edits(
+    work.artifactId,
+    { ...request, key: randomUUID() },
+    bearer(secret),
+  );
+  assert.equal(stale.statusCode, 409, stale.body);
+  baseMismatchSchema.parse(stale.json());
+  assert.equal(stale.json().currentRevisionId, body.revisionId);
+  // The same key with other edits is a conflict about the key.
+  const reused = await edits(
+    work.artifactId,
+    {
+      key,
+      baseRevisionId: body.revisionId,
+      edits: [{ oldText: "A patched report", newText: "Another report" }],
+    },
+    bearer(secret),
+  );
+  assert.equal(reused.statusCode, 409);
+  assert.equal(reused.json().currentRevisionId, undefined);
+  // Ambiguity and overlap name the edit.
+  const twice = await edits(
+    work.artifactId,
+    {
+      key: randomUUID(),
+      baseRevisionId: body.revisionId,
+      edits: [
+        { oldText: "Patchable</h1>", newText: "Title</h1>" },
+        { oldText: "Patchable", newText: "x" },
+      ],
+    },
+    bearer(secret),
+  );
+  assert.equal(twice.statusCode, 422, twice.body);
+  assert.equal(twice.json().editIndex, 1);
+  assert.equal(twice.json().reason, "ambiguous");
+  // Scope: a token without revise is refused; no Origin rule for bearer
+  // routes, but a foreign browser Origin is refused.
+  const { secret: captureOnly } = await token(owner, ["context", "capture"]);
+  assert.equal(
+    (
+      await edits(
+        work.artifactId,
+        { ...request, key: randomUUID(), baseRevisionId: body.revisionId },
+        bearer(captureOnly),
+      )
+    ).statusCode,
+    403,
+  );
+  assert.equal(
+    (
+      await edits(
+        work.artifactId,
+        { ...request, key: randomUUID(), baseRevisionId: body.revisionId },
+        { ...bearer(secret), origin: "https://evil.example" },
+      )
+    ).statusCode,
+    403,
+  );
+  // Another shelf's work is missing.
+  const stranger = await newOwner("publish-api-other");
+  const { secret: strangerSecret } = await token(stranger, [
+    "context",
+    "revise",
+  ]);
+  assert.equal(
+    (
+      await edits(
+        work.artifactId,
+        { ...request, key: randomUUID(), baseRevisionId: body.revisionId },
+        bearer(strangerSecret),
+      )
+    ).statusCode,
+    404,
+  );
 });

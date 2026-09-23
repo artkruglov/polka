@@ -634,6 +634,38 @@ test("bundle storage cannot use single-file live capabilities, including an exis
   }
 });
 
+test("the comment overlay follows the WebRTC guard, only on a grant issued for it", async () => {
+  const source = scripted("Overlay order");
+  const saved = await save(source);
+  const plain = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
+  const commented = await call(
+    "POST",
+    `/api/revisions/${saved.revisionId}/live-view`,
+    { comments: true },
+  );
+  assert.equal(commented.statusCode, 200, commented.body);
+  const without = await embeddedDocument(`/document/${capabilityToken(plain.json().url)}`);
+  const withOverlay = await embeddedDocument(`/document/${capabilityToken(commented.json().url)}`);
+  assert.equal(without.body, withViewerGuard(Buffer.from(source)).toString());
+  // Same CSP either way: the overlay adds no capability.
+  assert.equal(
+    withOverlay.headers["content-security-policy"],
+    without.headers["content-security-policy"],
+  );
+  const guard = withOverlay.body.indexOf("RTCPeerConnection");
+  const overlay = withOverlay.body.indexOf("polka:ready");
+  const page = withOverlay.body.indexOf("Overlay order");
+  assert.ok(guard > 0 && overlay > guard && page > overlay);
+  assert.equal(
+    withOverlay.body.replace(/<script>\(function\(\)\{[\s\S]*?\}\)\(\);<\/script>/, ""),
+    without.body,
+  );
+  assert.equal(
+    (await call("POST", `/api/revisions/${saved.revisionId}/live-view`, { comments: 1 })).statusCode,
+    400,
+  );
+});
+
 test("a build the builder gave up on is not rebuilt in a loop", async () => {
   const saved = await save(scripted("Build cooldown"));
   // Stand in for a builder timeout that happened just now.
