@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Почему сервер не может забрать артефакт по ссылке — история Полки</title>
+<style>
+:root{--ink:#1f272c;--muted:#5d6b71;--paper:#eff2ee;--card:#fff;--line:#d3dbd6;--accent:#25607a;--warm:#b4552c;--ok:#2d7350;--soft:#e4ecea;--term:#1d2529;--termink:#e6ede9;--shadow:#17303212}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.1;letter-spacing:-.02em}
+h1{font-size:clamp(2.1rem,6vw,4.2rem);margin:14px 0 12px}
+h2{font-size:clamp(1.45rem,3vw,2rem);margin:0 0 12px}
+h3{font-size:1.15rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.tabs{display:none;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.tab{min-height:44px;border:1px solid var(--line);border-radius:999px;padding:9px 16px;background:transparent;color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.track{list-style:none;margin:0;padding:0;counter-reset:s}
+.track>li{position:relative;padding:18px 0 18px 54px;border-top:1px solid var(--line);counter-increment:s}
+.track>li::before{content:counter(s);position:absolute;left:0;top:16px;width:38px;height:38px;border-radius:50%;background:var(--soft);color:var(--accent);font-weight:800;display:grid;place-items:center}
+.track>li.no::before{background:#f6e4dc;color:var(--warm)}
+.track>li.yes::before{background:#dff0e6;color:var(--ok)}
+.track h3{padding-top:6px}
+.track-title{margin:0 0 6px;color:var(--muted);font-size:.9rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.term{margin:10px 0;padding:14px 16px;border-radius:12px;background:var(--term);color:var(--termink);font:.86rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.term b{color:#ffcf99;font-weight:700}.term i{color:#9fd8b8;font-style:normal}
+.verdict{margin:8px 0 0;padding:10px 14px;border-left:4px solid var(--warm);background:#fbf3ef;border-radius:0 10px 10px 0}
+.yes .verdict{border-color:var(--ok);background:#eef7f1}
+.nav{display:none;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px}
+.js .nav{display:flex}.js .tabs{display:flex}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,a:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.count{margin-left:auto;color:var(--muted);font-size:.92rem}
+.js .track:not(.active){display:none}
+.js .stepping .track>li:not(.current){display:none}
+.js .stepping .track>li{border-top:0;padding-top:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:16px}
+.tile{padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:#fbfcfb}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--muted);font-size:.95rem}
+.tile .tag{display:inline-block;margin-bottom:8px;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:.76rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.tile.later .tag{background:#f1ede6;color:#7a6440}
+.note,.foot{color:var(--muted);font-size:.9rem}
+.note{margin-top:18px}.foot{margin-top:28px}
+.facts{margin:0;padding-left:20px}.facts li{margin-bottom:6px}
+@media(max-width:540px){.track>li{padding-left:46px}.track>li::before{width:32px;height:32px;top:18px;font-size:.9rem}.nav .button{flex:1 1 120px}.count{flex-basis:100%;margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Сделано с Claude · история Полки</div>
+<h1>Почему сервер не может забрать артефакт по ссылке</h1>
+<p class="dek">Мечта простая: вставил ссылку на артефакт Claude — и работа лежит на Полке. Мы проверили, что на самом деле видит сервер, когда идёт по такой ссылке. Ниже — каждый шаг как он был, с байтами и кодами ответов, и путь, который работает вместо этого.</p>
+</header>
+
+<section class="card" aria-labelledby="exp">
+<h2 id="exp">Эксперимент 20–21 сентября 2026</h2>
+<p>Взяли настоящую публичную ссылку на минимальный React-артефакт (автор выложил его как воспроизведение ошибки в открытом баг-трекере) и сделали то, что сделал бы любой сервер: обычный HTTPS-запрос без cookies, без авторизации, без подмены User-Agent, с таймаутом 20 секунд. Файлы провайдера не сохранялись и не исполнялись. Потом повторили запрос на следующий день и через новый модуль публичной загрузки Полки.</p>
+<p>Результат записан в <code>docs/specs/CLAUDE_IMPORT_EXPERIMENT.md</code> как отрицательный: <strong>автоматический перенос артефакта по ссылке Claude не подтверждён</strong>. Это оказалось полезнее, чем «почти получилось»: ограничение попало в FAQ, в дорожную карту и в интерфейс страницы «Сохранить».</p>
+</section>
+
+<section class="card" aria-labelledby="see">
+<h2 id="see">Что видит сервер — и что видит Claude</h2>
+<p>Два пути к одной цели. Первый — сервер Полки, который сам идёт за ссылкой. Второй — Claude, который приносит код сам через коннектор. Переключайте пути и листайте шаги.</p>
+<div class="tabs" role="group" aria-label="Выбор пути">
+<button class="tab" type="button" data-tab="server" aria-pressed="true" disabled="">Сервер идёт по ссылке</button>
+<button class="tab" type="button" data-tab="connector" aria-pressed="false" disabled="">Claude приносит код сам</button>
+</div>
+
+<div id="stepper" class="stepping">
+<ol class="track active" data-track="server" aria-labelledby="t-server">
+<li class="no current" id="t-server"><p class="track-title">Путь 1 · сервер Полки</p><h3>Ссылка из Share-диалога</h3>
+<p>Новые ссылки Claude вида <code>claude.ai/artifact/…</code> открываются только пользователю, который вошёл в свой аккаунт Claude. У сервера Полки аккаунта нет и быть не должно.</p>
+<pre class="term">GET /artifact/&lt;id&gt;   (без cookies, без Authorization)
+→ артефакт открывается только вошедшему пользователю Claude;
+   серверу без браузера — проверка Cloudflare, HTTP <b>403</b></pre>
+<p class="verdict">Содержимого артефакта нет. Чужие cookies или сессия пользователя — не вариант: это чужой доступ.</p></li>
+
+<li class="no"><h3>Запрос без браузера</h3>
+<p>На запрос, в котором нет настоящего браузера, сайт отвечает проверкой Cloudflare: HTTP 403 и страница «Just a moment…». Даже headless-браузер получил экран «докажите, что вы человек».</p>
+<pre class="term">GET https://…/public/artifacts/&lt;id&gt;   (повтор 20.09.2026, urllib)
+→ HTTP <b>403</b>   Cloudflare «Just a moment…»</pre>
+<p class="verdict">Пройти такую проверку автоматически — значит выдать программу за человека. Мы этого не делаем.</p></li>
+
+<li class="no"><h3>Публичная страница: HTTP 200, но пустая</h3>
+<p>Старые публичные ссылки <code>claude.ai/public/artifacts/…</code> иногда отвечают 200. Внутри — оболочка приложения: два пустых <code>div</code>, внешний скрипт и стили провайдера. Самого артефакта в HTML нет: его подгружает скрипт уже в браузере.</p>
+<pre class="term">GET /public/artifacts/&lt;id&gt;   (20.09.2026, curl)
+→ HTTP <b>200</b>  text/html  Cache-Control: private, no-store
+   body: <b>123 943</b> байта
+   &lt;div id="root"&gt;&lt;/div&gt;  &lt;div id="portal-root"&gt;&lt;/div&gt;
+   &lt;script type="module" src="…/index-….js"&gt;
+   UUID артефакта в HTML: <b>не найден</b></pre>
+<p class="verdict">Получить 200 — не значит получить работу. Это хеш оболочки, а не копия артефакта.</p></li>
+
+<li class="no"><h3>Внутренний API: 403 и robots.txt</h3>
+<p>В загрузчике страницы виден шаблон запроса <code>/api/published_artifacts/&lt;id&gt;</code>. Мы запросили его один раз, честно и без ухищрений — 21.09.2026, через новый модуль публичной загрузки Полки.</p>
+<pre class="term">GET /api/published_artifacts/&lt;id&gt;   (21.09.2026)
+→ HTTP <b>403</b>
+
+GET /robots.txt
+→ Disallow: /api/*        (для общего краулера)</pre>
+<p class="verdict">API закрыт для программ, и владелец сайта прямо просит туда не ходить. Подбор fingerprint, cookies и обход отказа в эксперимент не входили и не войдут.</p></li>
+
+<li class="no"><h3>Вывод</h3>
+<p>Сервер Полки не может сам забрать артефакт по ссылке Claude. В одном запросе он получает 200 с пустой оболочкой, в другом — 403, и ни в одном — содержимое работы. Со ссылками ChatGPT (share и canvas) ситуация похожая.</p>
+<pre class="term">Ссылка Claude/ChatGPT вставлена на странице «Сохранить»
+→ Полка узнаёт её <i>до любого запроса</i>, объясняет причину
+   и показывает поле для файла прямо в карточке   (коммит 1256784)</pre>
+<p class="verdict">Обход защиты — не вариант: это нарушение условий Anthropic, притворство перед антибот-проверкой и хрупкость: IP сервера рано или поздно заблокируют, и Полка встанет для всех. Вместо этого — путь 2.</p></li>
+</ol>
+
+<ol class="track" data-track="connector" aria-labelledby="t-conn">
+<li class="yes" id="t-conn"><p class="track-title">Путь 2 · коннектор</p><h3>Человек подключает Полку в Claude</h3>
+<p>В настройках Claude.ai добавляется custom connector с адресом <code>polochka.app/mcp</code>. Client ID вводить не нужно: приложение регистрируется само (Dynamic Client Registration), вход — OAuth 2.1 с PKCE.</p>
+<pre class="term">Claude → polochka.app/mcp: регистрация клиента, запрос авторизации
+Полка → человеку: «Разрешить доступ к вашей полке для claude.ai?»
+Человек нажимает «Разрешить»</pre>
+<p class="verdict">Сервер видит согласие вошедшего пользователя Полки, а не чужую сессию Claude.</p></li>
+
+<li class="yes"><h3>Одна фраза в чате</h3>
+<p>«Сохрани этот артефакт на Полку и дай ссылку». Claude вызывает инструмент <code>polka_publish</code> и передаёт код артефакта сам: одну HTML-страницу или исходник React-компонента.</p>
+<pre class="term">MCP tools/call polka_publish
+  html: "&lt;!doctype html&gt;…"     (или component: исходник React-компонента)
+  title: "…"</pre>
+<p class="verdict">Ничего не нужно скачивать: код приходит от того, у кого он и так есть.</p></li>
+
+<li class="yes"><h3>Что видит сервер Полки</h3>
+<p>Авторизованный запрос с кодом внутри. Сервер ничего не запрашивает у Claude: проверяет размер и тип, классифицирует страницу, при включённом интерактивном просмотре собирает интерактивную версию и сохраняет работу приватно.</p>
+<pre class="term">→ проверка токена и разрешения capture
+→ лимит 5 МиБ, тип HTML, классификация страницы
+→ сборка интерактивной версии (без сети)
+→ сохранено: приватно, ссылки пока нет</pre>
+<p class="verdict">Ни одного запроса наружу. Работа лежит на Полке как независимая копия.</p></li>
+
+<li class="yes"><h3>Ссылка — в ответ</h3>
+<p>Если подключению разрешено «Управлять ссылками», Claude возвращает в чат готовую ссылку вида <code>polochka.app/s#…</code>; без этого разрешения работа остаётся приватной, и инструмент объясняет модели, почему ссылки нет. Ссылку потом можно отозвать со страницы работы.</p>
+<pre class="term">← ссылка https://polochka.app/s#…
+   interactiveReady: true   scriptsRunForRecipients: true</pre>
+<p class="verdict">Та же цель — «вставил, и работа на Полке» — только законным путём и с копией, которая не исчезнет, если артефакт удалят в чате.</p></li>
+</ol>
+</div>
+<div class="nav">
+<button class="button secondary" type="button" id="prev" disabled="">Назад</button>
+<button class="button" type="button" id="next" disabled="">Дальше</button>
+<button class="button secondary" type="button" id="all" aria-pressed="false" disabled="">Показать все шаги</button>
+<span class="count" id="count" aria-live="polite">Шаг 1 из 5: Ссылка из Share-диалога</span>
+</div>
+</section>
+
+<section class="card" aria-labelledby="works">
+<h2 id="works">Что работает вместо этого</h2>
+<p>Ограничение сформулировано просто: автоматический перенос возможен только двумя легитимными путями — <strong>Claude сам передаёт код</strong> или <strong>браузер пользователя с его доступом</strong>. Из этого выросли способы, которые Полка предлагает сегодня.</p>
+<div class="grid">
+<div class="tile"><span class="tag">Работает</span><h3>Коннектор в Claude.ai и ChatGPT</h3><p>Полка подключается как удалённый MCP-сервер со входом через OAuth 2.1. Модель вызывает <code>polka_publish</code> и приносит код сама. Вручную проверено с Claude.ai 22.09.2026; ChatGPT подключается по той же схеме, но ещё не проверен.</p></div>
+<div class="tile"><span class="tag">Работает</span><h3>Файл из своего браузера</h3><p>В чате: ⋯ → Download. Файл перетаскивается прямо в карточку на странице «Сохранить» — она появляется, как только Полка узнаёт ссылку Claude или ChatGPT.</p></div>
+<div class="tile"><span class="tag">Работает</span><h3>«Вставить код»</h3><p>Кнопка «Копировать» в чате копирует код артефакта. На странице «Сохранить» есть поле «Вставить код» — файл скачивать не нужно.</p></div>
+<div class="tile"><span class="tag">Работает</span><h3>Агент на вашей машине</h3><p>Claude Code и Codex подключаются к Полке одной командой через тот же MCP и OAuth и сохраняют работу от вашего имени.</p></div>
+<div class="tile later"><span class="tag">В планах</span><h3>Расширение браузера</h3><p>«Сохранить на Полку» на странице артефакта — в вашем браузере, с вашим доступом. Это этап 4 дорожной карты, после коннектора; ещё не сделано.</p></div>
+</div>
+</section>
+
+<section class="card" aria-labelledby="why">
+<h2 id="why">Почему мы не «просто обошли»</h2>
+<p>Идея «запустить браузер на сервере» приходит первой. Мы её по сути проверили: headless-браузер получил ту же проверку «докажите, что вы человек». Дальше есть только маскировка бота под человека — а это обход защиты сайта и нарушение условий Anthropic. Полка не обходит защиту и не использует чужие cookies; так записано в FAQ и в дорожной карте, и так ведёт себя код: ссылка провайдера распознаётся ещё <em>до</em> любого запроса.</p>
+<ul class="facts">
+<li>Наблюдения зафиксированы с точными числами: 200, <code>text/html</code>, 123 943 байта, пустой <code>div#root</code>; затем 403 от Cloudflare; API — 403; <code>Disallow: /api/*</code>.</li>
+<li>Что не проверялось, записано тоже: содержимое API, разрешённый экспорт, полнота зависимостей. Отсутствие ответа в одном запросе — не доказательство недоступности для всех.</li>
+<li>Публичность чужого артефакта не даёт лицензии на его повторную публикацию в составе Полки.</li>
+</ul>
+<p class="note">Страница описывает собственный эксперимент Полки на 20–21.09.2026 и не является заявлением о текущем состоянии сервисов Anthropic или OpenAI. Никаких запросов эта страница не делает: весь текст и логика — внутри файла.</p>
+</section>
+
+<p class="foot">Автор: Редакция Полки · Источники: <code>docs/specs/CLAUDE_IMPORT_EXPERIMENT.md</code>, <code>docs/faq.md</code>, <code>docs/connect-agents.md</code>, коммит <code>1256784</code> в github.com/artkruglov/polka.</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+</body></html>

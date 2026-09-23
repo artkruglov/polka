@@ -90,6 +90,10 @@ const prepare: Record<string, string> = {
     document.querySelector('.actions')?.remove();
   })()`,
   "probability-lab": `document.querySelector('#run').click()`,
+  // The stories are written to read in full without scripts: show that layout.
+  "why-no-artifact-link": `document.documentElement.classList.remove('js')`,
+  "one-regex-froze-server": `document.documentElement.classList.remove('js')`,
+  "31-sandbox-escapes": `document.documentElement.classList.remove('js')`,
 };
 
 // Freezes form state into attributes, then strips everything executable.

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Одна регулярка, которая могла остановить сервер — история Полки</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--term:#26221f;--termink:#efe9e0;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.1;letter-spacing:-.02em}
+h1{font-size:clamp(2.1rem,6vw,4.2rem);margin:14px 0 12px}
+h2{font-size:clamp(1.45rem,3vw,2rem);margin:0 0 12px}
+h3{font-size:1.15rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.term{margin:10px 0 16px;padding:14px 16px;border-radius:12px;background:var(--term);color:var(--termink);font:.86rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.term b{color:#ffc790;font-weight:700}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:8px 0 4px;accent-color:var(--accent)}
+.sim{margin-top:8px}
+.strip{display:flex;flex-wrap:wrap;gap:4px;margin:12px 0;min-height:30px}
+.chip{display:inline-block;padding:3px 7px;border-radius:6px;background:var(--soft);font:.8rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink);transition:background .15s}
+.chip.scan{background:#f3c9b8}.chip.from{background:var(--accent);color:#fff}.chip.done{background:#cfe6d8}
+.bars{display:grid;gap:10px;margin:14px 0 6px}
+.bar{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:10px;font-size:.95rem}
+.bar i{display:block;height:22px;border-radius:6px;background:var(--accent);min-width:3px;transition:width .2s}
+.bar.lin i{background:var(--ok)}
+.bar b{font-variant-numeric:tabular-nums;min-width:5ch;text-align:right}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.95rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sizes{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:12px}
+.stat{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.stat .l{display:block;color:var(--muted);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+.stat .v{display:block;font-family:Georgia,serif;font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.1;margin:6px 0 4px}
+.stat.before .v{color:var(--accent)}.stat.after .v{color:var(--ok)}
+.stat small{color:var(--muted)}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{position:relative;padding:8px 0 14px 34px;border-left:2px solid var(--line);margin-left:9px}
+.timeline li::before{content:"";position:absolute;left:-8px;top:14px;width:14px;height:14px;border-radius:50%;background:var(--cool);border:3px solid var(--card)}
+.timeline li.bad::before{background:var(--accent)}.timeline li.good::before{background:var(--ok)}
+.timeline time{display:block;font-size:.82rem;color:var(--muted);font-weight:700;letter-spacing:.04em}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:16px}.foot{margin-top:28px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.two h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.two .before h3{color:var(--accent)}.two .after h3{color:var(--ok)}
+@media(max-width:540px){.bar{grid-template-columns:1fr auto}.bar span{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Сделано с Claude · история Полки</div>
+<h1>Одна регулярка, которая могла остановить сервер</h1>
+<p class="dek">Полка проверяет каждую сохранённую HTML-страницу: можно ли показать её без скриптов, есть ли формы, ссылки на чужие сайты, автопереход. Проверка была регулярным выражением. Вечером перед релизом rc.4 ИИ-ревью безопасности посчитало, сколько это стоит: страница в 480 КБ останавливала весь сервер примерно на минуту.</p>
+</header>
+
+<section class="card" aria-labelledby="what">
+<h2 id="what">Что делает классификатор</h2>
+<p>При каждом сохранении сервер решает, какой у страницы профиль: <code>static</code> (можно показать без скриптов и выпустить ссылку), <code>limited</code> (скрипты есть, но текст читается) или <code>unsupported</code> (форма, поле пароля, внешний адрес, автопереход — ссылку не выпускаем). А при каждом просмотре по ссылке вторая функция вставляет в <code>&lt;head&gt;</code> тег <code>&lt;base target="_blank"&gt;</code>, чтобы ссылки внутри чужой страницы открывались в новой вкладке.</p>
+<p>Обе работали на потоке запросов: пока идёт проверка, сервер не отвечает никому. Проверка была такой:</p>
+<pre class="term">const interactive = /&lt;script\b|&lt;(?:iframe|frame|object|embed|applet|form)\b|<b>&lt;[^&gt;]+\son[a-z]+\s*=</b>|…/i;
+const unsafe      = /&lt;form\b|<b>&lt;input\b[^&gt;]+type\s*=\s*["']?password\b</b>|…|<b>&lt;meta[^&gt;]+http-equiv\s*=\s*["']?refresh</b>/i;
+const head        = /&lt;head(?:\s[^&gt;]*)?&gt;/i;</pre>
+<p>Виновник — фрагменты вроде <code>&lt;[^&gt;]+\son[a-z]+\s*=</code>. Встретив <code>&lt;</code>, движок читает <code>[^&gt;]+</code> до ближайшего <code>&gt;</code>. Если в странице нет ни одного <code>&gt;</code> — например, она состоит из <code>&lt;meta </code>, повторённого 80 000 раз, — он читает до конца, не находит <code>on…=</code>, откатывается и начинает заново со следующего <code>&lt;</code>. Работа растёт как квадрат размера страницы.</p>
+</section>
+
+<section class="card" aria-labelledby="sim">
+<h2 id="sim">Посчитайте сами</h2>
+<p>Упрощённая модель: страница из <span id="nLabel">12</span> тегов <code>&lt;meta </code> без единого <code>&gt;</code>. Регулярка с каждого тега сканирует до конца страницы; разбор дерева (parse5) читает каждый тег один раз.</p>
+<div class="js-only">
+<label for="n">Тегов в странице</label><br>
+<input type="range" id="n" min="4" max="48" value="12" step="1" aria-describedby="nHint">
+<p id="nHint" class="note" style="margin-top:0">От 4 до 48. Реальная страница из ревью — 80 000 тегов.</p>
+</div>
+<div class="strip" id="strip" aria-hidden="true"><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span><span class="chip">&lt;meta </span></div>
+<div class="bars" role="group" aria-label="Сколько тегов прочитано">
+<div class="bar quad"><span>Регулярка</span><i id="barQ" style="width:100%"></i><b id="numQ">78</b></div>
+<div class="bar lin"><span>Один разбор</span><i id="barL" style="width:15.4%"></i><b id="numL">12</b></div>
+</div>
+<p id="formula">Регулярка: 12 + 11 + … + 1 = <strong>78</strong> прочитанных тегов; разбор — <strong>12</strong>. Для 80 000 тегов это 3&nbsp;200&nbsp;040&nbsp;000 против 80&nbsp;000.</p>
+<div class="actions js-only">
+<button class="button" type="button" id="run" disabled="">Показать, как сканирует регулярка</button>
+<button class="button secondary" type="button" id="stop" disabled="">Остановить</button>
+</div>
+<p class="note">Модель считает теги, а не байты и не шаги движка регулярных выражений; она показывает форму роста, а не точное время. Ниже — настоящие измерения.</p>
+</section>
+
+<section class="card" aria-labelledby="measured">
+<h2 id="measured">Что намерили на ревью</h2>
+<p>Ревью безопасности сервера перед релизом rc.4 (22.09.2026) вызвало <code>classifyHtml</code> напрямую на подготовленных страницах. Время росло квадратично:</p>
+<table>
+<caption class="note" style="caption-side:bottom;text-align:left;padding-top:8px">Измерения из отчёта ревью на машине разработчика, код на момент rc.3. На другом железе числа будут другими, форма роста — той же.</caption>
+<thead><tr><th>Страница</th><th class="num">Размер</th><th class="num">Время до фикса</th></tr></thead>
+<tbody>
+<tr><td><code>"&lt; "</code> повторённое</td><td class="num">40 КБ</td><td class="num">0,9 с</td></tr>
+<tr><td><code>"&lt; "</code> повторённое</td><td class="num">80 КБ</td><td class="num">4,9 с</td></tr>
+<tr><td><code>"&lt; "</code> повторённое</td><td class="num">160 КБ</td><td class="num">14 с</td></tr>
+<tr><td><code>"&lt;meta "</code> × 80 000</td><td class="num">480 КБ</td><td class="num">67 с</td></tr>
+<tr><td><code>"&lt;input "</code> повторённое</td><td class="num">560 КБ</td><td class="num">54 с</td></tr>
+<tr><td><code>"&lt;head "</code> × 80 000 — при каждом <em>просмотре</em> по ссылке</td><td class="num">480 КБ</td><td class="num">19,5 с</td></tr>
+</tbody>
+</table>
+<p>Лимит загрузки — 5 МБ. Такая страница заняла бы сервер не на минуту, а на часы: всё это время в очереди стоят вход, коннектор, ссылки и проверка здоровья. Вторая половина атаки не требовала даже аккаунта: страница из <code>&lt;head </code> классифицировалась как <code>static</code>, получала ссылку, и каждый её просмотр стоил серверу около 20 секунд; грант на просмотр действовал 60 секунд, а число запросов на грант никто не ограничивал.</p>
+<div class="js-only">
+<p><strong>Выберите размер страницы:</strong></p>
+<div class="sizes" role="group" aria-label="Размер страницы">
+<button class="button secondary" type="button" data-kb="40" aria-pressed="false" disabled="">40 КБ</button>
+<button class="button secondary" type="button" data-kb="80" aria-pressed="false" disabled="">80 КБ</button>
+<button class="button secondary" type="button" data-kb="160" aria-pressed="false" disabled="">160 КБ</button>
+<button class="button secondary" type="button" data-kb="480" aria-pressed="true" disabled="">480 КБ</button>
+<button class="button secondary" type="button" data-kb="5120" aria-pressed="false" disabled="">5 МБ</button>
+</div>
+</div>
+<div class="big" aria-live="polite">
+<div class="stat before"><span class="l">До фикса (регулярка)</span><span class="v" id="tBefore">67 с</span><small id="tBeforeNote">измерено на ревью</small></div>
+<div class="stat after"><span class="l">После фикса (один разбор)</span><span class="v" id="tAfter">&lt; 0,5 с</span><small id="tAfterNote">5 МБ враждебной страницы — 85–430 мс</small></div>
+</div>
+<p class="note" id="sizeNote">Для 5 МБ время «до» — экстраполяция по квадрату от измеренных 67 с на 480 КБ (в отчёте ревью: «примерно в 100 раз дольше, порядка часов»). Время «после» измерено для 5 МБ «плоских» враждебных страниц; страницы меньше проходят быстрее. Для глубоко вложенных страниц это не так — см. 23 сентября ниже.</p>
+</section>
+
+<section class="card" aria-labelledby="worse">
+<h2 id="worse">Как сделали хуже, прежде чем сделать лучше</h2>
+<p>Честная часть истории: квадрат в регулярке жил в коде с первого дня, но в rc.3 мы его удвоили — своим же исправлением безопасности. Всё произошло вечером 22 сентября 2026.</p>
+<ol class="timeline">
+<li><time>22.09.2026, 20:49</time><strong>Релиз rc.2.</strong> Первое ревью безопасности перед выкладкой находит обход классификатора: браузер раскрывает символьные ссылки, а регулярка читает сырой текст, поэтому <code>http-equiv="&amp;#x72;efresh"</code> проходил как обычная страница и получал ссылку.</li>
+<li class="bad"><time>22.09.2026, 21:11 · коммит d079285 · rc.3</time><strong>Исправление, которое удвоило цену.</strong> Классификатор стал дополнительно разбирать документ через parse5 и прогонять те же регулярки по раскодированным тегам. Обход закрыт, но теперь шаблоны бегут дважды: по исходнику и по тегам. Дерево уже построено — а решение по-прежнему принимает регулярка.</li>
+<li class="bad"><time>22.09.2026, вечер · ревью сервера</time><strong>Единственная блокирующая находка, F1.</strong> Второе ревью (другой экземпляр Claude, отдельно от автора кода) измеряет время на разных размерах, прослеживает вызовы до потока запросов и пишет: одна страница замораживает весь сервер; запустить может любой, кто умеет сохранять, а вторую половину — любой, у кого есть ссылка. Там же — важная оговорка: ограничить квантификатор (<code>[^&gt;]{0,N}</code>) недостаточно, скан всё равно перезапускается с каждого <code>&lt;</code>.</li>
+<li class="good"><time>22.09.2026, 22:00 · коммит 3e0be3b</time><strong>Один проход по дереву.</strong> <code>classifyHtml</code> обходит дерево parse5 один раз: имена тегов, имена атрибутов и значения в том виде, в каком на них реагирует браузер. Поиск <code>&lt;head&gt;</code> переписан вручную, без регулярки. Все прежние профили, включая корпус из 20 страниц, не изменились. Новый тест держит страницы-«наводнения» в 1 МБ под 1,5 с.</li>
+<li class="good"><time>22.09.2026, 22:10</time><strong>Релиз rc.4.</strong> В changelog: «Классификатор страниц работает за линейное время… 5 МБ — меньше полсекунды».</li>
+<li class="bad"><time>23.09.2026, 14:53 · коммит c1dd044</time><strong>Линейно — но не для всех страниц.</strong> Следующее ревью нашло, что это верно только для «плоских» страниц. Сам разбор parse5 квадратичен по глубине вложенности: 200 КБ вложенных <code>&lt;div&gt;</code> — около 4 с, 5 МБ — порядка 40 минут, а рекурсивный обход падал с переполнением стека ещё раньше. Теперь обход идёт без рекурсии, страницы больше 16 КБ классифицируются в отдельном потоке с дедлайном 2 с (не успел — ссылка не выдаётся), и поток запросов больше не ждёт. Запись rc.4 в changelog исправлена.</li>
+</ol>
+</section>
+
+<section class="card" aria-labelledby="fix">
+<h2 id="fix">До и после</h2>
+<div class="two">
+<div class="before"><h3>Было: регулярка по сырому тексту</h3>
+<pre class="term">const tags = decodedTags(source);   // rc.3: дерево уже есть…
+if (unsafe.test(source) || unsafe.test(tags))
+  return "unsupported";              // …но решает регулярка, дважды
+if (!interactive.test(source) &amp;&amp; !interactive.test(tags))
+  return "static";</pre></div>
+<div class="after"><h3>Стало (3e0be3b): один обход дерева</h3>
+<pre class="term">const walk = (node, hidden) =&gt; {
+  if (tag === "form") unsafe = true;
+  if (ACTIVE_ELEMENTS.has(tag)) interactive = true;
+  for (const { name, value } of node.attrs ?? []) {
+    if (attr.startsWith("on")) interactive = true;
+    if (SCRIPT_URL.test(target)) interactive = true;
+    if ((attr.endsWith("src") || attr.endsWith("action"))
+        &amp;&amp; (REMOTE_URL.test(target) || SCRIPT_URL.test(target))) unsafe = true;
+    …
+  }
+  for (const child of node.childNodes ?? []) walk(child, inner);
+};
+walk(parse(source), false);</pre></div>
+</div>
+<p>Регулярки остались только там, где они безопасны: <code>SCRIPT_URL</code> и <code>REMOTE_URL</code> проверяют начало одного значения атрибута, а не весь документ. Перед публикацией этой страницы Редакция повторила замер на текущем коде: старый классификатор на 40 КБ — около 1 с, на 80 КБ — около 4 с (вдвое больше страница, вчетверо дольше); новый на 5 МБ каждой из пяти «враждебных» страниц — от 80 до 324 мс. С тех пор обход стал итеративным (явный стек вместо рекурсии), а большие страницы проверяются вне потока запросов.</p>
+<p class="note">Урок не про регулярные выражения вообще, а про то, где они бегут: одна проверка на потоке запросов стоит столько, сколько самая злая страница, которую разрешает лимит. И про то, что своё же исправление стоит перемерить — не только на длинных страницах, но и на глубоких.</p>
+</section>
+
+<p class="foot">Автор: Редакция Полки · Источники: коммиты <code>d079285</code>, <code>3e0be3b</code> и <code>c1dd044</code>, <code>CHANGELOG.md</code> (rc.3, rc.4, Unreleased), <code>apps/server/html.ts</code>, тест «Classifying and viewing a hostile page stays linear in its size» в <code>tests/unit.test.ts</code>, отчёт ревью сервера 22.09.2026 — github.com/artkruglov/polka.</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+</body></html>
