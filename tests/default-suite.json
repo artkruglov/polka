@@ -56,6 +56,7 @@
   "tests/url-import-jobs.test.ts",
   "tests/artifact-reader.test.ts",
   "tests/legal-pages.test.ts",
+  "tests/licensing.test.ts",
   "tests/url-import-polling.test.ts",
   "tests/agent-context.test.ts",
   "tests/single-file-agent-context.test.ts",

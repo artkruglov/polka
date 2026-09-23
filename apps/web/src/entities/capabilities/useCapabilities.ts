@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { request } from "../../shared/api/client.ts";
+import { SOURCE_URL } from "../../shared/lib/project-links.ts";
 
 /** Installation capabilities that change what the interface may promise. */
 export type InstallationCapabilities = {
@@ -10,6 +11,8 @@ export type InstallationCapabilities = {
   urlImport: boolean;
   /** Isolated interactive view of supported pages. */
   livePreview: boolean;
+  /** This installation's source code (AGPL-3.0 § 13); a fork sets its own. */
+  sourceUrl: string;
 };
 
 export type CapabilitiesState =
@@ -18,6 +21,15 @@ export type CapabilitiesState =
   | { status: "ready"; capabilities: InstallationCapabilities };
 
 let cached: Promise<InstallationCapabilities> | null = null;
+
+const httpsUrl = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+};
 
 /** One /capabilities request per page load; a failure is retried by the next consumer. */
 export function loadCapabilities() {
@@ -32,6 +44,7 @@ export function loadCapabilities() {
         emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
         urlImport: raw.urlImport === true,
         livePreview: raw.liveExperimental === true,
+        sourceUrl: httpsUrl(raw.sourceUrl) ?? SOURCE_URL,
       } satisfies InstallationCapabilities;
     })
     .catch((error) => {
@@ -61,4 +74,10 @@ export function useCapabilities(): CapabilitiesState {
     };
   }, []);
   return state;
+}
+
+/** Where the source code of this installation is: upstream until the server says otherwise. */
+export function useSourceUrl() {
+  const state = useCapabilities();
+  return state.status === "ready" ? state.capabilities.sourceUrl : SOURCE_URL;
 }

@@ -11,14 +11,17 @@ import {
   LockKeyhole,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
+import {
+  useCapabilities,
+  useSourceUrl,
+} from "../../entities/capabilities/useCapabilities.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { Button, LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
-import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
+import { SOURCE_LICENSE } from "../../shared/lib/project-links.ts";
 
 export function Landing() {
   const account = useAccount();
@@ -30,6 +33,7 @@ export function Landing() {
   const canImport = imports.status === "ready" && imports.capabilities.urlImport;
   const livePreview =
     imports.status === "ready" && imports.capabilities.livePreview;
+  const sourceUrl = useSourceUrl();
   return (
     <AppShell current="landing" account={account} className="landing">
       <main className="landing-main">
@@ -46,7 +50,7 @@ export function Landing() {
           </p>
           <a
             className="landing-oss"
-            href={SOURCE_URL}
+            href={sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -189,15 +193,15 @@ export function Landing() {
               Полка — открытый код под лицензией {SOURCE_LICENSE}. Подключайте
               своего агента через MCP и храните работы здесь или на
               своей установке: код, инструкции по развёртыванию и документация —
-              на GitHub.
+              на GitHub. Для закрытых доработок есть коммерческая лицензия.
             </p>
           </div>
           <div className="landing-company-actions">
-            <LinkButton href="/settings/agents">
-              Подключить агента <ArrowUpRight size={18} />
+            <LinkButton href="/pricing">
+              Для компаний <ArrowUpRight size={18} />
             </LinkButton>
             <LinkButton
-              href={SOURCE_URL}
+              href={sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
               variant="secondary"

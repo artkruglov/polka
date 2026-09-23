@@ -19,7 +19,7 @@ import {
   rememberAccount,
   useAccountState,
 } from "../../entities/account/model/useAccount.ts";
-import { SOURCE_URL } from "../../shared/lib/project-links.ts";
+import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
 
 export type Section =
@@ -219,15 +219,21 @@ function SiteHeader({
   );
 }
 
-/** The operator's documents, linked under every page. */
+/**
+ * The operator's documents and the source code, linked under every page:
+ * AGPL-3.0 § 13 asks that everyone using Полка over the network is offered it.
+ */
 export function LegalLinks() {
+  const sourceUrl = useSourceUrl();
+  const onGitHub = new URL(sourceUrl).hostname === "github.com";
   return (
     <footer className="site-footer">
       <nav aria-label="Документы">
         <a href="/privacy">Политика</a>
         <a href="/terms">Соглашение</a>
-        <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
-          Открытый код на GitHub
+        <a href="/pricing">Для компаний</a>
+        <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+          {onGitHub ? "Открытый код на GitHub" : "Открытый код"}
         </a>
       </nav>
     </footer>

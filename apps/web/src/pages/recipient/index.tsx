@@ -29,7 +29,7 @@ import {
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { useSharedComments } from "../../widgets/comments/index.ts";
 import { takeShareAfterSignIn } from "../../shared/lib/share-return.ts";
-import { SOURCE_URL } from "../../shared/lib/project-links.ts";
+import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 
 const accessRequest =
   "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
@@ -379,6 +379,7 @@ function RecipientFrame({
 /** One line always in view; the full text and provenance behind «Подробнее». */
 function AboutThisPage({ viewer }: { viewer: Viewer }) {
   const [open, setOpen] = useState(false);
+  const sourceUrl = useSourceUrl();
   const detailsId = useId();
   const editorial = viewer.publisher === "editorial";
   const meta = [
@@ -452,7 +453,7 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
           </a>
           <a href="/privacy">Политика</a>
           <a href="/terms">Соглашение</a>
-          <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
             Открытый код
           </a>
         </nav>
