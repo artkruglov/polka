@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { VIEWER_GUARD } from "../apps/server/html.ts";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -254,7 +255,9 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
   assert.equal(recipientLive.json().profile, BUNDLE_RUNTIME_PROFILE);
   const oldDocument = await embedded(tokenFrom(recipientLive.json().url));
   assert.equal(oldDocument.statusCode, 200, oldDocument.body);
-  assert.equal(sha256(Buffer.from(oldDocument.body)), derivative.sha256);
+  // The stored derivative, byte for byte, with the viewer's guard added once.
+  assert.equal(oldDocument.body.split(VIEWER_GUARD).length, 2);
+  assert.equal(sha256(Buffer.from(oldDocument.body.replace(VIEWER_GUARD, ""))), derivative.sha256);
   await db.query(
     `UPDATE viewer_grants
      SET created_at=now()-interval '2 seconds',expires_at=now()-interval '1 second'
@@ -312,7 +315,9 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
   const oldGrantLive = await call("POST", "/api/view/live-view", {}, "", grant);
   assert.equal(oldGrantLive.statusCode, 200, oldGrantLive.body);
   const stillOld = await embedded(tokenFrom(oldGrantLive.json().url));
-  assert.equal(sha256(Buffer.from(stillOld.body)), derivative.sha256);
+  // The stored derivative, byte for byte, with the viewer's guard added once.
+  assert.equal(stillOld.body.split(VIEWER_GUARD).length, 2);
+  assert.equal(sha256(Buffer.from(stillOld.body.replace(VIEWER_GUARD, ""))), derivative.sha256);
 
   const disabled = spawnSync(
     process.execPath,

@@ -9,7 +9,7 @@ import { after, before, test } from "node:test";
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { componentShell } from "../packages/contracts/runtime.ts";
 import { buildDerivative } from "../apps/server/react-runtime.ts";
-import { liveViewerCsp } from "../apps/server/html.ts";
+import { liveViewerCsp, withViewerGuard } from "../apps/server/html.ts";
 
 /**
  * The compiled pages actually running: a real browser loads each build
@@ -133,7 +133,8 @@ before(async () => {
       "content-security-policy": liveViewerCsp(origin),
       "cache-control": "no-store",
     });
-    response.end(html);
+    // As the viewer serves it: the WebRTC guard goes first.
+    response.end(withViewerGuard(Buffer.from(html)));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -355,5 +356,35 @@ window.probe = () => localStorage.getItem("count");
     );
     assert.equal(await evaluate("window.probe()"), "1");
     assert.equal(await evaluate("document.cookie"), "");
+  },
+);
+
+test(
+  "a page in the viewer cannot reach WebRTC, even from a script before its head",
+  { skip },
+  async () => {
+    // Not compiled: served raw, as an owner sees an unbuilt single file.
+    const evaluate = await open(`<!doctype html><script>
+window.early = typeof RTCPeerConnection;
+</script><html><head><title>rtc</title></head><body><p>x</p></body></html>`);
+    assert.equal(await evaluate("window.early"), "undefined");
+    assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
+    assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
+    // It cannot be put back or deleted.
+    assert.equal(
+      await evaluate(
+        "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
+      ),
+      "TypeError",
+    );
+    assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
+    // A fresh realm does not bring it back: the sandbox makes the iframe a
+    // different opaque origin.
+    assert.equal(
+      await evaluate(
+        "(() => { const f = document.createElement('iframe'); document.body.appendChild(f); try { return typeof f.contentWindow.RTCPeerConnection; } catch (e) { return e.name; } })()",
+      ),
+      "SecurityError",
+    );
   },
 );

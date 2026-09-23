@@ -21,6 +21,49 @@ export const LIVE_VIEWER_SANDBOX = "allow-scripts allow-forms";
 export const liveViewerCsp = (appOrigin: string) =>
   `sandbox ${LIVE_VIEWER_SANDBOX}; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${appOrigin}`;
 
+/**
+ * CSP cannot stop WebRTC (Chrome ignores webrtc 'block'), so a page in the
+ * interactive viewer could reach any STUN/TURN server and send out what the
+ * reader types, and the reader's IP, despite connect-src 'none'. The viewer
+ * puts this script before anything the page runs: it removes the WebRTC
+ * constructors for good (non-configurable). A fresh realm cannot bring them
+ * back: the sandbox makes any iframe a different opaque origin, workers are
+ * refused by CSP, and popups by the sandbox.
+ */
+export const VIEWER_GUARD = `<script>(()=>{"use strict";for(const n of["RTCPeerConnection","webkitRTCPeerConnection","mozRTCPeerConnection","RTCDataChannel","RTCIceTransport","RTCDtlsTransport","RTCSctpTransport","RTCRtpSender","RTCRtpReceiver","RTCRtpTransceiver","RTCIceCandidate","RTCSessionDescription"])try{Object.defineProperty(window,n,{value:undefined,writable:false,configurable:false})}catch{}})();</script>`;
+const VIEWER_GUARD_BYTES = Buffer.from(VIEWER_GUARD);
+
+/**
+ * The guard goes first: after a leading doctype (so the page keeps standards
+ * mode), otherwise at the very start. Not after <head>: a page may put a
+ * script before its head, and that script would run first.
+ */
+export function withViewerGuard(html: Buffer): Buffer {
+  const text = html.toString("latin1");
+  let at = 0;
+  // Skip a byte-order mark, whitespace and comments before a doctype.
+  for (;;) {
+    const rest = text.slice(at, at + 4);
+    if (at === 0 && text.startsWith("\u00ef\u00bb\u00bf")) at = 3;
+    else if (/^\s/.test(rest)) at += 1;
+    else if (rest === "<!--") {
+      const end = text.indexOf("-->", at + 4);
+      if (end === -1) break;
+      at = end + 3;
+    } else break;
+  }
+  if (text.slice(at, at + 9).toLowerCase() === "<!doctype") {
+    const end = text.indexOf(">", at);
+    if (end !== -1)
+      return Buffer.concat([
+        html.subarray(0, end + 1),
+        VIEWER_GUARD_BYTES,
+        html.subarray(end + 1),
+      ]);
+  }
+  return Buffer.concat([VIEWER_GUARD_BYTES, html]);
+}
+
 // View-only transform (downloads stay byte-exact): a plain link would try to
 // load the external site inside Полка's frame, which the app forbids, so every
 // link in the static view opens in a new tab instead. base-uri 'none' still

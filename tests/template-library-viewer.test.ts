@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { VIEWER_GUARD, withViewerGuard } from "../apps/server/html.ts";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -250,7 +251,7 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 61_000);
   const document = await embedded(tokenPath(issued.json().url));
   assert.equal(document.statusCode, 200, document.body);
-  assert.equal(document.body, singleHtml);
+  assert.equal(document.body, withViewerGuard(Buffer.from(singleHtml)).toString());
   assert.match(
     String(document.headers["content-security-policy"]),
     /^sandbox allow-scripts allow-forms;/,
@@ -417,7 +418,7 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   assert.equal(bundleIssued.json().profile, BUNDLE_RUNTIME_PROFILE);
   const bundleDocument = await embedded(tokenPath(bundleIssued.json().url));
   assert.equal(bundleDocument.statusCode, 200, bundleDocument.body);
-  assert.equal(bundleDocument.body, bundleHtml.toString());
+  assert.equal(bundleDocument.body, withViewerGuard(bundleHtml).toString());
 });
 
 test("a member prepares an exact published bundle against source quota and opens it", async () => {
@@ -526,7 +527,9 @@ test("a member prepares an exact published bundle against source quota and opens
   assert.equal(issued.statusCode, 200, issued.body);
   const document = await embedded(tokenPath(issued.json().url));
   assert.equal(document.statusCode, 200, document.body);
-  assert.equal(sha256(Buffer.from(document.body)), derivative.sha256);
+  // The stored derivative, byte for byte, with the viewer's guard added once.
+  assert.equal(document.body.split(VIEWER_GUARD).length, 2);
+  assert.equal(sha256(Buffer.from(document.body.replace(VIEWER_GUARD, ""))), derivative.sha256);
 
   const ownerBuild = await call(
     "POST",

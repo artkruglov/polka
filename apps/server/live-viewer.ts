@@ -6,7 +6,7 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readBlob, sha256 } from "./storage.ts";
-import { liveViewerCsp } from "./html.ts";
+import { liveViewerCsp, withViewerGuard } from "./html.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -241,6 +241,8 @@ export async function createLiveViewerApp() {
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
       "x-robots-tag": "noindex, nofollow, noarchive",
+      // DNS prefetch is outside CSP; a hostname can carry data out.
+      "x-dns-prefetch-control": "off",
     });
     // The reverse proxy must replace Host with this fixed upstream authority.
     // Forwarded authority is deliberately ignored.
@@ -275,8 +277,11 @@ export async function createLiveViewerApp() {
     const revision = await authorizedRevision(token);
     if (!revision) throw missing();
     reply.type("text/html; charset=utf-8");
-    // Return only the pinned blob: never inject capabilities, sessions or API data.
-    return readBlob(revision.served_object_key, revision.served_object_version);
+    // The pinned blob plus the static WebRTC guard (html.ts); never inject
+    // capabilities, sessions or API data.
+    return withViewerGuard(
+      await readBlob(revision.served_object_key, revision.served_object_version),
+    );
   });
   viewer.get("/library-document/:token", async (req, reply) => {
     if (
@@ -287,7 +292,7 @@ export async function createLiveViewerApp() {
     const token = (req.params as { token?: string }).token ?? "";
     const bytes = await readLibraryLiveDocument(token);
     reply.type("text/html; charset=utf-8");
-    return bytes;
+    return withViewerGuard(bytes);
   });
   return viewer;
 }
