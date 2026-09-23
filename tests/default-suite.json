@@ -69,5 +69,6 @@
   "tests/onboarding-first-run.test.ts",
   "tests/service-auth.test.ts",
   "tests/moderation.test.ts",
-  "tests/abuse-protection.test.ts"
+  "tests/abuse-protection.test.ts",
+  "tests/comments.test.ts"
 ]

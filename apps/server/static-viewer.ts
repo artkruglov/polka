@@ -7,6 +7,7 @@ import { db, transaction } from "./db.ts";
 import { assertEditorialShareAccessible } from "./editorial.ts";
 import { missing } from "./errors.ts";
 import { staticHtmlCsp, withNewTabLinks } from "./html.ts";
+import { overlayNonce, withStaticOverlay } from "./comment-overlay.ts";
 import { staticSingleFileBundleSql } from "./revision-manifest.ts";
 import { readBlob, sha256 } from "./storage.ts";
 
@@ -36,6 +37,7 @@ export async function issueOwnerStaticView(
   actor: Actor,
   sessionToken: string,
   revisionId: string,
+  comments = false,
 ) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
   const token = randomBytes(32).toString("base64url");
@@ -48,8 +50,8 @@ export async function issueOwnerStaticView(
     ]);
     return (
       await c.query(
-        `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at)
-         SELECT $1,r.id,session.hash,NULL,LEAST(now()+interval '60 seconds',session.expires_at)
+        `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at,comments)
+         SELECT $1,r.id,session.hash,NULL,LEAST(now()+interval '60 seconds',session.expires_at),$6
          FROM revisions r
          JOIN artifacts artifact ON artifact.id=r.artifact_id
            AND artifact.tenant_id=r.tenant_id AND artifact.trashed_at IS NULL
@@ -61,7 +63,14 @@ export async function issueOwnerStaticView(
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
          RETURNING expires_at`,
-        [staticHash(token), sessionHash, actor.id, revisionId, actor.tenant],
+        [
+          staticHash(token),
+          sessionHash,
+          actor.id,
+          revisionId,
+          actor.tenant,
+          comments,
+        ],
       )
     ).rows[0];
   });
@@ -69,7 +78,10 @@ export async function issueOwnerStaticView(
   return staticViewResult(token, grant.expires_at);
 }
 
-export async function issueRecipientStaticView(sourceGrant: string) {
+export async function issueRecipientStaticView(
+  sourceGrant: string,
+  comments = false,
+) {
   if (!config.HTML_LIVE_ENABLED || !TOKEN.test(sourceGrant)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sourceGrantHash = sha256(sourceGrant);
@@ -97,8 +109,8 @@ export async function issueRecipientStaticView(sourceGrant: string) {
     await assertEditorialShareAccessible(c, candidate.share_id);
     return (
       await c.query(
-        `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at)
-         SELECT $1,r.id,s.id,g.hash,NULL,LEAST(now()+interval '60 seconds',g.expires_at)
+        `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at,comments)
+         SELECT $1,r.id,s.id,g.hash,NULL,LEAST(now()+interval '60 seconds',g.expires_at),$3
          FROM grants g
          JOIN shares s ON s.id=g.share_id
          JOIN revisions r ON r.id=g.revision_id
@@ -111,7 +123,7 @@ export async function issueRecipientStaticView(sourceGrant: string) {
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
            AND ${STATIC_REVISION_SQL}
          RETURNING expires_at`,
-        [staticHash(token), sourceGrantHash],
+        [staticHash(token), sourceGrantHash, comments],
       )
     ).rows[0];
   });
@@ -125,7 +137,7 @@ async function authorizedStaticRevision(token: string) {
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT r.*, vg.share_id AS authorized_share_id
+    `SELECT r.*, vg.share_id AS authorized_share_id, vg.comments AS comment_overlay
      FROM viewer_grants vg
      JOIN revisions r ON r.id=vg.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
@@ -183,16 +195,23 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
     const token = (req.params as { token?: string }).token ?? "";
     const revision = await authorizedStaticRevision(token);
     if (!revision) throw missing();
-    reply
-      .type("text/html; charset=utf-8")
-      // Replaces the interactive CSP set for every viewer response: no
-      // scripts at all, and only the app may frame it.
-      .header("content-security-policy", staticHtmlCsp(config.APP_ORIGIN));
-    return withNewTabLinks(
+    const page = withNewTabLinks(
       withSignedAwayLinks(
         await readBlob(revision.object_key, revision.object_version),
         `${config.VIEWER_ORIGIN}/static/${token}`,
       ),
     );
+    // With comments (asked for when the grant was issued), the one script
+    // this response may run is the overlay, under a nonce of this response.
+    const nonce = revision.comment_overlay ? overlayNonce() : undefined;
+    reply
+      .type("text/html; charset=utf-8")
+      // Replaces the interactive CSP set for every viewer response: no
+      // scripts of the page, and only the app may frame it.
+      .header(
+        "content-security-policy",
+        staticHtmlCsp(config.APP_ORIGIN, nonce),
+      );
+    return nonce ? withStaticOverlay(page, config.APP_ORIGIN, nonce) : page;
   });
 }
