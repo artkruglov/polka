@@ -155,12 +155,16 @@ test("runtime has exact current grants and denied administrative paths", async (
     await client.query(
       `SELECT table_name,privilege_type FROM information_schema.role_table_grants
        WHERE grantee=current_user AND table_name IN (
-         'comments','comment_reactions','enterprise_requests',
+         'comments','comment_reactions','account_identities','enterprise_requests',
          'moderation_events','moderation_blocks')
        ORDER BY table_name,privilege_type`,
     )
   ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
   assert.deepEqual(privileges, [
+    "account_identities:DELETE",
+    "account_identities:INSERT",
+    "account_identities:SELECT",
+    "account_identities:UPDATE",
     "comment_reactions:DELETE",
     "comment_reactions:INSERT",
     "comment_reactions:SELECT",
@@ -221,6 +225,7 @@ test("runtime has exact current grants and denied administrative paths", async (
     await denied("UPDATE template_library_events SET action=action");
     await denied("DELETE FROM template_library_events");
     await denied("SELECT public.preserve_account_deletion_marker()");
+    await denied("SELECT public.erase_account_identities()");
     await denied("SELECT * FROM account_purge_jobs");
     await denied(
       `SELECT public.claim_account_purge_job('${randomUUID()}','${randomUUID()}')`,

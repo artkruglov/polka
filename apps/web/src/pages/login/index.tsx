@@ -4,6 +4,7 @@ import { LinkButton } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
 import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { Wave } from "../../shared/ui/Wave.tsx";
+import { ProviderButtons } from "../../features/provider-sign-in/index.tsx";
 import "./styles.css";
 import React from "react";
 import {
@@ -25,6 +26,8 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
   const inviteOnly =
     capabilities.status === "ready" &&
     capabilities.capabilities.emailSignup === "invite";
+  const providers =
+    capabilities.status === "ready" ? capabilities.capabilities.signInProviders : [];
   const toFileSave = safeNext(
     new URLSearchParams(location.search).get("next"),
   )?.startsWith("/bring#file");
@@ -65,6 +68,12 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
               ? "Войдите с логином и паролем или по почте."
               : "Аккаунт выдаёт администратор этой Полки. Войдите с логином и паролем, которые вам передали."}
           </p>
+          {providers.length > 0 && (
+            <>
+              <ProviderButtons providers={providers} next={authReturnTo(location)} />
+              <div className="idp-or">или с логином и паролем</div>
+            </>
+          )}
           <PasswordLoginForm
             onLogin={onLogin}
             submitLabel={toFileSave ? "Войти и продолжить" : "Открыть Полку"}

@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
+import {
+  PUBLIC_MAIL_DOMAINS,
+  parseSignupDomains,
+} from "./mail-domains.ts";
 const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
   z
     .string()
@@ -81,6 +85,43 @@ const env = z
           z.string().regex(/^(?:[^@\s]+)?@[^@\s]+\.[^@\s]+$/, "an address or @domain"),
         ),
       ),
+    // Where a NEW shelf may open by an emailed code (docs/specs/
+    // SIGN_IN_PROVIDERS.md § 3): any | ru-only | a list of domains (ru-only
+    // may be one of its entries). Existing accounts sign in on any domain
+    // unless EMAIL_LOGIN_DOMAINS=signup. Providers are not restricted.
+    EMAIL_SIGNUP_DOMAINS: z.string().default("any"),
+    EMAIL_LOGIN_DOMAINS: z.enum(["any", "signup"]).default("any"),
+    // External sign-in (docs/specs/SIGN_IN_PROVIDERS.md § 1). A provider is
+    // off until its client is configured.
+    YANDEX_CLIENT_ID: unsetIfEmpty(z.string().max(200)),
+    YANDEX_CLIENT_SECRET: unsetIfEmpty(z.string().max(200)),
+    // Yandex confirms an address before it becomes the default one; false
+    // stops its email from linking accounts and joining organisations.
+    YANDEX_EMAIL_VERIFIED: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    VK_CLIENT_ID: unsetIfEmpty(z.string().max(200)),
+    // VK ID reports no verification of the address: off by default.
+    VK_EMAIL_VERIFIED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    OIDC_DISCOVERY_URL: unsetIfEmpty(z.string().url()),
+    OIDC_CLIENT_ID: unsetIfEmpty(z.string().max(500)),
+    OIDC_CLIENT_SECRET: unsetIfEmpty(z.string().max(500)),
+    OIDC_SCOPES: z.string().default("openid email profile"),
+    OIDC_NAME: unsetIfEmpty(z.string().max(60)).transform(
+      (value) => value ?? "Единый вход компании",
+    ),
+    OIDC_ALLOWED_DOMAINS: z.string().default(""),
+    OIDC_ORG_CLAIM: unsetIfEmpty(z.string().max(100)),
+    OIDC_ORG_VALUE: unsetIfEmpty(z.string().max(500)),
+    // Organisation access (§ 2): domain=libraryId[:reader|curator], …
+    ORG_DOMAINS: z.string().default(""),
+    OIDC_ORG_LIBRARY: z.string().default(""),
+    // Comments (docs/specs/SIGN_IN_PROVIDERS.md § 4): on | owner-notes | off.
+    COMMENTS_MODE: z.enum(["on", "owner-notes", "off"]).default("on"),
     // Abuse protection (docs/specs/ABUSE_PROTECTION.md). When a new link
     // waits for the operator: off, flagged (looks like phishing and the
     // author is not trusted), new-accounts (any link of an untrusted
@@ -258,6 +299,61 @@ if (env.CONTENT_MODEL_PROVIDER !== "off") {
         : "CONTENT_MODEL_URL must be a self-hosted model; a foreign API only with CONTENT_MODEL_FOREIGN_DEV=true outside production",
     );
 }
+
+const domainList = (value: string, name: string) =>
+  value
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean)
+    .map((entry) => {
+      if (!/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry))
+        throw new Error(`${name}: not a domain: ${entry}`);
+      return entry;
+    });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+type OrgRole = "reader" | "curator";
+/** libraryId[:reader|curator]; admin is never granted automatically. */
+function libraryGrant(value: string, name: string) {
+  const [libraryId, role = "reader", ...rest] = value.trim().split(":");
+  if (rest.length || !UUID.test(libraryId) || !["reader", "curator"].includes(role))
+    throw new Error(`${name}: expected <library uuid>[:reader|curator]`);
+  return { libraryId, role: role as OrgRole };
+}
+const orgDomains = env.ORG_DOMAINS.split(/[\s,]+/)
+  .filter(Boolean)
+  .map((entry) => {
+    const [domain, grant, ...rest] = entry.split("=");
+    if (rest.length || !grant) throw new Error("ORG_DOMAINS: domain=<library uuid>[:role]");
+    const [clean] = domainList(domain, "ORG_DOMAINS");
+    if (PUBLIC_MAIL_DOMAINS.includes(clean))
+      throw new Error(`ORG_DOMAINS: ${clean} is a public mail service, not an organisation`);
+    return { domain: clean, ...libraryGrant(grant, "ORG_DOMAINS") };
+  });
+const oidcConfigured = !!(env.OIDC_DISCOVERY_URL && env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET);
+if (env.OIDC_DISCOVERY_URL) {
+  const discovery = new URL(env.OIDC_DISCOVERY_URL);
+  if (
+    discovery.protocol !== "https:" &&
+    !(discovery.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(discovery.hostname))
+  )
+    throw new Error("OIDC_DISCOVERY_URL must be https");
+}
+if (!!env.OIDC_ORG_CLAIM !== !!env.OIDC_ORG_VALUE)
+  throw new Error("OIDC_ORG_CLAIM and OIDC_ORG_VALUE go together");
+const signInConfig = {
+  EMAIL_SIGNUP_DOMAINS: parseSignupDomains(env.EMAIL_SIGNUP_DOMAINS, env.APP_ORIGIN),
+  OIDC_ALLOWED_DOMAINS: domainList(env.OIDC_ALLOWED_DOMAINS, "OIDC_ALLOWED_DOMAINS"),
+  ORG_DOMAINS: orgDomains,
+  OIDC_ORG_LIBRARY: env.OIDC_ORG_LIBRARY.trim()
+    ? libraryGrant(env.OIDC_ORG_LIBRARY, "OIDC_ORG_LIBRARY")
+    : null,
+  /** Providers with a configured client, in the order the buttons show. */
+  SIGN_IN_PROVIDERS: [
+    ...(env.YANDEX_CLIENT_ID && env.YANDEX_CLIENT_SECRET ? (["yandex"] as const) : []),
+    ...(env.VK_CLIENT_ID ? (["vk"] as const) : []),
+    ...(oidcConfigured ? (["oidc"] as const) : []),
+  ] as Array<"yandex" | "vk" | "oidc">,
+};
 if (env.ACCOUNT_DELETION_ENABLED) {
   const appUrl = new URL(env.APP_ORIGIN);
   if (
@@ -284,4 +380,4 @@ if (
   throw new Error(
     "Restore mode requires the exact completion receipt identity",
   );
-export const config = { ...env, ...viewerConfig };
+export const config = { ...env, ...viewerConfig, ...signInConfig };

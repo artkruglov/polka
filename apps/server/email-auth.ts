@@ -11,6 +11,7 @@ import { limitAttempts, passwordHash } from "./auth.ts";
 import { assertNotDisposable, signupSpamKeys } from "./signup-guards.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
+import { domainAllowed } from "./mail-domains.ts";
 import {
   LOCAL_MAIL_DIRECTORY,
   LOCAL_MAIL_NOTICE,
@@ -41,7 +42,7 @@ const signupKeys = (ip: string, email: string | null) => [
   ...(email ? signupSpamKeys(ip, email) : []),
 ];
 
-async function signupRoomLeft(
+export async function signupRoomLeft(
   c: Pick<LocalDeliveryClient, "query">,
   ip: string,
   count: boolean,
@@ -72,6 +73,26 @@ export function emailInvited(email: string) {
   const domain = email.slice(email.lastIndexOf("@"));
   return config.EMAIL_SIGNUP_ALLOW.some(
     (entry) => entry === email || entry === domain,
+  );
+}
+
+/**
+ * Whether a code may open a NEW shelf for this address: the domain rule
+ * (EMAIL_SIGNUP_DOMAINS) and invite mode. An address the operator listed in
+ * EMAIL_SIGNUP_ALLOW is an invitation and passes both.
+ */
+export function emailSignupAllowed(email: string) {
+  if (emailInvited(email)) return true;
+  if (config.EMAIL_SIGNUP === "invite") return false;
+  return domainAllowed(email, config.EMAIL_SIGNUP_DOMAINS);
+}
+
+/** Whether an EXISTING account may still get a code on this address. */
+export function emailLoginAllowed(email: string) {
+  return (
+    config.EMAIL_LOGIN_DOMAINS === "any" ||
+    emailInvited(email) ||
+    domainAllowed(email, config.EMAIL_SIGNUP_DOMAINS)
   );
 }
 
@@ -163,14 +184,17 @@ export async function beginEmailLogin(email: string, ip: string) {
       )
     ).rowCount;
     if (blocked) return false;
-    // Invite-only installations send codes to existing accounts and invited
-    // addresses. The answer is the same either way, so the form does not tell
-    // a stranger which addresses are invited.
+    // Invite-only installations and the sign-up domain rule send codes to
+    // existing accounts and allowed addresses only. The answer is the same
+    // either way, so the form does not tell a stranger which addresses have
+    // a shelf; the interface explains the domain rule from /api/capabilities.
     const known = (
       await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])
     ).rowCount;
-    if (!known) {
-      if (config.EMAIL_SIGNUP === "invite" && !emailInvited(email)) return false;
+    if (known) {
+      if (!emailLoginAllowed(email)) return false;
+    } else {
+      if (!emailSignupAllowed(email)) return false;
       await assertNotDisposable(email);
       await signupRoomLeft(c, ip, false, email);
     }
@@ -272,7 +296,9 @@ export async function verifyEmailLogin(
       ).rows[0];
       if (!tenant || !account) return null;
     }
+    if (account && !emailLoginAllowed(challenge.email)) return null;
     if (!account) {
+      if (!emailSignupAllowed(challenge.email)) return null;
       await signupRoomLeft(c, ip, true, challenge.email);
       const accountId = randomUUID();
       // Unused random password keeps legacy password login separate from email identities.

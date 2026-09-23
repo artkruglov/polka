@@ -35,8 +35,7 @@ const catalog = [
   { version: 29, file: "029_abuse_protection.sql" },
   { version: 30, file: "030_comments.sql" },
   { version: 31, file: "031_content_filter.sql" },
-  // 032 (account identities) is taken by a concurrent branch; the catalog and
-  // every recipe accept the set with or without it until it lands.
+  { version: 32, file: "032_account_identities.sql" },
   { version: 33, file: "033_enterprise_requests.sql" },
 ] as const satisfies readonly SchemaMigration[];
 
