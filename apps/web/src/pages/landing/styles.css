@@ -42,7 +42,7 @@
 .landing-company { display: flex; align-items: center; justify-content: space-between; gap: 32px; margin-top: 64px; padding: 44px 48px; background: var(--soft); border-radius: var(--radius-xl); }
 .landing-company h2 { margin-bottom: 12px; font-size: clamp(26px, 3vw, 36px); line-height: 1.12; letter-spacing: -.035em; }
 .landing-company p { max-width: 640px; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }
-.landing-company > .ui-button { flex-shrink: 0; }
+.landing-company > .ui-button, .landing-company-actions { flex-shrink: 0; }
 
 @media (max-width: 900px) {
   .landing-main { padding: 40px var(--gutter) 96px; }
@@ -62,5 +62,14 @@
   .landing-entry .ui-button { width: 100%; }
   .landing-wave { margin: 28px 0 0; }
   .landing-company { padding: 28px 20px; }
-  .landing-company > .ui-button { width: 100%; }
+  .landing-company > .ui-button, .landing-company-actions, .landing-company-actions .ui-button { width: 100%; }
 }
+
+/* Open source: a quiet link under the hero text and a second action below. */
+.landing-oss {
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content;
+  color: var(--muted); font-size: var(--text-sm); text-decoration: none;
+  margin: -6px 0 22px;
+}
+.landing-oss:hover { color: var(--accent); }
+.landing-company-actions { display: flex; flex-wrap: wrap; gap: 12px; }
