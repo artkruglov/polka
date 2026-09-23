@@ -14,6 +14,9 @@ const reasonLabel: Record<ReportReason, string> = {
   personal_data: "Чужие личные данные",
   illegal: "Незаконное содержимое",
   other: "Другое",
+  child_sexual: "Сексуальное с участием детей",
+  intimate_nonconsensual: "Интимное без согласия",
+  threat_to_life: "Угроза жизни",
 };
 export function ReportArtifactPanel({
   token,

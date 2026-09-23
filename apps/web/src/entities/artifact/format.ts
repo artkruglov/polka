@@ -11,14 +11,22 @@ export const size = (n: number) =>
       ? `${Math.round(n / 1024)} КБ`
       : `${(n / 1024 / 1024).toFixed(1)} МБ`;
 export const status = (a: Artifact) =>
-  a.share && ["active", "behind"].includes(a.share.status)
+  a.share?.moderation === "blocked"
+    ? "Заблокировано модератором"
+    : a.share && ["active", "behind"].includes(a.share.status)
     ? a.share.moderation === "held" || a.share.moderation === "paused"
       ? `Ссылка на проверке · v${a.share.number}`
       : `По ссылке · v${a.share.number}`
     : "Только вы";
 /** What the owner is told while a link waits for the Полка moderator. */
 export const moderationNote = (a: Artifact) =>
-  a.share?.moderation === "held"
+  a.share?.moderation === "blocked"
+    ? `Заблокировано модератором: получатели видят «Ссылка недоступна», отправить работу заново нельзя.${
+        a.share.appeal
+          ? ` Если считаете решение ошибочным, напишите на ${a.share.appeal}: укажите ссылку и почему материал не нарушает правила.`
+          : " Обжаловать решение можно у оператора этой установки."
+      }`
+    : a.share?.moderation === "held"
     ? "Ссылка на проверке у модератора Полки. Получатели увидят работу после одобрения; до этого по ссылке открывается экран «на проверке»."
     : a.share?.moderation === "paused"
       ? "Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки. Получатели сейчас видят экран «на проверке»."
