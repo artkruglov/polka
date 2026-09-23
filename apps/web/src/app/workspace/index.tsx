@@ -491,6 +491,7 @@ export function App() {
             />
           ) : (
             <ShelfPage
+              account={account}
               activeFolder={activeFolder}
               folderId={folderId}
               items={items}
@@ -507,6 +508,7 @@ export function App() {
               setPanel={setPanel}
               open={open}
               loadMore={() => void loadMore()}
+              onSaved={() => setRefresh((x) => x + 1)}
             />
           )}
         </main>

@@ -10,6 +10,7 @@ import "./widgets/artifact-reader/styles.css";
 import "./widgets/editorial-catalog/styles.css";
 import "./widgets/trash/styles.css";
 import "./pages/agents/styles.css";
+import "./features/first-run/styles.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AppRoutes } from "./app/routing/index.tsx";

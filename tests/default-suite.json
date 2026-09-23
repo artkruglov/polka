@@ -64,6 +64,7 @@
   "tests/library-invite-parser.test.ts",
   "tests/live-plan.test.ts",
   "tests/paste-code.test.ts",
+  "tests/onboarding-first-run.test.ts",
   "tests/service-auth.test.ts",
   "tests/moderation.test.ts"
 ]
