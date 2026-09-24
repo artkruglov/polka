@@ -213,6 +213,18 @@ test("a Claude artifact: one try; its frame is the snapshot, a challenge is sour
   assert.doesNotMatch(html, /chat app shell/);
   assert.doesNotMatch(html, /<script/);
   assert.equal(result.manifest.provenance.sourceUrl, ARTIFACT);
+  // Only the hidden helper frame drew (seen on a real public artifact, 24.09.2026): not the artifact.
+  await assert.rejects(
+    captureRendered(ARTIFACT, {
+      render: async () => ({
+        finalUrl: ARTIFACT,
+        title: "Planner | Claude",
+        html: "<div>app</div>",
+        frames: [{ url: "https://www.claudeusercontent.com/", html: "<html><head><title>Claude User Content</title></head><body></body></html>" }],
+      }),
+    }),
+    { code: "source_blocked" },
+  );
   // No artifact frame (Cloudflare, or the chat app without the artifact): source_blocked.
   await assert.rejects(
     captureRendered(ARTIFACT, { render: async () => ({ finalUrl: ARTIFACT, title: "Claude", html: "<div>app</div>", frames: [] }) }),

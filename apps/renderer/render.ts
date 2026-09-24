@@ -98,6 +98,21 @@ export async function renderPage(
     // Let the SPA fetch its data; a page that never goes quiet is taken as it is.
     await page.waitForLoadState("networkidle", { timeout: Math.min(10_000, Math.max(0, left() - 4_000)) }).catch(() => {});
     await page.waitForTimeout(Math.min(1_500, Math.max(0, left() - 2_500)));
+    // A Claude artifact is drawn into its frame (<uuid>.frame.claudeusercontent.com)
+    // after the page loads; wait, within the deadline, until a frame has content.
+    if (new URL(url).hostname === "claude.ai") {
+      const until = Date.now() + Math.min(8_000, Math.max(0, left() - 3_000));
+      while (Date.now() < until) {
+        const drawn = await Promise.all(
+          page
+            .frames()
+            .filter((frame) => /\.claudeusercontent\.com\//.test(frame.url()) || frame.url() === "about:srcdoc")
+            .map((frame) => frame.evaluate("document.body ? document.body.innerText.trim().length : 0").catch(() => 0)),
+        );
+        if (drawn.some((length) => Number(length) > 30)) break;
+        await page.waitForTimeout(500);
+      }
+    }
     const evidence = {
       url: page.url(),
       title: await page.title().catch(() => ""),
