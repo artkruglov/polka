@@ -173,7 +173,8 @@ test("one guarded run reconciles exact upload and derivative versions before com
     sql.includes("UPDATE revision_derivatives"),
   );
   assert.ok(uploadUpdate > -1 && derivativeUpdate > uploadUpdate);
-  assert.equal(database.calls.filter((sql) => sql === "COMMIT").length, 5);
+  // Candidates, upload, derivative, idle provisional shelves, the sweep.
+  assert.equal(database.calls.filter((sql) => sql === "COMMIT").length, 6);
   // The privacy policy keeps a report for one year.
   assert.ok(
     database.calls.includes(

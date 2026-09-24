@@ -1,6 +1,8 @@
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { cleanupEmailChallengesInTransaction } from "../apps/server/email-maintenance.ts";
 import {
+  closeProvisionalShelf,
+  eraseProvisionalShelfRows,
   idleProvisionalShelves,
   retireProvisionalShelf,
   type ProvisionalRetirementPolicy,
@@ -150,7 +152,36 @@ export type MaintenanceOptions = {
    * used for `idleDays` are then deleted (apps/server/provisional-maintenance.ts).
    */
   provisionalRetirement?: ProvisionalRetirementPolicy;
+  /**
+   * Without the deletion pipeline: idle provisional shelves are deleted here,
+   * objects under their tenant prefix included, after this many idle days.
+   */
+  provisionalIdleDays?: number;
 };
+
+/** Every version (and delete marker) under `prefix`, deleted. */
+async function deleteEveryVersion(
+  storage: MaintenanceObjectStore,
+  prefix: string,
+  signal: AbortSignal,
+) {
+  for (let round = 0; round < 1000; round++) {
+    assertActive(signal);
+    const page = await storage.listVersions({ prefix, maxKeys: 100 }, signal);
+    const all = [...page.versions, ...page.deleteMarkers];
+    if (!all.length) {
+      if (page.truncated) throw new MaintenanceStorageFailure();
+      return;
+    }
+    for (const value of all) {
+      if (!value.key?.startsWith(prefix) || !validVersion(value.versionId))
+        throw new MaintenanceStorageFailure();
+      assertActive(signal);
+      await storage.deleteVersion(value.key, value.versionId, signal);
+    }
+  }
+  throw new MaintenanceStorageFailure();
+}
 
 export async function runMaintenanceCleanup(
   scope: MaintenanceScope,
@@ -259,6 +290,24 @@ export async function runMaintenanceCleanup(
   }
 
   let provisionalShelvesRetired = 0;
+  if (!options.provisionalRetirement && options.provisionalIdleDays) {
+    const idleDays = options.provisionalIdleDays;
+    const idle = await scope.transaction(async (c) => {
+      assertActive(scope.signal);
+      return idleProvisionalShelves(c, { idleDays });
+    });
+    for (const shelf of idle) {
+      assertActive(scope.signal);
+      const closed = await scope.transaction((c) =>
+        closeProvisionalShelf(c, shelf, idleDays),
+      );
+      if (!closed.closed) continue;
+      provisionalShelvesRetired++;
+      if (!closed.erase) continue;
+      await deleteEveryVersion(storage, `${shelf.tenant}/`, scope.signal);
+      await scope.transaction((c) => eraseProvisionalShelfRows(c, shelf));
+    }
+  }
   if (options.provisionalRetirement) {
     const policy = options.provisionalRetirement;
     const idle = await scope.transaction(async (c) => {
