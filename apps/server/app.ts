@@ -389,6 +389,18 @@ export async function createApp() {
     const a = await identity(req);
     return { id: a.id, name: a.name };
   });
+  // The web app's «who is here»: 200 for a guest too (account null), so a
+  // guest's every page load is not a 401 in the console. /api/me keeps its
+  // 401 for clients that need the session to be there.
+  app.get("/api/session", async (req) => {
+    try {
+      const a = await identity(req);
+      return { account: { id: a.id, name: a.name } };
+    } catch (error) {
+      if (error instanceof Problem && error.status === 401) return { account: null };
+      throw error;
+    }
+  });
   app.post("/api/account/deletion-csrf", async (req) =>
     issueAccountDeletionCsrf(
       await identity(req),
