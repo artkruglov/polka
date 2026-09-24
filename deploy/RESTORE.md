@@ -4,7 +4,7 @@ This runbook describes the current restore barrier for an already restored, dedi
 
 ## Required inputs
 
-Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (the exact set is in `packages/migrations.ts`, currently up to 034), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
+Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (the exact set is in `packages/migrations.ts`, currently up to 035), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
 
 Provide these exact values through a protected operator environment file or secret manager, never as command-line arguments:
 

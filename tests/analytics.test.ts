@@ -665,6 +665,7 @@ test("the operator report: token-gated like /api/ops/status, with the funnel, so
     "funnel",
     "generatedAt",
     "pages",
+    "recipients",
     "retention",
     "signupMethods",
     "since",

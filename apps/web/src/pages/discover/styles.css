@@ -1,0 +1,48 @@
+/* A feed material, document first (like the recipient page): a thin header,
+   one line about the task, the isolated frame filling the rest of the
+   viewport, a small licence line. A guest's bar (features/recipient-convert)
+   sits in the flow under it, so the work is never covered. */
+.feed-material { display: flex; flex-direction: column; min-height: 100dvh; }
+.feed-topbar { display: flex; flex: 0 0 auto; align-items: center; gap: 8px 14px; min-height: 52px; padding: 6px var(--gutter); border-bottom: 1px solid var(--line); background: var(--canvas); }
+.feed-back { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; min-height: 36px; padding: 0 6px; margin-left: -6px; border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-base); font-weight: 500; white-space: nowrap; }
+.feed-back:hover { color: var(--accent); background: var(--accent-soft); }
+.feed-back svg { width: 16px; height: 16px; }
+.feed-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 600 var(--text-md) / 1.3 var(--font-sans); letter-spacing: var(--tracking-snug); }
+.feed-topic { flex: 0 0 auto; }
+.feed-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.feed-actions .ui-button { min-height: 36px; padding: 6px 10px; font-size: var(--text-sm); color: var(--ink-2); }
+.feed-actions .ui-button svg { width: 16px; height: 16px; }
+.feed-task { flex: 0 0 auto; margin: 0; padding: 6px var(--gutter); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.4; }
+.feed-task span { color: var(--muted); }
+
+.feed-stage { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
+.feed-stage .html-preview { flex: 1 1 auto; height: auto; min-height: 420px; }
+.feed-stage .html-preview-expanded { flex: none; }
+.feed-stage .html-preview-note { border-top: 1px solid var(--line); }
+.feed-stage .html-preview-toolbar { border-top: 0; border-bottom: 1px solid var(--line); padding: 6px var(--gutter); }
+.feed-stage .html-preview-toolbar > .ui-button { min-height: 32px; padding: 4px 8px; font-size: var(--text-sm); }
+.feed-stage .preview-error { padding: 32px var(--gutter); }
+.feed-stage:fullscreen { background: var(--canvas); overflow: auto; }
+.feed-state { display: grid; gap: 12px; justify-items: start; margin: 0; padding: 32px var(--gutter); color: var(--muted); }
+.feed-state p { margin: 0; }
+
+.feed-footer { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; padding: 8px var(--gutter); border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); }
+.feed-footer a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-weight: 500; }
+.feed-footer a svg { width: 14px; height: 14px; }
+.feed-convert { position: sticky; bottom: 0; z-index: 60; flex: 0 0 auto; }
+
+@media (max-width: 760px) {
+  /* Under the shell's sticky header (60px); the tab bar is padding on the shell. */
+  .feed-material { min-height: calc(100dvh - 60px - var(--tabbar-height) - env(safe-area-inset-bottom, 0px)); }
+  .feed-topbar { flex-wrap: wrap; padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  .feed-title { flex-basis: 100%; order: 3; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .feed-actions { margin-left: auto; }
+  .feed-fullscreen > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .feed-task { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); white-space: normal; }
+  .feed-stage .html-preview { min-height: 360px; }
+  .feed-stage .html-preview-toolbar { padding: 4px var(--gutter-mobile); gap: 4px 6px; }
+  .feed-footer { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  /* Above the app's tab bar, which the shell keeps for guests too on this page. */
+  .feed-convert { bottom: var(--tabbar-height); }
+  .feed-reader .convert-card { bottom: calc(var(--convert-bar-height, 56px) + var(--tabbar-height) + 12px + env(safe-area-inset-bottom, 0px)); }
+}

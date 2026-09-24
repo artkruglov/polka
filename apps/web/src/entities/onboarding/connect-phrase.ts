@@ -3,8 +3,8 @@
  * agent would run. The commands are the same ones GET /connect serves
  * (apps/server/connect-guide.ts); a test keeps them in step.
  */
-export const connectPhrase = (origin: string) =>
-  `Подключи Полку: ${origin}/connect`;
+export const connectPhrase = (origin: string, ref?: string) =>
+  `Подключи Полку: ${origin}/connect${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`;
 
 export type ClientHint = {
   id: "codex" | "claude-code" | "claude-ai" | "chatgpt";

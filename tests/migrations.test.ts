@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 34 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 34);
+test("migration catalog is the complete contiguous schema 35 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 35);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
