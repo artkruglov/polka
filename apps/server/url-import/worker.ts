@@ -142,9 +142,11 @@ export async function runImportOnce({
             "UPDATE url_import_jobs SET state=$2,receipt=$3,prepared=NULL,lease_token=NULL,lease_until=NULL,attempts=0,error_code=CASE WHEN $2='partial' THEN 'preview_unavailable' ELSE NULL END,updated_at=now() WHERE id=$1",
             [
               job.id,
-              prepared.previewReady && config.HTML_LIVE_ENABLED
-                ? "previewing"
-                : "partial",
+              "staticReady" in prepared && prepared.staticReady
+                ? "ready"
+                : prepared.previewReady && config.HTML_LIVE_ENABLED
+                  ? "previewing"
+                  : "partial",
               receipt,
             ],
           );
