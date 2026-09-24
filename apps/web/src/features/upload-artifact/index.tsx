@@ -1,5 +1,6 @@
-import "./styles.css";
 import { Button, Segmented, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
+import { CopyText } from "../../shared/ui/CopyText.tsx";
+import { updatePhrase } from "../../entities/artifact/agent-phrases.ts";
 import React, { useRef, useState } from "react";
 import { ArrowUpRight, Upload } from "lucide-react";
 import type {
@@ -19,12 +20,15 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
 export function UploadPanel({
   artifact,
+  shelfUrl,
   folders,
   folderId,
   onClose,
   onSaved,
 }: {
   artifact?: Artifact;
+  /** The work's page (a new version): named in the phrase for the agent. */
+  shelfUrl?: string;
   folders: Folder[];
   folderId: string | null;
   onClose: () => void;
@@ -36,7 +40,9 @@ export function UploadPanel({
     [text, setText] = useState(""),
     [folder, setFolder] = useState(folderId ?? ""),
     [error, setError] = useState(""),
-    [stage, setStage] = useState("");
+    [stage, setStage] = useState(""),
+    // A new version: the agent phrase leads; the file and text forms fold away.
+    [manual, setManual] = useState(!artifact);
   const operation = useRef<PendingUpload | null>(null),
     busy = !!stage;
   const reset = () => {
@@ -96,6 +102,32 @@ export function UploadPanel({
             ? "Отправленная ссылка останется на прежней версии. Обновить её можно отдельно после просмотра."
             : "Сначала работу видите только вы. Поделиться ссылкой можно после сохранения."}
         </p>
+        {artifact && (
+          <section className="upload-agent">
+            <h3>Попросите агента</h3>
+            <CopyText
+              label="Фраза для агента"
+              value={updatePhrase(artifact.title, shelfUrl ?? "")}
+              rows={3}
+              buttonVariant="primary"
+              buttonLabel="Скопировать фразу"
+              successText="Скопировано. Вставьте в чат агента"
+            />
+            <p className="fine">
+              Агент найдёт работу по адресу, внесёт правки и сохранит новую версию сам.
+            </p>
+          </section>
+        )}
+        {artifact && (
+          <details
+            className="upload-manual"
+            open={manual}
+            onToggle={(event) => setManual(event.currentTarget.open)}
+          >
+            <summary>Загрузить файл или вставить текст</summary>
+          </details>
+        )}
+        {manual && (<>
         <Segmented
           label="Что сохранить"
           value={mode}
@@ -173,18 +205,21 @@ export function UploadPanel({
           и PPTX эта сборка не принимает.
         </p>
         <ErrorNotice error={error} />
+        </>)}
       </div>
       <div className="dialog-footer">
         <Button onClick={onClose} disabled={busy}>
-          Отмена
+          {manual ? "Отмена" : "Закрыть"}
         </Button>
-        <Button variant="primary" onClick={save} disabled={busy}>
-          {stage ||
-            (error && operation.current
-              ? "Повторить сохранение"
-              : "Сохранить на полку")}
-          <ArrowUpRight />
-        </Button>
+        {manual && (
+          <Button variant="primary" onClick={save} disabled={busy}>
+            {stage ||
+              (error && operation.current
+                ? "Повторить сохранение"
+                : "Сохранить на полку")}
+            <ArrowUpRight />
+          </Button>
+        )}
       </div>
     </Dialog>
   );

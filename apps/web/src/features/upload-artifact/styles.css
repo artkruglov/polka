@@ -1,4 +1,4 @@
-/* Upload dialog: a dashed drop zone and the text alternative. */
+/* Upload dialog: a dashed drop zone and the text alternative. Imported from main.tsx (Node tests render the panel). */
 .file-drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 150px; padding: 20px; border: 1.5px dashed #c5cfe3; border-radius: var(--radius-md); background: var(--soft-3); text-align: center; cursor: pointer; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .file-drop svg { width: 26px; height: 26px; margin-bottom: 6px; color: var(--accent); stroke-width: 1.5; }
 .file-drop strong { font-size: var(--text-md); font-weight: 500; overflow-wrap: anywhere; }
@@ -7,3 +7,9 @@
 .file-drop:hover { background: var(--accent-soft); border-color: var(--accent); }
 .file-drop:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .dialog-body > .ui-segmented { align-self: flex-start; }
+/* A new version: «Попросите агента» first, the forms behind a disclosure. */
+.upload-agent { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.upload-agent h3 { font-size: var(--text-md); font-weight: 600; letter-spacing: -.01em; }
+.upload-agent .copy-text textarea { background: var(--canvas); }
+.upload-agent .copy-row > .ui-button { width: 100%; min-height: 44px; }
+.upload-manual > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; color: var(--accent); font-size: var(--text-base); font-weight: 500; }
