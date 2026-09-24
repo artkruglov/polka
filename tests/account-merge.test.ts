@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
@@ -524,4 +525,17 @@ test("refuses a disabled side, the same account and blocked content", async () =
     console.error = error;
   }
   assert.match(refused.join("\n"), /Отказ/);
+});
+
+// Hosted installations grant the application role no TEMPORARY privilege
+// (deploy/migrations grants); a temporary table there fails the whole merge.
+test("server code creates no temporary tables", async () => {
+  const dir = new URL("../apps/server/", import.meta.url);
+  const files = (await readdir(dir, { recursive: true })).filter((file) =>
+    file.endsWith(".ts"),
+  );
+  for (const file of files) {
+    const source = await readFile(new URL(file, dir), "utf8");
+    assert.doesNotMatch(source, /CREATE\s+TEMP(ORARY)?\s+TABLE/i, file);
+  }
 });
