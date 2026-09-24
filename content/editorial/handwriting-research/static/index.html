@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Почерк и грамотность младшеклассника: что говорят исследования</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0 0}
+.steps li{counter-increment:s;position:relative;padding:10px 12px 10px 48px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:#fbfaf7}
+.steps li::before{content:counter(s);position:absolute;left:12px;top:9px;width:26px;height:26px;border-radius:50%;background:var(--cool);color:#fff;font-weight:800;font-size:.85rem;display:grid;place-items:center}
+.ladder{display:grid;gap:8px;margin-top:12px}
+.rung{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#fbfaf7;transition:background .2s,border-color .2s}
+.rung b{color:var(--muted);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase}
+.rung.on{background:#fff4ec;border-color:var(--accent)}
+.rung.on b{color:var(--accent)}
+.say{font-style:italic}
+.trainer{display:grid;gap:10px;max-width:520px}
+.word{font:700 clamp(1.8rem,6vw,2.6rem)/1.2 Georgia,serif;letter-spacing:.02em;min-height:60px;padding:10px 16px;border:2px dashed var(--line);border-radius:14px;background:#fbfaf7;text-align:center}
+.word.hidden{color:transparent;text-shadow:0 0 14px #0003}
+.trainer input[type=text]{font:inherit;font-size:1.2rem;padding:10px 12px;border:1px solid var(--line);border-radius:10px;min-height:44px}
+.verdict{min-height:1.6em;font-weight:700}
+.verdict.good{color:var(--ok)}.verdict.retry{color:var(--accent)}
+@media(max-width:540px){.rung{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Исследования · дети и школа</div>
+<h1>Почерк и грамотность младшеклассника: что работает по исследованиям</h1>
+<p class="dek">«Перепиши десять раз красиво» — самый частый домашний рецепт, и один из самых слабых. Разбираем, что показывают метаанализы и свежие работы о том, как дети 7–10 лет учатся писать разборчиво и без ошибок, и собираем из этого короткий план занятий на месяц.</p>
+</header>
+
+<section class="card" aria-labelledby="short">
+<h2 id="short">Коротко</h2>
+<div class="grid">
+<div class="tile"><span class="tag ok">Работает</span><h3>Учить конкретную букву</h3><p>Не «развивать моторику вообще», а тренировать одно начертание: букву, затем слово, затем предложение.</p></div>
+<div class="tile"><span class="tag ok">Работает</span><h3>Писать по памяти</h3><p>Посмотрел, закрыл образец, написал, сверил. Это лучше, чем многократно обводить и раскрашивать.</p></div>
+<div class="tile"><span class="tag cool">Важно</span><h3>Заметить ≠ исправить</h3><p>Найти у себя ошибку и правильно её исправить — два разных навыка. Их нужно проверять отдельно.</p></div>
+<div class="tile"><span class="tag">Осторожно</span><h3>Одна работа — не диагноз</h3><p>По одной тетради нельзя установить дисграфию. При стойких трудностях нужна очная оценка специалиста.</p></div>
+</div>
+</section>
+
+<section class="card" aria-labelledby="evidence">
+<h2 id="evidence">Что говорят исследования</h2>
+<h3>1. Почерку учат напрямую</h3>
+<p>Метаанализ Сантанджело и Грэма (2016) собрал исследования обучения письму рукой. Вывод: помогает прямое обучение самому письму и индивидуальная работа над его составляющими. Общие моторные упражнения «для руки» не дают оснований ждать того же переноса на почерк.</p>
+<p><b>Что это значит дома:</b> выберите одну букву или соединение, которое чаще всего приходится угадывать при чтении. Покажите, откуда начинается движение, и дайте написать 3 раза, потом одно короткое слово с этой буквой, потом предложение. Наклон сам по себе не ошибка; критерий должен быть наблюдаемым: «видны все элементы буквы», «слова отделены промежутком».</p>
+
+<h3>2. Вспоминать полезнее, чем переписывать</h3>
+<p>В трёх небольших экспериментах с младшими школьниками (Джонс и соавторы, 2016) написание слова по памяти после скрытия образца дало лучший результат, чем «радужное письмо» — многократное обведение слова разными цветами. Это не значит, что списывание вредно: осмысленное списывание остаётся нормальным упражнением. Но у заучивания правописания главный двигатель — усилие вспомнить.</p>
+
+<h3>3. Найти ошибку и исправить её — разные шаги</h3>
+<p>В исследовании 318 немецкоязычных школьников (Тиффин-Ричардс, Ленхарт, Маркс, 2026) обнаружить собственные ошибки оказалось трудно, а отметить сомнение и сделать полезное исправление — отдельными шагами. Практический вывод: сначала просите ребёнка самому проверить запись и только потом давайте подсказку, и записывайте результат этих этапов отдельно.</p>
+
+<h3>4. Сначала показать способ, потом отдать его</h3>
+<p>Подход SRSD (обучение стратегиям с саморегуляцией) поддержан многими исследованиями; квазиэксперимент с французскими школьниками (Фернандес и Гильбер, 2024) показывает, за счёт чего он работает: взрослый вслух показывает, как планировать и проверять текст, затем постепенно передаёт это ребёнку.</p>
+
+<h3>5. Уверенность и результат идут рядом</h3>
+<p>У 194 детей 8–11 лет (Варди, Вернон, Уилкинсон, 2026) уверенность в своих силах и внутренняя мотивация умеренно связаны с результатами в правописании. Исследование наблюдательное: оно не доказывает, что похвала сама по себе исправляет ошибки. Но посильный объём, выбор сюжета и похвала за конкретное действие («ты сам нашёл конец мысли и поставил точку») точно не мешают.</p>
+
+<h3>6. Структура слова помогает, но данные в основном английские</h3>
+<p>Обучение морфологии — корням, приставкам, родственным словам — может поддерживать грамотность (метаанализ Коленбрандер и соавторов, 2024), но эффекты неоднородны и получены на англоязычных детях. Для русского языка это разумный принцип («шёл — пришёл — ушёл — подошёл»), а не доказанный отдельным исследованием результат.</p>
+<p class="note">Основная доказательная база получена в других языках и школьных системах. Принципы прямого обучения, воспроизведения по памяти и постепенного снятия помощи переносятся на русское письмо как разумная адаптация.</p>
+</section>
+
+<section class="card" aria-labelledby="trainer-h">
+<h2 id="trainer-h">Попробуйте: «посмотри — закрой — напиши — сверь»</h2>
+<p>Так выглядит упражнение на воспроизведение по памяти. Слово показывается на несколько секунд, потом закрывается. Напишите его сами и сверьте. В тетради всё то же самое, только ручкой.</p>
+<p class="no-js note">Без JavaScript тренажёр не работает. Порядок такой: взрослый показывает слово (например, «пришёл»), ребёнок смотрит 3–5 секунд, образец закрывается листом, ребёнок пишет по памяти, открывает образец и сверяет одно выбранное место.</p>
+<div class="trainer js-only">
+<div class="word" id="word" aria-live="polite">пришёл</div>
+<div class="actions" style="margin-top:0">
+<button class="button" id="show" type="button" disabled="">Показать новое слово</button>
+<button class="button secondary" id="hide" type="button" disabled="">Закрыть образец</button>
+</div>
+<label for="answer">Ваш ответ</label>
+<input type="text" id="answer" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="напишите по памяти" value="">
+<div class="actions" style="margin-top:0"><button class="button secondary" id="check" type="button" disabled="">Сверить</button></div>
+<div class="verdict" id="verdict" aria-live="polite"></div>
+</div>
+</section>
+
+<section class="card" aria-labelledby="ladder-h">
+<h2 id="ladder-h">Лестница помощи</h2>
+<p>Когда ребёнок застрял, помощь даётся по ступеням: от самой слабой к самой сильной. Так видно, какой именно подсказки хватило, а ответ после показа образца честно отмечается как «с образцом», а не как самостоятельный.</p>
+<div class="ladder" id="ladder">
+<div class="rung on" data-i="0"><b>Сначала</b><div>Дать время подумать и одну самостоятельную попытку. Если просит — повторить инструкцию, не подсказывая ответ.</div></div>
+<div class="rung" data-i="1"><b>Затем</b><div>Напомнить действие: <span class="say">«Как можно проверить это место?»</span> Если мало — назвать категорию: <span class="say">«Посмотри на букву после ш»</span>, <span class="say">«Проверь начало второй мысли»</span>.</div></div>
+<div class="rung" data-i="2"><b>Если нужно</b><div>Показать правильный образец. Ребёнок сравнивает, закрывает образец и пишет ещё раз. В записи отмечается: «выполнено с образцом».</div></div>
+</div>
+<div class="actions js-only">
+<button class="button" id="up" type="button" disabled="">Следующая ступень</button>
+<button class="button secondary" id="reset" type="button" disabled="">Сначала</button>
+</div>
+<p class="note">Исправлять нужно только выбранное место. Переписывать весь текст ради одной буквы не требуется.</p>
+</section>
+
+<section class="card" aria-labelledby="measure">
+<h2 id="measure">Как понять, что есть прогресс</h2>
+<p>Главная ловушка — сравнивать «красивее / некрасивее». Вместо этого у каждой проверочной записи фиксируют три состояния:</p>
+<ol class="steps">
+<li><b>Исходно</b> — как написал сам, до любых исправлений. Эту версию сохраняют.</li>
+<li><b>После своей проверки</b> — «прочитай, отметь сомнения и исправь, что можешь».</li>
+<li><b>После подсказки или образца</b> — что получилось с помощью взрослого.</li>
+</ol>
+<p>Ниже — вымышленный пример журнала за месяц: три позиции в диктанте со словами «шёл», «пришёл», «подошёл», проверка в начале и в конце. Улучшение «после подсказки» подсказывает, какой способ обучения выбрать дальше; оно не ставит диагноз.</p>
+<svg viewBox="0 0 640 250" role="img" aria-labelledby="chartT chartD" style="width:100%;height:auto;margin-top:6px">
+<title id="chartT">Вымышленный пример: верные написания из трёх в начале и в конце месяца</title>
+<desc id="chartD">В начале: исходно 0 из 3, после своей проверки 1 из 3, после подсказки 3 из 3. В конце: исходно 2 из 3, после своей проверки 3 из 3, после подсказки 3 из 3.</desc>
+<g stroke="#d9d8d0"><line x1="60" y1="200" x2="620" y2="200"></line><line x1="60" y1="150" x2="620" y2="150" stroke-dasharray="3 4"></line><line x1="60" y1="100" x2="620" y2="100" stroke-dasharray="3 4"></line><line x1="60" y1="50" x2="620" y2="50" stroke-dasharray="3 4"></line></g>
+<g fill="#5f6a70" font-size="12" text-anchor="end"><text x="50" y="204">0</text><text x="50" y="154">1</text><text x="50" y="104">2</text><text x="50" y="54">3</text></g>
+<g font-size="13" fill="#22262a" text-anchor="middle"><text x="200" y="228">Начало месяца</text><text x="480" y="228">Конец месяца</text></g>
+<g>
+<rect x="120" y="198" width="44" height="2" fill="#7a3b2e"></rect><rect x="178" y="150" width="44" height="50" fill="#2d6a8a"></rect><rect x="236" y="50" width="44" height="150" fill="#b9b4a8"></rect>
+<rect x="400" y="100" width="44" height="100" fill="#7a3b2e"></rect><rect x="458" y="50" width="44" height="150" fill="#2d6a8a"></rect><rect x="516" y="50" width="44" height="150" fill="#b9b4a8"></rect>
+</g>
+<g font-size="12" fill="#22262a" text-anchor="middle"><text x="142" y="190">0</text><text x="200" y="142">1</text><text x="258" y="42">3</text><text x="422" y="92">2</text><text x="480" y="42">3</text><text x="538" y="42">3</text></g>
+</svg>
+<p class="note"><span style="color:#7a3b2e">■</span> исходно &nbsp; <span style="color:#2d6a8a">■</span> после своей проверки &nbsp; <span style="color:#8d887d">■</span> после подсказки. Данные придуманы для иллюстрации.</p>
+<p>Почерк сравнивают так же конкретно: в одном и том же тексте для списывания заранее выбирают несколько мест с целевой буквой и потом отмечают для каждого «читается сразу / пришлось уточнить / не прочитать». Никакого «процента красивого почерка». Через 7–10 дней после курса — короткая повторная проба: держится ли навык.</p>
+</section>
+
+<section class="card" aria-labelledby="plan">
+<h2 id="plan">План на месяц: 8 занятий по 30–35 минут</h2>
+<p>Так можно собрать первый цикл с репетитором или дома: два занятия в неделю с днём перерыва между ними и три домашних задания примерно по 5 минут. Если ребёнок устал, время сокращают, а пропущенное не отрабатывают двойным объёмом.</p>
+<div class="scroll"><table>
+<thead><tr><th>Неделя</th><th>Занятие 1</th><th>Занятие 2</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Начальные пробы: диктант, списывание, свой рассказ</td><td>Границы предложений: большая буква и точка</td></tr>
+<tr><td>2</td><td>Одна выбранная буква и семейство слов («шёл — пришёл — ушёл»)</td><td>Применение в предложениях, промежуточная проба</td></tr>
+<tr><td>3</td><td>Следующее правило — по результатам проб</td><td>Найти и исправить: сначала сам, потом с подсказкой</td></tr>
+<tr><td>4</td><td>Свой короткий рассказ: план из трёх вопросов</td><td>Итоговые пробы — те же, что в начале, плюс новые слова</td></tr>
+</tbody></table></div>
+<p style="margin-top:14px"><b>Ход одного занятия:</b> короткое воспроизведение без образца → показ взрослого с объяснением → совместная попытка → пауза → собственная запись → проверка одного выбранного пункта.</p>
+<p><b>Смысл отдельно от орфографии.</b> Рассказ оценивают по тому, понятна ли мысль, есть ли событие, действие и результат. Ошибки не должны превращаться в препятствие для того, чтобы ребёнок вообще писал.</p>
+</section>
+
+<section class="card" aria-labelledby="limits">
+<h2 id="limits">Границы: чего этот материал не делает</h2>
+<ul>
+<li>Это не стандартизованный тест и не клинический протокол коррекции дисграфии. Эффективность именно такого плана из 8 занятий отдельно не испытывалась.</li>
+<li>По одной работе или фотографии нельзя установить дисграфию, особенности внимания или «зрелость мозга». Обзор Чанга, Пателя и Низами (2020) подчёркивает: письменную речь оценивают по многим заданиям и ситуациям.</li>
+<li>Если письмо вызывает боль или стойкий дискомфорт, занятие останавливают и обсуждают это со специалистом. Ведущую руку и захват ради внешнего сходства с образцом не меняют.</li>
+<li>Нейропсихологическую или логопедическую программу выбирают по результатам очной оценки, а не по статье в интернете.</li>
+</ul>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ol class="sources">
+<li>Santangelo T., Graham S. A Comprehensive Meta-analysis of Handwriting Instruction. <i>Educational Psychology Review</i>, 2016. <small>link.springer.com/article/10.1007/s10648-015-9335-1</small></li>
+<li>Jones A. C. et al. Beyond the Rainbow: Retrieval Practice Leads to Better Spelling than does Rainbow Writing. <i>Educational Psychology Review</i>, 2016. <small>link.springer.com/article/10.1007/s10648-015-9330-6</small></li>
+<li>Tiffin-Richards S. P., Lenhart J., Marx P. Children’s metacognitive awareness and self-correction of their own spelling mistakes. <i>Metacognition and Learning</i>, 2026. <small>link.springer.com/article/10.1007/s11409-026-09491-z</small></li>
+<li>Fernandez J., Guilbert J. Self-regulated strategy development’s effectiveness: underlying cognitive and metacognitive mechanisms. <i>Metacognition and Learning</i>, 2024. <small>link.springer.com/article/10.1007/s11409-024-09398-7</small></li>
+<li>Vardy E. J., Vernon M., Wilkinson M. The relationship between spelling ability, motivation and self-efficacy. <i>Reading and Writing</i>, 2026. <small>link.springer.com/article/10.1007/s11145-026-10868-4</small></li>
+<li>Colenbrander D. et al. The Effects of Morphological Instruction on Literacy Outcomes for Children in English-Speaking Countries: A Systematic Review and Meta-Analysis. <i>Educational Psychology Review</i>, 2024. <small>link.springer.com/article/10.1007/s10648-024-09953-3</small></li>
+<li>Petersen-Brown S., Kromminga K. R. Systematic review and meta-analysis of the implementation and effectiveness of spelling instruction and intervention. <i>Psychology in the Schools</i>, 2024. <small>onlinelibrary.wiley.com/doi/10.1002/pits.23223</small></li>
+<li>Chung P. J., Patel D. R., Nizami I. Disorder of written expression and dysgraphia: definition, diagnosis, and management. <i>Translational Pediatrics</i>, 2020. <small>pmc.ncbi.nlm.nih.gov/articles/PMC7082241/</small></li>
+</ol>
+<p class="note">Ссылки собраны 20 сентября 2026 года; работы 2026 года дополнительно сверены Редакцией 24 сентября 2026 года. Пересказ — упрощённый; за точными формулировками обращайтесь к статьям.</p>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Материал вырос из исследования, которое автор Полки делал с Claude, когда составлял план занятий по письму для младшеклассника. Личные данные и детали конкретного ребёнка убраны, пример журнала вымышлен. Это не медицинская и не логопедическая консультация.</div>
+<p class="foot">Автор: Редакция Полки</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+
+</body></html>

@@ -109,7 +109,7 @@ export function SharePanel({
               disabled
               icon={<Globe />}
               title={<>Опубликовать <small className="share-soon">после проверки</small></>}
-              description="В «Интересном» после проверки редакцией Полки. Пока публикует оператор."
+              description="В «Ленте» после проверки редакцией Полки. Пока публикует оператор."
               onChange={() => undefined}
             />
           </div>
@@ -197,7 +197,7 @@ export function SharePanel({
         <p className="share-review">
           <ShieldCheck aria-hidden="true" />
           <span>
-            <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Интересное» сами; по умолчанию их видите только вы.
+            <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Ленту» сами; по умолчанию их видите только вы.
           </span>
         </p>
         <ErrorNotice error={error} />

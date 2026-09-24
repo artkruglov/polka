@@ -1,4 +1,4 @@
-// The content filter's rules over the editorial catalogue («Интересное»,
+// The content filter's rules over the editorial catalogue («Лента»,
 // content/editorial): Полка publishes these itself, so the operator answers
 // for them as a publisher (docs/EDITORIAL_CHECKLIST.md). Reads files only; no
 // database, no network, no model.

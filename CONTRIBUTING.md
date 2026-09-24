@@ -33,7 +33,7 @@ npm test               # временные БД и bucket, после прог�
 npm test -- --live     # файлы из tests/live-suite.json с включённым viewer
 ```
 
-`npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Интересного». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
+`npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Ленты». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
 
 Облачного CI у репозитория нет: перед pull request запустите `npm run verify`. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов.
 

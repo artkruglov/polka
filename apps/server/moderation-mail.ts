@@ -245,7 +245,7 @@ function compose(
               : "приостановлена",
     ],
   ];
-  if (facts.editorial) rows.push(["Каталог", "это материал «Интересного»"]);
+  if (facts.editorial) rows.push(["Каталог", "это материал «Ленты»"]);
   const links = (
     [...(csam ? [] : ["preview"]), ...letter.actions] as ModerationAction[]
   ).map((action) => [ACTION_LABEL[action], moderationUrl(action, notice.shareId)]);

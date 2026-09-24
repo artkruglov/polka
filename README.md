@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://polochka.app"><b>polochka.app</b></a> ·
-  <a href="https://polochka.app/discover">Интересное</a> ·
+  <a href="https://polochka.app/discover">Лента</a> ·
   <a href="docs/README.md">Документация</a> ·
   <a href="https://polochka.app/enterprise">Для компаний</a> ·
   <a href="README_EN.md">English</a>
@@ -86,7 +86,7 @@
     <td width="50%"><img src="docs/screenshots/agents.png" alt="Страница «Агенты»: подключить агента одной фразой, без токена"><br><sub><b>Агенты.</b> Одна фраза или одна команда; все подключения видны и отзываются.</sub></td>
   </tr>
   <tr>
-    <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="Каталог «Интересное»"></a><br><sub><b>Интересное.</b> Интерактивные материалы Редакции Полки.</sub></td>
+    <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="Лента"></a><br><sub><b>Лента.</b> Интерактивные материалы Редакции Полки.</sub></td>
     <td><a href="https://polochka.app/pricing"><img src="docs/screenshots/pricing.png" alt="Страница «Для компаний»: облако, своя установка, коммерческая лицензия"></a><br><sub><b>Для компаний.</b> Облако, своя установка или коммерческая лицензия.</sub></td>
   </tr>
 </table>
