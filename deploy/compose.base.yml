@@ -27,6 +27,11 @@ x-runtime-env: &runtime-env
   HTML_LIVE_MODE: ${HTML_LIVE_MODE:-disabled}
   URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
   GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  # Rendered snapshots of allowlisted SPA hosts; the renderer service below
+  # (--profile renderer) or a separate VM (deploy/renderer/README.md).
+  RENDERED_IMPORT_ENABLED: ${RENDERED_IMPORT_ENABLED:-false}
+  RENDERER_URL: ${RENDERER_URL:-}
+  RENDERER_SECRET: ${RENDERER_SECRET:-}
   ACCOUNT_DELETION_ENABLED: "false"
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
   MAIL_MODE: "disabled"
@@ -99,6 +104,7 @@ services:
     environment:
       <<: *runtime-env
       HOST: 0.0.0.0
+    networks: [default, render]
     # Loopback only: your reverse proxy terminates TLS and forwards here.
     ports:
       - "127.0.0.1:${APP_PORT:-4390}:4390"
@@ -145,3 +151,39 @@ services:
         limits:
           cpus: "1.0"
           memory: 768M
+
+  # Headless renderer (opt-in: docker compose --profile renderer up -d). On its
+  # own network: no route to the app's database or storage; the app reaches it
+  # as http://renderer:4395 through the shared «render» network only.
+  renderer:
+    profiles: ["renderer"]
+    build:
+      context: ..
+      dockerfile: apps/renderer/Dockerfile
+    image: polka-renderer:local
+    restart: unless-stopped
+    environment:
+      RENDERER_SECRET: ${RENDERER_SECRET:-}
+    networks: [render, egress]
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,size=256m"]
+    shm_size: 256m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+          pids: 256
+
+networks:
+  default: {}
+  # App ↔ renderer only, no outside route; the renderer reaches the internet
+  # through «egress», which the app is not on.
+  render: {internal: true}
+  egress: {}

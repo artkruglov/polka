@@ -1,0 +1,10 @@
+{
+  "name": "polka-renderer",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "description": "Полка's isolated headless renderer for allowlisted public links (docs/specs/URL_IMPORT_SUPPORT.md).",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

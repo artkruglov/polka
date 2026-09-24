@@ -9,6 +9,7 @@
 !THIRD_PARTY_NOTICES.md
 !apps/server/**
 !apps/web/**
+!apps/renderer/**
 !packages/**
 !scripts/*.ts
 !scripts/polka-publish.mjs
