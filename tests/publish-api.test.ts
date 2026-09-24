@@ -295,10 +295,14 @@ test("rate limits apply per connection and per address", async () => {
     [sha256(`api-v1:ip:${ip}`), PUBLISH_API_LIMITS.perIp],
   );
   const other = await token(owner);
-  const byAddress = await publish(input, bearer(other.secret), ip);
-  assert.equal(byAddress.statusCode, 429);
-  assert.ok(Number(byAddress.headers["retry-after"]) > 0);
-  // Unauthenticated guesses count against the address too.
+  // Agents on hosted platforms share addresses: a valid token passes.
+  const byAddress = await publish(
+    { ...input, key: randomUUID() },
+    bearer(other.secret),
+    ip,
+  );
+  assert.ok(byAddress.statusCode < 300, byAddress.body);
+  // Unauthenticated guesses count against the address.
   assert.equal((await publish(input, {}, ip)).statusCode, 429);
 });
 

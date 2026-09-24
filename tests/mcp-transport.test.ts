@@ -1204,9 +1204,19 @@ test("/mcp is rate limited per address, before authentication, and per connectio
     "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
     [sha256(`mcp:ip:${ip}`), MCP_LIMITS.perIp],
   );
-  assert.equal((await post(`Bearer ${unaffected.token}`, ip)).statusCode, 429);
-  // Token guesses count against the address too.
+  // Claude.ai and ChatGPT share addresses: a valid token is not limited by
+  // the address, only token guesses are.
+  assert.equal((await post(`Bearer ${unaffected.token}`, ip)).statusCode, 200);
   assert.equal((await post("Bearer invalid", ip)).statusCode, 429);
+  const fresh = address();
+  for (let i = 0; i < 3; i++)
+    assert.equal((await post(`Bearer ${unaffected.token}`, fresh)).statusCode, 200);
+  const [{ attempts = 0 } = {}] = (
+    await db.query("SELECT attempts FROM login_limits WHERE key=$1", [
+      sha256(`mcp:ip:${fresh}`),
+    ])
+  ).rows;
+  assert.equal(attempts, 0, "authenticated requests are not counted per address");
 });
 
 test("agents read comments, patch the text, move the link and resolve threads", async () => {

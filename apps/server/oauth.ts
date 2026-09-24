@@ -256,8 +256,15 @@ const registrationSchema = z
   })
   .passthrough();
 
+/**
+ * Claude.ai and ChatGPT register from their platforms' shared addresses, so
+ * the per-address cap is generous; the daily cap bounds the table.
+ */
+export const REGISTER_LIMITS = { perIp: 300, perDay: 20_000 };
+
 export async function registerClient(body: unknown, ip: string) {
-  await limitAttempts(`oauth-register:ip:${ip}`, 20);
+  await limitAttempts(`oauth-register:ip:${ip}`, REGISTER_LIMITS.perIp);
+  await limitAttempts("oauth-register:all", REGISTER_LIMITS.perDay, "24 hours");
   const parsed = registrationSchema.safeParse(body);
   if (!parsed.success)
     throw new OAuthFailure(
@@ -947,8 +954,14 @@ export async function tokenRequest(
   authorization: string | undefined,
   ip: string,
 ) {
-  await limitAttempts(`oauth-token:ip:${ip}`, 300);
-  const client = await authenticateClient(params, authorization);
+  // Platforms exchange codes from shared addresses: only failed client
+  // authentication counts per address; a known client has its own cap.
+  const client = await authenticateClient(params, authorization).catch(
+    async (error) => {
+      await limitAttempts(`oauth-token:ip:${ip}`, 300);
+      throw error;
+    },
+  );
   await limitAttempts(`oauth-token:client:${client.client_id}`, 300);
   if (params.grant_type === "authorization_code")
     return exchangeCode(client, params);
