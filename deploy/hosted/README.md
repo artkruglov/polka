@@ -279,7 +279,15 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 
 # доверять автору без ссылки под рукой
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts trust <логин|почта>
+
+# ссылки, которые ждут только модель (image-unchecked; при SHARE_MODERATION=auto ещё new-account,
+# задержанные до перехода на auto): что будет сделано, без изменений
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck --dry-run
+# то же всерьёз: непроверенные версии отправляются модели, проверенные решаются сразу
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck
 ```
+
+Ссылка с причиной `image-unchecked` ждёт модель, а не вас: когда модель проверила версию и ничего не нашла, ссылка открывается сама (в журнале `share.released`, письма нет); если нашла — причина меняется на найденное и приходит письмо. Письмо о такой ссылке при её создании можно не разбирать. `recheck` печатает по строке на ссылку (`released`, `held` с новой причиной, `blocked`, `kept` — ждёт дальше) и итог. Модель не настроена или бюджет исчерпан — изображения ждут, а старые `new-account` без изображений при `auto` открываются. Команду стоит запустить один раз после перехода на `SHARE_MODERATION=auto` и после простоя моделей; она безопасна при повторе.
 
 Жалобы, закрытие ссылки и блокировка:
 

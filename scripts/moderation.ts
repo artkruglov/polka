@@ -21,6 +21,7 @@
 //   npm run moderation:purge-artifact -- <id> [--reason "…"]
 //   npm run moderation:events [-- <id>]
 //   npm run moderation:sweep
+//   npm run moderation:recheck [-- --dry-run]
 import { parseArgs } from "node:util";
 import { db } from "../apps/server/db.ts";
 import {
@@ -73,7 +74,8 @@ const USAGE = `Usage:
   moderation.ts handed-over <id> [--reason "…"]
   moderation.ts purge-artifact <id> [--reason "…"]
   moderation.ts events [<id>]
-  moderation.ts sweep`;
+  moderation.ts sweep
+  moderation.ts recheck [--dry-run]`;
 
 const CATEGORY = new Set([
   "csam", "extremism_terror", "drugs", "weapons_explosives", "doxxing", "porn",
@@ -98,6 +100,7 @@ try {
       category: { type: "string" },
       disable: { type: "boolean" },
       "legal-hold": { type: "boolean" },
+      "dry-run": { type: "boolean" },
     },
   });
   const [command, target, ...extra] = positionals;
@@ -169,7 +172,12 @@ try {
     console.log(await purgeArtifactNow(one(), values.reason ?? ""));
   else if (command === "events" && extra.length === 0)
     console.log(formatEvents(await listEvents(target)));
-  else if (command === "sweep" && !target) {
+  else if (command === "recheck" && !target) {
+    const { recheckHeldShares, formatRecheck } = await import(
+      "../apps/server/shares.ts"
+    );
+    console.log(formatRecheck(await recheckHeldShares(values["dry-run"] === true)));
+  } else if (command === "sweep" && !target) {
     const { sweepBlocks, retryUnchecked, reviewsSettled } = await import(
       "../apps/server/content-moderation.ts"
     );
