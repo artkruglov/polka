@@ -11,7 +11,7 @@ import {
 } from "./analytics.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
-import { registerUrlImports } from "./url-import/routes.ts";
+import { importSources, registerUrlImports } from "./url-import/routes.ts";
 import { beginEmailLogin, verifyEmailLogin } from "./email-auth.ts";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
@@ -281,6 +281,7 @@ export async function createApp() {
     liveProfile: config.HTML_LIVE_ENABLED ? LIVE_HTML_PROFILE : null,
     // Mirrors /api/imports/capabilities: when disabled, links are only recognised in the browser.
     urlImport: config.URL_IMPORT_ENABLED,
+    urlImportSources: config.URL_IMPORT_ENABLED ? importSources() : [],
     htmlView: "static-sandbox",
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,

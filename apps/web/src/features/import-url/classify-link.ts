@@ -1,6 +1,12 @@
 import type { ImportStatus } from "../../../../../packages/contracts/index.ts";
+import {
+  matchLink,
+  type LinkProvider,
+  type LinkProviderId,
+  type LinkRoute,
+} from "../../../../../packages/contracts/link-providers.ts";
 
-export type ImportSource = "claude" | "chatgpt" | "html" | "zip" | null;
+export type ImportSource = LinkProviderId | "html" | "zip" | null;
 
 export type ImportClassification = {
   status: ImportStatus;
@@ -9,18 +15,28 @@ export type ImportClassification = {
   host: string | null;
   title: string;
   explain: string;
+  /** The service from the provider table (packages/contracts/link-providers.ts). */
+  provider: LinkProvider | null;
+  route: LinkRoute | null;
 };
 
-// Client-only recognition of a pasted link. Nothing is fetched: used when server import is off,
-// and for Claude/ChatGPT links that no server can fetch. The next step is always a file.
+// Client-only recognition of a pasted link. Nothing is fetched: used when server
+// import is off, and for links of services the server never opens. The routes
+// come from the same provider table the server uses.
 const FILE_NEXT = "Импорт по ссылке ещё не подключён: сохраните страницу файлом.";
 
-export function classify(input: string): ImportClassification {
+/**
+ * @param sources what this installation's server import copies
+ *   (/api/capabilities urlImportSources); empty when import is off.
+ */
+export function classify(input: string, sources: readonly string[] = []): ImportClassification {
+  const base = { provider: null, route: null } as const;
   let url: URL;
   try {
     url = new URL(input.trim());
   } catch {
     return {
+      ...base,
       status: "not_https",
       source: null,
       host: null,
@@ -29,37 +45,64 @@ export function classify(input: string): ImportClassification {
     };
   }
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
-  if (url.protocol !== "https:")
+  const match = matchLink(url);
+  if (!match)
     return {
+      ...base,
       status: "not_https",
       source: null,
       host,
       title: "Нужна ссылка https://",
       explain: `Полка принимает только защищённые адреса. ${FILE_NEXT}`,
     };
+  const { provider, route } = match;
   const path = url.pathname.toLowerCase();
-  // Artifacts shared from Claude/ChatGPT open only inside the provider's app and
-  // answer servers with a bot-protection page, so Полка cannot fetch a copy.
-  const provider = providerArtifact(host, path);
-  if (provider)
-    return {
-      status: "provider",
-      source: provider,
-      host,
-      title: provider === "claude" ? "Артефакт Claude" : "Артефакт ChatGPT",
-      explain: `${provider === "claude" ? "Claude" : "ChatGPT"} показывает такую ссылку только в своём приложении, а на запросы сервера отвечает защитной страницей, поэтому Полка не может сама забрать копию. Скачайте артефакт в чате (меню ⋯ → Download) и перетащите файл сюда — ссылка будет готова сразу.`,
-    };
   const loginPath = /(^|\/)(login|signin|sign-in|auth|oauth)(\/|$)/.test(path);
-  if (loginPath || (sourceOf(host) && !isPublic(host, path)))
+  if (loginPath || match.closed)
     return {
+      provider,
+      route,
       status: "closed",
-      source: sourceOf(host),
+      source: provider?.id ?? null,
       host,
       title: "Ссылка похожа на закрытую",
       explain: `Такая страница открывается только после входа, и Полка её не обходит. Скачайте артефакт из чата как HTML. ${FILE_NEXT}`,
     };
+  if (provider && route === "extension")
+    return {
+      provider,
+      route,
+      status: "provider",
+      source: provider.id,
+      host,
+      title: provider.title(url.pathname, host),
+      explain: `${provider.name} запрещает автоматическое извлечение, поэтому сервер Полки такие ссылки не открывает. Сохраните её из своего браузера расширением, попросите агента или загрузите скачанный файл — ссылка будет готова сразу.`,
+    };
+  if (provider && route === "server-api" && sources.includes("github-gist"))
+    return {
+      provider,
+      route,
+      status: "ready",
+      source: provider.id,
+      host,
+      title: "GitHub Gist",
+      explain: "Полка прочитает gist через официальный API GitHub и сохранит копию.",
+    };
+  if (provider && route === "server-render" && sources.includes("rendered-spa"))
+    return {
+      provider,
+      route,
+      status: "ready",
+      source: provider.id,
+      host,
+      title: `Сайт на ${provider.name}`,
+      explain:
+        "Полка откроет страницу в изолированном браузере и сохранит снимок: интерактив может не работать.",
+    };
   if (/\.html?$/.test(path))
     return {
+      provider,
+      route,
       status: "ready",
       source: "html",
       host,
@@ -68,6 +111,8 @@ export function classify(input: string): ImportClassification {
     };
   if (/\.zip$/.test(path))
     return {
+      provider,
+      route,
       status: "unsupported_host",
       source: "zip",
       host,
@@ -75,27 +120,14 @@ export function classify(input: string): ImportClassification {
       explain: "Архивы эта сборка не принимает. Сохраните из архива один HTML-файл без внешних ресурсов и загрузите его.",
     };
   return {
+    provider,
+    route,
     status: "unsupported_host",
-    source: null,
+    source: provider?.id ?? null,
     host,
-    title: "Этот сайт не распознан",
-    explain: `Узнаём ссылки на артефакты Claude и ChatGPT и прямые ссылки на HTML. ${FILE_NEXT}`,
+    title: provider ? `Сайт на ${provider.name}` : "Этот сайт не распознан",
+    explain: provider
+      ? `Эта установка пока не сохраняет такие страницы сама. ${FILE_NEXT}`
+      : `Узнаём ссылки на артефакты AI-сервисов и прямые ссылки на HTML. ${FILE_NEXT}`,
   };
-}
-
-function providerArtifact(host: string, path: string): ImportSource {
-  if (host === "claude.site" || host.endsWith(".claude.site")) return "claude";
-  if (host === "claude.ai" && /^\/(artifact|public\/artifacts)\/[^/]+/.test(path))
-    return "claude";
-  if ((host === "chatgpt.com" || host === "chat.openai.com") && /^\/(share|canvas\/shared)\/[^/]+/.test(path))
-    return "chatgpt";
-  return null;
-}
-
-function sourceOf(host: string): ImportSource {
-  return host === "claude.ai" ? "claude" : host === "chatgpt.com" || host === "chat.openai.com" ? "chatgpt" : null;
-}
-
-function isPublic(host: string, path: string) {
-  return providerArtifact(host, path) !== null;
 }

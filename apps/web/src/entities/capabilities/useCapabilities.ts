@@ -9,6 +9,8 @@ export type InstallationCapabilities = {
   emailSignup: "open" | "invite";
   /** Server-side import of public HTML pages by URL. */
   urlImport: boolean;
+  /** What that import copies: standalone-html, github-gist, rendered-spa (the renderer is on). */
+  urlImportSources: string[];
   /** Isolated interactive view of supported pages. */
   livePreview: boolean;
   /** This installation's source code (AGPL-3.0 § 13); a fork sets its own. */
@@ -55,6 +57,9 @@ export function loadCapabilities() {
         emailLogin,
         emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
         urlImport: raw.urlImport === true,
+        urlImportSources: Array.isArray(raw.urlImportSources)
+          ? raw.urlImportSources.filter((x): x is string => typeof x === "string")
+          : [],
         livePreview: raw.liveExperimental === true,
         sourceUrl: httpsUrl(raw.sourceUrl) ?? SOURCE_URL,
         signInProviders: Array.isArray(raw.signInProviders)

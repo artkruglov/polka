@@ -1,14 +1,21 @@
-import React from "react";
-import { ClipboardPaste, FileUp } from "lucide-react";
+import React, { useState } from "react";
+import { Bot, ClipboardPaste, FileUp, Puzzle } from "lucide-react";
 import { Button } from "../../shared/ui/controls.tsx";
+import { CopyButton } from "../../shared/ui/CopyText.tsx";
+import { ServiceMark } from "../../shared/ui/ServiceMark.tsx";
 import type { ImportClassification } from "./classify-link.ts";
 import { importableArtifact } from "../../../../../packages/contracts/extension-bridge.ts";
 import { ExtensionSave } from "./extension-save.tsx";
 
+/** What the user copies to their agent; the agent asks them for the artifact's code. */
+export const agentPhrase = (url: string) => `Сохрани на Полку артефакт по ссылке ${url}`;
+
 /**
- * Claude/ChatGPT artifacts cannot be fetched by Полка, so the pasted link turns
- * into the shortest real path: download in the chat, drop the file right here,
- * or copy the artifact's code and paste it (both composed by the page).
+ * A link of a service whose terms forbid automated extraction (Claude,
+ * ChatGPT, v0, Perplexity, AI Studio): Полка's server never opens it. The card
+ * offers the ways that work from the user's side: the «На Полку» extension in
+ * their own browser, their agent over MCP, a downloaded file, or (composed by
+ * the page) keeping the link itself as a bookmark.
  */
 export function ProviderGuide({
   result,
@@ -16,6 +23,7 @@ export function ProviderGuide({
   autoStart = false,
   fileSave,
   pasteCode,
+  saveLink,
   onFile,
 }: {
   result: ImportClassification;
@@ -24,36 +32,66 @@ export function ProviderGuide({
   autoStart?: boolean;
   fileSave?: React.ReactNode;
   pasteCode?: React.ReactNode;
+  /** «Сохранить как ссылку», composed by the page. */
+  saveLink?: React.ReactNode;
   onFile: () => void;
 }) {
-  const app = result.source === "chatgpt" ? "ChatGPT" : "Claude";
+  const app = result.provider?.name ?? "сервисе";
   const artifact = url ? importableArtifact(url) : null;
+  const [file, setFile] = useState(false);
   return (
-    <>
-      {artifact && <ExtensionSave url={artifact.url} autoStart={autoStart} />}
-      <div
-        className="url-import-result"
-        role="status"
-        data-import-status={result.status}
-      >
-        <strong>{result.title}</strong>
-        {result.host && <small>{result.host}</small>}
-        <p>{result.explain}</p>
-        <ol className="url-import-steps">
-          <li>Откройте артефакт в {app}.</li>
-          <li>В меню ⋯ выберите Download и сохраните файл.</li>
-          <li>Перетащите файл ниже — Полка сохранит копию и даст ссылку.</li>
-        </ol>
+    <div className="url-import-provider" data-import-status={result.status}>
+      <div className="url-import-provider-head" role="status">
+        <ServiceMark provider={result.provider} />
+        <div>
+          <strong>{result.title}</strong>
+          {result.host && <small>{result.host}</small>}
+        </div>
       </div>
-      {fileSave ? (
-        <div className="url-import-file">{fileSave}</div>
-      ) : (
-        <div className="bring-actions">
-          <Button variant="primary" onClick={onFile}>
-            <FileUp /> Загрузить скачанный файл
+      <p className="url-import-provider-explain">{result.explain}</p>
+      <div className="url-import-actions">
+        {artifact ? (
+          <ExtensionSave url={artifact.url} autoStart={autoStart} />
+        ) : (
+          <div className="url-import-action" data-extension="unsupported">
+            <Puzzle aria-hidden="true" />
+            <div>
+              <strong>Расширение «На Полку»</strong>
+              <p>Пока сохраняет артефакты Claude и ChatGPT; для {app} используйте агента или файл.</p>
+            </div>
+          </div>
+        )}
+        {url && (
+          <div className="url-import-action" data-action="agent">
+            <Bot aria-hidden="true" />
+            <div>
+              <strong>Попросить агента</strong>
+              <p>
+                Отправьте эту фразу агенту с подключённой Полкой — он попросит
+                вставить код артефакта и сохранит его.{" "}
+                <a href="/settings/agents">Подключить агента</a>
+              </p>
+              <code className="url-import-phrase">{agentPhrase(url)}</code>
+            </div>
+            <CopyButton value={agentPhrase(url)} label="Скопировать фразу" />
+          </div>
+        )}
+        <div className="url-import-action" data-action="file">
+          <FileUp aria-hidden="true" />
+          <div>
+            <strong>Загрузить файл</strong>
+            <p>
+              В {app} откройте артефакт, в меню ⋯ выберите Download и загрузите
+              скачанный файл сюда.
+            </p>
+          </div>
+          <Button onClick={() => (fileSave ? setFile((open) => !open) : onFile())} aria-expanded={fileSave ? file : undefined}>
+            Загрузить файл
           </Button>
         </div>
-      )}
+        {file && fileSave && <div className="url-import-file">{fileSave}</div>}
+        {saveLink}
+      </div>
       {pasteCode && (
         <details className="url-import-paste">
           <summary>
@@ -67,10 +105,6 @@ export function ProviderGuide({
           {pasteCode}
         </details>
       )}
-      <p className="url-import-agent">
-        Агент может сохранить работу сам:{" "}
-        <a href="/settings/agents">подключите Claude Code или Codex</a>.
-      </p>
-    </>
+    </div>
   );
 }

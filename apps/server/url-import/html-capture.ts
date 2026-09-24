@@ -5,6 +5,7 @@ import {canonicalizeManifest} from '../../../packages/contracts/bundle.ts';
 import {MAX_BYTES,MAX_TITLE} from '../../../packages/contracts/index.ts';
 import {checkBuildInWorker} from '../bundle-derivatives.ts';
 import {cdnRole} from '../react-runtime.ts';
+import {matchLink} from '../../../packages/contracts/link-providers.ts';
 import {fetchPublic,publicUrl,type PublicResponse} from './public-fetch.ts';
 
 export type Fetcher=(url:string,options:{maxBytes:number;signal:AbortSignal})=>Promise<PublicResponse>;
@@ -20,10 +21,10 @@ const extensions:Record<string,string>={'text/html':'html','text/css':'css','tex
 export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{fetcher?:Fetcher;signal?:AbortSignal}={}) {
  const timeout=AbortSignal.timeout(45_000);const abort=signal?AbortSignal.any([signal,timeout]):timeout;
  const sourceUrl=publicUrl(input);
- if(['claude.ai','chatgpt.com','chat.openai.com'].includes(sourceUrl.hostname.replace(/^www\./,'')))throw new HtmlCaptureError('provider_adapter_required','Для этой ссылки нужен адаптер извлечения артефакта. Оболочка чата не будет сохранена вместо результата.');
+ if(matchLink(sourceUrl)?.route==='extension')throw new HtmlCaptureError('provider_adapter_required','Этот сервис запрещает автоматическое извлечение: Полка не открывает такие ссылки сервером. Сохраните расширением «На Полку», через агента или файлом.');
  const main=await fetcher(sourceUrl.href,{maxBytes:MAX_BYTES,signal:abort});
  if(!/^text\/html(?:;|$)/i.test(main.contentType))throw new HtmlCaptureError('unsupported_type','Ожидалась HTML-страница.');
- if(['claude.ai','chatgpt.com','chat.openai.com'].includes(new URL(main.url).hostname.replace(/^www\./,'')))throw new HtmlCaptureError('provider_adapter_required','Источник перенаправил на провайдерскую оболочку, нужен отдельный адаптер.');
+ if(matchLink(main.url)?.route==='extension')throw new HtmlCaptureError('provider_adapter_required','Источник перенаправил на сервис, который Полка не открывает сервером.');
  return captureHtmlDocument(main,{fetcher,signal:abort});
 }
 export type CaptureOptions={fetcher?:Fetcher;signal?:AbortSignal;
