@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 33 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 33);
+test("migration catalog is the complete contiguous schema 34 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 34);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -47,6 +47,26 @@ test("account identities are unique per provider subject and erased with a delet
   assert.match(sql, /'template_library\.domain_joined'/);
   // No function body of the purge is redefined: 031 may redefine it.
   assert.doesNotMatch(sql, /terminal_erase_account_metadata\s*\(/);
+});
+
+test("product analytics stores keys, not identities, and counts a link once a day", async () => {
+  const sql = await readFile(
+    migrationFileUrl("034_product_analytics.sql"),
+    "utf8",
+  );
+  assert.match(sql, /CREATE TABLE analytics_events/);
+  assert.match(sql, /actor text CHECK \(actor ~ '\^\[A-Za-z0-9_-\]\{43\}\$'\)/);
+  assert.match(
+    sql,
+    /CREATE UNIQUE INDEX analytics_share_opened_daily ON analytics_events\(subject, day\)\s+WHERE name='share_opened'/,
+  );
+  assert.match(sql, /CREATE TABLE analytics_daily/);
+  assert.match(sql, /CREATE TABLE analytics_optouts/);
+  // No column may hold an account, an address or a request.
+  assert.doesNotMatch(
+    sql.replace(/^--.*$/gm, ""),
+    /account_id|email|\bip\b|user_agent|referer|url\b/i,
+  );
 });
 
 test("only a single-file HTML bundle may carry a static profile", async () => {
