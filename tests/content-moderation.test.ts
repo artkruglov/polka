@@ -22,7 +22,12 @@ import {
   reviewsSettled,
 } from "../apps/server/content-moderation.ts";
 import {
+  budgetLeft,
+  resetBudget,
+  setBudgetClock,
   setContentModels,
+  spend,
+  spentToday,
   type ModelAnswer,
   type ModelClient,
 } from "../apps/server/content-filter/model.ts";
@@ -49,7 +54,7 @@ if (config.MAIL_MODE !== "local")
 const defaults = { ...config };
 config.OPERATOR_EMAIL = "operator@example.test";
 
-afterEach(() => {
+afterEach(async () => {
   for (const key of [
     "SHARE_MODERATION",
     "CONTENT_FILTER_MODE",
@@ -65,6 +70,8 @@ afterEach(() => {
   resetRetention();
   setContentModels(undefined);
   setCodeReviewer(undefined);
+  setBudgetClock(undefined);
+  await resetBudget();
 });
 
 after(async () => {
@@ -477,6 +484,29 @@ test("models: a rate-limited primary (429) goes to the fallback at once and uses
   assert.equal(flatCalls, 1);
 });
 
+test("models: the daily budget is kept in the database, survives a restart and resets at 00:00 UTC", async () => {
+  config.CONTENT_MODEL_DAILY_BUDGET_RUB = 10;
+  const late = Date.parse("2030-03-01T23:59:00Z");
+  setBudgetClock(() => late);
+  assert.equal(await spend(6), false);
+  assert.equal(await spend(4.5), true); // the call that used it up: one letter
+  assert.equal(await spend(1), false); // no second letter the same day
+  assert.equal(await spentToday(), 11.5);
+  assert.equal(await budgetLeft(), false);
+  // A restart: a fresh copy of the module has no memory of its own, and the
+  // day's spend is still there.
+  const restarted = await import(`../apps/server/content-filter/model.ts?restart=${randomUUID()}`);
+  restarted.setBudgetClock(() => late);
+  assert.equal(await restarted.spentToday(), 11.5);
+  assert.equal(await restarted.budgetLeft(), false);
+  // Two minutes later it is a new UTC day.
+  setBudgetClock(() => late + 2 * 60_000);
+  assert.equal(await spentToday(), 0);
+  assert.equal(await budgetLeft(), true);
+  const { reset_at } = await row("SELECT reset_at FROM login_limits WHERE key=$1", ["content-model-budget:2030-03-01"]);
+  assert.equal(new Date(reset_at).toISOString(), "2030-03-02T00:00:00.000Z");
+});
+
 test("models with autoblock: both agreeing on a severe category block; the budget stops the calls", async () => {
   config.CONTENT_FILTER_AUTOBLOCK = true;
   const agree = fakeModel("m", (text) => (text.includes("СИГНАЛ-Д") ? "extremism_terror" : "none"));
@@ -495,6 +525,7 @@ test("models with autoblock: both agreeing on a severe category block; the budge
   assert.equal((await row("SELECT moderation FROM shares WHERE id=$1", [later.shareId])).moderation, "blocked");
   // Out of budget: one letter, then rules only.
   config.CONTENT_MODEL_DAILY_BUDGET_RUB = 0.5;
+  await resetBudget();
   setContentModels({ primary: agree, fallback: agree });
   await save(owner, page("<p>Первый текст.</p>"));
   await reviewsSettled();

@@ -77,7 +77,7 @@ polochka.app раздаёт по ссылкам то, что выложили п
 | `CONTENT_MODEL_ND_ALLOWED` | модели NeuralDeep, которые он запускает на своём оборудовании в России; с другим именем приложение не запускается | список по умолчанию в `config.ts` |
 | `CONTENT_MODEL_*_OPTIONS` | поля запроса модели (JSON): отключить «размышления», уровень рассуждения | см. `hosted.env.example` |
 | `CONTENT_MODEL_PRICES_RUB` | цены за 1000 токенов для учёта бюджета; `neuraldeep:<модель>=…` — цена только у этого провайдера | см. `hosted.env.example` |
-| `CONTENT_MODEL_DAILY_BUDGET_RUB` | бюджет в сутки | 500 |
+| `CONTENT_MODEL_DAILY_BUDGET_RUB` | бюджет в сутки (сутки по UTC, с 00:00 UTC; расход хранится в базе, в `login_limits`, и переживает перезапуск) | 500 |
 | `CONTENT_MODEL_IMAGES` | отправлять изображения основной модели | `true` |
 | `CONTENT_VISION_MODERATION` | Yandex Vision `moderation` (adult, gruesome) как доп. сигнал | `false` |
 

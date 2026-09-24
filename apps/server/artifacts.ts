@@ -14,7 +14,7 @@ import {
   type BundleExport,
   type BundleManifest,
 } from "../../packages/contracts/bundle.ts";
-import { db, transaction } from "./db.ts";
+import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
@@ -34,6 +34,7 @@ import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
   blockRevisionInTransaction,
   blockedHash,
+  queueReview,
 } from "./content-moderation.ts";
 import {
   createSingleHtmlRevisionManifest,
@@ -459,11 +460,7 @@ async function screenSavedRevision(
         fraud: false,
       });
   // The models read it after this save commits; the save never waits.
-  const { afterCommit } = await import("./db.ts");
-  afterCommit(c, async () => {
-    const { queueReview } = await import("./content-moderation.ts");
-    queueReview(saved.revisionId);
-  });
+  afterCommit(c, () => queueReview(saved.revisionId));
   const category = known ?? (decision?.action === "block" ? decision.category : null);
   if (!category) return;
   const freeze = known
