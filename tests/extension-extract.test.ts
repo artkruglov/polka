@@ -195,10 +195,16 @@ before(async () => {
         import { inspectPage } from "./extract/page.ts";
         import { extractFrame } from "./extract/frame.ts";
         import { cleanArtifactDocument } from "./extract/dom.ts";
+        import { findArtifactFrames, findShareButton } from "./extract/dom.ts";
         import { captureCopy } from "./extract/copy-capture.ts";
+        import { captureDownload } from "./extract/download-capture.ts";
         // As chrome.scripting ships a func: its source text, rebuilt in the page.
         const captureSource = captureCopy.toString();
-        globalThis.__test = { inspectPage, extractFrame, cleanArtifactDocument, captureSource };`,
+        const downloadSource = captureDownload.toString();
+        globalThis.__test = {
+          inspectPage, extractFrame, cleanArtifactDocument, findArtifactFrames,
+          findShareButton, captureSource, downloadSource,
+        };`,
       resolveDir: path.resolve("extensions/chrome/src"),
       loader: "ts",
     },
@@ -294,6 +300,8 @@ test("Claude chat: the panel's title and Copy button, not the message's", { skip
   assert.equal(report.frames, 1);
   assert.equal(report.signIn, false);
   assert.match(report.copyMarker, /^[0-9a-f]{24}$/);
+  // With a Copy button there is no need to go through a menu.
+  assert.equal(report.menuMarker, null);
   assert.equal(
     await evaluate(`document.querySelector("[data-polka-copy]").id`),
     "artifact-copy",
@@ -370,4 +378,79 @@ test("a provider's sign-in page is recognised, other hosts are not read", { skip
   await open("claude-code-view.html");
   assert.equal((await evaluate(`__test.inspectPage(document, "claude.ai", "/login")`)).signIn, true);
   assert.equal((await evaluate(`__test.inspectPage(document, "example.org", "/")`)).provider, null);
+});
+
+/** The page's originals, to check the capture puts every one of them back. */
+const REMEMBER_ORIGINALS = `window.__originals = [
+  URL.createObjectURL, HTMLAnchorElement.prototype.click,
+  EventTarget.prototype.dispatchEvent, window.open,
+]`;
+const ORIGINALS_BACK = `(() => {
+  const now = [URL.createObjectURL, HTMLAnchorElement.prototype.click,
+    EventTarget.prototype.dispatchEvent, window.open];
+  return now.every((value, index) => value === window.__originals[index]);
+})()`;
+const downloadCapture = (marker: string, ms = 3000) =>
+  evaluate(
+    `new Function("return (" + __test.downloadSource + ")")()(${JSON.stringify(marker)}, ${ms})`,
+  );
+
+test("standalone artifact page: title menu → Export → Download, read and never saved", { skip }, async () => {
+  await open("claude-artifact-page.html");
+  await evaluate(REMEMBER_ORIGINALS);
+  const report = await evaluate(`__test.inspectPage(document, "claude.ai", "/artifact/0f6e1b2a")`);
+  assert.equal(report.provider, "claude");
+  assert.equal(report.title, "Трекер привычек");
+  assert.equal(report.copyMarker, null);
+  assert.equal(report.code, null);
+  // The content frame counts; the hidden 1×1 helper frame does not.
+  assert.equal(report.frames, 1);
+  assert.match(report.menuMarker, /^[0-9a-f]{24}$/);
+  assert.equal(await evaluate(`document.querySelector("[data-polka-menu]").id`), "title");
+
+  const captured = await downloadCapture(report.menuMarker);
+  assert.equal(captured.ok, true, JSON.stringify(captured));
+  assert.equal(captured.filename, "habit-tracker.html");
+  assert.equal(captured.type, "text/html");
+  assert.equal(captured.text, await evaluate("SOURCE"));
+  // No click reached the a[download], the Markdown copy was not pressed, the
+  // menu is closed, the marker is gone and the page's functions are its own.
+  assert.equal(await evaluate("window.__downloadClicks"), 0);
+  assert.equal(await evaluate("window.__markdownCopied"), false);
+  assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  assert.equal(await evaluate(`document.querySelector("[data-polka-menu]")`), null);
+  assert.equal(await evaluate(ORIGINALS_BACK), true);
+  // The page carried on after its click as usual (it revokes the URL).
+  assert.equal(await evaluate("window.__revoked"), 1);
+  // A stale marker opens nothing.
+  assert.deepEqual(await downloadCapture("nope", 200), { ok: false, reason: "no_menu" });
+});
+
+test("a Download that would fetch a server URL is stopped; the frame is next", { skip }, async () => {
+  await open("claude-artifact-page.html?server=1");
+  await evaluate(REMEMBER_ORIGINALS);
+  const report = await evaluate(`__test.inspectPage(document, "claude.ai", "/artifact/0f6e1b2a")`);
+  const captured = await downloadCapture(report.menuMarker);
+  assert.deepEqual(captured, { ok: false, reason: "navigation" });
+  assert.equal(await evaluate("window.__downloadClicks"), 0);
+  assert.equal(await evaluate("location.pathname"), "/claude-artifact-page.html");
+  assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  assert.equal(await evaluate(ORIGINALS_BACK), true);
+});
+
+test("the page button's anchor on an artifact page is the Share button", { skip }, async () => {
+  await open("claude-artifact-page.html");
+  assert.match(
+    await evaluate(`__test.findShareButton(document).getAttribute("aria-label")`),
+    /^Share, shared with anyone/,
+  );
+  // The menu path is for standalone artifact pages only, never a chat's menus.
+  assert.equal(
+    (await evaluate(`__test.inspectPage(document, "claude.ai", "/chat/1")`)).menuMarker,
+    null,
+  );
+  assert.equal(
+    await evaluate(`__test.findArtifactFrames(document).map((f) => f.title).join("|")`),
+    "User-generated artifact content",
+  );
 });

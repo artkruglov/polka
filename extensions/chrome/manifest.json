@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "На Полку",
   "short_name": "На Полку",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Сохраняет артефакты Claude и ChatGPT из вашего браузера на вашу Полку и выдаёт ссылку.",
   "minimum_chrome_version": "116",
   "icons": {
