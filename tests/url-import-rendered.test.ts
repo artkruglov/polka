@@ -222,7 +222,7 @@ test("the job shows «rendering» while the renderer works", async () => {
     await c.query("BEGIN");
     await c.query(`CREATE SCHEMA ${schema}`);
     await c.query(`SET LOCAL search_path TO ${schema},public`);
-    for (const file of ["019_url_import_jobs.sql", "036_url_import_rendering.sql"])
+    for (const file of ["019_url_import_jobs.sql", "037_url_import_rendering.sql"])
       await c.query(await readFile(new URL(`../deploy/migrations/${file}`, import.meta.url), "utf8"));
     const job = await createImportJob(c, owner, { key: randomUUID(), url: PAGE });
     const run = <T>(fn: (client: typeof c) => Promise<T>) => fn(c);
