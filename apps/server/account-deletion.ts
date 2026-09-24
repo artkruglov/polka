@@ -4,6 +4,7 @@ import { z } from "zod";
 import { audit, type Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
+import { forgetAccountLater } from "./analytics.ts";
 import { withdrawEditorialForDeletionInTransaction } from "./editorial.ts";
 import { Problem, missing } from "./errors.ts";
 import { limitAttempts } from "./auth.ts";
@@ -326,6 +327,9 @@ export async function confirmAccountDeletion(
       )
     ).rows[0];
     await c.query("DELETE FROM sessions WHERE account_id=$1", [actor.id]);
+    // The account's usage events go with the request; maintenance repeats
+    // this for every deleted account (analytics.ts, maintenance-cleanup.ts).
+    forgetAccountLater(c, actor.id);
     return receipt(updated);
   });
 }

@@ -4,6 +4,7 @@ import type { FastifyRequest } from "fastify";
 import { db, transaction } from "./db.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
+import { markActive, trackSignup } from "./analytics.ts";
 const derive = promisify(scrypt);
 export async function passwordHash(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -32,6 +33,7 @@ export async function createAccount(name: string, password: string) {
       tenant,
       id,
     ]);
+    trackSignup(c, id, "password");
     return { id, name, tenant };
   });
 }
@@ -120,5 +122,7 @@ export async function identity(req: FastifyRequest) {
       "unauthorized",
       "Войдите, чтобы открыть свою полку.",
     );
+  // Returning activity for retention: one row per account and day.
+  markActive(actor.id);
   return actor as { id: string; name: string; tenant: string };
 }

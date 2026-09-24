@@ -1,3 +1,4 @@
+import { oauthClientKind, trackAgentConnected } from "./analytics.ts";
 import {
   createHash,
   randomBytes,
@@ -772,6 +773,23 @@ async function exchangeCode(
     await c.query(
       "UPDATE oauth_authorizations SET connection_id=$2 WHERE id=$1",
       [row.id, connectionId],
+    );
+    // Analytics: an agent connected (a new grant; re-authorising counts
+    // again, the report counts accounts). `first`: no earlier connection
+    // of this account ever worked.
+    const {
+      rows: [earlier],
+    } = await c.query(
+      `SELECT EXISTS(SELECT 1 FROM agent_connections
+         WHERE tenant_id=$1 AND id<>$2
+           AND (oauth_client_id IS NOT NULL OR last_seen_at IS NOT NULL)) AS found`,
+      [row.tenant_id, connectionId],
+    );
+    trackAgentConnected(
+      c,
+      row.account_id,
+      oauthClientKind(client.client_name, client.redirect_uris),
+      !earlier.found,
     );
     await c.query(
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.issued',$3)",

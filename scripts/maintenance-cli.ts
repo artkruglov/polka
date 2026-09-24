@@ -1,4 +1,5 @@
 import { config } from "../apps/server/config.ts";
+import { actorKey } from "../apps/server/analytics-keys.ts";
 import {
   createMaintenanceDatabase,
   createMaintenanceObjectStore,
@@ -65,7 +66,10 @@ export async function runMaintenanceOnce(options: {
   return runMaintenanceGuard({
     client: options.database,
     signal: options.signal,
-    run: (scope) => runMaintenanceCleanup(scope, options.storage),
+    run: (scope) =>
+      runMaintenanceCleanup(scope, options.storage, {
+        analyticsActorKey: actorKey,
+      }),
   });
 }
 

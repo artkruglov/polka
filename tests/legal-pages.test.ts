@@ -98,6 +98,21 @@ test("the texts keep the reviewed legal terms", () => {
     assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
   // Processing rests on the agreement: there is no consent to withdraw.
   assert.doesNotMatch(privacy, /отозвать согласие/);
+  // First-party usage statistics (apps/server/analytics.ts): what the policy
+  // promises is what the code does, and the old «no analytics» line is gone.
+  for (const phrase of [
+    "**Статистика использования**",
+    "без cookies, сторонних сервисов и IP-адресов",
+    "только в виде необратимого хеша",
+    "сырые события — 13 месяцев",
+    "законный интерес оператора в улучшении сервиса (п. 7 ч. 1 ст. 6 152-ФЗ)",
+    "Оператор удалит события вашего аккаунта и больше не будет их записывать",
+    "При удалении аккаунта его события удаляются тоже",
+    "не чаще раза в сутки на ссылку",
+  ])
+    assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
+  assert.doesNotMatch(privacy, /нет аналитики/);
+  assert.match(privacy, /^Редакция от 24 сентября 2026\.$/m);
   const terms = doc("terms");
   for (const phrase of [
     "публичная оферта",

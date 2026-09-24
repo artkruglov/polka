@@ -2,6 +2,7 @@ import statics from "@fastify/static";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { trackPageView } from "./analytics.ts";
 import { config } from "./config.ts";
 
 const escape = (value: string) =>
@@ -75,7 +76,11 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
   // Resolve files at request time: a rebuilt asset may not have existed at boot.
   await app.register(statics, { root, wildcard: true, index: false });
   // Otherwise the static handler would answer / with the shell as is.
-  app.get("/", (_req, reply) => shell("/", reply));
+  // Landing pages count an anonymous visitor's load (analytics.ts).
+  app.get("/", (req, reply) => {
+    trackPageView(req, "/");
+    return shell("/", reply);
+  });
   app.setNotFoundHandler(async (req, reply) => {
     const path = req.url.split("?")[0];
     if (
@@ -99,8 +104,10 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       path === "/moderation" ||
       /^\/works\/[a-f0-9-]{36}$/.test(path) ||
       /^\/discover(?:\/[a-z0-9-]+)?$/.test(path)
-    )
+    ) {
+      trackPageView(req, path);
       return shell(path, reply);
+    }
     return reply
       .code(404)
       .send({ code: "not_found", message: "Действие недоступно." });
