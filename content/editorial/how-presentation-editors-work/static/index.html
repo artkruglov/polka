@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Как устроен редактор презентаций изнутри</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.layer{min-height:96px;text-align:left;padding:14px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;font:inherit;cursor:pointer;color:var(--ink);position:relative}
+.layer b{display:block;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.layer span{font-weight:700}
+.layer[aria-pressed="true"]{border-color:var(--cool);background:#eaf2f6;box-shadow:inset 0 0 0 1px var(--cool)}
+.layer:not(:last-child)::after{content:"→";position:absolute;right:-12px;top:36px;color:var(--muted);font-weight:800}
+.panel dl{margin:0;display:grid;grid-template-columns:150px 1fr;gap:6px 14px}
+.panel dt{font-weight:700;color:var(--muted);font-size:.9rem}
+.panel dd{margin:0}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.side .tile ul{margin:6px 0 0;padding-left:18px;font-size:.95rem}
+.bad{color:var(--accent)}.good{color:var(--ok)}
+.lic{font-weight:700;white-space:nowrap}
+.lic.warn{color:var(--accent)}
+@media(max-width:700px){.pipe{grid-template-columns:1fr 1fr}.layer:nth-child(2)::after{display:none}}
+@media(max-width:540px){.pipe,.side{grid-template-columns:1fr}.layer::after{display:none}.panel dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Разбор · как устроены сервисы</div>
+<h1>Как устроен редактор презентаций изнутри</h1>
+<p class="dek">Сделать, чтобы ИИ «нарисовал слайды», — вечер работы. Сделать редактор, в котором эти слайды можно поправить руками, согласовать с коллегами и выгрузить в PowerPoint без сюрпризов, — совсем другая задача. Разбираем, из каких слоёв состоит такой продукт, что обычно ломается и что можно взять из открытого кода.</p>
+</header>
+
+<section class="card" aria-labelledby="layers">
+<h2 id="layers">Четыре слоя</h2>
+<p>Почти любой серьёзный редактор презентаций — Google Slides, Pitch, Gamma или открытые проекты — можно разложить на четыре слоя. Нажмите на слой, чтобы увидеть, что в нём хранится и где он обычно ломается.</p>
+<div class="pipe" role="group" aria-label="Слои редактора">
+<button class="layer" type="button" data-k="doc" aria-pressed="false" disabled=""><b>1</b><span>Документ</span></button>
+<button class="layer" type="button" data-k="layout" aria-pressed="false" disabled=""><b>2</b><span>Шаблон и раскладка</span></button>
+<button class="layer" type="button" data-k="render" aria-pressed="false" disabled=""><b>3</b><span>Отрисовка</span></button>
+<button class="layer" type="button" data-k="export" aria-pressed="false" disabled=""><b>4</b><span>Экспорт</span></button>
+</div>
+<div class="panel" id="panel" aria-live="polite"><h3 style="margin:14px 0 8px">Документ</h3><dl><dt>Что это</dt><dd>Типизированная модель презентации: слайды, смысловые блоки (заголовок, тезисы, график, таблица), у каждого блока — постоянный идентификатор.</dd><dt>Почему важно</dt><dd>Правки человека, агента и комментарии ссылаются на блоки по ID. Если ID нет, комментарий «поправь этот график» теряется после первой же перерисовки.</dd><dt>Где ломается</dt><dd>Когда в модели одновременно живут смысловые поля и свободные координаты. После перехода к «свободному холсту» старые поля перестают управлять видом, и становится непонятно, какая версия главная.</dd></dl><h3 style="margin:14px 0 8px">Шаблон и раскладка</h3><dl><dt>Что это</dt><dd>Правила бренда: сетка, шрифты, цвета, набор раскладок («заголовок + график», «три карточки»). Шаблон превращает смысловые блоки в геометрию.</dd><dt>Почему важно</dt><dd>Пользователь пишет смысл, а не двигает прямоугольники. Если текст не влез, шаблон выбирает запасную раскладку, а не уменьшает шрифт до нечитаемого.</dd><dt>Где ломается</dt><dd>Шаблон, который хранит готовые координаты вместо правил: любая правка текста ломает вёрстку, а обновление бренда требует переделать все старые слайды.</dd></dl><h3 style="margin:14px 0 8px">Отрисовка</h3><dl><dt>Что это</dt><dd>Показ слайда в браузере: DOM для текста, SVG для графиков и фигур. Тот же код рисует превью, миниатюры и страницу для печати в PDF.</dd><dt>Почему важно</dt><dd>Если превью и экспорт рисуют разные движки, пользователь видит одно, а получает другое. Одна отрисовка — одна правда.</dd><dt>Где ломается</dt><dd>Шрифты. Браузер и PowerPoint по-разному переносят строки и подставляют отсутствующие шрифты, поэтому заголовок «уезжает» на вторую строку только в выгрузке.</dd></dl><h3 style="margin:14px 0 8px">Экспорт</h3><dl><dt>Что это</dt><dd>Выгрузка в PDF (печать той же отрисовки в изолированном браузере) и в PPTX (отдельный адаптер, который строит настоящие объекты PowerPoint).</dd><dt>Почему важно</dt><dd>PPTX нужен тем, кто продолжит работу в PowerPoint. Там должны быть настоящие текстовые поля и графики с данными, а не картинка.</dd><dt>Где ломается</dt><dd>Графики. Проще всего нарисовать столбцы фигурами — выглядит так же, но изменить цифру в PowerPoint уже нельзя.</dd></dl></div>
+
+<p class="note">Главное правило, на котором сходятся продуктовые разборы: ИИ-агент должен пользоваться теми же командами, что и интерфейс. Тогда его правку можно отменить, прокомментировать и откатить, как правку человека.</p>
+</section>
+
+<section class="card" aria-labelledby="canvas">
+<h2 id="canvas">Почему не «всё нарисовать на canvas»</h2>
+<p>Кажется, что проще всего рисовать слайд целиком в <code>&lt;canvas&gt;</code>: полный контроль над пикселями. Но тогда всё, что браузер даёт тексту бесплатно, придётся писать самим:</p>
+<div class="grid">
+<div class="tile"><h3>Курсор и выделение</h3><p>Каретка, выделение мышью, двойной клик по слову.</p></div>
+<div class="tile"><h3>Доступность</h3><p>Экранные дикторы не прочитают картинку.</p></div>
+<div class="tile"><h3>Ввод и буфер обмена</h3><p>Раскладки, методы ввода, вставка из других программ.</p></div>
+<div class="tile"><h3>Поиск и PDF</h3><p>Поиск по тексту и векторный текст в PDF.</p></div>
+</div>
+<p style="margin-top:14px">Поэтому текст обычно остаётся в DOM, а canvas используют только для особых элементов.</p>
+</section>
+
+<section class="card" aria-labelledby="canon">
+<h2 id="canon">Что хранить «главной версией»</h2>
+<p>Самое дорогое решение в таком продукте — что считать каноническим документом. Соблазн — хранить то, что уже есть под рукой: HTML страницы, файл PPTX, спецификацию графика из библиотеки. Разборы архитектуры советуют обратное.</p>
+<div class="side">
+<div class="tile"><span class="tag">Не хранить как главное</span><ul>
+<li>сырой HTML и списки CSS-классов;</li>
+<li>XML внутри PPTX;</li>
+<li>настройки конкретной библиотеки экспорта или графиков;</li>
+<li>дерево React-компонентов;</li>
+<li>абсолютные координаты управляемого слайда;</li>
+<li>ответ модели без проверки по схеме.</li></ul></div>
+<div class="tile"><span class="tag ok">Хранить</span><ul>
+<li>свою схему документа и смысловые блоки;</li>
+<li>данные графиков как данные, с типами;</li>
+<li>постоянные ID у каждого элемента;</li>
+<li>историю ревизий и команды правки;</li>
+<li>шаблон бренда отдельным пакетом.</li></ul></div>
+</div>
+<p class="note">Библиотеки при этом можно использовать — но за своим адаптером, чтобы их формат не просочился в базу данных. Тогда замена библиотеки не превращается в миграцию всех документов.</p>
+</section>
+
+<section class="card" aria-labelledby="test">
+<h2 id="test">Живая проверка: один слайд, два инструмента</h2>
+<p>В сентябре 2026 года автор этого разбора прогнал один и тот же слайд с графиком через два открытых проекта — редактор CreatPPT и HTML-в-PPTX-конвертер Presenton — и посмотрел, что приедет в PowerPoint.</p>
+<div class="scroll"><table>
+<thead><tr><th>Что проверяли</th><th>CreatPPT</th><th>Presenton (конвертер)</th></tr></thead>
+<tbody>
+<tr><td>Правка текста и картинки, сохранение после перезагрузки</td><td class="good">работает</td><td>собственный редактор не запускался</td></tr>
+<tr><td>Правка значения на графике (20 → 25)</td><td class="bad">ошибка «число или строка»</td><td>—</td></tr>
+<tr><td>График в PPTX</td><td class="bad">данные внутри есть, но график закрыт белым объектом</td><td class="bad">столбцы стали фигурами, а не настоящим графиком</td></tr>
+<tr><td>Композиция слайда</td><td>шрифт заголовка расходится с браузером</td><td class="good">композиция сохранена лучше</td></tr>
+</tbody></table></div>
+<p style="margin-top:14px"><b>Вывод не про эти два проекта</b> (проверены конкретные версии, и это не доказывает ограничения всех их путей экспорта), а про то, что нужно в любом редакторе: <b>данные графика с типами, логические текстовые блоки и постоянные ID</b>. Без них экспорт в PowerPoint превращается в фотографию слайда, которую нельзя отредактировать.</p>
+</section>
+
+<section class="card" aria-labelledby="oss">
+<h2 id="oss">Что есть в открытом коде</h2>
+<p>Ориентиры, которые чаще всего всплывают при проектировании. Лицензии — на дату проверки, 4 сентября 2026 года; перед использованием их перепроверяют по конкретному коммиту.</p>
+<div class="scroll"><table>
+<thead><tr><th>Проект</th><th>Лицензия</th><th>Чем полезен</th></tr></thead>
+<tbody>
+<tr><td>Presenton</td><td class="lic">Apache-2.0</td><td>Путь «генерация → правка → экспорт», свой хостинг, загрузка шаблонов</td></tr>
+<tr><td>CreatPPT</td><td class="lic">Apache-2.0</td><td>Разделение домена, редактора и экспорта; проверки качества. Ранний проект</td></tr>
+<tr><td>PPTist</td><td class="lic warn">AGPL-3.0</td><td>Образец интерфейса: горячие клавиши, инспектор, импорт. Код в закрытый сервис без коммерческой лицензии не берут</td></tr>
+<tr><td>PptxGenJS</td><td class="lic">MIT</td><td>Генерация настоящих объектов PPTX: мастера, текст, фигуры, графики, таблицы</td></tr>
+<tr><td>Vega-Lite</td><td class="lic">BSD-3</td><td>Декларативные графики в SVG</td></tr>
+<tr><td>ProseMirror</td><td class="lic">MIT</td><td>Редактирование текста внутри блока</td></tr>
+<tr><td>Yjs</td><td class="lic">MIT</td><td>Совместное редактирование, курсоры соавторов</td></tr>
+<tr><td>Typst + Touying</td><td class="lic">Apache-2.0 / MIT</td><td>Качественный PDF для текстовых и технических презентаций</td></tr>
+<tr><td>Penpot</td><td class="lic">MPL-2.0</td><td>Дизайн-токены и ассеты бренда, интеграция позже</td></tr>
+</tbody></table></div>
+<h3 style="margin-top:18px">Перед тем как взять чужой код</h3>
+<ol>
+<li>Зафиксировать коммит.</li>
+<li>Проверить LICENSE, NOTICE и авторские права.</li>
+<li>Провести ревью безопасности.</li>
+<li>Составить список всех зависимостей (SBOM) и проверить транзитивные.</li>
+<li>Прогнать свой набор тестовых слайдов.</li>
+<li>Обернуть в свой интерфейс.</li>
+<li>Иметь план выхода, если проект забросят.</li>
+</ol>
+</section>
+
+<section class="card" aria-labelledby="pdf">
+<h2 id="pdf">PDF или PPTX</h2>
+<p>Если главный результат — документ, который читают, основным форматом разумно делать PDF: его печатают из той же отрисовки, что и превью, и он выглядит одинаково везде. PPTX — это совместимость для тех, кто продолжит работу в PowerPoint; его делают отдельным адаптером и не обещают точного обратного импорта без проверки на реальных файлах.</p>
+<p>Отказ от требования «точный PPTX любой ценой» развязывает руки при проектировании редактора в браузере, но сам по себе удобного редактора и совместной работы не создаёт.</p>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ul class="sources">
+<li>Собственное продуктовое исследование автора для редактора презентаций: требования и архитектура (версия 1.0, 4 сентября 2026), матрица открытых проектов и повторная сверка лицензий (5 сентября 2026), живое сравнение редактора и экспортёров на одном слайде (6 сентября 2026), итоговый разбор перехода на HTML-презентации (21 сентября 2026). <small>Не опубликованы.</small></li>
+<li>Репозитории проектов на GitHub: presenton/presenton, seekskyworld/CreatPPT, pipipi-pikachu/PPTist, gitbrent/PptxGenJS, vega/vega-lite, ProseMirror/prosemirror, yjs/yjs, typst/typst, touying-typ/touying, penpot/penpot — файлы LICENSE на дату проверки.</li>
+</ul>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Материал собран из исследования, которое автор Полки делал с Claude, проектируя собственный редактор презентаций. Названия продуктов приведены как примеры; это не реклама и не рейтинг.</div>
+<p class="foot">Автор: Редакция Полки</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+
+</body></html>

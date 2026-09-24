@@ -2,32 +2,8 @@
   "version": 1,
   "status": "draft-owner-review",
   "publication": "requires-explicit-registration",
-  "note": "Черновики из исследований владельца. Не зарегистрированы: не входят в candidates.json и editorial-seed-hosted.ts. Статичные снимки не сгенерированы.",
+  "note": "Черновики из исследований владельца, решение за владельцем. Не зарегистрированы: не входят в candidates.json и editorial-seed-hosted.ts. ai-game-makers-2026 — владелец решил пока не публиковать; how-the-brain-learns — ждёт решения.",
   "items": [
-    {
-      "slug": "handwriting-research",
-      "title": "Почерк и грамотность младшеклассника: что работает по исследованиям",
-      "topic": "Исследования",
-      "task": "Разобраться, какие способы помогают ребёнку 7–10 лет писать разборчивее и грамотнее",
-      "action": "Попробовать «посмотри — закрой — напиши — сверь» и пройти лестницу помощи",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/handwriting-research/index.html",
-      "sourceSha256": "8864e026dabd046bf86d024912b5f371b1e5640b533f4c3c2a5473661f31b88f",
-      "evidencePath": "content/editorial/handwriting-research/README.md"
-    },
-    {
-      "slug": "how-presentation-editors-work",
-      "title": "Как устроен редактор презентаций изнутри",
-      "topic": "Разборы",
-      "task": "Понять, из каких слоёв состоит редактор презентаций и почему экспорт ломает графики",
-      "action": "Нажимать на слои схемы и сравнить живую проверку двух открытых проектов",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/how-presentation-editors-work/index.html",
-      "sourceSha256": "d75cafa0c109b455b85e55df05a5f309fea88054cf65f2f3b6793694f3933dbb",
-      "evidencePath": "content/editorial/how-presentation-editors-work/README.md"
-    },
     {
       "slug": "ai-game-makers-2026",
       "title": "Игра по описанию: что на самом деле умеют ИИ-конструкторы игр",
@@ -41,16 +17,16 @@
       "evidencePath": "content/editorial/ai-game-makers-2026/README.md"
     },
     {
-      "slug": "observability-to-ai-sre",
-      "title": "Как следят за работой сервисов: от логов до ИИ-дежурного",
-      "topic": "Разборы",
-      "task": "Понять, как устроен рынок observability и что меняют ИИ-агенты",
-      "action": "Нажимать на слои рынка и читать, кто что делает и кто покупает",
+      "slug": "how-the-brain-learns",
+      "title": "Как мозг на самом деле учится: три условия нейропластичности",
+      "topic": "Исследования",
+      "task": "Понять, при каких условиях мозг действительно перестраивается и как превратить «практику» в тренировку",
+      "action": "Пройти тренировку различения яркости «на пороге» и раскрыть шесть активных операций",
       "author": "Редакция Полки",
       "license": "Apache-2.0",
-      "sourcePath": "content/editorial/observability-to-ai-sre/index.html",
-      "sourceSha256": "d2b975e49de9a8997af9207a606612e45e830a4d61c3b0197f06a95203d3f5b4",
-      "evidencePath": "content/editorial/observability-to-ai-sre/README.md"
+      "sourcePath": "content/editorial/how-the-brain-learns/index.html",
+      "sourceSha256": "37793ee803fa46531a101f2f093a5801eba52839cc162fd70eb629e42d6a0e52",
+      "evidencePath": "content/editorial/how-the-brain-learns/README.md"
     }
   ]
 }

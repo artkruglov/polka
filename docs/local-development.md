@@ -80,7 +80,7 @@ HTTP API и CLI публикации локально работают так:
 POLKA_ENDPOINT=http://127.0.0.1:4390 node scripts/polka-publish.mjs report.html --title "Проба"
 ```
 
-## Каталог «Интересное» локально
+## Лента локально
 
 Исходники материалов лежат в `content/editorial/<slug>/`. Засевом hosted-каталога занимается `scripts/editorial-seed-hosted.ts`, порядок описан в [deploy/hosted/README.md](../deploy/hosted/README.md).
 
