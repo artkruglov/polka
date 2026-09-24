@@ -198,3 +198,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .ui-checklist li { display: flex; align-items: center; gap: 12px; font-size: var(--text-md); color: var(--ink); }
 .ui-checklist li > span:first-child { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; }
 .ui-checklist li > span:first-child svg { width: 13px; height: 13px; stroke-width: 3; }
+
+/* Service badge of a saved or pasted link (ServiceMark.tsx): letters on the service colour. */
+.service-mark { display: inline-grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; background: var(--soft-2, #eef1f6); color: #fff; font: 700 12px/1 var(--font-sans); letter-spacing: 0.02em; }
+.service-mark[data-service="site"] { color: var(--muted); }
+.service-mark svg { width: 16px; height: 16px; }
+.service-mark--lg { width: 48px; height: 48px; border-radius: 12px; font-size: 16px; }
+.service-mark--lg svg { width: 22px; height: 22px; }

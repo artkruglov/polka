@@ -8,6 +8,7 @@ import "./shared/ui/onboard.css";
 import "./shared/ui/shelf-access.css";
 import "./widgets/navigation/navigation.css";
 import "./widgets/artifact-preview/styles.css";
+import "./entities/link/styles.css";
 import "./widgets/artifact-reader/styles.css";
 import "./widgets/editorial-catalog/styles.css";
 import "./widgets/trash/styles.css";

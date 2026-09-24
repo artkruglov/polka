@@ -1,0 +1,29 @@
+# TLS for the renderer's name; only the main VM gets through. The security
+# group is the first gate (README.md), the HMAC signature the last.
+{
+	admin off
+}
+
+{$RENDERER_HOST} {
+	@app remote_ip {$APP_VM_IP}
+	handle @app {
+		request_body {
+			max_size 8KB
+		}
+		reverse_proxy renderer:4395 {
+			transport http {
+				response_header_timeout 45s
+			}
+		}
+	}
+	handle {
+		respond 403
+	}
+	log {
+		output stdout
+		format filter {
+			# Paths are always /render or /healthz; nothing of the user's link is in them.
+			request>headers delete
+		}
+	}
+}

@@ -1,0 +1,42 @@
+# Полка's renderer on Fly.io (deploy/renderer/README.md, «Fly.io»). Before
+# using it: a URL a user pastes is their data, and rendering it abroad is a
+# cross-border transfer (README: privacy.md and the RKN notice first).
+# From the repository root:
+#   fly apps create <name>
+#   fly secrets set RENDERER_SECRET=<the same as on the main VM> --config deploy/renderer/fly.toml
+#   fly deploy --config deploy/renderer/fly.toml --dockerfile apps/renderer/Dockerfile .
+app = "polka-renderer"
+primary_region = "ams"
+kill_signal = "SIGTERM"
+kill_timeout = "20s"
+
+[build]
+  dockerfile = "apps/renderer/Dockerfile"
+
+[env]
+  RENDERER_HOST = "0.0.0.0"
+  RENDERER_PORT = "4395"
+
+[http_service]
+  internal_port = 4395
+  force_https = true
+  # Idle machines stop; the first import after a pause waits for a cold start.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    # One page at a time per machine; the renderer queues three more.
+    type = "requests"
+    soft_limit = 2
+    hard_limit = 4
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "3s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

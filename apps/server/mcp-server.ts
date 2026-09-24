@@ -21,7 +21,8 @@ import {
 } from "./service-auth.ts";
 import { db } from "./db.ts";
 import { config } from "./config.ts";
-import { uuid } from "../../packages/contracts/index.ts";
+import { saveLinkSchema, uuid } from "../../packages/contracts/index.ts";
+import { saveLinkFromAgent } from "./saved-links.ts";
 import {
   RUNTIME_IMPORT_LIST,
   RUNTIME_TAILWIND_META,
@@ -533,7 +534,7 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "Import a public HTML artifact",
         description:
-          "Queue a private standalone HTML copy with local dependencies. Claude/ChatGPT provider links are not supported yet. Poll polka_import_status; queued is not a saved receipt.",
+          "Queue a private standalone HTML copy with local dependencies. GitHub gists are read through the GitHub API; allowlisted SPA hosts (Lovable, bolt.host, Replit, GitHub Pages, Gemini share) are saved as snapshots where the renderer is enabled. Claude, ChatGPT, v0, Perplexity and AI Studio links are never fetched: ask the user for the code, or keep the link with polka_save_link. Poll polka_import_status; queued is not a saved receipt.",
         inputSchema: importRequestSchema,
         annotations: {
           readOnlyHint: false,
@@ -620,6 +621,23 @@ export function createMcpServer(actor: ServiceActor) {
         },
       },
       async (input) => asToolResult(await publishFromAgent(actor, input)),
+    );
+  if (actor.scopes.includes("capture"))
+    server.registerTool(
+      "polka_save_link",
+      {
+        title: "Save a link to Polka as it is",
+        description:
+          "Keep a link on the shelf as a bookmark work: its URL, a title and an optional note; Polka does not copy the page. Use it when the content itself cannot be saved (a Claude or ChatGPT link whose code you were not given, a page behind a login or a bot check). Prefer polka_publish with the actual code when the user can paste it. Polka never opens Claude, ChatGPT, v0, Perplexity or AI Studio links on its server. Returns the work's receipt; sharing it later shows recipients a card that leads to the original, which only works if they have access there.",
+        inputSchema: saveLinkSchema,
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (input) => asToolResult(await saveLinkFromAgent(actor, input)),
     );
   if (actor.scopes.includes("revise")) {
     server.registerTool(

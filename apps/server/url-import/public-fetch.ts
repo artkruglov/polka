@@ -1,19 +1,15 @@
 import { lookup } from 'node:dns/promises';
-import { BlockList, isIP } from 'node:net';
+import { isIP } from 'node:net';
+import { publicAddress } from '../../../packages/public-address.ts';
 import { request } from 'node:https';
 
 export class ImportFetchError extends Error {
-  constructor(public code:'invalid_url'|'blocked_address'|'too_large'|'timeout'|'redirect_limit'|'source_unavailable',message:string){super(message);}
+  /** An HTTP answer the source gave (status, Retry-After and GitHub's rate-limit headers), when there was one. */
+  constructor(public code:'invalid_url'|'blocked_address'|'too_large'|'timeout'|'redirect_limit'|'source_unavailable',message:string,public http?:{status:number;headers:Record<string,string|string[]|undefined>}){super(message);}
 }
-const denied4=new BlockList();
-for(const [network,prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.88.99.0',24],['192.168.0.0',16],['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',4],['240.0.0.0',4]] as const)denied4.addSubnet(network,prefix,'ipv4');
-const global6=new BlockList();global6.addSubnet('2000::',3,'ipv6');
-const denied6=new BlockList();
-for(const [network,prefix]of [['2001::',23],['2001:db8::',32],['2002::',16],['3fff::',20]] as const)denied6.addSubnet(network,prefix,'ipv6');
-export function publicAddress(address:string):boolean {
- const family=isIP(address);
- return family===4?!denied4.check(address,'ipv4'):family===6&&global6.check(address,'ipv6')&&!denied6.check(address,'ipv6');
-}
+/** The importer's own User-Agent. The renderer and robots.txt checks name themselves PolkaRenderer (robots.ts). */
+export const IMPORTER_USER_AGENT='Polka-Artifact-Importer/1.0';
+export {publicAddress};
 export function publicUrl(input:string):URL {
  let url:URL;try{url=new URL(input);}catch{throw new ImportFetchError('invalid_url','Нужна корректная публичная HTTPS-ссылка.');}
  if(url.protocol!=='https:'||url.username||url.password||(url.port&&url.port!=='443'))throw new ImportFetchError('invalid_url','Разрешены только HTTPS-ссылки без логина и нестандартного порта.');
@@ -27,11 +23,23 @@ export async function resolvePublicTarget(input:string,resolver:Resolver=hostnam
  return {url,...addresses[0]};
 }
 export type PublicResponse={url:string;contentType:string;bytes:Buffer};
-/** No cookies, ambient proxy, pooled connections, or caller-defined headers.
+export type FetchOptions={maxBytes?:number;timeoutMs?:number;maxRedirects?:number;signal?:AbortSignal;
+ /** Accept header instead of the HTML/asset default (the GitHub API wants its own). */
+ accept?:string;
+ /** Sent only to the first hop's host, never after a redirect to another host. */
+ authorization?:string;
+ userAgent?:string};
+/** The request headers of one hop. Authorization goes only to the host the caller asked for. */
+export function hopHeaders(first:string,hop:URL,{accept,authorization,userAgent=IMPORTER_USER_AGENT}:Pick<FetchOptions,'accept'|'authorization'|'userAgent'>):Record<string,string>{
+ return {Accept:accept??'text/html,application/xhtml+xml,image/*,text/css,application/javascript;q=0.8','Accept-Encoding':'identity','User-Agent':userAgent,
+  ...(authorization&&hop.host===new URL(first).host?{Authorization:authorization}:{})};
+}
+/** No cookies, ambient proxy or pooled connections; the only caller-set headers
+ * are Accept, User-Agent and a host-bound Authorization (FetchOptions).
  * Each hop resolves once and pins that address in the TLS connection; Host/SNI
  * and certificate verification still use the original hostname.
  */
-export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=15_000,maxRedirects=3,signal}:{maxBytes?:number;timeoutMs?:number;maxRedirects?:number;signal?:AbortSignal}={}):Promise<PublicResponse> {
+export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=15_000,maxRedirects=3,signal,accept,authorization,userAgent=IMPORTER_USER_AGENT}:FetchOptions={}):Promise<PublicResponse> {
  const deadline=AbortSignal.timeout(timeoutMs);const abort=signal?AbortSignal.any([signal,deadline]):deadline;
  let next=input;
  try {
@@ -40,14 +48,14 @@ export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=1
    const result=await new Promise<PublicResponse|{redirect:string}>((resolve,reject)=>{
     const req=request(target.url,{method:'GET',agent:false,family:target.family,signal:abort,
      lookup:(_host,_opts,cb)=>cb(null,target.address,target.family),
-     headers:{Accept:'text/html,application/xhtml+xml,image/*,text/css,application/javascript;q=0.8','Accept-Encoding':'identity','User-Agent':'Polka-Artifact-Importer/1.0'}},res=>{
+     headers:hopHeaders(input,target.url,{accept,authorization,userAgent})},res=>{
       const status=res.statusCode??0;
       if([301,302,303,307,308].includes(status)){
        const location=res.headers.location;res.destroy();
        if(!location)return reject(new ImportFetchError('source_unavailable','Источник вернул редирект без адреса.'));
        try{resolve({redirect:publicUrl(new URL(location,target.url).href).href});}catch(e){reject(e);}return;
       }
-      if(status<200||status>=300){res.destroy();reject(new ImportFetchError('source_unavailable',`Источник вернул HTTP ${status}.`));return;}
+      if(status<200||status>=300){res.destroy();reject(new ImportFetchError('source_unavailable',`Источник вернул HTTP ${status}.`,{status,headers:res.headers}));return;}
       if(res.headers['content-encoding']&&res.headers['content-encoding']!=='identity'){res.destroy();reject(new ImportFetchError('source_unavailable','Источник вернул неподдерживаемое сжатие.'));return;}
       const length=Number(res.headers['content-length']??0);
       if(length>maxBytes){res.destroy();reject(new ImportFetchError('too_large','Ответ источника превышает лимит.'));return;}

@@ -5,8 +5,11 @@ import {config} from '../config.ts';
 import {createImportJob,getImportJob,importJobView,cancelImportJob} from './jobs.ts';
 import {runImportOnce,expireImportJobs} from './worker.ts';
 
+/** What this installation's import can copy; the web reads it from /api/capabilities too. */
+/** rendered-spa: allowlisted SPA hosts; server-fetch: ChatGPT shares; server-try: one attempt at a Claude artifact. The last three need the renderer. */
+export function importSources(){return ['standalone-html','github-gist',...(config.RENDERED_IMPORT_ENABLED?['rendered-spa','server-fetch','server-try']:[])];}
 export function registerUrlImports(app:FastifyInstance,identity:(req:FastifyRequest)=>Promise<Actor>){
- app.get('/api/imports/capabilities',async()=>({enabled:config.URL_IMPORT_ENABLED,livePreview:config.HTML_LIVE_ENABLED,sources:['standalone-html'],providerArtifacts:false}));
+ app.get('/api/imports/capabilities',async()=>({enabled:config.URL_IMPORT_ENABLED,livePreview:config.HTML_LIVE_ENABLED,sources:importSources(),providerArtifacts:false}));
  if(!config.URL_IMPORT_ENABLED)return;
  app.post('/api/imports',{bodyLimit:4096},async req=>{const actor=await identity(req);return transaction(c=>createImportJob(c,actor,req.body));});
  app.get('/api/imports/:id',async req=>{const actor=await identity(req);return transaction(async c=>importJobView(await getImportJob(c,actor,(req.params as {id:string}).id)));});
