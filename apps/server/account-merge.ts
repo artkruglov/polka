@@ -477,11 +477,11 @@ export async function mergeAccounts(input: {
       const notes: string[] = [];
       if (from.email && into.email)
         notes.push(
-          `Адрес ${from.email} остаётся у отключённого источника: у получателя уже есть ${into.email}. Вход по коду на ${from.email} работать не будет.`,
+          `Адрес ${from.email} будет стёрт вместе с источником: у получателя уже есть ${into.email}. Код на ${from.email} потом откроет новую полку.`,
         );
       if (counts.identitiesKept.length)
         notes.push(
-          `У получателя уже есть ${counts.identitiesKept.join(", ")}: эти привязки источника остаются у него (вход через них будет отклонён).`,
+          `У получателя уже есть ${counts.identitiesKept.join(", ")}: эти привязки источника будут стёрты вместе с ним.`,
         );
       const summary = {
         dryRun: !!input.dryRun,

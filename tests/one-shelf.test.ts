@@ -1079,6 +1079,87 @@ async function linkingShelf() {
   return { ...shelf, bearer };
 }
 
+test("a link's weak session does not survive the claim and never hands out links (Б1)", async () => {
+  const shelf = await linkingShelf();
+  const saved = (await publish(shelf.bearer, "Работа для ссылки")).json();
+  const token = new URL((await signInLink(shelf.bearer)).json().url).hash.slice(1);
+  const entered = await post("/api/auth/enter", "", { token });
+  assert.equal(entered.statusCode, 200, entered.body);
+  const weak = `polka_session=${cookieOf(entered, "polka_session")!.value}`;
+  assert.equal(cookieOf(entered, "polka_session")!.maxAge, 86_400, "a day");
+  const {
+    rows: [artifact],
+  } = await db.query("SELECT latest_revision_id FROM artifacts WHERE id=$1", [
+    saved.artifactId,
+  ]);
+  const share = (cookie: string) =>
+    post(`/api/artifacts/${saved.artifactId}/share`, cookie, {
+      expectedRevisionId: artifact.latest_revision_id,
+      expiresInDays: 7,
+    });
+  // Before the claim: refused as a weak session.
+  const before = await share(weak);
+  assert.equal(before.statusCode, 403, before.body);
+  assert.equal(before.json().reason, "agent_link_session");
+  // The owner claims from the browser that opened the shelf.
+  const email = `b1-${randomUUID()}@example.test`;
+  const pending = await challenge(email);
+  const claimed = await post(
+    "/api/auth/email/verify",
+    `${shelf.cookie}; ${pending.cookie}`,
+    { id: pending.id, code: pending.code },
+  );
+  assert.deepEqual(claimed.json(), { ok: true, claimed: true });
+  // The link's session is gone: no share, no session at all.
+  const after = await share(weak);
+  assert.equal(after.statusCode, 401, after.body);
+  assert.equal(
+    (
+      await app.inject({ method: "GET", url: "/api/me", headers: { cookie: weak } })
+    ).statusCode,
+    401,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT 1 FROM sessions WHERE account_id=$1 AND assurance='agent_link'",
+        [shelf.id],
+      )
+    ).rowCount,
+    0,
+  );
+  // The owner's own session still works and now shares.
+  const owner = await share(shelf.cookie);
+  assert.equal(owner.statusCode, 200, owner.body);
+});
+
+test("temporary shelves have their own daily budget with a clear refusal (П5)", async () => {
+  const ip = address();
+  await db.query(
+    `INSERT INTO login_limits VALUES($1,$2,now()+interval '24 hours')
+     ON CONFLICT(key) DO UPDATE SET attempts=$2,reset_at=now()+interval '24 hours'`,
+    [sha256(`provisional-ip-day:${ip}`), 20],
+  );
+  const request = await authorizeRequest(await oauthClient());
+  const refused = await app.inject({
+    method: "POST",
+    url: "/oauth/authorize/provisional",
+    remoteAddress: ip,
+    headers: { origin, cookie: request.browser, "content-type": "application/json" },
+    payload: JSON.stringify({ request: request.requestId }),
+  });
+  assert.equal(refused.statusCode, 429, refused.body);
+  assert.equal(refused.json().reason, "provisional_limit");
+  assert.match(refused.json().message, /временных полок/);
+  // The sign-up budget of that address is untouched by temporary shelves.
+  const {
+    rows: [signups],
+  } = await db.query("SELECT attempts FROM login_limits WHERE key=$1", [
+    sha256(`email-signup-ip:${ip}`),
+  ]);
+  assert.equal(signups, undefined);
+});
+
 test("a provisional shelf's link: the page shows it first, spends it on a click, and gives a weak session", async () => {
   const shelf = await linkingShelf();
   const issued = await signInLink(shelf.bearer);

@@ -116,7 +116,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
     // Every agent that would move, one line each: the person ticks the
     // ones that are theirs (none by default).
     const { rows: connections } = await db.query(
-      `SELECT id,name,oauth_client_id IS NOT NULL AS oauth,last_seen_at
+      `SELECT id,name,oauth_client_id IS NOT NULL AS oauth,last_seen_at,created_at
          FROM agent_connections
         WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>now()
         ORDER BY created_at`,
@@ -134,6 +134,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
           id: item.id as string,
           name: item.name as string,
           kind: item.oauth ? ("oauth" as const) : ("token" as const),
+          createdAt: new Date(item.created_at).toISOString(),
           lastSeenAt: item.last_seen_at
             ? new Date(item.last_seen_at).toISOString()
             : null,

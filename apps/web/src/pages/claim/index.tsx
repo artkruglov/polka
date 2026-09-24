@@ -5,7 +5,10 @@ import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
-import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
+import {
+  loadCapabilities,
+  useSignInWays,
+} from "../../entities/capabilities/useCapabilities.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 import {
   LinkProviderButtons,
@@ -22,6 +25,7 @@ type Collision = {
     id: string;
     name: string;
     kind: "oauth" | "token";
+    createdAt: string;
     lastSeenAt: string | null;
   }>;
 };
@@ -35,6 +39,7 @@ type Collision = {
  */
 export function Claim() {
   const account = useAccount();
+  const ways = useSignInWays();
   const query = new URLSearchParams(location.search);
   const next = safeNext(query.get("next")) || "/?claimed=1";
   const [providers, setProviders] = useState<SignInProvider[]>([]);
@@ -122,7 +127,8 @@ export function Claim() {
               <fieldset className="claim-connections">
                 <legend>
                   Какие агенты перенести? Отметьте только тех, кого подключали
-                  вы сами; остальные будут отключены.
+                  вы сами и помните когда: имя агент выбирает себе сам.
+                  Остальные будут отключены.
                 </legend>
                 {collision.connections.map((connection) => (
                   <label key={connection.id} className="claim-connection">
@@ -142,6 +148,7 @@ export function Claim() {
                       <strong>{connection.name}</strong>
                       <small>
                         {connection.kind === "oauth" ? "вход через браузер" : "токен"}
+                        {` · подключено ${new Date(connection.createdAt).toLocaleString("ru-RU")}`}
                         {connection.lastSeenAt
                           ? ` · последний раз ${new Date(connection.lastSeenAt).toLocaleString("ru-RU")}`
                           : " · запросов ещё не было"}
@@ -183,8 +190,7 @@ export function Claim() {
             <h1>Закрепите полку.</h1>
             <p>
               Сейчас полка живёт только в этом браузере и не выдаёт ссылки.
-              Войдите с Яндекс ID{providers.some((p) => p.id === "vk") ? ", VK ID" : ""}{" "}
-              или подтвердите почту — способ входа привяжется к этой же полке,
+              Войдите {ways.with} — способ входа привяжется к этой же полке,
               работы и агенты останутся на месте.
             </p>
             {error && <Notice tone="error">{error}</Notice>}
@@ -192,9 +198,8 @@ export function Claim() {
               <>
                 <Notice>
                   Вы вошли по ссылке от агента. Чтобы закрепить полку, войдите
-                  в свою полку (или создайте её) через Яндекс ID, VK ID или по
-                  почте — затем работы этой временной полки можно будет
-                  перенести туда.
+                  в свою полку (или создайте её) {ways.via} — затем работы этой
+                  временной полки можно будет перенести туда.
                 </Notice>
                 <ProviderButtons providers={providers} next="/" />
                 {emailLogin && (
@@ -219,9 +224,10 @@ export function Claim() {
                   </a>
                 )}
                 <p className="onboard-fine">
-                  По закону авторизация — через российские сервисы: Яндекс ID,
-                  VK ID или почту на российском домене. Если этот способ уже
-                  открывает другую вашу полку, предложим объединить.
+                  По закону делиться ссылками можно после авторизации через
+                  российские сервисы: войдите {ways.via} (почта — на российском
+                  домене). Если этот способ уже открывает другую вашу полку,
+                  предложим объединить.
                 </p>
               </>
             )}

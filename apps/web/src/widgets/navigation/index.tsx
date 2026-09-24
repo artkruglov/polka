@@ -20,7 +20,10 @@ import {
   rememberAccount,
   useAccountState,
 } from "../../entities/account/model/useAccount.ts";
-import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import {
+  useSignInWays,
+  useSourceUrl,
+} from "../../entities/capabilities/useCapabilities.ts";
 import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { formatStars, onGitHub } from "../../shared/lib/project-links.ts";
@@ -280,6 +283,7 @@ function SiteHeader({
  * sign-up in this browser points to «Способы входа» in case a shelf existed.
  */
 function ShelfBanners({ account }: { account: Account }) {
+  const ways = useSignInWays();
   const [entered] = useState(() => takeEnteredByAgent());
   const [fresh, setFresh] = useState(
     () => !account.provisional && takeFreshShelfNote(),
@@ -293,8 +297,7 @@ function ShelfBanners({ account }: { account: Account }) {
         <aside className="shelf-banner" aria-label="Временная полка">
           <div>
             <strong>Полка живёт только в этом браузере.</strong> Закрепите
-            её — войдите с Яндекс ID или по почте, и ею можно будет делиться
-            ссылками.
+            её — войдите {ways.with}, и ею можно будет делиться ссылками.
             <small>
               Если {account.idleDays ?? 30} дней не открывать полку и не
               пользоваться агентами, она удалится. Потеряли вход? Попросите

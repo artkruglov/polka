@@ -1,4 +1,3 @@
-import "./styles.css";
 import React, { useEffect, useState, useRef } from "react";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";

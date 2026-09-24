@@ -11,6 +11,7 @@ import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { rememberAccount } from "../../entities/account/model/useAccount.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
+import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import "./styles.css";
 
@@ -213,6 +214,7 @@ function ShelfWhere({
   fallbackName: string | null;
 }) {
   const [busy, setBusy] = useState(false);
+  const ways = useSignInWays();
   const switchShelf = async () => {
     setBusy(true);
     try {
@@ -226,9 +228,8 @@ function ShelfWhere({
       <div className="shelf-where">
         <strong>Работы пойдут в вашу полку (временная, этот браузер).</strong>
         <small>
-          Делиться ссылками можно будет, когда закрепите полку — войдите с
-          Яндекс ID или по почте. Если 30 дней ею не пользоваться, она
-          удалится.
+          Делиться ссылками можно будет, когда закрепите полку — войдите{" "}
+          {ways.with}. Если 30 дней ею не пользоваться, она удалится.
         </small>
       </div>
     );
@@ -261,6 +262,7 @@ function GuestChoice({
   onStarted: () => void;
 }) {
   const hint = knownShelf();
+  const ways = useSignInWays();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const start = async () => {
@@ -296,7 +298,7 @@ function GuestChoice({
       <p className="oauth-lead">
         {hint
           ? `В этом браузере вы входили в полку «${hint.displayName}». Войдите в неё — и агент будет сохранять работы туда.`
-          : "Начните без регистрации: полка откроется в этом браузере сразу. Закрепить её (Яндекс ID или почта) и делиться ссылками можно потом. Уже есть полка — войдите в неё."}
+          : `Начните без регистрации: полка откроется в этом браузере сразу. Закрепить её (войти ${ways.with}) и делиться ссылками можно потом. Уже есть полка — войдите в неё.`}
       </p>
       {error && <Notice tone="error">{error}</Notice>}
       <div className="shelf-choice">

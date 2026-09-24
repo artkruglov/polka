@@ -3,6 +3,7 @@ import { KeyRound } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
+import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import {
   OPEN_SHELF_PHRASE,
   rememberEnteredByAgent,
@@ -24,6 +25,7 @@ type Preview = {
  * browser already signed in is never switched silently.
  */
 export function Enter() {
+  const ways = useSignInWays();
   const token = useRef("");
   const [state, setState] = useState<
     "busy" | "ready" | "entering" | "stale" | "error"
@@ -90,7 +92,7 @@ export function Enter() {
               Ссылку дал агент <strong>{preview.clientName}</strong>. Открывайте,
               только если вы сами попросили его об этом. По этой ссылке полку
               можно смотреть; закрепить её, подключить агентов или удалить —
-              только после входа через Яндекс ID, VK ID или по почте.
+              только после входа {ways.via}.
             </p>
             {preview.current && (
               <Notice>
