@@ -15,11 +15,11 @@ If polka_* tools are available, call polka_context and go to step 2. Otherwise f
 
 - Codex CLI: `codex mcp add polka --url https://polochka.app/mcp`
 - Claude Code: `claude mcp add --transport http --scope user polka https://polochka.app/mcp`, then ask the user to type /mcp, choose polka, press Authenticate.
-- Claude.ai or ChatGPT: ask the user to add a custom connector with URL https://polochka.app/mcp (OAuth).
+- Claude.ai or ChatGPT in the browser: you cannot run commands, and fetching https://polochka.app/connect usually fails there. Tell the user to add the custom connector themselves: Claude.ai: Settings → Connectors → Add custom connector, URL https://polochka.app/mcp; ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL https://polochka.app/mcp, Authentication: OAuth; then enable the connector in the chat. Step by step: https://polochka.app/settings/agents?client=claude-ai or https://polochka.app/settings/agents?client=chatgpt.
 
 Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow." The human signs in in the browser. Never ask for their password, email code or a token, and install nothing else.
 
-Without MCP (scripts, CI): the user creates a token at https://polochka.app/settings/agents (client «HTTP API / скрипт») and exports it themselves with `read -r -s POLKA_TOKEN && export POLKA_TOKEN`. Use it only as `Authorization: Bearer $POLKA_TOKEN` from the environment.
+Without MCP (scripts, CI): the user creates a token at https://polochka.app/settings/agents (section «Для разработчиков») and exports it themselves with `read -r -s POLKA_TOKEN && export POLKA_TOKEN`. Use it only as `Authorization: Bearer $POLKA_TOKEN` from the environment.
 
 ## 2. Save and get a link: polka_publish
 

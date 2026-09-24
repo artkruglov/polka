@@ -112,9 +112,9 @@ The human signs in or creates a shelf in their own browser (email + 8-digit code
 - Easiest: the human says "Подключи Полку: ${origin}/connect" (Connect Полка). Fetch ${origin}/connect and follow it: it names the one command for your client.
 - Codex CLI: \`codex mcp add polka --url ${mcp}\` (browser sign-in opens; if not, \`codex mcp login polka\`).
 - Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, then the human types /mcp, picks polka, presses Authenticate.
-- Claude.ai or ChatGPT (no terminal): the human adds a custom connector with URL ${mcp} and OAuth. Claude.ai: Settings → Connectors → Add custom connector. ChatGPT: Settings → Apps & Connectors → Developer mode → Create.
+- Claude.ai or ChatGPT in the browser (no terminal, and their sandboxes usually cannot fetch this site): do not try to run commands or fetch ${origin}/connect. The human adds the custom connector themselves; tell them these steps. Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect; then in the chat "+" → Connectors → enable "Полка". ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth; then in the chat "+" → enable the connector. Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai or ${origin}/settings/agents?client=chatgpt.
 - Any other MCP client with OAuth: remote Streamable HTTP server ${mcp}; metadata at ${origin}/.well-known/oauth-protected-resource and ${origin}/.well-known/oauth-authorization-server (dynamic client registration, PKCE).
-- No OAuth (scripts, CI): the human creates a token at ${origin}/settings/agents and exports it themselves: \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only from the environment as \`Authorization: Bearer $POLKA_TOKEN\`; never ask for it in chat.
+- No OAuth (scripts, CI): the human creates a token at ${origin}/settings/agents («Для разработчиков») and exports it themselves: \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only from the environment as \`Authorization: Bearer $POLKA_TOKEN\`; never ask for it in chat.
 
 ## MCP tools (${mcp})
 
@@ -187,11 +187,11 @@ If polka_* tools are available, call polka_context and go to step 2. Otherwise f
 
 - Codex CLI: \`codex mcp add polka --url ${mcp}\`
 - Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, then ask the user to type /mcp, choose polka, press Authenticate.
-- Claude.ai or ChatGPT: ask the user to add a custom connector with URL ${mcp} (OAuth).
+- Claude.ai or ChatGPT in the browser: you cannot run commands, and fetching ${origin}/connect usually fails there. Tell the user to add the custom connector themselves: Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp}; ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth; then enable the connector in the chat. Step by step: ${origin}/settings/agents?client=claude-ai or ${origin}/settings/agents?client=chatgpt.
 
 Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow." The human signs in in the browser. Never ask for their password, email code or a token, and install nothing else.
 
-Without MCP (scripts, CI): the user creates a token at ${origin}/settings/agents (client «HTTP API / скрипт») and exports it themselves with \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only as \`Authorization: Bearer $POLKA_TOKEN\` from the environment.
+Without MCP (scripts, CI): the user creates a token at ${origin}/settings/agents (section «Для разработчиков») and exports it themselves with \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only as \`Authorization: Bearer $POLKA_TOKEN\` from the environment.
 
 ## 2. Save and get a link: polka_publish
 
