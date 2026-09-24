@@ -125,6 +125,8 @@ function initialClient(): AgentClientId | null {
 export function AgentConnections() {
   const account = useAccount();
   const [connections, setConnections] = useState<AgentConnection[]>([]);
+  // Revoked and expired connections are history: shown on request only.
+  const [showInactive, setShowInactive] = useState(false);
   const [listState, setListState] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -850,65 +852,78 @@ export function AgentConnections() {
               </Button>
             </div>
           )}
-          {listState === "ready" && connections.length === 0 && (
-            <div className="agent-empty">
-              <strong>Подключений нет</strong>
-              Ни один агент ещё не получал доступ к этой полке. Выберите выше,
-              где вы работаете с ИИ, — подключение появится здесь.
-            </div>
-          )}
+          {listState === "ready" &&
+            !connections.some((connection) => isActive(connection)) && (
+              <div className="agent-empty">
+                <strong>Подключений нет</strong>
+                Ни один агент ещё не получал доступ к этой полке. Выберите выше,
+                где вы работаете с ИИ, — подключение появится здесь.
+              </div>
+            )}
           {connections.length > 0 && (
             <div className="agent-list">
-              {connections.map((connection) => (
-                <article
-                  className="agent-list-item"
-                  key={connection.id}
-                  data-active={isActive(connection) || undefined}
-                >
-                  <div>
-                    <h3>
-                      {connection.name}
-                      <span className="agent-kind">
-                        {connection.kind === "oauth"
-                          ? "вход через браузер"
-                          : "токен"}
-                      </span>
-                    </h3>
-                    <p className="agent-status-line">
-                      {connectionStatus(connection)}
-                    </p>
-                    <p className="agent-meta">
-                      Может: {scopeLabels(connection.scopes)}
-                    </p>
-                    <p className="agent-meta">
-                      Подключено {formatDate(connection.createdAt)}
-                      {isActive(connection)
-                        ? ` · действует до ${formatDate(connection.expiresAt)}${
-                            connection.kind === "oauth"
-                              ? ", продлевается при использовании"
-                              : ""
-                          }`
-                        : ""}
-                    </p>
-                  </div>
-                  {isActive(connection) && (
-                    <Button
-                      type="button"
-                      className="danger"
-                      onClick={() => {
-                        setRevokeError(null);
-                        setConfirmRevoke(connection);
-                      }}
-                      disabled={action !== null}
-                    >
-                      {action === `revoke:${connection.id}`
-                        ? "Отзываем…"
-                        : "Отозвать"}
-                    </Button>
-                  )}
-                </article>
-              ))}
+              {connections
+                .filter((connection) => showInactive || isActive(connection))
+                .map((connection) => (
+                  <article
+                    className="agent-list-item"
+                    key={connection.id}
+                    data-active={isActive(connection) || undefined}
+                  >
+                    <div>
+                      <h3>
+                        {connection.name}
+                        <span className="agent-kind">
+                          {connection.kind === "oauth"
+                            ? "вход через браузер"
+                            : "токен"}
+                        </span>
+                      </h3>
+                      <p className="agent-status-line">
+                        {connectionStatus(connection)}
+                      </p>
+                      <p className="agent-meta">
+                        Может: {scopeLabels(connection.scopes)}
+                      </p>
+                      <p className="agent-meta">
+                        Подключено {formatDate(connection.createdAt)}
+                        {isActive(connection)
+                          ? ` · действует до ${formatDate(connection.expiresAt)}${
+                              connection.kind === "oauth"
+                                ? ", продлевается при использовании"
+                                : ""
+                            }`
+                          : ""}
+                      </p>
+                    </div>
+                    {isActive(connection) && (
+                      <Button
+                        type="button"
+                        className="danger"
+                        onClick={() => {
+                          setRevokeError(null);
+                          setConfirmRevoke(connection);
+                        }}
+                        disabled={action !== null}
+                      >
+                        {action === `revoke:${connection.id}`
+                          ? "Отзываем…"
+                          : "Отозвать"}
+                      </Button>
+                    )}
+                  </article>
+                ))}
             </div>
+          )}
+          {connections.some((connection) => !isActive(connection)) && (
+            <Button
+              type="button"
+              onClick={() => setShowInactive((value) => !value)}
+            >
+              {showInactive
+                ? "Скрыть отозванные и истёкшие"
+                : `Показать отозванные и истёкшие (${connections.filter((connection) => !isActive(connection)).length})`}
+            </Button>
           )}
           <p className="agent-help">
             Отзыв подключения не отзывает уже выданные ссылки на работы.
