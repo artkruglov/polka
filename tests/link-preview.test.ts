@@ -156,3 +156,24 @@ test("/s shows one generic card that never carries share data", async () => {
   for (const secret of [secretTitle, token, artifactId, "secret.html"])
     assert.ok(!plain.body.includes(secret), secret);
 });
+
+test("public pages may be indexed; shared works, shelves and the API stay noindex", async () => {
+  cookie = "";
+  for (const url of ["/", "/connect", "/llms.txt", "/discover", "/enterprise", "/privacy"]) {
+    const response = await call("GET", url);
+    assert.equal(response.headers["x-robots-tag"], undefined, url);
+    assert.doesNotMatch(response.body, /<meta name="robots"/, url);
+  }
+  for (const url of ["/s", "/signup", "/api/session", `/works/${randomUUID()}`]) {
+    const response = await call("GET", url);
+    assert.equal(response.headers["x-robots-tag"], "noindex, nofollow, noarchive", url);
+    if (String(response.headers["content-type"]).startsWith("text/html"))
+      assert.match(response.body, /<meta name="robots" content="noindex,nofollow" \/>/, url);
+  }
+  const robots = await call("GET", "/robots.txt");
+  assert.equal(robots.statusCode, 200);
+  assert.match(robots.body, /^User-agent: \*/);
+  assert.match(robots.body, /\nAllow: \/connect\n/);
+  assert.match(robots.body, /\nDisallow: \/\n/);
+  assert.doesNotMatch(robots.body, /Allow: \/s\b/);
+});
