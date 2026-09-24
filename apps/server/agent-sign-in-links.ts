@@ -15,7 +15,7 @@ import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
-import { transaction } from "./db.ts";
+import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import {
@@ -23,6 +23,12 @@ import {
   PROVISIONAL_SESSION_SECONDS,
 } from "./provisional.ts";
 import type { ServiceActor } from "./service-auth.ts";
+import {
+  openValue,
+  providerEnabled,
+  sealValue,
+  type ProviderId,
+} from "./sign-in-providers.ts";
 import { sha256 } from "./storage.ts";
 
 export const SIGN_IN_LINK_TTL_SECONDS = 300;
@@ -39,7 +45,67 @@ export const staleLink = () =>
     "Ссылка устарела или уже использована. Попросите агента новую: «Открой мою Полку».",
   );
 
-/** Issues a link into the shelf `actor`'s connection saves to. */
+const HINT_LABEL = "polka:shelf-hint:v1";
+const HINT_TTL_MS = 30 * 86_400_000;
+
+/**
+ * A pointer to a shelf's sign-in page that carries no secret: it only says
+ * which shelf, so /signin can show that shelf's own ways in. Sealed, so it
+ * reveals nothing and cannot be forged.
+ */
+export function shelfHint(accountId: string, now = Date.now()) {
+  return sealValue({ a: accountId, expires: now + HINT_TTL_MS }, HINT_LABEL);
+}
+
+/** GET /api/auth/shelf-hint: the shelf's name and its ways in, no more. */
+export async function describeShelfHint(hint: string) {
+  const opened = openValue<{ a: string; expires: number }>(hint, HINT_LABEL);
+  if (!opened) throw staleHint();
+  const {
+    rows: [account],
+  } = await db.query(
+    `SELECT COALESCE(display_name,name) AS display,name,email,password_hash
+       FROM accounts WHERE id=$1 AND NOT disabled
+        AND deletion_requested_at IS NULL`,
+    [opened.a],
+  );
+  if (!account) throw staleHint();
+  const { rows: identities } = await db.query(
+    "SELECT DISTINCT provider FROM account_identities WHERE account_id=$1",
+    [opened.a],
+  );
+  const email = account.email as string | null;
+  return {
+    displayName: account.display as string,
+    providers: identities
+      .map((row) => row.provider as ProviderId)
+      .filter((provider) => providerEnabled(provider)),
+    // Enough to recognise one's own address, not to learn someone else's.
+    email: email ? maskEmail(email) : null,
+    password: !/^(email|yandex|vk|oidc|guest)-[0-9a-f-]{36}$/.test(account.name),
+  };
+}
+
+function maskEmail(email: string) {
+  const at = email.lastIndexOf("@");
+  const local = email.slice(0, at);
+  return `${local.slice(0, Math.min(2, local.length))}…${email.slice(at)}`;
+}
+
+const staleHint = () =>
+  new Problem(
+    410,
+    "expired",
+    "Подсказка устарела. Попросите агента новую: «Открой мою Полку».",
+  );
+
+/**
+ * «Открой мою Полку». A claimed shelf gets a sign-in hint (/signin?shelf=…,
+ * no secret): the person signs in the usual way. Only an unclaimed
+ * provisional shelf, which has no other way in, gets a one-time token link,
+ * and only from an OAuth connection its owner allowed to (the sign_in
+ * permission on consent and the switch on the agents page).
+ */
 export async function issueSignInLink(actor: ServiceActor) {
   await limitAttempts(
     `sign-in-link:${actor.connectionId}`,
@@ -47,11 +113,14 @@ export async function issueSignInLink(actor: ServiceActor) {
     "1 hour",
   );
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = await transaction(async (c) => {
+  const issued = await transaction(async (c) => {
     const {
       rows: [connection],
     } = await c.query(
-      `SELECT connection.oauth_client_id,connection.sign_in_links
+      `SELECT connection.oauth_client_id,connection.sign_in_links,
+              connection.scopes,
+              account.provisional_at IS NOT NULL
+                AND account.claimed_at IS NULL AS provisional
          FROM agent_connections connection
          JOIN accounts account ON account.id=connection.account_id
          JOIN tenants tenant ON tenant.id=connection.tenant_id
@@ -65,13 +134,17 @@ export async function issueSignInLink(actor: ServiceActor) {
     );
     if (!connection)
       throw new Problem(401, "unauthorized", "Подключение агента недействительно.");
+    if (!connection.provisional) return { kind: "hint" as const };
     if (!connection.oauth_client_id)
       throw refused(
         "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
       );
-    if (!connection.sign_in_links)
+    if (
+      !(connection.scopes as string[]).includes("sign_in") ||
+      !connection.sign_in_links
+    )
       throw refused(
-        "Владелец выключил ссылки для входа у этого подключения (раздел «Агенты» на Полке).",
+        "Этому подключению не разрешено давать ссылки для входа. Владелец включает это на странице подключения («Давать ссылку для входа»).",
       );
     const {
       rows: [row],
@@ -81,14 +154,29 @@ export async function issueSignInLink(actor: ServiceActor) {
        RETURNING expires_at`,
       [sha256(token), actor.connectionId, SIGN_IN_LINK_TTL_SECONDS],
     );
-    return new Date(row.expires_at).toISOString();
+    return {
+      kind: "link" as const,
+      expiresAt: new Date(row.expires_at).toISOString(),
+    };
   });
+  if (issued.kind === "hint") {
+    const expiresAt = new Date(Date.now() + HINT_TTL_MS).toISOString();
+    return {
+      kind: "hint" as const,
+      url: `${config.APP_ORIGIN}/signin?${new URLSearchParams({ shelf: shelfHint(actor.accountId) })}`,
+      expiresAt,
+      expiresInSeconds: HINT_TTL_MS / 1000,
+      instructions:
+        "Give this link to the user as it is. It carries no secret: it opens the sign-in page of this shelf, where the user signs in the usual way (Яндекс ID, VK ID, email code or login).",
+    };
+  }
   return {
+    kind: "link" as const,
     url: `${config.APP_ORIGIN}/enter#${token}`,
-    expiresAt,
+    expiresAt: issued.expiresAt,
     expiresInSeconds: SIGN_IN_LINK_TTL_SECONDS,
     instructions:
-      "Give this link to the user exactly as it is; do not open it yourself and do not shorten it. It signs one browser in to this shelf once, within 5 minutes.",
+      "Give this link to the user exactly as it is; do not open it yourself and do not shorten it. It opens this provisional shelf once, within 5 minutes, after the user confirms on the page.",
   };
 }
 
@@ -97,18 +185,10 @@ export async function issueSignInLink(actor: ServiceActor) {
  * Everything that makes a link unusable (unknown, spent, expired, the
  * connection revoked or switched off, the account blocked) is one answer.
  */
-export async function consumeSignInLink(token: string, ip: string) {
-  await limitAttempts(`sign-in-link-ip:${ip}`, 20);
-  if (!TOKEN.test(token)) throw staleLink();
-  return transaction(async (c) => {
-    const {
-      rows: [link],
-    } = await c.query(
-      `SELECT link.token_hash,connection.id AS connection_id,
+const LIVE_LINK = `SELECT link.token_hash,connection.id AS connection_id,
               connection.tenant_id,connection.account_id,
               COALESCE(client.client_name,connection.name) AS client_name,
-              account.provisional_at IS NOT NULL
-                AND account.claimed_at IS NULL AS provisional
+              COALESCE(account.display_name,account.name) AS shelf_name
          FROM agent_sign_in_links link
          JOIN agent_connections connection ON connection.id=link.connection_id
          JOIN accounts account ON account.id=connection.account_id
@@ -117,7 +197,36 @@ export async function consumeSignInLink(token: string, ip: string) {
         WHERE link.token_hash=$1 AND link.consumed_at IS NULL
           AND link.expires_at>clock_timestamp()
           AND connection.revoked_at IS NULL AND connection.expires_at>now()
-          AND connection.sign_in_links`,
+          AND connection.sign_in_links AND 'sign_in'=ANY(connection.scopes)
+          AND account.provisional_at IS NOT NULL AND account.claimed_at IS NULL
+          AND NOT account.disabled AND account.deletion_requested_at IS NULL`;
+
+/**
+ * What the /enter page shows before anything happens: which shelf and which
+ * agent. Looking does not spend the link (link scanners in mail and
+ * messengers open pages, they do not press buttons).
+ */
+export async function previewSignInLink(token: string, ip: string) {
+  await limitAttempts(`sign-in-link-ip:${ip}`, 20);
+  if (!TOKEN.test(token)) throw staleLink();
+  const {
+    rows: [link],
+  } = await db.query(LIVE_LINK, [sha256(token)]);
+  if (!link) throw staleLink();
+  return {
+    shelfName: link.shelf_name as string,
+    clientName: link.client_name as string,
+  };
+}
+
+export async function consumeSignInLink(token: string, ip: string) {
+  await limitAttempts(`sign-in-link-ip:${ip}`, 20);
+  if (!TOKEN.test(token)) throw staleLink();
+  return transaction(async (c) => {
+    const {
+      rows: [link],
+    } = await c.query(
+      LIVE_LINK,
       [sha256(token)],
     );
     if (!link) throw staleLink();
@@ -129,11 +238,13 @@ export async function consumeSignInLink(token: string, ip: string) {
       [link.token_hash],
     );
     if (!spent.rowCount) throw staleLink();
+    // A weak session (sessions.assurance): it browses the shelf and can be
+    // upgraded by a real sign-in, nothing more (auth.ts assertStrongSession).
     const session = randomBytes(32).toString("base64url");
-    const days = link.provisional ? PROVISIONAL_SESSION_DAYS : 7;
     await c.query(
-      "INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 day')",
-      [sha256(session), link.account_id, days],
+      `INSERT INTO sessions(hash,account_id,expires_at,assurance)
+       VALUES($1,$2,now()+$3*interval '1 day','agent_link')`,
+      [sha256(session), link.account_id, PROVISIONAL_SESSION_DAYS],
     );
     // The journal of the shelf: which connection let a browser in. Never
     // the token.
@@ -144,7 +255,7 @@ export async function consumeSignInLink(token: string, ip: string) {
     );
     return {
       session,
-      maxAge: link.provisional ? PROVISIONAL_SESSION_SECONDS : 604800,
+      maxAge: PROVISIONAL_SESSION_SECONDS,
       clientName: link.client_name as string,
     };
   });

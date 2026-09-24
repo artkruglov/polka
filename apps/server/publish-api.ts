@@ -108,6 +108,8 @@ export const statusResponseSchema = z
   .strict();
 export const signInLinkResponseSchema = z
   .object({
+    /** hint: /signin?shelf=… without a secret; link: /enter#token (provisional). */
+    kind: z.enum(["hint", "link"]),
     url: z.string().url(),
     expiresAt: z.iso.datetime(),
     expiresInSeconds: z.number().int(),

@@ -306,11 +306,18 @@ test("a merge moves everything; old links open, tokens keep working, the source 
     )
   ).rows;
   const sourceKey = actorKey(f.from.id);
+  // Without evidence that one person owns both, nothing happens (В5).
+  await assert.rejects(
+    mergeAccounts({ from: f.from.name, into: f.into.id, actor: "operator-script" }),
+    /--proof/,
+  );
+  assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
   const report = await mergeAccounts({
     from: f.from.name,
     into: f.into.id,
     actor: "operator-script",
     reason: "одна полка",
+    proof: "обращение №1042",
   });
   assert.equal(report.dryRun, false);
   assert.deepEqual(report.leftovers, []);
@@ -412,8 +419,15 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   );
   const {
     rows: [source],
-  } = await db.query("SELECT disabled FROM accounts WHERE id=$1", [f.from.id]);
+  } = await db.query(
+    "SELECT disabled,deletion_requested_at,email,display_name FROM accounts WHERE id=$1",
+    [f.from.id],
+  );
   assert.equal(source.disabled, true);
+  // The emptied source is deleted, not only disabled: no address or name left.
+  assert.ok(source.deletion_requested_at);
+  assert.equal(source.email, null);
+  assert.equal(source.display_name, null);
   assert.equal(
     (
       await db.query("SELECT 1 FROM sessions WHERE account_id=$1", [f.from.id])
@@ -439,10 +453,11 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   const {
     rows: [event],
   } = await db.query(
-    "SELECT actor,details,reason FROM moderation_events WHERE action='account.merged' AND account_id=$1",
+    "SELECT actor,details,reason,authority FROM moderation_events WHERE action='account.merged' AND account_id=$1",
     [f.from.id],
   );
   assert.equal(event.actor, "operator-script");
+  assert.equal(event.authority, "обращение №1042");
   assert.equal(event.details.intoAccountId, f.into.id);
   assert.equal(event.reason, "одна полка");
   await flushAnalytics();
@@ -471,7 +486,7 @@ test("a merge moves everything; old links open, tokens keep working, the source 
 test("refuses a disabled side, the same account and blocked content", async () => {
   const f = await fixture();
   await assert.rejects(
-    mergeAccounts({ from: f.from.id, into: f.from.id, actor: "operator-script" }),
+    mergeAccounts({ from: f.from.id, into: f.from.id, actor: "operator-script", proof: "t" }),
     MergeRefusal,
   );
   await db.query(
@@ -480,7 +495,7 @@ test("refuses a disabled side, the same account and blocked content", async () =
     [randomUUID(), f.second.artifactId],
   );
   await assert.rejects(
-    mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script" }),
+    mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script", proof: "t" }),
     /заблокированное/,
   );
   assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
@@ -493,6 +508,7 @@ test("refuses a disabled side, the same account and blocked content", async () =
       from: other.from.id,
       into: other.into.id,
       actor: "operator-script",
+      proof: "t",
     }),
     /отключён/,
   );
@@ -501,7 +517,7 @@ test("refuses a disabled side, the same account and blocked content", async () =
   console.error = (line: string) => refused.push(line);
   try {
     assert.equal(
-      await runAccountMerge(["--from", other.from.id, "--into", other.into.id]),
+      await runAccountMerge(["--from", other.from.id, "--into", other.into.id, "--proof", "t"]),
       1,
     );
   } finally {

@@ -445,6 +445,7 @@ const details = (cookie: string, requestId: string) =>
 async function approve(
   cookie: string,
   request: Awaited<ReturnType<typeof authorizeRequest>>,
+  scopes: string[] = ["context", "capture", "share"],
 ) {
   const csrf = await post("/api/agent-connections/csrf", cookie);
   assert.equal(csrf.statusCode, 200, csrf.body);
@@ -454,7 +455,7 @@ async function approve(
     {
       request: request.requestId,
       decision: "approve",
-      scopes: ["context", "capture", "share"],
+      scopes,
     },
     { "x-polka-csrf": csrf.json().csrfToken },
   );
@@ -708,15 +709,20 @@ test("a claim that meets an existing shelf offers to merge, and the merge keeps 
     headers: { cookie: `${shelf.cookie}; ${claimCookie}` },
   });
   assert.equal(shown.statusCode, 200, shown.body);
-  assert.deepEqual(shown.json().collision, {
+  const { connections, ...collision } = shown.json().collision;
+  assert.deepEqual(collision, {
     method: "yandex",
     methodName: "Яндекс ID",
     targetName: existing.name,
     works: 1,
   });
+  // Every agent that would move is its own line; the person ticks theirs.
+  assert.equal(connections.length, 1);
+  assert.equal(connections[0].name, "Claude");
   const merged = await post(
     "/api/account/claim/merge",
     `${shelf.cookie}; ${claimCookie}`,
+    { connections: [connections[0].id] },
   );
   assert.equal(merged.statusCode, 200, merged.body);
   const session = cookieOf(merged, "polka_session")!.value;
@@ -745,8 +751,67 @@ test("a claim that meets an existing shelf offers to merge, and the merge keeps 
   assert.equal(event.actor, "signup");
   const {
     rows: [provisional],
-  } = await db.query("SELECT disabled FROM accounts WHERE id=$1", [shelf.id]);
+  } = await db.query(
+    "SELECT disabled,deletion_requested_at FROM accounts WHERE id=$1",
+    [shelf.id],
+  );
   assert.equal(provisional.disabled, true);
+  assert.ok(provisional.deletion_requested_at, "the emptied source is deleted");
+});
+
+test("unticked agents do not move; a source claimed meanwhile is not merged", async () => {
+  const existing = await passwordOwner("unticked");
+  const sub = `ya-${randomUUID()}`;
+  await db.query(
+    `INSERT INTO account_identities(id,account_id,provider,subject,email,email_verified)
+     VALUES($1,$2,'yandex',$3,NULL,false)`,
+    [randomUUID(), existing.id, sub],
+  );
+  const collide = async () => {
+    const shelf = await startProvisional();
+    const bearer = await approve(shelf.cookie, shelf.request);
+    assert.equal((await publish(bearer, "Работа")).statusCode, 200);
+    const link = await post("/api/auth/idp/yandex/link", shelf.cookie);
+    const back = await returnFromYandex(
+      {
+        location: new URL(link.json().location),
+        flow: cookieOf(link, "polka_idp")!.value,
+        ip: address(),
+      },
+      { sub },
+    );
+    return {
+      shelf,
+      bearer,
+      claimCookie: `polka_claim=${cookieOf(back, "polka_claim")!.value}`,
+    };
+  };
+  const first = await collide();
+  const merged = await post(
+    "/api/account/claim/merge",
+    `${first.shelf.cookie}; ${first.claimCookie}`,
+  );
+  assert.equal(merged.statusCode, 200, merged.body);
+  // Nobody ticked the agent: its token no longer works anywhere.
+  assert.equal((await publish(first.bearer, "После")).statusCode, 401);
+
+  const second = await collide();
+  // Claimed in another tab meanwhile: «Объединить» refuses (В6).
+  await db.query(
+    "UPDATE accounts SET claimed_at=now() WHERE id=$1",
+    [second.shelf.id],
+  );
+  const refused = await post(
+    "/api/account/claim/merge",
+    `${second.shelf.cookie}; ${second.claimCookie}`,
+  );
+  assert.equal(refused.statusCode, 409, refused.body);
+  const {
+    rows: [still],
+  } = await db.query("SELECT disabled FROM accounts WHERE id=$1", [
+    second.shelf.id,
+  ]);
+  assert.equal(still.disabled, false);
 });
 
 test("a password sign-in from a provisional browser with works asks too; cancel keeps things as they were", async () => {
@@ -927,13 +992,99 @@ const signInLink = (bearer: string) =>
     payload: "{}",
   });
 
-test("an OAuth agent hands out a one-time link; the token lives only in the fragment", async () => {
-  const owner = await passwordOwner("link");
+test("for a claimed shelf the agent gets a sign-in hint without a secret", async () => {
+  const owner = await passwordOwner("hint");
   const request = await authorizeRequest(await oauthClient());
-  const bearer = await approve(`${owner.cookie}; ${request.browser}`, request);
+  // Even with the sign_in permission: a claimed shelf is never entered by link.
+  const bearer = await approve(`${owner.cookie}; ${request.browser}`, request, [
+    "context",
+    "sign_in",
+  ]);
   const issued = await signInLink(bearer);
   assert.equal(issued.statusCode, 200, issued.body);
-  const { url, expiresAt } = issued.json();
+  const body = issued.json();
+  assert.equal(body.kind, "hint");
+  const url = new URL(body.url);
+  assert.equal(`${url.origin}${url.pathname}`, `${origin}/signin`);
+  assert.equal(url.hash, "");
+  assert.equal(
+    (
+      await db.query(
+        `SELECT 1 FROM agent_sign_in_links l JOIN agent_connections c ON c.id=l.connection_id
+          WHERE c.account_id=$1`,
+        [owner.id],
+      )
+    ).rowCount,
+    0,
+  );
+  const hint = await app.inject({
+    method: "GET",
+    url: `/api/auth/shelf-hint?${new URLSearchParams({ h: url.searchParams.get("shelf")! })}`,
+    remoteAddress: address(),
+  });
+  assert.equal(hint.statusCode, 200, hint.body);
+  assert.deepEqual(hint.json(), {
+    displayName: owner.name,
+    providers: [],
+    email: null,
+    password: true,
+  });
+  // A forged hint opens nothing.
+  const forged = await app.inject({
+    method: "GET",
+    url: `/api/auth/shelf-hint?h=${"A".repeat(80)}`,
+    remoteAddress: address(),
+  });
+  assert.equal(forged.statusCode, 410);
+});
+
+test("a context-only grant gets no sign-in token; new connections start without the permission", async () => {
+  const shelf = await startProvisional();
+  const bearer = await approve(shelf.cookie, shelf.request, [
+    "context",
+    "capture",
+  ]);
+  const refused = await signInLink(bearer);
+  assert.equal(refused.statusCode, 403, refused.body);
+  const {
+    rows: [connection],
+  } = await db.query(
+    "SELECT sign_in_links FROM agent_connections WHERE account_id=$1",
+    [shelf.id],
+  );
+  assert.equal(connection.sign_in_links, false);
+  // The migration's default: a connection that existed before is off too.
+  const id = randomUUID();
+  await db.query(
+    `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
+     VALUES($1,$2,$3,$4,'old',ARRAY['context','sign_in'],$5,now()+interval '1 day')`,
+    [id, shelf.tenant, shelf.id, sha256(randomUUID()), MCP_AUDIENCE],
+  );
+  const {
+    rows: [old],
+  } = await db.query("SELECT sign_in_links FROM agent_connections WHERE id=$1", [
+    id,
+  ]);
+  assert.equal(old.sign_in_links, false);
+});
+
+/** A provisional shelf whose agent was granted «Давать ссылку для входа». */
+async function linkingShelf() {
+  const shelf = await startProvisional();
+  const bearer = await approve(shelf.cookie, shelf.request, [
+    "context",
+    "capture",
+    "sign_in",
+  ]);
+  return { ...shelf, bearer };
+}
+
+test("a provisional shelf's link: the page shows it first, spends it on a click, and gives a weak session", async () => {
+  const shelf = await linkingShelf();
+  const issued = await signInLink(shelf.bearer);
+  assert.equal(issued.statusCode, 200, issued.body);
+  const { url, expiresAt, kind } = issued.json();
+  assert.equal(kind, "link");
   const parsed = new URL(url);
   assert.equal(`${parsed.origin}${parsed.pathname}`, `${origin}/enter`);
   assert.equal(parsed.search, "");
@@ -941,21 +1092,38 @@ test("an OAuth agent hands out a one-time link; the token lives only in the frag
   assert.match(token, /^[A-Za-z0-9_-]{43}$/);
   const minutes = (Date.parse(expiresAt) - Date.now()) / 60_000;
   assert.ok(minutes > 4.9 && minutes <= 5.01, String(minutes));
-  // Stored as a hash only.
   assert.equal(
     (await db.query("SELECT 1 FROM agent_sign_in_links WHERE token_hash=$1", [token]))
       .rowCount,
     0,
   );
+  // Loading the page (and a link scanner) only looks: twice, nothing spent.
+  for (let i = 0; i < 2; i++) {
+    const preview = await post("/api/auth/enter/preview", "", { token });
+    assert.equal(preview.statusCode, 200, preview.body);
+    assert.deepEqual(preview.json(), {
+      shelfName: "Временная полка",
+      clientName: "Claude",
+      current: null,
+    });
+  }
   assert.equal(
     (
-      await db.query("SELECT 1 FROM agent_sign_in_links WHERE token_hash=$1", [
-        sha256(token),
-      ])
-    ).rowCount,
-    1,
+      await db.query(
+        "SELECT consumed_at FROM agent_sign_in_links WHERE token_hash=$1",
+        [sha256(token)],
+      )
+    ).rows[0].consumed_at,
+    null,
   );
-  // The page posts it; a foreign page cannot.
+  // A browser signed in elsewhere is never switched silently.
+  const other = await passwordOwner("other");
+  const shown = await post("/api/auth/enter/preview", other.cookie, { token });
+  assert.equal(shown.json().current.name, other.name);
+  const silent = await post("/api/auth/enter", other.cookie, { token });
+  assert.equal(silent.statusCode, 409);
+  assert.equal(silent.json().reason, "signed_in");
+  // A foreign page cannot post it.
   const foreign = await app.inject({
     method: "POST",
     url: "/api/auth/enter",
@@ -964,43 +1132,120 @@ test("an OAuth agent hands out a one-time link; the token lives only in the frag
     payload: JSON.stringify({ token }),
   });
   assert.equal(foreign.statusCode, 403);
-  const entered = await post("/api/auth/enter", "", { token });
+  // The click.
+  const entered = await post("/api/auth/enter", other.cookie, {
+    token,
+    replace: true,
+  });
   assert.equal(entered.statusCode, 200, entered.body);
   assert.equal(entered.json().clientName, "Claude");
   const session = cookieOf(entered, "polka_session")!;
-  assert.equal(session.sameSite, "Strict");
+  const weak = `polka_session=${session.value}`;
   const {
     rows: [row],
-  } = await db.query("SELECT account_id FROM sessions WHERE hash=$1", [
+  } = await db.query("SELECT account_id,assurance FROM sessions WHERE hash=$1", [
     sha256(session.value),
   ]);
-  assert.equal(row.account_id, owner.id);
-  // Once.
-  const again = await post("/api/auth/enter", "", { token });
-  assert.equal(again.statusCode, 410);
-  assert.match(again.json().message, /Попросите агента новую/);
+  assert.equal(row.account_id, shelf.id);
+  assert.equal(row.assurance, "agent_link");
+  assert.equal(
+    (await post("/api/auth/enter", "", { token })).statusCode,
+    410,
+    "once",
+  );
+  // The weak session browses...
+  const me = await app.inject({
+    method: "GET",
+    url: "/api/session",
+    headers: { cookie: weak },
+  });
+  assert.equal(me.json().account.assurance, "agent_link");
+  // ...but cannot claim, link, manage agents or delete.
+  for (const [path, body] of [
+    ["/api/auth/idp/yandex/link", {}],
+    ["/api/agent-connections/csrf", {}],
+    ["/api/account/deletion-csrf", {}],
+  ] as const) {
+    const refused = await post(path, weak, body);
+    assert.equal(refused.statusCode, 403, `${path}: ${refused.body}`);
+  }
+  // A code to a new address signs in for real and does not attach it here.
+  const email = `weak-${randomUUID()}@example.test`;
+  const pending = await challenge(email);
+  const verified = await post(
+    "/api/auth/email/verify",
+    `${weak}; ${pending.cookie}`,
+    { id: pending.id, code: pending.code },
+  );
+  assert.equal(verified.statusCode, 200, verified.body);
+  assert.notEqual(verified.json().claimed, true);
+  const {
+    rows: [account],
+  } = await db.query("SELECT email,claimed_at FROM accounts WHERE id=$1", [
+    shelf.id,
+  ]);
+  assert.equal(account.email, null);
+  assert.equal(account.claimed_at, null);
   // The journal names the connection, never the token.
-  const journal = (
-    await db.query(
-      "SELECT action,connection_id FROM audit_outbox WHERE action='auth.agent_link_used' AND tenant_id=$1",
-      [owner.tenant],
-    )
-  ).rows;
-  assert.equal(journal.length, 1);
-  assert.ok(journal[0].connection_id);
   const everything = JSON.stringify(
-    (await db.query("SELECT * FROM audit_outbox WHERE tenant_id=$1", [owner.tenant]))
+    (await db.query("SELECT * FROM audit_outbox WHERE tenant_id=$1", [shelf.tenant]))
       .rows,
   );
+  assert.match(everything, /auth\.agent_link_used/);
   assert.ok(!everything.includes(token));
 });
 
+test("from a link's weak session a real sign-in offers to carry works over, never attaching the identity", async () => {
+  const shelf = await linkingShelf();
+  assert.equal((await publish(shelf.bearer, "Черновик")).statusCode, 200);
+  const token = new URL((await signInLink(shelf.bearer)).json().url).hash.slice(1);
+  const entered = await post("/api/auth/enter", "", { token });
+  const weak = `polka_session=${cookieOf(entered, "polka_session")!.value}`;
+  // Яндекс ID from the weak session: an ordinary sign-in (a new shelf here).
+  const query = new URLSearchParams({ next: "/" });
+  const ip = address();
+  const started = await app.inject({
+    method: "GET",
+    url: `/api/auth/idp/yandex/start?${query}`,
+    remoteAddress: ip,
+    headers: { cookie: weak },
+  });
+  assert.equal(started.statusCode, 303);
+  const sub = `ya-${randomUUID()}`;
+  const back = await returnFromYandex(
+    {
+      location: new URL(started.headers.location as string),
+      flow: cookieOf(started, "polka_idp")!.value,
+      ip,
+    },
+    { sub, email: `carry.${sub.slice(3, 11)}@yandex.ru` },
+  );
+  assert.equal(back.headers.location, "/claim?collision=1");
+  assert.equal(cookieOf(back, "polka_session"), undefined);
+  const {
+    rows: [identity],
+  } = await db.query(
+    "SELECT account_id FROM account_identities WHERE provider='yandex' AND subject=$1",
+    [sub],
+  );
+  assert.notEqual(identity.account_id, shelf.id, "not attached to the provisional shelf");
+  const claimCookie = `polka_claim=${cookieOf(back, "polka_claim")!.value}`;
+  const merged = await post("/api/account/claim/merge", `${weak}; ${claimCookie}`);
+  assert.equal(merged.statusCode, 200, merged.body);
+  const {
+    rows: [work],
+  } = await db.query(
+    "SELECT t.owner_id FROM artifacts a JOIN tenants t ON t.id=a.tenant_id WHERE a.title='Черновик' AND t.owner_id=$1",
+    [identity.account_id],
+  );
+  assert.ok(work, "the works moved to the shelf signed in to");
+});
+
 test("expired links, static tokens, a switched-off connection and the hourly limit are refused", async () => {
-  const owner = await passwordOwner("limits");
-  const request = await authorizeRequest(await oauthClient());
-  const bearer = await approve(`${owner.cookie}; ${request.browser}`, request);
+  const shelf = await linkingShelf();
+  const owner = { cookie: shelf.cookie, id: shelf.id, tenant: shelf.tenant };
   // Expired.
-  const token = new URL((await signInLink(bearer)).json().url).hash.slice(1);
+  const token = new URL((await signInLink(shelf.bearer)).json().url).hash.slice(1);
   await db.query(
     `UPDATE agent_sign_in_links SET created_at=now()-interval '10 minutes',
             expires_at=now()-interval '5 minutes' WHERE token_hash=$1`,
@@ -1010,15 +1255,15 @@ test("expired links, static tokens, a switched-off connection and the hourly lim
   // A static token.
   const secret = randomBytes(32).toString("base64url");
   await db.query(
-    `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
-     VALUES($1,$2,$3,$4,'script',ARRAY['context','capture'],$5,now()+interval '1 day')`,
+    `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,sign_in_links)
+     VALUES($1,$2,$3,$4,'script',ARRAY['context','sign_in'],$5,now()+interval '1 day',true)`,
     [randomUUID(), owner.tenant, owner.id, sha256(secret), MCP_AUDIENCE],
   );
   const refused = await signInLink(secret);
   assert.equal(refused.statusCode, 403);
   assert.match(refused.json().message, /OAuth/);
   // The owner switches links off: new ones are refused, an unused one dies.
-  const unusedIssued = await signInLink(bearer);
+  const unusedIssued = await signInLink(shelf.bearer);
   assert.equal(unusedIssued.statusCode, 200, unusedIssued.body);
   const unused = new URL(unusedIssued.json().url).hash.slice(1);
   const {
@@ -1046,7 +1291,7 @@ test("expired links, static tokens, a switched-off connection and the hourly lim
     { "x-polka-csrf": csrf },
   );
   assert.equal(off.statusCode, 200, off.body);
-  assert.equal((await signInLink(bearer)).statusCode, 403);
+  assert.equal((await signInLink(shelf.bearer)).statusCode, 403);
   assert.equal(
     (await post("/api/auth/enter", "", { token: unused })).statusCode,
     410,
@@ -1060,7 +1305,7 @@ test("expired links, static tokens, a switched-off connection and the hourly lim
   assert.equal(on.statusCode, 200);
   // At most 5 links an hour per connection (3 were asked for above).
   const statuses: number[] = [];
-  for (let i = 0; i < 4; i++) statuses.push((await signInLink(bearer)).statusCode);
+  for (let i = 0; i < 4; i++) statuses.push((await signInLink(shelf.bearer)).statusCode);
   assert.deepEqual(statuses.slice(0, 1), [200]);
   assert.ok(statuses.includes(429), statuses.join(","));
 });

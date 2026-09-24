@@ -23,6 +23,7 @@ import {
   SignupLinked,
   Claim,
   Enter,
+  SignIn,
   Templates,
   TermsPage,
 } from "./lazy-pages.tsx";
@@ -48,6 +49,7 @@ function Route({ path }: { path: string }) {
   if (path === "/signup/linked") return <SignupLinked />;
   if (path === "/claim") return <Claim />;
   if (path === "/enter") return <Enter />;
+  if (path === "/signin") return <SignIn />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/pricing") return <Pricing />;

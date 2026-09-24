@@ -12,13 +12,14 @@
 // link, all in memory (sign-in-pending.ts) behind a sealed cookie.
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import {
   ClaimCollision,
   completeProviderSignIn,
 } from "./account-identities.ts";
 import { mergeAccounts, MergeRefusal } from "./account-merge.ts";
 import { trackShelfClaimed } from "./analytics.ts";
-import { identity, limitAttempts } from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { peekPending, takePending } from "./sign-in-pending.ts";
@@ -98,7 +99,11 @@ export function registerClaimRoutes(app: FastifyInstance) {
     const actor = await identity(req);
     const entry = peekPending(req.cookies[CLAIM_COOKIE], "collision");
     if (!entry || entry.provisionalId !== actor.id)
-      return { provisional: actor.provisional, collision: null };
+      return {
+        provisional: actor.provisional,
+        weak: actor.weak,
+        collision: null,
+      };
     const {
       rows: [row],
     } = await db.query(
@@ -108,13 +113,31 @@ export function registerClaimRoutes(app: FastifyInstance) {
          FROM accounts t WHERE t.id=$1`,
       [entry.targetId, actor.id],
     );
+    // Every agent that would move, one line each: the person ticks the
+    // ones that are theirs (none by default).
+    const { rows: connections } = await db.query(
+      `SELECT id,name,oauth_client_id IS NOT NULL AS oauth,last_seen_at
+         FROM agent_connections
+        WHERE account_id=$1 AND revoked_at IS NULL AND expires_at>now()
+        ORDER BY created_at`,
+      [actor.id],
+    );
     return {
       provisional: actor.provisional,
+      weak: actor.weak,
       collision: {
         method: entry.method,
         methodName: METHOD_NAMES[entry.method]?.() ?? entry.method,
         targetName: row?.target ?? "",
         works: Number(row?.works ?? 0),
+        connections: connections.map((item) => ({
+          id: item.id as string,
+          name: item.name as string,
+          kind: item.oauth ? ("oauth" as const) : ("token" as const),
+          lastSeenAt: item.last_seen_at
+            ? new Date(item.last_seen_at).toISOString()
+            : null,
+        })),
       },
     };
   });
@@ -125,9 +148,16 @@ export function registerClaimRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const actor = await identity(req);
       await limitAttempts(`claim-merge:${actor.id}`, 10);
+      const { connections } = z
+        .object({ connections: z.array(z.string().uuid()).max(100).default([]) })
+        .strict()
+        .parse(req.body ?? {});
       const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
       clear(reply);
       if (!entry || entry.provisionalId !== actor.id) throw gone();
+      // A session from an agent's link merges only into a shelf this browser
+      // has just signed in to for real (a code, a password, a provider).
+      if (actor.weak && !entry.targetSession) assertStrongSession(actor);
       let report;
       try {
         report = await mergeAccounts({
@@ -135,6 +165,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
           into: entry.targetId,
           actor: "signup",
           reason: "claim",
+          keepConnections: connections,
         });
       } catch (error) {
         if (error instanceof MergeRefusal)

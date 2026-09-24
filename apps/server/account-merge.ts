@@ -30,7 +30,9 @@ import type { PoolClient } from "pg";
 import { actorKey } from "./analytics-keys.ts";
 import { audit } from "./artifacts.ts";
 import { recordEvent } from "./content-moderation.ts";
+import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
+import { requestDeletionRows } from "./provisional-maintenance.ts";
 import { bucket, s3 } from "./storage.ts";
 
 type Queryable = Pick<PoolClient, "query">;
@@ -433,7 +435,21 @@ export async function mergeAccounts(input: {
   actor: "operator-script" | "signup";
   mover?: ObjectMover;
   reason?: string;
+  /**
+   * The operator's evidence that one person controls both shelves (a
+   * support ticket); required for the operator, recorded in the journal.
+   */
+  proof?: string;
+  /**
+   * Agent connections of the source that move ("all" for the operator). The
+   * person picks them one by one on /claim; the rest are revoked.
+   */
+  keepConnections?: string[] | "all";
 }): Promise<MergeReport> {
+  if (input.actor === "operator-script" && !input.dryRun && !input.proof?.trim())
+    throw new MergeRefusal(
+      "Укажите --proof <номер обращения>: чем подтверждено, что обе полки принадлежат одному человеку.",
+    );
   const mover = input.mover ?? s3Mover;
   const [fromFound, intoFound] = await Promise.all([
     findMergeAccount(input.from),
@@ -450,6 +466,12 @@ export async function mergeAccounts(input: {
   try {
     report = await transaction(async (c) => {
       const { from, into } = await lockPair(c, fromFound, intoFound);
+      // «Объединить» on /claim moves a provisional shelf only: one claimed
+      // in another tab meanwhile is a real shelf and is left alone.
+      if (input.actor === "signup" && !from.provisional)
+        throw new MergeRefusal(
+          "Временная полка уже закреплена. Обновите страницу.",
+        );
       await refuseUnsafeSource(c, from);
       const counts = await count(c, from, into);
       const notes: string[] = [];
@@ -483,6 +505,24 @@ export async function mergeAccounts(input: {
           `SELECT id FROM ${table} WHERE tenant_id=$1 ORDER BY id FOR UPDATE`,
           [from.tenant],
         );
+
+      // Connections the person did not pick are closed before they move.
+      if (input.keepConnections && input.keepConnections !== "all") {
+        const closed = await c.query(
+          `UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,clock_timestamp())
+            WHERE tenant_id=$1 AND NOT (id = ANY($2::uuid[])) RETURNING id`,
+          [from.tenant, input.keepConnections],
+        );
+        await c.query(
+          `UPDATE oauth_refresh_tokens SET revoked_at=COALESCE(revoked_at,clock_timestamp())
+            WHERE tenant_id=$1 AND NOT (connection_id = ANY($2::uuid[]))`,
+          [from.tenant, input.keepConnections],
+        );
+        counts.activeAgentConnections = Math.max(
+          0,
+          counts.activeAgentConnections - (closed.rowCount ?? 0),
+        );
+      }
 
       // 1. Copies under the target's prefix (the originals stay until commit).
       const objects = await sourceObjects(c, from.tenant);
@@ -753,20 +793,48 @@ export async function mergeAccounts(input: {
         notes.push(
           "Получатель теперь занимает больше своей квоты хранения: новые сохранения будут отклоняться, пока место не освободится или квоту не увеличат.",
         );
-      await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [from.id]);
-      await c.query("DELETE FROM sessions WHERE account_id=$1", [from.id]);
       await recordEvent(c, {
         actor: input.actor,
         action: "account.merged",
         accountId: from.id,
         tenantId: from.tenant,
         reason: input.reason ?? null,
+        authority: input.proof?.trim() || null,
         details: {
           intoAccountId: into.id,
           intoTenantId: into.tenant,
           counts: { ...counts, identitiesKept: counts.identitiesKept.length },
         },
       });
+      // The emptied source is deleted, not merely disabled: through the
+      // deletion pipeline where it runs, otherwise its personal fields go now.
+      await c.query("DELETE FROM sessions WHERE account_id=$1", [from.id]);
+      if (
+        config.ACCOUNT_DELETION_ENABLED &&
+        (await requestDeletionRows(
+          c,
+          { id: from.id, tenant: from.tenant },
+          {
+            policyVersion: config.ACCOUNT_DELETION_POLICY_VERSION!,
+            purgeMaxHours: config.ACCOUNT_PURGE_MAX_HOURS!,
+            backupRetentionMaxDays: config.BACKUP_RETENTION_MAX_DAYS!,
+          },
+          "account.merged_source_deleted",
+        ))
+      )
+        notes.push("Источник передан на удаление (конвейер удаления аккаунтов).");
+      else {
+        await c.query(
+          `UPDATE accounts SET disabled=true,
+                  deletion_requested_at=COALESCE(deletion_requested_at,clock_timestamp()),
+                  email=NULL,display_name=NULL,email_verified_at=NULL
+            WHERE id=$1`,
+          [from.id],
+        );
+        notes.push(
+          "Источник закрыт как удалённый: почта, имя и оставшиеся привязки стёрты.",
+        );
+      }
       await audit(c, { id: into.id, tenant: into.tenant }, "account.merged", from.id);
       return summary;
     });

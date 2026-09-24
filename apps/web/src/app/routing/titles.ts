@@ -11,6 +11,7 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/signup/linked") return "Способ входа привязан";
   if (path === "/claim") return "Закрепить полку";
   if (path === "/enter") return "Вход по ссылке";
+  if (path === "/signin") return "Вход в полку";
   if (path === "/privacy") return "Политика обработки персональных данных";
   if (path === "/terms") return "Пользовательское соглашение";
   if (path === "/pricing") return "Как пользоваться";

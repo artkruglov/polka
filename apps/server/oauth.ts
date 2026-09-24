@@ -29,7 +29,7 @@ import {
   type AgentScope,
 } from "../../packages/contracts/index.ts";
 import type { Actor } from "./artifacts.ts";
-import { identity, limitAttempts } from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
@@ -196,6 +196,8 @@ export function offeredScopes(scope: string | undefined): AgentScope[] {
   );
   if (!known.size) return [...AGENT_SCOPES];
   known.add("context");
+  // Offered on every consent page (unticked): the owner decides.
+  known.add("sign_in");
   return AGENT_SCOPES.filter((item) => known.has(item));
 }
 
@@ -766,9 +768,9 @@ async function exchangeCode(
     } = await c.query(
       `INSERT INTO agent_connections(
          id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,
-         oauth_client_id,access_expires_at
+         oauth_client_id,access_expires_at,sign_in_links
        ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '30 days',$8,
-         now()+$9*interval '1 second')
+         now()+$9*interval '1 second','sign_in'=ANY($6::text[]))
        RETURNING *`,
       [
         connectionId,
@@ -1134,6 +1136,8 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
         [input.request, sha256(browserToken)],
       );
       if (!pending.rowCount) throw expiredRequest();
+      // One provisional shelf per connection request.
+      await limitAttempts(`provisional-request:${input.request}`, 1, "24 hours");
       const shelf = await createProvisionalShelf(
         req.ip,
         sanitizeSource(input.source ?? null),
@@ -1158,8 +1162,11 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
     "/oauth/authorize/decision",
     { bodyLimit: 4096 },
     async (req, reply) => {
+      const actor = await identity(req);
+      // Granting an agent needs a real sign-in, not an agent's link.
+      assertStrongSession(actor);
       const result = await decideAuthorization(
-        await identity(req),
+        actor,
         req.cookies.polka_session ?? "",
         String(req.headers["x-polka-csrf"] ?? ""),
         browserCookie(req),

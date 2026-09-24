@@ -41,6 +41,7 @@ export const AGENT_SCOPES = [
   "revise",
   "share",
   "manage",
+  "sign_in",
 ] as const;
 /** «Для компаний» (/enterprise): the request form's choices and limits. */
 export const ENTERPRISE_TEAM_SIZES = [
