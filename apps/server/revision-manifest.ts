@@ -12,6 +12,8 @@ export function createSingleHtmlRevisionManifest(
   bytes: Buffer,
   htmlProfile: HtmlProfile,
   capturedAt = new Date(),
+  /** The page it was saved from (the «На Полку» bookmark), else a plain file. */
+  sourceUrl: string | null = null,
 ): { manifest: BundleManifest; manifestSha256: string } {
   const manifest = canonicalizeManifest({
     version: 1,
@@ -28,13 +30,22 @@ export function createSingleHtmlRevisionManifest(
         sha256: digest(bytes),
       },
     ],
-    provenance: {
-      kind: "file",
-      sourceUrl: null,
-      capturedAt: capturedAt.toISOString(),
-      attribution: "Загружено владельцем; авторство не подтверждено",
-      license: "unknown",
-    },
+    provenance: sourceUrl
+      ? {
+          kind: "url",
+          sourceUrl,
+          capturedAt: capturedAt.toISOString(),
+          attribution:
+            "Сохранено владельцем со страницы в его браузере (закладка «На Полку»); авторство не подтверждено",
+          license: "unknown",
+        }
+      : {
+          kind: "file",
+          sourceUrl: null,
+          capturedAt: capturedAt.toISOString(),
+          attribution: "Загружено владельцем; авторство не подтверждено",
+          license: "unknown",
+        },
     dependencies: { status: "unknown", unresolved: [] },
   });
   return {

@@ -97,6 +97,8 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       path === "/mail-off" ||
       path === "/settings/agents" ||
       path === "/bring" ||
+      path === "/bring/receive" ||
+      path === "/bookmarklet" ||
       path === "/landing" ||
       path === "/connections" ||
       path === "/trash" ||
