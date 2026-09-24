@@ -62,8 +62,8 @@ x-runtime-env: &runtime-env
   EMAIL_SIGNUP_DAILY_PER_IP: ${EMAIL_SIGNUP_DAILY_PER_IP:-3}
   # Anti-spam at sign-up: new shelves per day per /24 network and per mail
   # domain (not the large public providers). 0: no limit.
-  EMAIL_SIGNUP_DAILY_PER_SUBNET: ${EMAIL_SIGNUP_DAILY_PER_SUBNET:-0}
-  EMAIL_SIGNUP_DAILY_PER_DOMAIN: ${EMAIL_SIGNUP_DAILY_PER_DOMAIN:-0}
+  EMAIL_SIGNUP_DAILY_PER_SUBNET: ${EMAIL_SIGNUP_DAILY_PER_SUBNET:-10}
+  EMAIL_SIGNUP_DAILY_PER_DOMAIN: ${EMAIL_SIGNUP_DAILY_PER_DOMAIN:-20}
   # Sign-in rules (docs/specs/SIGN_IN_PROVIDERS.md). New shelves by an
   # emailed code only on Russian mail domains here; existing accounts keep
   # their codes unless EMAIL_LOGIN_DOMAINS=signup.
@@ -91,10 +91,10 @@ x-runtime-env: &runtime-env
   COMMENTS_MODE: ${COMMENTS_MODE:-owner-notes}
   # Abuse protection (docs/specs/ABUSE_PROTECTION.md). off | auto | flagged |
   # new-accounts | all: which new links wait for the operator.
-  SHARE_MODERATION: ${SHARE_MODERATION:-flagged}
+  SHARE_MODERATION: ${SHARE_MODERATION:-auto}
   TRUST_MIN_CLEAN_SAVES: ${TRUST_MIN_CLEAN_SAVES:-3}
   # Prohibited-content filter (docs/specs/CONTENT_FILTER.md).
-  CONTENT_FILTER_MODE: ${CONTENT_FILTER_MODE:-balanced}
+  CONTENT_FILTER_MODE: ${CONTENT_FILTER_MODE:-strict}
   CONTENT_FILTER_AUTOBLOCK: ${CONTENT_FILTER_AUTOBLOCK:-false}
   MODERATION_RETENTION: ${MODERATION_RETENTION:-}
   OPERATOR_CONTACT: ${OPERATOR_CONTACT:-}

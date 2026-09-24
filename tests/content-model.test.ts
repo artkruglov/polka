@@ -166,7 +166,7 @@ test("config: NeuralDeep primary, Yandex fallback; keys never cross endpoints", 
   assert.equal(own.code!.flatRate, false);
 });
 
-test("config: hosted.env.example starts as NeuralDeep primary and code model, Yandex fallback", () => {
+test("config: hosted.env.example starts on Yandex AI Studio for every role; NeuralDeep is only commented out", () => {
   const example = Object.fromEntries(
     readFileSync("deploy/hosted/hosted.env.example", "utf8")
       .split("\n")
@@ -180,14 +180,19 @@ test("config: hosted.env.example starts as NeuralDeep primary and code model, Ya
       }),
   );
   const roles = ok(endpoints(example));
-  assert.equal(roles.primary.provider, "neuraldeep");
-  assert.equal(roles.primary.url, ND);
-  assert.equal(roles.primary.rpm, 20);
-  assert.equal(roles.primary.concurrency, 3);
-  assert.equal(roles.fallback!.provider, "yandex");
-  assert.equal(roles.fallback!.url, YANDEX);
-  assert.equal(roles.fallback!.rpm, 0);
+  assert.equal(roles.primary.provider, "yandex");
+  assert.equal(roles.primary.url, YANDEX);
+  assert.equal(roles.primary.rpm, 0);
+  assert.equal(roles.primary.concurrency, 0);
+  assert.deepEqual(roles.fallback, roles.primary);
   assert.deepEqual(roles.code, roles.primary);
+  // AI Studio prices for the configured models.
+  const studio = parsePrices(example.CONTENT_MODEL_PRICES_RUB!);
+  for (const model of [example.CONTENT_MODEL_PRIMARY!, example.CONTENT_MODEL_FALLBACK!])
+    assert.ok(
+      costOf(model, { prompt_tokens: 1000, completion_tokens: 0 }, "yandex", studio) <= 0.3,
+      model,
+    );
   // The prices parse, and NeuralDeep's list prices are the built-in ones.
   const table = parsePrices(example.CONTENT_MODEL_PRICES_RUB!);
   const usage = { prompt_tokens: 1000, completion_tokens: 1000 };
