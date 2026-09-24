@@ -1,4 +1,14 @@
-import { oauthClientKind, trackAgentConnected } from "./analytics.ts";
+import {
+  oauthClientKind,
+  sanitizeSource,
+  trackAgentConnected,
+} from "./analytics.ts";
+import { shelfSummary } from "./account-identities.ts";
+import {
+  createProvisionalShelf,
+  PROVISIONAL_SESSION_SECONDS,
+} from "./provisional.ts";
+import { sessionCookie } from "./sign-in-routes.ts";
 import {
   createHash,
   randomBytes,
@@ -518,6 +528,8 @@ export async function authorizationDetails(
   if (!row) throw expiredRequest();
   const scopes = row.requested_scopes as AgentScope[];
   return {
+    // Which shelf the connector will save to, and how its owner signs in.
+    account: await shelfSummary(actor.id),
     requestId: row.id,
     client: {
       name: row.client_name,
@@ -1082,6 +1094,58 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
       });
     return reply.redirect(outcome.location, 302);
   });
+  // «Начать без регистрации» (provisional.ts): a shelf for this browser,
+  // only while it has a real pending connection request of its own (the
+  // request's browser cookie) and only from a page of Полка (Origin).
+  app.post(
+    "/oauth/authorize/provisional",
+    { bodyLimit: 2048 },
+    async (req, reply) => {
+      const input = z
+        .object({
+          request: uuid,
+          source: z
+            .object({
+              ref: z.string().max(200).optional(),
+              referrer: z.string().max(300).optional(),
+            })
+            .strict()
+            .optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const signedIn = await identity(req).then(
+        () => true,
+        () => false,
+      );
+      if (signedIn)
+        throw new Problem(
+          409,
+          "conflict",
+          "Этот браузер уже вошёл в полку. Обновите страницу.",
+        );
+      await limitAttempts(`provisional-ip:${req.ip}`, 5, "1 hour");
+      const browserToken = browserCookie(req);
+      if (!TOKEN.test(browserToken)) throw expiredRequest();
+      const pending = await db.query(
+        `SELECT 1 FROM oauth_authorizations
+          WHERE id=$1 AND browser_hash=$2 AND status='pending'
+            AND expires_at>now()`,
+        [input.request, sha256(browserToken)],
+      );
+      if (!pending.rowCount) throw expiredRequest();
+      const shelf = await createProvisionalShelf(
+        req.ip,
+        sanitizeSource(input.source ?? null),
+      );
+      reply.setCookie(
+        "polka_session",
+        shelf.session,
+        sessionCookie(PROVISIONAL_SESSION_SECONDS),
+      );
+      return { ok: true };
+    },
+  );
   app.get("/oauth/authorize/details", async (req) => {
     const actor = await identity(req);
     const { request } = z

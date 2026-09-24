@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { z } from "zod";
 import {
   issueAgentConnectionSchema,
   type AgentConnection,
@@ -25,6 +26,8 @@ export type ServiceActor = {
   scopes: AgentScope[];
   audience: string;
   expiresAt: number;
+  /** Granted to a chat connector by OAuth (not a pasted static token). */
+  oauth?: boolean;
 };
 
 /**
@@ -62,6 +65,7 @@ function serviceActorFromRow(row: any): ServiceActor {
     connectionId: row.id,
     scopes: row.scopes,
     audience: row.audience,
+    oauth: !!row.oauth_client_id,
     // An OAuth access token lapses before its connection's refresh window.
     expiresAt: Math.floor(
       Math.min(
@@ -99,6 +103,8 @@ const connectionDTO = (row: any): AgentConnection => ({
         ? "seen"
         : "issued",
   kind: row.oauth_client_id ? "oauth" : "token",
+  // OAuth connections may hand their owner a sign-in link (agent-sign-in-links.ts).
+  signInLinks: !!row.oauth_client_id && row.sign_in_links !== false,
   createdAt: new Date(row.created_at).toISOString(),
   expiresAt: new Date(row.expires_at).toISOString(),
   lastSeenAt: row.last_seen_at
@@ -261,6 +267,31 @@ export async function revokeAgentConnection(
       );
     }
     return { ok: true };
+  });
+}
+
+/** «Может выдавать ссылки для входа»: the owner's switch per OAuth connection. */
+export async function setConnectionSignInLinks(
+  actor: Actor,
+  sessionToken: string,
+  csrfToken: string,
+  connectionId: string,
+  body: unknown,
+) {
+  const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(body);
+  return transaction(async (c) => {
+    await lockOwner(c, actor, sessionToken, csrfToken);
+    const { setSignInLinks } = await import("./agent-sign-in-links.ts");
+    if (!(await setSignInLinks(c, actor, connectionId, enabled)))
+      throw missing();
+    // An owner who switches links off also voids the ones not yet used.
+    if (!enabled)
+      await c.query(
+        `UPDATE agent_sign_in_links SET consumed_at=clock_timestamp()
+          WHERE connection_id=$1 AND consumed_at IS NULL`,
+        [connectionId],
+      );
+    return { ok: true, signInLinks: enabled };
   });
 }
 

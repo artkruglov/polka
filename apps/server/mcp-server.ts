@@ -1,3 +1,4 @@
+import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { sourceForAgent, templatesForAgent } from "./agent-context.ts";
 import {
   contextInput,
@@ -297,12 +298,35 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "Polka context",
         description:
-          "Return this connection's tenant label, scopes, limits, and currently implemented MCP capabilities.",
+          "Return this connection's tenant label, scopes, limits, and currently implemented MCP capabilities. Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»».",
         inputSchema: z.object({}).strict(),
         annotations: { readOnlyHint: true, openWorldHint: false },
       },
       async () => asToolResult(await context(actor)),
     );
+    // A way back into the shelf for the owner (agent-sign-in-links.ts):
+    // OAuth connections only.
+    if (actor.oauth)
+      server.registerTool(
+        "polka_open_shelf",
+        {
+          title: "Sign-in link to the shelf",
+          description:
+            "Give the user a one-time link that signs their browser in to this shelf (the one this connection saves to), when they ask to open Полка («Открой мою Полку») or lost their way in. Hand the url to the user exactly as returned and never open it yourself; it works once, within 5 minutes. The owner may switch this off for the connection; then relay the message.",
+          inputSchema: z.object({}).strict(),
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false,
+          },
+        },
+        async () =>
+          withToolErrors(async () => {
+            const current = await recheckServiceActor(actor, "context");
+            return issueSignInLink(current);
+          }),
+      );
     server.registerTool(
       "polka_status",
       {
@@ -702,8 +726,10 @@ export function createMcpServer(actor: ServiceActor) {
           openWorldHint: false,
         },
       },
+      // A refusal with details (a provisional shelf's claimUrl) reaches the
+      // agent as structured fields.
       async (input) =>
-        asToolResult(
+        withToolErrors(async () =>
           input.moveShareId
             ? await moveShareFromAgent(actor, {
                 key: input.key,

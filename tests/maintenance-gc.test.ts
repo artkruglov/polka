@@ -158,6 +158,7 @@ test("one guarded run reconciles exact upload and derivative versions before com
       expiredUploadsReconciled: 1,
       expiredDerivativesReconciled: 1,
       emailChallengesRemoved: 0,
+      provisionalShelvesRetired: 0,
     },
   });
   assert.deepEqual(objects.listed, [uploadKey, derivativeKey]);

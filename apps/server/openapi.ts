@@ -12,6 +12,7 @@ import {
   editsBodySchema,
   editsResponseSchema,
   publishResponseSchema,
+  signInLinkResponseSchema,
   statusResponseSchema,
 } from "./publish-api.ts";
 
@@ -283,6 +284,37 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/sign-in-link": {
+        post: {
+          operationId: "signInLink",
+          summary: "A one-time link that signs the owner's browser in",
+          description:
+            "For an OAuth connection (a chat connector) whose owner asks to open Полка in a browser («Открой мою Полку»). Returns url = <origin>/enter#<token>: give it to the user exactly as returned and never open it yourself. It works once, within 5 minutes, and signs the browser in to the shelf this connection saves to. Refused for static tokens and when the owner switched links off for the connection. At most 5 links per connection per hour.",
+          security: [{ bearerAuth: ["context"] }],
+          responses: {
+            "200": {
+              description: "The link.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/SignInLinkResponse" },
+                },
+              },
+            },
+            "401": common["401"],
+            "403": problem(
+              "A static token, or the owner switched sign-in links off for this connection.",
+              {
+                token: {
+                  code: "forbidden",
+                  message:
+                    "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
+                },
+              },
+            ),
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/status/{artifactId}": {
         get: {
           operationId: "status",
@@ -458,6 +490,7 @@ export function openApiDocument(origin: string) {
           PUBLISH_RESPONSE_NOTES,
         ),
         StatusResponse: jsonSchema(statusResponseSchema, "output"),
+        SignInLinkResponse: jsonSchema(signInLinkResponseSchema, "output"),
         EditsRequest: jsonSchema(editsBodySchema, "input"),
         EditsResponse: jsonSchema(editsResponseSchema, "output"),
         EditProblem: jsonSchema(editProblemSchema, "output"),
