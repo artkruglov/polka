@@ -184,6 +184,15 @@ test("one guarded run reconciles exact upload and derivative versions before com
       "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
     ),
   );
+  // Usage analytics: raw events and active days for 13 months, and those of
+  // deleted accounts (the fake database has none); the counters stay.
+  for (const sql of [
+    "DELETE FROM analytics_events WHERE occurred_at<now()-interval '13 months'",
+    "DELETE FROM analytics_active_days WHERE day<(now()-interval '13 months')::date",
+    "SELECT id FROM accounts WHERE deletion_requested_at IS NOT NULL",
+  ])
+    assert.ok(database.calls.includes(sql), sql);
+  assert.ok(!database.calls.some((sql) => sql.includes("analytics_daily")));
 });
 
 test("abort after one exact delete rolls back metadata and a later run finishes reconciliation", async () => {

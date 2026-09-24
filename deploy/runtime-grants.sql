@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 033.
+-- Operator-reviewed recipe for the Polka schema through migration 034.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>33
+     OR (SELECT count(*) FROM public.schema_migrations)<>34
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>33 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 033';
+     OR (SELECT max(version) FROM public.schema_migrations)<>34 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 034';
   END IF;
 END $$;
 
@@ -148,5 +148,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.enterprise_requests TO :"ru
 -- Sign-in providers (032): the application links identities, stamps their
 -- last use and unlinks them from settings. Erasure is a protected trigger.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.account_identities TO :"runtime_role";
+-- Product analytics (034): the application appends events and counters and
+-- reads them for the operator report; maintenance deletes raw events and
+-- active days after 13 months and those of deleted accounts; an objection
+-- deletes an account's rows and records its opt-out. Counters are never
+-- deleted by the runtime.
+GRANT SELECT, INSERT, DELETE ON TABLE
+  public.analytics_events, public.analytics_active_days
+TO :"runtime_role";
+GRANT SELECT, INSERT, UPDATE ON TABLE public.analytics_daily TO :"runtime_role";
+GRANT SELECT, INSERT ON TABLE public.analytics_optouts TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 033
+\echo Runtime grants installed for the reviewed schema through migration 034

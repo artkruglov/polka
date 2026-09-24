@@ -8,6 +8,7 @@ import {
   confirmAccountDeletion,
   type AccountDeletionReceipt,
 } from "../apps/server/account-deletion.ts";
+import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
 import { beginUpload } from "../apps/server/artifacts.ts";
 import { createAccount, signIn } from "../apps/server/auth.ts";
 import { buildInlineRevisionWithRunner } from "../apps/server/bundle-derivatives.ts";
@@ -492,6 +493,21 @@ test("confirmed deletion atomically closes access while preserving source data f
     confirmation,
   );
   assert.deepEqual(replay, receipt);
+  // The account's usage events and active days went with the request
+  // (analytics.ts); the neighbour's stay.
+  await flushAnalytics();
+  const analyticsRows = async (accountId: string) =>
+    Number(
+      (
+        await db.query(
+          `SELECT (SELECT count(*) FROM analytics_events WHERE actor=$1)
+                 +(SELECT count(*) FROM analytics_active_days WHERE actor=$1) AS count`,
+          [actorKey(accountId)],
+        )
+      ).rows[0].count,
+    );
+  assert.equal(await analyticsRows(owner.id), 0);
+  assert.ok((await analyticsRows(neighbor.id)) > 0);
   assert.equal(
     Number(
       (

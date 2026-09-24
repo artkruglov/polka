@@ -1,4 +1,4 @@
--- Operator-reviewed grants for the restore-only erasure reconciler at schema 033.
+-- Operator-reviewed grants for the restore-only erasure reconciler at schema 034.
 -- This identity is distinct from both the application and ordinary purge worker.
 -- Run as the actual schema owner of a dedicated Polka database.
 \set ON_ERROR_STOP on
@@ -77,10 +77,10 @@ BEGIN
     RAISE EXCEPTION 'Require a dedicated public schema and objects owned by schema_owner';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>33
+     OR (SELECT count(*) FROM public.schema_migrations)<>34
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>33 THEN
-    RAISE EXCEPTION 'Restore grants require exactly migrations 001 through 033';
+     OR (SELECT max(version) FROM public.schema_migrations)<>34 THEN
+    RAISE EXCEPTION 'Restore grants require exactly migrations 001 through 034';
   END IF;
 END $$;
 
@@ -116,4 +116,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner"
 ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner" IN SCHEMA public
   REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC, :"restore_role";
 COMMIT;
-\echo Restore worker grants installed for reviewed schema through migration 033
+\echo Restore worker grants installed for reviewed schema through migration 034

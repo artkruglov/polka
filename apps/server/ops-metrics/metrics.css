@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf7;
+  --fg: #1d1c1a;
+  --muted: #6b675f;
+  --line: #e2ddd3;
+  --head: #f1ede4;
+  --accent: #2f5d50;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;
+    --fg: #ece8e0;
+    --muted: #a39d92;
+    --line: #37342f;
+    --head: #24221f;
+    --accent: #8cc7b2;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 24px 16px 64px;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    15px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+h1 {
+  font-size: 24px;
+  margin: 0 0 4px;
+}
+h2 {
+  font-size: 18px;
+  margin: 32px 0 4px;
+}
+.muted,
+.note {
+  color: var(--muted);
+  font-size: 13px;
+}
+form,
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+form {
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 420px;
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+input {
+  width: 100%;
+}
+button {
+  cursor: pointer;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+#controls button + button {
+  background: transparent;
+  color: var(--fg);
+}
+.table {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+th {
+  background: var(--head);
+  font-weight: 600;
+}
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+td.rate {
+  color: var(--muted);
+}
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 140px;
+}
+.kpi b {
+  display: block;
+  font-size: 22px;
+}
+#status.error {
+  color: #b3261e;
+}
+[hidden] {
+  display: none !important;
+}

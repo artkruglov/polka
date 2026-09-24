@@ -10,6 +10,7 @@ import type {
 } from "../../packages/contracts/constants.ts";
 import { enterpriseRequestSchema } from "../../packages/contracts/enterprise.ts";
 import { limitAttempts } from "./auth.ts";
+import { trackEnterpriseRequest } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem } from "./errors.ts";
@@ -131,6 +132,8 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
       );
     return { ok: true as const };
   }
+  // Analytics: that a request came, and what about; nothing about who.
+  trackEnterpriseRequest(created.interest, created.team_size);
   await notifyOperator(created);
   return { ok: true as const };
 }

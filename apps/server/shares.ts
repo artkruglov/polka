@@ -22,6 +22,7 @@ import {
 } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { trackShareCreated, viaFor } from "./analytics.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
 import {
   MODERATION_MESSAGE,
@@ -677,6 +678,9 @@ async function enableShareInTransaction(
     ],
   );
   await audit(c, actor, "share.enabled", shareId);
+  // Analytics: a link was made (after the commit; `first` is the account's
+  // first recorded one).
+  trackShareCreated(c, actor.id, viaFor(actor));
   await applyDecision(c, actor, created, decision, notices);
   return created;
 }

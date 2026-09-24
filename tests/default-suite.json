@@ -3,6 +3,7 @@
   "tests/browser-icons.test.ts",
   "tests/away-links.test.ts",
   "tests/ops-status.test.ts",
+  "tests/analytics.test.ts",
   "tests/storage-bootstrap.test.ts",
   "tests/viewer-config.test.ts",
   "tests/account-deletion-config.test.ts",
