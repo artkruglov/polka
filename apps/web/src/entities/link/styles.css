@@ -1,0 +1,18 @@
+/* A link work: the service, the title, the host and the way to the original. */
+.link-cover { display: grid; align-content: center; justify-items: start; gap: 10px; width: 100%; height: 100%; padding: 20px; background: var(--soft-3); }
+.link-cover strong { color: var(--ink); font-size: var(--text-md); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.link-cover span { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.link-card { display: grid; gap: 16px; max-width: 640px; margin: 32px auto; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
+.link-card-head { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
+.link-card-head > div { display: grid; gap: 2px; min-width: 0; }
+.link-card-kind { color: var(--muted); font-size: var(--text-sm); }
+.link-card h2 { font-size: var(--text-lg); line-height: 1.3; overflow-wrap: anywhere; }
+.link-card-host { color: var(--muted-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.link-card-note { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.link-card-open { justify-self: start; }
+.link-card-open svg { width: 16px; height: 16px; }
+.link-card-hint { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .link-card { margin: 16px 0; padding: 18px; }
+  .link-card-open { justify-self: stretch; justify-content: center; }
+}

@@ -16,9 +16,9 @@ WORKDIR /renderer
 COPY apps/renderer/package.json apps/renderer/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 # Only what the renderer runs: no app code, no database or storage clients.
-COPY packages/public-address.ts packages/renderer-contract.ts packages/
+COPY packages/public-address.ts packages/renderer-contract.ts packages/robots.ts packages/
 COPY packages/contracts/link-providers.ts packages/contracts/
-COPY apps/renderer/challenge.ts apps/renderer/egress-proxy.ts apps/renderer/render.ts apps/renderer/server.ts apps/renderer/
+COPY apps/renderer/challenge.ts apps/renderer/egress-proxy.ts apps/renderer/fetch-page.ts apps/renderer/proxied-fetch.ts apps/renderer/render.ts apps/renderer/server.ts apps/renderer/
 
 # The image's unprivileged user; compose adds read_only, cap_drop ALL and limits.
 USER pwuser

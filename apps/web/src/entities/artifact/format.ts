@@ -2,6 +2,7 @@ import type {
   Artifact,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
+import { LINK_MIME } from "../../../../../packages/contracts/constants.ts";
 export const date = (s: string) =>
   new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 export const size = (n: number) =>
@@ -44,7 +45,9 @@ export const kindOf = (r: Pick<Revision, "mime">) =>
     ? "Страница"
     : r.mime === "text/plain"
       ? "Текст"
-      : "Изображение";
+      : r.mime === LINK_MIME
+        ? "Ссылка"
+        : "Изображение";
 export type ProfileView = {
   label: string;
   text: string;
@@ -58,6 +61,13 @@ export function profileView(
   r: Pick<Revision, "mime" | "htmlProfile"> &
     Partial<Pick<Revision, "inlineBuild">>,
 ): ProfileView {
+  if (r.mime === LINK_MIME)
+    return {
+      label: "Ссылка",
+      text: "Получатель увидит карточку с кнопкой к оригиналу. Содержимое хранится у сервиса.",
+      linkable: true,
+      badge: "Ссылка на оригинал",
+    };
   if (r.mime !== "text/html")
     return {
       label: kindOf(r),

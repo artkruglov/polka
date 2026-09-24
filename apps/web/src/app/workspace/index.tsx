@@ -496,6 +496,7 @@ export function App() {
                 preview={
                   <Preview
                     revision={shown}
+                    title={work.title}
                     overlay={
                       workComments.available ? workComments.overlay : undefined
                     }

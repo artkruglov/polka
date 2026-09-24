@@ -48,6 +48,17 @@
 .url-import-action p { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; margin-top: 2px; }
 .url-import-action p a { color: var(--accent); font-weight: 500; }
 .url-import-action > .ui-button { justify-self: end; white-space: nowrap; }
+.url-import-drop { display: grid; gap: 10px; padding: 14px 16px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--canvas); }
+.url-import-drop-head { display: flex; align-items: center; gap: 12px; }
+.url-import-drop-head svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+.url-import-drop-head strong { font-size: var(--text-base); }
+.url-import-drop > .ui-button { justify-self: start; }
+.url-import-oneclick { font-size: var(--text-sm); }
+.url-import-oneclick > summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 500; cursor: pointer; }
+.url-import-oneclick[open] > summary { margin-bottom: 8px; }
+.url-import-oneclick > p { color: var(--muted); line-height: 1.5; }
+.url-import-link-form { display: grid; gap: 10px; margin-top: 12px; }
+.url-import-link-form > .ui-button { justify-self: start; }
 .url-import-phrase { display: block; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius); background: var(--soft); color: var(--ink-2); font: 400 var(--text-sm) / 1.45 var(--font-mono); overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .url-import-action { grid-template-columns: 20px minmax(0, 1fr); }

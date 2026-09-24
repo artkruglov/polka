@@ -1,16 +1,23 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { chromium, type Browser } from "playwright-core";
+import { renderable } from "../../packages/contracts/link-providers.ts";
 import {
   verifyRenderRequest,
+  type FetchResult,
   type RenderResult,
 } from "../../packages/renderer-contract.ts";
 import { createEgressProxy } from "./egress-proxy.ts";
+import { fetchPage, robotsVerdict, robotsVia, type RobotsSource } from "./fetch-page.ts";
+import { proxiedGet, type ProxiedGet } from "./proxied-fetch.ts";
 import { renderPage, type RenderOptions } from "./render.ts";
 
 /*
  * Полка's headless renderer (docs/specs/URL_IMPORT_SUPPORT.md, «Рендерер»).
- * One operation: POST /render {url} → the rendered DOM of an allowlisted
- * public page, or an error code. Every request is signed by the app
+ * POST /render {url} → the rendered DOM of an allowlisted public page;
+ * POST /fetch {url} → the HTML of a server-fetch page (ChatGPT share) from one
+ * plain GET, no browser. Both check robots.txt for PolkaRenderer from here,
+ * go out only through the egress proxy and answer an error code rather than
+ * retry. Every request is signed by the app
  * (packages/renderer-contract.ts). Pages are rendered one at a time; a short
  * queue waits, anything beyond it gets «busy». The process holds no database,
  * storage or user credentials: what it could leak is only what it renders.
@@ -28,16 +35,21 @@ export type RendererOptions = {
   secret: string;
   browser: () => Promise<Browser>;
   render?: RenderOptions;
+  /** The plain GET through the egress proxy, for /fetch and robots.txt. */
+  get: ProxiedGet;
+  robots?: RobotsSource;
+  /** Test hook: the /fetch allowlist of the fixture. Never set in production. */
+  fetchAllow?: (url: string) => boolean;
   /** Test hook: the fixture listens on a random port. Never set in production. */
   anyPort?: boolean;
 };
 
-export function createRenderer({ secret, browser, render, anyPort = false }: RendererOptions) {
+export function createRenderer({ secret, browser, render, get, robots = robotsVia(get), fetchAllow, anyPort = false }: RendererOptions) {
   if (secret.length < 32) throw new Error("RENDERER_SECRET must be at least 32 characters");
   let chain: Promise<unknown> = Promise.resolve();
   let waiting = 0;
-  const enqueue = (task: () => Promise<RenderResult>): Promise<RenderResult> => {
-    if (waiting > MAX_QUEUE) return Promise.resolve({ error: "busy" });
+  const enqueue = <T extends RenderResult | FetchResult>(task: () => Promise<T>): Promise<T> => {
+    if (waiting > MAX_QUEUE) return Promise.resolve({ error: "busy" } as T);
     waiting++;
     const next = chain.then(task).finally(() => waiting--);
     chain = next.catch(() => {});
@@ -49,14 +61,15 @@ export function createRenderer({ secret, browser, render, anyPort = false }: Ren
       res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(body));
     };
     if (req.method === "GET" && req.url === "/healthz") return send(200, { ok: true });
-    if (req.method !== "POST" || req.url !== "/render") return send(404, { error: "bad_request" });
+    const operation = req.url === "/render" ? "render" : req.url === "/fetch" ? "fetch" : null;
+    if (req.method !== "POST" || !operation) return send(404, { error: "bad_request" });
     let body = "";
     try {
       body = await readBody(req);
     } catch {
       return send(413, { error: "bad_request" });
     }
-    if (!verifyRenderRequest(secret, req.headers, "POST", "/render", body)) return send(401, { error: "unauthorized" });
+    if (!verifyRenderRequest(secret, req.headers, "POST", `/${operation}`, body)) return send(401, { error: "unauthorized" });
     let url: string;
     try {
       const parsed = JSON.parse(body) as { url?: unknown };
@@ -68,9 +81,18 @@ export function createRenderer({ secret, browser, render, anyPort = false }: Ren
     } catch {
       return send(400, { error: "bad_request" });
     }
-    const result = await enqueue(async () => renderPage(await browser(), url, render));
+    const allowRender = render?.allow ?? renderable;
+    const result: RenderResult | FetchResult =
+      operation === "fetch"
+        ? await enqueue(() => fetchPage(get, robots, url, fetchAllow ? { allow: fetchAllow } : {}))
+        : await enqueue(async (): Promise<RenderResult> => {
+            if (!allowRender(url)) return { error: "not_allowed" };
+            const verdict = await robotsVerdict(robots, new URL(url));
+            if (verdict) return { error: verdict };
+            return renderPage(await browser(), url, render);
+          });
     // Counts and outcomes only: the URL is the user's and stays out of logs.
-    console.log(JSON.stringify({ event: "render", outcome: "error" in result ? result.error : "ok", ms: Date.now() - started }));
+    console.log(JSON.stringify({ event: operation, outcome: "error" in result ? result.error : "ok", ms: Date.now() - started }));
     send("error" in result ? (result.error === "busy" ? 503 : 422) : 200, result);
   });
 }
@@ -129,7 +151,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     return current;
   };
   await browser();
-  const server = createRenderer({ secret, browser });
+  const server = createRenderer({ secret, browser, get: proxiedGet(egressPort) });
   server.listen(port, host, () => console.log(JSON.stringify({ event: "renderer.ready", port, sandbox })));
   setInterval(() => {
     if (refused) console.log(JSON.stringify({ event: "egress.refused", count: refused }));

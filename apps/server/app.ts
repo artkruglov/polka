@@ -70,7 +70,9 @@ import {
   isServedBuilderVersion,
   isServedRuntimeProfile,
 } from "./bundle-runtime-contract.ts";
-import { MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
+import { LINK_MIME, MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
+import { saveLink } from "./saved-links.ts";
+import { readLinkDocument } from "./saved-link-format.ts";
 import {
   issueAgentConnection,
   issueConnectionCsrf,
@@ -666,6 +668,27 @@ export async function createApp() {
   app.post("/api/uploads", async (req) =>
     beginUpload(await identity(req), req.body),
   );
+  // «Сохранить как ссылку» (docs/specs/SAVED_LINKS.md).
+  app.post("/api/links", { bodyLimit: 8192 }, async (req) =>
+    saveLink(await identity(req), req.body),
+  );
+  // The owner's «Открыть ↗» on a link work: the address is read from its file
+  // and the browser is sent there, without a referrer.
+  app.get("/api/revisions/:id/open", async (req, reply) => {
+    const actor = await identity(req);
+    const {
+      rows: [r],
+    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
+      id(req),
+      actor.tenant,
+    ]);
+    if (!r || r.mime !== LINK_MIME) throw missing();
+    const { url } = readLinkDocument(await readBlob(r.object_key, r.object_version));
+    return reply
+      .header("referrer-policy", "no-referrer")
+      .header("cache-control", "no-store")
+      .redirect(url, 303);
+  });
   // Runs before the body is read. The session is checked first, so requests
   // without one never hold a slot, and one shelf cannot take all of them.
   let transfers = 0;
