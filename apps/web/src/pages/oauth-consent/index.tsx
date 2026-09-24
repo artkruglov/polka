@@ -105,9 +105,10 @@ export function OAuthConsent() {
       );
       setState({
         kind: "leaving",
+        // «Возвращаем вас …»: a site by its host, an extension by what it is.
         host: state.details.client.extension
-          ? "расширение браузера"
-          : state.details.client.redirectHost,
+          ? "в расширение браузера"
+          : `на ${state.details.client.redirectHost}`,
         approved: decision === "approve",
       });
       location.assign(result.redirectTo);
@@ -155,7 +156,7 @@ export function OAuthConsent() {
             <h1>
               {state.approved ? "Доступ разрешён" : "Подключение отклонено"}
             </h1>
-            <p>Возвращаем вас на {state.host}…</p>
+            <p>Возвращаем вас {state.host}…</p>
             {state.approved && (
               <p>
                 Вернитесь к агенту: теперь он может сохранять работы на вашу
