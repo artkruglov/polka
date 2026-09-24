@@ -6,6 +6,7 @@
 //       docs/assets/social-preview.svg -> docs/assets/social-preview.png (1280×640)
 //   node scripts/render-readme-assets.mjs shot <url> <out.png> [height] [wait-ms]
 //       a 1440-wide screenshot of a page (e.g. polochka.app) into docs/screenshots/
+//       (SHOT_WIDTH=390 for the phone layout)
 //   node scripts/render-readme-assets.mjs links <url>
 //       prints the links on a page (to pick an editorial work from /discover)
 //
@@ -127,7 +128,9 @@ try {
     await capture(join(root, "docs/assets/social-preview.png"), 1280, 640);
   } else if (mode === "shot") {
     const [url, out, height = "900", wait = "2500"] = args;
-    await open(url, 1440, Number(height));
+    // SHOT_WIDTH=390 renders the phone layout; the default is the desktop width.
+    const width = Number(process.env.SHOT_WIDTH ?? 1440);
+    await open(url, width, Number(height));
     await sleep(Number(wait));
     // A local install shows its own address in commands; SHOW_ORIGIN puts the
     // public one there (as the hosted page shows it).
@@ -139,7 +142,10 @@ try {
           for (const el of document.querySelectorAll("input, textarea")) if (el.value.includes(from)) el.value = el.value.replaceAll(from, to);
         })()`,
       });
-    await capture(resolve(out), 1440, Number(height));
+    // SHOT_JS=<expression> runs in the page before the capture (a state the
+    // page cannot show by itself, e.g. a star count the repository has not yet).
+    if (process.env.SHOT_JS) await send("Runtime.evaluate", { expression: process.env.SHOT_JS });
+    await capture(resolve(out), width, Number(height));
   } else {
     await open(args[0], 1440, 900);
     await sleep(3000);

@@ -97,6 +97,10 @@ import {
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { createStarCounter } from "./source-stars.ts";
+
+/** The GitHub star count of SOURCE_URL for the header (source-stars.ts); one cache per process. */
+export const sourceStars = createStarCounter({ sourceUrl: config.SOURCE_URL });
 
 /** Share resolutions per client IP per 10 minutes; each view resolves once per grant. */
 export const RESOLVE_LIMIT_PER_IP = 600;
@@ -283,6 +287,13 @@ export async function createApp() {
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));
+  // The star count of SOURCE_URL on GitHub, fetched server-side (the browser
+  // may not talk to GitHub) and cached for an hour. Not a GitHub repository,
+  // or GitHub not answering: { stars: null }, never an error.
+  app.get("/api/source/stars", async (_req, reply) => {
+    reply.header("cache-control", "public, max-age=600");
+    return { stars: await sourceStars.stars() };
+  });
   app.get("/api/editorial", listEditorial);
   app.get("/api/editorial/:slug", async (req) => {
     const { slug } = z
