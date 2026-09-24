@@ -68,10 +68,17 @@ function documentOf(url: URL, result: Extract<RenderResult, { finalUrl: string }
     return { url: result.finalUrl, html: result.html, title: heading || "Чат Gemini" };
   }
   if (match?.route !== "server-try") return { url: result.finalUrl, html: result.html, title: result.title };
-  // Claude: the artifact is drawn in a frame on *.claudeusercontent.com (or its srcdoc child); the page around it is the chat app.
-  const frames = result.frames.filter((frame) => frame.url === "about:srcdoc" || /^https:\/\/[^/]*\.claudeusercontent\.com\//.test(frame.url));
-  const best = frames.sort((a, b) => b.html.length - a.html.length)[0];
-  if (!best || best.html.replace(/<[^>]+>/g, "").trim().length < 20)
+  // Claude: the artifact is drawn in a frame on <uuid>.frame.claudeusercontent.com (or its
+  // srcdoc child); the page around it is the chat app, and a hidden helper frame next to it
+  // holds only «Claude User Content». A frame without visible text is not the artifact.
+  const visible = (html: string) =>
+    html.replace(/<head[\s\S]*?<\/head>|<title[\s\S]*?<\/title>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const frames = result.frames
+    .filter((frame) => frame.url === "about:srcdoc" || /^https:\/\/[^/]*\.claudeusercontent\.com\//.test(frame.url))
+    .filter((frame) => visible(frame.html).length >= 30 && !/^Claude User Content$/i.test(visible(frame.html)));
+  const artifactHost = (url: string) => /\.frame\.claudeusercontent\.com\//.test(url) || url === "about:srcdoc";
+  const best = frames.sort((a, b) => Number(artifactHost(b.url)) - Number(artifactHost(a.url)) || b.html.length - a.html.length)[0];
+  if (!best)
     throw new HtmlCaptureError("source_blocked", "Артефакт не отрисовался для сервера Полки. Сохраните его другим способом.");
   return { url: result.finalUrl, html: best.html, title: result.title.replace(/\s*[|–-]\s*Claude\s*$/i, "") };
 }
