@@ -11,6 +11,7 @@ import {
 } from "../apps/server/service-auth.ts";
 import { s3 } from "../apps/server/storage.ts";
 import { publishToolDescription } from "../apps/server/agent-publish.ts";
+import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
 
 // The default suite runs static-only (HTML_LIVE_MODE=disabled), like the
 // hosted installation a chat connector talks to.
@@ -262,6 +263,30 @@ after(async () => {
   await app.close();
   await db.end();
   s3.destroy();
+});
+
+test("analytics: a granted OAuth connection is one agent_connected, by client, first for the account", async () => {
+  const who = await newOwner("oauth-analytics");
+  const events = async () => {
+    await flushAnalytics();
+    return (
+      await db.query(
+        `SELECT props FROM analytics_events
+         WHERE actor=$1 AND name='agent_connected' ORDER BY occurred_at`,
+        [actorKey(who.id)],
+      )
+    ).rows.map((row) => row.props);
+  };
+  const { tokens } = await connect(who);
+  // Using the granted token is not another connection.
+  await authenticateServiceToken(tokens.access_token, MCP_AUDIENCE);
+  assert.deepEqual(await events(), [{ client: "claude-ai", first: true }]);
+  // Re-authorizing grants a new connection: counted, no longer the first.
+  await connect(who);
+  assert.deepEqual(await events(), [
+    { client: "claude-ai", first: true },
+    { client: "claude-ai", first: false },
+  ]);
 });
 
 test("discovery documents describe the MCP resource and its authorization server", async () => {

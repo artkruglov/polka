@@ -102,15 +102,23 @@ const common = {
       },
     },
   ),
-  "429": problem(
-    `Rate limit: ${PUBLISH_API_LIMITS.perConnection} requests per token and ${PUBLISH_API_LIMITS.perIp} per IP address in 10 minutes. Retry later with the same key.`,
-    {
-      rate: {
-        code: "quota",
-        message: "Слишком много попыток. Попробуйте через 10 минут.",
+  "429": {
+    ...problem(
+      `Rate limit: ${PUBLISH_API_LIMITS.perConnection} requests per token and ${PUBLISH_API_LIMITS.perIp} per IP address in 10 minutes. Retry with the same key after Retry-After.`,
+      {
+        rate: {
+          code: "quota",
+          message: "Слишком много попыток. Попробуйте через 10 минут.",
+        },
+      },
+    ),
+    headers: {
+      "Retry-After": {
+        description: "Seconds until the limit window resets.",
+        schema: { type: "integer", minimum: 1 },
       },
     },
-  ),
+  },
   "503": problem(
     "The request collided with another action on the same works; nothing was committed. Retry with the same key after Retry-After.",
     {

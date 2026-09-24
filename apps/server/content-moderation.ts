@@ -750,8 +750,13 @@ function pump() {
   }
 }
 
-/** Tests: wait until every queued review is done. */
-export function reviewsSettled() {
+/**
+ * Tests: wait until every queued review is done. A save queues its review
+ * after it commits (db.ts afterCommit), a moment after its response: let
+ * that happen first.
+ */
+export async function reviewsSettled() {
+  await new Promise((resolve) => setImmediate(resolve));
   return !running && !queue.length
     ? Promise.resolve()
     : new Promise<void>((resolve) => idle.push(resolve));
@@ -847,25 +852,21 @@ async function revisionMaterial(revision: any) {
   };
 }
 
-let budgetLetterSent = "";
-
 async function charge(costRub: number) {
-  if (!spend(costRub)) return;
-  const day = new Date().toISOString().slice(0, 10);
-  if (budgetLetterSent === day) return;
-  budgetLetterSent = day;
+  // spend() is true once a day, for the call that used the budget up.
+  if (!(await spend(costRub))) return;
   console.error(JSON.stringify({ event: "moderation.model_budget_spent" }));
   if (config.OPERATOR_EMAIL && config.MAIL_MODE !== "disabled")
     await sendMail({
       to: config.OPERATOR_EMAIL,
       subject: "Полка: дневной бюджет проверки моделью исчерпан",
-      text: `Сегодня на проверку моделями потрачено ${spentToday().toFixed(0)} ₽ из ${config.CONTENT_MODEL_DAILY_BUDGET_RUB} ₽ (CONTENT_MODEL_DAILY_BUDGET_RUB). До конца суток (UTC) работают только правила, а изображения новых аккаунтов ждут проверки. Непроверенные версии будут проверены повторно.`,
+      text: `Сегодня на проверку моделями потрачено ${(await spentToday()).toFixed(0)} ₽ из ${config.CONTENT_MODEL_DAILY_BUDGET_RUB} ₽ (CONTENT_MODEL_DAILY_BUDGET_RUB). До конца суток (UTC) работают только правила, а изображения новых аккаунтов ждут проверки. Непроверенные версии будут проверены повторно.`,
     }).catch(() => undefined);
 }
 
 async function ask(client: ModelClient, input: { text?: string; image?: string }) {
   // A flat-rate key costs nothing: the budget stops only paid calls.
-  if (!client.flatRate && !budgetLeft())
+  if (!client.flatRate && !(await budgetLeft()))
     return { failed: "budget", model: client.name, costRub: 0 } as ModelAnswer;
   const answer = await client.classify(input);
   await charge(answer.costRub);
@@ -977,7 +978,7 @@ export async function reviewRevision(revisionId: string) {
     if (material.code && codeModel) {
       calls++;
       const review =
-        codeModel.flatRate || budgetLeft() ? await codeModel.review(material.code) : null;
+        codeModel.flatRate || (await budgetLeft()) ? await codeModel.review(material.code) : null;
       if (review) await charge(review.costRub);
       if (!review || "failed" in review) {
         failures++;
@@ -1038,7 +1039,7 @@ export async function reviewRevision(revisionId: string) {
 
 /** Unchecked revisions of the last week, tried again by the sweep. */
 export async function retryUnchecked(limit = 20) {
-  if (!contentModels() || !budgetLeft()) return 0;
+  if (!contentModels() || !(await budgetLeft())) return 0;
   const { rows } = await db.query(
     `SELECT id FROM revisions
      WHERE created_at>now()-interval '7 days' AND content_purged_at IS NULL

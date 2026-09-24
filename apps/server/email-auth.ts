@@ -1,3 +1,4 @@
+import { trackSignup, type VisitSource } from "./analytics.ts";
 import {
   randomBytes,
   randomInt,
@@ -39,7 +40,9 @@ const signupKeys = (ip: string, email: string | null) => [
   { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
   { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
   // Anti-spam: per network and per mail domain (signup-guards.ts).
-  ...(email ? signupSpamKeys(ip, email) : []),
+  // Anti-spam: per network and, with an address, per mail domain
+  // (signup-guards.ts). Provider sign-ups count here too.
+  ...signupSpamKeys(ip, email),
 ];
 
 export async function signupRoomLeft(
@@ -56,15 +59,15 @@ export async function signupRoomLeft(
            ON CONFLICT(key) DO UPDATE SET
              attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END,
              reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+interval '24 hours' ELSE login_limits.reset_at END
-           RETURNING attempts`,
+           RETURNING attempts, extract(epoch FROM reset_at-now())::float8 AS retry_after`,
           [sha256(key)],
         )
       : await c.query(
-          "SELECT attempts+1 AS attempts FROM login_limits WHERE key=$1 AND reset_at>now()",
+          "SELECT attempts+1 AS attempts, extract(epoch FROM reset_at-now())::float8 AS retry_after FROM login_limits WHERE key=$1 AND reset_at>now()",
           [sha256(key)],
         );
     if (Number(rows[0]?.attempts ?? 1) > max())
-      throw new Problem(429, "quota", message);
+      throw new Problem(429, "quota", message).retryIn(Number(rows[0]?.retry_after ?? 86_400));
   }
 }
 
@@ -241,6 +244,7 @@ export async function verifyEmailLogin(
   code: string,
   browser: string,
   ip: string,
+  source?: VisitSource | null,
 ) {
   if (config.MAIL_MODE === "disabled")
     throw new Problem(503, "invalid", "Вход по почте отключён.");
@@ -319,6 +323,7 @@ export async function verifyEmailLogin(
         randomUUID(),
         accountId,
       ]);
+      trackSignup(c, accountId, "email", source);
     } else if (challenge.delivery === "smtp")
       await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [
         account.id,

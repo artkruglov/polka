@@ -94,6 +94,8 @@ export type Flow = {
   /** Link to this signed-in account instead of signing in. */
   link: string | null;
   expires: number;
+  /** Where the visitor came from, for a new shelf's analytics (sanitised). */
+  source?: { ref?: string; referrer?: string };
 };
 
 const flowKey = () =>
@@ -402,6 +404,7 @@ export async function startFlow(
   provider: ProviderId,
   next: string,
   link: string | null,
+  source: Flow["source"] | null = null,
 ) {
   const flow: Flow = {
     provider,
@@ -411,6 +414,7 @@ export async function startFlow(
     next,
     link,
     expires: Date.now() + FLOW_TTL_SECONDS * 1000,
+    ...(source ? { source } : {}),
   };
   const params: Record<string, string> = {
     response_type: "code",

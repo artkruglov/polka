@@ -27,6 +27,7 @@ import {
 } from "../../packages/contracts/comments.ts";
 import type { Actor } from "./artifacts.ts";
 import { limitAttempts } from "./auth.ts";
+import { trackNoteAdded, viaFor } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
@@ -554,10 +555,11 @@ async function createInContext(
     `comments:${share.id}`,
   ]);
   const {
-    rows: [{ today }],
+    rows: [{ today, retry_after }],
   } = await c.query(
-    `SELECT count(*)::int AS today FROM comments
-     WHERE share_id=$1 AND created_at>now()-interval '1 day'`,
+    `SELECT count(*)::int AS today,
+       extract(epoch FROM min(created_at)+interval '1 day'-now())::float8 AS retry_after
+     FROM comments WHERE share_id=$1 AND created_at>now()-interval '1 day'`,
     [share.id],
   );
   if (today >= COMMENTS_PER_SHARE_PER_DAY)
@@ -565,7 +567,7 @@ async function createInContext(
       429,
       "quota",
       `По этой ссылке уже ${COMMENTS_PER_SHARE_PER_DAY} комментариев за сутки. Продолжите завтра.`,
-    );
+    ).retryIn(retry_after ?? 86_400);
   let parent: any = null;
   if (input.parentId) {
     parent = (
@@ -676,6 +678,12 @@ async function createInContext(
   // Owner notes send no letters: recipients are not a discussion to notify.
   if (!held && commentsMode() === "on")
     notices.push({ kind: "comment", commentId: id });
+  trackNoteAdded(
+    c,
+    writer.id,
+    writer.id === context.ownerId ? "owner" : "reader",
+    viaFor(),
+  );
   return { id: created.id as string };
 }
 

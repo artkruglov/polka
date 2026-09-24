@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import type { Account } from "../../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../../shared/api/client.ts";
 
-// One /me request per page load, shared by every consumer. Only 401 means
-// «guest»; a network or server failure is an error, never a silent logout.
+// One /session request per page load, shared by every consumer. A guest is
+// a 200 with no account (no 401 in the console on every page); a network or
+// server failure is an error, never a silent logout.
 let cached: Promise<Account | null> | null = null;
 const listeners = new Set<() => void>();
 
 function loadAccount(): Promise<Account | null> {
-  cached ??= client.me().catch((error) => {
+  cached ??= client.session().catch((error) => {
     if (error instanceof ApiError && error.status === 401) return null;
     cached = null;
     throw error;

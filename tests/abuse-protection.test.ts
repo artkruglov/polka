@@ -75,14 +75,14 @@ async function session(accountId: string) {
   return `polka_session=${token}`;
 }
 
-/** An account that signed up by email, `ageDays` ago. */
-async function signedUp(ageDays = 0): Promise<Owner> {
+/** An account that signed itself up (`way`: email or a provider), `ageDays` ago. */
+async function signedUp(ageDays = 0, way = "email"): Promise<Owner> {
   const id = randomUUID(),
     tenant = randomUUID();
   await db.query(
     `INSERT INTO accounts(id,name,password_hash,email,created_at)
      VALUES($1,$2,'unused',$3,now()-$4*interval '1 day')`,
-    [id, `email-${id}`, `new-${id.slice(0, 8)}@example.test`, ageDays],
+    [id, `${way}-${id}`, `new-${id.slice(0, 8)}@example.test`, ageDays],
   );
   await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
   return { id, tenant, cookie: await session(id) };
@@ -222,6 +222,13 @@ test("trust: operator-created, approved, or old without open reports; a paused l
   assert.equal((await authorStanding(db, operator.tenant)).trusted, true);
   const fresh = await signedUp(0);
   assert.equal((await authorStanding(db, fresh.tenant)).trusted, false);
+  // A shelf opened through Яндекс ID, VK ID or OIDC is self-registered too:
+  // new-account rules apply, it is not an operator's account.
+  for (const way of ["yandex", "vk", "oidc"]) {
+    const viaProvider = await authorStanding(db, (await signedUp(0, way)).tenant);
+    assert.equal(viaProvider.operatorCreated, false, way);
+    assert.equal(viaProvider.trusted, false, way);
+  }
   const old = await signedUp(8);
   assert.equal((await authorStanding(db, old.tenant)).trusted, true);
   // An open report takes the age path away until the operator settles it.

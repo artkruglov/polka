@@ -88,7 +88,7 @@ const runtimeBusy = () =>
     429,
     "quota",
     "Сервер уже собирает другую страницу с компонентами. Повторите запрос через несколько секунд.",
-  );
+  ).retryIn(5);
 
 export type WorkerResult =
   | {
@@ -688,7 +688,7 @@ export async function buildInlineRevisionFromSource({
       429,
       "quota",
       "Сервер уже собирает другие страницы. Повторите запрос.",
-    );
+    ).retryIn(5);
   activeBuilds.add(prepared.row.id);
   try {
     return {

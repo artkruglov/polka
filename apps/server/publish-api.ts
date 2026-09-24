@@ -189,7 +189,12 @@ async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
   if (!match) throw unauthorized(reply);
   let actor: ServiceActor;
   try {
-    actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
+    actor = await authenticateServiceToken(
+      match[1],
+      MCP_AUDIENCE,
+      undefined,
+      "http",
+    );
   } catch {
     throw unauthorized(reply, "invalid_token");
   }

@@ -8,6 +8,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { passwordHash } from "./auth.ts";
+import { trackSignup, type VisitSource } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { emailInvited, signupRoomLeft } from "./email-auth.ts";
@@ -49,6 +50,7 @@ async function createShelf(
   c: PoolClient,
   profile: ProviderProfile,
   ip: string,
+  source: VisitSource | null,
 ): Promise<Account> {
   // New shelves by providers share the email sign-up budget and invite mode.
   if (
@@ -56,13 +58,15 @@ async function createShelf(
     !(profile.email && profile.emailVerified && emailInvited(profile.email))
   )
     throw new IdpError("signup");
+  const email = profile.email && profile.emailVerified ? profile.email : null;
   try {
-    await signupRoomLeft(c, ip, true);
+    // The same caps as an email sign-up: installation, address, network and
+    // the address's domain.
+    await signupRoomLeft(c, ip, true, email);
   } catch (error) {
     if (error instanceof Problem) throw new IdpError("signup");
     throw error;
   }
-  const email = profile.email && profile.emailVerified ? profile.email : null;
   const taken =
     email &&
     (await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount;
@@ -86,6 +90,7 @@ async function createShelf(
     ],
   );
   await c.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
+  trackSignup(c, id, profile.provider, source);
   return { id, tenant };
 }
 
@@ -121,6 +126,7 @@ export async function completeProviderSignIn(
   profile: ProviderProfile,
   linkAccountId: string | null,
   ip: string,
+  source: VisitSource | null = null,
 ) {
   return transaction(async (c) => {
     await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
@@ -155,7 +161,7 @@ export async function completeProviderSignIn(
         if (!account) throw new IdpError("blocked");
       }
     }
-    account ??= await createShelf(c, profile, ip);
+    account ??= await createShelf(c, profile, ip, source);
     if (linked)
       await c.query(
         "UPDATE account_identities SET last_used_at=clock_timestamp() WHERE id=$1",

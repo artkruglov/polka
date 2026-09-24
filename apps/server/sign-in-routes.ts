@@ -1,6 +1,6 @@
 // Routes of external sign-in (docs/specs/SIGN_IN_PROVIDERS.md § 1).
 //
-//   GET  /api/auth/idp/:provider/start?next=…   leave for the provider
+//   GET  /api/auth/idp/:provider/start?next=…[&ref=…&referrer=…]  leave for the provider
 //   POST /api/auth/idp/:provider/link           the same, to link (session)
 //   GET  /api/auth/idp/:provider/callback       back from the provider
 //   GET  /api/account/identities                linked providers
@@ -17,6 +17,7 @@ import {
   listIdentities,
   unlinkIdentity,
 } from "./account-identities.ts";
+import { sanitizeSource } from "./analytics.ts";
 import { identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { missing, Problem } from "./errors.ts";
@@ -80,10 +81,13 @@ export function registerSignInRoutes(app: FastifyInstance) {
   app.get("/api/auth/idp/:provider/start", async (req, reply) => {
     const provider = enabledProvider(req);
     await limitAttempts(`idp-start-ip:${req.ip}`, 60);
-    const next =
-      safeReturnPath((req.query as Record<string, unknown>)?.next) ?? "/start";
+    const query = (req.query ?? {}) as Record<string, unknown>;
+    const next = safeReturnPath(query.next) ?? "/start";
+    // The tab's record of where the visitor came from (analytics.ts):
+    // only a sanitised ref and referrer host travel in the sealed flow.
+    const source = sanitizeSource({ ref: query.ref, referrer: query.referrer });
     try {
-      const { location, cookie } = await startFlow(provider, next, null);
+      const { location, cookie } = await startFlow(provider, next, null, source);
       reply.setCookie(FLOW_COOKIE, cookie, {
         ...flowCookie,
         secure: secure(),
@@ -148,7 +152,12 @@ export function registerSignInRoutes(app: FastifyInstance) {
         flow,
         (req.query ?? {}) as Record<string, unknown>,
       );
-      const result = await completeProviderSignIn(profile, flow.link, req.ip);
+      const result = await completeProviderSignIn(
+        profile,
+        flow.link,
+        req.ip,
+        flow.source ?? null,
+      );
       if (result.session) {
         // A Strict session cookie is not sent on this cross-site return,
         // so there is no earlier session of this browser to end here.

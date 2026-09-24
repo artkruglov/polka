@@ -2,6 +2,12 @@ import { registerAgentContext } from "./agent-context.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
+import { registerOpsMetrics } from "./metrics.ts";
+import {
+  runInChannel,
+  trackPageView,
+  trackShareOpened,
+} from "./analytics.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { registerUrlImports } from "./url-import/routes.ts";
@@ -91,6 +97,10 @@ import {
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { createStarCounter } from "./source-stars.ts";
+
+/** The GitHub star count of SOURCE_URL for the header (source-stars.ts); one cache per process. */
+export const sourceStars = createStarCounter({ sourceUrl: config.SOURCE_URL });
 
 /** Share resolutions per client IP per 10 minutes; each view resolves once per grant. */
 export const RESOLVE_LIMIT_PER_IP = 600;
@@ -157,11 +167,22 @@ export async function createApp() {
         "Запрос должен быть отправлен из Полки.",
       );
   });
+  // Which surface an action came through (analytics.ts: work_saved via).
+  // A preHandler, not onRequest: the context must survive body parsing.
+  app.addHook("preHandler", (req, _reply, done) => {
+    const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
+    runInChannel(
+      pathname === "/mcp" ? "mcp" : isPublishApiPath(pathname) ? "api" : "web",
+      done,
+    );
+  });
   app.setErrorHandler((error: any, _req, reply) => {
-    if (error instanceof Problem)
+    if (error instanceof Problem) {
+      if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
       return reply
         .code(error.status)
         .send({ code: error.code, message: error.message, ...error.details });
+    }
     if (error instanceof z.ZodError)
       return reply.code(400).send({
         code: "invalid",
@@ -217,11 +238,12 @@ export async function createApp() {
   registerTemplateLibraryRoutes(app, identity);
   registerSignInRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
-  app.get("/connect", async (_req, reply) =>
-    reply
+  app.get("/connect", async (req, reply) => {
+    trackPageView(req, "/connect");
+    return reply
       .type("text/plain; charset=utf-8")
-      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL)),
-  );
+      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL));
+  });
   // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
   registerAgentDiscovery(app);
   app.get("/api/health", async () => {
@@ -235,6 +257,8 @@ export async function createApp() {
     const status = await opsStatus(POLKA_VERSION);
     return reply.code(status.ok ? 200 : 503).send(status);
   });
+  // Product metrics for the operator: the same token (metrics.ts).
+  registerOpsMetrics(app);
   app.get("/api/capabilities", async () => ({
     profile: "file-v1",
     formats: MIME,
@@ -263,6 +287,13 @@ export async function createApp() {
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));
+  // The star count of SOURCE_URL on GitHub, fetched server-side (the browser
+  // may not talk to GitHub) and cached for an hour. Not a GitHub repository,
+  // or GitHub not answering: { stars: null }, never an error.
+  app.get("/api/source/stars", async (_req, reply) => {
+    reply.header("cache-control", "public, max-age=600");
+    return { stars: await sourceStars.stars() };
+  });
   app.get("/api/editorial", listEditorial);
   app.get("/api/editorial/:slug", async (req) => {
     const { slug } = z
@@ -330,7 +361,19 @@ export async function createApp() {
     { bodyLimit: 2048 },
     async (req, reply) => {
       const input = z
-        .object({ id: uuid, code: z.string().regex(/^\d{8}$/) })
+        .object({
+          id: uuid,
+          code: z.string().regex(/^\d{8}$/),
+          // Where the visitor came from (a sign-up's source in analytics):
+          // the tab's own record, sanitised again by analytics.ts.
+          source: z
+            .object({
+              ref: z.string().max(200).optional(),
+              referrer: z.string().max(300).optional(),
+            })
+            .strict()
+            .optional(),
+        })
         .strict()
         .parse(req.body);
       const token = await verifyEmailLogin(
@@ -338,6 +381,7 @@ export async function createApp() {
         input.code,
         req.cookies.polka_email_challenge ?? "",
         req.ip,
+        input.source,
       );
       if (req.cookies.polka_session)
         await db.query("DELETE FROM sessions WHERE hash=$1", [
@@ -386,6 +430,18 @@ export async function createApp() {
   app.get("/api/me", async (req) => {
     const a = await identity(req);
     return { id: a.id, name: a.name };
+  });
+  // The web app's «who is here»: 200 for a guest too (account null), so a
+  // guest's every page load is not a 401 in the console. /api/me keeps its
+  // 401 for clients that need the session to be there.
+  app.get("/api/session", async (req) => {
+    try {
+      const a = await identity(req);
+      return { account: { id: a.id, name: a.name } };
+    } catch (error) {
+      if (error instanceof Problem && error.status === 401) return { account: null };
+      throw error;
+    }
   });
   app.post("/api/account/deletion-csrf", async (req) =>
     issueAccountDeletionCsrf(
@@ -603,7 +659,7 @@ export async function createApp() {
         429,
         "quota",
         "Сервер принимает несколько файлов. Повторите через минуту.",
-      );
+      ).retryIn(60);
     transfers++;
     tenantTransfers.set(tenant, mine + 1);
     reply.raw.once("close", () => {
@@ -815,6 +871,15 @@ export async function createApp() {
       .strict()
       .parse(req.body);
     await limitAttempts(`resolve:ip:${req.ip}`, RESOLVE_LIMIT_PER_IP);
+    // The owner looking at their own link is not a recipient opening it.
+    const viewerAccount = req.cookies.polka_session
+      ? ((
+          await db.query(
+            "SELECT account_id FROM sessions WHERE hash=$1 AND expires_at>now()",
+            [sha256(req.cookies.polka_session)],
+          )
+        ).rows[0]?.account_id as string | undefined)
+      : undefined;
     // Read locks: resolve only issues a grant, so concurrent views of one
     // shelf do not queue behind each other, while trash, revoke, disable and
     // deletion (which hold these rows FOR UPDATE) still serialize with it and
@@ -883,6 +948,8 @@ export async function createApp() {
         )
       ).rowCount;
       const view = await issueShareGrant(c, s, candidate.artifact_id);
+      if (!editorial && viewerAccount !== candidate.account_id)
+        trackShareOpened(c, candidate.account_id, s.id);
       return {
         title: artifact.title ?? "Работа",
         ...view,

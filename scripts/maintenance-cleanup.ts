@@ -104,9 +104,46 @@ async function deleteStoredVersions(
   }
 }
 
+/**
+ * Deletes the usage events and active days of every account that asked to be
+ * deleted (a deletion request, a purge, a restored erasure). The keys are
+ * HMACs only the application can compute, so this runs here.
+ */
+export async function eraseDeletedAccountsAnalytics(
+  c: MaintenanceClient,
+  actorKey: (accountId: string) => string,
+  check: () => void = () => undefined,
+) {
+  const deleted = await c.query(
+    "SELECT id FROM accounts WHERE deletion_requested_at IS NOT NULL",
+  );
+  const keys = ((deleted.rows ?? []) as Array<{ id: string }>).map((row) =>
+    actorKey(row.id),
+  );
+  check();
+  if (!keys.length) return;
+  for (const sql of [
+    "DELETE FROM analytics_events WHERE actor=ANY($1::text[])",
+    "DELETE FROM analytics_active_days WHERE actor=ANY($1::text[])",
+  ]) {
+    await c.query(sql, [keys]);
+    check();
+  }
+}
+
+export type MaintenanceOptions = {
+  /**
+   * The analytics key of an account (apps/server/analytics-keys.ts). Given,
+   * maintenance deletes the usage events of every deleted account: only the
+   * application knows the key, so neither the purge worker nor a restore can.
+   */
+  analyticsActorKey?: (accountId: string) => string;
+};
+
 export async function runMaintenanceCleanup(
   scope: MaintenanceScope,
   storage: MaintenanceObjectStore,
+  options: MaintenanceOptions = {},
 ): Promise<MaintenanceCounters> {
   const uploadCandidates = await scope.transaction(async (c) => {
     assertActive(scope.signal);
@@ -229,6 +266,10 @@ export async function runMaintenanceCleanup(
          AND blocked_at<now()-interval '3 years'`,
       // Requests from /enterprise: one year, as the privacy policy says.
       "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
+      // Usage events and active days: 13 months, as the privacy policy says.
+      // The anonymous daily counters (analytics_daily) are kept.
+      "DELETE FROM analytics_events WHERE occurred_at<now()-interval '13 months'",
+      "DELETE FROM analytics_active_days WHERE day<(now()-interval '13 months')::date",
       `DELETE FROM oauth_clients client
        WHERE client.created_at<now()-interval '30 days'
          AND NOT EXISTS(SELECT 1 FROM agent_connections connection
@@ -240,6 +281,10 @@ export async function runMaintenanceCleanup(
       await c.query(sql);
       assertActive(scope.signal);
     }
+    if (options.analyticsActorKey)
+      await eraseDeletedAccountsAnalytics(c, options.analyticsActorKey, () =>
+        assertActive(scope.signal),
+      );
     return cleanupEmailChallengesInTransaction(
       c as Parameters<typeof cleanupEmailChallengesInTransaction>[0],
       100,
