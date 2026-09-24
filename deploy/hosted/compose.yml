@@ -57,6 +57,7 @@ x-runtime-env: &runtime-env
   RENDERED_IMPORT_ENABLED: ${RENDERED_IMPORT_ENABLED:-false}
   RENDERER_URL: ${RENDERER_URL:-}
   RENDERER_SECRET: ${RENDERER_SECRET:-}
+  RENDERER_CA: ${RENDERER_CA:-}
   MAIL_MODE: ${MAIL_MODE:-disabled}
   # Used only with MAIL_MODE=smtp (for example Yandex Cloud Postbox).
   SMTP_HOST: ${SMTP_HOST:-}

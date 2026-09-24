@@ -8,7 +8,7 @@ import {
 import { MCP_AUDIENCE } from "../service-auth.ts";
 import type { Actor } from "../artifacts.ts";
 import { captureHtmlUrl, HtmlCaptureError } from "./html-capture.ts";
-import { prepareImport } from "./prepare.ts";
+import { prepareImport, type PrepareOptions } from "./prepare.ts";
 import { ImportFetchError } from "./public-fetch.ts";
 import { authorizeImport, claimImportJob, requireImportLease } from "./jobs.ts";
 import { buildInlineRevisionWithRunner } from "../bundle-derivatives.ts";
@@ -45,7 +45,7 @@ export async function runImportOnce({
   persist = save,
 }: {
   run?: Run;
-  prepare?: (url: string) => Promise<Prepared>;
+  prepare?: (url: string, options: PrepareOptions) => Promise<Prepared>;
   persist?: Save;
 } = {}) {
   const job = await run(claimImportJob);
@@ -97,7 +97,17 @@ export async function runImportOnce({
     // Recheck before downloading, including revocation since enqueue.
     let prepared: Prepared = job.prepared;
     if (!prepared) {
-      prepared = await prepare(job.request.url);
+      prepared = await prepare(job.request.url, {
+        // Robots.txt allowed it; the isolated renderer opens the page now.
+        onRendering: () =>
+          run(async (c) => {
+            await guard(c);
+            await c.query(
+              "UPDATE url_import_jobs SET state='rendering',updated_at=now() WHERE id=$1",
+              [job.id],
+            );
+          }),
+      });
       await run(async (c) => {
         await guard(c);
         await c.query(
@@ -151,7 +161,7 @@ export async function runImportOnce({
     // Fenced update: a cancelled, reassigned or completed job is never overwritten.
     await run(async (c) => {
       await c.query(
-        "UPDATE url_import_jobs SET state=CASE WHEN receipt IS NULL THEN 'failed' ELSE 'partial' END,error_code=$3,lease_token=NULL,lease_until=NULL,prepared=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2 AND state IN ('fetching','prepared','saving','previewing')",
+        "UPDATE url_import_jobs SET state=CASE WHEN receipt IS NULL THEN 'failed' ELSE 'partial' END,error_code=$3,lease_token=NULL,lease_until=NULL,prepared=NULL,updated_at=now() WHERE id=$1 AND lease_token=$2 AND state IN ('fetching','rendering','prepared','saving','previewing')",
         [job.id, job.lease_token, code],
       );
     });
@@ -165,7 +175,7 @@ export async function expireImportJobs(run: Run = transaction) {
     async (c) =>
       (
         await c.query(
-          "UPDATE url_import_jobs SET state=CASE WHEN receipt IS NULL THEN 'failed' ELSE 'partial' END,error_code=CASE WHEN expires_at<=now() THEN 'expired' ELSE 'retry_exhausted' END,prepared=NULL,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE state IN ('queued','fetching','prepared','saving','previewing') AND (lease_until IS NULL OR lease_until<now()) AND (expires_at<=now() OR attempts>=3)",
+          "UPDATE url_import_jobs SET state=CASE WHEN receipt IS NULL THEN 'failed' ELSE 'partial' END,error_code=CASE WHEN expires_at<=now() THEN 'expired' ELSE 'retry_exhausted' END,prepared=NULL,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE state IN ('queued','fetching','rendering','prepared','saving','previewing') AND (lease_until IS NULL OR lease_until<now()) AND (expires_at<=now() OR attempts>=3)",
         )
       ).rowCount ?? 0,
   );
