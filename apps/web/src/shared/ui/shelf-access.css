@@ -21,7 +21,7 @@
 .shelf-choice .ui-button { width: 100%; min-height: 48px; }
 .shelf-where { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius); background: var(--accent-soft); font-size: var(--text-base); line-height: 1.55; }
 .shelf-where small { display: block; margin-top: 4px; color: var(--muted); font-size: var(--text-sm); }
-.shelf-where button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.shelf-where small button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* /claim: agents that would move, one line each, none ticked by default. */
 .claim-connections { display: grid; margin: 0 0 16px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; min-width: 0; }

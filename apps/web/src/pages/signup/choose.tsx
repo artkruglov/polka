@@ -1,4 +1,3 @@
-import "./styles.css";
 import React, { useEffect, useState } from "react";
 import { Link2, UserRoundPlus } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";

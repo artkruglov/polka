@@ -1180,7 +1180,7 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
           "conflict",
           "Этот браузер уже вошёл в полку. Обновите страницу.",
         );
-      await limitAttempts(`provisional-ip:${req.ip}`, 5, "1 hour");
+      await limitAttempts(`provisional-ip:${req.ip}`, 10, "1 hour");
       const browserToken = browserCookie(req);
       if (!TOKEN.test(browserToken)) throw expiredRequest();
       const pending = await db.query(

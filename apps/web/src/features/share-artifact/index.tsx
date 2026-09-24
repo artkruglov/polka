@@ -21,6 +21,7 @@ import {
   size,
 } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
 
 type Choice = "private" | "link";
@@ -41,6 +42,7 @@ export function SharePanel({
    */
   provisional?: boolean;
 }) {
+  const ways = useSignInWays();
   const active = !!a.share && ["active", "behind"].includes(a.share.status);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -125,8 +127,7 @@ export function SharePanel({
           <div className="share-step share-step--warn" role="note">
             <strong>Полка ещё не закреплена.</strong>
             <p>
-              Ссылки выдаются после входа через Яндекс ID, VK ID или почту:
-              так требует закон. Работа сохранена и видна только вам.
+              Ссылки выдаются после входа {ways.via}: так требует закон. Работа сохранена и видна только вам.
             </p>
           </div>
         )}

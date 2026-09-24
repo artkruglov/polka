@@ -262,7 +262,7 @@ export async function createApp() {
     config.COMMENTS_MODE !== "off";
   registerUrlImports(app, identity);
   registerAgentContext(app, identity);
-  registerTemplateLibraryRoutes(app, identity);
+  registerTemplateLibraryRoutes(app, strongIdentity);
   registerSignInRoutes(app);
   registerClaimRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
@@ -513,7 +513,7 @@ export async function createApp() {
       // A provisional shelf lives while its browser comes back: its session
       // (and cookie) move 30 days ahead on a visit.
       if (
-        a.provisional &&
+        a.provisional && !a.weak &&
         (await renewProvisionalSession(req.cookies.polka_session ?? ""))
       )
         reply.setCookie(
@@ -1013,13 +1013,13 @@ export async function createApp() {
     );
   });
   app.post("/api/artifacts/:id/share", async (req) => {
-    return enableOwnerShare(await identity(req), id(req), req.body);
+    return enableOwnerShare(await strongIdentity(req), id(req), req.body);
   });
   app.post("/api/shares/:id/revoke", async (req) => {
-    return revokeOwnerShare(await identity(req), id(req));
+    return revokeOwnerShare(await strongIdentity(req), id(req));
   });
   app.post("/api/shares/:id/publish", async (req) => {
-    return publishOwnerShare(await identity(req), id(req), req.body);
+    return publishOwnerShare(await strongIdentity(req), id(req), req.body);
   });
   app.post("/api/resolve", async (req) => {
     const { token } = z

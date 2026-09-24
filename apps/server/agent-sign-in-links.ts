@@ -18,10 +18,6 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
-import {
-  PROVISIONAL_SESSION_DAYS,
-  PROVISIONAL_SESSION_SECONDS,
-} from "./provisional.ts";
 import type { ServiceActor } from "./service-auth.ts";
 import {
   openValue,
@@ -46,7 +42,9 @@ export const staleLink = () =>
   );
 
 const HINT_LABEL = "polka:shelf-hint:v1";
-const HINT_TTL_MS = 30 * 86_400_000;
+const HINT_TTL_MS = 86_400_000;
+/** A session from an agent's link is for looking: one day. */
+const LINK_SESSION_DAYS = 1;
 
 /**
  * A pointer to a shelf's sign-in page that carries no secret: it only says
@@ -244,7 +242,7 @@ export async function consumeSignInLink(token: string, ip: string) {
     await c.query(
       `INSERT INTO sessions(hash,account_id,expires_at,assurance)
        VALUES($1,$2,now()+$3*interval '1 day','agent_link')`,
-      [sha256(session), link.account_id, PROVISIONAL_SESSION_DAYS],
+      [sha256(session), link.account_id, LINK_SESSION_DAYS],
     );
     // The journal of the shelf: which connection let a browser in. Never
     // the token.
@@ -255,7 +253,7 @@ export async function consumeSignInLink(token: string, ip: string) {
     );
     return {
       session,
-      maxAge: PROVISIONAL_SESSION_SECONDS,
+      maxAge: LINK_SESSION_DAYS * 86_400,
       clientName: link.client_name as string,
     };
   });
