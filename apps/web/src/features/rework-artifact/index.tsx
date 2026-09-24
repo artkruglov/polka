@@ -3,13 +3,17 @@ import { Upload } from "lucide-react";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { Button } from "../../shared/ui/controls.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
+import { updatePhrase } from "../../entities/artifact/agent-phrases.ts";
 
 export function ReworkArtifactPanel({
   title,
+  shelfUrl,
   onClose,
   onUpload,
 }: {
   title: string;
+  /** The work's page, named in the phrase so the agent finds it. */
+  shelfUrl: string;
   onClose: () => void;
   onUpload: () => void;
 }) {
@@ -22,7 +26,8 @@ export function ReworkArtifactPanel({
         </p>
         <CopyText
           label="Текст запроса агенту"
-          value={`Возьми мою работу «${title}» с Полки. Измени её: [опишите, что поменять]. Сохрани результат на Полке новой версией этой же работы.`}
+          value={`${updatePhrase(title, shelfUrl)} Что поменять: [опишите]. Сохрани результат новой версией этой же работы.`}
+          buttonVariant="primary"
         />
         <p className="fine">
           <a href="/settings/agents">Подключить агента через MCP</a>. Если агент
