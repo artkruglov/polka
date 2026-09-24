@@ -4,6 +4,7 @@
 //   POST /api/auth/idp/:provider/link           the same, to link (session)
 //   GET  /api/auth/idp/:provider/callback       back from the provider
 //   GET  /api/account/identities                linked providers
+//   GET  /login?next=…                          303 to /signup (an alias)
 //   POST /api/account/identities/:provider/unlink
 //
 // Failures come back to /signup?idp_error=<code>; nothing a provider sent is
@@ -55,8 +56,26 @@ function failure(reply: FastifyReply, code: string, next: string | null) {
   return reply.redirect(`/signup?${query}`, 303);
 }
 
+/**
+ * Every failed return from a provider leaves one line for the operator: the
+ * provider and the refusal code, never tokens, addresses or the query.
+ */
+function logCallbackFailure(provider: ProviderId, code: string) {
+  console.error(JSON.stringify({ event: "idp.callback_failed", provider, code }));
+}
+
 export function registerSignInRoutes(app: FastifyInstance) {
   const secure = () => config.COOKIE_SECURE === "true";
+
+  // People type /login: the sign-in page is /signup. Only a path of this
+  // installation is carried over as `next`.
+  app.get("/login", async (req, reply) => {
+    const next = safeReturnPath((req.query as Record<string, unknown>)?.next);
+    return reply.redirect(
+      next ? `/signup?${new URLSearchParams({ next })}` : "/signup",
+      303,
+    );
+  });
 
   app.get("/api/auth/idp/:provider/start", async (req, reply) => {
     const provider = enabledProvider(req);
@@ -117,10 +136,13 @@ export function registerSignInRoutes(app: FastifyInstance) {
     try {
       await limitAttempts(`idp-callback-ip:${req.ip}`, 60);
     } catch {
+      logCallbackFailure(provider, "rate_limited");
       return failure(reply, "provider", failTo);
     }
-    if (!flow || flow.provider !== provider)
+    if (!flow || flow.provider !== provider) {
+      logCallbackFailure(provider, "state");
       return failure(reply, "state", null);
+    }
     try {
       const profile = await finishFlow(
         flow,
@@ -141,13 +163,14 @@ export function registerSignInRoutes(app: FastifyInstance) {
       return reply.redirect(flow.next, 303);
     } catch (error) {
       if (error instanceof IdpError) {
+        logCallbackFailure(provider, error.code);
         if (flow.link) {
           const query = new URLSearchParams({ idp_error: error.code });
           return reply.redirect(`/settings/agents?${query}#sign-in`, 303);
         }
         return failure(reply, error.code, failTo);
       }
-      console.error(JSON.stringify({ event: "idp.callback_failed", provider }));
+      logCallbackFailure(provider, "internal");
       return failure(reply, "provider", failTo);
     }
   });
