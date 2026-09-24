@@ -382,6 +382,37 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
 - **Скрипт внешней проверки** — `node scripts/ci/uptime.mjs` с `APP_ORIGIN`, `VIEWER_ORIGIN` и `OPS_STATUS_TOKEN`: приложение и viewer отвечают, TLS-сертификатам больше 14 дней, статус зелёный. Код выхода 1 при сбое. Запускайте его по расписанию с машины вне VM (cron, любой uptime-сервис с проверкой HTTP-кода статуса).
 
+## Логи
+
+Все сервисы пишут в журнал systemd на VM (драйвер Docker `journald`, `compose.yml`, `x-logging`). Деплой пересоздаёт контейнеры `app` и `maintenance`, и лог `json-file` удалялся бы вместе с контейнером; журнал хоста остаётся. Нужна VM с systemd (Ubuntu, Debian — в том числе образы Yandex Cloud). Первый `up -d` с этой настройкой пересоздаёт все контейнеры, и старые `json-file` логи пропадают один раз.
+
+Содержимое логов не меняется: приложение не пишет адреса страниц, IP-адреса и тела запросов, ошибки — кодом события; у Caddy нет access log и записей `http.log.error` (`Caddyfile`). Размер и срок хранения задаёт journald. Один раз на VM:
+
+```sh
+sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+printf '[Journal]\nStorage=persistent\nSystemMaxUse=2G\nMaxRetentionSec=30day\n' \
+  | sudo tee /etc/systemd/journald.conf.d/polka.conf
+sudo systemctl restart systemd-journald
+journalctl --disk-usage
+```
+
+`Storage=persistent` — журнал на диске, он переживает и перезагрузку VM. Старые записи удаляются, когда журнал больше 2 ГБ или записи старше 30 дней.
+
+Чтение: тег записи — имя контейнера (`polka-hosted-app-1`, `polka-hosted-maintenance-1`, `polka-hosted-caddy-1`, `polka-hosted-backup-1`, `polka-hosted-postgres-1`). Нужен `sudo` или группа `systemd-journal`.
+
+```sh
+# app за последние N часов, включая контейнеры до последнего деплоя
+sudo journalctl -t polka-hosted-app-1 --since "6 hours ago" -o short-iso
+# только события-ошибки приложения (JSON-строки) за сутки
+sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '^{"event"'
+# все сервисы Полки за час, вперемешку по времени
+sudo journalctl -t polka-hosted-app-1 -t polka-hosted-maintenance-1 -t polka-hosted-caddy-1 -t polka-hosted-backup-1 --since "1 hour ago"
+# следить в реальном времени
+sudo journalctl -t polka-hosted-app-1 -f
+```
+
+`docker compose --env-file hosted.env logs app` по-прежнему работает, но показывает только текущий контейнер, то есть с последнего деплоя.
+
 ## Исходный код изменённой версии
 
 Полка распространяется по [AGPL-3.0](../../LICENSE). § 13 лицензии требует: если вы изменили код и даёте людям пользоваться Полкой по сети, предложите им исходный код именно вашей версии. Для этого в `hosted.env` есть `SOURCE_URL` — https-адрес репозитория или архива с вашими изменениями. Он попадает в ссылку «Открытый код» в подвале каждой страницы и у получателя ссылки, в `/llms.txt`, `/connect` и `GET /api/capabilities` (`sourceUrl`). Пусто — ссылка ведёт на исходный репозиторий `https://github.com/artkruglov/polka`; так можно, только если код не менялся.

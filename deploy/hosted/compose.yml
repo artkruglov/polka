@@ -6,14 +6,23 @@
 # Not HA: one VM, periodic logical DB backups. See deploy/hosted/README.md.
 name: polka-hosted
 
+# Logs go to the host journal (systemd-journald), not to Docker's json-file
+# files: `docker compose up -d` recreates app and maintenance on every
+# deploy, and a json-file log is deleted with its container. The journal keeps
+# them across recreation; its size and age are journald's (SystemMaxUse,
+# MaxRetentionSec: see README.md, «Логи»). Needs a VM with systemd (Ubuntu,
+# Debian). `docker compose logs` still reads them. Tag: the container name
+# (polka-hosted-app-1, polka-hosted-maintenance-1…).
+x-logging: &logging
+  driver: journald
+  options: {tag: "{{.Name}}"}
+
 x-hardening: &hardening
   read_only: true
   tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
   cap_drop: ["ALL"]
   security_opt: ["no-new-privileges:true"]
-  logging:
-    driver: json-file
-    options: {max-size: "10m", max-file: "5"}
+  logging: *logging
 
 x-runtime-env: &runtime-env
   DATABASE_URL: postgres://polka_runtime:${POLKA_RUNTIME_PASSWORD:?}@127.0.0.1:5432/polka
@@ -167,9 +176,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U polka_admin -d polka"]
       interval: 5s
       retries: 30
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "5"}
+    logging: *logging
 
   migrate:
     <<: *hardening
@@ -264,9 +271,7 @@ services:
       - caddy-config:/config
     depends_on:
       app: {condition: service_healthy}
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "5"}
+    logging: *logging
 
   backup:
     # Built locally from the pinned postgres image (pg_dump matches the server)
@@ -297,6 +302,4 @@ services:
     networks: [polka]
     depends_on:
       postgres: {condition: service_healthy}
-    logging:
-      driver: json-file
-      options: {max-size: "5m", max-file: "3"}
+    logging: *logging
