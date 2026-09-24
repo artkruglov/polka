@@ -9,6 +9,7 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/signup") return "Вход";
   if (path === "/privacy") return "Политика обработки персональных данных";
   if (path === "/terms") return "Пользовательское соглашение";
+  if (path === "/bot") return "PolkaRenderer — робот Полки";
   if (path === "/pricing") return "Как пользоваться";
   if (path === "/enterprise") return "Для компаний";
   if (path === "/start") return "Первая работа";

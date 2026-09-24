@@ -51,6 +51,9 @@ const PrivacyPage = page(() =>
 const TermsPage = page(() =>
   import("../../pages/legal/index.tsx").then((m) => m.TermsPage),
 );
+const BotPage = page(() =>
+  import("../../pages/legal/index.tsx").then((m) => m.BotPage),
+);
 const Pricing = page(() =>
   import("../../pages/pricing/index.tsx").then((m) => m.Pricing),
 );
@@ -125,6 +128,7 @@ export {
   MailOff,
   PrivacyPage,
   TermsPage,
+  BotPage,
   Pricing,
   Enterprise,
 };
