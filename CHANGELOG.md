@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-24
+
 ### Added
 
 - **Открытый код — на первом экране.** Кнопка «GitHub» с логотипом в навигации (гостям — на каждой странице, всем — на главной); число звёзд показывается от 10. Число получает сервер: `GET /api/source/stars` раз в час спрашивает `api.github.com` о репозитории из `SOURCE_URL` (только `https://github.com/<owner>/<repo>`; иначе и при любой ошибке — `{"stars":null}`), браузер к GitHub не обращается (CSP `connect-src 'self'`). Главная: кнопки «Подключить агента» и «Развернуть у себя» (инструкция для одной VM на GitHub), строка «Открытый код · AGPL-3.0 · ★ N на GitHub», ссылка «Для компаний» и внизу раздел «Разверните у себя в компании» — три шага, команды первого запуска с копированием, «Инструкция на GitHub» и «Нужна помощь» (→ `/enterprise`). `scripts/render-readme-assets.mjs shot`: `SHOT_WIDTH` и `SHOT_JS`.
@@ -235,7 +237,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/artkruglov/polka/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...v0.1.0
 [0.1.0-rc.5]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.5
 [0.1.0-rc.4]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.4
