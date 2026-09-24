@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Метрики Полки</title>
+    <link rel="stylesheet" href="/ops/metrics.css" />
+    <script src="/ops/metrics.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <h1>Метрики Полки</h1>
+      <p class="muted">
+        Обезличенные события, записанные сервером Полки. Без cookies, IP-адресов
+        и сторонних сервисов.
+      </p>
+    </header>
+    <form id="login" hidden>
+      <label for="token">Токен оператора (OPS_STATUS_TOKEN)</label>
+      <input id="token" type="password" autocomplete="off" required />
+      <p class="muted">Токен хранится только в этой вкладке и стирается при её закрытии.</p>
+      <button type="submit">Показать</button>
+    </form>
+    <section id="controls" hidden>
+      <label for="weeks">Недель</label>
+      <select id="weeks">
+        <option value="4">4</option>
+        <option value="8">8</option>
+        <option value="12" selected>12</option>
+        <option value="26">26</option>
+        <option value="52">52</option>
+      </select>
+      <button type="button" id="refresh">Обновить</button>
+      <button type="button" id="logout">Забыть токен</button>
+      <span id="generated" class="muted"></span>
+    </section>
+    <p id="status" role="status" aria-live="polite"></p>
+    <main id="report"></main>
+  </body>
+</html>

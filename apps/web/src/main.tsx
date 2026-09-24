@@ -16,5 +16,9 @@ import "./features/first-run/styles.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AppRoutes } from "./app/routing/index.tsx";
+import { rememberVisitSource } from "./shared/lib/visit-source.ts";
+
+// Before routing may change the address: the ref of the page the visit began on.
+rememberVisitSource();
 
 createRoot(document.getElementById("root")!).render(<AppRoutes />);
