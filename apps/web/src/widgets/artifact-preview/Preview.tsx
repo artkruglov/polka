@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
-import type { Revision } from "../../../../../packages/contracts/index.ts";
+import type { LinkDocument, Revision } from "../../../../../packages/contracts/index.ts";
+import { LINK_MIME, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
+import {
+  LinkCard,
+  LinkCover,
+  OWNER_LINK_HINT,
+  recipientAccessNote,
+} from "../../entities/link/index.tsx";
 import { bytes, staticView } from "../../shared/api/client.ts";
 import {
   isImage,
@@ -24,6 +31,7 @@ export function Preview({
   grant,
   compact = false,
   readingTitle,
+  title,
   onInlineBuildChange,
   overlay,
 }: {
@@ -31,6 +39,8 @@ export function Preview({
   grant?: string;
   compact?: boolean;
   readingTitle?: string;
+  /** The work's title: a link work shows it on its card. */
+  title?: string;
   onInlineBuildChange?: () => Promise<void>;
   overlay?: FrameOverlay;
 }) {
@@ -43,6 +53,8 @@ export function Preview({
     setError("");
     if (revision.mime === "text/html" || revision.storageKind === "bundle")
       return () => abort.abort();
+    // A link's cover needs only its host and service, which the revision carries.
+    if (revision.mime === LINK_MIME && compact) return () => abort.abort();
     bytes(
       grant ? "/view/bytes" : `/revisions/${revision.id}/bytes`,
       grant,
@@ -67,6 +79,32 @@ export function Preview({
     };
   }, [revision.id, grant]);
   if (error) return <div className="preview-error">{error}</div>;
+  if (revision.mime === LINK_MIME) {
+    const link = revision.link ?? { host: revision.filename.replace(/\.link\.json$/, ""), service: null };
+    const name = title ?? readingTitle ?? link.host;
+    if (compact) return <LinkCover title={name} host={link.host} service={link.service} />;
+    if (content.text === undefined) return <div className="placeholder" aria-label="Загрузка ссылки…" />;
+    let document: LinkDocument;
+    try {
+      const parsed = JSON.parse(content.text) as LinkDocument;
+      // Only an http(s) address becomes the button's href.
+      if (savedLinkUrl(parsed.url)?.href !== parsed.url) throw new Error();
+      document = parsed;
+    } catch {
+      return <div className="preview-error">Ссылку не удалось прочитать.</div>;
+    }
+    return (
+      <LinkCard
+        title={name}
+        host={link.host}
+        service={link.service}
+        // The owner goes through Полка (no referrer); a recipient straight to the original.
+        href={grant ? document.url : `/api/revisions/${revision.id}/open`}
+        note={document.note}
+        hint={grant ? recipientAccessNote(link.host, link.service, "recipient") : `${OWNER_LINK_HINT} ${recipientAccessNote(link.host, link.service)}`}
+      />
+    );
+  }
   // A lone static page saved as a bundle is shown like a single HTML upload.
   if (
     revision.storageKind === "bundle" &&

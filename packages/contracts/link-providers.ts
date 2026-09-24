@@ -4,11 +4,17 @@
  * so «which links the server may open» cannot drift between them. No
  * dependencies: the renderer image copies this file as it is.
  *
- * Each source has one route:
- * - extension: never opened by Полка's servers. The provider's terms forbid
- *   automated extraction (Claude, ChatGPT, v0, Perplexity) or robots.txt
- *   closes the path (AI Studio apps). The user's own browser (the «На Полку»
- *   extension), an agent over MCP, or a downloaded file brings the content.
+ * Each source has one route (per path where a provider has several):
+ * - extension: never opened by Полка's servers: robots.txt closes the path
+ *   (claude.site, AI Studio apps) or the page is behind a login or bot wall
+ *   (v0, Perplexity, Claude chat snapshots). The user brings the content: their
+ *   agent over MCP, a downloaded file, the «На Полку» extension, or the link
+ *   itself as a bookmark.
+ * - server-fetch: one plain HTTP request from the renderer's machine, no
+ *   browser (ChatGPT share and canvas pages: the conversation is in the
+ *   server-rendered HTML, and robots.txt allows /share/ and /canvas/shared/).
+ * - server-try: the renderer opens the page once in its browser; a bot check
+ *   is source_blocked, never retried or worked around (Claude artifacts).
  * - server-api: read through the provider's official API (GitHub Gist).
  * - server-render: a public site whose HTML is an empty SPA shell; the
  *   isolated renderer opens it once, after robots.txt allows it, and saves a
@@ -16,7 +22,13 @@
  * - html: any other public HTTPS page, downloaded without running its code.
  */
 
-export type LinkRoute = "extension" | "server-api" | "server-render" | "html";
+export type LinkRoute =
+  | "extension"
+  | "server-fetch"
+  | "server-try"
+  | "server-api"
+  | "server-render"
+  | "html";
 export type LinkProviderId =
   | "claude"
   | "chatgpt"
@@ -44,6 +56,8 @@ export type LinkProvider = {
   suffixes?: readonly string[];
   /** Paths of public share links. A matching host with another path is a page behind a login. */
   publicPath?: RegExp;
+  /** A route for some paths instead of `route` (the first match wins). */
+  pathRoutes?: ReadonlyArray<readonly [RegExp, LinkRoute]>;
   /** The default title of a link saved as a bookmark. */
   title: (path: string, host: string) => string;
 };
@@ -55,14 +69,27 @@ const hostTitle = (_path: string, host: string) => host;
 
 export const LINK_PROVIDERS: readonly LinkProvider[] = [
   {
+    // claude.site: robots.txt «Disallow: /» for everyone.
     id: "claude",
     name: "Claude",
     route: "extension",
     mark: "Cl",
     color: "#c96442",
-    hosts: ["claude.ai", "claude.site"],
+    hosts: ["claude.site"],
     suffixes: [".claude.site"],
-    publicPath: /^\/(?:artifact|public\/artifacts|share|code\/artifact)\/[^/]+|^\/artifacts?\//,
+    title: () => "Артефакт Claude",
+  },
+  {
+    id: "claude",
+    name: "Claude",
+    route: "extension",
+    mark: "Cl",
+    color: "#c96442",
+    hosts: ["claude.ai"],
+    publicPath: /^\/(?:artifact|public\/artifacts|share|code\/artifact)\/[^/]+/,
+    // robots.txt allows these pages (only /api/* is closed); Cloudflare usually
+    // answers a data-centre IP with a challenge, and then the card offers the rest.
+    pathRoutes: [[/^\/(?:artifact|public\/artifacts)\/[A-Za-z0-9-]{6,80}\/?$/, "server-try"]],
     title: byPath([[/^\/share\//, "Чат Claude"]], "Артефакт Claude"),
   },
   {
@@ -73,6 +100,8 @@ export const LINK_PROVIDERS: readonly LinkProvider[] = [
     color: "#10a37f",
     hosts: ["chatgpt.com", "chat.openai.com"],
     publicPath: /^\/(?:share|canvas\/shared)\/[^/]+/,
+    // robots.txt: «Allow: /share/» and «Allow: /canvas/shared/» for every agent.
+    pathRoutes: [[/^\/(?:share|canvas\/shared)\/[A-Za-z0-9-]{6,80}\/?$/, "server-fetch"]],
     title: byPath([[/^\/canvas\//, "Canvas ChatGPT"]], "Чат ChatGPT"),
   },
   {
@@ -195,13 +224,20 @@ export function matchLink(input: string | URL): LinkMatch | null {
   const closed = !!provider.publicPath && !provider.publicPath.test(url.pathname);
   // g.co is a Google short-link host: only its Gemini share path belongs to Gemini.
   if (host === "g.co" && closed) return { url, host, provider: null, route: "html", closed: false };
-  return { url, host, provider, route: provider.route, closed };
+  const route = provider.pathRoutes?.find(([pattern]) => pattern.test(url.pathname))?.[1] ?? provider.route;
+  return { url, host, provider, route, closed };
 }
 
-/** Hosts the renderer may open at all, whatever redirects lead there. */
+/** Pages the renderer may open in its browser at all, whatever redirects lead there. */
 export function renderable(input: string | URL): boolean {
   const match = matchLink(input);
-  return !!match && match.route === "server-render" && !match.closed;
+  return !!match && (match.route === "server-render" || match.route === "server-try") && !match.closed;
+}
+
+/** Pages the renderer may fetch without a browser (POST /fetch). */
+export function fetchable(input: string | URL): boolean {
+  const match = matchLink(input);
+  return !!match && match.route === "server-fetch" && !match.closed;
 }
 
 /** A bookmark's default title: «Артефакт Claude», «Чат ChatGPT», or the host. */

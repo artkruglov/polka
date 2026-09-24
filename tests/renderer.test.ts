@@ -9,6 +9,8 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { detectChallenge } from "../apps/renderer/challenge.ts";
 import { createEgressProxy, egressTarget } from "../apps/renderer/egress-proxy.ts";
+import { fetchPage, robotsVia } from "../apps/renderer/fetch-page.ts";
+import type { ProxiedAnswer, ProxiedGet } from "../apps/renderer/proxied-fetch.ts";
 import {
   RENDERER_USER_AGENT,
   signRenderRequest,
@@ -139,4 +141,44 @@ test("the proxy refuses CONNECT to internal targets and plain HTTP, and tunnels 
     proxy.close();
     upstream.close();
   }
+});
+
+test("/fetch: allowlist, robots.txt first, redirects only within the allowlist, bot checks, one attempt", async () => {
+  const SHARE = "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed";
+  const answers: Record<string, ProxiedAnswer> = {
+    "https://chatgpt.com/robots.txt": { status: 200, headers: {}, body: Buffer.from("User-agent: *\nDisallow: /\nAllow: /share/\nAllow: /canvas/shared/\n") },
+    [SHARE]: { status: 200, headers: { "content-type": "text/html; charset=utf-8" }, body: Buffer.from("<title>ChatGPT - x</title>" + "y".repeat(6000)) },
+  };
+  const asked: string[] = [];
+  const get: ProxiedGet = async (url) => {
+    asked.push(url);
+    const answer = answers[url];
+    if (!answer) throw Error(`unexpected ${url}`);
+    return answer;
+  };
+  const robots = robotsVia(get);
+  const ok = await fetchPage(get, robots, SHARE);
+  assert.ok("html" in ok && ok.finalUrl === SHARE && ok.status === 200);
+  assert.deepEqual(asked, ["https://chatgpt.com/robots.txt", SHARE]);
+  assert.deepEqual(await fetchPage(get, robots, "https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed"), { error: "not_allowed" });
+  assert.deepEqual(await fetchPage(get, robots, "https://example.com/share/x"), { error: "not_allowed" });
+  // A redirect out of the allowlist (a login page) is refused, not followed.
+  const MOVED = "https://chatgpt.com/share/6aa18924-7ee8-83ee-a6d3-46731e8b1f6b";
+  answers[MOVED] = { status: 302, headers: { location: "/auth/login" }, body: Buffer.alloc(0) };
+  assert.deepEqual(await fetchPage(get, robots, MOVED), { error: "not_allowed", detail: "redirect" });
+  const BLOCKED = "https://chatgpt.com/share/6a2c4eab-b7f0-83eb-99d3-7875da25e53f";
+  answers[BLOCKED] = { status: 403, headers: { "cf-mitigated": "challenge", "content-type": "text/html" }, body: Buffer.from("<title>Just a moment...</title>") };
+  const before = asked.length;
+  assert.equal(((await fetchPage(get, robots, BLOCKED)) as any).error, "source_blocked");
+  assert.equal(asked.length - before, 1, "no retry after a challenge (robots.txt came from the cache)");
+  const GONE = "https://chatgpt.com/share/6ab33cb3-73ec-83e8-90a4-2a1b8ff99a08";
+  answers[GONE] = { status: 404, headers: { "content-type": "text/html" }, body: Buffer.from("<title>Not found</title>" + "z".repeat(6000)) };
+  assert.deepEqual(await fetchPage(get, robots, GONE), { error: "navigation_failed", detail: "http_404" });
+  // robots.txt that closes the page, or cannot be read, stops the fetch before it.
+  const closed = robotsVia(async (url) =>
+    url.endsWith("/robots.txt") ? { status: 200, headers: {}, body: Buffer.from("User-agent: PolkaRenderer\nDisallow: /share/") } : answers[SHARE],
+  );
+  assert.deepEqual(await fetchPage(get, closed, SHARE), { error: "robots_disallowed" });
+  const down = robotsVia(async () => ({ status: 503, headers: {}, body: Buffer.alloc(0) }));
+  assert.deepEqual(await fetchPage(get, down, SHARE), { error: "robots_unavailable" });
 });

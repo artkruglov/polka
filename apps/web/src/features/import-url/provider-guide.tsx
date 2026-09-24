@@ -1,21 +1,33 @@
-import React, { useState } from "react";
-import { Bot, ClipboardPaste, FileUp, Puzzle } from "lucide-react";
+import React from "react";
+import { Bot, ClipboardPaste, FileDown, FileUp } from "lucide-react";
 import { Button } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { ServiceMark } from "../../shared/ui/ServiceMark.tsx";
 import type { ImportClassification } from "./classify-link.ts";
 import { importableArtifact } from "../../../../../packages/contracts/extension-bridge.ts";
 import { ExtensionSave } from "./extension-save.tsx";
+import { SaveLinkAction } from "./save-link.tsx";
 
-/** What the user copies to their agent; the agent asks them for the artifact's code. */
+/** What the user copies to their agent: it asks them for the artifact's code. */
 export const agentPhrase = (url: string) => `Сохрани на Полку артефакт по ссылке ${url}`;
+/** Said in the Claude chat where the artifact is, with the Полка connector on: Claude sends the source itself. */
+export const CLAUDE_PHRASE = "Сохрани этот артефакт на Полку";
+
+/** Why the card is shown, in the words of the import that did not work. */
+const BLOCKED: Record<string, string> = {
+  source_blocked: "показал серверу Полки проверку на бота. Полка такие проверки не обходит и попытку не повторяет.",
+  robots_disallowed: "запрещает роботам открывать эту страницу (robots.txt), и Полка это соблюдает.",
+  robots_unavailable: "не отдал robots.txt, поэтому Полка страницу не открыла.",
+  timeout: "не ответил вовремя.",
+  source_unavailable: "не отдал страницу: возможно, ссылка закрыта или удалена.",
+};
 
 /**
- * A link of a service whose terms forbid automated extraction (Claude,
- * ChatGPT, v0, Perplexity, AI Studio): Полка's server never opens it. The card
- * offers the ways that work from the user's side: the «На Полку» extension in
- * their own browser, their agent over MCP, a downloaded file, or (composed by
- * the page) keeping the link itself as a bookmark.
+ * A link whose content Полка's server could not or may not take (Claude,
+ * v0, Perplexity, AI Studio; ChatGPT or Claude when the server's attempt was
+ * refused). The ways that always work, simplest first: the user's own agent,
+ * the link itself as a work, a downloaded file dropped right here. The
+ * extension (and later a bookmarklet) waits behind «Сохранять в один клик».
  */
 export function ProviderGuide({
   result,
@@ -23,24 +35,30 @@ export function ProviderGuide({
   autoStart = false,
   fileSave,
   pasteCode,
-  saveLink,
   onFile,
+  folderId,
+  failure,
 }: {
   result: ImportClassification;
-  /** The pasted link: the «На Полку» extension can open it in this browser. */
+  /** The pasted link: the phrase, the link work and the extension use it. */
   url?: string;
+  /** Start the extension without a second click (only once it is opened). */
   autoStart?: boolean;
   fileSave?: React.ReactNode;
   pasteCode?: React.ReactNode;
-  /** «Сохранить как ссылку», composed by the page. */
-  saveLink?: React.ReactNode;
   onFile: () => void;
+  folderId?: string;
+  /** The server tried and this is its error code (source_blocked…). */
+  failure?: string | null;
 }) {
   const app = result.provider?.name ?? "сервисе";
+  const claude = result.provider?.id === "claude";
   const artifact = url ? importableArtifact(url) : null;
-  const [file, setFile] = useState(false);
+  const explain = failure
+    ? `${result.provider?.name ?? "Сайт"} ${BLOCKED[failure] ?? "не отдал страницу серверу Полки."} Сохраните работу одним из способов ниже.`
+    : result.explain;
   return (
-    <div className="url-import-provider" data-import-status={result.status}>
+    <div className="url-import-provider" data-import-status={result.status} data-failure={failure ?? undefined}>
       <div className="url-import-provider-head" role="status">
         <ServiceMark provider={result.provider} />
         <div>
@@ -48,50 +66,47 @@ export function ProviderGuide({
           {result.host && <small>{result.host}</small>}
         </div>
       </div>
-      <p className="url-import-provider-explain">{result.explain}</p>
+      <p className="url-import-provider-explain">{explain}</p>
       <div className="url-import-actions">
-        {artifact ? (
-          <ExtensionSave url={artifact.url} autoStart={autoStart} />
-        ) : (
-          <div className="url-import-action" data-extension="unsupported">
-            <Puzzle aria-hidden="true" />
-            <div>
-              <strong>Расширение «На Полку»</strong>
-              <p>Пока сохраняет артефакты Claude и ChatGPT; для {app} используйте агента или файл.</p>
-            </div>
-          </div>
-        )}
         {url && (
           <div className="url-import-action" data-action="agent">
             <Bot aria-hidden="true" />
             <div>
-              <strong>Попросить агента</strong>
+              <strong>{claude ? "Попросить Claude" : "Попросить агента"}</strong>
               <p>
-                Отправьте эту фразу агенту с подключённой Полкой — он попросит
-                вставить код артефакта и сохранит его.{" "}
-                <a href="/settings/agents">Подключить агента</a>
+                {claude
+                  ? "Напишите это в чате Claude, где открыт артефакт: Claude с подключённой Полкой отправит код сам. "
+                  : "Отправьте эту фразу агенту с подключённой Полкой: он попросит код артефакта и сохранит его. "}
+                <a href="/settings/agents">{claude ? "Подключить Полку к Claude" : "Подключить агента"}</a>
               </p>
-              <code className="url-import-phrase">{agentPhrase(url)}</code>
+              <code className="url-import-phrase">{claude ? CLAUDE_PHRASE : agentPhrase(url)}</code>
             </div>
-            <CopyButton value={agentPhrase(url)} label="Скопировать фразу" />
+            <CopyButton value={claude ? CLAUDE_PHRASE : agentPhrase(url)} label="Скопировать фразу" />
           </div>
         )}
-        <div className="url-import-action" data-action="file">
-          <FileUp aria-hidden="true" />
-          <div>
-            <strong>Загрузить файл</strong>
-            <p>
-              В {app} откройте артефакт, в меню ⋯ выберите Download и загрузите
-              скачанный файл сюда.
-            </p>
+        {url && <SaveLinkAction url={url} folderId={folderId} />}
+        <div className="url-import-drop" data-action="file">
+          <div className="url-import-drop-head">
+            <FileDown aria-hidden="true" />
+            <strong>Скачайте в {app} (Export → Download) и перетащите сюда</strong>
           </div>
-          <Button onClick={() => (fileSave ? setFile((open) => !open) : onFile())} aria-expanded={fileSave ? file : undefined}>
-            Загрузить файл
-          </Button>
+          {fileSave ?? (
+            <Button onClick={onFile}>
+              <FileUp /> Выбрать файл
+            </Button>
+          )}
         </div>
-        {file && fileSave && <div className="url-import-file">{fileSave}</div>}
-        {saveLink}
       </div>
+      <details className="url-import-oneclick">
+        <summary>Сохранять в один клик</summary>
+        {artifact ? (
+          <ExtensionSave url={artifact.url} autoStart={autoStart} />
+        ) : (
+          <p>Расширение «На Полку» пока сохраняет артефакты Claude и ChatGPT.</p>
+        )}
+        {/* The bookmarklet («Полка» in the bookmarks bar) lands here from its own branch. */}
+        <div data-slot="bookmarklet" hidden />
+      </details>
       {pasteCode && (
         <details className="url-import-paste">
           <summary>

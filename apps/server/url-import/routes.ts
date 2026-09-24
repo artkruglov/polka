@@ -6,7 +6,8 @@ import {createImportJob,getImportJob,importJobView,cancelImportJob} from './jobs
 import {runImportOnce,expireImportJobs} from './worker.ts';
 
 /** What this installation's import can copy; the web reads it from /api/capabilities too. */
-export function importSources(){return ['standalone-html','github-gist',...(config.RENDERED_IMPORT_ENABLED?['rendered-spa']:[])];}
+/** rendered-spa: allowlisted SPA hosts; server-fetch: ChatGPT shares; server-try: one attempt at a Claude artifact. The last three need the renderer. */
+export function importSources(){return ['standalone-html','github-gist',...(config.RENDERED_IMPORT_ENABLED?['rendered-spa','server-fetch','server-try']:[])];}
 export function registerUrlImports(app:FastifyInstance,identity:(req:FastifyRequest)=>Promise<Actor>){
  app.get('/api/imports/capabilities',async()=>({enabled:config.URL_IMPORT_ENABLED,livePreview:config.HTML_LIVE_ENABLED,sources:importSources(),providerArtifacts:false}));
  if(!config.URL_IMPORT_ENABLED)return;

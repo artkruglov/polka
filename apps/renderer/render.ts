@@ -115,8 +115,15 @@ export async function renderPage(
     if (Buffer.byteLength(html) > RENDER_MAX_HTML) return { error: "too_large" };
     const frames: Array<{ url: string; html: string }> = [];
     let frameBytes = 0;
+    // A Claude artifact lives in a frame on *.claudeusercontent.com, often in
+    // a srcdoc frame inside it: those count, whatever their own URL says.
+    const artifactFrame = (frame: ReturnType<typeof page.mainFrame>): boolean => {
+      for (let current: typeof frame | null = frame; current; current = current.parentFrame())
+        if (/^https:\/\/[^/]*\.claudeusercontent\.com\//.test(current.url())) return true;
+      return false;
+    };
     for (const frame of page.frames().slice(1, 9)) {
-      if (!/^https:/.test(frame.url()) || left() < 1_000) continue;
+      if (!(/^https:/.test(frame.url()) || artifactFrame(frame)) || left() < 1_000) continue;
       const content = await frame.content().catch(() => null);
       if (!content || frameBytes + Buffer.byteLength(content) > RENDER_MAX_HTML) continue;
       frameBytes += Buffer.byteLength(content);

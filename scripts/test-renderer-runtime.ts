@@ -7,7 +7,8 @@
 //    private address, and to open a WebSocket: all must fail, the canary must
 //    see no request. A Cloudflare-style challenge page must come back as
 //    source_blocked, an unsigned request as 401, a non-allowlisted URL as
-//    not_allowed.
+//    not_allowed. POST /fetch reads a page with one plain GET through the same
+//    proxy, and robots.txt (read by the renderer itself) can refuse both.
 // 2. Docker (skipped with a note when Docker is absent): the renderer image is
 //    built and started with the compose hardening; from inside it the proxy
 //    must refuse 169.254.169.254, the Docker network's gateway and 127.0.0.1,
@@ -27,6 +28,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { createEgressProxy } from "../apps/renderer/egress-proxy.ts";
 import { createRenderer } from "../apps/renderer/server.ts";
+import { proxiedGet } from "../apps/renderer/proxied-fetch.ts";
 import { signRenderRequest } from "../packages/renderer-contract.ts";
 
 const SECRET = "runtime-test-secret-0123456789abcdef";
@@ -37,12 +39,12 @@ const pass = (name: string) => {
   console.log(`ok  ${name}`);
 };
 
-async function render(base: string, url: string, secret = SECRET) {
+async function render(base: string, url: string, secret = SECRET, path: "/render" | "/fetch" = "/render") {
   const body = JSON.stringify({ url });
-  const response = await fetch(`${base}/render`, {
+  const response = await fetch(`${base}${path}`, {
     method: "POST",
     body,
-    headers: { "content-type": "application/json", ...(secret ? signRenderRequest(secret, "POST", "/render", body) : {}) },
+    headers: { "content-type": "application/json", ...(secret ? signRenderRequest(secret, "POST", path, body) : {}) },
   });
   return { status: response.status, body: (await response.json()) as any };
 }
@@ -59,7 +61,17 @@ const canary = createHttps(tls, (_req, res) => {
 });
 await new Promise<void>((resolve) => canary.listen(0, "127.0.0.1", resolve));
 const canaryPort = (canary.address() as AddressInfo).port;
+let robotsReads = 0;
 const fixture = createHttps(tls, (req, res) => {
+  if (req.url === "/robots.txt") {
+    robotsReads++;
+    res.writeHead(200, { "content-type": "text/plain" });
+    return res.end("User-agent: *\nDisallow: /private\n\nUser-agent: PolkaRenderer\nDisallow: /closed-to-us\n");
+  }
+  if (req.url === "/share/plain") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(`<!doctype html><title>Shared</title><p>ua=${req.headers["user-agent"]}</p>`);
+  }
   if (req.url === "/challenge") {
     res.writeHead(403, { "content-type": "text/html", "cf-mitigated": "challenge" });
     return res.end("<!doctype html><title>Just a moment...</title><p>Checking your browser");
@@ -115,6 +127,8 @@ const service = createRenderer({
   secret: SECRET,
   anyPort: true,
   browser: async () => browser,
+  get: proxiedGet(proxyPort, { insecure: true }),
+  fetchAllow: (url) => new URL(url).hostname === FIXTURE,
   render: { allow: (url) => new URL(url).hostname === FIXTURE, ignoreHTTPSErrors: true },
 });
 await new Promise<void>((resolve) => service.listen(0, "127.0.0.1", resolve));
@@ -143,6 +157,15 @@ try {
   pass("unsigned or wrongly signed requests → 401");
   assert.equal((await render(base, "https://example.com/")).body.error, "not_allowed");
   pass("a host outside the allowlist → not_allowed");
+  const fetched = await render(base, `${origin}/share/plain`, SECRET, "/fetch");
+  assert.equal(fetched.status, 200, JSON.stringify(fetched.body));
+  assert.match(fetched.body.html, /ua=PolkaRenderer\/1\.0 \(\+https:\/\/polochka\.app\/bot\)/);
+  pass("/fetch: one plain GET through the egress proxy, with the honest User-Agent");
+  assert.equal((await render(base, `${origin}/closed-to-us`, SECRET, "/fetch")).body.error, "robots_disallowed");
+  assert.equal((await render(base, `${origin}/closed-to-us`)).body.error, "robots_disallowed");
+  assert.equal((await render(base, "https://example.com/", SECRET, "/fetch")).body.error, "not_allowed");
+  assert.equal(robotsReads, 1, "robots.txt is read once per host and cached");
+  pass("robots.txt is read by the renderer, once per host, and refuses both /render and /fetch");
 } finally {
   service.close();
   await browser.close();
@@ -186,7 +209,9 @@ if (docker.status !== 0) {
     pass(`docker egress: proxy refuses 169.254.169.254, the docker gateway ${gateway} and 127.0.0.1`);
     assert.equal((await render(dockerBase, "https://example.com/")).body.error, "not_allowed");
     assert.equal((await render(dockerBase, "https://demo.lovable.app/", "")).status, 401);
-    pass("docker /render: unsigned → 401, non-allowlisted → not_allowed");
+    assert.equal((await render(dockerBase, "https://example.com/", SECRET, "/fetch")).body.error, "not_allowed");
+    assert.equal((await render(dockerBase, "https://chatgpt.com/share/x-x-x-x", "", "/fetch")).status, 401);
+    pass("docker /render and /fetch: unsigned → 401, non-allowlisted → not_allowed");
     const user = run(["exec", name, "id", "-un"]);
     assert.equal(user, "pwuser");
     pass("docker: runs as pwuser with a read-only root and no capabilities");

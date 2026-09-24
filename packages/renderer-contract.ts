@@ -20,6 +20,8 @@ export const RENDER_TIMEOUT_MS = 25_000;
 export type RenderRequest = { url: string };
 export type RenderError =
   | "source_blocked"
+  | "robots_disallowed"
+  | "robots_unavailable"
   | "timeout"
   | "not_allowed"
   | "navigation_failed"
@@ -35,6 +37,11 @@ export type RenderResult =
       frames: Array<{ url: string; html: string }>;
     }
   | { error: RenderError; detail?: string };
+/** POST /fetch: one plain HTTP GET of a server-fetch page (no browser). */
+export type FetchResult =
+  | { finalUrl: string; status: number; html: string }
+  | { error: RenderError; detail?: string };
+export const FETCH_TIMEOUT_MS = 15_000;
 
 const payload = (timestamp: string, method: string, path: string, body: string) =>
   `${timestamp}\n${method.toUpperCase()}\n${path}\n${createHash("sha256").update(body).digest("hex")}`;

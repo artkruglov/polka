@@ -68,7 +68,27 @@ export function classify(input: string, sources: readonly string[] = []): Import
       title: "Ссылка похожа на закрытую",
       explain: `Такая страница открывается только после входа, и Полка её не обходит. Скачайте артефакт из чата как HTML. ${FILE_NEXT}`,
     };
-  if (provider && route === "extension")
+  if (provider && route === "server-fetch" && sources.includes("server-fetch"))
+    return {
+      provider,
+      route,
+      status: "ready",
+      source: provider.id,
+      host,
+      title: provider.title(url.pathname, host),
+      explain: `Полка откроет общую ссылку ${provider.name} и сохранит canvas, код из ответа или сам разговор.`,
+    };
+  if (provider && route === "server-try" && sources.includes("server-try"))
+    return {
+      provider,
+      route,
+      status: "ready",
+      source: provider.id,
+      host,
+      title: provider.title(url.pathname, host),
+      explain: `Полка один раз попробует открыть артефакт. Если ${provider.name} покажет проверку на бота, предложим другие способы.`,
+    };
+  if (provider && (route === "extension" || route === "server-fetch" || route === "server-try"))
     return {
       provider,
       route,
@@ -76,7 +96,7 @@ export function classify(input: string, sources: readonly string[] = []): Import
       source: provider.id,
       host,
       title: provider.title(url.pathname, host),
-      explain: `${provider.name} запрещает автоматическое извлечение, поэтому сервер Полки такие ссылки не открывает. Сохраните её из своего браузера расширением, попросите агента или загрузите скачанный файл — ссылка будет готова сразу.`,
+      explain: `${provider.name} не отдаёт такую ссылку серверу Полки. Сохраните работу одним из способов ниже: через агента, как ссылку или файлом.`,
     };
   if (provider && route === "server-api" && sources.includes("github-gist"))
     return {

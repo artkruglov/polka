@@ -374,6 +374,7 @@ export function RecipientScreen({
       <Preview
         revision={viewer.revision}
         grant={viewer.grant}
+        title={viewer.title}
         readingTitle={plainText ? viewer.title : undefined}
         overlay={overlay}
       />

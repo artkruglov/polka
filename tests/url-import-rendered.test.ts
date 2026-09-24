@@ -1,8 +1,8 @@
-// Rendered import (apps/server/url-import/rendered.ts): robots.txt for
+// Rendered import (apps/server/url-import/rendered.ts): robots.txt rules for
 // PolkaRenderer, the renderer's answer turned into a script-free bundle with
-// the snapshot provenance and warning, failures mapped without retries, the
-// job's «rendering» state, and the content filter on the saved snapshot.
-// The renderer, robots.txt and the page's resources are stand-ins.
+// the snapshot provenance and warning, a Claude artifact's frame, failures
+// mapped without retries, the job's «rendering» state, and the content filter
+// on the saved snapshot. The renderer and the page's resources are stand-ins.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -34,7 +34,6 @@ const snapshot = (html: string, over: Partial<{ finalUrl: string; title: string 
   frames: [],
   ...over,
 });
-const allowAll = async () => ({ rules: [] });
 const assets = async (url: string) => {
   if (url === "https://demo.lovable.app/assets/index.css")
     return { url, contentType: "text/css", bytes: Buffer.from("h1{color:teal}") };
@@ -96,7 +95,6 @@ test("robots.txt is fetched once per host per hour; 404 allows, 5xx disallows", 
 test("a rendered page becomes a script-free snapshot bundle with provenance and a warning", async () => {
   let rendering = 0;
   const result = await captureRendered(PAGE, {
-    robots: allowAll,
     onRendering: async () => void rendering++,
     render: async () =>
       snapshot(
@@ -121,53 +119,27 @@ test("a rendered page becomes a script-free snapshot bundle with provenance and 
   assert.ok([...parsed.source.values()].some((bytes) => bytes.toString() === "h1{color:teal}"), "CSS localised");
 });
 
-test("robots.txt, the allowlist and bot checks stop a render; nothing is retried", async () => {
+test("the renderer's refusals stop an import; nothing is retried", async () => {
   let renders = 0;
-  const render = async () => {
+  const answer = (result: RenderResult) => async () => {
     renders++;
-    return snapshot("<h1>x</h1>");
+    return result;
   };
-  await assert.rejects(
-    captureRendered(PAGE, { render, robots: async () => ({ rules: parseRobots("User-agent: *\nDisallow: /") }) }),
-    { code: "robots_disallowed" },
-  );
-  await assert.rejects(captureRendered(PAGE, { render, robots: async () => ({ unreachable: true }) }), {
-    code: "robots_unavailable",
+  // robots.txt is read by the renderer, from the machine that opens the page.
+  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_disallowed" }) }), { code: "robots_disallowed" });
+  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_unavailable" }) }), { code: "robots_unavailable" });
+  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "source_blocked", detail: "cloudflare_challenge" }) }), {
+    code: "source_blocked",
   });
-  await assert.rejects(captureRendered("https://example.com/", { render, robots: allowAll }), { code: "not_allowed" });
-  assert.equal(renders, 0, "the renderer was never asked");
-  let blocked = 0;
+  assert.equal(renders, 3, "one request each");
+  await assert.rejects(captureRendered("https://example.com/", { render: answer(snapshot("<h1>x</h1>")) }), { code: "not_allowed" });
+  assert.equal(renders, 3, "a host outside the allowlist is never sent to the renderer");
   await assert.rejects(
-    captureRendered(PAGE, {
-      robots: allowAll,
-      render: async () => {
-        blocked++;
-        return { error: "source_blocked", detail: "cloudflare_challenge" };
-      },
-    }),
-    { code: "source_blocked" },
-  );
-  assert.equal(blocked, 1);
-  await assert.rejects(
-    captureRendered(PAGE, { robots: allowAll, render: async () => snapshot("<h1>x</h1>", { finalUrl: "https://evil.example/" }) }),
+    captureRendered(PAGE, { render: async () => snapshot("<h1>x</h1>", { finalUrl: "https://evil.example/" }) }),
     { code: "not_allowed" },
   );
-  // A redirect to another allowlisted host asks that host's robots.txt too.
-  const asked: string[] = [];
   await assert.rejects(
     captureRendered(PAGE, {
-      robots: async (url) => {
-        asked.push(url.host);
-        return url.host === "other.github.io" ? { rules: parseRobots("User-agent: *\nDisallow: /") } : { rules: [] };
-      },
-      render: async () => snapshot("<h1>x</h1>", { finalUrl: "https://other.github.io/" }),
-    }),
-    { code: "robots_disallowed" },
-  );
-  assert.deepEqual(asked, ["demo.lovable.app", "other.github.io"]);
-  await assert.rejects(
-    captureRendered(PAGE, {
-      robots: allowAll,
       render: async () => {
         throw Error("ECONNREFUSED");
       },
@@ -176,15 +148,49 @@ test("robots.txt, the allowlist and bot checks stop a render; nothing is retried
   );
 });
 
+test("a Claude artifact: one try; its frame is the snapshot, a challenge is source_blocked", async () => {
+  const ARTIFACT = "https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo";
+  let calls = 0;
+  const result = await captureRendered(ARTIFACT, {
+    render: async () => {
+      calls++;
+      return {
+        finalUrl: ARTIFACT,
+        title: "Budget planner | Claude",
+        html: "<!doctype html><title>Claude</title><div id=app>chat app shell</div>",
+        frames: [
+          { url: "https://www.claudeusercontent.com/artifact/x", html: "<html><body><iframe srcdoc></iframe></body></html>" },
+          { url: "about:srcdoc", html: "<!doctype html><html><head><title>Planner</title></head><body><h1>Budget planner</h1><p>Income and expenses per month.</p><script>calc()</script></body></html>" },
+        ],
+      };
+    },
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.title, "Budget planner");
+  const html = Buffer.from(result.files.find((f) => f.path === "index.html")!.data, "base64").toString();
+  assert.match(html, /Budget planner/);
+  assert.doesNotMatch(html, /chat app shell/);
+  assert.doesNotMatch(html, /<script/);
+  assert.equal(result.manifest.provenance.sourceUrl, ARTIFACT);
+  // No artifact frame (Cloudflare, or the chat app without the artifact): source_blocked.
+  await assert.rejects(
+    captureRendered(ARTIFACT, { render: async () => ({ finalUrl: ARTIFACT, title: "Claude", html: "<div>app</div>", frames: [] }) }),
+    { code: "source_blocked" },
+  );
+  await assert.rejects(captureRendered(ARTIFACT, { render: async () => ({ error: "source_blocked", detail: "cloudflare_turnstile" }) }), {
+    code: "source_blocked",
+  });
+});
+
 test("the import dispatcher sends allowlisted SPA hosts to the renderer only when it is enabled", async () => {
   let used = 0;
-  const rendered = { robots: allowAll, render: async () => (used++, snapshot("<h1>ok</h1>")) };
+  const rendered = { render: async () => (used++, snapshot("<h1>ok</h1>")) };
   await prepareImport(PAGE, { renderedEnabled: true, rendered });
   assert.equal(used, 1);
   await assert.rejects(prepareImport("https://gemini.google.com/share/abc123", { renderedEnabled: false, rendered }), {
     code: "renderer_disabled",
   });
-  await assert.rejects(prepareImport("https://claude.ai/public/artifacts/x", { renderedEnabled: true, rendered }), {
+  await assert.rejects(prepareImport("https://claude.ai/share/0b5c2f0e-1111-4222-8333-444455556666", { renderedEnabled: true, rendered }), {
     code: "provider_adapter_required",
   });
   assert.equal(used, 1);
@@ -228,7 +234,6 @@ test("the job shows «rendering» while the renderer works", async () => {
           ...options,
           renderedEnabled: true,
           rendered: {
-            robots: allowAll,
             render: async () => {
               seen.push((await getImportJob(c, owner, job.id)).state);
               return snapshot("<h1>Rendered</h1>");
@@ -247,7 +252,7 @@ test("the job shows «rendering» while the renderer works", async () => {
         prepareImport(url, {
           ...options,
           renderedEnabled: true,
-          rendered: { robots: allowAll, render: async () => ({ error: "source_blocked" }) },
+          rendered: { render: async () => ({ error: "source_blocked" }) },
         }),
       persist: async () => ({ ok: true }),
     });
@@ -264,7 +269,6 @@ test("the job shows «rendering» while the renderer works", async () => {
 test("a rendered snapshot is saved through the same content filter as any import", async () => {
   const owner = await createAccount("render-save-" + randomBytes(5).toString("hex"), randomBytes(24).toString("hex"));
   const result = await captureRendered(PAGE, {
-    robots: allowAll,
     render: async () =>
       snapshot(
         "<!doctype html><title>Casino</title><main><h1>Онлайн казино Вулкан</h1><p>Онлайн казино Вулкан: фриспины за регистрацию, бонус на депозит, рабочее зеркало. Играть на деньги!</p></main>",

@@ -40,7 +40,7 @@ export function UrlImportCard(props: {
       </section>
     );
   return state.capabilities.urlImport ? (
-    <UrlImport {...props} />
+    <UrlImport {...props} sources={state.capabilities.urlImportSources} />
   ) : (
     <UrlRecognizer {...props} />
   );

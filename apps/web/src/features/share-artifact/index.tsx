@@ -22,6 +22,7 @@ import {
 } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
+import { recipientAccessNote } from "../../entities/link/index.tsx";
 
 type Choice = "private" | "link";
 
@@ -185,6 +186,16 @@ export function SharePanel({
               </div>
             )}
           </div>
+        )}
+
+        {a.revision.link && (
+          <p className="share-moderation" role="note" data-link-access>
+            <LinkIcon aria-hidden="true" />
+            <span>
+              Это ссылка, а не копия.{" "}
+              {recipientAccessNote(a.revision.link.host, a.revision.link.service)}
+            </span>
+          </p>
         )}
 
         {wantsClose && (

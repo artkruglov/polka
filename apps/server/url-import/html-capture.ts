@@ -8,6 +8,7 @@ import {cdnRole} from '../react-runtime.ts';
 import {matchLink} from '../../../packages/contracts/link-providers.ts';
 import {fetchPublic,publicUrl,type PublicResponse} from './public-fetch.ts';
 
+const downloadable=(url:URL)=>{const route=matchLink(url)?.route;return !route||route==='html'||route==='server-render';};
 export type Fetcher=(url:string,options:{maxBytes:number;signal:AbortSignal})=>Promise<PublicResponse>;
 const detach=(node:Tree.Element)=>{if(node.parentNode&&'childNodes'in node.parentNode)node.parentNode.childNodes=node.parentNode.childNodes.filter(n=>n!==node);};
 export class HtmlCaptureError extends Error {constructor(public code:string,message:string){super(message);}}
@@ -21,10 +22,11 @@ const extensions:Record<string,string>={'text/html':'html','text/css':'css','tex
 export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{fetcher?:Fetcher;signal?:AbortSignal}={}) {
  const timeout=AbortSignal.timeout(45_000);const abort=signal?AbortSignal.any([signal,timeout]):timeout;
  const sourceUrl=publicUrl(input);
- if(matchLink(sourceUrl)?.route==='extension')throw new HtmlCaptureError('provider_adapter_required','Этот сервис запрещает автоматическое извлечение: Полка не открывает такие ссылки сервером. Сохраните расширением «На Полку», через агента или файлом.');
+ // AI chats and their artifacts are opened only through their own route (prepare.ts), never downloaded from here.
+ if(!downloadable(sourceUrl))throw new HtmlCaptureError('provider_adapter_required','Этот сервис Полка не скачивает напрямую. Сохраните работу через агента, файлом или как ссылку.');
  const main=await fetcher(sourceUrl.href,{maxBytes:MAX_BYTES,signal:abort});
  if(!/^text\/html(?:;|$)/i.test(main.contentType))throw new HtmlCaptureError('unsupported_type','Ожидалась HTML-страница.');
- if(matchLink(main.url)?.route==='extension')throw new HtmlCaptureError('provider_adapter_required','Источник перенаправил на сервис, который Полка не открывает сервером.');
+ if(!downloadable(new URL(main.url)))throw new HtmlCaptureError('provider_adapter_required','Источник перенаправил на сервис, который Полка не скачивает напрямую.');
  return captureHtmlDocument(main,{fetcher,signal:abort});
 }
 export type CaptureOptions={fetcher?:Fetcher;signal?:AbortSignal;
