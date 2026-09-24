@@ -156,7 +156,8 @@ test("runtime has exact current grants and denied administrative paths", async (
       `SELECT table_name,privilege_type FROM information_schema.role_table_grants
        WHERE grantee=current_user AND table_name IN (
          'comments','comment_reactions','account_identities','enterprise_requests',
-         'moderation_events','moderation_blocks')
+         'moderation_events','moderation_blocks','analytics_events',
+         'analytics_daily','analytics_active_days','analytics_optouts')
        ORDER BY table_name,privilege_type`,
     )
   ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
@@ -165,6 +166,17 @@ test("runtime has exact current grants and denied administrative paths", async (
     "account_identities:INSERT",
     "account_identities:SELECT",
     "account_identities:UPDATE",
+    "analytics_active_days:DELETE",
+    "analytics_active_days:INSERT",
+    "analytics_active_days:SELECT",
+    "analytics_daily:INSERT",
+    "analytics_daily:SELECT",
+    "analytics_daily:UPDATE",
+    "analytics_events:DELETE",
+    "analytics_events:INSERT",
+    "analytics_events:SELECT",
+    "analytics_optouts:INSERT",
+    "analytics_optouts:SELECT",
     "comment_reactions:DELETE",
     "comment_reactions:INSERT",
     "comment_reactions:SELECT",
@@ -200,6 +212,40 @@ test("runtime has exact current grants and denied administrative paths", async (
       "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
     );
     await denied("TRUNCATE TABLE enterprise_requests");
+  } finally {
+    await client.query("ROLLBACK");
+  }
+  await client.query("BEGIN");
+  try {
+    // Product analytics (034): events and counters are written, read for the
+    // report and deleted by maintenance; counters and opt-outs never deleted.
+    const actor = "A".repeat(43);
+    await client.query(
+      `INSERT INTO analytics_events(id,name,actor,props)
+       VALUES($1,'work_saved',$2,'{"via":"web"}')`,
+      [randomUUID(), actor],
+    );
+    await client.query(
+      `INSERT INTO analytics_daily(day,name,count) VALUES(current_date,'work_saved',1)
+       ON CONFLICT(day,name,path,source,detail) DO UPDATE SET count=analytics_daily.count+1`,
+    );
+    await client.query(
+      "INSERT INTO analytics_active_days(actor,day) VALUES($1,current_date) ON CONFLICT DO NOTHING",
+      [actor],
+    );
+    await client.query(
+      "INSERT INTO analytics_optouts(actor) VALUES($1) ON CONFLICT DO NOTHING",
+      [actor],
+    );
+    await client.query(
+      "DELETE FROM analytics_events WHERE occurred_at<now()-interval '13 months'",
+    );
+    await client.query("DELETE FROM analytics_active_days WHERE actor=$1", [
+      actor,
+    ]);
+    await denied("DELETE FROM analytics_daily");
+    await denied("DELETE FROM analytics_optouts");
+    await denied("TRUNCATE TABLE analytics_events");
   } finally {
     await client.query("ROLLBACK");
   }
