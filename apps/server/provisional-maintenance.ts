@@ -34,7 +34,7 @@ const IDLE = `a.provisional_at IS NOT NULL AND a.claimed_at IS NULL
 /** Provisional shelves idle long enough to delete, oldest first. */
 export async function idleProvisionalShelves(
   c: Client,
-  policy: ProvisionalRetirementPolicy,
+  policy: Pick<ProvisionalRetirementPolicy, "idleDays">,
   limit = 20,
 ) {
   const { rows } = await c.query(
@@ -166,4 +166,92 @@ export async function retireProvisionalShelf(
   );
   await c.query("DELETE FROM sessions WHERE account_id=$1", [shelf.id]);
   return true;
+}
+
+// Without the deletion pipeline (ACCOUNT_DELETION_ENABLED=false) maintenance
+// deletes an idle provisional shelf itself, in three steps: close it (this
+// transaction), delete every stored object under its tenant prefix, then
+// delete its rows. A provisional shelf has no address, links, discussions,
+// publications or identities by construction; one that somehow has any, or
+// has blocked content (evidence), is only closed and left to the operator.
+
+/** Step 1: close the shelf. False when it is no longer idle or not simple. */
+export async function closeProvisionalShelf(
+  c: Client,
+  shelf: { id: string; tenant: string },
+  idleDays: number,
+) {
+  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [
+    shelf.tenant,
+    shelf.id,
+  ]);
+  const still = await c.query(
+    `SELECT a.id,
+            (a.email IS NULL
+             AND NOT EXISTS(SELECT 1 FROM shares WHERE tenant_id=t.id)
+             AND NOT EXISTS(SELECT 1 FROM comments WHERE author_account_id=a.id)
+             AND NOT EXISTS(SELECT 1 FROM comment_reactions WHERE author_account_id=a.id)
+             AND NOT EXISTS(SELECT 1 FROM moderation_blocks WHERE tenant_id=t.id)
+             AND NOT EXISTS(SELECT 1 FROM editorial_publications WHERE tenant_id=t.id)
+             AND NOT EXISTS(SELECT 1 FROM template_library_members WHERE account_id=a.id)
+             AND NOT EXISTS(SELECT 1 FROM account_deletions WHERE account_id=a.id)
+            ) AS simple
+       FROM accounts a JOIN tenants t ON t.owner_id=a.id
+      WHERE a.id=$2 AND ${IDLE} FOR UPDATE OF a`,
+    [idleDays, shelf.id],
+  );
+  const row = still.rows?.[0];
+  if (!row) return { closed: false, erase: false };
+  const {
+    rows: [{ now }] = [{ now: new Date() }],
+  } = await c.query("SELECT clock_timestamp() AS now");
+  await c.query(
+    "UPDATE accounts SET disabled=true,deletion_requested_at=$2 WHERE id=$1",
+    [shelf.id, now],
+  );
+  await c.query(
+    "UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1",
+    [shelf.tenant, now],
+  );
+  await c.query(
+    "UPDATE oauth_refresh_tokens SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1",
+    [shelf.tenant, now],
+  );
+  await c.query(
+    "UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL",
+    [shelf.tenant],
+  );
+  await c.query("DELETE FROM sessions WHERE account_id=$1", [shelf.id]);
+  return { closed: true, erase: !!row.simple };
+}
+
+/** Step 3 (after the objects are gone): the shelf's rows. */
+export async function eraseProvisionalShelfRows(
+  c: Client,
+  shelf: { id: string; tenant: string },
+) {
+  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [
+    shelf.tenant,
+    shelf.id,
+  ]);
+  for (const sql of [
+    "DELETE FROM agent_operations WHERE tenant_id=$1",
+    "DELETE FROM url_import_jobs WHERE tenant_id=$1",
+    "DELETE FROM oauth_refresh_tokens WHERE tenant_id=$1",
+    "DELETE FROM oauth_authorizations WHERE tenant_id=$1",
+    "DELETE FROM audit_outbox WHERE tenant_id=$1",
+    "DELETE FROM upload_files f USING uploads u WHERE u.id=f.upload_id AND u.tenant_id=$1",
+    "DELETE FROM uploads WHERE tenant_id=$1",
+    "DELETE FROM agent_connections WHERE tenant_id=$1",
+    `DELETE FROM viewer_grants v USING revisions r
+      WHERE v.revision_id=r.id AND r.tenant_id=$1`,
+    "UPDATE artifacts SET latest_revision_id=NULL WHERE tenant_id=$1",
+    "DELETE FROM revision_derivatives WHERE tenant_id=$1",
+    "DELETE FROM revision_files f USING revisions r WHERE r.id=f.revision_id AND r.tenant_id=$1",
+    "DELETE FROM revisions WHERE tenant_id=$1",
+    "DELETE FROM artifacts WHERE tenant_id=$1",
+    "DELETE FROM folders WHERE tenant_id=$1",
+    "UPDATE tenants SET used_bytes=0,derivative_used_bytes=0 WHERE id=$1",
+  ])
+    await c.query(sql, [shelf.tenant]);
 }

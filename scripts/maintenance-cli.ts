@@ -81,7 +81,7 @@ export async function runMaintenanceOnce(options: {
                 backupRetentionMaxDays: config.BACKUP_RETENTION_MAX_DAYS!,
               },
             }
-          : {}),
+          : { provisionalIdleDays: PROVISIONAL_IDLE_DAYS }),
       }),
   });
 }

@@ -19,6 +19,8 @@ import { pendingForTests } from "../apps/server/sign-in-pending.ts";
 import { providerEndpoints } from "../apps/server/sign-in-providers.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { runMaintenanceCleanup } from "../scripts/maintenance-cleanup.ts";
+import { createMaintenanceObjectStore } from "../scripts/maintenance-adapters.ts";
+import { HeadObjectCommand } from "@aws-sdk/client-s3";
 
 const app = await createApp();
 const origin = config.APP_ORIGIN;
@@ -778,6 +780,92 @@ test("a password sign-in from a provisional browser with works asks too; cancel 
   assert.equal(me.json().account.id, shelf.id);
 });
 
+function maintenanceScope() {
+  return {
+    signal: new AbortController().signal,
+    transaction: async <R>(operation: (client: any) => Promise<R>) => {
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
+        const value = await operation(client);
+        await client.query("COMMIT");
+        return value;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  };
+}
+
+test("without the deletion pipeline maintenance deletes an idle provisional shelf, objects included", async () => {
+  const idle = await startProvisional();
+  const bearer = await approve(idle.cookie, idle.request);
+  const saved = (await publish(bearer, "Забытая работа")).json();
+  const {
+    rows: [revision],
+  } = await db.query(
+    "SELECT object_key,object_version FROM revisions WHERE artifact_id=$1",
+    [saved.artifactId],
+  );
+  assert.ok(revision.object_key.startsWith(`${idle.tenant}/`));
+  await db.query(
+    "UPDATE accounts SET provisional_at=now()-interval '40 days' WHERE id=$1",
+    [idle.id],
+  );
+  await db.query(
+    `UPDATE agent_connections SET created_at=now()-interval '40 days',
+            last_seen_at=now()-interval '35 days' WHERE account_id=$1`,
+    [idle.id],
+  );
+  await db.query(
+    "UPDATE revisions SET created_at=now()-interval '35 days' WHERE tenant_id=$1",
+    [idle.tenant],
+  );
+  await db.query("DELETE FROM sessions WHERE account_id=$1", [idle.id]);
+  const storage = createMaintenanceObjectStore({
+    endpoint: config.S3_ENDPOINT,
+    region: "us-east-1",
+    accessKey: config.S3_ACCESS_KEY,
+    secretKey: config.S3_SECRET_KEY,
+    bucket: config.S3_BUCKET,
+  });
+  try {
+    const result = await runMaintenanceCleanup(maintenanceScope(), storage, {
+      provisionalIdleDays: 30,
+    });
+    assert.ok(result.provisionalShelvesRetired >= 1);
+  } finally {
+    storage.close();
+  }
+  await assert.rejects(
+    s3.send(
+      new HeadObjectCommand({
+        Bucket: config.S3_BUCKET,
+        Key: revision.object_key,
+        VersionId: revision.object_version,
+      }),
+    ),
+  );
+  const {
+    rows: [left],
+  } = await db.query(
+    `SELECT a.disabled,a.deletion_requested_at IS NOT NULL AS deleting,
+            (SELECT count(*) FROM artifacts WHERE tenant_id=$2) AS works,
+            (SELECT count(*) FROM agent_connections WHERE tenant_id=$2) AS connections
+       FROM accounts a WHERE a.id=$1`,
+    [idle.id, idle.tenant],
+  );
+  assert.equal(left.disabled, true);
+  assert.equal(left.deleting, true);
+  assert.equal(Number(left.works), 0);
+  assert.equal(Number(left.connections), 0);
+  // The agent's token is dead.
+  assert.equal((await publish(bearer, "Ещё")).statusCode, 401);
+});
+
 test("maintenance deletes an idle provisional shelf and leaves a live one", async () => {
   const idle = await startProvisional();
   const live = await startProvisional();
@@ -791,23 +879,7 @@ test("maintenance deletes an idle provisional shelf and leaves a live one", asyn
   );
   await db.query("DELETE FROM sessions WHERE account_id=$1", [idle.id]);
   const result = await runMaintenanceCleanup(
-    {
-      signal: new AbortController().signal,
-      transaction: async (operation) => {
-        const client = await db.connect();
-        try {
-          await client.query("BEGIN");
-          const value = await operation(client as any);
-          await client.query("COMMIT");
-          return value;
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        } finally {
-          client.release();
-        }
-      },
-    },
+    maintenanceScope(),
     {
       listVersions: async () => ({ versions: [], deleteMarkers: [], truncated: false }),
       deleteVersion: async () => undefined,
