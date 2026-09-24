@@ -4,24 +4,41 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bot,
-  CodeXml,
+  Building2,
   FileUp,
   History,
   Link2,
   LockKeyhole,
+  Server,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import {
   useCapabilities,
   useSourceUrl,
 } from "../../entities/capabilities/useCapabilities.ts";
+import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { Button, LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
+import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
-import { SOURCE_LICENSE } from "../../shared/lib/project-links.ts";
+import {
+  SOURCE_LICENSE,
+  formatStars,
+  onGitHub,
+  selfHostGuideUrl,
+} from "../../shared/lib/project-links.ts";
+
+/** The hosted guide's first run in four lines (deploy/hosted/README.md has the rest). */
+const selfHostCommand = (sourceUrl: string) =>
+  [
+    `git clone ${sourceUrl} && cd ${sourceUrl.replace(/\/$/, "").split("/").pop()?.replace(/\.git$/, "") || "polka"}`,
+    "docker build -t polka:local .",
+    "cp deploy/hosted/hosted.env.example deploy/hosted/hosted.env   # домены, пароли, S3, POLKA_IMAGE=polka:local",
+    "cd deploy/hosted && docker compose --env-file hosted.env up -d --build",
+  ].join("\n");
 
 export function Landing() {
   const account = useAccount();
@@ -34,6 +51,10 @@ export function Landing() {
   const livePreview =
     imports.status === "ready" && imports.capabilities.livePreview;
   const sourceUrl = useSourceUrl();
+  const github = onGitHub(sourceUrl);
+  const stars = formatStars(useSourceStars());
+  const guideUrl = selfHostGuideUrl(sourceUrl);
+  const command = selfHostCommand(sourceUrl);
   return (
     <AppShell current="landing" account={account} className="landing">
       <main className="landing-main">
@@ -48,15 +69,6 @@ export function Landing() {
             Сохраните отчёт, страницу или прототип из чата. Отправьте ссылку —
             получателю не нужен аккаунт в Claude или ChatGPT.
           </p>
-          <a
-            className="landing-oss"
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <CodeXml size={16} aria-hidden="true" />
-            Открытый код на GitHub · {SOURCE_LICENSE}
-          </a>
 
           <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
             <span id="landing-agent-title" className="landing-agent-title">
@@ -77,40 +89,51 @@ export function Landing() {
             </small>
           </div>
 
-          {canImport ? (
-            <>
-              <form action="/bring" className="landing-entry">
-                <Link2 aria-hidden="true" />
-                <input
-                  type="url"
-                  name="url"
-                  required
-                  aria-label="Ссылка на страницу"
-                  placeholder="Вставьте ссылку на публичную HTML-страницу"
-                />
-                <Button type="submit" variant="primary">
-                  Сохранить копию <ArrowUpRight size={18} />
-                </Button>
-              </form>
-              <div className="landing-paths landing-paths--secondary">
-                <LinkButton href="/bring#file">
-                  <FileUp /> Загрузить файл
-                </LinkButton>
-                <LinkButton href="/settings/agents">
-                  <Bot /> Подключить агента
-                </LinkButton>
-              </div>
-            </>
-          ) : (
-            <div className="landing-paths" aria-busy={imports.status === "loading"}>
-              <LinkButton variant="primary" href="/settings/agents">
-                <Bot /> Подключить агента
-              </LinkButton>
-              <LinkButton href="/bring#file">
-                <FileUp /> Загрузить файл
-              </LinkButton>
-            </div>
+          <div className="landing-paths">
+            <LinkButton variant="primary" href="/settings/agents">
+              <Bot /> Подключить агента
+            </LinkButton>
+            <LinkButton href={guideUrl} target="_blank" rel="noopener noreferrer">
+              <Server /> Развернуть у себя
+            </LinkButton>
+          </div>
+          <a
+            className="landing-oss"
+            href={sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {github && <GitHubMark size={16} />}
+            {github && !stars
+              ? `Открытый код на GitHub · ${SOURCE_LICENSE}`
+              : `Открытый код · ${SOURCE_LICENSE}`}
+            {stars && <span className="landing-oss-stars">· ★ {stars} на GitHub</span>}
+          </a>
+
+          {canImport && (
+            <form action="/bring" className="landing-entry">
+              <Link2 aria-hidden="true" />
+              <input
+                type="url"
+                name="url"
+                required
+                aria-label="Ссылка на страницу"
+                placeholder="Вставьте ссылку на публичную HTML-страницу"
+              />
+              <Button type="submit" variant="primary">
+                Сохранить копию <ArrowUpRight size={18} />
+              </Button>
+            </form>
           )}
+
+          <nav className="landing-more" aria-label="Другие пути">
+            <a href="/bring#file">
+              <FileUp aria-hidden="true" /> Загрузить файл
+            </a>
+            <a href="/enterprise">
+              <Building2 aria-hidden="true" /> Для компаний
+            </a>
+          </nav>
 
           <small className="landing-fine" role="status">
             {imports.status === "loading"
@@ -182,31 +205,57 @@ export function Landing() {
           )}
         </section>
 
-        <section className="landing-company">
-          <div>
-            <h2>
-              Личная полка сегодня.
-              <br />
-              Общая среда команды — дальше.
-            </h2>
+        <section className="landing-selfhost" aria-labelledby="landing-selfhost-title">
+          <div className="landing-selfhost-intro">
+            <span className="eyebrow">Открытый код · {SOURCE_LICENSE}</span>
+            <h2 id="landing-selfhost-title">Разверните у себя в компании</h2>
             <p>
-              Полка — открытый код под лицензией {SOURCE_LICENSE}. Подключайте
-              своего агента через MCP и храните работы здесь или на
-              своей установке: код, инструкции по развёртыванию и документация —
-              на GitHub. Для закрытых доработок есть коммерческая лицензия.
+              Один Docker-образ, PostgreSQL и S3-хранилище с версионированием на
+              ваших серверах. Данные не покидают вашу сеть. Для закрытых
+              доработок есть коммерческая лицензия.
             </p>
           </div>
-          <div className="landing-company-actions">
-            <LinkButton href="/enterprise">
-              Для компаний <ArrowUpRight size={18} />
-            </LinkButton>
+          <ol className="landing-selfhost-steps">
+            <li>
+              <strong>Docker, PostgreSQL, S3</strong>
+              <span>
+                Виртуальная машина с Docker, домен и S3-бакет с версионированием.
+                PostgreSQL поднимается вместе с приложением.
+              </span>
+            </li>
+            <li>
+              <strong>docker compose up</strong>
+              <span>
+                Клонируйте репозиторий, заполните hosted.env и запустите. TLS
+                выдаёт встроенный Caddy.
+              </span>
+            </li>
+            <li>
+              <strong>Подключите агентов сотрудников</strong>
+              <span>
+                Каждый копирует фразу своему агенту. Вход — по рабочей почте или
+                через OpenID Connect компании.
+              </span>
+            </li>
+          </ol>
+          <div className="landing-selfhost-command">
+            <pre>
+              <code>{command}</code>
+            </pre>
+            <CopyButton value={command} label="Скопировать" successText="Скопировано" />
+          </div>
+          <div className="landing-selfhost-actions">
             <LinkButton
-              href={sourceUrl}
+              variant="primary"
+              href={guideUrl}
               target="_blank"
               rel="noopener noreferrer"
-              variant="secondary"
             >
-              Код на GitHub <ArrowUpRight size={18} />
+              {github ? <GitHubMark /> : <Server />}
+              {github ? "Инструкция на GitHub" : "Инструкция"}
+            </LinkButton>
+            <LinkButton href="/enterprise?interest=self-hosted#request">
+              Нужна помощь <ArrowUpRight size={18} />
             </LinkButton>
           </div>
         </section>

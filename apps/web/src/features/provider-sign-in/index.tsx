@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
+import { visitSourceQuery } from "../../shared/lib/visit-source.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 
 /**
@@ -70,7 +71,7 @@ export function ProviderButtons({
         <a
           key={provider.id}
           className={`idp-button idp-button--${provider.id}`}
-          href={`/api/auth/idp/${provider.id}/start?next=${encodeURIComponent(next)}`}
+          href={`/api/auth/idp/${provider.id}/start?next=${encodeURIComponent(next)}${visitSourceQuery()}`}
         >
           <Mark id={provider.id} />
           <span>{label(provider)}</span>

@@ -11,6 +11,7 @@ import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { sha256 } from "./storage.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+import { markActive, trackAgentConnected } from "./analytics.ts";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 export const MAX_ACTIVE_CONNECTIONS = 20;
@@ -267,6 +268,7 @@ export async function authenticateServiceToken(
   token: string,
   audience: string,
   scope?: AgentScope,
+  transport: "mcp" | "http" = "mcp",
 ): Promise<ServiceActor> {
   if (!TOKEN.test(token) || audience !== MCP_AUDIENCE) throw unauthorized();
   const tokenHash = sha256(token);
@@ -278,6 +280,19 @@ export async function authenticateServiceToken(
   );
   if (!row) throw unauthorized();
   if (scope) requireScope(row.scopes, scope);
+  // A token's first successful call is when its agent connected (analytics;
+  // an OAuth connection counts when it is granted, oauth.ts). Only one of
+  // two concurrent first calls claims it.
+  const firstCall =
+    !row.oauth_client_id && !row.last_seen_at
+      ? !!(
+          await db.query(
+            `UPDATE agent_connections SET last_seen_at=clock_timestamp()
+              WHERE id=$1 AND last_seen_at IS NULL`,
+            [row.id],
+          )
+        ).rowCount
+      : false;
   const seen = await db.query(
     `UPDATE agent_connections connection
      SET last_seen_at=clock_timestamp()
@@ -292,6 +307,23 @@ export async function authenticateServiceToken(
     [tokenHash, audience],
   );
   if (!seen.rowCount) throw unauthorized();
+  markActive(row.account_id);
+  if (firstCall) {
+    const {
+      rows: [earlier],
+    } = await db.query(
+      `SELECT EXISTS(SELECT 1 FROM agent_connections
+         WHERE tenant_id=$1 AND id<>$2
+           AND (oauth_client_id IS NOT NULL OR last_seen_at IS NOT NULL)) AS found`,
+      [row.tenant_id, row.id],
+    );
+    trackAgentConnected(
+      null,
+      row.account_id,
+      transport === "http" ? "token-http" : "token-mcp",
+      !earlier.found,
+    );
+  }
   return serviceActorFromRow(row);
 }
 

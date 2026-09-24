@@ -16,6 +16,17 @@
 .site-rail-actions { display: flex; align-items: center; gap: 4px; }
 .site-rail-actions .navigation-mobile-menu { display: none; }
 
+/* The source on GitHub under the sections: the mark, the word, the star count when it is worth showing. */
+.site-source { margin-top: calc(-1 * var(--space-6) + 6px); padding-top: 6px; border-top: 1px solid var(--line); }
+.site-github {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px;
+  border-radius: var(--radius-sm); color: var(--ink-2); font: 500 var(--text-md) / 1.4 var(--font-sans); white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.site-github:hover { background: var(--soft-2); color: var(--ink); }
+.site-github > svg { width: 20px; height: 20px; flex-shrink: 0; stroke-width: 1.6; }
+.site-github-stars { margin-left: auto; padding: 2px 9px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--canvas); color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+
 .site-nav { display: flex; flex-direction: column; gap: 2px; }
 .site-nav a {
   display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px;
@@ -73,6 +84,11 @@
   .site-rail-actions .navigation-mobile-menu { display: inline-grid; }
   .site-nav, .navigation-context { display: none; }
   .site-account { margin: 0; }
+  /* The phone top bar: the mark (and the count) as a bordered button next to «Войти». */
+  .site-source { margin: 0; padding: 0; border: 0; }
+  .site-github { gap: 6px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); color: var(--ink); }
+  .site-github-label { display: none; }
+  .site-github-stars { margin: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font-weight: 500; }
   .site-account-menu { width: auto; }
   .site-account-menu .ui-action-menu-trigger { min-height: 44px; padding: 4px; }
   .site-account-name, .site-account-trigger > svg { display: none; }

@@ -9,6 +9,13 @@ export class Problem extends Error {
   ) {
     super(message);
   }
+  /** Seconds until a limit resets: sent as Retry-After with a 429. */
+  retryAfter?: number;
+  /** This problem with a Retry-After (rounded up, at least 1 s). */
+  retryIn(seconds: number) {
+    this.retryAfter = Math.max(1, Math.ceil(seconds));
+    return this;
+  }
 }
 export const missing = () =>
   new Problem(

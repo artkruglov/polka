@@ -39,6 +39,7 @@ import { safeNext } from "../../shared/lib/safe-next.ts";
 import { ReworkArtifactPanel } from "../../features/rework-artifact/index.tsx";
 import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
+import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 import "./styles.css";
 const params = new URLSearchParams(location.search);
 function resume(next: string) {
@@ -96,6 +97,8 @@ export function App() {
     [trashBusy, setTrashBusy] = useState(false),
     [trashActionError, setTrashActionError] = useState("");
   const stageRef = useRef<HTMLElement>(null);
+  // The tab names the open work (the owner's own title) or the trash.
+  useDocumentTitle(selected ? (work?.title ?? "Работа") : trashView ? "Корзина" : null);
   useEffect(() => setTrashActionError(""), [panel, selected]);
   const shelfGeneration = useRef(0);
   const trashGeneration = useRef(0);

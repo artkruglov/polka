@@ -14,7 +14,7 @@ import {
   type BundleExport,
   type BundleManifest,
 } from "../../packages/contracts/bundle.ts";
-import { db, transaction } from "./db.ts";
+import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
@@ -34,6 +34,7 @@ import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
   blockRevisionInTransaction,
   blockedHash,
+  queueReview,
 } from "./content-moderation.ts";
 import {
   createSingleHtmlRevisionManifest,
@@ -46,6 +47,7 @@ import {
   derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+import { trackWorkSaved, viaFor } from "./analytics.ts";
 export type Actor = { id: string; tenant: string; connectionId?: string };
 export const audit = (
   c: PoolClient,
@@ -64,6 +66,27 @@ export const audit = (
       actor.connectionId ?? null,
     ],
   );
+/** Analytics: a work was saved (a new one or a version); `first` for the shelf. */
+async function trackSaved(
+  c: PoolClient,
+  actor: Actor,
+  revisionId: string,
+  number: number,
+) {
+  const {
+    rows: [earlier],
+  } = await c.query(
+    "SELECT EXISTS(SELECT 1 FROM revisions WHERE tenant_id=$1 AND id<>$2) AS found",
+    [actor.tenant, revisionId],
+  );
+  trackWorkSaved(
+    c,
+    actor.id,
+    viaFor(actor),
+    !earlier.found,
+    number === 1 ? "new" : "revision",
+  );
+}
 export const tokenFor = (id: string) =>
   createHmac("sha256", config.LINK_KEY)
     .update(`share:${id}`)
@@ -459,11 +482,7 @@ async function screenSavedRevision(
         fraud: false,
       });
   // The models read it after this save commits; the save never waits.
-  const { afterCommit } = await import("./db.ts");
-  afterCommit(c, async () => {
-    const { queueReview } = await import("./content-moderation.ts");
-    queueReview(saved.revisionId);
-  });
+  afterCommit(c, () => queueReview(saved.revisionId));
   const category = known ?? (decision?.action === "block" ? decision.category : null);
   if (!category) return;
   const freeze = known
@@ -633,6 +652,7 @@ export async function finalizeUploadInTransaction(
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
   await audit(c, actor, "revision.saved", revisionId);
+  await trackSaved(c, actor, revisionId, number);
   return receipt;
 }
 
@@ -1087,6 +1107,7 @@ export async function finalizeBundleUploadInTransaction(
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
   await audit(c, actor, "revision.saved", revisionId);
+  await trackSaved(c, actor, revisionId, number);
   return receipt;
 }
 

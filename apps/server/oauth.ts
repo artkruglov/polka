@@ -1,3 +1,4 @@
+import { oauthClientKind, trackAgentConnected } from "./analytics.ts";
 import {
   createHash,
   randomBytes,
@@ -773,6 +774,23 @@ async function exchangeCode(
       "UPDATE oauth_authorizations SET connection_id=$2 WHERE id=$1",
       [row.id, connectionId],
     );
+    // Analytics: an agent connected (a new grant; re-authorising counts
+    // again, the report counts accounts). `first`: no earlier connection
+    // of this account ever worked.
+    const {
+      rows: [earlier],
+    } = await c.query(
+      `SELECT EXISTS(SELECT 1 FROM agent_connections
+         WHERE tenant_id=$1 AND id<>$2
+           AND (oauth_client_id IS NOT NULL OR last_seen_at IS NOT NULL)) AS found`,
+      [row.tenant_id, connectionId],
+    );
+    trackAgentConnected(
+      c,
+      row.account_id,
+      oauthClientKind(client.client_name, client.redirect_uris),
+      !earlier.found,
+    );
     await c.query(
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.issued',$3)",
       [row.tenant_id, row.account_id, connectionId],
@@ -1015,11 +1033,13 @@ function sendFailure(reply: FastifyReply, error: unknown) {
       .code(error.status)
       .send({ error: error.error, error_description: error.description });
   }
-  if (error instanceof Problem && error.status === 429)
+  if (error instanceof Problem && error.status === 429) {
+    if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
     return reply.code(429).send({
       error: "temporarily_unavailable",
       error_description: "Too many requests. Retry in a few minutes.",
     });
+  }
   // A deadlock or serialization victim committed nothing; the client may retry.
   const code = (error as { code?: unknown } | null)?.code;
   if (code === "40P01" || code === "40001")

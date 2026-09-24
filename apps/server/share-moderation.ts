@@ -56,11 +56,13 @@ export type AuthorStanding = {
 };
 
 /**
- * Email sign-up names an account `email-<its id>` (email-auth.ts); an
- * operator login is 3–40 characters and can never take that form.
+ * Self sign-up names an account `<way>-<its id>`: `email-` (email-auth.ts)
+ * or a sign-in provider's `yandex-`, `vk-`, `oidc-` (account-identities.ts).
+ * An operator login is 3–40 characters and can never take that form, so
+ * only operator-created accounts escape the new-account rules.
  */
 export const SIGNED_UP_SQL = (account: string) =>
-  `(${account}.name = 'email-' || ${account}.id::text)`;
+  `(${account}.name IN ('email-' || ${account}.id::text, 'yandex-' || ${account}.id::text, 'vk-' || ${account}.id::text, 'oidc-' || ${account}.id::text))`;
 
 /**
  * Trusted: not holding a paused link, and created by the operator, approved
@@ -168,10 +170,11 @@ export async function assertNewAccountLimits(
   const daily = config.NEW_ACCOUNT_DAILY_LINKS;
   if (daily) {
     const {
-      rows: [{ today }],
+      rows: [{ today, retry_after }],
     } = await c.query(
-      `SELECT count(*)::int AS today FROM shares
-       WHERE tenant_id=$1 AND created_at>now()-interval '1 day'`,
+      `SELECT count(*)::int AS today,
+         extract(epoch FROM min(created_at)+interval '1 day'-now())::float8 AS retry_after
+       FROM shares WHERE tenant_id=$1 AND created_at>now()-interval '1 day'`,
       [tenantId],
     );
     if (today >= daily)
@@ -179,7 +182,7 @@ export async function assertNewAccountLimits(
         429,
         "quota",
         `За сутки вы уже создали ${today} ${linksWord(today)}: ${untrustedBecause(standing)}, в сутки можно создать не больше ${daily}. Продолжите завтра.`,
-      );
+      ).retryIn(retry_after ?? 86_400);
   }
   const max = config.NEW_ACCOUNT_MAX_LINKS;
   if (!max) return;

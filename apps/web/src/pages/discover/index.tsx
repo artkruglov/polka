@@ -10,6 +10,7 @@ import {
 } from "../../entities/editorial/api.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 
 function Detail({
   slug,
@@ -47,6 +48,7 @@ function Detail({
       });
     return () => controller.abort();
   }, [retry, slug]);
+  useDocumentTitle(item?.title ?? "Лента");
   const url = item ? safeEditorialRecipientUrl(item.recipientUrl) : null;
   return (
     <AppShell current="discover" account={account}>
@@ -110,6 +112,7 @@ export function EditorialPage() {
   const account = useAccount();
   const [retry, setRetry] = useState(0);
   const slug = parseEditorialSlug(location.pathname);
+  useDocumentTitle(slug ? undefined : "Лента");
   if (slug)
     return (
       <Detail
