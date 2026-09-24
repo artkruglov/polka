@@ -34,11 +34,35 @@
 .url-import-paste > summary svg { flex-shrink: 0; width: 16px; height: 16px; }
 .url-import-paste > p { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
 .url-import-paste[open] { padding-bottom: 18px; }
-/* «На Полку» extension: hand the pasted link to the user's own browser. */
-.url-import-extension { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
-.url-import-extension > svg { width: 20px; height: 20px; margin-top: 2px; color: var(--accent); }
-.url-import-extension > p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
-.url-import-extension > p a { color: var(--accent); font-weight: 500; }
-.url-import-extension > .ui-button { grid-column: 2; justify-self: start; margin-top: 8px; }
+/* A link the server never opens (provider-guide.tsx): the service, why, and the ways from the user's side. */
+.url-import-provider { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.url-import-provider-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.url-import-provider-head > div { display: grid; min-width: 0; }
+.url-import-provider-head strong { font-size: var(--text-md); }
+.url-import-provider-head small { color: var(--muted-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.url-import-provider-explain { color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
+.url-import-actions { display: grid; gap: 8px; }
+.url-import-action { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
+.url-import-action > svg { width: 20px; height: 20px; align-self: start; margin-top: 2px; color: var(--accent); }
+.url-import-action strong { font-size: var(--text-base); }
+.url-import-action p { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; margin-top: 2px; }
+.url-import-action p a { color: var(--accent); font-weight: 500; }
+.url-import-action > .ui-button { justify-self: end; white-space: nowrap; }
+.url-import-drop { display: grid; gap: 10px; padding: 14px 16px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--canvas); }
+.url-import-drop-head { display: flex; align-items: center; gap: 12px; }
+.url-import-drop-head svg { width: 20px; height: 20px; color: var(--accent); flex-shrink: 0; }
+.url-import-drop-head strong { font-size: var(--text-base); }
+.url-import-drop > .ui-button { justify-self: start; }
+.url-import-oneclick { font-size: var(--text-sm); }
+.url-import-oneclick > summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 500; cursor: pointer; }
+.url-import-oneclick[open] > summary { margin-bottom: 8px; }
+.url-import-oneclick > p { color: var(--muted); line-height: 1.5; }
+.url-import-link-form { display: grid; gap: 10px; margin-top: 12px; }
+.url-import-link-form > .ui-button { justify-self: start; }
+.url-import-phrase { display: block; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius); background: var(--soft); color: var(--ink-2); font: 400 var(--text-sm) / 1.45 var(--font-mono); overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .url-import-action { grid-template-columns: 20px minmax(0, 1fr); }
+  .url-import-action > .ui-button { grid-column: 2; justify-self: start; margin-top: 8px; }
+}
 .url-import-link { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); color: var(--ink); font: 400 var(--text-sm) / 1.4 var(--font-mono); }
 .url-import-paste > * + * { margin-top: 12px; }

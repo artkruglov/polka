@@ -4,6 +4,7 @@ import {
   PUBLIC_MAIL_DOMAINS,
   parseSignupDomains,
 } from "./mail-domains.ts";
+import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
 const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
@@ -18,6 +19,24 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // GitHub API token for importing gists (docs/specs/URL_IMPORT_SUPPORT.md).
+    // Optional: without it GitHub allows 60 requests an hour per IP. A
+    // fine-grained token with no permissions is enough (public gists only).
+    GITHUB_TOKEN: unsetIfEmpty(z.string().max(255)),
+    // Rendered snapshots of allowlisted SPA hosts through Полка's isolated
+    // renderer (apps/renderer, deploy/renderer/README.md). Off by default;
+    // needs URL_IMPORT_ENABLED, RENDERER_URL and RENDERER_SECRET.
+    RENDERED_IMPORT_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    // https://…; plain http only for loopback or a docker-network address.
+    RENDERER_URL: unsetIfEmpty(z.string().url()),
+    // Shared with the renderer (openssl rand -hex 32); signs every request.
+    RENDERER_SECRET: unsetIfEmpty(z.string().min(32).max(512)),
+    // PEM of a private CA the renderer's certificate is issued by (Caddy
+    // «tls internal»); unset: the system's public roots.
+    RENDERER_CA: unsetIfEmpty(z.string().max(16384)),
     DATABASE_URL: z.string().url(),
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),
@@ -334,6 +353,12 @@ if (
   throw new Error("Local mail is restricted to loopback installations");
 if (env.MAIL_MODE === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM))
   throw new Error("SMTP_HOST and MAIL_FROM are required");
+if (env.RENDERED_IMPORT_ENABLED) {
+  if (!env.RENDERER_URL || !env.RENDERER_SECRET)
+    throw new Error("RENDERED_IMPORT_ENABLED needs RENDERER_URL and RENDERER_SECRET");
+  if (!rendererUrlAllowed(env.RENDERER_URL))
+    throw new Error("RENDERER_URL must be https (plain http only for loopback or a docker-network address)");
+}
 const viewerConfig = parseViewerConfig(env);
 // A model host this install may send user content to: its own machine or
 // private network, or Yandex Cloud (data stays with a Russian provider).

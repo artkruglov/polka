@@ -74,31 +74,39 @@ export function ExtensionSave({
     // The link is found once per pasted URL; autoStart only matters then.
   }, [url]);
 
-  if (state.kind === "detecting") return null;
-  if (state.kind === "absent")
+  if (state.kind === "detecting" || state.kind === "absent")
     return (
-      <div className="url-import-extension" data-extension="absent">
+      <div className="url-import-action" data-extension={state.kind}>
         <Puzzle aria-hidden="true" />
-        <p>
-          Быстрее с расширением «На Полку»: оно откроет артефакт в вашем
-          браузере, где вы уже вошли в {providerName(url)}, и сохранит его на
-          полку само — без скачивания.{" "}
-          <a href={EXTENSION_GUIDE_URL} target="_blank" rel="noopener">
-            Как установить
-          </a>
-        </p>
+        <div>
+          <strong>Расширение «На Полку»</strong>
+          <p>
+            Откроет ссылку в вашем браузере, где вы уже вошли в{" "}
+            {providerName(url)}, и сохранит работу само — без скачивания.
+          </p>
+        </div>
+        {state.kind === "absent" ? (
+          <LinkButton href={EXTENSION_GUIDE_URL} target="_blank" rel="noopener">
+            Установить расширение
+          </LinkButton>
+        ) : (
+          <Button disabled>Ищем расширение…</Button>
+        )}
       </div>
     );
   if (state.kind === "ready")
     return (
-      <div className="url-import-extension" data-extension="ready">
+      <div className="url-import-action" data-extension="ready">
         <Puzzle aria-hidden="true" />
-        <p>
-          Расширение «На Полку» установлено: оно откроет артефакт в фоновой
-          вкладке вашего браузера и сохранит его на полку, к которой подключено.
-        </p>
+        <div>
+          <strong>Расширение «На Полку» установлено</strong>
+          <p>
+            Оно откроет ссылку в фоновой вкладке вашего браузера и сохранит
+            работу на полку, к которой подключено.
+          </p>
+        </div>
         <Button variant="primary" onClick={() => void run()}>
-          Сохранить через расширение
+          Сохранить расширением
         </Button>
       </div>
     );

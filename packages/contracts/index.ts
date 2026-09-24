@@ -8,9 +8,23 @@ export {
   looksLikeHtml,
   REPORT_REASONS,
   AGENT_SCOPES,
+  LINK_MIME,
+  MAX_LINK_NOTE,
+  MAX_LINK_URL,
+  savedLinkUrl,
 } from "./constants.ts";
 export type { UploadMime, ReportReason } from "./constants.ts";
-import { MAX_BYTES, MAX_TITLE, MIME, REPORT_REASONS, AGENT_SCOPES } from "./constants.ts";
+import {
+  MAX_BYTES,
+  MAX_TITLE,
+  MIME,
+  REPORT_REASONS,
+  AGENT_SCOPES,
+  LINK_MIME,
+  MAX_LINK_NOTE,
+  MAX_LINK_URL,
+  savedLinkUrl,
+} from "./constants.ts";
 // How a saved HTML page may be shown. "static" and "limited" render in a
 // scriptless, networkless sandbox; "unsupported" needs a runtime profile that
 // this build does not have, so it gets no link.
@@ -118,7 +132,7 @@ export const beginUploadSchema = z
     key: uuid,
     title: z.string().trim().min(1).max(MAX_TITLE),
     filename: z.string().trim().min(1).max(200),
-    mime: z.enum(MIME),
+    mime: z.enum([...MIME, LINK_MIME]),
     size: z.number().int().min(1).max(MAX_BYTES),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
     artifactId: uuid.optional(),
@@ -137,6 +151,34 @@ export const beginUploadSchema = z
     "Only an HTML page keeps its source address",
   );
 export type UploadInput = z.infer<typeof beginUploadSchema>;
+/** «Сохранить как ссылку»: the web form, the MCP tool and the API take this. */
+export const saveLinkSchema = z
+  .object({
+    key: uuid,
+    url: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_LINK_URL)
+      .refine((value) => !!savedLinkUrl(value), "An http(s) link without credentials"),
+    title: z.string().trim().min(1).max(MAX_TITLE).optional(),
+    note: z.string().trim().max(MAX_LINK_NOTE).optional(),
+    folderId: uuid.nullable().optional(),
+  })
+  .strict();
+export type SaveLinkInput = z.infer<typeof saveLinkSchema>;
+/** The stored file of a link work. */
+export const linkDocumentSchema = z
+  .object({
+    v: z.literal(1),
+    url: z
+      .string()
+      .max(MAX_LINK_URL)
+      .refine((value) => savedLinkUrl(value)?.href === value, "A normalised http(s) link"),
+    note: z.string().max(MAX_LINK_NOTE).nullable(),
+  })
+  .strict();
+export type LinkDocument = z.infer<typeof linkDocumentSchema>;
 export const shareSchema = z
   .object({
     expectedRevisionId: uuid,
@@ -182,6 +224,8 @@ export interface Revision {
   htmlProfile: HtmlProfile | null;
   inlineBuild: InlineBuildStatus | null;
   createdAt: string;
+  /** A link work (LINK_MIME): its host and service; the URL itself is in its file. */
+  link?: { host: string; service: import("./link-providers.ts").LinkProviderId | null } | null;
 }
 export interface Share {
   id: string;

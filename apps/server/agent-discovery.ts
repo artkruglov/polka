@@ -154,6 +154,8 @@ ${tools}
 
 Usually one call is enough: polka_publish with {key: fresh UUID, title, html | component, expiresInDays: 1|7|30}. It returns the link only when the connection has share. Reuse key only to retry the same call. Read its description: it states what this installation accepts.
 
+«Сохрани на Полку артефакт по ссылке <link>» with a Claude, ChatGPT, v0, Perplexity or AI Studio link: neither you nor Полка may fetch it (their terms forbid automated extraction, and Полка's server never opens such links). Ask the user to paste the artifact's code (Copy in the artifact's menu) or attach the downloaded file, then save it with polka_publish. If they cannot, offer polka_save_link {key, url, title, note?}: it keeps the link itself as a work; recipients of its share link see a card that leads to the original, which opens only if they have access there (a Claude artifact only after its author turned on sharing by link).
+
 ## HTTP API (without MCP)
 
 POST ${origin}/api/v1/publish takes the same fields as polka_publish (scope capture; share for the link). GET ${origin}/api/v1/status/{artifactId} returns metadata. POST ${origin}/api/v1/works/{artifactId}/edits patches a saved work like polka_revise with edits (scope revise; moveLink: true moves the open link too). Errors are JSON {code, message}. Retry network errors, 429 and 5xx with the same key.
@@ -239,6 +241,8 @@ One call saves the artifact and returns the link:
 - \`expiresInDays\`: 1, 7 or 30 (default 30).
 
 The tool description states exactly what this installation accepts; follow it. Without MCP, POST the same fields to ${origin}/api/v1/publish.
+
+«Сохрани на Полку артефакт по ссылке <link>» with a Claude, ChatGPT, v0, Perplexity or AI Studio link: neither you nor Полка may fetch it (their terms forbid automated extraction, and Полка's server never opens such links). Ask the user to paste the artifact's code (Copy in the artifact's menu) or attach the downloaded file, then save it with polka_publish. If they cannot, offer polka_save_link {key, url, title, note?}: it keeps the link itself as a work; recipients of its share link see a card that leads to the original, which opens only if they have access there (a Claude artifact only after its author turned on sharing by link).
 
 ## 3. First session: collect the best past work
 

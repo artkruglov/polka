@@ -132,3 +132,20 @@ test("the texts keep the reviewed legal terms", () => {
   ])
     assert.ok(terms.includes(phrase), `terms: ${phrase}`);
 });
+
+test("/bot describes PolkaRenderer for site owners: user click only, robots.txt, how to opt out", async () => {
+  const html = render(React.createElement(Markdown, { source: doc("bot") }));
+  const { RENDERER_USER_AGENT } = await import("../packages/renderer-contract.ts");
+  assert.match(html, /^<h1>PolkaRenderer — робот Полки<\/h1>/);
+  // The User-Agent the renderer sends points here, and the page names it exactly.
+  assert.equal(RENDERER_USER_AGENT, "PolkaRenderer/1.0 (+https://polochka.app/bot)");
+  assert.ok(html.includes(RENDERER_USER_AGENT));
+  assert.match(html, /только тогда, когда пользователь Полки вставил ссылку/);
+  assert.match(html, /<code>User-agent: PolkaRenderer<\/code> и <code>Disallow: \/<\/code>/);
+  assert.doesNotMatch(html, /``|<p>  - /);
+  assert.match(html, /robots\.txt/);
+  const routes = readFileSync("apps/web/src/app/routing/index.tsx", "utf8");
+  assert.match(routes, /path === "\/bot"\) return <BotPage \/>/);
+  const { indexable } = await import("../apps/server/indexing.ts");
+  assert.equal(indexable("/bot"), true);
+});

@@ -88,7 +88,7 @@ export async function createImportJob(
   )
     throw missing();
   const pending = await c.query(
-    "SELECT count(*)::integer n FROM url_import_jobs WHERE tenant_id=$1 AND state IN ('queued','fetching','prepared','saving','previewing') AND expires_at>now()",
+    "SELECT count(*)::integer n FROM url_import_jobs WHERE tenant_id=$1 AND state IN ('queued','fetching','rendering','prepared','saving','previewing') AND expires_at>now()",
     [actor.tenant],
   );
   if (pending.rows[0].n >= 5)
@@ -139,7 +139,7 @@ export async function cancelImportJob(c: PoolClient, actor: Actor, id: string) {
 export async function claimImportJob(c: PoolClient) {
   const row = (
     await c.query(
-      `SELECT * FROM url_import_jobs WHERE state IN ('queued','fetching','prepared','saving','previewing') AND expires_at>now() AND (lease_until IS NULL OR lease_until<now()) AND attempts<3 ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+      `SELECT * FROM url_import_jobs WHERE state IN ('queued','fetching','rendering','prepared','saving','previewing') AND expires_at>now() AND (lease_until IS NULL OR lease_until<now()) AND attempts<3 ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
     )
   ).rows[0];
   if (!row) return null;
@@ -158,7 +158,7 @@ export async function requireImportLease(
 ) {
   const row = (
     await c.query(
-      "SELECT * FROM url_import_jobs WHERE id=$1 AND lease_token=$2 AND lease_until>now() AND expires_at>now() AND state IN ('fetching','prepared','saving','previewing') FOR UPDATE",
+      "SELECT * FROM url_import_jobs WHERE id=$1 AND lease_token=$2 AND lease_until>now() AND expires_at>now() AND state IN ('fetching','rendering','prepared','saving','previewing') FOR UPDATE",
       [id, token],
     )
   ).rows[0];

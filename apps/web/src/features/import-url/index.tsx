@@ -8,6 +8,7 @@ import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import { Link2, X } from "lucide-react";
 import { classify, type ImportClassification } from "./classify-link.ts";
 import { ProviderGuide } from "./provider-guide.tsx";
+import { SaveLinkAction } from "./save-link.tsx";
 
 type Job = {
   id: string;
@@ -19,6 +20,7 @@ type Job = {
 const labels: Record<string, string> = {
   queued: "В очереди",
   fetching: "Получаем страницу и ресурсы",
+  rendering: "Открываем страницу в изолированном браузере",
   prepared: "Копия подготовлена",
   saving: "Сохраняем на полку",
   previewing: "Копия сохранена. Подготавливаем просмотр…",
@@ -47,14 +49,31 @@ const reasons: Record<string, string> = {
     "Страница содержит больше 63 внешних ресурсов. Подготовьте автономный HTML-файл.",
   unsupported_asset: "Один из ресурсов имеет неподдерживаемый формат.",
   forbidden: "Подключение или права изменились.",
+  source_blocked:
+    "Сайт показал проверку на бота или окно согласия вместо страницы. Полка такие проверки не проходит и не повторяет попытку.",
+  robots_disallowed:
+    "Сайт запрещает роботам открывать эту страницу (robots.txt), и Полка это соблюдает.",
+  robots_unavailable:
+    "Сайт не отдал robots.txt, поэтому Полка его сейчас не открывает. Повторите позже.",
+  not_allowed: "Страница ведёт на сайт, который Полка не открывает в браузере.",
+  renderer_disabled:
+    "Эта страница собирается скриптами, а снимки страниц на этом сервере выключены.",
+  renderer_unavailable: "Сервис снимков страниц недоступен. Повторите позже.",
+  renderer_busy: "Сервис снимков страниц занят. Повторите через минуту.",
+  rate_limited:
+    "GitHub временно ограничил число запросов к Gist. Повторите позже или сохраните файл из gist вручную.",
   timeout: "Источник не ответил вовремя.",
   expired: "Время выполнения задания истекло.",
   retry_exhausted: "Импорт не удалось восстановить после нескольких попыток.",
 };
 const active = (j: Job | null) =>
   !!j &&
-  ["queued", "fetching", "prepared", "saving", "previewing"].includes(j.state);
+  ["queued", "fetching", "rendering", "prepared", "saving", "previewing"].includes(j.state);
 const storageKey = "polka.active-url-import";
+/** The link of the active job: a failed import offers to keep it as a link. */
+const jobUrlKey = "polka.active-url-import-url";
+/** Failures where the link itself is still worth keeping. */
+const LINK_WORTHY = ["source_blocked", "robots_disallowed", "robots_unavailable", "timeout", "source_unavailable", "not_allowed", "provider_adapter_required", "renderer_disabled", "renderer_unavailable", "renderer_busy", "unsupported_type", "too_large"];
 const draftKey = "polka.url-import-draft";
 // Storage can be blocked (private mode, disabled site data): the import still works for this tab.
 const session = {
@@ -88,6 +107,7 @@ export function UrlImport({
   fileSave,
   pasteCode,
   onProviderChange,
+  sources = [],
 }: {
   initialFolderId?: string;
   initial?: string;
@@ -97,9 +117,11 @@ export function UrlImport({
   pasteCode?: React.ReactNode;
   /** Tells the page when the Claude/ChatGPT guide (with its own file drop) is showing. */
   onProviderChange?: (active: boolean) => void;
+  /** What this installation's import copies (/api/capabilities urlImportSources). */
+  sources?: string[];
 }) {
   const [provider, setProvider] = useState<ImportClassification | null>(() => {
-    const recognised = initial ? classify(initial) : null;
+    const recognised = initial ? classify(initial, sources) : null;
     return recognised?.status === "provider" ? recognised : null;
   });
   // A link the user has just submitted goes straight to the extension, if any.
@@ -114,6 +136,7 @@ export function UrlImport({
     [error, setError] = useState("");
   const [needsLogin, setNeedsLogin] = useState(false);
   const [jobId, setJobId] = useState(() => session.get(storageKey));
+  const [jobUrl, setJobUrl] = useState(() => session.get(jobUrlKey) ?? "");
   const folders = useFolders(accountId);
   const [destination, setDestination] = useState({ accountId, folderId: initialFolderId });
   const folderId =
@@ -123,9 +146,6 @@ export function UrlImport({
   const cancelSending = useRef(false);
   const stopPolling = useRef<() => void>(() => {});
   const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    onProviderChange?.(!!provider);
-  }, [provider, onProviderChange]);
   useEffect(() => {
     if (!jobId) return;
     const stop = pollImport<Job>({
@@ -164,7 +184,7 @@ export function UrlImport({
     e.preventDefault();
     if (sending.current) return;
     // The server blocks Claude/ChatGPT hosts; show the real path instead of a failing job.
-    const recognised = classify(url);
+    const recognised = classify(url, sources);
     if (recognised.status === "provider") {
       setProvider(recognised);
       setSubmitted({ url: url.trim(), autoStart: true });
@@ -183,7 +203,9 @@ export function UrlImport({
       });
       setJob(next);
       setJobId(next.id);
+      setJobUrl(url.trim());
       session.set(storageKey, next.id);
+      session.set(jobUrlKey, url.trim());
       session.remove(draftKey);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
@@ -224,11 +246,24 @@ export function UrlImport({
     stopPolling.current();
     setJob(null);
     setJobId(null);
+    setJobUrl("");
     session.remove(storageKey);
+    session.remove(jobUrlKey);
     key.current = crypto.randomUUID();
     setError("");
     setNeedsLogin(false);
   }
+  // An AI chat's link the server tried and could not take: the same card as
+  // for links it never opens, with the reason on top.
+  const failed = job?.state === "failed" && jobUrl ? classify(jobUrl, sources) : null;
+  const failedGuide =
+    failed?.provider && failed.route && ["server-fetch", "server-try", "extension"].includes(failed.route)
+      ? { ...failed, status: "provider" as const }
+      : null;
+  const guideShown = !!provider || !!failedGuide;
+  useEffect(() => {
+    onProviderChange?.(guideShown);
+  }, [guideShown, onProviderChange]);
   return (
     <section className="url-import" aria-labelledby="url-import-title">
       <h2 id="url-import-title" className="sr-only">Сохранить страницу по ссылке</h2>
@@ -302,7 +337,21 @@ export function UrlImport({
       {jobId && !job && !error && (
         <p role="status">Восстанавливаем состояние импорта…</p>
       )}
-      {job && (
+      {failedGuide && job && (
+        <>
+          <ProviderGuide
+            result={failedGuide}
+            url={jobUrl}
+            failure={job.errorCode}
+            fileSave={fileSave}
+            pasteCode={pasteCode}
+            onFile={onFile}
+            folderId={folderId || undefined}
+          />
+          <Button onClick={reset}>Сохранить другую ссылку</Button>
+        </>
+      )}
+      {job && !failedGuide && (
         <div className="url-import-status" role="status" aria-live="polite">
           <h3>{labels[job.state] ?? job.state}</h3>
           {job.errorCode && (
@@ -316,6 +365,9 @@ export function UrlImport({
           {job.warnings.map((w) => (
             <p key={w}>{w}</p>
           ))}
+          {job.state === "failed" && jobUrl && job.errorCode && LINK_WORTHY.includes(job.errorCode) && (
+            <SaveLinkAction url={jobUrl} folderId={folderId || undefined} />
+          )}
           {job.receipt && (
             <LinkButton
               variant="primary"
@@ -373,6 +425,7 @@ export function UrlImport({
           fileSave={fileSave}
           pasteCode={pasteCode}
           onFile={onFile}
+          folderId={folderId || undefined}
         />
       )}
     </section>

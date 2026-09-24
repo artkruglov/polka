@@ -2,6 +2,8 @@ import { randomUUID, createHmac } from "node:crypto";
 import type { PoolClient } from "pg";
 import {
   beginUploadSchema,
+  LINK_MIME,
+  linkDocumentSchema,
   MAX_BYTES,
   type HtmlProfile,
   type Revision,
@@ -48,6 +50,7 @@ import {
 } from "./bundle-runtime-contract.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 import { trackWorkSaved, viaFor } from "./analytics.ts";
+import { linkOfRevision, linkText } from "./saved-link-format.ts";
 export type Actor = { id: string; tenant: string; connectionId?: string };
 export const audit = (
   c: PoolClient,
@@ -103,6 +106,7 @@ export const revisionDTO = (r: any): Revision => ({
   storageKind: r.storage_kind ?? "single",
   totalSize: Number(r.total_size ?? r.size),
   htmlProfile: r.html_profile ?? null,
+  link: r.mime === LINK_MIME ? linkOfRevision(r.filename) : null,
   inlineBuild:
     config.HTML_LIVE_ENABLED && r.inline_build
       ? {
@@ -316,6 +320,18 @@ async function validateBytes(
       "invalid",
       "Содержимое файла не соответствует выбранному формату.",
     );
+  // A link work's file: exactly the small document saveLink writes.
+  if (input.mime === LINK_MIME) {
+    let document: unknown;
+    try {
+      document = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    } catch {
+      document = null;
+    }
+    if (bytes.length > 8192 || !linkDocumentSchema.safeParse(document).success)
+      throw new Problem(422, "invalid", "Ссылка сохранена не полностью. Повторите.");
+    return null;
+  }
   if (input.mime === "text/plain" || input.mime === "text/html") {
     let source: string;
     try {
@@ -554,7 +570,10 @@ export async function finalizeUploadInTransaction(
     inspection?.filter ??
     (input.mime === "text/plain"
       ? await scanTextBounded(bytes.toString("utf8"))
-      : { v: 1, hits: {} });
+      : input.mime === LINK_MIME
+        ? // The link's address (and the listed domains in it), title and note.
+          await scanTextBounded(linkText(input.title, bytes))
+        : { v: 1, hits: {} });
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
   > | null = null;

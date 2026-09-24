@@ -25,6 +25,7 @@ import type {
   Folder,
 } from "../../../../../packages/contracts/index.ts";
 import { Preview, TextCover } from "../../widgets/artifact-preview/index.ts";
+import { LinkCover } from "../../entities/link/index.tsx";
 import { FirstRunChecklist } from "../../features/first-run/index.tsx";
 import { readDismissed } from "../../entities/onboarding/dismissal.ts";
 import {
@@ -67,6 +68,7 @@ const categories: Category[] = ["pages", "documents", "images", "other"];
 /** The cover a card shows: the work itself when it can be drawn, otherwise a typographic cover. */
 function CardCover({ a }: { a: Artifact }) {
   const r = a.revision;
+  if (r.link) return <LinkCover title={a.title} host={r.link.host} service={r.link.service} />;
   const drawable =
     isImage(r) ||
     (r.mime === "text/html" && r.htmlProfile !== "unsupported");
@@ -355,9 +357,22 @@ export function ShelfPage({
                       </div>
                     </div>
                     <div className="shelf-card-actions">
-                      <a className="shelf-card-open" href={href} onClick={go}>
-                        Открыть <ArrowUpRight />
-                      </a>
+                      {a.revision.link ? (
+                        // A link work opens its original in a new tab (docs/specs/SAVED_LINKS.md).
+                        <a
+                          className="shelf-card-open"
+                          href={`/api/revisions/${a.revision.id}/open`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={a.revision.link.host}
+                        >
+                          Открыть <ArrowUpRight />
+                        </a>
+                      ) : (
+                        <a className="shelf-card-open" href={href} onClick={go}>
+                          Открыть <ArrowUpRight />
+                        </a>
+                      )}
                       {menu}
                     </div>
                   </article>

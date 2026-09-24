@@ -43,7 +43,8 @@
 | [specs/COMPANY_TEMPLATE_LIBRARY.md](specs/COMPANY_TEMPLATE_LIBRARY.md) | реализовано | Библиотеки шаблонов: роли, приглашения, журнал |
 | [specs/SELF_HOST_BASE_SPEC.md](specs/SELF_HOST_BASE_SPEC.md) | реализовано | Health, readiness, maintenance |
 | [specs/RESTORE_DRILL_SPEC.md](specs/RESTORE_DRILL_SPEC.md) | реализовано | Совместное восстановление БД и объектов |
-| [specs/URL_IMPORT_SUPPORT.md](specs/URL_IMPORT_SUPPORT.md) | реализовано | Импорт по URL (выключен по умолчанию) |
+| [specs/URL_IMPORT_SUPPORT.md](specs/URL_IMPORT_SUPPORT.md) | реализовано | Импорт по URL, таблица источников и рендерер (выключены по умолчанию) |
+| [specs/SAVED_LINKS.md](specs/SAVED_LINKS.md) | реализовано | «Сохранить как ссылку»: работа-закладка |
 | [specs/ACCOUNT_DELETION_SPEC.md](specs/ACCOUNT_DELETION_SPEC.md) | контракт | Удаление аккаунта и очистка данных |
 | [specs/PRODUCT.md](specs/PRODUCT.md) | контракт | Для кого продукт, границы, словарь |
 | [specs/REQUIREMENTS.md](specs/REQUIREMENTS.md) | контракт | Требования R01–R20 |

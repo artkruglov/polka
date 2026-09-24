@@ -66,6 +66,9 @@ const provenanceSchema = z
     capturedAt: capturedAtSchema,
     attribution: z.string().min(1).max(500),
     license: z.string().min(1).max(200),
+    // How a URL copy was made when not by plain download: a DOM snapshot of a
+    // page rendered by Полка's headless renderer (docs/specs/URL_IMPORT_SUPPORT.md).
+    renderer: z.enum(["headless-snapshot-v1"]).optional(),
   })
   .strict();
 
@@ -175,6 +178,10 @@ export function canonicalizeManifest(input: unknown): BundleManifest {
       capturedAt: manifest.provenance.capturedAt,
       attribution: manifest.provenance.attribution,
       license: manifest.provenance.license,
+      // Present only when set, so manifests saved before it keep their hash.
+      ...(manifest.provenance.renderer
+        ? { renderer: manifest.provenance.renderer }
+        : {}),
     },
     dependencies: {
       status: manifest.dependencies.status,

@@ -11,7 +11,7 @@ import {
 } from "./analytics.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
-import { registerUrlImports } from "./url-import/routes.ts";
+import { importSources, registerUrlImports } from "./url-import/routes.ts";
 import { beginEmailLogin, verifyEmailLogin } from "./email-auth.ts";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
@@ -86,7 +86,9 @@ import {
   isServedBuilderVersion,
   isServedRuntimeProfile,
 } from "./bundle-runtime-contract.ts";
-import { MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
+import { LINK_MIME, MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
+import { saveLink } from "./saved-links.ts";
+import { readLinkDocument } from "./saved-link-format.ts";
 import {
   issueAgentConnection,
   issueConnectionCsrf,
@@ -305,6 +307,7 @@ export async function createApp() {
     liveProfile: config.HTML_LIVE_ENABLED ? LIVE_HTML_PROFILE : null,
     // Mirrors /api/imports/capabilities: when disabled, links are only recognised in the browser.
     urlImport: config.URL_IMPORT_ENABLED,
+    urlImportSources: config.URL_IMPORT_ENABLED ? importSources() : [],
     htmlView: "static-sandbox",
     identity: "operator-provisioned-local-account",
     emailLogin: config.MAIL_MODE,
@@ -803,6 +806,27 @@ export async function createApp() {
   app.post("/api/uploads", async (req) =>
     beginUpload(await identity(req), req.body),
   );
+  // «Сохранить как ссылку» (docs/specs/SAVED_LINKS.md).
+  app.post("/api/links", { bodyLimit: 8192 }, async (req) =>
+    saveLink(await identity(req), req.body),
+  );
+  // The owner's «Открыть ↗» on a link work: the address is read from its file
+  // and the browser is sent there, without a referrer.
+  app.get("/api/revisions/:id/open", async (req, reply) => {
+    const actor = await identity(req);
+    const {
+      rows: [r],
+    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
+      id(req),
+      actor.tenant,
+    ]);
+    if (!r || r.mime !== LINK_MIME) throw missing();
+    const { url } = readLinkDocument(await readBlob(r.object_key, r.object_version));
+    return reply
+      .header("referrer-policy", "no-referrer")
+      .header("cache-control", "no-store")
+      .redirect(url, 303);
+  });
   // Runs before the body is read. The session is checked first, so requests
   // without one never hold a slot, and one shelf cannot take all of them.
   let transfers = 0;

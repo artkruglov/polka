@@ -112,8 +112,8 @@ test("importMock classifies links without issuing ids or receipts", () => {
       assert.match(classify(url).explain, /файл/i, url);
   // Provider artifacts explain why Полка cannot fetch them and how to bring the file.
   const provider = classify("https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo");
-  assert.match(provider.explain, /Download/);
-  assert.match(provider.explain, /не может сама забрать/);
+  assert.match(provider.explain, /не отдаёт такую ссылку серверу Полки/);
+  assert.match(provider.explain, /как ссылку/);
 });
 
 test("User-facing profile strings do not promise universal VPN-free availability", () => {

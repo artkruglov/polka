@@ -14,6 +14,8 @@ const INDEXABLE = new Set([
   "/discover",
   "/privacy",
   "/terms",
+  // What PolkaRenderer is: its User-Agent points here.
+  "/bot",
 ]);
 
 export function indexable(pathname: string) {
