@@ -7,7 +7,8 @@ import {checkBuildInWorker} from '../bundle-derivatives.ts';
 import {cdnRole} from '../react-runtime.ts';
 import {fetchPublic,publicUrl,type PublicResponse} from './public-fetch.ts';
 
-type Fetcher=(url:string,options:{maxBytes:number;signal:AbortSignal})=>Promise<PublicResponse>;
+export type Fetcher=(url:string,options:{maxBytes:number;signal:AbortSignal})=>Promise<PublicResponse>;
+const detach=(node:Tree.Element)=>{if(node.parentNode&&'childNodes'in node.parentNode)node.parentNode.childNodes=node.parentNode.childNodes.filter(n=>n!==node);};
 export class HtmlCaptureError extends Error {constructor(public code:string,message:string){super(message);}}
 /** A resource the viewer cannot use anyway (a font format it does not load); it is left out with a warning. */
 class SkippedResource extends Error {}
@@ -20,17 +21,40 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
  const timeout=AbortSignal.timeout(45_000);const abort=signal?AbortSignal.any([signal,timeout]):timeout;
  const sourceUrl=publicUrl(input);
  if(['claude.ai','chatgpt.com','chat.openai.com'].includes(sourceUrl.hostname.replace(/^www\./,'')))throw new HtmlCaptureError('provider_adapter_required','Для этой ссылки нужен адаптер извлечения артефакта. Оболочка чата не будет сохранена вместо результата.');
- const stored=new Map<string,{mime:string;bytes:Buffer}>();const paths=new Map<string,string>();let downloaded=0;let sequence=0;
- const request=async(url:string)=>{abort.throwIfAborted();const r=await fetcher(url,{maxBytes:MAX_BYTES-downloaded,signal:abort});downloaded+=r.bytes.length;if(downloaded>MAX_BYTES)throw new HtmlCaptureError('too_large','Страница с ресурсами превышает 5 МиБ.');return r;};
- const main=await request(sourceUrl.href);
+ const main=await fetcher(sourceUrl.href,{maxBytes:MAX_BYTES,signal:abort});
  if(!/^text\/html(?:;|$)/i.test(main.contentType))throw new HtmlCaptureError('unsupported_type','Ожидалась HTML-страница.');
  if(['claude.ai','chatgpt.com','chat.openai.com'].includes(new URL(main.url).hostname.replace(/^www\./,'')))throw new HtmlCaptureError('provider_adapter_required','Источник перенаправил на провайдерскую оболочку, нужен отдельный адаптер.');
+ return captureHtmlDocument(main,{fetcher,signal:abort});
+}
+export type CaptureOptions={fetcher?:Fetcher;signal?:AbortSignal;
+ /** How the document was obtained, recorded in provenance (a rendered snapshot). */
+ renderer?:'headless-snapshot-v1';
+ /** Drop <script>, <noscript>, inline handlers and javascript: URLs: the document is a rendered snapshot, its code already ran. */
+ stripScripts?:boolean;
+ /** Warnings known before capture (for example, «a snapshot, not the app»). */
+ warnings?:string[];
+ /** Where the copy came from, when that is not main.url (the Gist page rather than its API). */
+ sourceUrl?:string;
+ title?:string};
+/** The localisation half of captureHtmlUrl: the entrypoint is already in hand
+ * (fetched, rendered or read from an API); its resources still go through the
+ * fetcher, within the same 5 MiB / 64 files / 45 s budget. */
+export async function captureHtmlDocument(main:PublicResponse,{fetcher=fetchPublic,signal,renderer,stripScripts=false,warnings:known=[],sourceUrl:declared,title:declaredTitle}:CaptureOptions={}) {
+ const timeout=AbortSignal.timeout(45_000);const abort=signal?AbortSignal.any([signal,timeout]):timeout;
+ const sourceUrl=publicUrl(declared??main.url);
+ const stored=new Map<string,{mime:string;bytes:Buffer}>();const paths=new Map<string,string>();let downloaded=main.bytes.length;let sequence=0;
+ if(downloaded>MAX_BYTES)throw new HtmlCaptureError('too_large','Страница с ресурсами превышает 5 МиБ.');
+ const request=async(url:string)=>{abort.throwIfAborted();const r=await fetcher(url,{maxBytes:MAX_BYTES-downloaded,signal:abort});downloaded+=r.bytes.length;if(downloaded>MAX_BYTES)throw new HtmlCaptureError('too_large','Страница с ресурсами превышает 5 МиБ.');return r;};
  const html=main.bytes.toString('utf8');if(!Buffer.from(html).equals(main.bytes))throw new HtmlCaptureError('unsupported_encoding','Пока поддерживается только UTF-8.');
  const doc=parse(html);const nodes:Tree.Element[]=[];
  function walk(n:Tree.Node){if('tagName'in n)nodes.push(n);if('childNodes'in n)for(const c of n.childNodes)walk(c);if('content'in n)walk(n.content);}
  walk(doc);
+ if(stripScripts)for(const node of [...nodes]){
+  if(node.tagName==='script'||node.tagName==='noscript'){detach(node);nodes.splice(nodes.indexOf(node),1);continue;}
+  node.attrs=node.attrs.filter(a=>!a.name.startsWith('on')&&!/^\s*javascript:/i.test(a.value));
+ }
  let base=main.url;const baseNode=nodes.find(n=>n.tagName==='base');const baseHref=baseNode?.attrs.find(a=>a.name==='href')?.value;if(baseHref)base=publicUrl(new URL(baseHref,base).href).href;
- const warnings=new Set<string>();
+ const warnings=new Set<string>(known);
  async function resource(value:string,parent:string):Promise<string>{
   if(!value||value.startsWith('#')||value.startsWith('data:'))return value;
   const url=publicUrl(new URL(value,parent).href);const fragment=new URL(value,parent).hash;
@@ -65,7 +89,7 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
   }return tree.toString();
  }
  for(const node of nodes){
-  if(node.tagName==='base'){if(node.parentNode&&'childNodes'in node.parentNode)node.parentNode.childNodes=node.parentNode.childNodes.filter(n=>n!==node);continue;}
+  if(node.tagName==='base'){detach(node);continue;}
   if(node.tagName==='iframe'||node.tagName==='object'||node.tagName==='embed')warnings.add('Встроенный внешний документ требует отдельного импорта.');
   node.attrs=node.attrs.filter(a=>a.name!=='integrity');
   for(const a of node.attrs){
@@ -90,13 +114,13 @@ export async function captureHtmlUrl(input:string,{fetcher=fetchPublic,signal}:{
  if(scripts.some(script=>/\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|importScripts)\b|\bimport\s*\(/.test(script)))
   warnings.add('В коде найдены возможные сетевые зависимости. Внешние API и динамическая загрузка в просмотре отключены; связанные действия могут не работать.');
  const output=Buffer.from(serialize(doc));stored.set('index.html',{mime:'text/html',bytes:output});
- const safeSource=new URL(main.url);safeSource.search='';safeSource.hash='';
- const manifest=canonicalizeManifest({version:1,entrypoint:'index.html',runtime:'preserved-only-v1',files:[...stored].map(([path,{mime,bytes}])=>({path,mime,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')})),provenance:{kind:'url',sourceUrl:safeSource.href,capturedAt:new Date().toISOString(),attribution:'Imported from a public URL by the user',license:'unknown'},dependencies:{status:'unknown',unresolved:[]}});
+ const safeSource=new URL(sourceUrl);safeSource.search='';safeSource.hash='';
+ const manifest=canonicalizeManifest({version:1,entrypoint:'index.html',runtime:'preserved-only-v1',files:[...stored].map(([path,{mime,bytes}])=>({path,mime,size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')})),provenance:{kind:'url',sourceUrl:safeSource.href,capturedAt:new Date().toISOString(),attribution:'Imported from a public URL by the user',license:'unknown',...(renderer?{renderer}:{})},dependencies:{status:'unknown',unresolved:[]}});
  // The same isolated build worker (and runtime) as the interactive version, off the main thread.
  const built=await checkBuildInWorker(manifest,[...stored].map(([path,f])=>({path,bytes:f.bytes})));
  if(!built.ok)warnings.add(built.failed?`Интерактивная сборка не проверена: ${built.reason}`:`Интерактивная сборка недоступна: ${built.reason}`);
  else for(const warning of built.warnings??[])warnings.add(`В интерактивной версии: ${warning}`);
  // Successful localization alone cannot prove arbitrary JavaScript is offline.
- const title=nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,MAX_TITLE)||sourceUrl.hostname;
+ const title=(declaredTitle?.trim().slice(0,MAX_TITLE))||nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,MAX_TITLE)||sourceUrl.hostname;
  return {title,manifest,files:[...stored].map(([path,{bytes}])=>({path,encoding:'base64' as const,data:bytes.toString('base64')})),previewReady:built.ok&&warnings.size===0,warnings:[...warnings]};
 }
