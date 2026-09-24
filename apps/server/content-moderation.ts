@@ -692,11 +692,14 @@ export async function revisionBlocked(c: Queryable, revisionId: string) {
 // ---------------------------------------------------------------------------
 // The model stage (docs/specs/CONTENT_FILTER.md, «Модель»): after a save
 // commits, in the background. The verdict is stored with the revision; links
-// already made to it are decided again (only ever more strictly).
+// already made to it are decided again: stricter for open links, released for
+// links that waited only for the model (shares.ts, releasableHold).
 
 const MAX_IMAGE_BYTES = 1_000_000;
 const MAX_CODE_CHARS = 12_000;
-const MAX_ATTEMPTS = 5;
+/** Reviews of one revision before the models are given up on. */
+export const MAX_REVIEW_ATTEMPTS = 5;
+const MAX_ATTEMPTS = MAX_REVIEW_ATTEMPTS;
 
 type StoredModel = {
   state: "checked" | "unchecked";
@@ -1024,9 +1027,12 @@ export async function reviewRevision(revisionId: string) {
         answers: stored.answers,
       },
     });
-    const { reconsiderLinks } = await import("./shares.ts");
-    await reconsiderLinks(revisionId);
   }
+  // Whatever the models said, links to the revision are decided again: a
+  // finding makes them stricter; a clean answer releases a link that waited
+  // only for the model. A failed review keeps it waiting.
+  const { reconsiderLinks } = await import("./shares.ts");
+  await reconsiderLinks(revisionId);
   return stored;
 }
 
