@@ -123,5 +123,6 @@ export async function captureHtmlDocument(main:PublicResponse,{fetcher=fetchPubl
  else for(const warning of built.warnings??[])warnings.add(`В интерактивной версии: ${warning}`);
  // Successful localization alone cannot prove arbitrary JavaScript is offline.
  const title=(declaredTitle?.trim().slice(0,MAX_TITLE))||nodes.find(n=>n.tagName==='title')?.childNodes.filter((n):n is Tree.TextNode=>n.nodeName==='#text').map(n=>n.value).join('').trim().slice(0,MAX_TITLE)||sourceUrl.hostname;
- return {title,manifest,files:[...stored].map(([path,{bytes}])=>({path,encoding:'base64' as const,data:bytes.toString('base64')})),previewReady:built.ok&&warnings.size===0,warnings:[...warnings]};
+ return {title,manifest,files:[...stored].map(([path,{bytes}])=>({path,encoding:'base64' as const,data:bytes.toString('base64')})),// Warnings known up front (a snapshot's note) inform the user; only found limitations stop «ready».
+ previewReady:built.ok&&warnings.size===new Set(known).size,warnings:[...warnings]};
 }

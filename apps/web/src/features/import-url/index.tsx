@@ -19,6 +19,7 @@ type Job = {
 const labels: Record<string, string> = {
   queued: "В очереди",
   fetching: "Получаем страницу и ресурсы",
+  rendering: "Открываем страницу в изолированном браузере",
   prepared: "Копия подготовлена",
   saving: "Сохраняем на полку",
   previewing: "Копия сохранена. Подготавливаем просмотр…",
@@ -47,6 +48,17 @@ const reasons: Record<string, string> = {
     "Страница содержит больше 63 внешних ресурсов. Подготовьте автономный HTML-файл.",
   unsupported_asset: "Один из ресурсов имеет неподдерживаемый формат.",
   forbidden: "Подключение или права изменились.",
+  source_blocked:
+    "Сайт показал проверку на бота или окно согласия вместо страницы. Полка такие проверки не проходит и не повторяет попытку.",
+  robots_disallowed:
+    "Сайт запрещает роботам открывать эту страницу (robots.txt), и Полка это соблюдает.",
+  robots_unavailable:
+    "Сайт не отдал robots.txt, поэтому Полка его сейчас не открывает. Повторите позже.",
+  not_allowed: "Страница ведёт на сайт, который Полка не открывает в браузере.",
+  renderer_disabled:
+    "Эта страница собирается скриптами, а снимки страниц на этом сервере выключены.",
+  renderer_unavailable: "Сервис снимков страниц недоступен. Повторите позже.",
+  renderer_busy: "Сервис снимков страниц занят. Повторите через минуту.",
   rate_limited:
     "GitHub временно ограничил число запросов к Gist. Повторите позже или сохраните файл из gist вручную.",
   timeout: "Источник не ответил вовремя.",
@@ -55,7 +67,7 @@ const reasons: Record<string, string> = {
 };
 const active = (j: Job | null) =>
   !!j &&
-  ["queued", "fetching", "prepared", "saving", "previewing"].includes(j.state);
+  ["queued", "fetching", "rendering", "prepared", "saving", "previewing"].includes(j.state);
 const storageKey = "polka.active-url-import";
 const draftKey = "polka.url-import-draft";
 // Storage can be blocked (private mode, disabled site data): the import still works for this tab.
