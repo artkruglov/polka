@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 035.
+-- Operator-reviewed recipe for the Polka schema through migration 036.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>35
+     OR (SELECT count(*) FROM public.schema_migrations)<>36
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>35 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 035';
+     OR (SELECT max(version) FROM public.schema_migrations)<>36 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 036';
   END IF;
 END $$;
 
@@ -158,5 +158,10 @@ GRANT SELECT, INSERT, DELETE ON TABLE
 TO :"runtime_role";
 GRANT SELECT, INSERT, UPDATE ON TABLE public.analytics_daily TO :"runtime_role";
 GRANT SELECT, INSERT ON TABLE public.analytics_optouts TO :"runtime_role";
+-- Shelf access (036): provisional shelves add only columns to accounts and
+-- agent_connections. Sign-in links from agents: the application issues and
+-- consumes them; maintenance deletes expired rows; purge removes them with
+-- their connection (ON DELETE CASCADE).
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.agent_sign_in_links TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 035
+\echo Runtime grants installed for the reviewed schema through migration 036

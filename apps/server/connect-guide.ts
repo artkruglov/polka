@@ -41,9 +41,11 @@ export function connectGuide(origin: string, sourceUrl?: string) {
   - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
   - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Затем в чате «+» → включить коннектор «Полка». Пошагово: ${origin}/settings/agents?client=chatgpt
 
-Скажи пользователю: «Откроется Полка. Войдите или создайте полку по почте — придёт код из восьми цифр — и нажмите «Разрешить».»
+Скажи пользователю: «Откроется Полка. Войдите в свою полку или нажмите «Начать без регистрации», затем «Разрешить».»
 
-Когда Полка подключена, сохраняй работу инструментом \`polka_publish\`: он вернёт ссылку ${origin}/s#…, которую можно отправить кому угодно.
+Когда Полка подключена, сохраняй работу инструментом \`polka_publish\`: он вернёт ссылку ${origin}/s#…, которую можно отправить кому угодно. Если полка временная (без регистрации), ссылки не будет: передай пользователю \`claimUrl\` — там полку закрепляют через Яндекс ID или почту.
+
+Сразу после подключения один раз скажи пользователю: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». На эту просьбу вызови \`polka_open_shelf\` и отдай ссылку как есть (страница входа в полку или, для временной полки, одноразовая ссылка), сам её не открывай.
 
 ## Скилл для Claude Code и Codex
 
@@ -76,9 +78,11 @@ Your user asked to connect Полка. Work out which client you are, run the on
   - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
   - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Then in the chat "+" → enable the "Полка" connector. Step by step: ${origin}/settings/agents?client=chatgpt
 
-Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow."
+Tell the user: "Полка will open. Sign in to your shelf or press «Начать без регистрации» (start without signing up), then Allow."
 
-Once connected, save work with the \`polka_publish\` tool: it returns a link ${origin}/s#… you can send to anyone.
+Once connected, save work with the \`polka_publish\` tool: it returns a link ${origin}/s#… you can send to anyone. On a provisional shelf (no sign-up yet) there is no link: give the user \`claimUrl\`, where they claim the shelf with Яндекс ID or email.
+
+Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»» (if you need to open the shelf in a browser, tell me "Open my Polka"). When they ask, call \`polka_open_shelf\` and hand over the link exactly as returned; never open it yourself.
 
 ## Skill for Claude Code and Codex
 

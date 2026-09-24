@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { createApp } from "../apps/server/app.ts";
 import { createOwnerNoteInTransaction } from "../apps/server/comments.ts";
 import { config } from "../apps/server/config.ts";
@@ -121,12 +121,25 @@ async function link(owner: Person) {
 }
 
 const anchor = { exact: "Второй шаг.", prefix: "Первый шаг. ", suffix: "" };
-const letters = async () => {
+/** Letters in the local comment mailbox; with `to`, only those to these addresses (other files share the folder). */
+const letters = async (to?: string[]) => {
+  let names: string[];
   try {
-    return (await readdir(LOCAL_COMMENT_MAIL_DIRECTORY)).length;
+    names = await readdir(LOCAL_COMMENT_MAIL_DIRECTORY);
   } catch {
     return 0;
   }
+  if (!to) return names.length;
+  let count = 0;
+  for (const name of names) {
+    try {
+      const mail = JSON.parse(await readFile(`${LOCAL_COMMENT_MAIL_DIRECTORY}/${name}`, "utf8"));
+      if (to.includes(mail.to)) count++;
+    } catch {
+      /* being written, or gone */
+    }
+  }
+  return count;
 };
 
 test("owner-notes: recipients read the owner's notes and cannot write or react", async () => {
@@ -151,7 +164,16 @@ test("owner-notes: recipients read the owner's notes and cannot write or react",
   assert.equal(reacted.statusCode, 200, reacted.body);
 
   config.COMMENTS_MODE = "owner-notes";
-  const lettersBefore = await letters();
+  // Only this test's letters (other files write to the same folder), counted
+  // once the recipient's comment above has been mailed (after its commit).
+  const ours = [owner.email, reader.email];
+  let lettersBefore = await letters(ours);
+  for (let quiet = 0; quiet < 5; ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const now = await letters(ours);
+    quiet = now === lettersBefore ? quiet + 1 : 0;
+    lettersBefore = now;
+  }
   const note = await call(
     "POST",
     `/api/artifacts/${work.artifactId}/comments`,
@@ -242,7 +264,7 @@ test("owner-notes: recipients read the owner's notes and cannot write or react",
   assert.equal(page.json().shares[0].threads.length, 2);
   // No letters about notes.
   await new Promise((resolve) => setTimeout(resolve, 300));
-  assert.equal(await letters(), lettersBefore);
+  assert.equal(await letters(ours), lettersBefore);
 
   // The recipient's comment and reaction are hidden, not deleted.
   const kept = await db.query("SELECT body FROM comments WHERE id=$1", [

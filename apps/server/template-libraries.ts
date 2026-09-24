@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { audit } from "./artifacts.ts";
-import { transaction } from "./db.ts";
+import { db, transaction } from "./db.ts";
 import { missing, Problem } from "./errors.ts";
 import {
   changeTemplateLibraryRoleInput,
@@ -16,6 +16,7 @@ import {
 } from "../../packages/contracts/template-library.ts";
 import { config } from "./config.ts";
 import { sha256 } from "./storage.ts";
+import { assertClaimed } from "./provisional.ts";
 
 // Mutations take FOR UPDATE; read-only listings take FOR SHARE, which still
 // waits for (and rechecks after) a concurrent revoke, disable or archive but
@@ -167,6 +168,7 @@ async function ensureAnotherActiveAdmin(
 }
 
 export async function createTemplateLibrary(actor: Actor, body: unknown) {
+  await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInput.parse(body);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
@@ -397,6 +399,7 @@ export async function createTemplateLibraryInvitation(
   libraryId: string,
   body: unknown,
 ) {
+  await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInvitationInput.parse(body);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
@@ -696,6 +699,7 @@ export async function publishTemplateLibraryRelease(
     await lockActorAndAccounts(c, actor);
     await lockLibrary(c, libraryId);
     await requirePublisher(c, libraryId, actor.id);
+    await assertClaimed(c, actor.id);
     const release = (
       await c.query(
         `SELECT release.id,release.artifact_id,release.revision_id

@@ -19,7 +19,12 @@ import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
-import { identity, limitAttempts, signIn } from "./auth.ts";
+import {
+  assertStrongSession,
+  identity,
+  limitAttempts,
+  signIn,
+} from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { registerEnterpriseRequests } from "./enterprise-requests.ts";
@@ -27,7 +32,18 @@ import { registerRecipientCta } from "./recipient-cta.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
-import { registerSignInRoutes } from "./sign-in-routes.ts";
+import { registerSignInRoutes, sessionCookie } from "./sign-in-routes.ts";
+import { holdSignInCollision, registerClaimRoutes } from "./claim-routes.ts";
+import {
+  consumeSignInLink,
+  describeShelfHint,
+  previewSignInLink,
+} from "./agent-sign-in-links.ts";
+import {
+  PROVISIONAL_IDLE_DAYS,
+  PROVISIONAL_SESSION_SECONDS,
+  renewProvisionalSession,
+} from "./provisional.ts";
 import { PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
@@ -78,6 +94,7 @@ import {
   issueConnectionCsrf,
   listAgentConnections,
   revokeAgentConnection,
+  setConnectionSignInLinks,
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
@@ -233,6 +250,12 @@ export async function createApp() {
     });
   });
   const id = (req: any) => uuid.parse(req.params.id);
+  // Agents, tokens and deletion need a real sign-in, not an agent's link.
+  const strongIdentity = async (req: Parameters<typeof identity>[0]) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return actor;
+  };
   // The shell asks for the comment overlay when it issues a view grant; the
   // flag lives in the grant, never in a URL anyone could open.
   // COMMENTS_MODE=off: no overlay at all, whatever the shell asks.
@@ -241,8 +264,9 @@ export async function createApp() {
     config.COMMENTS_MODE !== "off";
   registerUrlImports(app, identity);
   registerAgentContext(app, identity);
-  registerTemplateLibraryRoutes(app, identity);
+  registerTemplateLibraryRoutes(app, strongIdentity);
   registerSignInRoutes(app);
+  registerClaimRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
   app.get("/robots.txt", async (_req, reply) =>
     reply
@@ -386,29 +410,59 @@ export async function createApp() {
             })
             .strict()
             .optional(),
+          // The browser remembers another shelf (docs/specs/
+          // SIGN_IN_PROVIDERS.md § 1): ask before opening a new one.
+          knownShelf: z.boolean().optional(),
+          createNew: z.boolean().optional(),
         })
         .strict()
         .parse(req.body);
-      const token = await verifyEmailLogin(
+      // A provisional shelf in this browser is claimed by an address that
+      // has no shelf yet (provisional.ts).
+      let current: Awaited<ReturnType<typeof identity>> | null = null;
+      try {
+        current = await identity(req);
+      } catch {
+        current = null;
+      }
+      const result = await verifyEmailLogin(
         input.id,
         input.code,
         req.cookies.polka_email_challenge ?? "",
         req.ip,
         input.source,
+        {
+          // An agent-link session never attaches an address to its shelf.
+          provisionalId:
+            current?.provisional && !current.weak ? current.id : null,
+          knownShelf: input.knownShelf,
+          createNew: input.createNew,
+        },
       );
+      if (result.kind === "new-shelf")
+        throw new Problem(
+          409,
+          "conflict",
+          "На этот адрес полки ещё нет. Похоже, у вас уже есть полка: войдите в неё или создайте новую.",
+          { reason: "new_shelf" },
+        );
+      reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
+      if (result.kind === "claimed") return { ok: true, claimed: true };
+      if (
+        await holdSignInCollision(
+          req,
+          reply,
+          { accountId: result.accountId, session: result.session },
+          "email",
+        )
+      )
+        return { ok: true, collision: true };
       if (req.cookies.polka_session)
         await db.query("DELETE FROM sessions WHERE hash=$1", [
           sha256(req.cookies.polka_session),
         ]);
-      reply.setCookie("polka_session", token, {
-        httpOnly: true,
-        sameSite: "strict",
-        secure: config.COOKIE_SECURE === "true",
-        path: "/",
-        maxAge: 604800,
-      });
-      reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
-      return { ok: true };
+      reply.setCookie("polka_session", result.session, sessionCookie());
+      return { ok: true, created: result.created };
     },
   );
   app.post("/api/login", { bodyLimit: 2048 }, async (req, reply) => {
@@ -420,17 +474,26 @@ export async function createApp() {
       .strict()
       .parse(req.body);
     const token = await signIn(input.name, input.password, req.ip);
+    const {
+      rows: [signedIn],
+    } = await db.query("SELECT account_id FROM sessions WHERE hash=$1", [
+      sha256(token),
+    ]);
+    if (
+      signedIn &&
+      (await holdSignInCollision(
+        req,
+        reply,
+        { accountId: signedIn.account_id, session: token },
+        "password",
+      ))
+    )
+      return { ok: true, collision: true };
     if (req.cookies.polka_session)
       await db.query("DELETE FROM sessions WHERE hash=$1", [
         sha256(req.cookies.polka_session),
       ]);
-    reply.setCookie("polka_session", token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: config.COOKIE_SECURE === "true",
-      path: "/",
-      maxAge: 604800,
-    });
+    reply.setCookie("polka_session", token, sessionCookie());
     return { ok: true };
   });
   app.post("/api/logout", async (req, reply) => {
@@ -447,9 +510,20 @@ export async function createApp() {
   // The web app's «who is here»: 200 for a guest too (account null), so a
   // guest's every page load is not a 401 in the console. /api/me keeps its
   // 401 for clients that need the session to be there.
-  app.get("/api/session", async (req) => {
+  app.get("/api/session", async (req, reply) => {
     try {
       const a = await identity(req);
+      // A provisional shelf lives while its browser comes back: its session
+      // (and cookie) move 30 days ahead on a visit.
+      if (
+        a.provisional && !a.weak &&
+        (await renewProvisionalSession(req.cookies.polka_session ?? ""))
+      )
+        reply.setCookie(
+          "polka_session",
+          req.cookies.polka_session!,
+          sessionCookie(PROVISIONAL_SESSION_SECONDS),
+        );
       // createdAt lets the app tell a shelf made a minute ago from an old
       // one (the «Полка создана» note after a sign-up from a shared link).
       return {
@@ -457,6 +531,10 @@ export async function createApp() {
           id: a.id,
           name: a.name,
           createdAt: a.createdAt ? a.createdAt.toISOString() : null,
+          ...(a.provisional
+            ? { provisional: true, idleDays: PROVISIONAL_IDLE_DAYS }
+            : {}),
+          ...(a.weak ? { assurance: "agent_link" as const } : {}),
         },
       };
     } catch (error) {
@@ -466,20 +544,20 @@ export async function createApp() {
   });
   app.post("/api/account/deletion-csrf", async (req) =>
     issueAccountDeletionCsrf(
-      await identity(req),
+      await strongIdentity(req),
       req.cookies.polka_session ?? "",
     ),
   );
   app.post("/api/account/deletion-plan", async (req) =>
     createAccountDeletionPlan(
-      await identity(req),
+      await strongIdentity(req),
       req.cookies.polka_session ?? "",
       String(req.headers["x-polka-csrf"] ?? ""),
     ),
   );
   app.post("/api/account/deletion", async (req, reply) => {
     const result = await confirmAccountDeletion(
-      await identity(req),
+      await strongIdentity(req),
       req.cookies.polka_session ?? "",
       String(req.headers["x-polka-csrf"] ?? ""),
       req.body,
@@ -496,11 +574,11 @@ export async function createApp() {
     return accountDeletionStatus(parsed.data.capability, req.ip);
   });
   app.post("/api/agent-connections/csrf", async (req) =>
-    issueConnectionCsrf(await identity(req), req.cookies.polka_session ?? ""),
+    issueConnectionCsrf(await strongIdentity(req), req.cookies.polka_session ?? ""),
   );
   app.post("/api/agent-connections", async (req) =>
     issueAgentConnection(
-      await identity(req),
+      await strongIdentity(req),
       req.cookies.polka_session ?? "",
       String(req.headers["x-polka-csrf"] ?? ""),
       req.body,
@@ -511,12 +589,72 @@ export async function createApp() {
   );
   app.post("/api/agent-connections/:id/revoke", async (req) =>
     revokeAgentConnection(
-      await identity(req),
+      await strongIdentity(req),
       req.cookies.polka_session ?? "",
       String(req.headers["x-polka-csrf"] ?? ""),
       id(req),
     ),
   );
+  // /signin?shelf=…: which shelf and its ways in (no secret in the hint).
+  app.get("/api/auth/shelf-hint", async (req) => {
+    const { h } = z
+      .object({ h: z.string().min(10).max(1024) })
+      .parse(req.query);
+    await limitAttempts(`shelf-hint-ip:${req.ip}`, 60);
+    return describeShelfHint(h);
+  });
+  // «Может выдавать ссылки для входа» (agent-sign-in-links.ts).
+  app.post(
+    "/api/agent-connections/:id/sign-in-links",
+    { bodyLimit: 1024 },
+    async (req) =>
+      setConnectionSignInLinks(
+        await strongIdentity(req),
+        req.cookies.polka_session ?? "",
+        String(req.headers["x-polka-csrf"] ?? ""),
+        id(req),
+        req.body,
+      ),
+  );
+  // /enter#<token>: the page posts the fragment here (Origin-checked like
+  // every browser POST). The token never appears in a URL we receive.
+  // Looking spends nothing: the page shows the shelf and the agent first.
+  app.post("/api/auth/enter/preview", { bodyLimit: 1024 }, async (req) => {
+    const { token } = z
+      .object({ token: z.string().max(64) })
+      .strict()
+      .parse(req.body);
+    const link = await previewSignInLink(token, req.ip);
+    const current = await identity(req).catch(() => null);
+    return { ...link, current: current ? { name: current.name } : null };
+  });
+  // After the click. A browser already signed in keeps its session unless
+  // the person chose to switch (replace: true).
+  app.post("/api/auth/enter", { bodyLimit: 1024 }, async (req, reply) => {
+    const { token, replace } = z
+      .object({ token: z.string().max(64), replace: z.boolean().optional() })
+      .strict()
+      .parse(req.body);
+    const current = await identity(req).catch(() => null);
+    if (current && !replace)
+      throw new Problem(
+        409,
+        "conflict",
+        `Этот браузер уже вошёл в полку «${current.name}». Выберите, остаться в ней или перейти.`,
+        { reason: "signed_in" },
+      );
+    const entered = await consumeSignInLink(token, req.ip);
+    if (req.cookies.polka_session)
+      await db.query("DELETE FROM sessions WHERE hash=$1", [
+        sha256(req.cookies.polka_session),
+      ]);
+    reply.setCookie(
+      "polka_session",
+      entered.session,
+      sessionCookie(entered.maxAge),
+    );
+    return { ok: true, clientName: entered.clientName };
+  });
   app.get(
     "/api/folders",
     async (req) =>
@@ -899,13 +1037,13 @@ export async function createApp() {
     );
   });
   app.post("/api/artifacts/:id/share", async (req) => {
-    return enableOwnerShare(await identity(req), id(req), req.body);
+    return enableOwnerShare(await strongIdentity(req), id(req), req.body);
   });
   app.post("/api/shares/:id/revoke", async (req) => {
-    return revokeOwnerShare(await identity(req), id(req));
+    return revokeOwnerShare(await strongIdentity(req), id(req));
   });
   app.post("/api/shares/:id/publish", async (req) => {
-    return publishOwnerShare(await identity(req), id(req), req.body);
+    return publishOwnerShare(await strongIdentity(req), id(req), req.body);
   });
   app.post("/api/resolve", async (req) => {
     const { token } = z

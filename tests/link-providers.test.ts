@@ -150,9 +150,9 @@ test("a Claude link the server could not open gets the card: ask Claude, keep th
   assert.ok(html.includes(CLAUDE_PHRASE));
   assert.match(html, /Скопировать фразу/);
   assert.ok(html.indexOf("DROPZONE") > drop, "the drop zone is inside the card");
-  // The extension waits behind a small link, with room for the bookmarklet.
+  // The extension and the bookmarklet wait behind a small link.
   assert.match(html, /<details class="url-import-oneclick"><summary>Сохранять в один клик<\/summary>/);
-  assert.match(html, /data-slot="bookmarklet"/);
+  assert.match(html, /data-slot="bookmarklet">Без расширения: <a href="\/bookmarklet">/);
   // Another service: the phrase names the link for the user's agent.
   const v0 = "https://v0.app/chat/demo";
   const other = renderToStaticMarkup(

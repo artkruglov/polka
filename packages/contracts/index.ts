@@ -77,12 +77,16 @@ export type AgentConnection = {
   status: "issued" | "seen" | "expired" | "revoked";
   /** token: issued on the agents page; oauth: granted to a chat connector. */
   kind: "token" | "oauth";
+  /** OAuth only: the agent may hand its owner a one-time sign-in link. */
+  signInLinks?: boolean;
   createdAt: string;
   expiresAt: string;
   lastSeenAt: string | null;
 };
 /** What the consent page shows for one pending connector authorization. */
 export type OAuthConsentDetails = {
+  /** The shelf the connector will save to and how its owner signs in. */
+  account?: { name: string; methods: string[]; provisional: boolean };
   requestId: string;
   client: {
     name: string;
@@ -98,6 +102,31 @@ export type OAuthConsentDetails = {
   replaces: boolean;
   expiresAt: string;
 };
+/** A provenance address: https, no credentials, query or fragment. */
+export const sourceUrlSchema = z
+  .string()
+  .max(2048)
+  .refine((value) => {
+    if (
+      !value.startsWith("https://") ||
+      /[\s\\\u0000-\u001f\u007f]/.test(value) ||
+      value.includes("?") ||
+      value.includes("#")
+    )
+      return false;
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === "https:" &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "sourceUrl must be an HTTPS URL without credentials, query, or fragment");
 export const beginUploadSchema = z
   .object({
     key: uuid,
@@ -109,11 +138,17 @@ export const beginUploadSchema = z
     artifactId: uuid.optional(),
     baseRevisionId: uuid.optional(),
     folderId: uuid.nullable().optional(),
+    /** The page an HTML file was saved from (the «На Полку» bookmark); kept in provenance. */
+    sourceUrl: sourceUrlSchema.optional(),
   })
   .strict()
   .refine(
     (x) => !!x.artifactId === !!x.baseRevisionId,
     "A revision needs its base",
+  )
+  .refine(
+    (x) => x.sourceUrl === undefined || x.mime === "text/html",
+    "Only an HTML page keeps its source address",
   );
 export type UploadInput = z.infer<typeof beginUploadSchema>;
 /** «Сохранить как ссылку»: the web form, the MCP tool and the API take this. */
@@ -274,6 +309,15 @@ export interface Account {
   name: string;
   /** From /api/session only; null for accounts made before it was recorded. */
   createdAt?: string | null;
+  /**
+   * From /api/session only: a provisional shelf (no sign-in method yet; it
+   * lives in this browser and cannot share until claimed).
+   */
+  provisional?: boolean;
+  /** Days without use after which a provisional shelf is deleted. */
+  idleDays?: number;
+  /** The session came from an agent's sign-in link (browse only). */
+  assurance?: "agent_link";
 }
 export type ErrorCode =
   | "invalid"

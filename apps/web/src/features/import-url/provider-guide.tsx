@@ -27,7 +27,7 @@ const BLOCKED: Record<string, string> = {
  * v0, Perplexity, AI Studio; ChatGPT or Claude when the server's attempt was
  * refused). The ways that always work, simplest first: the user's own agent,
  * the link itself as a work, a downloaded file dropped right here. The
- * extension (and later a bookmarklet) waits behind «Сохранять в один клик».
+ * extension and the bookmarklet (/bookmarklet) wait behind «Сохранять в один клик».
  */
 export function ProviderGuide({
   result,
@@ -104,8 +104,10 @@ export function ProviderGuide({
         ) : (
           <p>Расширение «На Полку» пока сохраняет артефакты Claude и ChatGPT.</p>
         )}
-        {/* The bookmarklet («Полка» in the bookmarks bar) lands here from its own branch. */}
-        <div data-slot="bookmarklet" hidden />
+        <p data-slot="bookmarklet">
+          Без расширения: <a href="/bookmarklet">закладка «На Полку»</a> в панели
+          закладок читает артефакт в вашем браузере и передаёт его Полке.
+        </p>
       </details>
       {pasteCode && (
         <details className="url-import-paste">

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { Account } from "../../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../../shared/api/client.ts";
+import {
+  markFreshShelfNote,
+  rememberKnownShelf,
+} from "../../../shared/lib/known-shelf.ts";
 
 // One /session request per page load, shared by every consumer. A guest is
 // a 200 with no account (no 401 in the console on every page); a network or
@@ -8,12 +12,32 @@ import { ApiError, client } from "../../../shared/api/client.ts";
 let cached: Promise<Account | null> | null = null;
 const listeners = new Set<() => void>();
 
+/**
+ * A signed-in browser remembers which shelf it is in (shared/lib/known-shelf:
+ * the display name and the method, nothing else), so a later sign-in that
+ * would open another shelf asks first. A provisional shelf is not a shelf
+ * one signs in to, so it leaves no hint.
+ */
+function remember(account: Account | null) {
+  if (!account || account.provisional) return;
+  const first = rememberKnownShelf(account.name);
+  const created = account.createdAt ? Date.parse(account.createdAt) : NaN;
+  if (first && Number.isFinite(created) && Date.now() - created < 30 * 60_000)
+    markFreshShelfNote();
+}
+
 function loadAccount(): Promise<Account | null> {
-  cached ??= client.session().catch((error) => {
-    if (error instanceof ApiError && error.status === 401) return null;
-    cached = null;
-    throw error;
-  });
+  cached ??= client
+    .session()
+    .then((account) => {
+      remember(account);
+      return account;
+    })
+    .catch((error) => {
+      if (error instanceof ApiError && error.status === 401) return null;
+      cached = null;
+      throw error;
+    });
   return cached;
 }
 

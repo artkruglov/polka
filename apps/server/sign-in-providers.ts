@@ -96,43 +96,70 @@ export type Flow = {
   expires: number;
   /** Where the visitor came from, for a new shelf's analytics (sanitised). */
   source?: { ref?: string; referrer?: string };
+  /**
+   * The browser remembers a shelf it signed in to before (a hint in its
+   * localStorage, never sent to us beyond this flag): a sign-in that would
+   * open a NEW shelf asks first (/signup/choose).
+   */
+  known?: boolean;
+  /**
+   * The provisional shelf this browser was in by an agent's link: after the
+   * sign-in /claim offers to carry its works over (never a link to it).
+   */
+  carry?: string;
 };
 
-const flowKey = () =>
-  createHmac("sha256", config.LINK_KEY).update("polka:idp-flow:v1").digest();
+const sealKey = (label: string) =>
+  createHmac("sha256", config.LINK_KEY).update(label).digest();
 
-export function sealFlow(flow: Flow) {
+/** AES-256-GCM under a key for `label`, as one base64url string. */
+export function sealValue(value: unknown, label: string) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", flowKey(), iv);
+  const cipher = createCipheriv("aes-256-gcm", sealKey(label), iv);
   const body = Buffer.concat([
-    cipher.update(JSON.stringify(flow), "utf8"),
+    cipher.update(JSON.stringify(value), "utf8"),
     cipher.final(),
   ]);
   return Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");
 }
 
-export function openFlow(value: string | undefined, now = Date.now()) {
+/** The sealed value, or null when forged, foreign or past its `expires`. */
+export function openValue<T extends { expires: number }>(
+  value: string | undefined,
+  label: string,
+  now = Date.now(),
+): T | null {
   if (!value || value.length > 4096) return null;
   try {
     const raw = Buffer.from(value, "base64url");
     if (raw.length < 12 + 16 + 2) return null;
     const decipher = createDecipheriv(
       "aes-256-gcm",
-      flowKey(),
+      sealKey(label),
       raw.subarray(0, 12),
     );
     decipher.setAuthTag(raw.subarray(raw.length - 16));
-    const flow = JSON.parse(
+    const opened = JSON.parse(
       Buffer.concat([
         decipher.update(raw.subarray(12, raw.length - 16)),
         decipher.final(),
       ]).toString("utf8"),
-    ) as Flow;
-    if (typeof flow.expires !== "number" || flow.expires < now) return null;
-    return flow;
+    ) as T;
+    if (typeof opened.expires !== "number" || opened.expires < now) return null;
+    return opened;
   } catch {
     return null;
   }
+}
+
+const FLOW_LABEL = "polka:idp-flow:v1";
+
+export function sealFlow(flow: Flow) {
+  return sealValue(flow, FLOW_LABEL);
+}
+
+export function openFlow(value: string | undefined, now = Date.now()) {
+  return openValue<Flow>(value, FLOW_LABEL, now);
 }
 
 /** Constant-time comparison of the state the provider returned. */
@@ -405,6 +432,8 @@ export async function startFlow(
   next: string,
   link: string | null,
   source: Flow["source"] | null = null,
+  known = false,
+  carry: string | null = null,
 ) {
   const flow: Flow = {
     provider,
@@ -415,6 +444,8 @@ export async function startFlow(
     link,
     expires: Date.now() + FLOW_TTL_SECONDS * 1000,
     ...(source ? { source } : {}),
+    ...(known ? { known: true } : {}),
+    ...(carry ? { carry } : {}),
   };
   const params: Record<string, string> = {
     response_type: "code",

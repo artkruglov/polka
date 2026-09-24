@@ -1,4 +1,14 @@
-import { oauthClientKind, trackAgentConnected } from "./analytics.ts";
+import {
+  oauthClientKind,
+  sanitizeSource,
+  trackAgentConnected,
+} from "./analytics.ts";
+import { shelfSummary } from "./account-identities.ts";
+import {
+  createProvisionalShelf,
+  PROVISIONAL_SESSION_SECONDS,
+} from "./provisional.ts";
+import { sessionCookie } from "./sign-in-routes.ts";
 import {
   createHash,
   randomBytes,
@@ -19,7 +29,7 @@ import {
   type AgentScope,
 } from "../../packages/contracts/index.ts";
 import type { Actor } from "./artifacts.ts";
-import { identity, limitAttempts } from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
@@ -201,6 +211,8 @@ export function offeredScopes(scope: string | undefined): AgentScope[] {
   );
   if (!known.size) return [...AGENT_SCOPES];
   known.add("context");
+  // Offered on every consent page (unticked): the owner decides.
+  known.add("sign_in");
   return AGENT_SCOPES.filter((item) => known.has(item));
 }
 
@@ -562,6 +574,8 @@ export async function authorizationDetails(
   const scopes = row.requested_scopes as AgentScope[];
   const extensionId = browserExtensionId(row.redirect_uri);
   return {
+    // Which shelf the connector will save to, and how its owner signs in.
+    account: await shelfSummary(actor.id),
     requestId: row.id,
     client: {
       name: row.client_name,
@@ -802,9 +816,9 @@ async function exchangeCode(
     } = await c.query(
       `INSERT INTO agent_connections(
          id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,
-         oauth_client_id,access_expires_at
+         oauth_client_id,access_expires_at,sign_in_links
        ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '30 days',$8,
-         now()+$9*interval '1 second')
+         now()+$9*interval '1 second','sign_in'=ANY($6::text[]))
        RETURNING *`,
       [
         connectionId,
@@ -1136,6 +1150,60 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
       });
     return reply.redirect(outcome.location, 302);
   });
+  // «Начать без регистрации» (provisional.ts): a shelf for this browser,
+  // only while it has a real pending connection request of its own (the
+  // request's browser cookie) and only from a page of Полка (Origin).
+  app.post(
+    "/oauth/authorize/provisional",
+    { bodyLimit: 2048 },
+    async (req, reply) => {
+      const input = z
+        .object({
+          request: uuid,
+          source: z
+            .object({
+              ref: z.string().max(200).optional(),
+              referrer: z.string().max(300).optional(),
+            })
+            .strict()
+            .optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const signedIn = await identity(req).then(
+        () => true,
+        () => false,
+      );
+      if (signedIn)
+        throw new Problem(
+          409,
+          "conflict",
+          "Этот браузер уже вошёл в полку. Обновите страницу.",
+        );
+      await limitAttempts(`provisional-ip:${req.ip}`, 10, "1 hour");
+      const browserToken = browserCookie(req);
+      if (!TOKEN.test(browserToken)) throw expiredRequest();
+      const pending = await db.query(
+        `SELECT 1 FROM oauth_authorizations
+          WHERE id=$1 AND browser_hash=$2 AND status='pending'
+            AND expires_at>now()`,
+        [input.request, sha256(browserToken)],
+      );
+      if (!pending.rowCount) throw expiredRequest();
+      // One provisional shelf per connection request.
+      await limitAttempts(`provisional-request:${input.request}`, 1, "24 hours");
+      const shelf = await createProvisionalShelf(
+        req.ip,
+        sanitizeSource(input.source ?? null),
+      );
+      reply.setCookie(
+        "polka_session",
+        shelf.session,
+        sessionCookie(PROVISIONAL_SESSION_SECONDS),
+      );
+      return { ok: true };
+    },
+  );
   app.get("/oauth/authorize/details", async (req) => {
     const actor = await identity(req);
     const { request } = z
@@ -1148,8 +1216,11 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
     "/oauth/authorize/decision",
     { bodyLimit: 4096 },
     async (req, reply) => {
+      const actor = await identity(req);
+      // Granting an agent needs a real sign-in, not an agent's link.
+      assertStrongSession(actor);
       const result = await decideAuthorization(
-        await identity(req),
+        actor,
         req.cookies.polka_session ?? "",
         String(req.headers["x-polka-csrf"] ?? ""),
         browserCookie(req),

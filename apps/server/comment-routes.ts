@@ -12,7 +12,7 @@ import {
   sharedReactSchema,
   sharedResolveSchema,
 } from "../../packages/contracts/comments.ts";
-import { identity, limitAttempts } from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import {
   createOwnerComment,
   createSharedComment,
@@ -102,11 +102,15 @@ export function registerCommentRoutes(app: FastifyInstance) {
   );
   app.post("/api/artifacts/:id/comments", options, async (req) => {
     const owner = await identity(req);
+    // A note on a link is read by its recipients: not from an agent's link.
+    assertStrongSession(owner);
     const { shareId, ...input } = ownerCreateCommentSchema.parse(req.body);
     return createOwnerComment(owner, id(req), shareId, input);
   });
   app.post("/api/artifacts/:id/reactions", options, async (req) => {
     const owner = await identity(req);
+    // A note on a link is read by its recipients: not from an agent's link.
+    assertStrongSession(owner);
     const input = ownerReactSchema.parse(req.body);
     return reactOwner(owner, id(req), input.shareId, input.emoji, input.anchor);
   });

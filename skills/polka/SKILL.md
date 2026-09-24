@@ -17,7 +17,7 @@ If polka_* tools are available, call polka_context and go to step 2. Otherwise f
 - Claude Code: `claude mcp add --transport http --scope user polka https://polochka.app/mcp`, then ask the user to type /mcp, choose polka, press Authenticate.
 - Claude.ai or ChatGPT in the browser: you cannot run commands, and fetching https://polochka.app/connect usually fails there. Tell the user to add the custom connector themselves: Claude.ai: Settings → Connectors → Add custom connector, URL https://polochka.app/mcp; ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL https://polochka.app/mcp, Authentication: OAuth; then enable the connector in the chat. Step by step: https://polochka.app/settings/agents?client=claude-ai or https://polochka.app/settings/agents?client=chatgpt.
 
-Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow." The human signs in in the browser. Never ask for their password, email code or a token, and install nothing else.
+Tell the user: "Полка will open. Sign in to your shelf or press «Начать без регистрации», then Allow." The human signs in in the browser. Never ask for their password, email code or a token, and install nothing else.
 
 Without MCP (scripts, CI): the user creates a token at https://polochka.app/settings/agents (section «Для разработчиков») and exports it themselves with `read -r -s POLKA_TOKEN && export POLKA_TOKEN`. Use it only as `Authorization: Bearer $POLKA_TOKEN` from the environment.
 
@@ -57,7 +57,8 @@ The owner copies these from a work's page; each names the work and its shelf add
 
 - Give the returned `url` (https://polochka.app/s#…) as the link. Say the work is saved privately on their shelf and the link is unlisted: only people they send it to can open it, until `expiresAt` or until they revoke it.
 - `expiresNote` present: the link was issued for fewer days (new account); say so.
-- `url` null: the work is saved privately; `shelfUrl` opens only for the owner and is not a share link. Relay `linkUnavailableReason`.
+- `url` null: the work is saved privately; `shelfUrl` opens only for the owner and is not a share link. Relay `linkUnavailableReason`. `claimUrl` present: the shelf is provisional (started without sign-up); give the user that address to claim it with Яндекс ID, VK ID or email, then links work.
+- Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf and give the returned url exactly as it is (the shelf's sign-in page, or a one-time link for a provisional shelf). Never open it yourself.
 - `interactiveUnavailableReason` present: say scripts will not run for recipients and why.
 
 ## 7. Moderation

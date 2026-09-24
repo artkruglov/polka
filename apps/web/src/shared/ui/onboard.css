@@ -1,4 +1,6 @@
-/* Signup / entry: one column, one headline, the real way in. */
+/* Entry pages (/signup, /signup/choose, /claim, /enter, /signin): one column,
+   one headline, the real way in. Global, so a page opened directly from an
+   agent's link is styled too. */
 .onboard { width: 100%; max-width: 520px; margin: 56px auto 0; padding: 0 28px 80px; }
 .onboard-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 26px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); }
 .onboard-icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
