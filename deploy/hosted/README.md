@@ -221,7 +221,7 @@ rm polka.dump
 
 ### Настройки
 
-В `hosted.env` (все передаются через `compose.yml`):
+В `hosted.env` (все передаются через `compose.yml`). У `SHARE_MODERATION`, `CONTENT_FILTER_MODE`, `CONTENT_FILTER_AUTOBLOCK`, лимитов новых аккаунтов, регистрации и бюджета моделей значение из средней колонки (для автоблокировки — `false`) — оно же умолчание `compose.yml`: переменная, которой нет в `hosted.env` (или она пуста), получает его. Умолчания в коде (`config.ts`) мягче, они для локального запуска. `OPERATOR_EMAIL`, `OPERATOR_CONTACT` и модели по умолчанию пусты или выключены.
 
 | Переменная | На запуск polochka.app | Что делает |
 |---|---|---|
@@ -236,8 +236,8 @@ rm polka.dump
 | `CONTENT_FILTER_AUTOBLOCK` | `false` первые 2–4 недели, затем `true` | Автоблокировка: при `false` сразу блокируются только CSAM и явный вредоносный код, остальное ждёт вас; при `true` — ещё тяжёлые категории, в которых уверены правила или согласны обе модели |
 | `MODERATION_RETENTION` | пусто | Сроки изоляции по категориям поверх умолчаний (`porn=30,gambling=keep`…) |
 | `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы |
-| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: основная и ревьюер кода — NeuralDeep (только модели из `CONTENT_MODEL_ND_ALLOWED`, на его оборудовании в России), второе мнение и запасная — Yandex AI Studio; у каждой роли свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). До включения NeuralDeep — поручение на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` — только правила |
-| `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки; дальше только правила и одно письмо вам |
+| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила |
+| `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки (UTC, с 03:00 по Москве); дальше только правила и одно письмо вам. Расход хранится в базе, перезапуск и деплой его не обнуляют |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 
 Аккаунты, созданные оператором (`account:create`, вход по паролю), и все аккаунты, существовавшие до миграции 029, доверенные. Письма и кнопки подписаны ключом из `LINK_KEY`: смена `LINK_KEY` делает недействительными и кнопки в уже отправленных письмах.
@@ -406,6 +406,37 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 - **CLI** — `npm run metrics` (или `docker compose --env-file hosted.env exec app npx tsx scripts/metrics.ts`), `-- --weeks 26`, `-- --json`.
 
 Возражение против статистики (политика, раздел 3): `npm run metrics -- forget <id|логин|почта>` удаляет события аккаунта и больше их не записывает.
+
+## Логи
+
+Все сервисы пишут в журнал systemd на VM (драйвер Docker `journald`, `compose.yml`, `x-logging`). Деплой пересоздаёт контейнеры `app` и `maintenance`, и лог `json-file` удалялся бы вместе с контейнером; журнал хоста остаётся. Нужна VM с systemd (Ubuntu, Debian — в том числе образы Yandex Cloud). Первый `up -d` с этой настройкой пересоздаёт все контейнеры, и старые `json-file` логи пропадают один раз.
+
+Содержимое логов не меняется: приложение не пишет адреса страниц, IP-адреса и тела запросов, ошибки — кодом события; у Caddy нет access log и записей `http.log.error` (`Caddyfile`). Размер и срок хранения задаёт journald. Один раз на VM:
+
+```sh
+sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+printf '[Journal]\nStorage=persistent\nSystemMaxUse=2G\nMaxRetentionSec=30day\n' \
+  | sudo tee /etc/systemd/journald.conf.d/polka.conf
+sudo systemctl restart systemd-journald
+journalctl --disk-usage
+```
+
+`Storage=persistent` — журнал на диске, он переживает и перезагрузку VM. Старые записи удаляются, когда журнал больше 2 ГБ или записи старше 30 дней.
+
+Чтение: тег записи — имя контейнера (`polka-hosted-app-1`, `polka-hosted-maintenance-1`, `polka-hosted-caddy-1`, `polka-hosted-backup-1`, `polka-hosted-postgres-1`). Нужен `sudo` или группа `systemd-journal`.
+
+```sh
+# app за последние N часов, включая контейнеры до последнего деплоя
+sudo journalctl -t polka-hosted-app-1 --since "6 hours ago" -o short-iso
+# только события-ошибки приложения (JSON-строки) за сутки
+sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '^{"event"'
+# все сервисы Полки за час, вперемешку по времени
+sudo journalctl -t polka-hosted-app-1 -t polka-hosted-maintenance-1 -t polka-hosted-caddy-1 -t polka-hosted-backup-1 --since "1 hour ago"
+# следить в реальном времени
+sudo journalctl -t polka-hosted-app-1 -f
+```
+
+`docker compose --env-file hosted.env logs app` по-прежнему работает, но показывает только текущий контейнер, то есть с последнего деплоя.
 
 ## Исходный код изменённой версии
 

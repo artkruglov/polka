@@ -170,10 +170,11 @@ export async function assertNewAccountLimits(
   const daily = config.NEW_ACCOUNT_DAILY_LINKS;
   if (daily) {
     const {
-      rows: [{ today }],
+      rows: [{ today, retry_after }],
     } = await c.query(
-      `SELECT count(*)::int AS today FROM shares
-       WHERE tenant_id=$1 AND created_at>now()-interval '1 day'`,
+      `SELECT count(*)::int AS today,
+         extract(epoch FROM min(created_at)+interval '1 day'-now())::float8 AS retry_after
+       FROM shares WHERE tenant_id=$1 AND created_at>now()-interval '1 day'`,
       [tenantId],
     );
     if (today >= daily)
@@ -181,7 +182,7 @@ export async function assertNewAccountLimits(
         429,
         "quota",
         `За сутки вы уже создали ${today} ${linksWord(today)}: ${untrustedBecause(standing)}, в сутки можно создать не больше ${daily}. Продолжите завтра.`,
-      );
+      ).retryIn(retry_after ?? 86_400);
   }
   const max = config.NEW_ACCOUNT_MAX_LINKS;
   if (!max) return;

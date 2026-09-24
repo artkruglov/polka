@@ -619,6 +619,14 @@ test("Logout invalidates the server session; mutation origin and noindex headers
     (await call("GET", "/api/me", undefined, cookie)).statusCode,
     200,
   );
+  // The web app's check: the account signed in, null (still 200) for a guest.
+  const session = await call("GET", "/api/session", undefined, cookie);
+  assert.equal(session.statusCode, 200);
+  assert.equal(session.json().account.name, b.name);
+  const guest = await call("GET", "/api/session", undefined, "");
+  assert.equal(guest.statusCode, 200);
+  assert.deepEqual(guest.json(), { account: null });
+  assert.equal(guest.headers["cache-control"], "no-store");
   assert.equal(
     (
       await app.inject({
@@ -634,6 +642,10 @@ test("Logout invalidates the server session; mutation origin and noindex headers
   assert.equal(
     (await call("GET", "/api/me", undefined, cookie)).statusCode,
     401,
+  );
+  assert.deepEqual(
+    (await call("GET", "/api/session", undefined, cookie)).json(),
+    { account: null },
   );
   const noAccess = await call("GET", "/api/artifacts", undefined, "");
   assert.match(noAccess.headers["x-robots-tag"] as string, /noindex/);
@@ -1298,4 +1310,5 @@ test("share resolution is rate limited per address", async () => {
   const limited = await resolve();
   assert.equal(limited.statusCode, 429);
   assert.equal(limited.json().code, "quota");
+  assert.ok(Number(limited.headers["retry-after"]) > 0);
 });

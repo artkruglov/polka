@@ -173,10 +173,12 @@ export async function createApp() {
     );
   });
   app.setErrorHandler((error: any, _req, reply) => {
-    if (error instanceof Problem)
+    if (error instanceof Problem) {
+      if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
       return reply
         .code(error.status)
         .send({ code: error.code, message: error.message, ...error.details });
+    }
     if (error instanceof z.ZodError)
       return reply.code(400).send({
         code: "invalid",
@@ -418,6 +420,18 @@ export async function createApp() {
     const a = await identity(req);
     return { id: a.id, name: a.name };
   });
+  // The web app's «who is here»: 200 for a guest too (account null), so a
+  // guest's every page load is not a 401 in the console. /api/me keeps its
+  // 401 for clients that need the session to be there.
+  app.get("/api/session", async (req) => {
+    try {
+      const a = await identity(req);
+      return { account: { id: a.id, name: a.name } };
+    } catch (error) {
+      if (error instanceof Problem && error.status === 401) return { account: null };
+      throw error;
+    }
+  });
   app.post("/api/account/deletion-csrf", async (req) =>
     issueAccountDeletionCsrf(
       await identity(req),
@@ -634,7 +648,7 @@ export async function createApp() {
         429,
         "quota",
         "Сервер принимает несколько файлов. Повторите через минуту.",
-      );
+      ).retryIn(60);
     transfers++;
     tenantTransfers.set(tenant, mine + 1);
     reply.raw.once("close", () => {
