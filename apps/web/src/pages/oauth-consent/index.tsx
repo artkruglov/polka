@@ -105,7 +105,9 @@ export function OAuthConsent() {
       );
       setState({
         kind: "leaving",
-        host: state.details.client.redirectHost,
+        host: state.details.client.extension
+          ? "расширение браузера"
+          : state.details.client.redirectHost,
         approved: decision === "approve",
       });
       location.assign(result.redirectTo);
@@ -198,18 +200,56 @@ function ConsentForm({
   const offered = scopeOptions.filter((scope) =>
     details.scopes.includes(scope.id),
   );
+  const extension = details.client.extension;
   return (
     <section className="oauth-card" aria-labelledby="oauth-title">
-      <span className="eyebrow">Подключение к Полке</span>
-      <h1 id="oauth-title">
-        Разрешить доступ к вашей полке для{" "}
-        <span className="oauth-host">{details.client.redirectHost}</span>?
-      </h1>
-      <p className="oauth-lead">
-        Ответ получит сайт <strong>{details.client.redirectHost}</strong>.
-        Приложение называет себя «{details.client.name}» — это имя оно указало
-        само. Разрешайте, только если вы сами начали подключение на этом сайте.
-      </p>
+      <span className="eyebrow">
+        {extension?.official
+          ? "Расширение браузера «На Полку»"
+          : "Подключение к Полке"}
+      </span>
+      {extension ? (
+        <>
+          <h1 id="oauth-title">
+            Разрешить доступ к вашей полке для{" "}
+            <span className="oauth-host">
+              {extension.official
+                ? "расширения браузера «На Полку»"
+                : "расширения браузера"}
+            </span>
+            ?
+          </h1>
+          <p className="oauth-lead">
+            {extension.official ? (
+              <>
+                Это официальное расширение Полки. Оно сохраняет артефакты
+                Claude и ChatGPT из вашего браузера на вашу полку.
+              </>
+            ) : (
+              <>
+                Ответ получит расширение браузера с ID{" "}
+                <code className="oauth-extension-id">{extension.id}</code>.
+                Оно называет себя «{details.client.name}» — это имя оно указало
+                само. Разрешайте, только если вы сами установили это расширение
+                и нажали в нём «Подключить».
+              </>
+            )}
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 id="oauth-title">
+            Разрешить доступ к вашей полке для{" "}
+            <span className="oauth-host">{details.client.redirectHost}</span>?
+          </h1>
+          <p className="oauth-lead">
+            Ответ получит сайт <strong>{details.client.redirectHost}</strong>.
+            Приложение называет себя «{details.client.name}» — это имя оно
+            указало само. Разрешайте, только если вы сами начали подключение на
+            этом сайте.
+          </p>
+        </>
+      )}
       {accountName && (
         <p className="oauth-account">
           Аккаунт: <strong>{accountName}</strong>
