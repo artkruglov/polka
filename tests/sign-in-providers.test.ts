@@ -760,3 +760,65 @@ test("return paths stay on this installation", () => {
   ])
     assert.equal(safeReturnPath(bad), null, bad);
 });
+
+test("every failed provider return is logged by provider and code only", async (t) => {
+  const lines: string[] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  });
+  const sub = `log-${randomUUID()}`;
+  const email = `${sub}@yandex.ru`;
+  // The token exchange refuses (PKCE mismatch).
+  const refused = await authorize("yandex", { sub, email }, { wrongChallenge: true });
+  assert.match(refused.location, /idp_error=provider/);
+  // The person says no at the provider.
+  const begun = await start("yandex");
+  const state = begun.location.searchParams.get("state")!;
+  const denied = await app.inject({
+    method: "GET",
+    url: `/api/auth/idp/yandex/callback?error=access_denied&error_description=secret-description&state=${state}`,
+    remoteAddress: begun.ip,
+    headers: { cookie: `polka_idp=${begun.flow}` },
+  });
+  assert.match(denied.headers.location as string, /idp_error=denied/);
+  // No flow cookie at all.
+  const lost = await app.inject({
+    method: "GET",
+    url: "/api/auth/idp/vk/callback?code=secret-code&state=secret-state&device_id=d",
+    remoteAddress: address(),
+  });
+  assert.match(lost.headers.location as string, /idp_error=state/);
+  t.mock.restoreAll();
+
+  const logged = lines.filter((line) => line.includes("idp.callback_failed"));
+  assert.deepEqual(
+    logged.map((line) => JSON.parse(line)),
+    [
+      { event: "idp.callback_failed", provider: "yandex", code: "provider" },
+      { event: "idp.callback_failed", provider: "yandex", code: "denied" },
+      { event: "idp.callback_failed", provider: "vk", code: "state" },
+    ],
+  );
+  for (const line of logged)
+    for (const secret of [sub, email, state, begun.flow, "secret", "code=", "access_denied"])
+      assert.ok(!line.includes(secret), `${secret} in ${line}`);
+});
+
+test("/login leads to /signup and keeps only a safe return path", async () => {
+  const login = (query = "") =>
+    app.inject({ method: "GET", url: `/login${query}`, remoteAddress: address() });
+  const plain = await login();
+  assert.equal(plain.statusCode, 303);
+  assert.equal(plain.headers.location, "/signup");
+  const kept = await login(`?next=${encodeURIComponent("/oauth/consent?request=1")}`);
+  assert.equal(kept.statusCode, 303);
+  assert.equal(
+    kept.headers.location,
+    `/signup?next=${encodeURIComponent("/oauth/consent?request=1")}`,
+  );
+  for (const bad of ["//evil.example", "https://evil.example", "/\\evil"]) {
+    const dropped = await login(`?next=${encodeURIComponent(bad)}`);
+    assert.equal(dropped.statusCode, 303, bad);
+    assert.equal(dropped.headers.location, "/signup", bad);
+  }
+});
