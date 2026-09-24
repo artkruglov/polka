@@ -5,8 +5,27 @@
  * else (account, consent) happens in the user's browser over OAuth, so no
  * token or password passes through the agent or the chat.
  */
+
+/** The skill package `npx skills add …` installs (skills/polka/SKILL.md). */
+export const SKILL_REPO = "artkruglov/polka";
+export const SKILL_INSTALL = `npx skills add ${SKILL_REPO}`;
+
+/**
+ * The first task after connecting: the agent finds the person's best past
+ * work and saves it. Terminal agents look at this machine; web chats search
+ * their own history. The web app shows the same text
+ * (apps/web/src/entities/onboarding/agent-setup.ts); a test keeps them equal.
+ */
+const HARVEST_REST =
+  "Найди 3–5 самых интересных работ, которые мы делали: исследования, статьи, презентации, дашборды, прототипы. Пропусти личное (здоровье, финансы, переписка) и материалы работодателя или клиентов. Покажи мне список с одной строкой о каждой. После моего «да» сохрани каждую на Полку отдельной работой (polka_publish; HTML или React как есть), с понятным названием, и пришли ссылки.";
+export const harvestPrompts = {
+  terminal: `Посмотри наши прошлые сессии и файлы проекта на этом компьютере. ${HARVEST_REST}`,
+  chat: `Поищи в наших прошлых чатах (поиск по истории/памяти). ${HARVEST_REST}`,
+} as const;
+
 export function connectGuide(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
+  const skills = `${origin}/.well-known/agent-skills`;
   return `# Подключить Полку
 
 Полка хранит страницы, отчёты и прототипы, которые вы делаете с агентом, и даёт на них ссылку. MCP-сервер: ${mcp}. Вход через OAuth в браузере, токен не нужен.
@@ -25,6 +44,18 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 Скажи пользователю: «Откроется Полка. Войдите или создайте полку по почте — придёт код из восьми цифр — и нажмите «Разрешить».»
 
 Когда Полка подключена, сохраняй работу инструментом \`polka_publish\`: он вернёт ссылку ${origin}/s#…, которую можно отправить кому угодно.
+
+## Скилл для Claude Code и Codex
+
+Для Claude Code и Codex есть скилл Полки — агент будет знать, как сохранять, делиться и править: \`${SKILL_INSTALL}\` (или по адресу ${skills}).
+
+## Первая сессия: соберите лучшие работы
+
+Когда Полка подключена, предложи пользователю собрать его лучшие прошлые работы. В терминале (Claude Code, Codex) задание такое:
+
+«${harvestPrompts.terminal}»
+
+В чате (Claude.ai, ChatGPT): «${harvestPrompts.chat}»
 
 Полный справочник для агентов (инструменты, HTTP API, лимиты): ${origin}/llms.txt.
 ${sourceUrl ? `\nИсходный код этой установки (AGPL-3.0): ${sourceUrl}\n` : ""}
@@ -48,6 +79,18 @@ Your user asked to connect Полка. Work out which client you are, run the on
 Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow."
 
 Once connected, save work with the \`polka_publish\` tool: it returns a link ${origin}/s#… you can send to anyone.
+
+## Skill for Claude Code and Codex
+
+The Полка skill teaches the agent how to save, share and revise: \`${SKILL_INSTALL}\` (or ${skills}).
+
+## First session: collect the best past work
+
+After connecting, offer the user to collect their best past work. In a terminal agent (Claude Code, Codex) the task is:
+
+"${harvestPrompts.terminal}"
+
+In a web chat (Claude.ai, ChatGPT): "${harvestPrompts.chat}"
 
 Full agent reference (tools, HTTP API, limits): ${origin}/llms.txt.
 ${sourceUrl ? `\nSource code of this installation (AGPL-3.0): ${sourceUrl}\n` : ""}`;

@@ -12,6 +12,7 @@ import {
   TextAreaField,
 } from "../../shared/ui/controls.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
+import { improvePhrase, shelfUrl } from "../../entities/artifact/agent-phrases.ts";
 import "./styles.css";
 /** «Для вашего агента»: the copyable context for one version, docked to the right. */
 export function AgentContextPanel({
@@ -114,17 +115,28 @@ export function AgentContextPanel({
               </section>
             )}
             <section className="agent-context-section agent-context-text">
-              <h3>Текст для агента</h3>
+              <h3>Фраза для агента</h3>
               <CopyText
-                key={context.clipboardText}
-                label="Текст для агента"
-                value={context.clipboardText}
-                rows={6}
+                label="Фраза для агента"
+                value={improvePhrase(context.title, shelfUrl(location.origin, artifactId))}
+                rows={3}
                 buttonVariant="primary"
                 buttonLabel="Скопировать для агента"
                 successText="Скопировано. Вставьте в чат своего агента"
               />
-              <p className="fine">Вставьте в чат и опишите, что нужно сделать. Копирование не запускает агента и не открывает доступ к работе.</p>
+              <p className="fine">Подключённый агент найдёт работу по адресу сам. Копирование не запускает агента и не открывает доступ к работе.</p>
+              <details className="agent-context-files">
+                <summary>Подробный контекст для агента</summary>
+                <CopyText
+                  key={context.clipboardText}
+                  label="Подробный контекст для агента"
+                  value={context.clipboardText}
+                  rows={6}
+                  buttonLabel="Скопировать контекст"
+                  successText="Контекст скопирован"
+                />
+                <p className="fine">Версия, состав файлов и правила шаблона — для агента без подключения или для точной версии.</p>
+              </details>
             </section>
             <details className="agent-context-files">
               <summary>

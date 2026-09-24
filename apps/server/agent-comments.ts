@@ -12,6 +12,7 @@ import {
   type ReactionGroup,
 } from "../../packages/contracts/comments.ts";
 import { uuid } from "../../packages/contracts/index.ts";
+import { artifactIdOf, artifactRef } from "./agent-management.ts";
 import {
   anchorSignature,
   commentsMode,
@@ -27,7 +28,7 @@ import {
 
 export const agentCommentsInputSchema = z
   .object({
-    artifactId: uuid,
+    artifactId: artifactRef,
     includeResolved: z.boolean().default(true),
   })
   .strict();
@@ -54,16 +55,17 @@ const reactionsOn = (groups: ReactionGroup[], sig: string) =>
 
 export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
   const input = agentCommentsInputSchema.parse(raw);
+  const artifactId = artifactIdOf(input.artifactId);
   return withServiceActorTransaction(actor, "read", async (c, verified) => {
     const work = await workCommentsInTransaction(
       c,
       { id: verified.accountId, tenant: verified.tenantId },
-      input.artifactId,
+      artifactId,
     );
     const {
       rows: [artifact],
     } = await c.query("SELECT latest_revision_id FROM artifacts WHERE id=$1", [
-      input.artifactId,
+      artifactId,
     ]);
     return {
       // on: recipients comment; owner-notes: only the owner (and you) write
@@ -102,7 +104,7 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
 
 export const agentNoteInputSchema = z
   .object({
-    artifactId: uuid,
+    artifactId: artifactRef,
     /** The link the note belongs to; the newest open link when omitted. */
     shareId: uuid.optional(),
     body: commentBody,
@@ -123,7 +125,8 @@ export const agentNoteInputSchema = z
  */
 export async function noteFromAgent(actor: ServiceActor, raw: unknown) {
   const input = agentNoteInputSchema.parse(raw);
-  const { artifactId, shareId, ...note } = input;
+  const { artifactId: ref, shareId, ...note } = input;
+  const artifactId = artifactIdOf(ref);
   const result = await withServiceActorTransaction(
     actor,
     "revise",

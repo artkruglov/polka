@@ -5,6 +5,8 @@ import type {
   ShareDiscussion,
 } from "../../../../../packages/contracts/comments.ts";
 import { signInFromShare } from "../../shared/lib/share-return.ts";
+import { CopyButton } from "../../shared/ui/CopyText.tsx";
+import { notesPhrase } from "../../entities/artifact/agent-phrases.ts";
 import { useOverlayBridge } from "./bridge.ts";
 import {
   CommentsRail,
@@ -151,9 +153,14 @@ const shareLabel = (share: ShareDiscussion, index: number) =>
  */
 export function useWorkComments({
   artifactId,
+  title,
+  shelfUrl,
   enabled,
 }: {
   artifactId: string;
+  /** Named in «Поправь работу «…» по моим заметкам на Полке» for the agent. */
+  title: string;
+  shelfUrl: string;
   enabled: boolean;
 }): CommentsPlacement & { unread: number } {
   const bridge = useOverlayBridge();
@@ -233,6 +240,19 @@ export function useWorkComments({
               больше не видят.
             </p>
           ) : null}
+          {share.threads.some((t) => !t.deleted && !t.resolvedAt) && (
+            <div className="comments-agent">
+              <span>
+                Агенту: «Поправь работу по моим {notes ? "заметкам" : "комментариям"} на Полке»
+              </span>
+              <CopyButton
+                variant="quiet"
+                value={notesPhrase(title, shelfUrl, notes ? "notes" : "comments")}
+                label="Скопировать"
+                successText="Скопировано"
+              />
+            </div>
+          )}
           </>
         }
       />

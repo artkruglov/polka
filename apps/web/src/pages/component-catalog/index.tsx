@@ -67,7 +67,7 @@ export function ComponentCatalog() {
         <h2>Сценарии материала</h2>
         <div className="component-samples"><Button onClick={()=>{setTrashError("");setFeatureDialog("trash");}}>Диалог корзины</Button><Button onClick={()=>setFeatureDialog("rework")}>Диалог агента</Button></div>
         {featureDialog==="trash"&&<TrashArtifactPanel busy={false} error={trashError} onClose={()=>setFeatureDialog(null)} onConfirm={async()=>setTrashError("Материал изменился. Данные обновлены, проверьте их и повторите перемещение.")}/>}
-        {featureDialog==="rework"&&<ReworkArtifactPanel title="Отчёт команды" onClose={()=>setFeatureDialog(null)} onUpload={()=>setFeatureDialog(null)}/>}
+        {featureDialog==="rework"&&<ReworkArtifactPanel title="Отчёт команды" shelfUrl="https://polochka.app/works/00000000-0000-4000-8000-000000000001" onClose={()=>setFeatureDialog(null)} onUpload={()=>setFeatureDialog(null)}/>}
       </section>
       <section>
         <h2>Действия</h2>

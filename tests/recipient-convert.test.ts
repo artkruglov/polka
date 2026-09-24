@@ -302,6 +302,8 @@ test("first-run steps for an account that came from a share: the phrase leads, Â
     works: { status: "ready" as const, retry: () => {} },
     sample: { busy: false, stage: "", error: "", retrying: false, saved: null, save: () => {} },
     announcement: "",
+    client: "claude-code" as const,
+    onClient: () => {},
     onUpload: () => {},
   };
   const html = renderToStaticMarkup(

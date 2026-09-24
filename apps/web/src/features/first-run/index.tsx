@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Bot, Check, Link2, Sparkles, Upload } from "lucide-react";
+import { ArrowUpRight, Bot, Check, Link2, Upload } from "lucide-react";
 import type {
   Account,
   Artifact,
@@ -15,6 +15,13 @@ import {
   type FirstRunStepId,
 } from "../../entities/onboarding/steps.ts";
 import { clientHints, connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
+import {
+  harvestClient,
+  readStoredClient,
+  storeClient,
+  type HarvestClientId,
+} from "../../entities/onboarding/agent-setup.ts";
+import { HarvestPrompt } from "../../entities/onboarding/HarvestPrompt.tsx";
 import { arrivedFromShare } from "../../entities/onboarding/arrival.ts";
 import { writeDismissed } from "../../entities/onboarding/dismissal.ts";
 import { useFirstRun } from "../../entities/onboarding/useFirstRun.ts";
@@ -44,6 +51,9 @@ export type FirstRunStepsProps = {
   };
   /** What the live region says right now. */
   announcement: string;
+  /** Whose harvest task step 2 shows; the tabs switch it. */
+  client: HarvestClientId;
+  onClient: (id: HarvestClientId) => void;
   onShare?: (work: Artifact) => void;
   onDismiss?: () => void;
   /** On the shelf: «Загрузить файл» opens the upload panel; /start links to /bring. */
@@ -58,7 +68,7 @@ export type FirstRunStepsProps = {
 const stepText: Record<FirstRunStepId, string> = {
   agent:
     "Скажите агенту фразу ниже. Он выполнит одну команду, Полка откроется в браузере, вы нажмёте «Разрешить». Токен не нужен.",
-  save: "Попросите агента: «Сохрани это на Полку». Или сохраните сами — HTML, текст, изображение или код из чата.",
+  save: "Скопируйте задание агенту: он найдёт ваши лучшие работы, покажет список и после вашего «да» сохранит их на Полку. Или загрузите файл сами.",
   share:
     "Ссылка открывает зафиксированную версию, получателю не нужен аккаунт. Срок 1, 7 или 30 дней; закрыть можно в любой момент.",
 };
@@ -72,6 +82,8 @@ export function FirstRunSteps({
   works,
   sample,
   announcement,
+  client,
+  onClient,
   onShare,
   onDismiss,
   onUpload,
@@ -83,7 +95,6 @@ export function FirstRunSteps({
   const titleId = "first-run-title";
   const [agent, save, share] = model.steps;
   const tone = (id: FirstRunStepId) => (model.next === id ? "primary" : "secondary");
-  const showTry = !save.done && !sample.saved;
   const fromShare = arrival === "share" && !agent.done;
   return (
     <section
@@ -201,25 +212,46 @@ export function FirstRunSteps({
               )}
 
               {step.id === "save" && !step.done && (
-                <div className="first-run-action">
-                  {onUpload ? (
-                    <Button variant={tone("save")} onClick={onUpload}>
-                      <Upload /> Загрузить файл
-                    </Button>
-                  ) : (
-                    <LinkButton href="/bring" variant={tone("save")}>
-                      <Upload /> Сохранить без агента
-                    </LinkButton>
+                <>
+                  <HarvestPrompt
+                    client={client}
+                    onClient={onClient}
+                    primary={model.next === "save"}
+                  />
+                  <div className="first-run-action">
+                    {onUpload ? (
+                      <Button onClick={onUpload}>
+                        <Upload /> Загрузить файл
+                      </Button>
+                    ) : (
+                      <LinkButton href="/bring">
+                        <Upload /> Загрузить файл
+                      </LinkButton>
+                    )}
+                    {!sample.saved && (
+                      <Button variant="quiet" busy={sample.busy} onClick={sample.save}>
+                        {sample.stage || (sample.retrying ? "Повторить сохранение" : "Сохранить пример")}
+                      </Button>
+                    )}
+                    {works.status === "error" && (
+                      <span role="alert" className="first-run-problem">
+                        Не удалось загрузить полку.{" "}
+                        <button type="button" className="text-button" onClick={works.retry}>
+                          Повторить
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  <ErrorNotice error={sample.error} />
+                  {sample.saved && (
+                    <p className="first-run-saved" role="status">
+                      <Check /> Пример сохранён: «{sample.saved.title}». Пока его видите только вы.{" "}
+                      <a href={`/works/${sample.saved.id}`}>
+                        Открыть <ArrowUpRight />
+                      </a>
+                    </p>
                   )}
-                  {works.status === "error" && (
-                    <span role="alert" className="first-run-problem">
-                      Не удалось загрузить полку.{" "}
-                      <button type="button" className="text-button" onClick={works.retry}>
-                        Повторить
-                      </button>
-                    </span>
-                  )}
-                </div>
+                </>
               )}
               {step.id === "save" && step.done && model.agentSaved && (
                 <p className="first-run-text">Агент подключён и уже обращался к Полке.</p>
@@ -252,35 +284,6 @@ export function FirstRunSteps({
         ))}
       </ol>
 
-      {showTry && (
-        <div className="first-run-try">
-          <span className="first-run-try-icon" aria-hidden="true">
-            <Sparkles />
-          </span>
-          <div>
-            <strong>Попробовать за 10 секунд</strong>
-            <p>
-              Нет агента под рукой? Сохраним на полку страницу-пример: её можно открыть, отправить ссылкой и удалить.
-            </p>
-            <ErrorNotice error={sample.error} />
-          </div>
-          <Button
-            variant={model.next === "save" ? "primary" : "secondary"}
-            busy={sample.busy}
-            onClick={sample.save}
-          >
-            {sample.stage || (sample.retrying ? "Повторить сохранение" : "Сохранить пример")}
-          </Button>
-        </div>
-      )}
-      {sample.saved && !save.done && (
-        <p className="first-run-saved" role="status">
-          <Check /> Пример сохранён: «{sample.saved.title}». Пока его видите только вы.{" "}
-          <a href={`/works/${sample.saved.id}`}>
-            Открыть <ArrowUpRight />
-          </a>
-        </p>
-      )}
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
@@ -315,6 +318,10 @@ export function FirstRunChecklist({
   // Read once: the tab's source does not change while the shelf is open.
   const [arrival] = useState<"share" | undefined>(() =>
     arrivedFromShare() ? "share" : undefined,
+  );
+  // The client chosen on the agents page; switching here remembers it too.
+  const [client, setClient] = useState<HarvestClientId>(() =>
+    harvestClient(readStoredClient()),
   );
   const upload = useSaveUpload();
   const model = deriveFirstRun({
@@ -387,6 +394,11 @@ export function FirstRunChecklist({
         save: saveSample,
       }}
       announcement={announcement}
+      client={client}
+      onClient={(id) => {
+        setClient(id);
+        storeClient(id);
+      }}
       onShare={onShare}
       onUpload={onUpload}
       arrival={arrival}
