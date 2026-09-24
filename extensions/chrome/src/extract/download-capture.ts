@@ -11,9 +11,19 @@ export type DownloadCapture =
  * outside its body, and it imports nothing.
  *
  * On a standalone artifact page (claude.ai/artifact/<id>) the only way to the
- * source is the artifact's own title menu → Export → Download. This presses
+ * source is the artifact's own title menu → Export → Download. This opens
  * those items (the title button is marked data-polka-menu=<marker> by the
- * isolated-world script) and takes the file the page is about to save:
+ * isolated-world script) and takes the file the page is about to save.
+ *
+ * The menu is Base UI (checked on claude.ai 24.09.2026): synthetic pointer
+ * events and Enter do not open it; focus + ArrowDown opens the root menu,
+ * focus + ArrowRight the Export submenu. Items carry data-download-submenu
+ * and data-download-item; their text (Export/Download, Экспорт/Скачать) is
+ * the fallback. Synthetic Escape on the document does not close it; Escape
+ * on the focused item, Escape on the trigger, an outside pointerdown and a
+ * second press of the trigger are tried in that order.
+ *
+ * While it runs:
  *
  * - for that moment URL.createObjectURL, HTMLAnchorElement.prototype.click,
  *   EventTarget.prototype.dispatchEvent and window.open are wrapped, and a
@@ -21,7 +31,7 @@ export type DownloadCapture =
  * - a blob: (or data:) download is read and never saved;
  * - a download that would navigate to a server URL is stopped too, and the
  *   caller falls back to the frame;
- * - everything is restored and the menu closed with Escape before returning.
+ * - everything is restored and the menus closed before returning.
  *
  * «Copy as Markdown» is never pressed: it copies rendered text, not source.
  */
@@ -41,10 +51,16 @@ export async function captureDownload(
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
-  const menuItem = (pattern: RegExp, exclude?: Element | null) =>
-    [...document.querySelectorAll('[role="menuitem"]')].find(
+  const menuItem = (selector: string, pattern: RegExp, exclude?: Element | null) =>
+    document.querySelector<HTMLElement>(`[role="menuitem"]${selector}`) ??
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (item) => item !== exclude && pattern.test(label(item)),
-    ) ?? null;
+    ) ??
+    null;
+  const exportItem = () => menuItem("[data-download-submenu]", /^(export|экспорт)/);
+  const downloadItem = (exclude: Element | null) =>
+    menuItem("[data-download-item]", /^(download|скачать)/, exclude);
+  const menusOpen = () => document.querySelector('[role="menu"]') !== null;
   async function waitFor<T>(find: () => T | null, ms: number): Promise<T | null> {
     const deadline = Date.now() + ms;
     for (;;) {
@@ -63,10 +79,63 @@ export async function captureDownload(
     element.dispatchEvent(new MouseEvent("mouseup", { ...init, buttons: 0 }));
     element.dispatchEvent(new MouseEvent("click", { ...init, buttons: 0 }));
   };
+  const KEYS: Record<string, string> = {
+    ArrowDown: "ArrowDown",
+    ArrowRight: "ArrowRight",
+    Enter: "Enter",
+    Escape: "Escape",
+  };
   const key = (target: Element | Document, name: string) =>
     target.dispatchEvent(
-      new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, composed: true }),
+      new KeyboardEvent("keydown", {
+        key: name,
+        code: KEYS[name] ?? name,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      }),
     );
+  const hover = (element: Element) => {
+    for (const type of ["pointerover", "pointerenter", "pointermove"])
+      element.dispatchEvent(
+        new PointerEvent(type, { bubbles: type !== "pointerenter", pointerType: "mouse" }),
+      );
+    element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+  };
+
+  /** Leave no menu open: each way is tried only while a menu is still there. */
+  async function closeMenus(opener: HTMLElement) {
+    const attempts: (() => void)[] = [
+      () => {
+        const focused = document.activeElement;
+        const item = focused?.closest('[role="menu"]')
+          ? focused
+          : document.querySelector('[role="menu"] [role="menuitem"]');
+        if (item instanceof HTMLElement) {
+          item.focus();
+          key(item, "Escape");
+        }
+      },
+      () => {
+        opener.focus();
+        key(opener, "Escape");
+      },
+      () => {
+        const init = { bubbles: true, cancelable: true, button: 0, buttons: 1 };
+        document.body.dispatchEvent(new PointerEvent("pointerdown", { ...init, pointerType: "mouse" }));
+        document.body.dispatchEvent(new MouseEvent("mousedown", init));
+        document.body.dispatchEvent(new PointerEvent("pointerup", { ...init, buttons: 0, pointerType: "mouse" }));
+        document.body.dispatchEvent(new MouseEvent("mouseup", { ...init, buttons: 0 }));
+      },
+      () => press(opener),
+    ];
+    for (const attempt of attempts) {
+      if (!menusOpen()) return;
+      attempt();
+      await waitFor(() => (menusOpen() ? null : true), 400);
+    }
+  }
 
   // --- Interception ---------------------------------------------------------
   const originalCreate = URL.createObjectURL;
@@ -137,27 +206,38 @@ export async function captureDownload(
   document.addEventListener("click", stopClicks, true);
 
   try {
-    press(trigger);
-    let exportItem = await waitFor(() => menuItem(/^(export|экспорт)/), 1500);
-    if (!exportItem) {
-      // Some menus open from the keyboard only.
-      (trigger as HTMLElement).focus?.();
-      key(trigger, "Enter");
-      exportItem = await waitFor(() => menuItem(/^(export|экспорт)/), 1000);
+    // Root menu: focus + ArrowDown; a mouse press and Enter as fallbacks.
+    trigger.focus();
+    key(trigger, "ArrowDown");
+    let exp = await waitFor(exportItem, 1200);
+    if (!exp) {
+      press(trigger);
+      exp = await waitFor(exportItem, 800);
     }
-    if (!exportItem) return { ok: false, reason: "no_export" };
-    // A submenu trigger opens on hover, click or →.
-    exportItem.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
-    exportItem.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
-    press(exportItem);
-    let download = await waitFor(() => menuItem(/^(download|скачать)/, exportItem), 1000);
+    if (!exp) {
+      trigger.focus();
+      key(trigger, "Enter");
+      exp = await waitFor(exportItem, 800);
+    }
+    if (!exp) return { ok: false, reason: "no_export" };
+    // Submenu: focus + ArrowRight; Enter and hover open it too, more slowly.
+    exp.focus();
+    key(exp, "ArrowRight");
+    let download = await waitFor(() => downloadItem(exp), 2000);
     if (!download) {
-      (exportItem as HTMLElement).focus?.();
-      key(exportItem, "ArrowRight");
-      download = await waitFor(() => menuItem(/^(download|скачать)/, exportItem), 1000);
+      exp.focus();
+      key(exp, "Enter");
+      hover(exp);
+      download = await waitFor(() => downloadItem(exp), 2000);
     }
     if (!download) return { ok: false, reason: "no_download" };
     press(download);
+    await Promise.race([settled, wait(1000)]);
+    if (!outcome) {
+      // An item that reacts to the keyboard only.
+      download.focus();
+      key(download, "Enter");
+    }
     await Promise.race([settled, wait(timeoutMs)]);
     return outcome ?? { ok: false, reason: "timeout" };
   } finally {
@@ -168,10 +248,6 @@ export async function captureDownload(
     HTMLAnchorElement.prototype.click = originalClick;
     EventTarget.prototype.dispatchEvent = originalDispatch;
     window.open = originalOpen;
-    if (document.querySelector('[role="menu"]')) {
-      const focused = document.activeElement ?? document.body;
-      key(focused, "Escape");
-      if (document.querySelector('[role="menu"]')) key(document, "Escape");
-    }
+    await closeMenus(trigger);
   }
 }

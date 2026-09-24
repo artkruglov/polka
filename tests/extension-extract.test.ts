@@ -418,12 +418,54 @@ test("standalone artifact page: title menu → Export → Download, read and nev
   assert.equal(await evaluate("window.__downloadClicks"), 0);
   assert.equal(await evaluate("window.__markdownCopied"), false);
   assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  assert.equal(await evaluate("window.__closedBy"), "escape-in-menu");
   assert.equal(await evaluate(`document.querySelector("[data-polka-menu]")`), null);
   assert.equal(await evaluate(ORIGINALS_BACK), true);
   // The page carried on after its click as usual (it revokes the URL).
   assert.equal(await evaluate("window.__revoked"), 1);
   // A stale marker opens nothing.
   assert.deepEqual(await downloadCapture("nope", 200), { ok: false, reason: "no_menu" });
+});
+
+test("the fixture's menu is as stubborn as the real one: no pointer, no Enter", { skip }, async () => {
+  await open("claude-artifact-page.html");
+  await evaluate(`(() => {
+    const title = document.getElementById("title");
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
+      title.dispatchEvent(new (type.startsWith("pointer") ? PointerEvent : MouseEvent)(type, { bubbles: true, button: 0, buttons: 1 }));
+    title.focus();
+    title.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  })()`);
+  await wait(300);
+  assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  await evaluate(`document.getElementById("title").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))`);
+  await wait(300);
+  assert.notEqual(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  // A document-level Escape leaves it open.
+  await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+  assert.notEqual(await evaluate(`document.querySelector('[role="menu"]')`), null);
+});
+
+test("without data attributes the items are found by role and text", { skip }, async () => {
+  await open("claude-artifact-page.html?plain=1");
+  await evaluate(REMEMBER_ORIGINALS);
+  const report = await evaluate(`__test.inspectPage(document, "claude.ai", "/artifact/0f6e1b2a")`);
+  assert.equal(report.title, "Трекер привычек");
+  const captured = await downloadCapture(report.menuMarker);
+  assert.equal(captured.ok, true, JSON.stringify(captured));
+  assert.equal(captured.text, await evaluate("SOURCE"));
+  assert.equal(await evaluate("window.__downloadClicks"), 0);
+  assert.equal(await evaluate(ORIGINALS_BACK), true);
+});
+
+test("menus that ignore Escape are closed by an outside press", { skip }, async () => {
+  await open("claude-artifact-page.html?noescape=1");
+  const report = await evaluate(`__test.inspectPage(document, "claude.ai", "/artifact/0f6e1b2a")`);
+  const captured = await downloadCapture(report.menuMarker);
+  assert.equal(captured.ok, true, JSON.stringify(captured));
+  assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
+  assert.equal(await evaluate("window.__closedBy"), "outside");
 });
 
 test("a Download that would fetch a server URL is stopped; the frame is next", { skip }, async () => {
