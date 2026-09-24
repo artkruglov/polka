@@ -57,6 +57,7 @@
   "tests/url-import-fetch.test.ts",
   "tests/url-import-html.test.ts",
   "tests/url-import-gist.test.ts",
+  "tests/link-providers.test.ts",
   "tests/url-import-save.test.ts",
   "tests/url-import-jobs.test.ts",
   "tests/artifact-reader.test.ts",

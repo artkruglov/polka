@@ -102,6 +102,7 @@ function UrlRecognizer({
       {result && provider ? (
         <ProviderGuide
           result={result}
+          url={value.trim()}
           fileSave={fileSave}
           pasteCode={pasteCode}
           onFile={onFile}
