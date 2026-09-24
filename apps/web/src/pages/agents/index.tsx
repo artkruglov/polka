@@ -44,6 +44,7 @@ import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
+import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 
 const clientDefaults = {
   http: "Скрипт (HTTP API)",
@@ -62,6 +63,7 @@ const agentConnectionSchema = z.object({
     .refine((value) => ["http:", "https:"].includes(new URL(value).protocol)),
   status: z.enum(["issued", "seen", "expired", "revoked"]),
   kind: z.enum(["token", "oauth"]).default("token"),
+  signInLinks: z.boolean().optional(),
   createdAt: z.string().refine((value) => Number.isFinite(Date.parse(value))),
   expiresAt: z.string().refine((value) => Number.isFinite(Date.parse(value))),
   lastSeenAt: z
@@ -327,6 +329,31 @@ export function AgentConnections() {
     }
   };
 
+  /** «Может выдавать ссылки для входа»: the owner's switch per OAuth connection. */
+  const toggleSignInLinks = async (connection: AgentConnection) => {
+    if (actionRef.current) return;
+    setBusy(`links:${connection.id}`);
+    setRevokeError(null);
+    try {
+      const csrf = await client.agentConnections.csrf();
+      await client.agentConnections.setSignInLinks(
+        connection.id,
+        !connection.signInLinks,
+        csrf.csrfToken,
+      );
+      if (mounted.current) void refresh();
+    } catch (error) {
+      if (!mounted.current) return;
+      setRevokeError(
+        error instanceof ApiError && error.status < 500
+          ? error.message
+          : "Не удалось сохранить. Повторите попытку.",
+      );
+    } finally {
+      if (actionRef.current === `links:${connection.id}`) setBusy(null);
+    }
+  };
+
   /** Resolves true once access is revoked; the confirmation stays open on failure. */
   const revoke = async (connection: AgentConnection) => {
     if (actionRef.current) return false;
@@ -513,6 +540,14 @@ export function AgentConnections() {
                   </span>
                 </li>
               ))}
+              {active.some((connection) => connection.kind === "oauth") && (
+                <li className="agent-status-hint">
+                  <AskAgentHint
+                    lead="Чтобы открыть эту полку в другом браузере, попросите агента:"
+                    tail="— он даст ссылку для входа."
+                  />
+                </li>
+              )}
             </ul>
           ) : (
             <p className="agent-status-none">
@@ -885,6 +920,17 @@ export function AgentConnections() {
                       <p className="agent-meta">
                         Может: {scopeLabels(connection.scopes)}
                       </p>
+                      {connection.kind === "oauth" && isActive(connection) && (
+                        <label className="agent-meta agent-sign-in-links">
+                          <input
+                            type="checkbox"
+                            checked={connection.signInLinks !== false}
+                            disabled={action !== null}
+                            onChange={() => void toggleSignInLinks(connection)}
+                          />{" "}
+                          Может выдавать ссылки для входа («Открой мою Полку»)
+                        </label>
+                      )}
                       <p className="agent-meta">
                         Подключено {formatDate(connection.createdAt)}
                         {isActive(connection)

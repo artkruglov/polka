@@ -24,6 +24,11 @@ import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { formatStars, onGitHub } from "../../shared/lib/project-links.ts";
+import {
+  OPEN_SHELF_PHRASE,
+  takeEnteredByAgent,
+  takeFreshShelfNote,
+} from "../../shared/lib/known-shelf.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
 
 /**
@@ -139,7 +144,11 @@ function AccountMenu({
       {confirm && (
         <Dialog title="Выйти из Полки?" onClose={() => !busy && setConfirm(false)} busy={busy}>
           <div className="dialog-body">
-            <p>Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, войдите снова.</p>
+            <p>
+              {account.provisional
+                ? `Полка временная и живёт в этом браузере. Вернуться в неё можно по ссылке от агента («${OPEN_SHELF_PHRASE}») — или закрепите её перед выходом.`
+                : "Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, войдите снова."}
+            </p>
             {error && <p className="ui-field-error" role="alert">{error}</p>}
           </div>
           <div className="dialog-footer">
@@ -265,6 +274,69 @@ function SiteHeader({
 }
 
 /**
+ * Notes about the shelf itself (docs/specs/SIGN_IN_PROVIDERS.md § 1, 8, 10):
+ * a provisional shelf lives in this browser only and shares nothing until it
+ * is claimed; a sign-in by an agent's link names the agent once; a first
+ * sign-up in this browser points to «Способы входа» in case a shelf existed.
+ */
+function ShelfBanners({ account }: { account: Account }) {
+  const [entered] = useState(() => takeEnteredByAgent());
+  const [fresh, setFresh] = useState(
+    () => !account.provisional && takeFreshShelfNote(),
+  );
+  const claimed =
+    !account.provisional &&
+    new URLSearchParams(location.search).get("claimed") === "1";
+  return (
+    <>
+      {account.provisional && (
+        <aside className="shelf-banner" aria-label="Временная полка">
+          <div>
+            <strong>Полка живёт только в этом браузере.</strong> Закрепите
+            её — войдите с Яндекс ID или по почте, и ею можно будет делиться
+            ссылками.
+            <small>
+              Если {account.idleDays ?? 30} дней не открывать полку и не
+              пользоваться агентами, она удалится. Потеряли вход? Попросите
+              агента: «{OPEN_SHELF_PHRASE}».
+            </small>
+          </div>
+          <a className="ui-button ui-button--primary" href="/claim">
+            Закрепить
+          </a>
+        </aside>
+      )}
+      {claimed && (
+        <aside className="shelf-banner shelf-banner--quiet" role="status">
+          <div>
+            <strong>Полка закреплена.</strong> Теперь ею можно делиться, а
+            входить — выбранным способом.
+          </div>
+        </aside>
+      )}
+      {entered && (
+        <aside className="shelf-banner shelf-banner--quiet" role="status">
+          <div>
+            Вы вошли по ссылке от агента <strong>{entered}</strong>.
+          </div>
+        </aside>
+      )}
+      {fresh && (
+        <aside className="shelf-banner shelf-banner--quiet">
+          <div>
+            Уже есть полка? Привяжите этот вход к ней в{" "}
+            <a href="/settings/agents#sign-in">«Способах входа»</a>.
+          </div>
+          <Button variant="quiet" onClick={() => setFresh(false)}>
+            Понятно
+          </Button>
+        </aside>
+      )}
+    </>
+  );
+}
+
+/**
  * The operator's documents and the source code, linked under every page:
  * AGPL-3.0 § 13 asks that everyone using Полка over the network is offered it.
  */
@@ -317,6 +389,7 @@ export function AppShell({
           {navigation}
         </SiteHeader>
       )}
+      {!bare && account && <ShelfBanners account={account} />}
       {children}
       {!bare && <LegalLinks />}
     </div>

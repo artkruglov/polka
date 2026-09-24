@@ -30,10 +30,16 @@ export function SharePanel({
   artifact: a,
   onClose,
   onChange,
+  provisional = false,
 }: {
   artifact: Artifact;
   onClose: () => void;
   onChange: () => Promise<void>;
+  /**
+   * A provisional shelf (docs/specs/SIGN_IN_PROVIDERS.md § 8) gives no links
+   * until it is claimed: the link step leads to /claim instead.
+   */
+  provisional?: boolean;
 }) {
   const active = !!a.share && ["active", "behind"].includes(a.share.status);
   const [error, setError] = useState(""),
@@ -115,7 +121,16 @@ export function SharePanel({
           </div>
         </fieldset>
 
-        {wantsLink && (
+        {wantsLink && provisional && (
+          <div className="share-step share-step--warn" role="note">
+            <strong>Полка ещё не закреплена.</strong>
+            <p>
+              Ссылки выдаются после входа через Яндекс ID, VK ID или почту:
+              так требует закон. Работа сохранена и видна только вам.
+            </p>
+          </div>
+        )}
+        {wantsLink && !provisional && (
           <div className="share-step">
             <p>
               {a.share?.status === "revoked"
@@ -206,7 +221,12 @@ export function SharePanel({
         <Button onClick={onClose} disabled={busy}>
           {wantsLink || wantsClose ? "Отмена" : "Готово"}
         </Button>
-        {wantsLink && (
+        {wantsLink && provisional && (
+          <LinkButton href="/claim" variant="primary">
+            <ShieldCheck /> Закрепить, чтобы поделиться
+          </LinkButton>
+        )}
+        {wantsLink && !provisional && (
           <Button variant="primary" busy={busy} onClick={() => run(() => client.enable(a, days))}>
             <LinkIcon /> {a.share ? "Создать новую ссылку" : "Включить доступ по ссылке"}
           </Button>
