@@ -546,6 +546,10 @@ test("anti-spam: throwaway mail and per-network sign-ups; the same content from 
     ["email-signup-domain:corp.example", 5],
   ]);
   assert.equal(signupSpamKeys("198.51.100.7", "a@yandex.ru").length, 1);
+  // A provider sign-up without a verified address keeps the network cap.
+  const none = signupSpamKeys("198.51.100.7", null);
+  assert.equal(none.length, 1);
+  assert.match(none[0]!.key, /^email-signup-subnet:/);
   (config as any).EMAIL_SIGNUP_DAILY_PER_DOMAIN = 0;
   // Sign-in itself still works for an ordinary address.
   assert.ok((await beginEmailLogin(`ok-${randomUUID().slice(0, 6)}@example.test`, "198.51.100.8")).id);

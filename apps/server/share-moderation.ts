@@ -56,11 +56,13 @@ export type AuthorStanding = {
 };
 
 /**
- * Email sign-up names an account `email-<its id>` (email-auth.ts); an
- * operator login is 3–40 characters and can never take that form.
+ * Self sign-up names an account `<way>-<its id>`: `email-` (email-auth.ts)
+ * or a sign-in provider's `yandex-`, `vk-`, `oidc-` (account-identities.ts).
+ * An operator login is 3–40 characters and can never take that form, so
+ * only operator-created accounts escape the new-account rules.
  */
 export const SIGNED_UP_SQL = (account: string) =>
-  `(${account}.name = 'email-' || ${account}.id::text)`;
+  `(${account}.name IN ('email-' || ${account}.id::text, 'yandex-' || ${account}.id::text, 'vk-' || ${account}.id::text, 'oidc-' || ${account}.id::text))`;
 
 /**
  * Trusted: not holding a paused link, and created by the operator, approved

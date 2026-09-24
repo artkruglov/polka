@@ -62,8 +62,9 @@ export function subnetOf(ip: string) {
 }
 
 /** The per-network and per-domain limits, as email-auth.ts's signupKeys. */
-export function signupSpamKeys(ip: string, email: string) {
-  const domain = mailDomain(email);
+export function signupSpamKeys(ip: string, email: string | null) {
+  // A provider sign-up may bring no verified address: the network cap only.
+  const domain = email ? mailDomain(email) : null;
   return [
     {
       key: `email-signup-subnet:${subnetOf(ip)}`,
@@ -71,7 +72,7 @@ export function signupSpamKeys(ip: string, email: string) {
       message:
         "Из этой сети сегодня уже создано много полок. Попробуйте завтра или войдите в существующую полку.",
     },
-    ...(PUBLIC_PROVIDERS.has(domain) || !config.EMAIL_SIGNUP_DAILY_PER_DOMAIN
+    ...(!domain || PUBLIC_PROVIDERS.has(domain) || !config.EMAIL_SIGNUP_DAILY_PER_DOMAIN
       ? []
       : [
           {

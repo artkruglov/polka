@@ -56,13 +56,15 @@ async function createShelf(
     !(profile.email && profile.emailVerified && emailInvited(profile.email))
   )
     throw new IdpError("signup");
+  const email = profile.email && profile.emailVerified ? profile.email : null;
   try {
-    await signupRoomLeft(c, ip, true);
+    // The same caps as an email sign-up: installation, address, network and
+    // the address's domain.
+    await signupRoomLeft(c, ip, true, email);
   } catch (error) {
     if (error instanceof Problem) throw new IdpError("signup");
     throw error;
   }
-  const email = profile.email && profile.emailVerified ? profile.email : null;
   const taken =
     email &&
     (await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount;

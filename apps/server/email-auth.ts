@@ -39,7 +39,9 @@ const signupKeys = (ip: string, email: string | null) => [
   { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
   { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
   // Anti-spam: per network and per mail domain (signup-guards.ts).
-  ...(email ? signupSpamKeys(ip, email) : []),
+  // Anti-spam: per network and, with an address, per mail domain
+  // (signup-guards.ts). Provider sign-ups count here too.
+  ...signupSpamKeys(ip, email),
 ];
 
 export async function signupRoomLeft(
