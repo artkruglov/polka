@@ -90,6 +90,8 @@
   "tests/share-return.test.ts",
   "tests/recipient-convert.test.ts",
   "tests/sign-in-providers.test.ts",
+  "tests/account-merge.test.ts",
+  "tests/one-shelf.test.ts",
   "tests/email-signup-domains.test.ts",
   "tests/comments-modes.test.ts"
 ]

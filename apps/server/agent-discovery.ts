@@ -40,6 +40,8 @@ function registeredTools(scopes: AgentScope[]): RegisteredTools {
     scopes,
     audience: MCP_AUDIENCE,
     expiresAt: 0,
+    // As a chat connector: its tools include polka_open_shelf.
+    oauth: true,
   };
   // The SDK keeps registrations in a field it does not type as public;
   // reading it is what keeps this list equal to what tools/list returns.

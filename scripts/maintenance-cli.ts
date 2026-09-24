@@ -1,4 +1,5 @@
 import { config } from "../apps/server/config.ts";
+import { PROVISIONAL_IDLE_DAYS } from "../apps/server/provisional.ts";
 import { actorKey } from "../apps/server/analytics-keys.ts";
 import {
   createMaintenanceDatabase,
@@ -69,6 +70,18 @@ export async function runMaintenanceOnce(options: {
     run: (scope) =>
       runMaintenanceCleanup(scope, options.storage, {
         analyticsActorKey: actorKey,
+        // Idle provisional shelves go through the deletion pipeline, so only
+        // where it is configured (apps/server/provisional-maintenance.ts).
+        ...(config.ACCOUNT_DELETION_ENABLED
+          ? {
+              provisionalRetirement: {
+                idleDays: PROVISIONAL_IDLE_DAYS,
+                policyVersion: config.ACCOUNT_DELETION_POLICY_VERSION!,
+                purgeMaxHours: config.ACCOUNT_PURGE_MAX_HOURS!,
+                backupRetentionMaxDays: config.BACKUP_RETENTION_MAX_DAYS!,
+              },
+            }
+          : {}),
       }),
   });
 }

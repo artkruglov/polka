@@ -27,6 +27,7 @@
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "account:create": "tsx --env-file=.env scripts/account.ts",
     "account:email": "tsx --env-file=.env scripts/account-email.ts",
+    "account:merge": "tsx --env-file=.env scripts/account-merge.ts",
     "moderation:reports": "tsx --env-file=.env scripts/moderation.ts reports",
     "moderation:revoke-share": "tsx --env-file=.env scripts/moderation.ts revoke-share",
     "moderation:disable": "tsx --env-file=.env scripts/moderation.ts disable",

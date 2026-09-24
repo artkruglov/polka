@@ -16,6 +16,7 @@ import {
 } from "../../packages/contracts/template-library.ts";
 import { config } from "./config.ts";
 import { sha256 } from "./storage.ts";
+import { assertClaimed } from "./provisional.ts";
 
 // Mutations take FOR UPDATE; read-only listings take FOR SHARE, which still
 // waits for (and rechecks after) a concurrent revoke, disable or archive but
@@ -696,6 +697,7 @@ export async function publishTemplateLibraryRelease(
     await lockActorAndAccounts(c, actor);
     await lockLibrary(c, libraryId);
     await requirePublisher(c, libraryId, actor.id);
+    await assertClaimed(c, actor.id);
     const release = (
       await c.query(
         `SELECT release.id,release.artifact_id,release.revision_id

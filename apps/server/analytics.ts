@@ -30,6 +30,7 @@ export const ANALYTICS_EVENTS = [
   "enterprise_request",
   "recipient_cta_view",
   "recipient_cta_click",
+  "shelf_claimed",
 ] as const;
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];
 
@@ -60,7 +61,13 @@ export const PUBLIC_PAGES = new Set([
   "/signup",
 ]);
 
-export type SignupMethod = "email" | "yandex" | "vk" | "oidc" | "password";
+export type SignupMethod =
+  | "email"
+  | "yandex"
+  | "vk"
+  | "oidc"
+  | "password"
+  | "provisional";
 export type AgentClient =
   | "codex"
   | "claude-code"
@@ -318,6 +325,25 @@ export function trackSignup(
     }),
   );
   afterCommit(c, () => markActive(accountId));
+}
+
+/**
+ * A provisional shelf got a sign-in method (migration 036): `method` is
+ * email, yandex, vk, oidc or merge (moved into an existing shelf).
+ */
+export function trackShelfClaimed(
+  c: PoolClient,
+  accountId: string,
+  method: "email" | "yandex" | "vk" | "oidc" | "merge",
+) {
+  later(
+    c,
+    event("shelf_claimed", {
+      actor: actorKey(accountId),
+      props: { method },
+      detail: method,
+    }),
+  );
 }
 
 /** Which agent an OAuth client is, from its name and where it returns to. */

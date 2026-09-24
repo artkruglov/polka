@@ -1,8 +1,12 @@
 // Routes of external sign-in (docs/specs/SIGN_IN_PROVIDERS.md § 1).
 //
-//   GET  /api/auth/idp/:provider/start?next=…[&ref=…&referrer=…]  leave for the provider
+//   GET  /api/auth/idp/:provider/start?next=…[&ref=…&referrer=…][&known=1]  leave for the provider
 //   POST /api/auth/idp/:provider/link           the same, to link (session)
 //   GET  /api/auth/idp/:provider/callback       back from the provider
+//   GET  /api/auth/idp/pending                  a sign-in waiting for «войти или создать»
+//   POST /api/auth/idp/pending/create           … open the new shelf after all
+//   POST /api/auth/idp/pending/link             … link it to the shelf just signed in to
+//   POST /api/auth/idp/pending/cancel           … forget it
 //   GET  /api/account/identities                linked providers
 //   GET  /login?next=…                          303 to /signup (an alias)
 //   POST /api/account/identities/:provider/unlink
@@ -13,29 +17,83 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
+  ClaimCollision,
   completeProviderSignIn,
   listIdentities,
   unlinkIdentity,
+  wouldOpenNewShelf,
 } from "./account-identities.ts";
 import { sanitizeSource } from "./analytics.ts";
 import { identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
+import { db } from "./db.ts";
 import { missing, Problem } from "./errors.ts";
+import {
+  holdPending,
+  PENDING_TTL_SECONDS,
+  peekPending,
+  takePending,
+} from "./sign-in-pending.ts";
 import {
   FLOW_COOKIE,
   FLOW_COOKIE_PATH,
   FLOW_TTL_SECONDS,
   IdpError,
   PROVIDER_IDS,
+  PROVIDER_NAMES,
   finishFlow,
   openFlow,
   providerEnabled,
   safeReturnPath,
   startFlow,
   type ProviderId,
+  type ProviderProfile,
 } from "./sign-in-providers.ts";
+import { sha256 } from "./storage.ts";
 
 const providerParam = z.object({ provider: z.enum(PROVIDER_IDS) });
+
+/** The sealed name of a sign-in waiting on /signup/choose. */
+export const PENDING_COOKIE = "polka_idp_pending";
+/** The sealed name of a claim collision waiting on /claim. */
+export const CLAIM_COOKIE = "polka_claim";
+export const CLAIM_COOKIE_PATH = "/api/account/claim";
+
+/** The attributes of every session cookie (7 days unless stated). */
+export const sessionCookie = (maxAge = 604800) => ({
+  httpOnly: true,
+  sameSite: "strict" as const,
+  secure: config.COOKIE_SECURE === "true",
+  path: "/",
+  maxAge,
+});
+
+/** A sealed pending entry: HttpOnly, Lax (set on a return from a provider). */
+export const pendingCookie = (path: string) => ({
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: config.COOKIE_SECURE === "true",
+  path,
+  maxAge: PENDING_TTL_SECONDS,
+});
+
+/** Holds a claim collision (claim-routes.ts) and sets its cookie. */
+export function holdCollision(
+  reply: FastifyReply,
+  entry: {
+    provisionalId: string;
+    targetId: string;
+    targetSession: string | null;
+    profile: ProviderProfile | null;
+    method: string;
+  },
+) {
+  reply.setCookie(
+    CLAIM_COOKIE,
+    holdPending({ kind: "collision", ...entry }),
+    pendingCookie(CLAIM_COOKIE_PATH),
+  );
+}
 
 function enabledProvider(req: FastifyRequest): ProviderId {
   const parsed = providerParam.safeParse(req.params);
@@ -50,6 +108,36 @@ const flowCookie = {
   sameSite: "lax" as const,
   path: FLOW_COOKIE_PATH,
 };
+
+const pendingGone = () =>
+  new Problem(
+    410,
+    "expired",
+    "Вход не завершён: прошло больше 10 минут или он открыт в другом браузере. Войдите ещё раз.",
+  );
+
+const IDP_PROBLEMS: Partial<Record<IdpError["code"], string>> = {
+  linked:
+    "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
+  blocked: "Эта полка заблокирована или удаляется.",
+  signup:
+    "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
+  domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
+};
+
+function idpProblem(error: IdpError) {
+  return new Problem(
+    error.code === "signup" ? 429 : 409,
+    error.code === "signup" ? "quota" : "conflict",
+    IDP_PROBLEMS[error.code] ??
+      "Не удалось завершить вход. Попробуйте ещё раз.",
+    { reason: error.code },
+  );
+}
+
+async function endSession(token: string) {
+  await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(token)]);
+}
 
 function failure(reply: FastifyReply, code: string, next: string | null) {
   const query = new URLSearchParams({ idp_error: code });
@@ -86,8 +174,17 @@ export function registerSignInRoutes(app: FastifyInstance) {
     // The tab's record of where the visitor came from (analytics.ts):
     // only a sanitised ref and referrer host travel in the sealed flow.
     const source = sanitizeSource({ ref: query.ref, referrer: query.referrer });
+    // known=1: this browser remembers a shelf (a localStorage hint that
+    // never leaves it); only the flag travels, sealed in the flow.
+    const known = query.known === "1";
     try {
-      const { location, cookie } = await startFlow(provider, next, null, source);
+      const { location, cookie } = await startFlow(
+        provider,
+        next,
+        null,
+        source,
+        known,
+      );
       reply.setCookie(FLOW_COOKIE, cookie, {
         ...flowCookie,
         secure: secure(),
@@ -109,9 +206,13 @@ export function registerSignInRoutes(app: FastifyInstance) {
       const actor = await identity(req);
       await limitAttempts(`idp-link:${actor.id}`, 20);
       try {
+        // Linking claims a provisional shelf (provisional.ts): back to the
+        // shelf with a note, not to the settings.
         const { location, cookie } = await startFlow(
           provider,
-          "/settings/agents?linked=1#sign-in",
+          actor.provisional
+            ? "/?claimed=1"
+            : "/settings/agents?linked=1#sign-in",
           actor.id,
         );
         reply.setCookie(FLOW_COOKIE, cookie, {
@@ -147,11 +248,30 @@ export function registerSignInRoutes(app: FastifyInstance) {
       logCallbackFailure(provider, "state");
       return failure(reply, "state", null);
     }
+    let profile: ProviderProfile | null = null;
     try {
-      const profile = await finishFlow(
+      profile = await finishFlow(
         flow,
         (req.query ?? {}) as Record<string, unknown>,
       );
+      // «Похоже, у вас уже есть полка»: nothing is created yet. The profile
+      // waits in memory for ten minutes; the URL carries only `next`.
+      if (!flow.link && flow.known && (await wouldOpenNewShelf(profile))) {
+        reply.setCookie(
+          PENDING_COOKIE,
+          holdPending({
+            kind: "choice",
+            profile,
+            next: flow.next,
+            source: flow.source ?? null,
+          }),
+          pendingCookie(FLOW_COOKIE_PATH),
+        );
+        return reply.redirect(
+          `/signup/choose?${new URLSearchParams({ next: flow.next })}`,
+          303,
+        );
+      }
       const result = await completeProviderSignIn(
         profile,
         flow.link,
@@ -161,20 +281,29 @@ export function registerSignInRoutes(app: FastifyInstance) {
       if (result.session) {
         // A Strict session cookie is not sent on this cross-site return,
         // so there is no earlier session of this browser to end here.
-        reply.setCookie("polka_session", result.session, {
-          httpOnly: true,
-          sameSite: "strict",
-          secure: secure(),
-          path: "/",
-          maxAge: 604800,
-        });
+        reply.setCookie("polka_session", result.session, sessionCookie());
       }
       return reply.redirect(flow.next, 303);
     } catch (error) {
+      if (error instanceof ClaimCollision && flow.link) {
+        // A provisional shelf met the person's existing one: /claim asks
+        // whether to merge. The identity waits in memory, not in the URL.
+        holdCollision(reply, {
+          provisionalId: flow.link,
+          targetId: error.targetId,
+          targetSession: null,
+          profile,
+          method: provider,
+        });
+        return reply.redirect("/claim?collision=1", 303);
+      }
       if (error instanceof IdpError) {
         logCallbackFailure(provider, error.code);
         if (flow.link) {
           const query = new URLSearchParams({ idp_error: error.code });
+          // A claim of a provisional shelf explains itself on /claim.
+          if (flow.next.startsWith("/?claimed=1"))
+            return reply.redirect(`/claim?${query}`, 303);
           return reply.redirect(`/settings/agents?${query}#sign-in`, 303);
         }
         return failure(reply, error.code, failTo);
@@ -183,6 +312,79 @@ export function registerSignInRoutes(app: FastifyInstance) {
       return failure(reply, "provider", failTo);
     }
   });
+
+  // The sign-in waiting on /signup/choose: which provider, nothing else.
+  app.get("/api/auth/idp/pending", async (req) => {
+    const entry = peekPending(req.cookies[PENDING_COOKIE], "choice");
+    if (!entry) throw pendingGone();
+    return {
+      provider: entry.profile.provider,
+      providerName: PROVIDER_NAMES[entry.profile.provider](),
+      next: entry.next,
+    };
+  });
+  // «Создать новую полку»: what the callback would have done.
+  app.post(
+    "/api/auth/idp/pending/create",
+    { bodyLimit: 1024 },
+    async (req, reply) => {
+      await limitAttempts(`idp-pending-ip:${req.ip}`, 30);
+      const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
+      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+      if (!entry) throw pendingGone();
+      let result;
+      try {
+        result = await completeProviderSignIn(
+          entry.profile,
+          null,
+          req.ip,
+          entry.source,
+        );
+      } catch (error) {
+        if (error instanceof IdpError) throw idpProblem(error);
+        throw error;
+      }
+      if (req.cookies.polka_session)
+        await endSession(req.cookies.polka_session);
+      reply.setCookie("polka_session", result.session!, sessionCookie());
+      return { next: entry.next };
+    },
+  );
+  // «Войти в существующую полку»: after that sign-in, the provider is linked
+  // to the shelf this browser is now signed in to. The ordinary link rules
+  // apply: a provider account already linked elsewhere is refused.
+  app.post(
+    "/api/auth/idp/pending/link",
+    { bodyLimit: 1024 },
+    async (req, reply) => {
+      const actor = await identity(req);
+      await limitAttempts(`idp-link:${actor.id}`, 20);
+      const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
+      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+      if (!entry) throw pendingGone();
+      try {
+        await completeProviderSignIn(entry.profile, actor.id, req.ip);
+      } catch (error) {
+        if (error instanceof IdpError) throw idpProblem(error);
+        if (error instanceof ClaimCollision)
+          throw idpProblem(new IdpError("linked"));
+        throw error;
+      }
+      return {
+        providerName: PROVIDER_NAMES[entry.profile.provider](),
+        next: entry.next,
+      };
+    },
+  );
+  app.post(
+    "/api/auth/idp/pending/cancel",
+    { bodyLimit: 1024 },
+    async (req, reply) => {
+      takePending(req.cookies[PENDING_COOKIE], "choice");
+      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+      return { ok: true };
+    },
+  );
 
   app.get("/api/account/identities", async (req) =>
     listIdentities(await identity(req)),

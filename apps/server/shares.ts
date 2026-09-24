@@ -45,6 +45,7 @@ import {
   revisionBlocked,
 } from "./content-moderation.ts";
 import { contentModels } from "./content-filter/model.ts";
+import { assertClaimed } from "./provisional.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
   mergeResults,
@@ -604,6 +605,8 @@ async function enableShareInTransaction(
   existingPolicy: ExistingPolicy,
   notices: ModerationNotice[] = [],
 ) {
+  // A provisional shelf links nothing until it is claimed (provisional.ts).
+  await assertClaimed(c, actor.id);
   const artifact = await lockArtifact(c, actor, artifactId);
   if (artifact.latest_revision_id !== input.expectedRevisionId)
     throw new Problem(

@@ -7,6 +7,7 @@ import { reviseWithEdits } from "./agent-edits.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
+import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { artifactStatusForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
@@ -23,7 +24,10 @@ import {
  * CI jobs, the CLI in scripts/polka-publish.mjs. The same agent tokens and
  * scopes as /mcp, the same publishFromAgent, no cookies.
  */
-export const PUBLISH_API_PATHS = new Set(["/api/v1/publish"]);
+export const PUBLISH_API_PATHS = new Set([
+  "/api/v1/publish",
+  "/api/v1/sign-in-link",
+]);
 /** The machine routes of this API: bearer only, exempt from the browser Origin rule. */
 export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
@@ -66,6 +70,8 @@ export const publishResponseSchema = z
     expiresNote: z.string().optional(),
     linkUnavailableReason: z.string().optional(),
     interactiveUnavailableReason: z.string().optional(),
+    // saved on a provisional shelf: where the owner claims it to share.
+    claimUrl: z.string().url().optional(),
   })
   .strict();
 
@@ -98,6 +104,14 @@ export const statusResponseSchema = z
       })
       .strict(),
     shelfUrl: z.string().url(),
+  })
+  .strict();
+export const signInLinkResponseSchema = z
+  .object({
+    url: z.string().url(),
+    expiresAt: z.iso.datetime(),
+    expiresInSeconds: z.number().int(),
+    instructions: z.string(),
   })
   .strict();
 export const editsResponseSchema = z
@@ -254,6 +268,10 @@ function publishResponse(result: PublishResult) {
     ...("linkUnavailableReason" in result && result.linkUnavailableReason
       ? { linkUnavailableReason: result.linkUnavailableReason }
       : {}),
+    // A provisional shelf: where the owner claims it to hand out links.
+    ...("claimUrl" in result && result.claimUrl
+      ? { claimUrl: result.claimUrl }
+      : {}),
     ...("interactiveUnavailableReason" in result &&
     result.interactiveUnavailableReason
       ? { interactiveUnavailableReason: result.interactiveUnavailableReason }
@@ -270,6 +288,16 @@ export async function registerPublishApi(app: FastifyInstance) {
       return publishResponse(
         await withFieldErrors(() => publishFromAgent(actor, req.body ?? {})),
       );
+    },
+  );
+  // A one-time link back into this shelf for the agent's owner
+  // (agent-sign-in-links.ts): OAuth connections only, 5 minutes, one use.
+  app.post(
+    "/api/v1/sign-in-link",
+    { bodyLimit: 1024 },
+    async (req, reply) => {
+      const actor = await bearerActor(req, reply);
+      return signInLinkResponseSchema.parse(await issueSignInLink(actor));
     },
   );
   app.get("/api/v1/status/:artifactId", async (req, reply) => {

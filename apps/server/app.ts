@@ -27,7 +27,14 @@ import { registerRecipientCta } from "./recipient-cta.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
-import { registerSignInRoutes } from "./sign-in-routes.ts";
+import { registerSignInRoutes, sessionCookie } from "./sign-in-routes.ts";
+import { holdSignInCollision, registerClaimRoutes } from "./claim-routes.ts";
+import { consumeSignInLink } from "./agent-sign-in-links.ts";
+import {
+  PROVISIONAL_IDLE_DAYS,
+  PROVISIONAL_SESSION_SECONDS,
+  renewProvisionalSession,
+} from "./provisional.ts";
 import { PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
@@ -76,6 +83,7 @@ import {
   issueConnectionCsrf,
   listAgentConnections,
   revokeAgentConnection,
+  setConnectionSignInLinks,
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
@@ -241,6 +249,7 @@ export async function createApp() {
   registerAgentContext(app, identity);
   registerTemplateLibraryRoutes(app, identity);
   registerSignInRoutes(app);
+  registerClaimRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
   app.get("/robots.txt", async (_req, reply) =>
     reply
@@ -383,29 +392,57 @@ export async function createApp() {
             })
             .strict()
             .optional(),
+          // The browser remembers another shelf (docs/specs/
+          // SIGN_IN_PROVIDERS.md § 1): ask before opening a new one.
+          knownShelf: z.boolean().optional(),
+          createNew: z.boolean().optional(),
         })
         .strict()
         .parse(req.body);
-      const token = await verifyEmailLogin(
+      // A provisional shelf in this browser is claimed by an address that
+      // has no shelf yet (provisional.ts).
+      let current: Awaited<ReturnType<typeof identity>> | null = null;
+      try {
+        current = await identity(req);
+      } catch {
+        current = null;
+      }
+      const result = await verifyEmailLogin(
         input.id,
         input.code,
         req.cookies.polka_email_challenge ?? "",
         req.ip,
         input.source,
+        {
+          provisionalId: current?.provisional ? current.id : null,
+          knownShelf: input.knownShelf,
+          createNew: input.createNew,
+        },
       );
+      if (result.kind === "new-shelf")
+        throw new Problem(
+          409,
+          "conflict",
+          "На этот адрес полки ещё нет. Похоже, у вас уже есть полка: войдите в неё или создайте новую.",
+          { reason: "new_shelf" },
+        );
+      reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
+      if (result.kind === "claimed") return { ok: true, claimed: true };
+      if (
+        await holdSignInCollision(
+          req,
+          reply,
+          { accountId: result.accountId, session: result.session },
+          "email",
+        )
+      )
+        return { ok: true, collision: true };
       if (req.cookies.polka_session)
         await db.query("DELETE FROM sessions WHERE hash=$1", [
           sha256(req.cookies.polka_session),
         ]);
-      reply.setCookie("polka_session", token, {
-        httpOnly: true,
-        sameSite: "strict",
-        secure: config.COOKIE_SECURE === "true",
-        path: "/",
-        maxAge: 604800,
-      });
-      reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
-      return { ok: true };
+      reply.setCookie("polka_session", result.session, sessionCookie());
+      return { ok: true, created: result.created };
     },
   );
   app.post("/api/login", { bodyLimit: 2048 }, async (req, reply) => {
@@ -417,17 +454,26 @@ export async function createApp() {
       .strict()
       .parse(req.body);
     const token = await signIn(input.name, input.password, req.ip);
+    const {
+      rows: [signedIn],
+    } = await db.query("SELECT account_id FROM sessions WHERE hash=$1", [
+      sha256(token),
+    ]);
+    if (
+      signedIn &&
+      (await holdSignInCollision(
+        req,
+        reply,
+        { accountId: signedIn.account_id, session: token },
+        "password",
+      ))
+    )
+      return { ok: true, collision: true };
     if (req.cookies.polka_session)
       await db.query("DELETE FROM sessions WHERE hash=$1", [
         sha256(req.cookies.polka_session),
       ]);
-    reply.setCookie("polka_session", token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: config.COOKIE_SECURE === "true",
-      path: "/",
-      maxAge: 604800,
-    });
+    reply.setCookie("polka_session", token, sessionCookie());
     return { ok: true };
   });
   app.post("/api/logout", async (req, reply) => {
@@ -444,9 +490,20 @@ export async function createApp() {
   // The web app's «who is here»: 200 for a guest too (account null), so a
   // guest's every page load is not a 401 in the console. /api/me keeps its
   // 401 for clients that need the session to be there.
-  app.get("/api/session", async (req) => {
+  app.get("/api/session", async (req, reply) => {
     try {
       const a = await identity(req);
+      // A provisional shelf lives while its browser comes back: its session
+      // (and cookie) move 30 days ahead on a visit.
+      if (
+        a.provisional &&
+        (await renewProvisionalSession(req.cookies.polka_session ?? ""))
+      )
+        reply.setCookie(
+          "polka_session",
+          req.cookies.polka_session!,
+          sessionCookie(PROVISIONAL_SESSION_SECONDS),
+        );
       // createdAt lets the app tell a shelf made a minute ago from an old
       // one (the «Полка создана» note after a sign-up from a shared link).
       return {
@@ -454,6 +511,9 @@ export async function createApp() {
           id: a.id,
           name: a.name,
           createdAt: a.createdAt ? a.createdAt.toISOString() : null,
+          ...(a.provisional
+            ? { provisional: true, idleDays: PROVISIONAL_IDLE_DAYS }
+            : {}),
         },
       };
     } catch (error) {
@@ -514,6 +574,38 @@ export async function createApp() {
       id(req),
     ),
   );
+  // «Может выдавать ссылки для входа» (agent-sign-in-links.ts).
+  app.post(
+    "/api/agent-connections/:id/sign-in-links",
+    { bodyLimit: 1024 },
+    async (req) =>
+      setConnectionSignInLinks(
+        await identity(req),
+        req.cookies.polka_session ?? "",
+        String(req.headers["x-polka-csrf"] ?? ""),
+        id(req),
+        req.body,
+      ),
+  );
+  // /enter#<token>: the page posts the fragment here (Origin-checked like
+  // every browser POST). The token never appears in a URL we receive.
+  app.post("/api/auth/enter", { bodyLimit: 1024 }, async (req, reply) => {
+    const { token } = z
+      .object({ token: z.string().max(64) })
+      .strict()
+      .parse(req.body);
+    const entered = await consumeSignInLink(token, req.ip);
+    if (req.cookies.polka_session)
+      await db.query("DELETE FROM sessions WHERE hash=$1", [
+        sha256(req.cookies.polka_session),
+      ]);
+    reply.setCookie(
+      "polka_session",
+      entered.session,
+      sessionCookie(entered.maxAge),
+    );
+    return { ok: true, clientName: entered.clientName };
+  });
   app.get(
     "/api/folders",
     async (req) =>

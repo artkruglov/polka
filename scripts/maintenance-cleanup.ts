@@ -1,5 +1,10 @@
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { cleanupEmailChallengesInTransaction } from "../apps/server/email-maintenance.ts";
+import {
+  idleProvisionalShelves,
+  retireProvisionalShelf,
+  type ProvisionalRetirementPolicy,
+} from "../apps/server/provisional-maintenance.ts";
 import type { MaintenanceClient } from "./maintenance-guard.ts";
 
 export type MaintenanceObjectVersion = {
@@ -43,6 +48,8 @@ export type MaintenanceCounters = {
   expiredUploadsReconciled: number;
   expiredDerivativesReconciled: number;
   emailChallengesRemoved: number;
+  /** Idle provisional shelves handed to the deletion pipeline. */
+  provisionalShelvesRetired: number;
 };
 
 export class MaintenanceStorageFailure extends Error {}
@@ -138,6 +145,11 @@ export type MaintenanceOptions = {
    * application knows the key, so neither the purge worker nor a restore can.
    */
   analyticsActorKey?: (accountId: string) => string;
+  /**
+   * With account deletion enabled: its policy. Provisional shelves nobody
+   * used for `idleDays` are then deleted (apps/server/provisional-maintenance.ts).
+   */
+  provisionalRetirement?: ProvisionalRetirementPolicy;
 };
 
 export async function runMaintenanceCleanup(
@@ -246,6 +258,22 @@ export async function runMaintenanceCleanup(
     if (committed) expiredDerivativesReconciled++;
   }
 
+  let provisionalShelvesRetired = 0;
+  if (options.provisionalRetirement) {
+    const policy = options.provisionalRetirement;
+    const idle = await scope.transaction(async (c) => {
+      assertActive(scope.signal);
+      return idleProvisionalShelves(c, policy);
+    });
+    for (const shelf of idle) {
+      assertActive(scope.signal);
+      if (
+        await scope.transaction((c) => retireProvisionalShelf(c, shelf, policy))
+      )
+        provisionalShelvesRetired++;
+    }
+  }
+
   const emailChallengesRemoved = await scope.transaction(async (c) => {
     for (const sql of [
       "DELETE FROM viewer_grants WHERE expires_at<now()",
@@ -256,6 +284,8 @@ export async function runMaintenanceCleanup(
       // Consumed codes stay a day so a late replay still revokes its grant.
       "DELETE FROM oauth_authorizations WHERE expires_at<now()-interval '1 day'",
       "DELETE FROM oauth_refresh_tokens WHERE expires_at<now()",
+      // Sign-in links from agents live 5 minutes; a day later they go.
+      "DELETE FROM agent_sign_in_links WHERE expires_at<now()-interval '1 day'",
       // The privacy policy keeps a report for one year.
       "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
       // The moderation journal is kept for 3 years (its trigger refuses any
@@ -296,5 +326,6 @@ export async function runMaintenanceCleanup(
     expiredUploadsReconciled,
     expiredDerivativesReconciled,
     emailChallengesRemoved,
+    provisionalShelvesRetired,
   };
 }
