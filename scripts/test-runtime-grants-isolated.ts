@@ -854,6 +854,7 @@ let restoreTargetOperationalPassed = false;
 let ledgerReaderResidueRemoved = false;
 let appFlowPassed = false;
 let moderationPassed = false;
+let accountMergePassed = false;
 let residueRemoved = false;
 let failed = false;
 let failureStage = "setup";
@@ -1113,6 +1114,25 @@ try {
   );
   moderationPassed = moderationCode === 0;
   if (!moderationPassed) throw new Error("Runtime moderation failed");
+  // The operator merge script (scripts/account-merge.ts) runs as the runtime
+  // role on the hosted VM too.
+  failureStage = "runtime-account-merge";
+  const mergeCode = await spawnTestWithEnv(
+    "../tests/account-merge.test.ts",
+    {
+      ...common,
+      S3_BUCKET: targetBucket,
+      LINK_KEY: randomBytes(64).toString("base64url"),
+      MAIL_MODE: "disabled",
+      // Old links are checked through the static document route.
+      HTML_LIVE_MODE: "disabled",
+      HTML_LIVE_ENABLED: "false",
+      RUNTIME_GRANTS_EXPECT_ROLE: runtimeRole,
+    },
+    120_000,
+  );
+  accountMergePassed = mergeCode === 0;
+  if (!accountMergePassed) throw new Error("Runtime account merge failed");
 } catch {
   failed = true;
 } finally {
@@ -1199,6 +1219,7 @@ const evidence = {
   defaultAclDenials: roleAssertionsPassed,
   appFlowPassed,
   moderationPassed,
+  accountMergePassed,
   triggerAndCascadePassed: roleAssertionsPassed && appFlowPassed,
   syntheticResidueRemoved: residueRemoved,
   workingResourcesUsed: false,
