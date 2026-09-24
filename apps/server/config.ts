@@ -18,6 +18,10 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // GitHub API token for importing gists (docs/specs/URL_IMPORT_SUPPORT.md).
+    // Optional: without it GitHub allows 60 requests an hour per IP. A
+    // fine-grained token with no permissions is enough (public gists only).
+    GITHUB_TOKEN: unsetIfEmpty(z.string().max(255)),
     DATABASE_URL: z.string().url(),
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),

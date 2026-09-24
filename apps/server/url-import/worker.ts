@@ -8,6 +8,7 @@ import {
 import { MCP_AUDIENCE } from "../service-auth.ts";
 import type { Actor } from "../artifacts.ts";
 import { captureHtmlUrl, HtmlCaptureError } from "./html-capture.ts";
+import { prepareImport } from "./prepare.ts";
 import { ImportFetchError } from "./public-fetch.ts";
 import { authorizeImport, claimImportJob, requireImportLease } from "./jobs.ts";
 import { buildInlineRevisionWithRunner } from "../bundle-derivatives.ts";
@@ -40,7 +41,7 @@ const save: Save = (actor, body, hooks) =>
 /** One durable job per call. Scheduling is separate; no secrets or raw errors in logs. */
 export async function runImportOnce({
   run = transaction,
-  prepare = captureHtmlUrl,
+  prepare = prepareImport,
   persist = save,
 }: {
   run?: Run;

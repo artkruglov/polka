@@ -26,6 +26,7 @@ x-runtime-env: &runtime-env
   # this bridge-network shape cannot expose; see deploy/BASE.md.
   HTML_LIVE_MODE: ${HTML_LIVE_MODE:-disabled}
   URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   ACCOUNT_DELETION_ENABLED: "false"
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
   MAIL_MODE: "disabled"

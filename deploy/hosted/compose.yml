@@ -46,7 +46,10 @@ x-runtime-env: &runtime-env
   # disabled | production. production needs VIEWER_HOST_NAME DNS/TLS in place.
   HTML_LIVE_MODE: ${HTML_LIVE_MODE:-disabled}
   ACCOUNT_DELETION_ENABLED: "false"
-  URL_IMPORT_ENABLED: "false"
+  # Import by link (docs/specs/URL_IMPORT_SUPPORT.md). GITHUB_TOKEN is optional:
+  # gists without it are limited to 60 GitHub API requests an hour.
+  URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   MAIL_MODE: ${MAIL_MODE:-disabled}
   # Used only with MAIL_MODE=smtp (for example Yandex Cloud Postbox).
   SMTP_HOST: ${SMTP_HOST:-}
