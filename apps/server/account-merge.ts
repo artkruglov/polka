@@ -547,23 +547,19 @@ export async function mergeAccounts(input: {
           newVersion: version,
         });
       }
-      await c.query(
-        `CREATE TEMPORARY TABLE merge_objects(
-           old_key text, old_version text, new_key text, new_version text,
-           PRIMARY KEY(old_key,old_version)
-         ) ON COMMIT DROP`,
+      // The key mapping travels as one JSON parameter: the application role
+      // has no TEMPORARY privilege on hosted installations.
+      const objectMap = JSON.stringify(
+        mapping.map((item) => ({
+          old_key: item.oldKey,
+          old_version: item.oldVersion,
+          new_key: item.newKey,
+          new_version: item.newVersion,
+        })),
       );
-      if (mapping.length)
-        await c.query(
-          `INSERT INTO merge_objects
-           SELECT * FROM unnest($1::text[],$2::text[],$3::text[],$4::text[])`,
-          [
-            mapping.map((item) => item.oldKey),
-            mapping.map((item) => item.oldVersion),
-            mapping.map((item) => item.newKey),
-            mapping.map((item) => item.newVersion),
-          ],
-        );
+      const mergeObjects = (param: string) =>
+        `(SELECT * FROM jsonb_to_recordset(${param}::jsonb)
+            AS o(old_key text,old_version text,new_key text,new_version text))`;
 
       // 2. The works and everything that points at them, in ONE statement:
       // foreign keys include the tenant, so they are checked once all rows
@@ -598,7 +594,7 @@ export async function mergeAccounts(input: {
            UPDATE revisions r SET tenant_id=$2,
                   created_by=CASE WHEN r.created_by=$3 THEN $4 ELSE r.created_by END,
                   object_key=m.new_key,object_version=m.new_version
-             FROM merge_objects m
+             FROM ${mergeObjects("$5")} m
             WHERE r.tenant_id=$1 AND m.old_key=r.object_key
               AND m.old_version=r.object_version
            RETURNING r.id
@@ -606,7 +602,7 @@ export async function mergeAccounts(input: {
          moved_files AS (
            UPDATE revision_files f
               SET object_key=m.new_key,object_version=m.new_version
-             FROM merge_objects m, revisions r
+             FROM ${mergeObjects("$5")} m, revisions r
             WHERE r.id=f.revision_id AND r.tenant_id=$1
               AND m.old_key=f.object_key AND m.old_version=f.object_version
            RETURNING f.revision_id
@@ -628,7 +624,7 @@ export async function mergeAccounts(input: {
                   d.reason,d.error_path,d.created_at,d.updated_at,
                   d.artifact_lifecycle_version
              FROM old_derivatives d
-             LEFT JOIN merge_objects m
+             LEFT JOIN ${mergeObjects("$5")} m
                ON m.old_key=d.object_key AND m.old_version=d.object_version
            RETURNING id
          ),
@@ -658,7 +654,7 @@ export async function mergeAccounts(input: {
                 (SELECT count(*) FROM moved_reactions) AS reactions,
                 (SELECT count(*) FROM moved_reports) AS reports,
                 (SELECT count(*) FROM moved_blocks) AS blocks`,
-        [from.tenant, into.tenant, from.id, into.id],
+        [from.tenant, into.tenant, from.id, into.id, objectMap],
       );
       const stillThere = await c.query(
         "SELECT 1 FROM revisions WHERE tenant_id=$1 LIMIT 1",
@@ -714,17 +710,17 @@ export async function mergeAccounts(input: {
       // Upload receipts name the same objects as the versions they made.
       await c.query(
         `UPDATE upload_files f SET object_key=m.new_key,object_version=m.new_version
-           FROM merge_objects m, uploads u
+           FROM ${mergeObjects("$2")} m, uploads u
           WHERE u.id=f.upload_id AND u.tenant_id=$1
             AND m.old_key=f.object_key AND m.old_version=f.object_version`,
-        [into.tenant],
+        [into.tenant, objectMap],
       );
       await c.query(
         `UPDATE uploads u SET object_version=m.new_version
-           FROM merge_objects m
+           FROM ${mergeObjects("$3")} m
           WHERE u.tenant_id=$1 AND u.object_version IS NOT NULL
             AND m.old_key=$2||'/'||u.id::text AND m.old_version=u.object_version`,
-        [into.tenant, from.tenant],
+        [into.tenant, from.tenant, objectMap],
       );
 
       // 4. What the source wrote elsewhere, and who it is.
