@@ -95,5 +95,6 @@
   "tests/comments-modes.test.ts",
   "tests/extension-bridge.test.ts",
   "tests/extension-extract.test.ts",
+  "tests/bookmarklet.test.ts",
   "tests/extension-oauth.test.ts"
 ]
