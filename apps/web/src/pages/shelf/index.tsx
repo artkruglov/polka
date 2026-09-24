@@ -196,6 +196,7 @@ export function ShelfPage({
               variant="card"
               onSaved={onSaved}
               onShare={(work) => open(work.id, "share")}
+              onUpload={() => setPanel("upload")}
               onDismiss={() => {
                 setFirstRunHidden(true);
                 requestAnimationFrame(() => libraryHeading.current?.focus());

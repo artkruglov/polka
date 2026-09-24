@@ -22,6 +22,7 @@ import { identity, limitAttempts, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { registerEnterpriseRequests } from "./enterprise-requests.ts";
+import { registerRecipientCta } from "./recipient-cta.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
@@ -426,7 +427,15 @@ export async function createApp() {
   app.get("/api/session", async (req) => {
     try {
       const a = await identity(req);
-      return { account: { id: a.id, name: a.name } };
+      // createdAt lets the app tell a shelf made a minute ago from an old
+      // one (the «Полка создана» note after a sign-up from a shared link).
+      return {
+        account: {
+          id: a.id,
+          name: a.name,
+          createdAt: a.createdAt ? a.createdAt.toISOString() : null,
+        },
+      };
     } catch (error) {
       if (error instanceof Problem && error.status === 401) return { account: null };
       throw error;
@@ -1020,6 +1029,7 @@ export async function createApp() {
   registerModerationRoutes(app);
   registerCommentRoutes(app);
   registerEnterpriseRequests(app);
+  registerRecipientCta(app);
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);

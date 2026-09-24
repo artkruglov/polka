@@ -4,6 +4,7 @@
   "tests/away-links.test.ts",
   "tests/ops-status.test.ts",
   "tests/analytics.test.ts",
+  "tests/recipient-cta.test.ts",
   "tests/storage-bootstrap.test.ts",
   "tests/viewer-config.test.ts",
   "tests/account-deletion-config.test.ts",
@@ -85,6 +86,7 @@
   "tests/edit-patch.test.ts",
   "tests/comment-overlay-dom.test.ts",
   "tests/share-return.test.ts",
+  "tests/recipient-convert.test.ts",
   "tests/sign-in-providers.test.ts",
   "tests/email-signup-domains.test.ts",
   "tests/comments-modes.test.ts"

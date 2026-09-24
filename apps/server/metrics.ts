@@ -58,7 +58,101 @@ const DEFINITIONS = {
     "Of a sign-up week's accounts, the share active (any signed-in or agent action) on day 1, on days 7–13 and on days 30–36 after sign-up. Only accounts whose window is over are counted (eligible).",
   sources:
     "ref:<value> from a link's ?ref=, else the referrer host, else (direct). A sign-up carries the source of the tab it came from.",
+  recipients:
+    "Guests of shared works, by week of the event: links opened (a link once a day, editorial links excluded), loads that showed the bar «сделали с ИИ и сохранили на Полку» (every guest load, editorial pages too), openings of the card, presses by action, and sign-ups whose source is ref:share or ref:share-remix (the tab's source is set when the prompt is pressed). Anonymous counters; conversions are ratios of the counts, not of people.",
 };
+
+/** The prompt's presses, in the report's column order (analytics.ts). */
+export const RECIPIENT_ACTIONS = [
+  "try",
+  "remix",
+  "copy_phrase",
+  "yandex",
+  "email",
+] as const;
+type RecipientAction = (typeof RECIPIENT_ACTIONS)[number];
+
+export type RecipientWeek = {
+  week: string;
+  opened: number;
+  barViews: number;
+  cardViews: number;
+  clicks: Record<RecipientAction, number>;
+  clicksTotal: number;
+  signups: number;
+  conversion: {
+    barToCard: number | null;
+    cardToClick: number | null;
+    clickToSignup: number | null;
+    barToSignup: number | null;
+  };
+};
+
+const recipientConversion = (row: Omit<RecipientWeek, "conversion" | "week">) => ({
+  barToCard: rate(row.cardViews, row.barViews),
+  cardToClick: rate(row.clicksTotal, row.cardViews),
+  clickToSignup: rate(row.signups, row.clicksTotal),
+  barToSignup: rate(row.signups, row.barViews),
+});
+
+const emptyRecipientWeek = () => ({
+  opened: 0,
+  barViews: 0,
+  cardViews: 0,
+  clicks: Object.fromEntries(RECIPIENT_ACTIONS.map((a) => [a, 0])) as Record<
+    RecipientAction,
+    number
+  >,
+  clicksTotal: 0,
+  signups: 0,
+});
+
+/**
+ * «Получатели → регистрации»: the recipient page's prompt, from the daily
+ * counters only (there is no actor on any of these events).
+ */
+export function recipientFunnel(
+  weeks: string[],
+  daily: Array<{ day: string; name: string; source: string; detail: string; count: number }>,
+) {
+  const byWeek = new Map(weeks.map((week) => [week, emptyRecipientWeek()]));
+  for (const row of daily) {
+    const entry = byWeek.get(weekOf(row.day));
+    if (!entry) continue;
+    if (row.name === "share_opened") entry.opened += row.count;
+    else if (row.name === "recipient_cta_view") {
+      if (row.detail === "bar") entry.barViews += row.count;
+      else if (row.detail === "card") entry.cardViews += row.count;
+    } else if (row.name === "recipient_cta_click") {
+      if ((RECIPIENT_ACTIONS as readonly string[]).includes(row.detail)) {
+        entry.clicks[row.detail as RecipientAction] += row.count;
+        entry.clicksTotal += row.count;
+      }
+    } else if (
+      row.name === "signup_completed" &&
+      (row.source === "ref:share" || row.source === "ref:share-remix")
+    )
+      entry.signups += row.count;
+  }
+  const rows: RecipientWeek[] = weeks.map((week) => {
+    const entry = byWeek.get(week)!;
+    return { week, ...entry, conversion: recipientConversion(entry) };
+  });
+  const total = emptyRecipientWeek();
+  for (const row of rows) {
+    total.opened += row.opened;
+    total.barViews += row.barViews;
+    total.cardViews += row.cardViews;
+    total.clicksTotal += row.clicksTotal;
+    total.signups += row.signups;
+    for (const action of RECIPIENT_ACTIONS) total.clicks[action] += row.clicks[action];
+  }
+  return {
+    actions: RECIPIENT_ACTIONS,
+    weeks: rows,
+    total: { ...total, conversion: recipientConversion(total) },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Dates as YYYY-MM-DD strings (UTC).
@@ -324,6 +418,7 @@ export async function metricsReport(
     pages: [...pages.entries()]
       .map(([path, visits]) => ({ path, visits }))
       .sort((a, b) => b.visits - a.visits),
+    recipients: recipientFunnel(weeks, daily),
     signupMethods: [...methods.entries()]
       .map(([method, signups]) => ({ method, signups }))
       .sort((a, b) => b.signups - a.signups),
