@@ -44,7 +44,7 @@ The tool description states exactly what this installation accepts; follow it. W
 - Give the returned `url` (https://polochka.app/s#…) as the link. Say the work is saved privately on their shelf and the link is unlisted: only people they send it to can open it, until `expiresAt` or until they revoke it.
 - `expiresNote` present: the link was issued for fewer days (new account); say so.
 - `url` null: the work is saved privately; `shelfUrl` opens only for the owner and is not a share link. Relay `linkUnavailableReason`. `claimUrl` present: the shelf is provisional (started without sign-up); give the user that address to claim it with Яндекс ID, VK ID or email, then links work.
-- Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf and give the returned url exactly as it is (a one-time sign-in link, 5 minutes). Never open it yourself.
+- Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf and give the returned url exactly as it is (the shelf's sign-in page, or a one-time link for a provisional shelf). Never open it yourself.
 - `interactiveUnavailableReason` present: say scripts will not run for recipients and why.
 
 ## 5. Moderation

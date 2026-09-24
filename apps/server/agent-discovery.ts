@@ -160,7 +160,7 @@ polka_note {artifactId, body, anchor?, shareId?} adds the owner's own note to a 
 - Give the human the \`url\` (${origin}/s#…) as the link. Say the work is saved privately on their shelf and the link is unlisted: only people they send it to can open it, until it expires (expiresAt) or they revoke it.
 - If \`moderation\` is present, relay moderationMessage and do not call the link ready.
 - If \`url\` is null, say the work is saved privately (shelfUrl opens only for the owner) and relay linkUnavailableReason. With \`claimUrl\` the shelf is provisional (started without sign-up): links come once the owner claims it there with Яндекс ID, VK ID or email.
-- Right after connecting, tell the human once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf (OAuth connections; POST ${origin}/api/v1/sign-in-link over HTTP) and give them the url exactly as returned: a one-time sign-in link for 5 minutes. Never open it yourself.
+- Right after connecting, tell the human once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf (OAuth connections; POST ${origin}/api/v1/sign-in-link over HTTP) and give them the url exactly as returned: the shelf's sign-in page (kind hint, no secret) or, for a provisional shelf whose owner granted sign_in, a one-time link for 5 minutes (kind link). Never open it yourself.
 - Never print tokens, Authorization headers, OAuth codes or email codes in chat, logs, commits or command lines.
 `;
 }
@@ -219,7 +219,7 @@ The tool description states exactly what this installation accepts; follow it. W
 - Give the returned \`url\` (${origin}/s#…) as the link. Say the work is saved privately on their shelf and the link is unlisted: only people they send it to can open it, until \`expiresAt\` or until they revoke it.
 - \`expiresNote\` present: the link was issued for fewer days (new account); say so.
 - \`url\` null: the work is saved privately; \`shelfUrl\` opens only for the owner and is not a share link. Relay \`linkUnavailableReason\`. \`claimUrl\` present: the shelf is provisional (started without sign-up); give the user that address to claim it with Яндекс ID, VK ID or email, then links work.
-- Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf and give the returned url exactly as it is (a one-time sign-in link, 5 minutes). Never open it yourself.
+- Right after connecting, tell the user once: «Если понадобится открыть полку в браузере — скажите мне «Открой мою Полку»». When they ask, call polka_open_shelf and give the returned url exactly as it is (the shelf's sign-in page, or a one-time link for a provisional shelf). Never open it yourself.
 - \`interactiveUnavailableReason\` present: say scripts will not run for recipients and why.
 
 ## 5. Moderation

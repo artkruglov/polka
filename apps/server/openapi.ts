@@ -289,7 +289,7 @@ export function openApiDocument(origin: string) {
           operationId: "signInLink",
           summary: "A one-time link that signs the owner's browser in",
           description:
-            "For an OAuth connection (a chat connector) whose owner asks to open Полка in a browser («Открой мою Полку»). Returns url = <origin>/enter#<token>: give it to the user exactly as returned and never open it yourself. It works once, within 5 minutes, and signs the browser in to the shelf this connection saves to. Refused for static tokens and when the owner switched links off for the connection. At most 5 links per connection per hour.",
+            "When the owner asks to open Полка in a browser («Открой мою Полку»). For a claimed shelf returns kind hint: url = <origin>/signin?shelf=… (no secret), the shelf's sign-in page. For a provisional shelf returns kind link: url = <origin>/enter#<token>, one use within 5 minutes after the user confirms — only for an OAuth connection granted the sign_in permission. Give the url to the user exactly as returned and never open it yourself. At most 5 per connection per hour.",
           security: [{ bearerAuth: ["context"] }],
           responses: {
             "200": {
@@ -302,7 +302,7 @@ export function openApiDocument(origin: string) {
             },
             "401": common["401"],
             "403": problem(
-              "A static token, or the owner switched sign-in links off for this connection.",
+              "A provisional shelf and a connection without the sign_in permission (or a static token).",
               {
                 token: {
                   code: "forbidden",

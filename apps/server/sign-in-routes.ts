@@ -24,7 +24,7 @@ import {
   wouldOpenNewShelf,
 } from "./account-identities.ts";
 import { sanitizeSource } from "./analytics.ts";
-import { identity, limitAttempts } from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { missing, Problem } from "./errors.ts";
@@ -177,6 +177,11 @@ export function registerSignInRoutes(app: FastifyInstance) {
     // known=1: this browser remembers a shelf (a localStorage hint that
     // never leaves it); only the flag travels, sealed in the flow.
     const known = query.known === "1";
+    // A browser in a provisional shelf by an agent's link (a weak session)
+    // signs in for real here; afterwards /claim offers to carry that
+    // shelf's works over, never attaching this identity to it.
+    const current = await identity(req).catch(() => null);
+    const carry = current?.provisional && current.weak ? current.id : null;
     try {
       const { location, cookie } = await startFlow(
         provider,
@@ -184,6 +189,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
         null,
         source,
         known,
+        carry,
       );
       reply.setCookie(FLOW_COOKIE, cookie, {
         ...flowCookie,
@@ -204,6 +210,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const provider = enabledProvider(req);
       const actor = await identity(req);
+      assertStrongSession(actor);
       await limitAttempts(`idp-link:${actor.id}`, 20);
       try {
         // Linking claims a provisional shelf (provisional.ts): back to the
@@ -256,7 +263,12 @@ export function registerSignInRoutes(app: FastifyInstance) {
       );
       // «Похоже, у вас уже есть полка»: nothing is created yet. The profile
       // waits in memory for ten minutes; the URL carries only `next`.
-      if (!flow.link && flow.known && (await wouldOpenNewShelf(profile))) {
+      if (
+        !flow.link &&
+        !flow.carry &&
+        flow.known &&
+        (await wouldOpenNewShelf(profile))
+      ) {
         reply.setCookie(
           PENDING_COOKIE,
           holdPending({
@@ -278,6 +290,18 @@ export function registerSignInRoutes(app: FastifyInstance) {
         req.ip,
         flow.source ?? null,
       );
+      // Signed in for real from a provisional shelf opened by an agent's
+      // link: the session is held back and /claim asks what to carry over.
+      if (flow.carry && result.session && result.accountId !== flow.carry) {
+        holdCollision(reply, {
+          provisionalId: flow.carry,
+          targetId: result.accountId,
+          targetSession: result.session,
+          profile: null,
+          method: provider,
+        });
+        return reply.redirect("/claim?collision=1", 303);
+      }
       if (result.session) {
         // A Strict session cookie is not sent on this cross-site return,
         // so there is no earlier session of this browser to end here.
@@ -358,6 +382,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
     { bodyLimit: 1024 },
     async (req, reply) => {
       const actor = await identity(req);
+      assertStrongSession(actor);
       await limitAttempts(`idp-link:${actor.id}`, 20);
       const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
       reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
@@ -394,7 +419,9 @@ export function registerSignInRoutes(app: FastifyInstance) {
     { bodyLimit: 1024 },
     async (req) => {
       const { provider } = providerParam.parse(req.params);
-      return unlinkIdentity(await identity(req), provider);
+      const actor = await identity(req);
+      assertStrongSession(actor);
+      return unlinkIdentity(actor, provider);
     },
   );
 }

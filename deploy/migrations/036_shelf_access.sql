@@ -33,8 +33,35 @@ ALTER TABLE accounts
 CREATE INDEX accounts_unclaimed_provisional ON accounts(provisional_at)
   WHERE provisional_at IS NOT NULL AND claimed_at IS NULL;
 
+-- Off for every connection that exists: consent already given is not widened
+-- after the fact. A new connection gets it only when its owner ticks the
+-- sign_in permission on the consent page.
 ALTER TABLE agent_connections
-  ADD COLUMN sign_in_links boolean NOT NULL DEFAULT true;
+  ADD COLUMN sign_in_links boolean NOT NULL DEFAULT false;
+
+-- sign_in: «Давать ссылку для входа» — a separate permission, off by
+-- default on the consent page, never implied by context.
+ALTER TABLE agent_connections DROP CONSTRAINT agent_connections_scopes_check,
+  ADD CONSTRAINT agent_connections_scopes_check CHECK (
+    cardinality(scopes) BETWEEN 1 AND 8
+    AND scopes <@ ARRAY['context','read','source:read','capture','revise','share','manage','sign_in']::text[]);
+ALTER TABLE oauth_authorizations
+  DROP CONSTRAINT oauth_authorizations_requested_scopes_check,
+  ADD CONSTRAINT oauth_authorizations_requested_scopes_check CHECK (
+    cardinality(requested_scopes) BETWEEN 1 AND 8
+    AND requested_scopes <@ ARRAY['context','read','source:read','capture','revise','share','manage','sign_in']::text[]),
+  DROP CONSTRAINT oauth_authorizations_granted_scopes_check,
+  ADD CONSTRAINT oauth_authorizations_granted_scopes_check CHECK (
+    cardinality(granted_scopes) BETWEEN 1 AND 8
+    AND granted_scopes <@ ARRAY['context','read','source:read','capture','revise','share','manage','sign_in']::text[]);
+
+-- How strongly a session proves its owner. agent_link: opened by a sign-in
+-- link from an agent; it browses and may be upgraded by a real sign-in, but
+-- cannot claim, merge, link or unlink sign-in methods, manage agents or
+-- delete the account.
+ALTER TABLE sessions
+  ADD COLUMN assurance text NOT NULL DEFAULT 'full'
+    CHECK (assurance IN ('full','agent_link'));
 
 CREATE TABLE agent_sign_in_links (
   token_hash text PRIMARY KEY CHECK (token_hash ~ '^[a-f0-9]{64}$'),

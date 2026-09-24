@@ -9,6 +9,7 @@ import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 import {
   LinkProviderButtons,
+  ProviderButtons,
   providerErrorMessage,
 } from "../../features/provider-sign-in/index.tsx";
 
@@ -17,6 +18,12 @@ type Collision = {
   methodName: string;
   targetName: string;
   works: number;
+  connections: Array<{
+    id: string;
+    name: string;
+    kind: "oauth" | "token";
+    lastSeenAt: string | null;
+  }>;
 };
 
 /**
@@ -38,20 +45,27 @@ export function Claim() {
     providerErrorMessage(query.get("idp_error")) ?? "",
   );
   const [busy, setBusy] = useState<"merge" | "switch" | "cancel" | null>(null);
+  // A session from an agent's link: sign in for real, then carry works over.
+  const [weak, setWeak] = useState(false);
+  // Agents that move with the works: the person ticks their own, none by default.
+  const [keep, setKeep] = useState<string[]>([]);
   useEffect(() => {
     if (account === null)
       location.replace(`/signup?${new URLSearchParams({ next: "/" })}`);
     if (!account) return;
     Promise.all([
       loadCapabilities(),
-      request<{ provisional: boolean; collision: Collision | null }>(
-        "/account/claim",
-      ),
+      request<{
+        provisional: boolean;
+        weak: boolean;
+        collision: Collision | null;
+      }>("/account/claim"),
     ])
       .then(([capabilities, claim]) => {
         setProviders(capabilities.signInProviders);
         setEmailLogin(capabilities.emailLogin !== "disabled");
         setCollision(claim.collision);
+        setWeak(claim.weak);
         if (!claim.provisional && !claim.collision) location.replace("/");
         setLoaded(true);
       })
@@ -65,7 +79,10 @@ export function Claim() {
     setBusy(kind);
     setError("");
     try {
-      await request(`/account/claim/${kind}`, {});
+      await request(
+        `/account/claim/${kind}`,
+        kind === "merge" ? { connections: keep } : {},
+      );
       if (kind === "cancel") {
         setCollision(null);
         setBusy(null);
@@ -97,10 +114,43 @@ export function Claim() {
               {collision.methodName} открывает её. Объединить с ней временную
               полку?{" "}
               {collision.works
-                ? `Работы (${collision.works}) и подключённые агенты перейдут туда, ссылки сохранятся.`
-                : "Подключённые агенты перейдут туда."}{" "}
+                ? `Работы (${collision.works}) перейдут туда.`
+                : "Работ на временной полке нет."}{" "}
               Временная полка закроется.
             </p>
+            {collision.connections.length > 0 && (
+              <fieldset className="claim-connections">
+                <legend>
+                  Какие агенты перенести? Отметьте только тех, кого подключали
+                  вы сами; остальные будут отключены.
+                </legend>
+                {collision.connections.map((connection) => (
+                  <label key={connection.id} className="claim-connection">
+                    <input
+                      type="checkbox"
+                      checked={keep.includes(connection.id)}
+                      disabled={busy !== null}
+                      onChange={() =>
+                        setKeep((current) =>
+                          current.includes(connection.id)
+                            ? current.filter((id) => id !== connection.id)
+                            : [...current, connection.id],
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>{connection.name}</strong>
+                      <small>
+                        {connection.kind === "oauth" ? "вход через браузер" : "токен"}
+                        {connection.lastSeenAt
+                          ? ` · последний раз ${new Date(connection.lastSeenAt).toLocaleString("ru-RU")}`
+                          : " · запросов ещё не было"}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
             {error && <Notice tone="error">{error}</Notice>}
             <div className="shelf-choice">
               <Button
@@ -138,7 +188,26 @@ export function Claim() {
               работы и агенты останутся на месте.
             </p>
             {error && <Notice tone="error">{error}</Notice>}
-            {loaded && (
+            {loaded && weak && (
+              <>
+                <Notice>
+                  Вы вошли по ссылке от агента. Чтобы закрепить полку, войдите
+                  в свою полку (или создайте её) через Яндекс ID, VK ID или по
+                  почте — затем работы этой временной полки можно будет
+                  перенести туда.
+                </Notice>
+                <ProviderButtons providers={providers} next="/" />
+                {emailLogin && (
+                  <a
+                    className="ui-button ui-button--secondary ui-button--block"
+                    href={`/signup?${new URLSearchParams({ claim: "1", next: "/" })}`}
+                  >
+                    <Mail /> По почте
+                  </a>
+                )}
+              </>
+            )}
+            {loaded && !weak && (
               <>
                 <LinkProviderButtons providers={providers} onError={setError} />
                 {emailLogin && (

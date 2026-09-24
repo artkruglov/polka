@@ -10,6 +10,7 @@
 //
 // Bodies are plain text. Nothing here renders HTML; the web app shows the
 // text as text and links as text. Authors are shown by display name only.
+import { assertAuthorisedForPublic } from "./provisional.ts";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import {
@@ -841,6 +842,7 @@ export async function createSharedComment(
   if (commentsMode() === "off") throw commentsOff();
   if (!writer)
     throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
+  await assertAuthorisedForPublic(db, writer.id);
   await limitAuthor(writer);
   const notices: CommentNotice[] = [];
   const result = await transaction(async (c) =>
@@ -859,6 +861,7 @@ export async function reactShared(
   if (commentsMode() === "off") throw commentsOff();
   if (!writer)
     throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
+  await assertAuthorisedForPublic(db, writer.id);
   await limitAuthor(writer);
   return transaction(async (c) =>
     reactInContext(c, await lockShareByToken(c, token), writer, emoji, anchor),

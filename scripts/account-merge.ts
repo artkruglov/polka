@@ -3,7 +3,7 @@
 // Runs as the runtime database role, like the moderation scripts; prints no
 // tokens and no content.
 //
-//   npm run account:merge -- --from <login|email|id> --into <login|email|id> [--dry-run] [--reason "…"]
+//   npm run account:merge -- --from <login|email|id> --into <login|email|id> --proof <ticket> [--dry-run] [--reason "…"]
 //
 // Start with --dry-run: it prints what would move and changes nothing.
 import { parseArgs } from "node:util";
@@ -18,7 +18,7 @@ import { db } from "../apps/server/db.ts";
 import { s3 } from "../apps/server/storage.ts";
 
 const USAGE =
-  'Usage: account-merge.ts --from <login|email|id> --into <login|email|id> [--dry-run] [--reason "…"] [--json]';
+  'Usage: account-merge.ts --from <login|email|id> --into <login|email|id> --proof <номер обращения> [--dry-run] [--reason "…"] [--json]';
 
 export async function runAccountMerge(argv: string[]) {
   const { values } = parseArgs({
@@ -28,6 +28,7 @@ export async function runAccountMerge(argv: string[]) {
       into: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       reason: { type: "string" },
+      proof: { type: "string" },
       json: { type: "boolean", default: false },
     },
     strict: true,
@@ -43,6 +44,7 @@ export async function runAccountMerge(argv: string[]) {
       dryRun: values["dry-run"],
       actor: "operator-script",
       reason: values.reason,
+      proof: values.proof,
     });
     console.log(
       values.json ? JSON.stringify(report, null, 2) : formatMergeReport(report),

@@ -236,6 +236,8 @@ export interface Account {
   provisional?: boolean;
   /** Days without use after which a provisional shelf is deleted. */
   idleDays?: number;
+  /** The session came from an agent's sign-in link (browse only). */
+  assurance?: "agent_link";
 }
 export type ErrorCode =
   | "invalid"

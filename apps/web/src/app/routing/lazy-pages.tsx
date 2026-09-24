@@ -27,6 +27,9 @@ const Claim = page(() =>
 const Enter = page(() =>
   import("../../pages/enter/index.tsx").then((m) => m.Enter),
 );
+const SignIn = page(() =>
+  import("../../pages/enter/signin.tsx").then((m) => m.SignIn),
+);
 const FirstSave = page(() =>
   import("../../pages/start/index.tsx").then((m) => m.FirstSave),
 );
@@ -143,4 +146,5 @@ export {
   SignupLinked,
   Claim,
   Enter,
+  SignIn,
 };

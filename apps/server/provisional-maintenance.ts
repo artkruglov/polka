@@ -67,6 +67,21 @@ export async function retireProvisionalShelf(
     [policy.idleDays, shelf.id],
   );
   if (!still.rows?.length) return false;
+  return requestDeletionRows(c, shelf, policy, "account.provisional_retired");
+}
+
+/**
+ * The rows of a deletion request for a locked account and tenant, as a
+ * confirmed deletion writes them (account-deletion.ts): the account is
+ * closed and the purge worker takes it from there. Also used for the source
+ * of a merge (account-merge.ts). False when a request already exists.
+ */
+export async function requestDeletionRows(
+  c: Client,
+  shelf: { id: string; tenant: string },
+  policy: Omit<ProvisionalRetirementPolicy, "idleDays">,
+  auditAction: string,
+) {
   const capability = createHash("sha256")
     .update(randomBytes(32))
     .digest("hex");
@@ -147,8 +162,8 @@ export async function retireProvisionalShelf(
   );
   await c.query(
     `INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id)
-     VALUES($1,$2,'account.provisional_retired',$3)`,
-    [shelf.tenant, shelf.id, planned.id],
+     VALUES($1,$2,$4,$3)`,
+    [shelf.tenant, shelf.id, planned.id, auditAction],
   );
   await c.query(
     `UPDATE account_deletions SET

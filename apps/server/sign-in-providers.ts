@@ -102,6 +102,11 @@ export type Flow = {
    * open a NEW shelf asks first (/signup/choose).
    */
   known?: boolean;
+  /**
+   * The provisional shelf this browser was in by an agent's link: after the
+   * sign-in /claim offers to carry its works over (never a link to it).
+   */
+  carry?: string;
 };
 
 const sealKey = (label: string) =>
@@ -428,6 +433,7 @@ export async function startFlow(
   link: string | null,
   source: Flow["source"] | null = null,
   known = false,
+  carry: string | null = null,
 ) {
   const flow: Flow = {
     provider,
@@ -439,6 +445,7 @@ export async function startFlow(
     expires: Date.now() + FLOW_TTL_SECONDS * 1000,
     ...(source ? { source } : {}),
     ...(known ? { known: true } : {}),
+    ...(carry ? { carry } : {}),
   };
   const params: Record<string, string> = {
     response_type: "code",

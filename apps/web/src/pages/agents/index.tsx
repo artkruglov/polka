@@ -662,7 +662,7 @@ export function AgentConnections() {
                   </p>
                 )}
                 <div className="agent-scopes">
-                  {scopeOptions.map((scope) => (
+                  {scopeOptions.filter((scope) => !scope.oauthOnly).map((scope) => (
                     <label
                       key={scope.id}
                       className="agent-scope"
@@ -920,7 +920,9 @@ export function AgentConnections() {
                       <p className="agent-meta">
                         Может: {scopeLabels(connection.scopes)}
                       </p>
-                      {connection.kind === "oauth" && isActive(connection) && (
+                      {connection.kind === "oauth" &&
+                        isActive(connection) &&
+                        connection.scopes.includes("sign_in") && (
                         <label className="agent-meta agent-sign-in-links">
                           <input
                             type="checkbox"
@@ -928,7 +930,7 @@ export function AgentConnections() {
                             disabled={action !== null}
                             onChange={() => void toggleSignInLinks(connection)}
                           />{" "}
-                          Может выдавать ссылки для входа («Открой мою Полку»)
+                          Может давать ссылку для входа во временную полку («Открой мою Полку»)
                         </label>
                       )}
                       <p className="agent-meta">

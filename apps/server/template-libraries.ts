@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { audit } from "./artifacts.ts";
-import { transaction } from "./db.ts";
+import { db, transaction } from "./db.ts";
 import { missing, Problem } from "./errors.ts";
 import {
   changeTemplateLibraryRoleInput,
@@ -168,6 +168,7 @@ async function ensureAnotherActiveAdmin(
 }
 
 export async function createTemplateLibrary(actor: Actor, body: unknown) {
+  await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInput.parse(body);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
@@ -398,6 +399,7 @@ export async function createTemplateLibraryInvitation(
   libraryId: string,
   body: unknown,
 ) {
+  await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInvitationInput.parse(body);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);

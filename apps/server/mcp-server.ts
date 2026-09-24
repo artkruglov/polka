@@ -312,7 +312,7 @@ export function createMcpServer(actor: ServiceActor) {
         {
           title: "Sign-in link to the shelf",
           description:
-            "Give the user a one-time link that signs their browser in to this shelf (the one this connection saves to), when they ask to open Полка («Открой мою Полку») or lost their way in. Hand the url to the user exactly as returned and never open it yourself; it works once, within 5 minutes. The owner may switch this off for the connection; then relay the message.",
+            "When the user asks to open Полка in a browser («Открой мою Полку»): returns a url for the shelf this connection saves to. For a claimed shelf (kind: hint) it is its sign-in page, with no secret: the user signs in the usual way. For a provisional shelf (kind: link) it is a one-time link, only if the owner granted «Давать ссылку для входа»; it works once within 5 minutes after the user confirms on the page. Hand the url over exactly as returned and never open it yourself.",
           inputSchema: z.object({}).strict(),
           annotations: {
             readOnlyHint: false,
