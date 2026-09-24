@@ -25,6 +25,8 @@ import {
   initialInterest,
 } from "../apps/web/src/pages/enterprise/form.tsx";
 import { LegalLinks } from "../apps/web/src/widgets/navigation/index.tsx";
+import { routeTitle } from "../apps/web/src/app/routing/titles.ts";
+import { pageTitle } from "../apps/web/src/shared/lib/document-title.ts";
 
 const app = await createApp();
 const origin = config.APP_ORIGIN;
@@ -196,6 +198,9 @@ test(`one IP may send ${ENTERPRISE_REQUESTS_PER_IP} requests an hour`, async () 
   const res = await post(blocked, { ip });
   assert.equal(res.statusCode, 429, res.body);
   assert.match(res.json().message, /через час/);
+  // The window's reset time, not a guess: within the hour.
+  const retryAfter = Number(res.headers["retry-after"]);
+  assert.ok(retryAfter > 3500 && retryAfter <= 3600, String(retryAfter));
   assert.equal((await stored(blocked.company)).length, 0);
   // Another address is counted on its own.
   assert.equal((await post(valid())).statusCode, 200);
@@ -352,4 +357,19 @@ test("/enterprise is routed and linked from the footer, /pricing and the landing
   );
   // The link preview is the default Полка card.
   assert.equal(linkPreviewTags("/enterprise"), linkPreviewTags("/"));
+});
+
+test("each page names its browser tab; a recipient's tab and /s previews stay generic", () => {
+  assert.equal(pageTitle(routeTitle("/enterprise")), "Для компаний — Полка");
+  assert.equal(pageTitle(routeTitle("/privacy")), "Политика обработки персональных данных — Полка");
+  assert.equal(pageTitle(routeTitle("/landing")), "Полка");
+  // Recipients never see the work's own title in the tab.
+  assert.equal(pageTitle(routeTitle("/s")), "Работа по ссылке — Полка");
+  // The workspace and /discover name their own tabs (the work, an item).
+  assert.equal(routeTitle("/"), undefined);
+  assert.equal(routeTitle("/works/x"), undefined);
+  assert.equal(routeTitle("/discover"), undefined);
+  // The page the server sends keeps «Полка»; the recipient page never retitles.
+  assert.match(read("apps/web/index.html"), /<title>Полка<\/title>/);
+  assert.doesNotMatch(read("apps/web/src/pages/recipient/index.tsx"), /document\.title/);
 });

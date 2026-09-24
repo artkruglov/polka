@@ -152,6 +152,9 @@ export function request<T>(
 
 export const client = {
   me: () => request<Account>("/me"),
+  /** The signed-in account, or null for a guest (200 either way). */
+  session: () =>
+    request<{ account: Account | null }>("/session").then(({ account }) => account),
   login: (name: string, password: string) =>
     request("/login", { name, password }),
   logout: () => request("/logout", {}),

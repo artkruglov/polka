@@ -12,6 +12,7 @@
 // falls back to the second model; when both fail the revision stays
 // «unchecked» and is retried.
 import { config, type ModelEndpoint, type ModelProvider } from "../config.ts";
+import { db } from "../db.ts";
 import { CATEGORIES, type Category } from "./lists.ts";
 import { postChat } from "./endpoints.ts";
 import { CONTENT_CATEGORIES, CONTENT_PROMPT, CONTENT_SCHEMA } from "./prompts.ts";
@@ -282,36 +283,62 @@ export function contentModels(): ModelPair | null {
 /** Tests put fake models in place (undefined restores the config). */
 export function setContentModels(pair: ModelPair | null | undefined) {
   override = pair;
-  budget.day = "";
-  budget.spent = 0;
-  budget.warned = false;
 }
 
-// Spend per UTC day, in this process (one app process per installation).
-const budget = { day: "", spent: 0, warned: false };
+// The day's spend lives in Postgres (login_limits, one row per UTC day), so a
+// restart or a deploy does not start the day again from 0 ₽. The day is the
+// UTC calendar day: it resets at 00:00 UTC (03:00 in Moscow). `attempts` is
+// an integer, so the spend is kept in 1/10000 ₽ (up to about 214 000 ₽ a day;
+// larger sums are clamped, which only means «spent»). The row expires at the
+// end of its day and maintenance deletes it with the other expired limits.
+const UNITS_PER_RUB = 10_000;
+const MAX_UNITS = 2_147_483_647;
+let clock = () => Date.now();
 
-function today() {
-  const day = new Date().toISOString().slice(0, 10);
-  if (budget.day !== day) {
-    budget.day = day;
-    budget.spent = 0;
-    budget.warned = false;
-  }
-  return budget;
+/** Tests move the budget's clock (undefined restores the real one). */
+export function setBudgetClock(now: (() => number) | undefined) {
+  clock = now ?? (() => Date.now());
+}
+
+function budgetDay() {
+  const now = new Date(clock());
+  const day = now.toISOString().slice(0, 10);
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  return { key: `content-model-budget:${day}`, end };
+}
+
+/** Today's spend in rubles (UTC day), read from the database. */
+export async function spentToday() {
+  const { key } = budgetDay();
+  const { rows } = await db.query("SELECT attempts FROM login_limits WHERE key=$1", [key]);
+  return (rows[0]?.attempts ?? 0) / UNITS_PER_RUB;
 }
 
 /** False once today's CONTENT_MODEL_DAILY_BUDGET_RUB is spent. */
-export const budgetLeft = () => today().spent < config.CONTENT_MODEL_DAILY_BUDGET_RUB;
+export const budgetLeft = async () =>
+  (await spentToday()) < config.CONTENT_MODEL_DAILY_BUDGET_RUB;
 
-/** Record a call's cost; true the first time the budget runs out today. */
-export function spend(costRub: number) {
-  const state = today();
-  state.spent += costRub;
-  if (state.spent >= config.CONTENT_MODEL_DAILY_BUDGET_RUB && !state.warned) {
-    state.warned = true;
-    return true;
-  }
-  return false;
+/**
+ * Record a call's cost (one atomic increment); true for the call that took
+ * today's spend to the budget, so the operator is written to once a day.
+ */
+export async function spend(costRub: number) {
+  const units = Math.max(0, Math.min(MAX_UNITS, Math.ceil(costRub * UNITS_PER_RUB)));
+  if (!units) return false;
+  const { key, end } = budgetDay();
+  const {
+    rows: [row],
+  } = await db.query(
+    `INSERT INTO login_limits VALUES($1,$2,$3) ON CONFLICT(key) DO UPDATE
+       SET attempts=LEAST(login_limits.attempts::bigint+$2,${MAX_UNITS})::int
+     RETURNING attempts`,
+    [key, units, end],
+  );
+  const limit = config.CONTENT_MODEL_DAILY_BUDGET_RUB * UNITS_PER_RUB;
+  return row.attempts >= limit && row.attempts - units < limit;
 }
 
-export const spentToday = () => today().spent;
+/** Tests start the day over. */
+export async function resetBudget() {
+  await db.query("DELETE FROM login_limits WHERE key LIKE 'content-model-budget:%'");
+}

@@ -1,5 +1,7 @@
 import React from "react";
 import { App } from "../workspace/index.tsx";
+import { useDocumentTitle } from "../../shared/lib/document-title.ts";
+import { routeTitle } from "./titles.ts";
 import {
   AgentConnections,
   Away,
@@ -56,6 +58,7 @@ function Route({ path }: { path: string }) {
 }
 
 export function AppRoutes({ path = location.pathname }: { path?: string }) {
+  useDocumentTitle(routeTitle(path));
   const route = Route({ path });
   // The workspace («/», /works/…, /trash) stays in the initial chunk: it is the most common entry.
   return route ? <Lazy>{route}</Lazy> : <App />;

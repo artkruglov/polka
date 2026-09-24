@@ -287,6 +287,8 @@ test("rate limits apply per connection and per address", async () => {
   const response = await publish(input, bearer(limited.secret));
   assert.equal(response.statusCode, 429);
   assert.equal(response.json().code, "quota");
+  const retryAfter = Number(response.headers["retry-after"]);
+  assert.ok(retryAfter > 0 && retryAfter <= 600, String(retryAfter));
   const ip = address();
   await db.query(
     "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
@@ -295,6 +297,7 @@ test("rate limits apply per connection and per address", async () => {
   const other = await token(owner);
   const byAddress = await publish(input, bearer(other.secret), ip);
   assert.equal(byAddress.statusCode, 429);
+  assert.ok(Number(byAddress.headers["retry-after"]) > 0);
   // Unauthenticated guesses count against the address too.
   assert.equal((await publish(input, {}, ip)).statusCode, 429);
 });
