@@ -96,5 +96,5 @@ flowchart LR
 | `packages` | Общие контракты (zod-схемы, лимиты, список библиотек runtime) и каталог миграций |
 | `deploy` | Миграции, права ролей БД, compose-файлы, hosted-поставка |
 | `scripts` | Миграции, аккаунты, тестовый раннер, CLI публикации, restore и maintenance |
-| `content/editorial` | Исходники 12 материалов «Интересного» |
+| `content/editorial` | Исходники материалов «Ленты»: 14 в каталоге (`candidates.json`), черновики — `owner-research-candidates.json`; три истории о Полке лежат вне каталога |
 | `tests` | Интеграционные тесты на настоящих PostgreSQL и S3 |

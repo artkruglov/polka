@@ -22,6 +22,15 @@
 // renewed ahead of time: a fresh copy gets its own share and replaces the old
 // publication in one transaction, without a gap. Run weekly.
 // Output is slug/status/version only — never tokens, URLs or IDs.
+//
+// Taking materials out of the catalogue (remove them from candidates.json
+// first, or the next weekly run publishes them again):
+//
+//   node --import tsx scripts/editorial-seed-hosted.ts --confirm-publication --login redakciya --withdraw slug-a,slug-b
+//
+// withdraws this tenant's active publication of each slug and revokes its
+// share in one transaction, publishing nothing. Prints {"slug","status"}:
+// "withdrawn", "absent" (nothing active) or "blocked" (another tenant's).
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -44,7 +53,7 @@ import {
 } from "../apps/server/bundle-runtime-contract.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import { getEditorial } from "../apps/server/editorial.ts";
+import { getEditorial, withdrawEditorial } from "../apps/server/editorial.ts";
 import { classifyHtml } from "../apps/server/html.ts";
 import { enableOwnerShare } from "../apps/server/shares.ts";
 import { sha256 } from "../apps/server/storage.ts";
@@ -346,6 +355,29 @@ async function seed(
 const reason = (error: unknown) =>
   error instanceof Error ? error.message : "rejected";
 
+/** Withdraws this tenant's active publication of each slug; returns failures. */
+async function withdrawSlugs(owner: Actor, slugs: string[]) {
+  let failures = 0;
+  for (const slug of slugs) {
+    const active = await activePublication(slug);
+    let status: "withdrawn" | "absent" | "blocked" | "failed";
+    if (!active) status = "absent";
+    else if (active.tenant_id !== owner.tenant) status = "blocked";
+    else {
+      try {
+        const result = await withdrawEditorial(owner, { publicationId: active.id });
+        status = result.state === "withdrawn" ? "withdrawn" : "failed";
+      } catch (error) {
+        status = "failed";
+        process.stderr.write(`${JSON.stringify({ slug, reason: reason(error) })}\n`);
+      }
+    }
+    if (status === "blocked" || status === "failed") failures++;
+    print({ slug, status });
+  }
+  return failures;
+}
+
 if (!args.includes("--confirm-publication")) {
   process.stderr.write(
     "Refusing to publish: pass --confirm-publication and --login <editorial account>.\n",
@@ -357,59 +389,67 @@ if (!args.includes("--confirm-publication")) {
   try {
     const login = option("--login");
     if (!login) throw new Error("--login is required");
-    const only = option("--only")?.split(",");
-    const renewWithinDays = Number(option("--renew-within-days") ?? 7);
-    if (
-      !Number.isInteger(renewWithinDays) ||
-      renewWithinDays < 0 ||
-      renewWithinDays >= SHARE_DAYS
-    )
-      throw new Error("--renew-within-days must be an integer from 0 to 29");
-    const catalogue = staticCandidatesSchema.parse(
-      JSON.parse(
-        await readFile(
-          resolve(option("--candidates") ?? "content/editorial/static-candidates.json"),
-          "utf8",
+    const withdraw = option("--withdraw");
+    if (withdraw !== undefined) {
+      const slugs = withdraw.split(",");
+      if (!slugs.every((slug) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)))
+        throw new Error("--withdraw takes comma-separated slugs");
+      failures += await withdrawSlugs(await resolveOwner(login), slugs);
+    } else {
+      const only = option("--only")?.split(",");
+      const renewWithinDays = Number(option("--renew-within-days") ?? 7);
+      if (
+        !Number.isInteger(renewWithinDays) ||
+        renewWithinDays < 0 ||
+        renewWithinDays >= SHARE_DAYS
+      )
+        throw new Error("--renew-within-days must be an integer from 0 to 29");
+      const catalogue = staticCandidatesSchema.parse(
+        JSON.parse(
+          await readFile(
+            resolve(option("--candidates") ?? "content/editorial/static-candidates.json"),
+            "utf8",
+          ),
         ),
-      ),
-    );
-    const owner = await resolveOwner(login);
-    const preferred: Version =
-      config.HTML_LIVE_ENABLED && !args.includes("--static-only")
-        ? "interactive"
-        : "static";
-    // The catalogue lists newest first; publish in reverse so it reads in
-    // the candidates' order.
-    for (const candidate of [...catalogue.items].reverse()) {
-      if (only && !only.includes(candidate.slug)) continue;
-      let status: Status;
-      let version = preferred;
-      try {
-        try {
-          status = await seed(owner, candidate, renewWithinDays, version);
-        } catch (error) {
-          if (version !== "interactive") throw error;
-          // The static snapshot stays (or becomes) the published version.
-          process.stderr.write(
-            `${JSON.stringify({ slug: candidate.slug, fallback: "static", reason: reason(error) })}\n`,
-          );
-          version = "static";
-          status = await seed(owner, candidate, renewWithinDays, version);
-        }
-      } catch (error) {
-        status = "failed";
-        process.stderr.write(
-          `${JSON.stringify({ slug: candidate.slug, reason: reason(error) })}\n`,
-        );
-      }
-      if (status === "failed" || status === "blocked") failures++;
-      else if (version !== preferred) fallbacks++;
-      print({ slug: candidate.slug, status, version });
-    }
-    if (fallbacks)
-      process.stderr.write(
-        `${JSON.stringify({ event: "editorial.seed.static-fallback", count: fallbacks })}\n`,
       );
+      const owner = await resolveOwner(login);
+      const preferred: Version =
+        config.HTML_LIVE_ENABLED && !args.includes("--static-only")
+          ? "interactive"
+          : "static";
+      // The catalogue lists newest first; publish in reverse so it reads in
+      // the candidates' order.
+      for (const candidate of [...catalogue.items].reverse()) {
+        if (only && !only.includes(candidate.slug)) continue;
+        let status: Status;
+        let version = preferred;
+        try {
+          try {
+            status = await seed(owner, candidate, renewWithinDays, version);
+          } catch (error) {
+            if (version !== "interactive") throw error;
+            // The static snapshot stays (or becomes) the published version.
+            process.stderr.write(
+              `${JSON.stringify({ slug: candidate.slug, fallback: "static", reason: reason(error) })}\n`,
+            );
+            version = "static";
+            status = await seed(owner, candidate, renewWithinDays, version);
+          }
+        } catch (error) {
+          status = "failed";
+          process.stderr.write(
+            `${JSON.stringify({ slug: candidate.slug, reason: reason(error) })}\n`,
+          );
+        }
+        if (status === "failed" || status === "blocked") failures++;
+        else if (version !== preferred) fallbacks++;
+        print({ slug: candidate.slug, status, version });
+      }
+      if (fallbacks)
+        process.stderr.write(
+          `${JSON.stringify({ event: "editorial.seed.static-fallback", count: fallbacks })}\n`,
+        );
+    }
   } catch (error) {
     failures++;
     process.stderr.write(

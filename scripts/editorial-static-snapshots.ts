@@ -94,6 +94,30 @@ const prepare: Record<string, string> = {
   "why-no-artifact-link": `document.documentElement.classList.remove('js')`,
   "one-regex-froze-server": `document.documentElement.classList.remove('js')`,
   "31-sandbox-escapes": `document.documentElement.classList.remove('js')`,
+  "handwriting-research": `document.documentElement.classList.remove('js')`,
+  "how-presentation-editors-work": `(() => {
+    const panel = document.getElementById('panel');
+    const parts = [];
+    for (const button of document.querySelectorAll('.layer')) {
+      button.click();
+      parts.push('<h3 style="margin:14px 0 8px">' + button.querySelector('span').textContent + '</h3>' + panel.innerHTML);
+    }
+    panel.innerHTML = parts.join('');
+    document.querySelectorAll('.layer').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+    document.documentElement.classList.remove('js');
+  })()`,
+  "observability-to-ai-sre": `(() => {
+    const panel = document.getElementById('panel');
+    const parts = [];
+    // Bottom floor first: the buttons are listed top-down, the text reads bottom-up.
+    for (const key of ['1', '2', '3', '4', 'ai']) {
+      document.querySelector('.floor[data-k="' + key + '"]').click();
+      parts.push(panel.innerHTML);
+    }
+    panel.innerHTML = parts.join('');
+    document.querySelectorAll('.floor').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+    document.documentElement.classList.remove('js');
+  })()`,
 };
 
 // Freezes form state into attributes, then strips everything executable.

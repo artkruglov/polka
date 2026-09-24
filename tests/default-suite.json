@@ -59,6 +59,7 @@
   "tests/artifact-reader.test.ts",
   "tests/legal-pages.test.ts",
   "tests/licensing.test.ts",
+  "tests/source-stars.test.ts",
   "tests/enterprise.test.ts",
   "tests/url-import-polling.test.ts",
   "tests/agent-context.test.ts",

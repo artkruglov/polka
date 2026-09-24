@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Игра по описанию: что на самом деле умеют ИИ-конструкторы игр</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.levels{display:grid;gap:8px;margin-top:12px}
+.lvl{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#fbfaf7}
+.lvl i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;background:var(--cool)}
+.lvl small{color:var(--muted)}
+.lvl .st{font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.lvl.l1 .st,.lvl.l2 .st{color:var(--ok)}.lvl.l3 .st{color:#9a6a12}.lvl.l4 .st{color:var(--accent)}
+.lvl.l4{border-color:var(--accent);background:#fff4ec}.lvl.l4 i{background:var(--accent)}
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:12px}
+.funnel{display:grid;gap:14px;margin-top:10px}
+.funnel .row{display:grid;grid-template-columns:minmax(150px,230px) 1fr 64px;gap:12px;align-items:center}
+.funnel output{font-variant-numeric:tabular-nums;font-weight:700;text-align:right}
+.fbars{margin-top:14px;display:grid;gap:6px}
+.fbar{display:grid;grid-template-columns:minmax(120px,190px) 1fr 80px;gap:10px;align-items:center;font-size:.92rem}
+.fbar div{height:22px;background:#eceae3;border-radius:6px;overflow:hidden}
+.fbar div i{display:block;height:100%;background:var(--cool);min-width:2px;transition:width .2s}
+.fbar.pay div i{background:var(--accent)}
+.fbar b{text-align:right;font-variant-numeric:tabular-nums}
+.big{font:700 clamp(1.8rem,5vw,2.6rem)/1.1 Georgia,serif;color:var(--accent)}
+@media(max-width:560px){.funnel .row,.fbar{grid-template-columns:1fr 70px}.funnel .row label,.fbar span{grid-column:1/-1}.lvl{grid-template-columns:40px 1fr}.lvl .st{grid-column:2}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Исследование рынка · сервисы</div>
+<h1>Игра по описанию: что на самом деле умеют ИИ-конструкторы игр</h1>
+<p class="dek">«Опиши игру словами — и играй» стало одной из самых модных категорий 2026 года: в неё вкладывают десятки миллионов долларов. Разбираем, что эти сервисы выдают на самом деле, кто за что платит и почему самое трудное начинается после того, как ИИ сделал первую версию.</p>
+</header>
+
+<section class="card" aria-labelledby="tldr">
+<h2 id="tldr">Коротко</h2>
+<ul class="lead">
+<li><b>Создать игру стало просто, сделать её законченной — нет.</b> Генераторы надёжно выдают прототип: играбельный, но ломкий, без баланса и сохранений.</li>
+<li><b>Денег в категории много, доказанного платящего спроса на создание — мало.</b> Генерацию раздают бесплатно, а выручка индустрии сосредоточена у крупнейших издателей.</li>
+<li><b>Самая недозакрытая задача — «последняя миля»:</b> довести ИИ-прототип до игры, которую примет площадка и в которую сыграют посторонние люди.</li>
+</ul>
+</section>
+
+<section class="card" aria-labelledby="ladder">
+<h2 id="ladder">Четыре уровня зрелости результата</h2>
+<p>Главное, что стоит понять про эту категорию: слово «игра» в рекламе и в жизни значит разное. Результат ИИ-генерации удобно раскладывать по четырём уровням.</p>
+<div class="levels">
+<div class="lvl l1"><i>1</i><div><b>Ассет</b><br><small>Картинка, спрайт, 3D-модель, звук</small></div><span class="st">генерируется надёжно</span></div>
+<div class="lvl l2"><i>2</i><div><b>Интерактивная сцена</b><br><small>Управляемый объект в мире. Модель мира Genie 3 держит такую сцену несколько минут</small></div><span class="st">работает</span></div>
+<div class="lvl l3"><i>3</i><div><b>Прототип</b><br><small>Есть игровой цикл, но он ломкий: баги, нет баланса, прогресс теряется</small></div><span class="st">типичный выход генераторов</span></div>
+<div class="lvl l4"><i>4</i><div><b>Игра, готовая к публикации</b><br><small>Завершённый цикл, сохранение прогресса, стабильность, требования площадки</small></div><span class="st">почти никто не доводит</span></div>
+</div>
+<p class="note">Пользователи генераторов жалуются на одно и то же: «ИИ не понимает, что я хочу», «потерял прогресс, когда ИИ сгенерировал плохой код», «опубликованные игры не открываются». Практики называют это «потолком сложности»: после него агент ходит по кругу.</p>
+</section>
+
+<section class="card" aria-labelledby="map">
+<h2 id="map">Карта рынка</h2>
+<p>Игроков удобнее делить не по технологиям, а по задаче, которую они решают.</p>
+<div class="map">
+<div class="tile"><span class="tag">Текст → игра</span><p>Rosebud AI, Astrocade, Higgsfield Games, Upit и другие. Генерация исполняемой браузерной или мобильной игры по описанию.</p></div>
+<div class="tile"><span class="tag cool">ИИ в редакторе</span><p>GDevelop AI, помощники для Roblox, ИИ в Unity и Unreal. Агент понимает проект, а не пишет игру с нуля.</p></div>
+<div class="tile"><span class="tag cool">No-code и UGC</span><p>Roblox, GDevelop, Construct. Платформы пользовательских игр, на которые ИИ «надстраивается».</p></div>
+<div class="tile"><span class="tag ok">Поставщики ассетов</span><p>Генерация графики, моделей и звука. Надёжный, но всё более дешёвый слой.</p></div>
+<div class="tile"><span class="tag ok">Площадки и каналы</span><p>Poki, CrazyGames, YouTube Playables, Playgama, «Пикабу Игры». Где игру публикуют и находят игроков.</p></div>
+<div class="tile"><span class="tag">Генеративные миры</span><p>Genie 3 и похожие модели мира. Пока исследовательские прототипы, а не движки для развлечений.</p></div>
+</div>
+</section>
+
+<section class="card" aria-labelledby="who">
+<h2 id="who">Кто есть кто</h2>
+<p>Данные на 11 сентября 2026 года. Метрики пользователей — в основном заявления самих компаний, независимого аудита нет.</p>
+<div class="scroll"><table>
+<thead><tr><th>Сервис</th><th>Что делает</th><th>Деньги</th><th>Заявленный масштаб</th><th>Как платит пользователь</th></tr></thead>
+<tbody>
+<tr><td>Astrocade</td><td>текст → игра + лента игр</td><td>$12 млн посевной (2024) и $56 млн раундов A и B (май 2026, лиды — Sea и Sequoia)</td><td>~5 млн MAU, 140 млн запусков игр в месяц, 75 тыс.+ игр через 8 месяцев после запуска</td><td>бесплатно; программа монетизации авторов</td></tr>
+<tr><td>Rosebud AI</td><td>текст → код → браузерная игра</td><td>~$9,2 млн (по PitchBook)</td><td>не раскрыт</td><td>бесплатный лимит; подписки $15–50 в месяц; коммерческие права — на старших тарифах</td></tr>
+<tr><td>Higgsfield Games</td><td>промпт → прототип, в том числе мультиплеер</td><td>деньги компании в целом; основная выручка — ИИ-видео, а не игры</td><td>игровое направление новое, масштаб не подтверждён</td><td>общие кредиты платформы</td></tr>
+<tr><td>Upit (FRVR)</td><td>текст → 2D-казуальная игра</td><td>не установлено</td><td>не установлено</td><td>бесплатно, конкурсы</td></tr>
+<tr><td>GDevelop</td><td>открытый движок с ИИ-агентом</td><td>открытый проект (MIT)</td><td>10 тыс.+ учащихся в школах и вузах</td><td>кредиты только за успешные ИИ-запросы</td></tr>
+</tbody></table></div>
+<p class="note">«Не установлено» значит, что нет публичного подтверждения, а не что функции или денег нет.</p>
+</section>
+
+<section class="card" aria-labelledby="money">
+<h2 id="money">Где деньги — и где их нет</h2>
+<div class="grid">
+<div class="tile"><span class="tag">Рынок игр</span><div class="big">$201,6 млрд</div><p>Мировой рынок игр в 2025 году по Newzoo. Это то, что тратят игроки, а не рынок инструментов создания.</p></div>
+<div class="tile"><span class="tag">Концентрация</span><div class="big">$75,6 млрд</div><p>Выручка топ-1% издателей в 2025 году против $6,1 млрд у остальных 99% (FT). ИИ пока не демократизировал деньги.</p></div>
+<div class="tile"><span class="tag cool">«ИИ в играх»</span><div class="big">$2,9–8,5 млрд</div><p>Оценки разных агентств расходятся в разы, и все они про широкий «ИИ в играх», а не про конструкторы.</p></div>
+</div>
+<h3 style="margin-top:18px">ИИ при создании против ИИ во время игры</h3>
+<p>Если ИИ работает только при создании игры, расход разовый и предсказуемый. Если он генерирует что-то в каждой сессии, расход растёт вместе с числом игроков — а при рекламной монетизации браузерных игр выручка с сессии маленькая. Поэтому устойчивые модели почти всегда используют ИИ при создании, а не во время игры.</p>
+</section>
+
+<section class="card" aria-labelledby="calc">
+<h2 id="calc">Посчитайте воронку сами</h2>
+<p>Популярная идея — запустить такой сервис на аудитории своего блога или сообщества. Прежде чем вкладываться, стоит пройти воронку по шагам. Это сценарий, а не прогноз: подставьте свои цифры.</p>
+<div class="funnel js-only">
+<div class="row"><label for="a">Месячная аудитория</label><input type="range" id="a" min="1000" max="100000" step="1000" value="10000"><output id="ao">10 000</output></div>
+<div class="row"><label for="c1">Начали делать игру</label><input type="range" id="c1" min="1" max="10" step="0.5" value="3"><output id="c1o">3%</output></div>
+<div class="row"><label for="c2">Довели до публикации</label><input type="range" id="c2" min="5" max="60" step="5" value="30"><output id="c2o">30%</output></div>
+<div class="row"><label for="c3">Стали платить</label><input type="range" id="c3" min="1" max="15" step="1" value="5"><output id="c3o">5%</output></div>
+</div>
+<div class="fbars" id="fbars" aria-live="polite">
+<div class="fbar"><span>Аудитория</span><div><i style="width:100%"></i></div><b>10 000</b></div>
+<div class="fbar"><span>Начали игру</span><div><i style="width:3%"></i></div><b>300</b></div>
+<div class="fbar"><span>Опубликовали</span><div><i style="width:.9%"></i></div><b>90</b></div>
+<div class="fbar pay"><span>Платят</span><div><i style="width:.05%"></i></div><b>≈ 5</b></div>
+</div>
+<p class="note">При аудитории 10 000 человек и средних конверсиях (3% начинают, 30% доводят до публикации, 5% опубликовавших платят) в первый месяц получается около 5 платящих; во всём разумном диапазоне (2–5%, 20–40%, 3–8%) — от 1 до 16. Без сильного канала экономика хрупкая, поэтому конверсии надо мерить до вложений. Ширина полос пропорциональна доле от аудитории, и то, что нижние почти не видны, — это и есть вывод.</p>
+</section>
+
+<section class="card" aria-labelledby="check">
+<h2 id="check">Как проверить идею за три недели</h2>
+<ol>
+<li><b>Интервью.</b> 10–15 разговоров с начинающими авторами игр о прошлом опыте, а не о будущих желаниях. Порог: хотя бы 6 из 10 застревали или бросали игру на этапе доводки.</li>
+<li><b>Предоплата.</b> Лендинг и реальная предоплата за доведение 3–5 игр до публикации. «Интересно» и «купил бы» не считаются.</li>
+<li><b>Мини-джем.</b> Довести 5–10 ИИ-игр до публикации на выбранной площадке. Мерить долю принятых с 1–2 попыток и средний расход на ИИ на одну игру.</li>
+</ol>
+<p><b>Чего не строить на старте:</b> универсальный генератор, собственный движок, ИИ во время игры, полноценную соцсеть — эти направления либо уже бесплатны, либо убыточны, либо требуют сотен миллионов.</p>
+</section>
+
+<section class="card" aria-labelledby="caveats">
+<h2 id="caveats">Оговорки</h2>
+<ul>
+<li>Метрики Astrocade и других сервисов — заявления компаний и их инвесторов; магазины приложений дают лишь частичную независимую проверку.</li>
+<li>Тарифы Rosebud и Higgsfield расходятся между официальными страницами и агрегаторами — перед решениями сверяйте актуальные цены.</li>
+<li>Свидетельства трудностей «последней мили» косвенные: отзывы и опросы. Прямых данных о том, сколько авторов бросает игру на доводке, нет.</li>
+<li>Сравнительный тест сервисов на одинаковых заданиях в исследовании не проводился — выводы о зрелости основаны на документации и обзорах.</li>
+</ul>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ul class="sources">
+<li>Fortune, 05.05.2026: Sequoia-backed Astrocade raises $56 million to let everyone build games; блог Astrocade о раунде. <small>fortune.com · astrocade.com/blog</small></li>
+<li>Google DeepMind: Genie 3 — a new frontier for world models, 05.08.2025. <small>deepmind.google/blog</small></li>
+<li>Newzoo через Gamebastion: мировой рынок игр в 2025 году превысил $200 млрд. <small>gamebastion.com</small></li>
+<li>Financial Times через Digital Trends: концентрация выручки у топ-1% издателей в 2025 году.</li>
+<li>Stack Overflow Developer Survey 2025; опрос Fastly (июль 2025) в пересказе IT Pro — об отладке ИИ-кода. <small>itpro.com</small></li>
+<li>Rosebud AI: Pricing &amp; Subscription FAQs; обзоры SoonLab. <small>rosebud.ai/blog · soonlab.ai</small></li>
+<li>Ziva: Vibe Coding Games — What Ships and What Breaks. <small>ziva.sh/blogs</small></li>
+<li>Precedence Research, Grand View Research, The Business Research Company — оценки рынка «AI in games».</li>
+<li>Страницы Astrocade в Google Play и AppBrain — отзывы пользователей.</li>
+</ul>
+<p class="note">Исследование собрано 11 сентября 2026 года; ключевые цифры Astrocade сверены Редакцией 24 сентября 2026 года. События после этих дат не учтены.</p>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Материал сокращён из исследования рынка, которое автор Полки делал с Claude, выбирая идею для продукта. Названия сервисов — примеры, это не реклама и не рейтинг.</div>
+<p class="foot">Автор: Редакция Полки</p>
+</main>
+<script>
+(function(){
+document.documentElement.classList.add('js');
+var el=function(id){return document.getElementById(id)};
+var fmt=function(n){return Math.round(n).toLocaleString('ru-RU')};
+function draw(){
+var A=+el('a').value,c1=+el('c1').value/100,c2=+el('c2').value/100,c3=+el('c3').value/100;
+el('ao').textContent=fmt(A);el('c1o').textContent=String(+el('c1').value).replace('.',',')+'%';el('c2o').textContent=el('c2').value+'%';el('c3o').textContent=el('c3').value+'%';
+var s=A*c1,p=s*c2,pay=p*c3;
+var rows=[['Аудитория',A,''],['Начали игру',s,''],['Опубликовали',p,''],['Платят',pay,'pay']];
+el('fbars').innerHTML=rows.map(function(r){return '<div class="fbar '+r[2]+'"><span>'+r[0]+'</span><div><i style="width:'+Math.max(r[1]/A*100,.05).toFixed(2)+'%"></i></div><b>'+(r[2]?'≈ ':'')+fmt(r[1])+'</b></div>'}).join('');
+}
+['a','c1','c2','c3'].forEach(function(id){el(id).addEventListener('input',draw)});
+draw();
+})();
+</script>
+</body></html>

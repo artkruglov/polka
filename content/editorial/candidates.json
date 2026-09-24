@@ -4,40 +4,28 @@
   "publication": "requires-explicit-registration",
   "items": [
     {
-      "slug": "why-no-artifact-link",
-      "title": "Почему сервер не может забрать артефакт по ссылке",
-      "topic": "Как сделана Полка",
-      "task": "Понять, почему Полка не забирает артефакт Claude по ссылке и что работает вместо этого",
-      "action": "Пройти два пути шаг за шагом и сравнить, что видит сервер",
+      "slug": "handwriting-research",
+      "title": "Почерк и грамотность младшеклассника: что работает по исследованиям",
+      "topic": "Исследования",
+      "task": "Разобраться, какие способы помогают ребёнку 7–10 лет писать разборчивее и грамотнее",
+      "action": "Попробовать «посмотри — закрой — напиши — сверь» и пройти лестницу помощи",
       "author": "Редакция Полки",
       "license": "Apache-2.0",
-      "sourcePath": "content/editorial/why-no-artifact-link/index.html",
-      "sourceSha256": "a4ccf61bf79a10e5ba7e29cf96bd840d21bb5d74780b42684e96626b2c5b0521",
-      "evidencePath": "content/editorial/why-no-artifact-link/README.md"
+      "sourcePath": "content/editorial/handwriting-research/index.html",
+      "sourceSha256": "8864e026dabd046bf86d024912b5f371b1e5640b533f4c3c2a5473661f31b88f",
+      "evidencePath": "content/editorial/handwriting-research/README.md"
     },
     {
-      "slug": "one-regex-froze-server",
-      "title": "Одна регулярка, которая могла остановить сервер",
-      "topic": "Как сделана Полка",
-      "task": "Разобраться, как одна проверка страницы могла заморозить весь сервер",
-      "action": "Двигать ползунок и сравнивать время до и после исправления",
+      "slug": "how-presentation-editors-work",
+      "title": "Как устроен редактор презентаций изнутри",
+      "topic": "Исследования",
+      "task": "Понять, из каких слоёв состоит редактор презентаций и почему экспорт ломает графики",
+      "action": "Нажимать на слои схемы и сравнить живую проверку двух открытых проектов",
       "author": "Редакция Полки",
       "license": "Apache-2.0",
-      "sourcePath": "content/editorial/one-regex-froze-server/index.html",
-      "sourceSha256": "44d4b474d7d1d8b2ba871129afbb5fd6018bbb2da327a4c6d7019e7ae12a91e9",
-      "evidencePath": "content/editorial/one-regex-froze-server/README.md"
-    },
-    {
-      "slug": "31-sandbox-escapes",
-      "title": "31 попытка выбраться из песочницы",
-      "topic": "Как сделана Полка",
-      "task": "Посмотреть, как одна модель ломала защиту, написанную другой",
-      "action": "Фильтровать 25 приёмов по категории и по слою, который их остановил",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/31-sandbox-escapes/index.html",
-      "sourceSha256": "259deb14292eb186ed5324c4606f3e7aa0fbf603be2a698266b1afcda334ee2f",
-      "evidencePath": "content/editorial/31-sandbox-escapes/README.md"
+      "sourcePath": "content/editorial/how-presentation-editors-work/index.html",
+      "sourceSha256": "d75cafa0c109b455b85e55df05a5f309fea88054cf65f2f3b6793694f3933dbb",
+      "evidencePath": "content/editorial/how-presentation-editors-work/README.md"
     },
     {
       "slug": "fractions",

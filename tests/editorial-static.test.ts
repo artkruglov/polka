@@ -234,3 +234,76 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   );
   assert.equal((await getEditorial(slug)).slug, slug);
 });
+
+test("seed --withdraw takes this tenant's slugs out of the catalogue and revokes their shares", async () => {
+  const suffix = randomBytes(5).toString("hex");
+  const login = `redakciya-w-${suffix}`;
+  const other = `redakciya-o-${suffix}`;
+  const owner = await createAccount(login, randomBytes(24).toString("hex"));
+  const stranger = await createAccount(other, randomBytes(24).toString("hex"));
+  cleanup.push(() =>
+    db.query("UPDATE accounts SET disabled=true WHERE id=ANY($1)", [
+      [owner.id, stranger.id],
+    ]),
+  );
+  const mine = `withdraw-seed-${suffix}`;
+  const theirs = `withdraw-other-${suffix}`;
+  const directory = await mkdtemp(join(tmpdir(), "polka-withdraw-seed-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const write = async (slug: string) => {
+    const path = join(directory, `${slug}.json`);
+    await writeFile(
+      path,
+      JSON.stringify({ ...staticCatalogue, items: [{ ...staticCatalogue.items[0]!, slug }] }),
+    );
+    return path;
+  };
+  const published = await seed("--confirm-publication", "--login", login, "--candidates", await write(mine));
+  assert.equal(published.code, 0, published.stderr);
+  const foreign = await seed("--confirm-publication", "--login", other, "--candidates", await write(theirs));
+  assert.equal(foreign.code, 0, foreign.stderr);
+  const { rows: [strangers] } = await db.query(
+    "SELECT id FROM editorial_publications WHERE slug=$1 AND withdrawn_at IS NULL",
+    [theirs],
+  );
+  cleanup.push(() =>
+    withdrawEditorial({ id: stranger.id, tenant: stranger.tenant }, { publicationId: strangers.id }),
+  );
+
+  // Without confirmation nothing happens; a malformed list publishes nothing.
+  const refused = await seed("--login", login, "--withdraw", mine);
+  assert.equal(refused.code, 1);
+  assert.equal(refused.stdout, "");
+  const malformed = await seed("--confirm-publication", "--login", login, "--withdraw", "Bad/slug");
+  assert.equal(malformed.code, 1);
+  assert.equal(malformed.stdout, "");
+  assert.equal((await getEditorial(mine)).slug, mine);
+
+  const withdrawn = await seed(
+    "--confirm-publication", "--login", login, "--withdraw", `${mine},${theirs},absent-${suffix}`,
+  );
+  assert.equal(withdrawn.code, 1, "another tenant's slug is reported as blocked");
+  assert.deepEqual(
+    withdrawn.stdout.trim().split("\n").map((line) => JSON.parse(line)),
+    [
+      { slug: mine, status: "withdrawn" },
+      { slug: theirs, status: "blocked" },
+      { slug: `absent-${suffix}`, status: "absent" },
+    ],
+  );
+  assert.doesNotMatch(withdrawn.stdout + withdrawn.stderr, /https?:|\/s#|[0-9a-f]{8}-[0-9a-f]{4}-/);
+  await assert.rejects(getEditorial(mine));
+  const { rows: [row] } = await db.query(
+    `SELECT publication.withdrawn_at IS NOT NULL AS withdrawn,share.revoked
+     FROM editorial_publications publication
+     JOIN shares share ON share.id=publication.share_id
+     WHERE publication.slug=$1`,
+    [mine],
+  );
+  assert.deepEqual([row.withdrawn, row.revoked], [true, true]);
+  assert.equal((await getEditorial(theirs)).slug, theirs);
+
+  const again = await seed("--confirm-publication", "--login", login, "--withdraw", mine);
+  assert.equal(again.code, 0, again.stderr);
+  assert.deepEqual(JSON.parse(again.stdout), { slug: mine, status: "absent" });
+});
