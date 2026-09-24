@@ -79,6 +79,44 @@ export type ClientSetup = {
 
 export const SAVE_PHRASE = "Сохрани это на Полку";
 
+/** The skill Claude Code and Codex install; the server names the same repository (apps/server/connect-guide.ts). */
+export const SKILL_INSTALL = "npx skills add artkruglov/polka";
+export const SKILL_INDEX_PATH = "/.well-known/agent-skills";
+
+/**
+ * The first task after connecting: the agent finds the person's best past
+ * work and saves it. Terminal agents look at this machine; web chats search
+ * their own history. GET /connect, /llms.txt and the skill carry the same
+ * text (apps/server/connect-guide.ts); a test keeps them equal.
+ */
+export type HarvestClientId = "claude-code" | "codex" | "claude-ai" | "chatgpt";
+export const harvestClients: readonly { id: HarvestClientId; name: string }[] =
+  [
+    { id: "claude-code", name: "Claude Code" },
+    { id: "codex", name: "Codex" },
+    { id: "claude-ai", name: "Claude.ai" },
+    { id: "chatgpt", name: "ChatGPT" },
+  ];
+const HARVEST_REST =
+  "Найди 3–5 самых интересных работ, которые мы делали: исследования, статьи, презентации, дашборды, прототипы. Пропусти личное (здоровье, финансы, переписка) и материалы работодателя или клиентов. Покажи мне список с одной строкой о каждой. После моего «да» сохрани каждую на Полку отдельной работой (polka_publish; HTML или React как есть), с понятным названием, и пришли ссылки.";
+export const harvestPrompts = {
+  terminal: `Посмотри наши прошлые сессии и файлы проекта на этом компьютере. ${HARVEST_REST}`,
+  chat: `Поищи в наших прошлых чатах (поиск по истории/памяти). ${HARVEST_REST}`,
+} as const;
+
+export function harvestPrompt(id: HarvestClientId): string {
+  return id === "claude-ai" || id === "chatgpt"
+    ? harvestPrompts.chat
+    : harvestPrompts.terminal;
+}
+
+/** The tab for the remembered choice; «Другое» and no choice read like a terminal agent. */
+export function harvestClient(id: AgentClientId | null): HarvestClientId {
+  return id === "codex" || id === "claude-ai" || id === "chatgpt"
+    ? id
+    : "claude-code";
+}
+
 const url = (value: string): SetupCopy => ({
   value,
   label: "Скопировать адрес",

@@ -105,6 +105,6 @@ export function deriveFirstRun({
 
 export const firstRunTitles: Record<FirstRunStepId, string> = {
   agent: "Подключите агента",
-  save: "Сохраните первую работу",
+  save: "Сохраните первые работы",
   share: "Отправьте ссылку",
 };
