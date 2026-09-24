@@ -6,6 +6,8 @@ import {
   AgentConnections,
   Away,
   Bring,
+  BringReceive,
+  BookmarkletPage,
   EditorialPage,
   Enterprise,
   FirstSave,
@@ -53,6 +55,8 @@ function Route({ path }: { path: string }) {
   // The guest landing, also for people who are signed in.
   if (path === "/landing") return <Landing />;
   if (path.startsWith("/discover")) return <EditorialPage />;
+  if (path === "/bring/receive") return <BringReceive />;
+  if (path === "/bookmarklet") return <BookmarkletPage />;
   if (path.startsWith("/bring")) return <Bring />;
   return null;
 }
