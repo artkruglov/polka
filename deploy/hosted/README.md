@@ -76,15 +76,23 @@ docker compose --env-file hosted.env run --rm -T --no-deps app \
 cd /opt/polka/deploy/hosted
 docker compose --env-file hosted.env run --rm -T --no-deps app \
   node --import tsx scripts/editorial-seed-hosted.ts --confirm-publication --login <editorial-login>
-curl -s https://polka.example.com/api/editorial | grep -o '"slug"' | wc -l   # 15
+curl -s https://polka.example.com/api/editorial | grep -o '"slug"' | wc -l   # 14
 docker compose --env-file hosted.env exec -T postgres psql -U polka_admin -d polka -Atc \
   "SELECT slug, derivative_id IS NOT NULL, builder_version FROM editorial_publications WHERE withdrawn_at IS NULL ORDER BY slug"
-# 15 строк вида fractions|t|bundle-inline-v6 (или прежняя версия, если производная уже была готова)
+# 14 строк вида fractions|t|bundle-inline-v6 (или прежняя версия, если производная уже была готова)
 ```
 
-Первый запуск печатает 15 строк `{"slug":…,"status":"published","version":"interactive"}` (или `replaced`, если до этого были опубликованы статичные снимки). Затем откройте любую карточку `https://polka.example.com/discover`: над работой «Интерактивная версия», iframe с `https://polka-viewer.example.net`, материал реагирует (например, выбор ответа в «Доли без зубрёжки»).
+Первый запуск печатает 14 строк `{"slug":…,"status":"published","version":"interactive"}` (или `replaced`, если до этого были опубликованы статичные снимки). Затем откройте любую карточку `https://polka.example.com/discover`: над работой «Интерактивная версия», iframe с `https://polka-viewer.example.net`, материал реагирует (например, выбор ответа в «Доли без зубрёжки»).
 
-Раз в неделю запускайте ту же команду (share живёт 30 дней, публикация с share, истекающей в ближайшие 7 дней, заменяется свежей копией без перерыва). Вывод — по строке `{"slug":…,"status":…,"version":"interactive"|"static"}`: `published`, `unchanged`, `replaced`, `renewed`; `blocked` (slug занят другим tenant) и `failed` дают exit 1. Откат viewer'а (`HTML_LIVE_MODE=disabled`) сразу скрывает интерактивные публикации; после него запустите ту же команду, и она вернёт статичные снимки (`replaced`, `"version":"static"`). Новые материалы добавляются в `content/editorial/candidates.json`, снимки — `npx tsx scripts/editorial-static-snapshots.ts`; опубликовать только их, не трогая остальные: та же команда с `--only <slug>,<slug>`. Снять материал: `scripts/editorial-publish.ts withdraw --confirm-publication --tenant … --owner … --publication …`.
+Раз в неделю запускайте ту же команду (share живёт 30 дней, публикация с share, истекающей в ближайшие 7 дней, заменяется свежей копией без перерыва). Вывод — по строке `{"slug":…,"status":…,"version":"interactive"|"static"}`: `published`, `unchanged`, `replaced`, `renewed`; `blocked` (slug занят другим tenant) и `failed` дают exit 1. Откат viewer'а (`HTML_LIVE_MODE=disabled`) сразу скрывает интерактивные публикации; после него запустите ту же команду, и она вернёт статичные снимки (`replaced`, `"version":"static"`). Новые материалы добавляются в `content/editorial/candidates.json`, снимки — `npx tsx scripts/editorial-static-snapshots.ts`; опубликовать только их, не трогая остальные: та же команда с `--only <slug>,<slug>`. Снять материал: сначала убрать его из `content/editorial/candidates.json` и перегенерировать снимки (иначе еженедельный запуск опубликует его снова), развернуть образ, затем:
+
+```sh
+cd /opt/polka/deploy/hosted
+docker compose --env-file hosted.env run --rm -T --no-deps app \
+  node --import tsx scripts/editorial-seed-hosted.ts --confirm-publication --login <editorial-login> --withdraw <slug>,<slug>
+```
+
+По строке на slug: `withdrawn` (публикация снята, её share отозван — одной транзакцией), `absent` (активной публикации нет — повторный запуск безопасен), `blocked` (slug опубликован другим tenant, exit 1). Ничего не публикуется. Низкоуровневый путь по ID публикации: `scripts/editorial-publish.ts withdraw --confirm-publication --tenant … --owner … --publication …`.
 
 ## Интерактивный viewer
 
