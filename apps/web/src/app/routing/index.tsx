@@ -17,6 +17,7 @@ import {
   OAuthConsent,
   Pricing,
   PrivacyPage,
+  BotPage,
   Recipient,
   Signup,
   Templates,
@@ -42,6 +43,7 @@ function Route({ path }: { path: string }) {
   if (path === "/signup") return <Signup />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
+  if (path === "/bot") return <BotPage />;
   if (path === "/pricing") return <Pricing />;
   if (path === "/enterprise") return <Enterprise />;
   if (path === "/start") return <FirstSave />;
