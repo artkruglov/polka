@@ -221,7 +221,7 @@ rm polka.dump
 
 ### Настройки
 
-В `hosted.env` (все передаются через `compose.yml`):
+В `hosted.env` (все передаются через `compose.yml`). У `SHARE_MODERATION`, `CONTENT_FILTER_MODE`, `CONTENT_FILTER_AUTOBLOCK`, лимитов новых аккаунтов, регистрации и бюджета моделей значение из средней колонки (для автоблокировки — `false`) — оно же умолчание `compose.yml`: переменная, которой нет в `hosted.env` (или она пуста), получает его. Умолчания в коде (`config.ts`) мягче, они для локального запуска. `OPERATOR_EMAIL`, `OPERATOR_CONTACT` и модели по умолчанию пусты или выключены.
 
 | Переменная | На запуск polochka.app | Что делает |
 |---|---|---|
@@ -236,7 +236,7 @@ rm polka.dump
 | `CONTENT_FILTER_AUTOBLOCK` | `false` первые 2–4 недели, затем `true` | Автоблокировка: при `false` сразу блокируются только CSAM и явный вредоносный код, остальное ждёт вас; при `true` — ещё тяжёлые категории, в которых уверены правила или согласны обе модели |
 | `MODERATION_RETENTION` | пусто | Сроки изоляции по категориям поверх умолчаний (`porn=30,gambling=keep`…) |
 | `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы |
-| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: основная и ревьюер кода — NeuralDeep (только модели из `CONTENT_MODEL_ND_ALLOWED`, на его оборудовании в России), второе мнение и запасная — Yandex AI Studio; у каждой роли свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). До включения NeuralDeep — поручение на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` — только правила |
+| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила |
 | `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки (UTC, с 03:00 по Москве); дальше только правила и одно письмо вам. Расход хранится в базе, перезапуск и деплой его не обнуляют |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 
