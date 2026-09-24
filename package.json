@@ -52,6 +52,7 @@
     "infra:up": "docker compose --env-file=.env -f deploy/compose.local.yml up -d --wait",
     "infra:stop": "docker compose --env-file=.env -f deploy/compose.local.yml stop",
     "maintenance": "tsx --env-file=.env scripts/maintenance.ts",
+    "metrics": "tsx --env-file=.env scripts/metrics.ts",
     "format": "prettier --write apps packages scripts/*.ts tests/*.ts",
     "test:restore-guards": "tsx --test tests/restore-drill.test.ts",
     "test:url-import-runtime": "tsx --env-file=.env scripts/test-url-import-runtime.ts",

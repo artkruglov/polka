@@ -2,6 +2,12 @@ import { registerAgentContext } from "./agent-context.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
+import { registerOpsMetrics } from "./metrics.ts";
+import {
+  runInChannel,
+  trackPageView,
+  trackShareOpened,
+} from "./analytics.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { registerUrlImports } from "./url-import/routes.ts";
@@ -157,6 +163,15 @@ export async function createApp() {
         "Запрос должен быть отправлен из Полки.",
       );
   });
+  // Which surface an action came through (analytics.ts: work_saved via).
+  // A preHandler, not onRequest: the context must survive body parsing.
+  app.addHook("preHandler", (req, _reply, done) => {
+    const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
+    runInChannel(
+      pathname === "/mcp" ? "mcp" : isPublishApiPath(pathname) ? "api" : "web",
+      done,
+    );
+  });
   app.setErrorHandler((error: any, _req, reply) => {
     if (error instanceof Problem)
       return reply
@@ -217,11 +232,12 @@ export async function createApp() {
   registerTemplateLibraryRoutes(app, identity);
   registerSignInRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
-  app.get("/connect", async (_req, reply) =>
-    reply
+  app.get("/connect", async (req, reply) => {
+    trackPageView(req, "/connect");
+    return reply
       .type("text/plain; charset=utf-8")
-      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL)),
-  );
+      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL));
+  });
   // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
   registerAgentDiscovery(app);
   app.get("/api/health", async () => {
@@ -235,6 +251,8 @@ export async function createApp() {
     const status = await opsStatus(POLKA_VERSION);
     return reply.code(status.ok ? 200 : 503).send(status);
   });
+  // Product metrics for the operator: the same token (metrics.ts).
+  registerOpsMetrics(app);
   app.get("/api/capabilities", async () => ({
     profile: "file-v1",
     formats: MIME,
@@ -330,7 +348,19 @@ export async function createApp() {
     { bodyLimit: 2048 },
     async (req, reply) => {
       const input = z
-        .object({ id: uuid, code: z.string().regex(/^\d{8}$/) })
+        .object({
+          id: uuid,
+          code: z.string().regex(/^\d{8}$/),
+          // Where the visitor came from (a sign-up's source in analytics):
+          // the tab's own record, sanitised again by analytics.ts.
+          source: z
+            .object({
+              ref: z.string().max(200).optional(),
+              referrer: z.string().max(300).optional(),
+            })
+            .strict()
+            .optional(),
+        })
         .strict()
         .parse(req.body);
       const token = await verifyEmailLogin(
@@ -338,6 +368,7 @@ export async function createApp() {
         input.code,
         req.cookies.polka_email_challenge ?? "",
         req.ip,
+        input.source,
       );
       if (req.cookies.polka_session)
         await db.query("DELETE FROM sessions WHERE hash=$1", [
@@ -815,6 +846,15 @@ export async function createApp() {
       .strict()
       .parse(req.body);
     await limitAttempts(`resolve:ip:${req.ip}`, RESOLVE_LIMIT_PER_IP);
+    // The owner looking at their own link is not a recipient opening it.
+    const viewerAccount = req.cookies.polka_session
+      ? ((
+          await db.query(
+            "SELECT account_id FROM sessions WHERE hash=$1 AND expires_at>now()",
+            [sha256(req.cookies.polka_session)],
+          )
+        ).rows[0]?.account_id as string | undefined)
+      : undefined;
     // Read locks: resolve only issues a grant, so concurrent views of one
     // shelf do not queue behind each other, while trash, revoke, disable and
     // deletion (which hold these rows FOR UPDATE) still serialize with it and
@@ -883,6 +923,8 @@ export async function createApp() {
         )
       ).rowCount;
       const view = await issueShareGrant(c, s, candidate.artifact_id);
+      if (!editorial && viewerAccount !== candidate.account_id)
+        trackShareOpened(c, candidate.account_id, s.id);
       return {
         title: artifact.title ?? "Работа",
         ...view,

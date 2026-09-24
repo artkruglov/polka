@@ -46,6 +46,7 @@ import {
   derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+import { trackWorkSaved, viaFor } from "./analytics.ts";
 export type Actor = { id: string; tenant: string; connectionId?: string };
 export const audit = (
   c: PoolClient,
@@ -64,6 +65,27 @@ export const audit = (
       actor.connectionId ?? null,
     ],
   );
+/** Analytics: a work was saved (a new one or a version); `first` for the shelf. */
+async function trackSaved(
+  c: PoolClient,
+  actor: Actor,
+  revisionId: string,
+  number: number,
+) {
+  const {
+    rows: [earlier],
+  } = await c.query(
+    "SELECT EXISTS(SELECT 1 FROM revisions WHERE tenant_id=$1 AND id<>$2) AS found",
+    [actor.tenant, revisionId],
+  );
+  trackWorkSaved(
+    c,
+    actor.id,
+    viaFor(actor),
+    !earlier.found,
+    number === 1 ? "new" : "revision",
+  );
+}
 export const tokenFor = (id: string) =>
   createHmac("sha256", config.LINK_KEY)
     .update(`share:${id}`)
@@ -633,6 +655,7 @@ export async function finalizeUploadInTransaction(
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
   await audit(c, actor, "revision.saved", revisionId);
+  await trackSaved(c, actor, revisionId, number);
   return receipt;
 }
 
@@ -1087,6 +1110,7 @@ export async function finalizeBundleUploadInTransaction(
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
   await audit(c, actor, "revision.saved", revisionId);
+  await trackSaved(c, actor, revisionId, number);
   return receipt;
 }
 

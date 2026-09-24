@@ -5,6 +5,7 @@ import { request } from "../../shared/api/client.ts";
 import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
+import { visitSource } from "../../shared/lib/visit-source.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
 import { SignupConsent } from "./consent.tsx";
@@ -208,7 +209,12 @@ export function Signup() {
               setBusy(true);
               setError("");
               try {
-                await request("/auth/email/verify", { id: challenge.id, code });
+                const source = visitSource();
+                await request("/auth/email/verify", {
+                  id: challenge.id,
+                  code,
+                  ...(source ? { source } : {}),
+                });
                 location.assign(next);
               } catch (e) {
                 setError((e as Error).message);

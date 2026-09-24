@@ -1,3 +1,4 @@
+import { trackSignup, type VisitSource } from "./analytics.ts";
 import {
   randomBytes,
   randomInt,
@@ -241,6 +242,7 @@ export async function verifyEmailLogin(
   code: string,
   browser: string,
   ip: string,
+  source?: VisitSource | null,
 ) {
   if (config.MAIL_MODE === "disabled")
     throw new Problem(503, "invalid", "Вход по почте отключён.");
@@ -319,6 +321,7 @@ export async function verifyEmailLogin(
         randomUUID(),
         accountId,
       ]);
+      trackSignup(c, accountId, "email", source);
     } else if (challenge.delivery === "smtp")
       await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [
         account.id,

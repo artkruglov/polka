@@ -27,6 +27,7 @@ import {
 } from "../../packages/contracts/comments.ts";
 import type { Actor } from "./artifacts.ts";
 import { limitAttempts } from "./auth.ts";
+import { trackNoteAdded, viaFor } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
@@ -676,6 +677,12 @@ async function createInContext(
   // Owner notes send no letters: recipients are not a discussion to notify.
   if (!held && commentsMode() === "on")
     notices.push({ kind: "comment", commentId: id });
+  trackNoteAdded(
+    c,
+    writer.id,
+    writer.id === context.ownerId ? "owner" : "reader",
+    viaFor(),
+  );
   return { id: created.id as string };
 }
 
