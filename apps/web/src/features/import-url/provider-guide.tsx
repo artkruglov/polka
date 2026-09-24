@@ -2,6 +2,8 @@ import React from "react";
 import { ClipboardPaste, FileUp } from "lucide-react";
 import { Button } from "../../shared/ui/controls.tsx";
 import type { ImportClassification } from "./classify-link.ts";
+import { importableArtifact } from "../../../../../packages/contracts/extension-bridge.ts";
+import { ExtensionSave } from "./extension-save.tsx";
 
 /**
  * Claude/ChatGPT artifacts cannot be fetched by Полка, so the pasted link turns
@@ -10,18 +12,25 @@ import type { ImportClassification } from "./classify-link.ts";
  */
 export function ProviderGuide({
   result,
+  url,
+  autoStart = false,
   fileSave,
   pasteCode,
   onFile,
 }: {
   result: ImportClassification;
+  /** The pasted link: the «На Полку» extension can open it in this browser. */
+  url?: string;
+  autoStart?: boolean;
   fileSave?: React.ReactNode;
   pasteCode?: React.ReactNode;
   onFile: () => void;
 }) {
   const app = result.source === "chatgpt" ? "ChatGPT" : "Claude";
+  const artifact = url ? importableArtifact(url) : null;
   return (
     <>
+      {artifact && <ExtensionSave url={artifact.url} autoStart={autoStart} />}
       <div
         className="url-import-result"
         role="status"
