@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Что происходит с графиком, когда слайд уходит в PowerPoint</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.views{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 10px}
+.slide{width:100%;height:auto;border:1px solid var(--line);border-radius:12px;background:#fff;display:block}
+.cap{margin-top:10px;min-height:3.2em}
+.static-views{display:grid;gap:16px;margin-top:12px}
+.static-views figure{margin:0}
+.static-views figcaption{font-size:.92rem;color:var(--muted);margin-top:6px}
+.js .static-views{display:none}
+.bad{color:var(--accent)}.good{color:var(--ok)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0 0}
+.steps li{counter-increment:s;position:relative;padding:8px 10px 8px 44px;margin:0 0 6px;border-left:2px solid var(--line)}
+.steps li::before{content:counter(s);position:absolute;left:8px;top:7px;width:24px;height:24px;border-radius:50%;background:var(--cool);color:#fff;font-weight:800;font-size:.8rem;display:grid;place-items:center}
+.criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px}
+pre.code{margin:10px 0 14px;padding:12px 14px;border-radius:12px;background:#26221f;color:#efe9e0;font:.84rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+pre.code b{color:#ffc790;font-weight:700}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Исследования · презентации</div>
+<h1>Что происходит с графиком, когда слайд уходит в PowerPoint</h1>
+<p class="dek">Кнопка «Скачать PPTX» есть почти в каждом генераторе презентаций. Автор взял один простой слайд с диаграммой, прогнал его через два открытых проекта и разобрал получившиеся файлы по косточкам. Оба файла открылись, но ни один не прошёл проверку: в одном график спрятался, в другом перестал быть графиком.</p>
+</header>
+
+<section class="card" aria-labelledby="setup">
+<h2 id="setup">Что проверяли</h2>
+<p>Один слайд: заголовок «Музейные коллекции», короткое пояснение, картинка и столбчатая диаграмма: Керамика — 20, Монеты — 30, Тексты — 40. Числа условные, это тестовый пример, а не статистика.</p>
+<div class="grid">
+<div class="tile"><span class="tag cool">Редактор</span><h3>CreatPPT 0.1.4</h3><p>Открытый браузерный редактор с собственным экспортом в PPTX (Apache-2.0). Проверен весь путь: создать → править на слайде → сохранить → выгрузить.</p></div>
+<div class="tile"><span class="tag cool">Конвертер</span><h3>Presenton, HTML → PPTX</h3><p>Штатный конвертер открытой редакции 0.9.9-beta. Ему отдали HTML уже отредактированного слайда. Собственный редактор Presenton и его компоненты графиков не запускались.</p></div>
+</div>
+<ol class="steps">
+<li>Создать слайд из описания без координат.</li>
+<li>Изменить заголовок прямо на слайде («Коллекции древнего мира»), сохранить, перезагрузить.</li>
+<li>Изменить значение на графике: 20 → 25.</li>
+<li>Добавить и заменить картинку, сдвинуть её.</li>
+<li>Выгрузить PPTX штатной кнопкой.</li>
+<li>Тот же слайд отдать конвертеру как HTML.</li>
+<li>Разобрать оба файла как OOXML и отрисовать в LibreOffice.</li>
+</ol>
+<p class="note">Проверка 6 сентября 2026 года. В самом PowerPoint файлы не открывали — это отдельный открытый вопрос, о нём ниже.</p>
+</section>
+
+<section class="card" aria-labelledby="look">
+<h2 id="look">Как это выглядело</h2>
+<p>Схематичная реконструкция трёх картинок из проверки: исходник в браузере и два PPTX после отрисовки.</p>
+<div class="views js-only" role="group" aria-label="Выбор версии слайда">
+<button class="button" type="button" data-v="0" aria-pressed="true">Браузер</button>
+<button class="button secondary" type="button" data-v="1" aria-pressed="false">PPTX из редактора</button>
+<button class="button secondary" type="button" data-v="2" aria-pressed="false">PPTX из конвертера</button>
+</div>
+<div class="js-only">
+<svg class="slide" id="slide" viewBox="0 0 640 360" role="img" aria-labelledby="slideT"><title id="slideT">Слайд</title></svg>
+<p class="cap" id="cap" aria-live="polite"></p>
+</div>
+<p class="no-js note">Без JavaScript схемы не рисуются. Коротко: в браузере — заголовок Georgia и график из трёх столбцов; в PPTX из редактора график есть в файле, но закрыт белым прямоугольником, а заголовок стал Arial; в PPTX из конвертера всё выглядит как в браузере, но столбцы — это фигуры, а не диаграмма.</p>
+<div class="static-views" id="static"></div>
+</section>
+
+<section class="card" aria-labelledby="inside">
+<h2 id="inside">Что внутри файлов</h2>
+<p>PPTX — это ZIP с XML внутри. Можно посчитать, какие объекты там на самом деле лежат.</p>
+<div class="scroll"><table>
+<thead><tr><th>Что нашли</th><th>Редактор CreatPPT</th><th>Конвертер Presenton</th></tr></thead>
+<tbody>
+<tr><td>Текстовые блоки</td><td class="num">6</td><td class="num">12 — включая подписи и числа диаграммы</td></tr>
+<tr><td>Картинки</td><td class="num">1</td><td class="num">2 — фото и снимок всего слайда в нижнем слое</td></tr>
+<tr><td>Настоящая диаграмма PowerPoint</td><td class="good">1</td><td class="bad">0</td></tr>
+<tr><td>Таблица данных внутри диаграммы</td><td class="good">есть: 20, 30, 40</td><td class="bad">нет</td></tr>
+<tr><td>Заголовок одним текстовым блоком</td><td class="good">да</td><td class="good">да</td></tr>
+<tr><td>Шрифт заголовка</td><td class="bad">Arial, хотя в браузере Georgia</td><td class="good">Georgia</td></tr>
+<tr><td>Столбцы при отрисовке</td><td class="bad">закрыты белой подложкой</td><td>видны, но как фигуры</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="card" aria-labelledby="why">
+<h2 id="why">Почему так вышло</h2>
+<h3>График спрятался из-за порядка слоёв</h3>
+<p>В PowerPoint объекты рисуются в том порядке, в каком лежат в файле: что позже — то сверху. Экспортёр редактора сначала добавлял диаграмму, а потом — все остальные элементы слайда, включая непрозрачный белый прямоугольник фона карточки. Он и накрыл график.</p>
+<pre class="code">addNativeChart(slide, chart)   <b>// диаграмма — первой</b>
+renderElements(slide, elements) <b>// белая подложка — поверх неё</b></pre>
+<p>Данные при этом в файле правильные: откройте диаграмму — там 20, 30, 40. Пользователь просто её не видит.</p>
+<h3>Число не сохранилось из-за типа данных</h3>
+<p>Правка «20 → 25» на слайде вернула ошибку: поле ждало число, а получило строку «25». Подпись на слайде была связана прямо с числовым полем данных, а редактор записывал туда текст из подписи. После перезагрузки осталось 20 — к чести редактора, неудачная правка не была выдана за сохранённую.</p>
+<h3>Конвертер не знал, что это график</h3>
+<p>Конвертер HTML видит прямоугольники, текст и картинки. Что три прямоугольника — это ряд данных, в HTML не написано, поэтому он честно выгрузил их фигурами. Выглядит похоже, но поменять число в PowerPoint уже нельзя. Это результат универсального пути «любой HTML → PPTX»; со специальной разметкой графиков Presenton может вести себя иначе, её не проверяли.</p>
+<h3>А Slidev?</h3>
+<p>По официальной документации Slidev, его экспорт в PPTX кладёт в файл изображения слайдов: текст в них не выделяется и не правится. Это честный вариант, если PPTX нужен только для показа.</p>
+</section>
+
+<section class="card" aria-labelledby="crit">
+<h2 id="crit">Четыре разных вопроса вместо одного «работает»</h2>
+<p>Главный вывод проверки: «экспорт в PPTX работает» — это четыре отдельных утверждения. Счётчик «в файле есть диаграмма» не отвечает ни на одно из них целиком.</p>
+<div class="criteria">
+<div class="tile"><span class="tag">1</span><h3>Настоящие объекты</h3><p>Текст — текстом, график — графиком, а не картинкой или фигурами.</p></div>
+<div class="tile"><span class="tag">2</span><h3>Правильные данные</h3><p>Внутри графика те же числа, что на слайде.</p></div>
+<div class="tile"><span class="tag">3</span><h3>Тот же вид</h3><p>Шрифты, кадрирование, порядок слоёв совпадают с превью.</p></div>
+<div class="tile"><span class="tag">4</span><h3>Удобная правка</h3><p>Абзац правится как абзац, а не как стопка строк; изменённый файл снова сохраняется.</p></div>
+</div>
+<p style="margin-top:16px"><b>Что из этого следует для тех, кто делает редактор:</b> хранить данные графика как данные с типами, а не как текст подписей; давать элементам постоянные ID; держать общий план отрисовки для браузера, PDF и PPTX, чтобы семантика графика доходила до экспортёра. И не полагаться на автоматическое превращение произвольного HTML в PPTX как на единственный путь.</p>
+<p><b>Что осталось непроверенным:</b> как эти файлы открываются и пересохраняются в самом Microsoft PowerPoint. Разбор XML подтверждает типы объектов и данные, но не поведение конкретной программы.</p>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ul class="sources">
+<li>Собственная проверка автора, 6 сентября 2026: CreatPPT <code>@seekskyworld/creatppt@0.1.4</code> (репозиторий seekskyworld/CreatPPT, коммит <code>8b7804b</code>, файлы <code>src/export/pptx.ts</code>, <code>src/domain/elements.ts</code>, <code>src/editor/state.ts</code>); Presenton 0.9.9-beta (репозиторий presenton/presenton, коммит <code>6bcd0bd</code>), конвертер <code>@presenton/export-core@1.0.26</code>, открытая редакция; отрисовка файлов — LibreOffice.</li>
+<li>Документация Slidev, раздел Exporting → PPTX. <small>sli.dev/guide/exporting.html</small></li>
+<li>Спецификация Office Open XML (ECMA-376): порядок объектов в дереве фигур слайда определяет порядок отрисовки.</li>
+</ul>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Проверку автор Полки проводил с Claude, выбирая архитектуру своего редактора презентаций. Картинки на странице — схематичные реконструкции, а не снимки экрана. Названия проектов — примеры, это не реклама и не рейтинг.</div>
+<p class="foot">Автор: Редакция Полки</p>
+</main>
+<script>
+(function(){
+document.documentElement.classList.add('js');
+function slide(v){
+var title=v===1?'<text x="36" y="62" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#1e2a33">Коллекции древнего мира</text>':'<text x="36" y="62" font-family="Georgia, serif" font-size="32" font-weight="700" fill="#1e2a33">Коллекции древнего мира</text>';
+var body='<text x="36" y="96" font-size="15" fill="#5f6a70">Условные данные для проверки экспорта</text>';
+var img=v===1?'<rect x="36" y="124" width="236" height="190" rx="6" fill="#c9bfae"/><rect x="36" y="150" width="236" height="140" fill="#b3a792"/>':'<rect x="36" y="124" width="236" height="190" rx="6" fill="#c9bfae"/><circle cx="110" cy="190" r="34" fill="#b3a792"/><rect x="150" y="220" width="90" height="70" fill="#a89a82"/>';
+var card='<rect x="300" y="124" width="304" height="190" rx="8" fill="#fff" stroke="#d9d8d0"/>';
+var bars='<g fill="#2d6a8a"><rect x="340" y="234" width="56" height="50"/><rect x="424" y="209" width="56" height="75"/><rect x="508" y="184" width="56" height="100"/></g><line x1="330" y1="284" x2="580" y2="284" stroke="#5f6a70"/><g font-size="12" fill="#22262a" text-anchor="middle"><text x="368" y="302">Керамика</text><text x="452" y="302">Монеты</text><text x="536" y="302">Тексты</text><text x="368" y="228">20</text><text x="452" y="203">30</text><text x="536" y="178">40</text></g>';
+var cover='<rect x="302" y="126" width="300" height="186" rx="7" fill="#fff"/><text x="452" y="224" font-size="12" fill="#b9b4a8" text-anchor="middle">(здесь должен быть график)</text>';
+var mark=v===2?'<g font-size="11" fill="#7a3b2e"><text x="452" y="150" text-anchor="middle">фигуры, а не диаграмма</text></g>':'';
+var content=v===1?card+bars+cover:card+bars+mark;
+return '<rect width="640" height="360" fill="#fbfaf7"/>'+title+body+img+content;
+}
+var caps=['Исходник в браузере: заголовок набран Georgia, график с тремя столбцами.','PPTX из редактора: настоящая диаграмма с данными 20, 30, 40 в файле есть, но её закрыл белый прямоугольник; заголовок стал Arial, кадр картинки сместился.','PPTX из конвертера: композиция и шрифт сохранились, но столбцы — отдельные фигуры. Изменить число в PowerPoint нельзя.'];
+var svg=document.getElementById('slide'),cap=document.getElementById('cap'),btns=[].slice.call(document.querySelectorAll('[data-v]'));
+function show(v){svg.innerHTML='<title>'+caps[v]+'</title>'+slide(v);cap.textContent=caps[v];btns.forEach(function(b){var on=+b.dataset.v===v;b.setAttribute('aria-pressed',String(on));b.className=on?'button':'button secondary'})}
+btns.forEach(function(b){b.addEventListener('click',function(){show(+b.dataset.v)})});
+show(0);
+var st=document.getElementById('static');
+st.innerHTML=[0,1,2].map(function(v){return '<figure><svg class="slide" viewBox="0 0 640 360" role="img" aria-label="'+caps[v]+'">'+slide(v)+'</svg><figcaption>'+caps[v]+'</figcaption></figure>'}).join('');
+})();
+</script>
+</body></html>

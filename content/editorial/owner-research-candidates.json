@@ -2,7 +2,7 @@
   "version": 1,
   "status": "draft-owner-review",
   "publication": "requires-explicit-registration",
-  "note": "Черновики из исследований владельца, решение за владельцем. Не зарегистрированы: не входят в candidates.json. observability-to-ai-sre — готов и проверен (есть статичный снимок), владелец отложил; ai-game-makers-2026 — пока не публикуем; how-the-brain-learns — ждёт решения.",
+  "note": "Черновики из исследований владельца, решение за владельцем. Не зарегистрированы: не входят в candidates.json. observability-to-ai-sre — готов и проверен (есть статичный снимок), владелец отложил; ai-game-makers-2026 — пока не публикуем; how-the-brain-learns — ждёт решения; slide-to-pptx-test и writing-workbook-design — новые черновики, ждут решения.",
   "items": [
     {
       "slug": "observability-to-ai-sre",
@@ -39,6 +39,30 @@
       "sourcePath": "content/editorial/how-the-brain-learns/index.html",
       "sourceSha256": "e726fe26562a8eb8ff24885053f41bbc94ab015deba3cacd3e4432905fbd84ce",
       "evidencePath": "content/editorial/how-the-brain-learns/README.md"
+    },
+    {
+      "slug": "slide-to-pptx-test",
+      "title": "Что происходит с графиком, когда слайд уходит в PowerPoint",
+      "topic": "Исследования",
+      "task": "Понять, почему экспорт презентации в PPTX прячет или ломает графики и как это проверять",
+      "action": "Переключать три версии одного слайда и сравнивать, что лежит внутри файлов",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/slide-to-pptx-test/index.html",
+      "sourceSha256": "b875489d95e0e0de37a8e4cfff03c4cb4c35016d42aab36b7d39bf96f0dc0837",
+      "evidencePath": "content/editorial/slide-to-pptx-test/README.md"
+    },
+    {
+      "slug": "writing-workbook-design",
+      "title": "Тетрадь, которую хочется заполнять: как устроить домашнюю практику письма",
+      "topic": "Исследования",
+      "task": "Собрать домашнюю практику письма для младшеклассника, которую ребёнок не бросит",
+      "action": "Выбрать тему и цель и получить мини-миссию на три дня для печати",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/writing-workbook-design/index.html",
+      "sourceSha256": "774e11607653dc4d1e15d7bf0d66a9b403c03eb0068ed839f4cc39568068a726",
+      "evidencePath": "content/editorial/writing-workbook-design/README.md"
     }
   ]
 }

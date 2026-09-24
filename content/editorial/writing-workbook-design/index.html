@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тетрадь, которую хочется заполнять: домашняя практика письма</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.rules{counter-reset:r;list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px}
+.rules li{counter-increment:r;position:relative;padding:12px 14px 12px 52px;border:1px solid var(--line);border-radius:12px;background:#fbfaf7}
+.rules li::before{content:counter(r);position:absolute;left:14px;top:11px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:.85rem;display:grid;place-items:center}
+.rules b{display:block}
+.pick{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.mission{margin-top:10px;padding:18px 20px;border:2px dashed var(--line);border-radius:16px;background:#fff}
+.mission h3{font-family:inherit;letter-spacing:0;margin-bottom:10px}
+.mission ol{margin:0;padding-left:0;list-style:none;display:grid;gap:10px}
+.mission li{padding:10px 12px;border-radius:10px;background:#fbfaf7}
+.mission li b{color:var(--cool)}
+.mission .done{margin-top:12px;font-size:.92rem;color:var(--muted)}
+.checkcard{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;font-weight:800;font-size:.95rem}
+.checkcard span{padding:8px 12px;border-radius:999px;background:var(--soft)}
+.map{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:10px;max-width:420px}
+.map i{aspect-ratio:1;border-radius:6px;border:2px solid var(--line);background:#fff}
+.map i.on{background:var(--cool);border-color:var(--cool)}
+.maplabel{font-size:.85rem;color:var(--muted);margin-top:10px}
+@media print{body{background:#fff}.card{box-shadow:none}.pick,.actions,header .dek{display:none}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Шаблоны · дети и школа</div>
+<h1>Тетрадь, которую хочется заполнять: как устроить домашнюю практику письма</h1>
+<p class="dek">Прописи, которые ребёнок делает из-под палки, дают мало. Эта страница — разбор того, как собрать тетрадь-игру для младшеклассника: короткие «миссии» по интересам, одна цель за раз, отметка за участие, а не за отсутствие ошибок. Внизу — конструктор мини-миссии, которую можно распечатать.</p>
+</header>
+
+<section class="card" aria-labelledby="rules-h">
+<h2 id="rules-h">Семь правил тетради</h2>
+<ol class="rules">
+<li><b>Сюжет из того, что ребёнку интересно.</b> Машинки, космос, футбол, животные. Письмо — это «сообщение по рации», «адрес для курьера», «табличка для гаража», а не «упражнение 14».</li>
+<li><b>Сначала придумай, потом пиши.</b> Ребёнок сначала рассказывает, что хочет сообщить. Идея важна отдельно от того, как она записана.</li>
+<li><b>Одна цель на миссию.</b> Точки между мыслями, или одно трудное слово, или пробелы между словами. Всё остальное в этот раз не проверяется.</li>
+<li><b>Сомневаться можно.</b> Не знаешь, как пишется, — отметь место карандашом и спроси. Угадывать молча не нужно.</li>
+<li><b>Отметка за участие, а не за ошибки.</b> После миссии закрашивается одна клетка на карте, и она не зависит от числа ошибок. Помощь взрослого разрешена.</li>
+<li><b>Короткие подходы в разные дни.</b> 5–7 минут, одно задание за раз. Пропущенное не отрабатывается двойным объёмом.</li>
+<li><b>Береги руку.</b> Можно сделать паузу. Если рука болит — остановиться и сказать взрослому. Раскрашивание — только по желанию.</li>
+</ol>
+<p class="note">Эти правила опираются на те же выводы, что и материал «Почерк и грамотность младшеклассника»: учить конкретному написанию, писать по памяти, отдельно проверять «заметил» и «исправил», хвалить за конкретное действие.</p>
+</section>
+
+<section class="card" aria-labelledby="shape">
+<h2 id="shape">Как устроена одна миссия</h2>
+<p>У каждой миссии одинаковый каркас, поэтому ребёнку не приходится каждый раз разбираться в правилах:</p>
+<div class="grid">
+<div class="tile"><span class="tag cool">Разминка</span><p>Взрослый показывает один рукописный образец — не печатный шрифт.</p></div>
+<div class="tile"><span class="tag cool">Три задания</span><p>Прочитать и заметить → записать по памяти или под диктовку → написать своё.</p></div>
+<div class="tile"><span class="tag cool">Итог</span><p>«Получилось самому / помогла подсказка / хочу ещё потренироваться» — ребёнок выбирает сам.</p></div>
+</div>
+<div class="checkcard" aria-label="Карточка проверки"><span>ПОНЯТНО?</span>→<span>МОЯ ЦЕЛЬ</span>→<span>ИСПРАВИЛ ИЛИ СПРОСИЛ</span></div>
+<p class="note">Карточка проверки: сначала — поймёт ли меня другой человек, потом — выбранная цель, и только потом — исправление или вопрос взрослому.</p>
+<h3 style="margin-top:18px">Карта миссий</h3>
+<p>24 миссии в трёх «локациях»: короткие сообщения → точность и самостоятельность → свои истории. Одна миссия — одна закрашенная клетка.</p>
+<div class="map" id="map" aria-label="Карта из 24 клеток, закрашено 7">
+<i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+</div>
+<p class="maplabel">Первая строка — короткие сообщения, вторая — точность, третья — свои истории.</p>
+</section>
+
+<section class="card" aria-labelledby="make">
+<h2 id="make">Соберите мини-миссию</h2>
+<p>Выберите тему и одну цель — получится карточка из трёх коротких заданий на разные дни. Её можно распечатать.</p>
+<div class="js-only">
+<label>Тема</label>
+<div class="pick" id="themes" role="group" aria-label="Тема"></div>
+<label>Цель</label>
+<div class="pick" id="targets" role="group" aria-label="Цель"></div>
+</div>
+<div class="mission" id="mission">
+<h3>Мини-миссия «Гараж»: начало и конец предложения</h3>
+<ol>
+<li><b>День А.</b> Напиши одно предложение о своей машинке. Проверь: большая буква в начале, точка в конце.</li>
+<li><b>День Б.</b> Здесь две мысли слиплись. Раздели их точкой и большой буквой: «машина заехала в гараж ворота закрылись».</li>
+<li><b>День В.</b> Взрослый диктует: «Ключ лежит на столе». Проверь начало и конец.</li>
+</ol>
+<div class="done">Сделано: А □ Б □ В □ · Мой итог: получилось самому / помогла подсказка / хочу ещё</div>
+</div>
+<div class="actions js-only"><button class="button secondary" id="print" type="button">Распечатать карточку</button></div>
+</section>
+
+<section class="card" aria-labelledby="adult">
+<h2 id="adult">Взрослому: как не превратить игру в экзамен</h2>
+<ul>
+<li>Хвалите конкретное действие: «Ты сам нашёл, где кончается мысль». Не «молодец» и не «красиво».</li>
+<li>Исправляйте только выбранную цель. Остальные ошибки в эту миссию не входят.</li>
+<li>Не показывайте печатный шрифт как образец рукописной буквы.</li>
+<li>В конце тетради — страница «Теперь у меня лучше получается…» и одна конкретная удача, записанная взрослым.</li>
+<li>Если трудности стойкие или письмо болезненно, это повод для очной консультации специалиста, а не для ещё одной тетради.</li>
+</ul>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Материал вырос из тетради, которую автор Полки делал с Claude для домашних занятий по письму. Имена, сюжет и задания конкретного ребёнка заменены вымышленными; научная основа — в материале «Почерк и грамотность младшеклассника».</div>
+<p class="foot">Автор: Редакция Полки</p>
+</main>
+<script>
+(function(){
+document.documentElement.classList.add('js');
+var themes={
+ garage:{name:'Гараж',obj:'своей машинке',joined:'машина заехала в гараж ворота закрылись',spaces:'уворотгаража',word:'машина',dict:'Ключ лежит на столе.',names:'Саша и Петя'},
+ space:{name:'Космос',obj:'своей ракете',joined:'ракета взлетела звёзды стали ближе',spaces:'наорбитеземли',word:'космонавт',dict:'Ракета летит к Луне.',names:'Юрий и Валентина'},
+ football:{name:'Футбол',obj:'своём любимом матче',joined:'мяч влетел в ворота трибуны закричали',spaces:'уштангиворот',word:'вратарь',dict:'Вратарь поймал мяч.',names:'Лёва и Игорь'},
+ animals:{name:'Животные',obj:'своём любимом звере',joined:'кот забрался на шкаф собака залаяла',spaces:'подстаройелью',word:'медведь',dict:'Ёжик спит под листьями.',names:'Мурзик и Шарик'}};
+var targets={
+ bounds:{name:'Начало и конец предложения',check:'большая буква в начале, точка в конце',b:function(t){return 'Здесь две мысли слиплись. Раздели их точкой и большой буквой: «'+t.joined+'».'},c:'Проверь начало и конец.'},
+ word:{name:'Одно трудное слово',check:'трудное слово',b:function(t){return 'Посмотри на слово «'+t.word+'». Закрой, напиши по памяти, открой и сравни каждую букву.'},c:'Проверь слово, которое тренировал.'},
+ spaces:{name:'Пробелы между словами',check:'каждое слово стоит отдельно',b:function(t){return 'Раздели слова пробелами: «'+t.spaces+'».'},c:'Проверь, что между словами есть промежутки.'},
+ caps:{name:'Заглавные буквы в именах',check:'имена с большой буквы',b:function(t){return 'Спиши и проверь заглавные буквы: «'+t.names+' играли вместе».'},c:'Проверь большие буквы в начале и в именах.'}};
+var theme='garage',target='bounds';
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function buttons(el,map,cur,set){el.innerHTML='';Object.keys(map).forEach(function(k){var b=document.createElement('button');b.type='button';b.className=k===cur?'button':'button secondary';b.setAttribute('aria-pressed',String(k===cur));b.textContent=map[k].name;b.addEventListener('click',function(){set(k);render()});el.appendChild(b)})}
+function render(){
+ var t=themes[theme],g=targets[target];
+ document.getElementById('mission').innerHTML='<h3>Мини-миссия «'+esc(t.name)+'»: '+esc(g.name.toLowerCase())+'</h3><ol><li><b>День А.</b> Напиши одно предложение о '+esc(t.obj)+'. Проверь: '+esc(g.check)+'.</li><li><b>День Б.</b> '+esc(g.b(t))+'</li><li><b>День В.</b> Взрослый диктует: «'+esc(t.dict)+'» '+esc(g.c)+'</li></ol><div class="done">Сделано: А □ Б □ В □ · Мой итог: получилось самому / помогла подсказка / хочу ещё</div>';
+ buttons(document.getElementById('themes'),themes,theme,function(k){theme=k});
+ buttons(document.getElementById('targets'),targets,target,function(k){target=k});
+}
+document.getElementById('print').addEventListener('click',function(){window.print()});
+render();
+})();
+</script>
+</body></html>
