@@ -236,7 +236,7 @@ rm polka.dump
 | `CONTENT_FILTER_AUTOBLOCK` | `false` первые 2–4 недели, затем `true` | Автоблокировка: при `false` сразу блокируются только CSAM и явный вредоносный код, остальное ждёт вас; при `true` — ещё тяжёлые категории, в которых уверены правила или согласны обе модели |
 | `MODERATION_RETENTION` | пусто | Сроки изоляции по категориям поверх умолчаний (`porn=30,gambling=keep`…) |
 | `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы |
-| `CONTENT_MODEL_*` | см. `hosted.env.example` | Модели Yandex AI Studio: основная, второе мнение, ревьюер кода, их параметры, цены и ключ. Ключ — секрет (hosted.env и Lockbox). `CONTENT_MODEL_PROVIDER=off` — только правила |
+| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: основная и ревьюер кода — NeuralDeep (только модели из `CONTENT_MODEL_ND_ALLOWED`, на его оборудовании в России), второе мнение и запасная — Yandex AI Studio; у каждой роли свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). До включения NeuralDeep — поручение на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` — только правила |
 | `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки; дальше только правила и одно письмо вам |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 

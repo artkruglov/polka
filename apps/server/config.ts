@@ -4,6 +4,8 @@ import {
   PUBLIC_MAIL_DOMAINS,
   parseSignupDomains,
 } from "./mail-domains.ts";
+const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
+export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
   z
     .string()
@@ -166,15 +168,57 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
-    // The model stage (docs/specs/CONTENT_FILTER.md, «Модель»), run after a
-    // save and never blocking it. off: rules only. yandex: Yandex AI Studio
-    // (the production choice: data stays with a Russian provider).
-    // openai-compatible: a self-hosted server with the same API.
-    CONTENT_MODEL_PROVIDER: z.enum(["off", "yandex", "openai-compatible"]).default("off"),
-    CONTENT_MODEL_URL: z
+    // The model stage (docs/specs/CONTENT_FILTER.md, «Модели»), run after a
+    // save and never blocking it. off: rules only. neuraldeep: NeuralDeep
+    // (api.neuraldeep.ru; only models it serves on its own hardware in Russia,
+    // CONTENT_MODEL_ND_ALLOWED). yandex: Yandex AI Studio. Both keep the data
+    // with a Russian provider. openai-compatible: a self-hosted server with the
+    // same API. The fallback and the code model may use another endpoint
+    // (CONTENT_MODEL_FALLBACK_* / CONTENT_CODE_MODEL_*, by default the primary's).
+    CONTENT_MODEL_PROVIDER: z
+      .enum(["off", "yandex", "neuraldeep", "openai-compatible"])
+      .default("off"),
+    // The /chat/completions address. Unset: the provider's own (Yandex AI
+    // Studio or NeuralDeep); a …/v1 base gets /chat/completions appended.
+    CONTENT_MODEL_URL: unsetIfEmpty(z.string().url()),
+    CONTENT_MODEL_FALLBACK_PROVIDER: unsetIfEmpty(z.enum(MODEL_PROVIDERS)),
+    CONTENT_MODEL_FALLBACK_URL: unsetIfEmpty(z.string().url()),
+    CONTENT_MODEL_FALLBACK_API_KEY: unsetIfEmpty(z.string().max(4096)),
+    CONTENT_CODE_MODEL_PROVIDER: unsetIfEmpty(z.enum(MODEL_PROVIDERS)),
+    CONTENT_CODE_MODEL_URL: unsetIfEmpty(z.string().url()),
+    CONTENT_CODE_MODEL_API_KEY: unsetIfEmpty(z.string().max(4096)),
+    // Requests per minute and parallel requests per endpoint, counted in this
+    // process (NeuralDeep plans cap both: free 20 rpm and 3 parallel). Unset:
+    // 20 and 3 on NeuralDeep, no limit elsewhere; 0: no limit. A 429 or a
+    // full limiter sends the primary's question to the fallback at once.
+    CONTENT_MODEL_RPM: unsetIfEmpty(z.string().regex(/^\d{1,5}$/)),
+    CONTENT_MODEL_MAX_CONCURRENCY: unsetIfEmpty(z.string().regex(/^\d{1,3}$/)),
+    CONTENT_MODEL_FALLBACK_RPM: unsetIfEmpty(z.string().regex(/^\d{1,5}$/)),
+    CONTENT_MODEL_FALLBACK_MAX_CONCURRENCY: unsetIfEmpty(z.string().regex(/^\d{1,3}$/)),
+    CONTENT_CODE_MODEL_RPM: unsetIfEmpty(z.string().regex(/^\d{1,5}$/)),
+    CONTENT_CODE_MODEL_MAX_CONCURRENCY: unsetIfEmpty(z.string().regex(/^\d{1,3}$/)),
+    // A flat-rate key (NeuralDeep «Qwen ∞»): its calls cost 0 for the budget.
+    CONTENT_MODEL_FLAT_RATE: unsetIfEmpty(z.enum(["true", "false"])),
+    CONTENT_MODEL_FALLBACK_FLAT_RATE: unsetIfEmpty(z.enum(["true", "false"])),
+    CONTENT_CODE_MODEL_FLAT_RATE: unsetIfEmpty(z.enum(["true", "false"])),
+    // NeuralDeep models served on NeuralDeep's own hardware in Russia. Its
+    // wallet models (DeepSeek, GLM, Kimi…) may be served by foreign vendors: a
+    // cross-border transfer of user content, so any other model name refuses
+    // to start. Add a model only after NeuralDeep confirms where it runs.
+    // Empty: this default list.
+    CONTENT_MODEL_ND_ALLOWED: z
       .string()
-      .url()
-      .default("https://llm.api.cloud.yandex.net/v1/chat/completions"),
+      .max(2000)
+      .optional()
+      .transform((value) =>
+        (
+          value?.trim() ||
+          "qwen3.6-35b-a3b,qwen3.6-35b-a3b-noreason,qwen3.6-fp8,qwen3.6-fp8-noreason,qwen3.6-unlim,qwen3.6-unlim-noreason,qwen3.8-27b,qwen3.8-27b-noreason,gemma-4-31b,gemma-4-31b-noreason,gpt-oss-120b,gpt-oss-20b"
+        )
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
     // Model names (gpt://<folder>/<model>/latest on AI Studio) are only
     // configuration: hosted.env.example carries the benchmark's choice.
     // The primary reads text and images; the fallback is the second opinion
@@ -187,9 +231,11 @@ const env = z
     CONTENT_MODEL_PRIMARY_OPTIONS: z.string().max(2000).default(""),
     CONTENT_MODEL_FALLBACK_OPTIONS: z.string().max(2000).default(""),
     CONTENT_CODE_MODEL_OPTIONS: z.string().max(2000).default(""),
-    // «<part of a model name>=<input>/<cached>/<output>» ₽ per 1000 tokens.
+    // «[<provider>:]<part of a model name>=<input>/<cached>/<output>» ₽ per
+    // 1000 tokens; a provider-specific entry first, then the longest name.
     CONTENT_MODEL_PRICES_RUB: z.string().max(2000).default(""),
-    // An AI Studio API key (a secret: hosted.env/Lockbox, never the repository).
+    // The primary endpoint's key: Api-Key on Yandex, Bearer elsewhere (a
+    // secret: hosted.env/Lockbox, never the repository).
     CONTENT_MODEL_API_KEY: unsetIfEmpty(z.string().max(4096)),
     CONTENT_MODEL_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(8000),
     // Send images (a single image, bundle images, data: images) to the primary.
@@ -284,20 +330,102 @@ if (env.CONTENT_MODEL_FOREIGN_DEV && env.MAIL_MODE === "smtp" && env.APP_ORIGIN.
   throw new Error(
     "CONTENT_MODEL_FOREIGN_DEV is for development and benchmarks only, not a production install",
   );
+// NeuralDeep: exactly its API host (it serves its open models on its own
+// hardware in Russia), and only the models CONTENT_MODEL_ND_ALLOWED lists.
+const NEURALDEEP_HOST = "api.neuraldeep.ru";
+const PROVIDER_URLS: Record<ModelProvider, string | undefined> = {
+  yandex: "https://llm.api.cloud.yandex.net/v1/chat/completions",
+  neuraldeep: `https://${NEURALDEEP_HOST}/v1/chat/completions`,
+  "openai-compatible": undefined,
+};
+/** One model role's endpoint: where its requests go and how they are limited. */
+export type ModelEndpoint = {
+  provider: ModelProvider;
+  url: string;
+  key: string | null;
+  /** Requests per minute and in parallel; 0: no limit. */
+  rpm: number;
+  concurrency: number;
+  /** A flat-rate key: its calls cost 0 for the budget. */
+  flatRate: boolean;
+};
+type ModelRole = "CONTENT_MODEL" | "CONTENT_MODEL_FALLBACK" | "CONTENT_CODE_MODEL";
+const chatUrl = (value: string) =>
+  /\/v1\/?$/.test(new URL(value).pathname)
+    ? value.replace(/\/?$/, "/chat/completions")
+    : value;
+/**
+ * A role's endpoint. The fallback and the code model inherit the primary's
+ * provider; its URL when the provider is the same; its key, limits and flat
+ * rate only when the URL is the same (a key never goes to another host).
+ */
+function modelEndpoint(role: ModelRole, model: string, primary: ModelEndpoint | null): ModelEndpoint {
+  const own = (name: string) =>
+    (env as Record<string, unknown>)[`${role}_${name}`] as string | undefined;
+  const label = (name: "URL" | "MODEL") =>
+    name === "URL" ? `${role}_URL` : role === "CONTENT_MODEL" ? "CONTENT_MODEL_PRIMARY" : role;
+  const provider = (primary
+    ? (own("PROVIDER") ?? primary.provider)
+    : env.CONTENT_MODEL_PROVIDER) as ModelProvider;
+  const given =
+    own("URL") ??
+    (primary && provider === primary.provider ? primary.url : PROVIDER_URLS[provider]);
+  if (!given) throw new Error(`${label("URL")} is required for provider ${provider}`);
+  const url = chatUrl(given);
+  const sameEndpoint = !!primary && url === primary.url;
+  const key = own("API_KEY") ?? (sameEndpoint ? primary!.key : null);
+  const parsed = new URL(url);
+  if (provider === "yandex" && !yandexHost(parsed.hostname))
+    throw new Error(`${label("URL")} is not a Yandex Cloud address`);
+  if (provider === "neuraldeep") {
+    if (parsed.hostname !== NEURALDEEP_HOST || parsed.protocol !== "https:")
+      throw new Error(`${label("URL")} must be https://${NEURALDEEP_HOST}/v1/chat/completions`);
+    if (!env.CONTENT_MODEL_ND_ALLOWED.includes(model.trim()))
+      throw new Error(
+        `${label("MODEL")}: «${model}» is not in CONTENT_MODEL_ND_ALLOWED — NeuralDeep may serve other models abroad (a cross-border transfer)`,
+      );
+  }
+  if (
+    provider === "openai-compatible" &&
+    !privateHost(parsed.hostname) &&
+    !env.CONTENT_MODEL_FOREIGN_DEV
+  )
+    throw new Error(
+      `${label("URL")} must be a self-hosted model; a foreign API only with CONTENT_MODEL_FOREIGN_DEV=true outside production`,
+    );
+  const neuraldeep = provider === "neuraldeep";
+  const limit = (name: string, inherited: number | undefined, fallback: number) => {
+    const value = own(name);
+    return value !== undefined ? Number(value) : sameEndpoint ? inherited! : fallback;
+  };
+  const flat = own("FLAT_RATE");
+  return {
+    provider,
+    url,
+    key,
+    rpm: limit("RPM", primary?.rpm, neuraldeep ? 20 : 0),
+    concurrency: limit("MAX_CONCURRENCY", primary?.concurrency, neuraldeep ? 3 : 0),
+    flatRate: flat !== undefined ? flat === "true" : sameEndpoint && primary!.flatRate,
+  };
+}
+let contentModelEndpoints: {
+  primary: ModelEndpoint;
+  fallback: ModelEndpoint | null;
+  code: ModelEndpoint | null;
+} | null = null;
 if (env.CONTENT_MODEL_PROVIDER !== "off") {
   if (!env.CONTENT_MODEL_PRIMARY)
     throw new Error("CONTENT_MODEL_PRIMARY is required for the content model");
-  const host = new URL(env.CONTENT_MODEL_URL).hostname;
-  if (
-    env.CONTENT_MODEL_PROVIDER === "yandex"
-      ? !yandexHost(host)
-      : !privateHost(host) && !env.CONTENT_MODEL_FOREIGN_DEV
-  )
-    throw new Error(
-      env.CONTENT_MODEL_PROVIDER === "yandex"
-        ? "CONTENT_MODEL_URL is not a Yandex Cloud address"
-        : "CONTENT_MODEL_URL must be a self-hosted model; a foreign API only with CONTENT_MODEL_FOREIGN_DEV=true outside production",
-    );
+  const primary = modelEndpoint("CONTENT_MODEL", env.CONTENT_MODEL_PRIMARY, null);
+  contentModelEndpoints = {
+    primary,
+    fallback: env.CONTENT_MODEL_FALLBACK
+      ? modelEndpoint("CONTENT_MODEL_FALLBACK", env.CONTENT_MODEL_FALLBACK, primary)
+      : null,
+    code: env.CONTENT_CODE_MODEL
+      ? modelEndpoint("CONTENT_CODE_MODEL", env.CONTENT_CODE_MODEL, primary)
+      : null,
+  };
 }
 
 const domainList = (value: string, name: string) =>
@@ -380,4 +508,10 @@ if (
   throw new Error(
     "Restore mode requires the exact completion receipt identity",
   );
-export const config = { ...env, ...viewerConfig, ...signInConfig };
+export const config = {
+  ...env,
+  ...viewerConfig,
+  ...signInConfig,
+  /** Each model role's endpoint; null while CONTENT_MODEL_PROVIDER=off. */
+  CONTENT_MODEL_ENDPOINTS: contentModelEndpoints,
+};

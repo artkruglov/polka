@@ -423,6 +423,60 @@ test("models: reviewed after save; agreement holds, one model only asks, CSAM wa
   assert.equal(calls, 0);
 });
 
+test("models: a rate-limited primary (429) goes to the fallback at once and uses up no attempts; a flat rate ignores the budget", async () => {
+  // The review is queued after the save commits: wait for its verdict.
+  const verdict = async (revisionId: string) => {
+    for (const deadline = Date.now() + 5000; Date.now() < deadline; ) {
+      await reviewsSettled();
+      const { model } = await row("SELECT content_filter->'model' AS model FROM revisions WHERE id=$1", [revisionId]);
+      if (model) return model;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error("no model verdict");
+  };
+  const limited = (name: string): ModelClient => ({
+    name,
+    classify: async () => ({ failed: "rate_limited", model: name, costRub: 0 }),
+  });
+  let fallbackCalls = 0;
+  const fallback = fakeModel("fallback", (text) => (fallbackCalls++, text.includes("СИГНАЛ-Ж") ? "drugs" : "none"));
+  setContentModels({ primary: limited("primary"), fallback });
+  const owner = await trusted();
+  const checked = await verdict((await save(owner, page("<p>Невинный текст СИГНАЛ-Ж про садоводство.</p>"))).revisionId);
+  assert.equal(fallbackCalls, 1);
+  assert.equal(checked.state, "checked");
+  assert.deepEqual(checked.findings.map((finding: any) => [finding.category, finding.agreed]), [["drugs", false]]);
+  assert.deepEqual(checked.answers.map((answer: any) => answer.answer), ["ошибка: rate_limited", "drugs"]);
+  // Both endpoints at their limits: unchecked, retried, attempts untouched.
+  setContentModels({ primary: limited("primary"), fallback: limited("fallback") });
+  const unchecked = await verdict((await save(owner, page("<p>Другой текст про садоводство.</p>"))).revisionId);
+  assert.equal(unchecked.state, "unchecked");
+  assert.equal(unchecked.attempts, 0);
+  // A real failure counts.
+  setContentModels({ primary: fakeModel("primary", () => "fail"), fallback: limited("fallback") });
+  assert.equal((await verdict((await save(owner, page("<p>Третий текст про садоводство.</p>"))).revisionId)).attempts, 1);
+  // Out of budget: a paid model is not asked, a flat-rate one still is.
+  config.CONTENT_MODEL_DAILY_BUDGET_RUB = 0;
+  let paidCalls = 0,
+    flatCalls = 0;
+  setContentModels({
+    primary: { name: "paid", classify: async (input) => (paidCalls++, fallback.classify(input)) },
+    fallback: null,
+  });
+  assert.equal((await verdict((await save(owner, page("<p>Четвёртый текст.</p>"))).revisionId)).state, "unchecked");
+  assert.equal(paidCalls, 0);
+  setContentModels({
+    primary: {
+      name: "flat",
+      flatRate: true,
+      classify: async () => (flatCalls++, { category: "none", reason: "", model: "flat", costRub: 0 }),
+    },
+    fallback: null,
+  });
+  assert.equal((await verdict((await save(owner, page("<p>Пятый текст.</p>"))).revisionId)).state, "checked");
+  assert.equal(flatCalls, 1);
+});
+
 test("models with autoblock: both agreeing on a severe category block; the budget stops the calls", async () => {
   config.CONTENT_FILTER_AUTOBLOCK = true;
   const agree = fakeModel("m", (text) => (text.includes("СИГНАЛ-Д") ? "extremism_terror" : "none"));

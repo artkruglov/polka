@@ -75,6 +75,7 @@
   "tests/moderation.test.ts",
   "tests/abuse-protection.test.ts",
   "tests/content-filter.test.ts",
+  "tests/content-model.test.ts",
   "tests/content-moderation.test.ts",
   "tests/line-diff.test.ts",
   "tests/compare-revisions.test.ts",
