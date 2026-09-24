@@ -113,7 +113,7 @@ export async function identity(req: FastifyRequest) {
   const {
     rows: [actor],
   } = await db.query(
-    `SELECT a.id,COALESCE(a.display_name,a.name) AS name,t.id AS tenant FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
+    `SELECT a.id,COALESCE(a.display_name,a.name) AS name,t.id AS tenant,a.created_at AS "createdAt" FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
     [sha256(req.cookies.polka_session ?? "")],
   );
   if (!actor)
@@ -124,5 +124,11 @@ export async function identity(req: FastifyRequest) {
     );
   // Returning activity for retention: one row per account and day.
   markActive(actor.id);
-  return actor as { id: string; name: string; tenant: string };
+  return actor as {
+    id: string;
+    name: string;
+    tenant: string;
+    /** null for accounts older than the abuse-protection migration (029). */
+    createdAt: Date | null;
+  };
 }

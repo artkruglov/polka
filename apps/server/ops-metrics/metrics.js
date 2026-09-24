@@ -156,6 +156,54 @@
         ),
       ),
     );
+    const rec = data.recipients;
+    if (rec) {
+      const actionLabel = {
+        try: "Попробовать",
+        remix: "Такую же",
+        copy_phrase: "Фраза",
+        yandex: "Яндекс ID",
+        email: "Почта",
+      };
+      const recRow = (row, label) => [
+        label ?? row.week,
+        row.opened,
+        row.barViews,
+        row.cardViews,
+        ...rec.actions.map((a) => row.clicks[a]),
+        row.clicksTotal,
+        row.signups,
+        r(row.conversion.barToCard),
+        r(row.conversion.cardToClick),
+        r(row.conversion.clickToSignup),
+        r(row.conversion.barToSignup),
+      ];
+      report.append(
+        section(
+          "Получатели → регистрации",
+          data.definitions.recipients,
+          table(
+            [
+              "Неделя",
+              "Ссылки открыты",
+              "Подсказка",
+              "Карточка",
+              ...rec.actions.map((a) => actionLabel[a] ?? a),
+              "Нажатий",
+              "Регистрации",
+              "Подск.→карт.",
+              "Карт.→наж.",
+              "Наж.→рег.",
+              "Подск.→рег.",
+            ],
+            [
+              ...[...rec.weeks].reverse().map((w) => recRow(w)),
+              recRow(rec.total, "Всего"),
+            ],
+          ),
+        ),
+      );
+    }
     report.append(
       section(
         "Источники",

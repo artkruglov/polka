@@ -45,6 +45,25 @@ export function rememberVisitSource() {
   }
 }
 
+/**
+ * A sign-up that starts on a page of Полка itself (the prompt on a shared
+ * work) names that page as the source: the tab's earlier ref, if any, is
+ * replaced; the referrer host stays. Returns false when nothing was kept.
+ */
+export function setVisitSourceRef(ref: string): boolean {
+  try {
+    if (typeof window === "undefined" || !REF.test(ref)) return false;
+    const current = visitSource();
+    sessionStorage.setItem(
+      KEY,
+      JSON.stringify({ ...(current?.referrer ? { referrer: current.referrer } : {}), ref }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function visitSource(): VisitSource | null {
   try {
     if (typeof window === "undefined") return null;

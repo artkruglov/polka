@@ -15,6 +15,7 @@ import {
   type FirstRunStepId,
 } from "../../entities/onboarding/steps.ts";
 import { clientHints, connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
+import { arrivedFromShare } from "../../entities/onboarding/arrival.ts";
 import { writeDismissed } from "../../entities/onboarding/dismissal.ts";
 import { useFirstRun } from "../../entities/onboarding/useFirstRun.ts";
 import {
@@ -45,6 +46,13 @@ export type FirstRunStepsProps = {
   announcement: string;
   onShare?: (work: Artifact) => void;
   onDismiss?: () => void;
+  /** On the shelf: «Загрузить файл» opens the upload panel; /start links to /bring. */
+  onUpload?: () => void;
+  /**
+   * share: the person came from someone's shared work (entities/onboarding/
+   * arrival.ts). The agent phrase leads, because that is what they saw made.
+   */
+  arrival?: "share";
 };
 
 const stepText: Record<FirstRunStepId, string> = {
@@ -66,6 +74,8 @@ export function FirstRunSteps({
   announcement,
   onShare,
   onDismiss,
+  onUpload,
+  arrival,
 }: FirstRunStepsProps) {
   const phrase = connectPhrase(origin);
   const hints = clientHints(origin);
@@ -74,17 +84,23 @@ export function FirstRunSteps({
   const [agent, save, share] = model.steps;
   const tone = (id: FirstRunStepId) => (model.next === id ? "primary" : "secondary");
   const showTry = !save.done && !sample.saved;
+  const fromShare = arrival === "share" && !agent.done;
   return (
     <section
       className={`first-run first-run--${variant}`}
       aria-labelledby={titleId}
       data-complete={model.complete || undefined}
+      data-arrival={arrival}
     >
       <header className="first-run-head">
         <div className="first-run-heading">
-          <span className="eyebrow">Первые шаги</span>
+          <span className="eyebrow">{fromShare ? "Вы пришли по ссылке с Полки" : "Первые шаги"}</span>
           <h2 id={titleId} className={variant === "page" ? "sr-only" : undefined}>
-            {model.complete ? "Готово: агент, работа, ссылка" : "Три шага до первой ссылки"}
+            {model.complete
+              ? "Готово: агент, работа, ссылка"
+              : fromShare
+                ? "Подключите агента — и он будет сохранять работы сам"
+                : "Три шага до первой ссылки"}
           </h2>
         </div>
         <span className="first-run-progress" aria-label={`Выполнено ${model.done} из ${model.total}`}>
@@ -186,9 +202,15 @@ export function FirstRunSteps({
 
               {step.id === "save" && !step.done && (
                 <div className="first-run-action">
-                  <LinkButton href="/bring" variant={tone("save")}>
-                    <Upload /> Сохранить без агента
-                  </LinkButton>
+                  {onUpload ? (
+                    <Button variant={tone("save")} onClick={onUpload}>
+                      <Upload /> Загрузить файл
+                    </Button>
+                  ) : (
+                    <LinkButton href="/bring" variant={tone("save")}>
+                      <Upload /> Сохранить без агента
+                    </LinkButton>
+                  )}
                   {works.status === "error" && (
                     <span role="alert" className="first-run-problem">
                       Не удалось загрузить полку.{" "}
@@ -278,6 +300,7 @@ export function FirstRunChecklist({
   onSaved,
   onShare,
   onDismiss,
+  onUpload,
 }: {
   account: Account;
   /** The shelf passes what it shows; omitted on /start. */
@@ -286,8 +309,13 @@ export function FirstRunChecklist({
   onSaved?: (receipt: Receipt) => void;
   onShare?: (work: Artifact) => void;
   onDismiss?: () => void;
+  onUpload?: () => void;
 }) {
   const data = useFirstRun({ accountId: account.id, provided: works });
+  // Read once: the tab's source does not change while the shelf is open.
+  const [arrival] = useState<"share" | undefined>(() =>
+    arrivedFromShare() ? "share" : undefined,
+  );
   const upload = useSaveUpload();
   const model = deriveFirstRun({
     connections: data.connections.value,
@@ -360,6 +388,8 @@ export function FirstRunChecklist({
       }}
       announcement={announcement}
       onShare={onShare}
+      onUpload={onUpload}
+      arrival={arrival}
       onDismiss={
         onDismiss
           ? () => {
