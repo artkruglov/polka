@@ -41,12 +41,6 @@
 .first-run-links svg { width: 15px; height: 15px; color: var(--muted); }
 .first-run-links [role="alert"] { color: #8f2a20; }
 
-.first-run-try { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--soft-3); }
-.first-run-try-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent); }
-.first-run-try-icon svg { width: 18px; height: 18px; }
-.first-run-try strong { display: block; font-size: var(--text-md); }
-.first-run-try p { margin-top: 2px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.first-run-try .ui-notice { margin: 10px 0 0; }
 .first-run-saved { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--success); font-size: var(--text-base); }
 .first-run-saved svg { width: 15px; height: 15px; }
 .first-run-saved a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 500; }
@@ -58,7 +52,4 @@
   .first-run-step { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 12px 10px 14px; }
   .first-run-mark { width: 26px; height: 26px; }
   .first-run-action > .ui-button, .first-run-phrase > .ui-button { width: 100%; }
-  .first-run-try { grid-template-columns: minmax(0, 1fr); }
-  .first-run-try-icon { display: none; }
-  .first-run-try > .ui-button { width: 100%; }
 }

@@ -25,6 +25,8 @@
 .agent-status-arrived strong { display: block; color: var(--accent-ink); font-size: var(--text-lg); }
 .agent-status-arrived p { color: var(--ink-2); font-size: var(--text-base); }
 .agent-status .agent-error { display: grid; gap: 10px; color: #8f2a20; }
+.agent-next { display: grid; gap: 12px; padding: 18px 20px 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+.agent-next h2 { font-size: var(--text-lg); letter-spacing: -.02em; }
 
 /* The question and its five answers. */
 .agent-where h2 { margin-bottom: 14px; font-size: var(--text-2xl); letter-spacing: -.03em; }
