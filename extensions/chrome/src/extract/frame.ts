@@ -21,6 +21,8 @@ export async function extractFrame(options: {
 } = {}): Promise<FrameReport | null> {
   if (!options.anyHost && !ARTIFACT_HOST.test(location.hostname)) return null;
   if (window === window.top && !options.anyHost) return null;
+  // The hidden 1×1 helper frame next to the artifact is not it.
+  if (!options.anyHost && window.innerWidth * window.innerHeight < 100 * 100) return null;
   try {
     const response = await fetch(location.href, {
       credentials: "include",

@@ -1,0 +1,120 @@
+<!doctype html>
+<!--
+  Synthetic fixture for tests/extension-extract.test.ts: a standalone artifact
+  page, claude.ai/artifact/<id>, as described from a logged-in look on
+  24.09.2026 (not a copy of its markup). The header has a title button
+  without aria-label that opens a menu, aria-labelled buttons (You, Comment,
+  Chat with Claude, Share …), no Copy button, no Code tab and no data-testid.
+  The menu opens on pointerdown, like common React menu kits; Export opens a
+  submenu with Download, which builds a Blob and clicks an <a download>.
+  «Copy as Markdown» copies rendered text; the extension must not press it.
+  With ?server=1 Download instead clicks an <a download> to a server URL.
+  The artifact frame is iframe[title="User-generated artifact content"]
+  (on *.frame.claudeusercontent.com in the real app), plus a hidden 1×1 frame.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Трекер привычек - Claude</title>
+<style>
+  body { margin: 0; font: 14px system-ui; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid #ddd; }
+  [role="menu"] { position: absolute; top: 44px; left: 8px; background: #fff; border: 1px solid #ccc; padding: 4px; }
+  [role="menu"].sub { left: 180px; }
+  [role="menuitem"] { display: block; padding: 4px 8px; cursor: pointer; }
+  iframe.content { width: 100%; height: 600px; border: 0; }
+</style>
+</head>
+<body>
+<header>
+  <button type="button" id="title">Трекер привычек</button>
+  <div class="right">
+    <button type="button" aria-label="You">A</button>
+    <button type="button" aria-label="Translate to American English">EN</button>
+    <button type="button" aria-label="Comment on this artifact">💬</button>
+    <button type="button" aria-label="More comment options">⋯</button>
+    <button type="button" aria-label="Chat with Claude">Chat</button>
+    <button type="button" aria-label="Share, shared with anyone who has the link">Share</button>
+    <button type="button" aria-label="Open chat">Open</button>
+  </div>
+</header>
+<iframe class="content" title="User-generated artifact content" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"
+  srcdoc="<!doctype html><h1>Трекер привычек</h1><p>Rendered artifact</p>"></iframe>
+<iframe style="position:absolute;width:1px;height:1px;border:0" srcdoc="<p>helper</p>"></iframe>
+<script>
+  const SOURCE = '<!doctype html>\n<html lang="ru"><head><meta charset="utf-8"><title>Трекер привычек</title></head>\n<body><h1>Трекер привычек</h1><script>console.log("mine")<\/script></body></html>\n';
+  window.__downloadClicks = 0;
+  window.__markdownCopied = false;
+  window.__revoked = 0;
+  // Any click that reaches an a[download] would start a real download.
+  document.addEventListener("click", (event) => {
+    if (event.target.closest && event.target.closest("a[download]")) window.__downloadClicks++;
+  }, true);
+
+  const title = document.getElementById("title");
+  let menu = null;
+  let submenu = null;
+  const close = () => {
+    submenu?.remove(); submenu = null;
+    menu?.remove(); menu = null;
+    title.setAttribute("aria-expanded", "false");
+  };
+  const item = (text, extra = {}) => {
+    const node = document.createElement("div");
+    node.setAttribute("role", "menuitem");
+    node.tabIndex = -1;
+    node.textContent = text;
+    for (const [name, value] of Object.entries(extra)) node.setAttribute(name, value);
+    return node;
+  };
+  const download = async () => {
+    close();
+    await new Promise((resolve) => setTimeout(resolve, 30)); // work before saving
+    const a = document.createElement("a");
+    if (location.search.includes("server=1")) {
+      a.href = "/files/artifact.html";
+    } else {
+      const blob = new Blob([SOURCE], { type: "text/html" });
+      a.href = URL.createObjectURL(blob);
+    }
+    a.download = "habit-tracker.html";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    if (a.href.startsWith("blob:")) { URL.revokeObjectURL(a.href); window.__revoked++; }
+  };
+  const openSubmenu = (exportItem) => {
+    if (submenu) return;
+    submenu = document.createElement("div");
+    submenu.setAttribute("role", "menu");
+    submenu.className = "sub";
+    const dl = item("Download");
+    dl.addEventListener("click", () => void download());
+    submenu.append(dl);
+    document.body.append(submenu);
+  };
+  const openMenu = () => {
+    if (menu) return;
+    menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    const exportItem = item("Export", { "aria-haspopup": "menu" });
+    exportItem.addEventListener("pointermove", () => openSubmenu(exportItem));
+    exportItem.addEventListener("keydown", (event) => { if (event.key === "ArrowRight") openSubmenu(exportItem); });
+    const markdown = item("Copy as Markdown");
+    markdown.addEventListener("click", () => {
+      window.__markdownCopied = true;
+      navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob(["# Трекер"], { type: "text/plain" }) })]);
+    });
+    menu.append(exportItem, markdown, item("Rename"), item("Duplicate"), item("Share"), item("Refresh"), item("Pin"), item("All artifacts"), item("Report artifact"), item("Delete artifact"));
+    document.body.append(menu);
+    title.setAttribute("aria-expanded", "true");
+  };
+  // Opens on pointerdown (button 0), not on click.
+  title.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    menu ? close() : openMenu();
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") close(); });
+</script>
+</body>
+</html>

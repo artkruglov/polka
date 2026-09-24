@@ -11,6 +11,7 @@ import {
   codeView,
   findArtifactFrames,
   findCopyButton,
+  findTitleMenuButton,
 } from "./dom.ts";
 
 export type PageReport = {
@@ -18,6 +19,8 @@ export type PageReport = {
   title: string;
   /** Set when the artifact's Copy button was found and marked. */
   copyMarker: string | null;
+  /** Set when the title menu (→ Export → Download) was found and marked. */
+  menuMarker: string | null;
   code: { source: string; language: string | null } | null;
   frames: number;
   /** The provider shows its sign-in page instead of the artifact. */
@@ -40,13 +43,14 @@ export function inspectPage(doc: Document, host: string, path: string): PageRepo
       provider: "chatgpt",
       title: found?.title ?? doc.title,
       copyMarker: null,
+      menuMarker: null,
       code: found ? { source: found.source, language: found.language } : null,
       frames: 0,
       signIn,
     };
   }
   if (host !== "claude.ai") {
-    return { provider: null, title: doc.title, copyMarker: null, code: null, frames: 0, signIn: false };
+    return { provider: null, title: doc.title, copyMarker: null, menuMarker: null, code: null, frames: 0, signIn: false };
   }
   const frames = findArtifactFrames(doc);
   const panel = frames[0] ? artifactPanel(frames[0]) : null;
@@ -58,10 +62,22 @@ export function inspectPage(doc: Document, host: string, path: string): PageRepo
     copyMarker = randomMarker();
     copy.setAttribute("data-polka-copy", copyMarker);
   }
+  // A standalone artifact page (claude.ai/artifact/<id>) has no Copy button
+  // and no Code tab: its title menu leads to Export → Download.
+  // Only there: in a chat the header menu belongs to the conversation.
+  const standalone = /^\/(artifact|code\/artifact|public\/artifacts)\//.test(path);
+  const menu = copy || !standalone ? null : findTitleMenuButton(doc);
+  let menuMarker: string | null = null;
+  if (menu) {
+    menuMarker = randomMarker();
+    menu.setAttribute("data-polka-menu", menuMarker);
+  }
+  const menuTitle = menu?.textContent?.replace(/\s+/g, " ").trim();
   return {
     provider: "claude",
-    title: artifactTitle(doc, panel),
+    title: menuTitle || artifactTitle(doc, panel),
     copyMarker,
+    menuMarker,
     code,
     frames: frames.length,
     signIn,
