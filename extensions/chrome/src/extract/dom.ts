@@ -49,6 +49,9 @@ export function findShareButton(root: ParentNode): HTMLElement | null {
  * no aria-label, its text is the title, and it opens the menu with Export.
  */
 export function findTitleMenuButton(doc: Document): HTMLElement | null {
+  // Base UI's trigger carries data-title-menu (seen 24.09.2026).
+  const marked = doc.querySelector<HTMLElement>("button[data-title-menu]");
+  if (marked) return marked;
   const share = findShareButton(doc);
   if (!share) return null;
   const titled = (button: HTMLElement) =>
