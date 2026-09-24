@@ -18,7 +18,9 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 - Codex CLI: \`codex mcp add polka --url ${mcp}\` — вход в браузере откроется сам. Если не открылся: \`codex mcp login polka\`.
 - Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, затем попроси пользователя ввести \`/mcp\`, выбрать \`polka\` и нажать Authenticate.
 - Другой MCP-клиент с OAuth: добавь удалённый Streamable HTTP-сервер ${mcp} с авторизацией OAuth.
-- Claude.ai или ChatGPT (терминала нет): попроси пользователя добавить коннектор ${mcp}. Claude.ai: Settings → Connectors → Add custom connector. ChatGPT: Settings → Apps & Connectors → Developer mode → Create, Authentication: OAuth.
+- Claude.ai или ChatGPT в браузере (терминала нет, эту страницу ты, скорее всего, не смог загрузить): команды не выполнить, коннектор добавляет сам пользователь. Перескажи ему шаги, ничего не запрашивай:
+  - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
+  - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Затем в чате «+» → включить коннектор «Полка». Пошагово: ${origin}/settings/agents?client=chatgpt
 
 Скажи пользователю: «Откроется Полка. Войдите или создайте полку по почте — придёт код из восьми цифр — и нажмите «Разрешить».»
 
@@ -39,7 +41,9 @@ Your user asked to connect Полка. Work out which client you are, run the on
 - Codex CLI: \`codex mcp add polka --url ${mcp}\`; the browser sign-in opens by itself. If it does not: \`codex mcp login polka\`.
 - Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, then ask the user to type \`/mcp\`, choose \`polka\` and press Authenticate.
 - Another MCP client with OAuth: add the remote Streamable HTTP server ${mcp} with OAuth authorization.
-- Claude.ai or ChatGPT (no terminal): ask the user to add the connector ${mcp}. Claude.ai: Settings → Connectors → Add custom connector. ChatGPT: Settings → Apps & Connectors → Developer mode → Create, Authentication: OAuth.
+- Claude.ai or ChatGPT in the browser (no terminal; you most likely could not even fetch this page): you cannot run commands, the user adds the connector themselves. Tell them the steps, ask for nothing:
+  - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
+  - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Then in the chat "+" → enable the "Полка" connector. Step by step: ${origin}/settings/agents?client=chatgpt
 
 Tell the user: "Полка will open. Sign in or create a shelf with your email (you get an eight-digit code) and press Allow."
 

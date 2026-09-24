@@ -61,7 +61,7 @@ Viewer поднимается отдельным listener на http://localhost:
 
 ## Подключить локального агента
 
-Создайте токен на странице http://127.0.0.1:4390/settings/agents. MCP-адрес — `http://127.0.0.1:4390/mcp`. Команды для Codex и Claude Code приведены в [connect-agents.md](connect-agents.md), только с локальным адресом вместо `https://polochka.app`.
+Создайте токен на странице http://127.0.0.1:4390/settings/agents (раздел «Для разработчиков»). MCP-адрес — `http://127.0.0.1:4390/mcp`. Команды для Codex и Claude Code приведены в [connect-agents.md](connect-agents.md), только с локальным адресом вместо `https://polochka.app`.
 
 Чтобы передать агенту пакет файлов побайтно, без переписывания моделью, есть два помощника:
 
