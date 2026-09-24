@@ -4,6 +4,10 @@ import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { visitSourceQuery } from "../../shared/lib/visit-source.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
+import {
+  loadIdentities,
+  type AccountIdentities,
+} from "../../entities/account/model/identities.ts";
 
 /**
  * Sign-in with Яндекс ID, VK ID or the company's own IdP
@@ -107,31 +111,20 @@ export function providerErrorMessage(code: string | null) {
   return ERRORS[code] ?? ERRORS.provider;
 }
 
-type Identities = {
-  email: string | null;
-  identities: Array<{
-    provider: SignInProvider["id"];
-    name: string;
-    email: string | null;
-    linkedAt: string;
-  }>;
-  available: Array<{ provider: SignInProvider["id"]; name: string }>;
-};
-
 /**
  * «Способы входа» in settings: link Яндекс ID or VK ID to the shelf (so a
  * person with a foreign mailbox keeps their shelf), or unlink one while
  * another way in remains.
  */
 export function SignInMethods() {
-  const [data, setData] = useState<Identities | null>(null);
+  const [data, setData] = useState<AccountIdentities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const query = new URLSearchParams(location.search);
   const returned = providerErrorMessage(query.get("idp_error"));
   const linked = query.get("linked") === "1";
   const load = () =>
-    request<Identities>("/account/identities")
+    loadIdentities()
       .then(setData)
       .catch((e) => setError((e as Error).message));
   useEffect(() => {

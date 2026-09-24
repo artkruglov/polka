@@ -1,23 +1,82 @@
-/* Agent connections: a quiet setup form, a clear three-step path, hairline cards. */
-.agent-connections { width: 100%; max-width: 1240px; margin: 0 auto; padding: 44px var(--gutter) 96px; }
-.agent-page-heading { max-width: 760px; margin-bottom: 28px; }
-.agent-page-heading h1 { margin: 12px 0 14px; font-size: clamp(34px, 4.2vw, 52px); line-height: 1.04; letter-spacing: -.045em; }
+/* Agents: one column, one question («Где вы работаете с ИИ?»), one panel of steps.
+   The developer material folds away; the connections list and sign-in methods follow. */
+.agent-connections { width: 100%; max-width: 880px; margin: 0 auto; padding: 44px var(--gutter) 96px; display: grid; gap: 28px; }
+.agent-page-heading { max-width: 760px; }
+.agent-page-heading h1 { margin: 0 0 12px; font-size: clamp(32px, 4vw, 46px); line-height: 1.06; letter-spacing: -.04em; }
 .agent-lead { color: var(--ink-2); font-size: var(--text-xl); line-height: 1.55; }
-.agent-boundary { display: flex; gap: 8px; align-items: flex-start; margin-top: 16px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.agent-boundary svg { flex: 0 0 17px; margin-top: 1px; color: var(--accent); }
-.agent-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0 0 32px; padding: 0; list-style: none; }
-.agent-steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); }
-.agent-steps li > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 600 var(--text-sm) / 1 var(--font-sans); }
-.agent-steps strong { display: block; margin-bottom: 4px; font-size: var(--text-md); font-weight: 600; }
-.agent-steps p { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.agent-workspace { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr); gap: 24px; align-items: start; }
-.agent-setup-column { min-width: 0; display: grid; gap: 24px; }
-.agent-card { min-width: 0; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+/* Who this shelf belongs to: the fact that decides where the agent's work lands. */
+.agent-account { display: grid; gap: 6px; margin-top: 18px; padding: 12px 16px; border-left: 3px solid var(--line-strong); color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
+.agent-account strong { color: var(--ink); overflow-wrap: anywhere; }
+.agent-account-fresh { color: var(--muted); font-size: var(--text-sm); }
+.agent-account-fresh a { color: var(--accent); font-weight: 500; }
+
+/* Live status: grey dot while nothing is connected, green once something is, accent for «Готово». */
+.agent-status { padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); font-size: var(--text-md); line-height: 1.5; }
+.agent-status[data-state="connected"] { border-color: #bfe3c8; background: var(--success-soft); }
+.agent-status[data-state="arrived"] { border-color: var(--accent-ring); background: var(--accent-soft); }
+.agent-status-none strong { color: var(--ink); font-weight: 600; }
+.agent-status-none { color: var(--ink-2); }
+.agent-status-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.agent-status-list li { display: flex; align-items: baseline; gap: 10px; color: var(--ink-2); }
+.agent-status-list strong { color: var(--success); font-weight: 600; }
+.agent-status-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--success); transform: translateY(-1px); }
+.agent-status-arrived { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.agent-status-arrived > svg { width: 28px; height: 28px; padding: 5px; border-radius: 50%; background: var(--accent); color: #fff; }
+.agent-status-arrived strong { display: block; color: var(--accent-ink); font-size: var(--text-lg); }
+.agent-status-arrived p { color: var(--ink-2); font-size: var(--text-base); }
+.agent-status .agent-error { display: grid; gap: 10px; color: #8f2a20; }
+
+/* The question and its five answers. */
+.agent-where h2 { margin-bottom: 14px; font-size: var(--text-2xl); letter-spacing: -.03em; }
+.agent-client-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.agent-client-card { display: grid; gap: 4px; align-content: start; min-height: 88px; padding: 14px 14px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--canvas); text-align: left; font: inherit; color: var(--ink); cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.agent-client-card:hover { border-color: #c9d2e0; box-shadow: var(--shadow-sm); }
+.agent-client-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.agent-client-card strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -.01em; }
+.agent-client-card small { color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
+.agent-client-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.agent-client-card[aria-pressed="true"] strong { color: var(--accent-ink); }
+
+/* The one panel of steps for the chosen client. */
+.agent-setup { margin-top: 16px; padding: 24px 28px 22px; border: 1px solid var(--accent-ring); border-radius: var(--radius-lg); background: var(--canvas); }
+.agent-setup h3 { margin-bottom: 6px; font-size: var(--text-xl); letter-spacing: -.02em; }
+.agent-setup-intro { color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
+.agent-setup-steps { display: grid; gap: 18px; margin: 20px 0 0; padding: 0; list-style: none; }
+.agent-setup-steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+.agent-setup-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font: 600 var(--text-sm) / 1 var(--font-sans); }
+.agent-setup-body { display: grid; gap: 10px; min-width: 0; padding-top: 4px; }
+.agent-setup-body > p { color: var(--ink); font-size: var(--text-md); line-height: 1.55; }
+.agent-setup-note { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.agent-setup-waiting { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: var(--muted); font-size: var(--text-sm); }
+.agent-setup-waiting::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: agent-pulse 1.6s ease-in-out infinite; }
+@keyframes agent-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .agent-setup-waiting::before { animation: none; } }
+/* What to copy: the address, the phrase or the command, with its one button. */
+.agent-copy { display: grid; gap: 6px; }
+.agent-copy-lead { color: var(--muted); font-size: var(--text-sm); }
+.agent-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-copy-row > code { flex: 1 1 260px; min-width: 0; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--soft-3); font-size: var(--text-base); line-height: 1.45; overflow-wrap: anywhere; user-select: all; }
+.agent-copy[data-kind="phrase"] .agent-copy-row > code { font-family: var(--font-sans); font-weight: 500; color: var(--ink); }
+.agent-copy[data-kind="command"] .agent-copy-row > code { font-size: var(--text-sm); }
+.agent-copy-row .field-note { flex-basis: 100%; }
+
+/* Cards: the developer fold and the connections list. */
+.agent-card { min-width: 0; padding: 24px 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
 .agent-card h2 { margin-bottom: 6px; font-size: var(--text-2xl); letter-spacing: -.03em; }
 .agent-card p { line-height: 1.5; }
-.agent-card form { display: grid; gap: 22px; margin-top: 18px; }
-.agent-field, .agent-card fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
-.agent-field > span, .agent-card legend { display: block; margin-bottom: 10px; padding: 0; font: 500 var(--text-base) / 1.4 var(--font-sans); color: var(--ink-2); }
+.agent-developers { padding: 0; background: var(--soft-3); }
+.agent-developers > summary { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 14px 28px; list-style: none; cursor: pointer; font-size: var(--text-lg); font-weight: 600; color: var(--ink); }
+.agent-developers > summary::-webkit-details-marker { display: none; }
+.agent-developers > summary::before { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform var(--dur) var(--ease); }
+.agent-developers[open] > summary::before { transform: rotate(45deg); }
+.agent-developers > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-lg); }
+.agent-developers-body { display: grid; gap: 24px; padding: 4px 28px 28px; border-top: 1px solid var(--line); background: var(--canvas); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.agent-developers-body > .agent-help { margin: 18px 0 0; font-size: var(--text-base); color: var(--ink-2); }
+.agent-developers-body h3 { font-size: var(--text-xl); letter-spacing: -.02em; }
+.agent-developers-body > h3 { margin-bottom: -10px; }
+.agent-developers-body form { display: grid; gap: 22px; }
+.agent-field, .agent-developers-body fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.agent-field > span, .agent-developers-body legend { display: block; margin-bottom: 10px; padding: 0; font: 500 var(--text-base) / 1.4 var(--font-sans); color: var(--ink-2); }
 .agent-field input { width: 100%; max-width: 100%; min-height: var(--control-height); padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 400 var(--text-md) / 1.4 var(--font-sans); }
 .agent-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .agent-choice { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font-size: var(--text-base); line-height: 1.35; cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
@@ -32,22 +91,27 @@
 .agent-scope span { display: grid; gap: 2px; }
 .agent-scope strong { font-size: var(--text-base); font-weight: 500; line-height: 1.4; color: var(--ink); }
 .agent-scope small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.agent-card form > .ui-notice { margin: 0; }
+.agent-developers-body form > .ui-notice { margin: 0; }
 .agent-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .agent-card-heading p { color: var(--muted); font-size: var(--text-base); }
-.agent-existing { background: var(--soft-3); }
-.agent-existing .agent-card-heading { flex-direction: column; gap: 12px; }
 .agent-existing .agent-card-heading p { font-size: var(--text-sm); margin-top: 6px; }
-.agent-existing .agent-card-heading .ui-button { font-size: var(--text-sm); padding: 8px 12px; min-height: 40px; }
+.agent-existing .agent-card-heading .ui-button { flex: none; font-size: var(--text-sm); padding: 8px 12px; min-height: 40px; }
 .agent-list { display: grid; gap: 10px; margin-top: 20px; }
-.agent-list-item { display: flex; align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--canvas); }
-.agent-list-item > div { min-width: 0; width: 100%; }
-.agent-list-item h3 { margin-bottom: 4px; overflow-wrap: anywhere; font-size: var(--text-lg); }
-.agent-status { color: var(--ink-2); font-size: var(--text-sm); }
-.agent-meta { margin-top: 6px; overflow-wrap: anywhere; line-height: 1.6; font-size: var(--text-sm); color: var(--muted); }
+.agent-list-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.agent-list-item[data-active] { background: var(--canvas); }
+.agent-list-item > div { min-width: 0; display: grid; gap: 4px; }
+.agent-list-item h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; overflow-wrap: anywhere; font-size: var(--text-lg); }
+.agent-kind { padding: 2px 8px; border-radius: 999px; background: var(--soft-2); color: var(--muted); font-size: var(--text-xs); font-weight: 500; letter-spacing: 0; }
+.agent-status-line { color: var(--ink-2); font-size: var(--text-sm); }
+.agent-list-item[data-active] .agent-status-line { color: var(--success); font-weight: 500; }
+.agent-meta { overflow-wrap: anywhere; line-height: 1.55; font-size: var(--text-sm); color: var(--muted); }
+.agent-list-item .ui-button { flex: none; }
 .agent-error { display: grid; gap: 10px; margin-top: 16px; color: #8f2a20; }
-.agent-empty { display: grid; gap: 8px; margin-top: 20px; padding: 22px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--canvas); color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
+.agent-empty { display: grid; gap: 6px; margin-top: 16px; padding: 18px 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--soft-3); color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
 .agent-empty strong { color: var(--ink); font-size: var(--text-md); }
+.agent-existing > .agent-help { margin: 14px 0 0; }
+
+/* The token, shown once. */
 .agent-secret { border-color: var(--accent-ring); background: var(--soft-3); }
 .agent-secret .agent-card-heading > div { min-width: 0; }
 .agent-secret .agent-card-heading .icon { flex: 0 0 40px; padding: 8px; }
@@ -55,34 +119,46 @@
 .agent-secret-row { display: flex; gap: 8px; align-items: stretch; }
 .agent-secret-row input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--text-sm); }
 .agent-secret-row button { flex-shrink: 0; }
-.agent-secret h3 { margin: 24px 0 6px; font-size: var(--text-lg); }
+.agent-secret h4 { margin: 24px 0 6px; font-size: var(--text-lg); }
 .agent-details { display: grid; gap: 10px; margin: 18px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--canvas); font-size: var(--text-sm); }
 .agent-details div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
 .agent-details dt { color: var(--muted); }
 .agent-details dd { margin: 0; overflow-wrap: anywhere; }
 .agent-instruction-block { margin-top: 12px; }
 .agent-instruction-block h4 { margin-bottom: 8px; font-size: var(--text-base); font-weight: 500; }
-.agent-instruction-block pre { margin-bottom: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--canvas); font-size: var(--text-sm); line-height: 1.6; overflow: auto; }
+.agent-instruction-block pre { margin-bottom: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft-3); font-size: var(--text-sm); line-height: 1.6; overflow: auto; }
 .agent-instruction { color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; }
-.agent-instruction code, .agent-next-step code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); }
+.agent-instruction code, .agent-next-step code, .agent-http .agent-help code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); }
 .agent-next-step { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-sm); line-height: 1.55; }
 /* HTTP API and CLI: the same instruction blocks, switched by two tabs. */
-.agent-http h2 { margin-bottom: 8px; }
-.agent-http .agent-help code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); }
+.agent-http { padding-top: 22px; border-top: 1px solid var(--line); }
+.agent-http h3 { margin-bottom: 8px; }
 .agent-http .ui-tabs { margin-top: 14px; }
 .agent-http [role="tabpanel"] { padding-top: 4px; }
 .agent-http > .agent-instruction { margin-top: 14px; }
+
 @media (max-width: 940px) {
-  .agent-workspace { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .agent-connections { max-width: 760px; padding: 36px 28px 96px; }
-  .agent-steps { grid-template-columns: 1fr; gap: 10px; }
+  .agent-connections { padding: 36px 28px 96px; }
+  .agent-client-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
-  .agent-connections { padding: 28px var(--gutter-mobile) 48px; }
-  .agent-page-heading { margin-bottom: 24px; }
+  .agent-connections { padding: 28px var(--gutter-mobile) 48px; gap: 22px; }
   .agent-lead { font-size: var(--text-lg); }
+  .agent-status { padding: 14px 16px; }
+  .agent-status-arrived { grid-template-columns: 28px minmax(0, 1fr); }
+  .agent-status-arrived .ui-button { grid-column: 2; justify-self: start; }
+  .agent-client-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .agent-client-card { min-height: 0; padding: 12px; }
+  .agent-client-card:last-child { grid-column: 1 / -1; }
+  .agent-setup { padding: 18px 16px; }
+  .agent-setup-steps li { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
+  .agent-setup-number { width: 26px; height: 26px; }
+  .agent-copy-row .ui-button { width: 100%; }
   .agent-card { padding: 20px 18px; }
+  .agent-developers > summary { padding: 12px 18px; }
+  .agent-developers-body { padding: 0 18px 22px; }
   .agent-choice-row { grid-template-columns: minmax(0, 1fr); }
+  .agent-list-item { flex-direction: column; }
   .agent-secret .agent-card-heading { flex-direction: row; gap: 10px; }
   .agent-details div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .agent-secret-row { flex-direction: column; }

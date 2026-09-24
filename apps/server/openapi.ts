@@ -442,7 +442,7 @@ export function openApiDocument(origin: string) {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          description: `An agent token of the shelf owner: created by the human at ${origin}/settings/agents (client «HTTP API / скрипт», shown once), or the OAuth access token of an MCP connection (audience ${origin}/mcp). Send it only in this header; keep it in an environment variable, never in a chat, command line or log. Scopes: ${AGENT_SCOPES.join(", ")}. publish needs capture; the link needs share.`,
+          description: `An agent token of the shelf owner: created by the human at ${origin}/settings/agents (section «Для разработчиков», shown once), or the OAuth access token of an MCP connection (audience ${origin}/mcp). Send it only in this header; keep it in an environment variable, never in a chat, command line or log. Scopes: ${AGENT_SCOPES.join(", ")}. publish needs capture; the link needs share.`,
         },
       },
       schemas: {
