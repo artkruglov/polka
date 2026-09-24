@@ -1,0 +1,153 @@
+<!doctype html>
+<!--
+  Synthetic fixture for tests/extension-extract.test.ts: a standalone artifact
+  page, claude.ai/artifact/<id>, as described from a logged-in look on
+  24.09.2026 (not a copy of its markup). The header has a title button
+  without aria-label that opens a menu, aria-labelled buttons (You, Comment,
+  Chat with Claude, Share …), no Copy button, no Code tab and no data-testid.
+  The menu behaves as the real one (Base UI) did under synthetic events on
+  24.09.2026: the trigger is button[data-title-menu] (aria-haspopup="menu");
+  pointer events and Enter do NOT open it, focus + ArrowDown does. The Export
+  item ([data-download-submenu]) opens its submenu on ArrowRight after a short
+  delay, on Enter or hover only after 700 ms. Download ([data-download-item])
+  builds a Blob and clicks an <a download>, and the menus stay open. Escape
+  closes them only when dispatched on a focused menu item (not on the
+  document); an outside pointerdown closes them too.
+  «Copy as Markdown» copies rendered text; the extension must not press it.
+  ?server=1: Download clicks an <a download> to a server URL instead.
+  ?plain=1: no data-* attributes, only roles and text.
+  ?noescape=1: Escape does not close the menus at all.
+  The artifact frame is iframe[title="User-generated artifact content"]
+  (on *.frame.claudeusercontent.com in the real app), plus a hidden 1×1 frame.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Трекер привычек - Claude</title>
+<style>
+  body { margin: 0; font: 14px system-ui; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid #ddd; }
+  [role="menu"] { position: absolute; top: 44px; left: 8px; background: #fff; border: 1px solid #ccc; padding: 4px; }
+  [role="menu"].sub { left: 180px; }
+  [role="menuitem"] { display: block; padding: 4px 8px; cursor: pointer; }
+  iframe.content { width: 100%; height: 600px; border: 0; }
+</style>
+</head>
+<body>
+<header>
+  <button type="button" id="title" aria-haspopup="menu" data-cds="Button" data-title-menu="">Трекер привычек</button>
+  <div class="right">
+    <button type="button" aria-label="You">A</button>
+    <button type="button" aria-label="Translate to American English">EN</button>
+    <button type="button" aria-label="Comment on this artifact">💬</button>
+    <button type="button" aria-label="More comment options">⋯</button>
+    <button type="button" aria-label="Chat with Claude">Chat</button>
+    <button type="button" aria-label="Share, shared with anyone who has the link">Share</button>
+    <button type="button" aria-label="Open chat">Open</button>
+  </div>
+</header>
+<iframe class="content" title="User-generated artifact content" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"
+  srcdoc="<!doctype html><h1>Трекер привычек</h1><p>Rendered artifact</p>"></iframe>
+<iframe style="position:absolute;width:1px;height:1px;border:0" srcdoc="<p>helper</p>"></iframe>
+<script>
+  const SOURCE = '<!doctype html>\n<html lang="ru"><head><meta charset="utf-8"><title>Трекер привычек</title></head>\n<body><h1>Трекер привычек</h1><script>console.log("mine")<\/script></body></html>\n';
+  window.__downloadClicks = 0;
+  window.__markdownCopied = false;
+  window.__revoked = 0;
+  // Any click that reaches an a[download] would start a real download.
+  document.addEventListener("click", (event) => {
+    if (event.target.closest && event.target.closest("a[download]")) window.__downloadClicks++;
+  }, true);
+
+  const plain = location.search.includes("plain=1");
+  const title = document.getElementById("title");
+  if (plain) title.removeAttribute("data-title-menu");
+  let menu = null;
+  let submenu = null;
+  let submenuTimer = null;
+  window.__closedBy = null;
+  const close = (how) => {
+    clearTimeout(submenuTimer);
+    submenu?.remove(); submenu = null;
+    menu?.remove(); menu = null;
+    title.setAttribute("aria-expanded", "false");
+    window.__closedBy = how;
+  };
+  const item = (text, data) => {
+    const node = document.createElement("div");
+    node.setAttribute("role", "menuitem");
+    node.id = "base-ui-" + Math.random().toString(36).slice(2, 8);
+    node.tabIndex = -1;
+    node.textContent = text;
+    if (data && !plain) node.setAttribute(data, "");
+    return node;
+  };
+  const withMenuKeys = (element) => {
+    // Escape works only from inside the menu, as with the real one.
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !location.search.includes("noescape=1")) close("escape-in-menu");
+    });
+  };
+  const download = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30)); // work before saving
+    const a = document.createElement("a");
+    if (location.search.includes("server=1")) {
+      a.href = "/files/artifact.html";
+    } else {
+      const blob = new Blob([SOURCE], { type: "text/html" });
+      a.href = URL.createObjectURL(blob);
+    }
+    a.download = "habit-tracker.html";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    if (a.href.startsWith("blob:")) { URL.revokeObjectURL(a.href); window.__revoked++; }
+  };
+  const openSubmenu = (delay) => {
+    if (submenu || submenuTimer) return;
+    submenuTimer = setTimeout(() => {
+      submenuTimer = null;
+      if (!menu) return;
+      submenu = document.createElement("div");
+      submenu.setAttribute("role", "menu");
+      submenu.className = "sub";
+      withMenuKeys(submenu);
+      const dl = item("Download", "data-download-item");
+      dl.addEventListener("click", () => void download());
+      submenu.append(dl);
+      document.body.append(submenu);
+    }, delay);
+  };
+  const openMenu = () => {
+    if (menu) return;
+    menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    withMenuKeys(menu);
+    const exportItem = item("Export", "data-download-submenu");
+    exportItem.setAttribute("aria-haspopup", "menu");
+    exportItem.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") openSubmenu(150);
+      if (event.key === "Enter") openSubmenu(700);
+    });
+    exportItem.addEventListener("pointermove", () => openSubmenu(700));
+    const markdown = item("Copy as Markdown");
+    markdown.addEventListener("click", () => {
+      window.__markdownCopied = true;
+      navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob(["# Трекер"], { type: "text/plain" }) })]);
+    });
+    menu.append(exportItem, markdown, item("Rename"), item("Duplicate"), item("Share"), item("Refresh"), item("Pin"), item("All artifacts"), item("Report artifact"), item("Delete artifact"));
+    document.body.append(menu);
+    title.setAttribute("aria-expanded", "true");
+    exportItem.focus();
+  };
+  // Only ArrowDown on the trigger opens the menu: not pointer events, not Enter.
+  title.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") setTimeout(openMenu, 100);
+  });
+  // An outside press closes.
+  document.addEventListener("pointerdown", (event) => {
+    if (menu && !event.target.closest('[role="menu"]') && event.target !== title) close("outside");
+  });
+</script>
+</body>
+</html>

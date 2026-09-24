@@ -281,6 +281,23 @@ const env = z
       .string()
       .regex(/^[A-Za-z0-9._-]{1,80}$/)
       .optional(),
+    // Chrome extension IDs of the official «На Полку» build (comma-separated,
+    // 32 letters a–p each). Its OAuth consent screen is labelled «Расширение
+    // браузера «На Полку»»; any other extension is shown with its ID and a
+    // self-declared name (extensions/chrome/README.md).
+    BROWSER_EXTENSION_IDS: z
+      .string()
+      .default("")
+      .transform((value) =>
+        value
+          .split(/[\s,]+/)
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      )
+      .refine(
+        (ids) => ids.every((id) => /^[a-p]{32}$/.test(id)),
+        "BROWSER_EXTENSION_IDS: 32 letters a–p each",
+      ),
     // Operator status for external monitoring (GET /api/ops/status). Unset or
     // empty: the route does not exist. OPS_BACKUP_BUCKET is where the backup
     // job writes dumps; the app only lists it to report the newest dump's age.

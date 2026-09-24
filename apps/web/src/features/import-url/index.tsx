@@ -102,6 +102,10 @@ export function UrlImport({
     const recognised = initial ? classify(initial) : null;
     return recognised?.status === "provider" ? recognised : null;
   });
+  // A link the user has just submitted goes straight to the extension, if any.
+  const [submitted, setSubmitted] = useState<{ url: string; autoStart: boolean }>(
+    () => ({ url: initial, autoStart: false }),
+  );
   const [url, setUrl] = useState(
       () => initial || session.get(draftKey) || "",
     ),
@@ -163,6 +167,7 @@ export function UrlImport({
     const recognised = classify(url);
     if (recognised.status === "provider") {
       setProvider(recognised);
+      setSubmitted({ url: url.trim(), autoStart: true });
       return;
     }
     setProvider(null);
@@ -361,7 +366,10 @@ export function UrlImport({
       )}
       {provider && (
         <ProviderGuide
+          key={submitted.url}
           result={provider}
+          url={submitted.url}
+          autoStart={submitted.autoStart}
           fileSave={fileSave}
           pasteCode={pasteCode}
           onFile={onFile}

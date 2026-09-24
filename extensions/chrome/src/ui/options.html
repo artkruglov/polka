@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>На Полку — настройки</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body class="options">
+<main>
+  <header>
+    <img src="icons/icon-48.png" width="32" height="32" alt="">
+    <h1>На Полку</h1>
+  </header>
+
+  <section aria-labelledby="connection-title">
+    <h2 id="connection-title">Подключение</h2>
+    <p id="connection" class="muted">Проверяем…</p>
+    <div class="row">
+      <button type="button" id="connect" class="primary" hidden>Подключить Полку</button>
+      <button type="button" id="disconnect" class="secondary" hidden>Отключить</button>
+    </div>
+    <p id="connection-error" class="error" hidden></p>
+  </section>
+
+  <section aria-labelledby="origin-title">
+    <h2 id="origin-title">Адрес Полки</h2>
+    <p class="muted">polochka.app или адрес своей установки. Работы уходят только сюда.</p>
+    <form id="origin-form" class="row">
+      <input id="origin" type="url" required aria-label="Адрес Полки" placeholder="https://polochka.app">
+      <button type="submit" class="secondary">Сохранить адрес</button>
+    </form>
+    <p id="origin-error" class="error" hidden></p>
+  </section>
+
+  <section aria-labelledby="button-title">
+    <h2 id="button-title">Кнопка на страницах</h2>
+    <label class="check">
+      <input id="page-button" type="checkbox">
+      <span>Показывать кнопку «На Полку» рядом с артефактом в Claude и ChatGPT. Кнопка ничего не читает, пока вы её не нажмёте.</span>
+    </label>
+  </section>
+
+  <section aria-labelledby="privacy-title">
+    <h2 id="privacy-title">Что видит расширение</h2>
+    <ul class="muted">
+      <li>Страницу артефакта — только когда вы нажимаете «На Полку» или вставляете ссылку в Полку.</li>
+      <li>Код артефакта отправляется только на вашу Полку (адрес выше). Аналитики и сторонних серверов нет.</li>
+      <li>Токен доступа хранится в браузере; отключить его можно здесь или на странице «Агенты» на Полке.</li>
+    </ul>
+  </section>
+</main>
+<script src="options.js" type="module"></script>
+</body>
+</html>

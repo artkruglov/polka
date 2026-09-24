@@ -29,6 +29,7 @@ import {
   SAVE_PHRASE,
   agentClients,
   clientSetup,
+  harvestClient,
   isFreshAccount,
   parseClientId,
   readStoredClient,
@@ -38,8 +39,10 @@ import {
   storeClient,
   type AgentClientId,
   type ClientSetup,
+  type HarvestClientId,
   type SetupCopy,
 } from "../../entities/onboarding/agent-setup.ts";
+import { HarvestPrompt } from "../../entities/onboarding/HarvestPrompt.tsx";
 import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
@@ -137,6 +140,8 @@ export function AgentConnections() {
   const [selected, setSelected] = useState<AgentClientId | null>(initialClient);
   // The connection that appeared while the steps were open: «Готово!».
   const [arrived, setArrived] = useState<AgentConnection | null>(null);
+  // The harvest task's tab: the chosen client until the person switches it.
+  const [harvest, setHarvest] = useState<HarvestClientId | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [name, setName] = useState("");
   const [clientKind, setClientKind] = useState<ClientKind>("http");
@@ -556,6 +561,13 @@ export function AgentConnections() {
             </p>
           )}
         </section>
+
+        {(arrived || active.length > 0) && listState !== "error" && (
+          <NextStep
+            client={harvest ?? harvestClient(selected)}
+            onClient={setHarvest}
+          />
+        )}
 
         <section className="agent-where" aria-labelledby="agent-where-title">
           <h2 id="agent-where-title">Где вы работаете с ИИ?</h2>
@@ -1034,6 +1046,26 @@ export function connectionStatus(
   return connection.kind === "oauth"
     ? "Доступ разрешён · запросов ещё не было"
     : "Токен выдан · запросов ещё не было";
+}
+
+/** Connected: the first task, «соберите свои лучшие работы», ready to copy. */
+export function NextStep({
+  client,
+  onClient,
+}: {
+  client: HarvestClientId;
+  onClient: (id: HarvestClientId) => void;
+}) {
+  return (
+    <section className="agent-next" aria-labelledby="agent-next-title">
+      <h2 id="agent-next-title">Что дальше: соберите свои лучшие работы</h2>
+      <p className="agent-help">
+        Скопируйте задание агенту: он найдёт 3–5 лучших работ, покажет список и
+        после вашего «да» сохранит их на Полку.
+      </p>
+      <HarvestPrompt client={client} onClient={onClient} />
+    </section>
+  );
 }
 
 /** The numbered steps for one client, each thing to copy under its step. */

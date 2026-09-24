@@ -14,6 +14,7 @@ import "./pages/agents/styles.css";
 // Imported here, not by the feature: pages that import it are rendered in Node tests.
 import "./features/provider-sign-in/styles.css";
 import "./features/first-run/styles.css";
+import "./features/upload-artifact/styles.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AppRoutes } from "./app/routing/index.tsx";

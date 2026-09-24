@@ -2,6 +2,8 @@ import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import React from "react";
 import { Badge, Button } from "../../shared/ui/controls.tsx";
+import { useCopy } from "../../shared/ui/CopyText.tsx";
+import { improvePhrase } from "../../entities/artifact/agent-phrases.ts";
 import {
   LockKeyhole,
   Link as LinkIcon,
@@ -15,6 +17,7 @@ import {
   Image as ImageIcon,
   Sparkles,
   Ellipsis,
+  Bot,
 } from "lucide-react";
 import type {
   Artifact,
@@ -34,6 +37,8 @@ export type ReaderAction =
   "share" | "version" | "metadata" | "trash" | "rework" | "agent-context";
 type Props = {
   work: Artifact;
+  /** The address of this page, named in the phrase the owner copies for the agent. */
+  shelfUrl: string;
   shown: Revision;
   revisions: Revision[];
   viewed: Revision | null;
@@ -53,6 +58,7 @@ type Props = {
 /** Read-only composition. The page owns fetching, mutations and asynchronous races. */
 export function ArtifactReader({
   work,
+  shelfUrl,
   shown,
   revisions,
   viewed,
@@ -72,6 +78,11 @@ export function ArtifactReader({
     !!work.share && ["active", "behind"].includes(work.share.status);
   const KindIcon = isImage(shown) ? ImageIcon : FileText;
   const plainText = shown.mime === "text/plain" && !work.trashedAt;
+  // «Скопировать для агента» copies one phrase; the full context stays in the menu.
+  const agent = useCopy(improvePhrase(work.title, shelfUrl));
+  const copyForAgent = async () => {
+    if ((await agent.copy()) === "failed") setPanel("agent-context");
+  };
   return (
     <>
       <header className={`work-heading${plainText ? " work-heading--quiet" : ""}`} aria-label={`${folderName} · ${work.title}`}>
@@ -120,9 +131,13 @@ export function ArtifactReader({
         trailing={
           !work.trashedAt ? (
             <div className="work-actions">
-              <Button onClick={() => setPanel("agent-context")}>
-                <Sparkles />
-                <span>Скопировать для агента</span>
+              <Button
+                busy={agent.state === "copying"}
+                onClick={() => void copyForAgent()}
+                title={improvePhrase(work.title, shelfUrl)}
+              >
+                {agent.state === "copied" ? <Check /> : <Sparkles />}
+                <span>{agent.state === "copied" ? "Скопировано" : "Скопировать для агента"}</span>
               </Button>
               <Button onClick={() => setPanel("version")}>
                 <Upload />
@@ -132,6 +147,7 @@ export function ArtifactReader({
                 label="Ещё действия"
                 icon={<Ellipsis />}
                 items={[
+                  { id: "agent-context", label: "Подробный контекст для агента", icon: <Bot />, onSelect: () => setPanel("agent-context") },
                   { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => setPanel("metadata") },
                   { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => setPanel("trash") },
                 ]}

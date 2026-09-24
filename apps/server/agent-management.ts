@@ -47,8 +47,26 @@ export const agentArtifactListInputSchema = z
   })
   .strict();
 
+/** …/works/<id>: the page of a work on the owner's shelf, as the owner copies it. */
+const WORKS_PATH =
+  /\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
+
+/**
+ * A work named the way the owner names it: by id, or by the address of its
+ * page («Открой на Полке работу «…» (https://…/works/<id>)»). The tenant
+ * check on the id is what keeps another shelf's address a neutral 404.
+ */
+export const artifactRef = z
+  .union([uuid, z.string().max(2048).regex(WORKS_PATH)])
+  .describe(
+    "The work's id, or the address of its page on the owner's shelf (<origin>/works/<id>) as the owner pastes it.",
+  );
+
+export const artifactIdOf = (ref: string) =>
+  WORKS_PATH.exec(ref)?.[1]?.toLowerCase() ?? ref;
+
 export const agentGetArtifactInputSchema = z
-  .object({ artifactId: uuid })
+  .object({ artifactId: artifactRef })
   .strict();
 
 export const agentFolderListInputSchema = z
@@ -225,7 +243,7 @@ export async function getArtifactForAgent(
      FROM artifacts artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
      WHERE artifact.id=$1 AND artifact.tenant_id=$2`,
-    [input.artifactId, verified.tenantId],
+    [artifactIdOf(input.artifactId), verified.tenantId],
   );
   if (!row) throw missing();
   return artifactProjection(row);
@@ -254,7 +272,7 @@ export async function artifactStatusForAgent(
            AND upload.connection_id=$4
            AND upload.receipt->>'artifactId'=artifact.id::text))`,
     [
-      input.artifactId,
+      artifactIdOf(input.artifactId),
       verified.tenantId,
       verified.scopes.includes("read"),
       verified.connectionId,

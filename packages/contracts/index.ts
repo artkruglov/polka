@@ -74,7 +74,12 @@ export type OAuthConsentDetails = {
   /** The shelf the connector will save to and how its owner signs in. */
   account?: { name: string; methods: string[]; provisional: boolean };
   requestId: string;
-  client: { name: string; redirectHost: string };
+  client: {
+    name: string;
+    redirectHost: string;
+    /** Set when the answer goes to a Chrome extension (chromiumapp.org). */
+    extension: { id: string; official: boolean } | null;
+  };
   scopes: AgentScope[];
   defaultScopes: AgentScope[];
   accessMinutes: number;
