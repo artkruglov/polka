@@ -43,6 +43,7 @@
   "tests/capture-via-mcp.test.ts",
   "tests/agent-connections.test.ts",
   "tests/agents-page.test.ts",
+  "tests/agent-first.test.ts",
   "tests/artifact-metadata.test.ts",
   "tests/shelf-pagination.test.ts",
   "tests/restore-drill.test.ts",
