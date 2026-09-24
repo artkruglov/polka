@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru" class=""><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Как следят за работой сервисов: от логов до ИИ-дежурного</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.stack{display:grid;gap:8px;margin-top:14px}
+.floor{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:center;text-align:left;width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#fbfaf7;font:inherit;color:var(--ink);cursor:pointer;min-height:56px}
+.floor i{font-style:normal;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-weight:800;color:#fff;background:var(--cool)}
+.floor small{display:block;color:var(--muted)}
+.floor[aria-pressed="true"]{border-color:var(--cool);background:#eaf2f6;box-shadow:inset 0 0 0 1px var(--cool)}
+.floor.ai i{background:var(--accent)}
+.floor.ai[aria-pressed="true"]{border-color:var(--accent);background:#fff4ec;box-shadow:inset 0 0 0 1px var(--accent)}
+.panel h3{font-family:inherit;letter-spacing:0}
+.tl{list-style:none;margin:10px 0 0;padding:0}
+.tl li{position:relative;padding:6px 0 14px 30px;border-left:2px solid var(--line);margin-left:8px}
+.tl li::before{content:"";position:absolute;left:-8px;top:12px;width:14px;height:14px;border-radius:50%;background:var(--cool);border:3px solid var(--card)}
+.tl li.m::before{background:var(--accent)}
+.tl time{display:block;font-size:.82rem;color:var(--muted);font-weight:700}
+dl.gl{display:grid;grid-template-columns:170px 1fr;gap:8px 16px;margin:10px 0 0}
+dl.gl dt{font-weight:700}dl.gl dd{margin:0}
+@media(max-width:540px){dl.gl{grid-template-columns:1fr}dl.gl dd{margin-bottom:8px}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Разбор · B2B-технологии</div>
+<h1>Как следят за работой сервисов: от логов до ИИ-дежурного</h1>
+<p class="dek">Когда в три часа ночи падает оплата в приложении, кто-то должен за минуты понять, что сломалось. Для этого существует целая индустрия — observability. Сейчас она быстро меняется: ИИ-агенты начинают сами расследовать сбои. Разбираем, как устроен этот рынок, по слоям.</p>
+</header>
+
+<section class="card" aria-labelledby="stack-h">
+<h2 id="stack-h">Четыре этажа и пристройка</h2>
+<p>Рынок удобно представлять как здание: снизу — сбор данных о работе системы, наверху — решения и действия. Нажмите на этаж.</p>
+<div class="stack" role="group" aria-label="Слои рынка observability">
+<button class="floor" type="button" data-k="4" aria-pressed="false" disabled=""><i>4</i><span><b>Системы действия</b><small>ИИ-агенты расследуют и чинят</small></span></button>
+<button class="floor" type="button" data-k="3" aria-pressed="false" disabled=""><i>3</i><span><b>AIOps</b><small>Шум, корреляция, первопричина</small></span></button>
+<button class="floor" type="button" data-k="2" aria-pressed="false" disabled=""><i>2</i><span><b>Хранилище и связи</b><small>Метрики, события, логи, трассы</small></span></button>
+<button class="floor" type="button" data-k="1" aria-pressed="false" disabled=""><i>1</i><span><b>Сбор данных</b><small>Агенты и OpenTelemetry</small></span></button>
+<button class="floor ai" type="button" data-k="ai" aria-pressed="false" disabled=""><i>ИИ</i><span><b>Отдельная пристройка: наблюдение за ИИ-системами</b><small>Оценки качества, токены, вызовы инструментов</small></span></button>
+</div>
+<div class="panel" id="panel" aria-live="polite"><h3>1. Сбор данных</h3><p>На серверах и в коде стоят агенты, которые собирают телеметрию: метрики (нагрузка, задержка), логи (текстовые записи событий) и трассы (путь одного запроса через все сервисы). Стандарт де-факто — открытый OpenTelemetry: его сборщик есть почти у всех крупных поставщиков.</p><p><b>Кто покупает:</b> инженеры платформы и SRE. <b>Главное:</b> собранные данные тяжело и дорого перевозить — это и есть «гравитация данных», на которой держатся крупные игроки.</p><h3>2. Хранилище и связи</h3><p>Бэкенд хранит четыре вида сигналов — метрики, события, логи и трассы (MELT) — и связывает их: из медленного запроса можно перейти к логам именно этого запроса и к метрикам сервера, где он выполнялся.</p><p><b>Кто покупает:</b> SRE, эксплуатация. <b>Главное:</b> здесь основные деньги классической observability; цена обычно зависит от объёма данных.</p><h3>3. AIOps</h3><p>Когда сыплются тысячи алертов, AIOps убирает шум, склеивает связанные события и ищет первопричину по карте зависимостей сервисов. Так работают, например, Davis у Dynatrace и AIOps у IBM.</p><p><b>Кто покупает:</b> часто ИТ-директор и служба поддержки. <b>Главное:</b> качество зависит от того, насколько полна карта связей между сервисами.</p><h3>4. Системы действия</h3><p>ИИ-агенты, которые сами берут алерт в работу: смотрят логи, трассы, недавние выкладки и код, формулируют гипотезу и предлагают — а иногда выполняют — исправление по ранбуку. Примеры: Bits AI SRE у Datadog, Olly у Coralogix, стартапы Resolve AI и Traversal.</p><p><b>Главное:</b> это самый быстрорастущий и самый спорный этаж: кто отвечает, если агент «починил» не то.</p><h3>Наблюдение за ИИ-системами</h3><p>Отдельная пристройка для сервисов на языковых моделях: оценки качества ответов на реальных запросах, поиск галлюцинаций, проверка, правильно ли агент вызывает инструменты, учёт токенов и стоимости.</p><p><b>Кто покупает:</b> ML-платформа и продуктовые команды ИИ, а не SRE. <b>Главное:</b> классические сигналы «работает / быстро» здесь не отвечают на вопрос «правильно ли».</p></div>
+
+</section>
+
+<section class="card" aria-labelledby="shift">
+<h2 id="shift">Что изменилось за последний год</h2>
+<p>Крупные поставщики, у которых уже лежат данные клиентов, быстро поднимаются на верхний этаж — выпускают своих ИИ-дежурных. Одновременно стартапы получают крупные раунды на ту же задачу.</p>
+<ul class="tl">
+<li class="m"><time>17 июня 2025</time>Coralogix привлекает $115 млн, оценка — больше $1 млрд.</li>
+<li class="m"><time>20 июня 2025</time>Стартап Traversal объявляет о $48 млн (посевной и раунд A): «модель мира продакшена» и поиск причин сбоя.</li>
+<li><time>2 декабря 2025</time>Datadog выпускает Bits AI SRE — агента, который сам расследует алерты и предлагает первопричину. До этого полгода в тесте у ~2000 ранних клиентов.</li>
+<li><time>2 декабря 2025</time>Coralogix выводит в общий доступ автономного агента Olly.</li>
+<li class="m"><time>17 февраля 2026</time>Braintrust (оценка качества ИИ-систем) привлекает $80 млн в раунде B.</li>
+<li><time>24 февраля 2026</time>New Relic анонсирует no-code-платформу для ИИ-агентов наблюдения.</li>
+</ul>
+<p class="note"><span style="color:#2d6a8a">●</span> продукты крупных поставщиков &nbsp; <span style="color:#7a3b2e">●</span> раунды</p>
+</section>
+
+<section class="card" aria-labelledby="wedges">
+<h2 id="wedges">Где есть место новым игрокам</h2>
+<p>Строить «ещё один дашборд» против Datadog или Dynatrace бессмысленно: данные уже у них. Стартапы выбирают один из четырёх клиньев:</p>
+<div class="grid">
+<div class="tile"><span class="tag cool">Надстройка</span><h3>Управление дежурством</h3><p>Подключаются к существующему мониторингу и инцидент-системам без переезда данных. Пример — Resolve AI, Traversal.</p></div>
+<div class="tile"><span class="tag cool">Качество ИИ</span><h3>Оценки и трассы для LLM</h3><p>Из реальных запросов делают тесты, следят за качеством и стоимостью. Braintrust, Arize.</p></div>
+<div class="tile"><span class="tag cool">Отладка агентов</span><h3>Повтор и разбор шагов</h3><p>Позволяют «перемотать» работу ИИ-агента и увидеть, где он ошибся. Laminar.</p></div>
+<div class="tile"><span class="tag cool">Замкнутый цикл</span><h3>Наблюдение → оценка → действие</h3><p>Связывают мониторинг, проверку качества и автоматические действия в одном продукте.</p></div>
+</div>
+<p class="note" style="margin-top:16px">Главный риск стартапов-надстроек: крупный поставщик может сделать ту же функцию у себя. Datadog, Coralogix и New Relic уже показали, что делают.</p>
+</section>
+
+<section class="card" aria-labelledby="why-ai">
+<h2 id="why-ai">Почему ИИ-системам нужен свой мониторинг</h2>
+<p>Классический мониторинг отвечает на вопрос «работает ли сервис и быстро ли». Для сервиса на языковой модели этого мало: он может отвечать быстро и без ошибок — и при этом неправильно.</p>
+<div class="scroll"><table>
+<thead><tr><th>Что мерят</th><th>Обычный сервис</th><th>Сервис на LLM или агент</th></tr></thead>
+<tbody>
+<tr><td>Работает ли</td><td>ошибки 5xx, доступность</td><td>то же плюс отказы модели, таймауты провайдера</td></tr>
+<tr><td>Быстро ли</td><td>задержка p99</td><td>время до первого токена, длина цепочки шагов</td></tr>
+<tr><td>Правильно ли</td><td>тесты до выкладки</td><td>оценки (evals) на реальных запросах, галлюцинации, верность вызовов инструментов</td></tr>
+<tr><td>Сколько стоит</td><td>серверы</td><td>токены на запрос, промахи кэша, повторы</td></tr>
+<tr><td>Кто покупает</td><td>SRE и платформа</td><td>ML-платформа и продуктовая команда ИИ</td></tr>
+</tbody></table></div>
+<p style="margin-top:14px">Мост между двумя мирами — тот же OpenTelemetry: например, Phoenix от Arize построен на нём, а у Dynatrace есть отдельное приложение для наблюдения за ИИ, которое принимает данные OpenTelemetry.</p>
+</section>
+
+<section class="card" aria-labelledby="choose">
+<h2 id="choose">Если выбираете ИИ-дежурного: пять вопросов</h2>
+<ol>
+<li><b>Только читает или может действовать?</b> Режим «только чтение» безопаснее; право на автоматические исправления — отдельное решение с журналом и откатом.</li>
+<li><b>Где живут данные?</b> Нужна ли установка в своём контуре, и что уходит внешнему поставщику модели.</li>
+<li><b>Работает ли поверх ваших инструментов?</b> Поддержка OpenTelemetry и ваших инцидент-систем без переезда.</li>
+<li><b>Как он показывает доказательства?</b> Хороший агент приводит ссылки на конкретные логи, трассы и коммиты, а не «кажется, дело в базе».</li>
+<li><b>Как мерить пользу?</b> Время до первопричины и доля верных гипотез на ваших прошлых инцидентах, а не на демо.</li>
+</ol>
+</section>
+
+<section class="card" aria-labelledby="gl-h">
+<h2 id="gl-h">Словарик</h2>
+<dl class="gl">
+<dt>Observability</dt><dd>Способность понять, что происходит внутри системы, по её внешним сигналам.</dd>
+<dt>MELT</dt><dd>Metrics, Events, Logs, Traces — четыре вида телеметрии.</dd>
+<dt>Трасса и спан</dt><dd>Трасса — путь одного запроса через сервисы; спан — один шаг на этом пути.</dd>
+<dt>SRE</dt><dd>Инженеры надёжности: отвечают за доступность и дежурства.</dd>
+<dt>AIOps</dt><dd>Алгоритмы, которые разбирают поток алертов: убирают шум, группируют, ищут причину.</dd>
+<dt>RCA</dt><dd>Root cause analysis — поиск первопричины сбоя.</dd>
+<dt>Ранбук</dt><dd>Инструкция дежурному: что проверить и сделать при конкретном алерте.</dd>
+<dt>Evals</dt><dd>Автоматические оценки качества ответов ИИ-системы на наборе примеров.</dd>
+</dl>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ul class="sources">
+<li>Datadog, пресс-релиз «Datadog Launches Bits AI SRE Agent to Resolve Incidents Faster», 02.12.2025. <small>datadoghq.com/about/latest-news/press-releases</small></li>
+<li>Coralogix, пресс-релиз «Coralogix Autonomous Agent Olly Now in General Availability», 02.12.2025 (GlobeNewswire). <small>globenewswire.com</small></li>
+<li>Coralogix — раунд $115 млн, 17.06.2025 (сообщения MSSP Alert, Tech Funding News). <small>msspalert.com</small></li>
+<li>Traversal — объявление о раунде $48 млн, 20.06.2025; Business Wire — описание продукта.</li>
+<li>Braintrust — объявление о раунде B $80 млн, 17.02.2026.</li>
+<li>New Relic — анонс Agentic Platform, 24.02.2026.</li>
+<li>Документация Arize Phoenix (OpenTelemetry и OpenInference), Dynatrace (AI Observability, Davis), New Relic (MELT), Splunk и Datadog (дистрибутивы OpenTelemetry Collector).</li>
+</ul>
+<p class="note">Обзор рынка собран 10 апреля 2026 года; даты запуска Bits AI SRE и Olly и раунд Coralogix сверены Редакцией 24 сентября 2026 года. Названия компаний — примеры, это не реклама и не рейтинг.</p>
+</section>
+
+<div class="made"><b>Подготовлено с Claude.</b> Материал вырос из обзора рынка, который автор Полки собирал с помощью ИИ-исследования; текст переписан и проверен с Claude. Оценки и прогнозы исходного обзора опущены, оставлены факты с датами и устройство рынка.</div>
+<p class="foot">Автор: Редакция Полки</p>
+<p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
+
+
+</body></html>

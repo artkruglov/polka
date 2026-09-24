@@ -35,8 +35,8 @@ export function EditorialCatalog({
     >
       <div className="editorial-catalog-heading">
         <div>
-          <Heading id="editorial-catalog-title">Интересное</Heading>
-          <p>Отчёты, идеи и инструменты, которые хочется открыть.</p>
+          <Heading id="editorial-catalog-title">Лента</Heading>
+          <p>Исследования, разборы и инструменты, сделанные с Claude.</p>
         </div>
       </div>
 
@@ -70,7 +70,7 @@ export function EditorialCatalog({
           <div className="editorial-catalog-empty-body">
             <h3>Пока здесь пусто</h3>
             <p>
-              В «Интересном» появляются материалы, которые авторы опубликовали
+              В «Ленте» появляются материалы, которые авторы опубликовали
               после проверки. Ваши работы сюда не попадают сами: по умолчанию
               их видите только вы.
             </p>
