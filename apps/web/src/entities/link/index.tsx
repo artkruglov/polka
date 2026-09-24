@@ -55,7 +55,7 @@ export function LinkCover({
     <div className="link-cover" aria-hidden="true">
       <ServiceMark provider={provider} size="lg" />
       <strong>{title}</strong>
-      <span>
+      <span className="link-cover-host">
         {provider ? `${provider.name} · ` : ""}
         {host}
       </span>
