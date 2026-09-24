@@ -50,6 +50,13 @@ x-runtime-env: &runtime-env
   # gists without it are limited to 60 GitHub API requests an hour.
   URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
   GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  # Rendered snapshots of allowlisted SPA hosts (Lovable, bolt.host, Replit,
+  # GitHub Pages, Gemini share). Off by default. RENDERER_URL: the renderer
+  # service below (http://127.0.0.1:4395, --profile renderer) or a separate
+  # VM (https://…, deploy/renderer/README.md). RENDERER_SECRET: shared with it.
+  RENDERED_IMPORT_ENABLED: ${RENDERED_IMPORT_ENABLED:-false}
+  RENDERER_URL: ${RENDERER_URL:-}
+  RENDERER_SECRET: ${RENDERER_SECRET:-}
   MAIL_MODE: ${MAIL_MODE:-disabled}
   # Used only with MAIL_MODE=smtp (for example Yandex Cloud Postbox).
   SMTP_HOST: ${SMTP_HOST:-}
@@ -152,6 +159,11 @@ networks:
   polka:
     ipam:
       config: [{subnet: 172.28.0.0/24}]
+  # The renderer's own network: it shares nothing with postgres, backup or
+  # the host-network services; the app reaches it on 127.0.0.1:4395 only.
+  render:
+    ipam:
+      config: [{subnet: 172.29.0.0/24}]
 
 volumes:
   pgdata:
@@ -305,4 +317,30 @@ services:
     networks: [polka]
     depends_on:
       postgres: {condition: service_healthy}
+    logging: *logging
+
+  # Headless renderer on this VM (opt-in: docker compose --profile renderer up -d).
+  # For a separate VM use deploy/renderer instead. Chromium goes out only
+  # through the egress proxy inside the container, which refuses private,
+  # link-local (169.254.169.254) and docker addresses; see
+  # deploy/renderer/README.md. About 1–1.5 GB RAM while a page renders.
+  renderer:
+    profiles: ["renderer"]
+    build:
+      context: ../..
+      dockerfile: apps/renderer/Dockerfile
+    image: polka-renderer:local
+    restart: unless-stopped
+    environment:
+      RENDERER_SECRET: ${RENDERER_SECRET:-}
+    networks: [render]
+    ports: ["127.0.0.1:4395:4395"]
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,size=256m"]
+    shm_size: 256m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: {cpus: "1.0", memory: 1536M, pids: 256}
     logging: *logging
