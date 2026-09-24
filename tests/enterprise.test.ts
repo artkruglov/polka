@@ -196,6 +196,9 @@ test(`one IP may send ${ENTERPRISE_REQUESTS_PER_IP} requests an hour`, async () 
   const res = await post(blocked, { ip });
   assert.equal(res.statusCode, 429, res.body);
   assert.match(res.json().message, /через час/);
+  // The window's reset time, not a guess: within the hour.
+  const retryAfter = Number(res.headers["retry-after"]);
+  assert.ok(retryAfter > 3500 && retryAfter <= 3600, String(retryAfter));
   assert.equal((await stored(blocked.company)).length, 0);
   // Another address is counted on its own.
   assert.equal((await post(valid())).statusCode, 200);

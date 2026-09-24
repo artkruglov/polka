@@ -1192,6 +1192,8 @@ test("/mcp is rate limited per address, before authentication, and per connectio
   const byConnection = await post(`Bearer ${limited.token}`, address());
   assert.equal(byConnection.statusCode, 429);
   assert.equal(byConnection.json().code, "quota");
+  const retryAfter = Number(byConnection.headers["retry-after"]);
+  assert.ok(retryAfter > 0 && retryAfter <= 600, String(retryAfter));
   // Other connections from the same owner are unaffected.
   assert.equal(
     (await post(`Bearer ${unaffected.token}`, address())).statusCode,

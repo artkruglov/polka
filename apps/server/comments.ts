@@ -554,10 +554,11 @@ async function createInContext(
     `comments:${share.id}`,
   ]);
   const {
-    rows: [{ today }],
+    rows: [{ today, retry_after }],
   } = await c.query(
-    `SELECT count(*)::int AS today FROM comments
-     WHERE share_id=$1 AND created_at>now()-interval '1 day'`,
+    `SELECT count(*)::int AS today,
+       extract(epoch FROM min(created_at)+interval '1 day'-now())::float8 AS retry_after
+     FROM comments WHERE share_id=$1 AND created_at>now()-interval '1 day'`,
     [share.id],
   );
   if (today >= COMMENTS_PER_SHARE_PER_DAY)
@@ -565,7 +566,7 @@ async function createInContext(
       429,
       "quota",
       `По этой ссылке уже ${COMMENTS_PER_SHARE_PER_DAY} комментариев за сутки. Продолжите завтра.`,
-    );
+    ).retryIn(retry_after ?? 86_400);
   let parent: any = null;
   if (input.parentId) {
     parent = (

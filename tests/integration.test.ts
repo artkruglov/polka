@@ -1298,4 +1298,5 @@ test("share resolution is rate limited per address", async () => {
   const limited = await resolve();
   assert.equal(limited.statusCode, 429);
   assert.equal(limited.json().code, "quota");
+  assert.ok(Number(limited.headers["retry-after"]) > 0);
 });

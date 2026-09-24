@@ -601,6 +601,9 @@ test("anti-spam: throwaway mail and per-network sign-ups; the same content from 
   const third = await share(busy, await save(busy, HONEST.replace("Отчёт", "3")));
   assert.equal(third.statusCode, 429, third.body);
   assert.match(third.json().message, /в сутки/);
+  // When the oldest of today's links leaves the 24-hour window.
+  const retryAfter = Number(third.headers["retry-after"]);
+  assert.ok(retryAfter > 86_000 && retryAfter <= 86_400, String(retryAfter));
 });
 
 test("an urgent report pauses the link at once", async () => {

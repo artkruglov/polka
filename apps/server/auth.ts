@@ -49,7 +49,7 @@ export async function limitAttempts(
   const {
     rows: [limit],
   } = await db.query(
-    `INSERT INTO login_limits VALUES($1,1,now()+$2::interval) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END, reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+$2::interval ELSE login_limits.reset_at END RETURNING attempts`,
+    `INSERT INTO login_limits VALUES($1,1,now()+$2::interval) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END, reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+$2::interval ELSE login_limits.reset_at END RETURNING attempts, extract(epoch FROM reset_at-now())::float8 AS retry_after`,
     [sha256(key), window],
   );
   if (limit.attempts > max)
@@ -57,7 +57,7 @@ export async function limitAttempts(
       429,
       "quota",
       `Слишком много попыток. Попробуйте ${RETRY_AFTER[window]}.`,
-    );
+    ).retryIn(limit.retry_after);
 }
 export async function signIn(name: string, password: string, ip: string) {
   await limitAttempts(`name:${name}`, 12);
