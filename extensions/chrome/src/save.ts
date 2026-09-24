@@ -11,6 +11,7 @@ import type {
 import { AuthError, connect, isConnected } from "./auth.ts";
 import { noteFor, publish, PublishError } from "./api.ts";
 import { captureCopy } from "./extract/copy-capture.ts";
+import { captureDownload, type DownloadCapture } from "./extract/download-capture.ts";
 import type { FrameReport } from "./extract/frame.ts";
 import type { PageReport } from "./extract/page.ts";
 import { getSettings } from "./settings.ts";
@@ -26,8 +27,15 @@ const fail = (code: ImportFailure["code"], message: string): ImportFailure => ({
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** One pass over the tab: the page, its Copy button, the artifact frames. */
-async function extractOnce(tabId: number): Promise<{
+/** A file name's extension as a language hint: page.jsx → jsx. */
+const extensionOf = (name: string | null) =>
+  /\.([a-z0-9]+)$/i.exec(name ?? "")?.[1]?.toLowerCase() ?? null;
+
+/**
+ * One pass over the tab: the title menu's Download (once per save), the Copy
+ * button, the Code view, the artifact frames.
+ */
+async function extractOnce(tabId: number, state: { menuTried: boolean }): Promise<{
   best: Extracted | null;
   page: PageReport | null;
 }> {
@@ -43,6 +51,29 @@ async function extractOnce(tabId: number): Promise<{
   if (!page?.provider) return { best: null, page };
   const candidates: (Extracted | null)[] = [];
   const base = { provider: page.provider, title: page.title };
+
+  // Pressing through a menu is visible to the user: at most once per save.
+  if (page.menuMarker && !state.menuTried) {
+    state.menuTried = true;
+    const [downloaded] = await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      world: "MAIN",
+      func: captureDownload,
+      args: [page.menuMarker, 5000],
+    });
+    const capture = downloaded?.result as DownloadCapture | undefined;
+    if (capture?.ok && capture.text.trim())
+      return {
+        best: {
+          ...base,
+          source: capture.text,
+          language: extensionOf(capture.filename) ?? (capture.type || null),
+          via: "download",
+        },
+        page,
+      };
+    // Otherwise (a server download, no menu, a binary file): the frame below.
+  }
 
   if (page.copyMarker) {
     const [copied] = await chrome.scripting.executeScript({
@@ -88,9 +119,10 @@ async function extractOnce(tabId: number): Promise<{
 async function extract(tabId: number, patienceMs: number) {
   const deadline = Date.now() + patienceMs;
   let last: Awaited<ReturnType<typeof extractOnce>> = { best: null, page: null };
+  const state = { menuTried: false };
   do {
     try {
-      last = await extractOnce(tabId);
+      last = await extractOnce(tabId, state);
     } catch {
       /* the tab navigated mid-way; try again */
     }

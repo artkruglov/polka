@@ -8,6 +8,7 @@ export type Provider = "claude" | "chatgpt";
 
 /** How a source was obtained, best first. Shown in the result as a hint. */
 export type Via =
+  | "download"
   | "copy-button"
   | "frame-source"
   | "code-view"
@@ -182,7 +183,7 @@ export function publishBody(extracted: Extracted, key: string): PublishBody {
 
 /** Candidates in order of trust; the first non-empty one wins. */
 export function pickBest(candidates: (Extracted | null | undefined)[]) {
-  const order: Via[] = ["copy-button", "frame-source", "code-view", "frame-rendered"];
+  const order: Via[] = ["download", "copy-button", "frame-source", "code-view", "frame-rendered"];
   const usable = candidates.filter(
     (item): item is Extracted => !!item && item.source.trim().length > 0,
   );

@@ -8,7 +8,12 @@
  * when that button can be found, and floats in the corner of the artifact
  * otherwise.
  */
-import { artifactPanel, findArtifactFrames, findCopyButton } from "../extract/dom.ts";
+import {
+  artifactPanel,
+  findArtifactFrames,
+  findCopyButton,
+  findShareButton,
+} from "../extract/dom.ts";
 import { STYLES } from "./page-button-styles.ts";
 
 type Result =
@@ -23,7 +28,12 @@ function anchor(): { frame: Element; copy: HTMLElement | null } | null {
     const frame = findArtifactFrames(document)[0];
     if (!frame || frame.getBoundingClientRect().width < 200) return null;
     const panel = artifactPanel(frame);
-    return { frame, copy: panel ? findCopyButton(panel) : null };
+    // Next to the panel's Copy button in a chat; next to Share on a
+    // standalone artifact page (claude.ai/artifact/<id>).
+    return {
+      frame,
+      copy: (panel ? findCopyButton(panel) : null) ?? findShareButton(document),
+    };
   }
   // ChatGPT: an open canvas/code panel.
   const panel = document.querySelector(
