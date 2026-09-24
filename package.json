@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "tsx --env-file=.env apps/server/main.ts",
     "build": "vite build --config apps/web/vite.config.ts",
-    "check": "npm run check:layers && tsc --noEmit && tsc --noEmit -p extensions/chrome",
+    "check": "npm run check:layers && tsc --noEmit && tsc --noEmit -p extensions/chrome && tsc --noEmit -p extensions/bookmarklet",
     "ext:build": "tsc --noEmit -p extensions/chrome && node extensions/chrome/build.mjs",
     "test": "tsx --env-file=.env scripts/test-isolated.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
