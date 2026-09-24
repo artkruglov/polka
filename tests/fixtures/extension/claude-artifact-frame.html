@@ -1,0 +1,28 @@
+<!doctype html>
+<!--
+  Synthetic fixture for tests/extension-extract.test.ts: the document inside
+  the artifact sandbox frame. The provider's viewer adds a CSP meta, its own
+  runtime script from claudeusercontent.com and an inline bridge script; the
+  rest is the page the model wrote. Invented markers, modelled on public
+  descriptions of the viewer; not Claude's actual runtime.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://www.claudeusercontent.com">
+<script src="https://www.claudeusercontent.com/artifact-runtime.js"></script>
+<script id="__claude-bridge">window.__viewerBridge = true;</script>
+<title>Трекер привычек</title>
+<style>body { font: 16px system-ui; } .done { color: green; }</style>
+</head>
+<body>
+<h1>Трекер привычек</h1>
+<ul id="list"><li>Зарядка</li><li>Чтение</li></ul>
+<script>
+  // The artifact's own script stays.
+  document.getElementById("list").addEventListener("click", (event) => {
+    event.target.classList.toggle("done");
+  });
+</script>
+</body>
+</html>
