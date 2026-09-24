@@ -209,6 +209,19 @@ async function fixture() {
       from.id,
     ],
   );
+  await db.query(
+    `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,emoji)
+     VALUES($1,$2,$3,$4,$5,$6,'',$7)`,
+    [
+      randomUUID(),
+      from.tenant,
+      first.artifactId,
+      share.id,
+      share.revision_id,
+      from.id,
+      "\u{1F44D}",
+    ],
+  );
   const oauth = await connector(from);
   await db.query(
     `INSERT INTO account_identities(id,account_id,provider,subject,email,email_verified)
@@ -244,6 +257,19 @@ async function fixture() {
     session,
   };
 }
+
+// scripts/test-runtime-grants-isolated.ts reruns this file as the runtime role.
+test("runs as the expected database role", async () => {
+  const expected = process.env.RUNTIME_GRANTS_EXPECT_ROLE;
+  if (!expected) return;
+  const {
+    rows: [identity],
+  } = await db.query("SELECT current_user,session_user");
+  assert.deepEqual(identity, {
+    current_user: expected,
+    session_user: expected,
+  });
+});
 
 const tenantOf = async (artifactId: string) =>
   (await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [artifactId]))
@@ -375,6 +401,14 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   );
   assert.equal(note.tenant_id, f.into.tenant);
   assert.equal(note.author_account_id, f.into.id);
+  // So did the reaction, although the runtime role never updates reactions.
+  const { rows: reactions } = await db.query(
+    "SELECT tenant_id,author_account_id FROM comment_reactions WHERE artifact_id=$1",
+    [f.first.artifactId],
+  );
+  assert.deepEqual(reactions, [
+    { tenant_id: f.into.tenant, author_account_id: f.into.id },
+  ]);
 
   // The source's agent token now saves to the target's shelf.
   const saved = await publish(f.fromToken, "После объединения");
