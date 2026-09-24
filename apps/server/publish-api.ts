@@ -172,14 +172,26 @@ const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
   );
 };
 
-/** Bearer only: cookies are never read, and a browser Origin other than Полка is refused. */
+/**
+ * A browser extension's own pages and service worker (the «На Полку»
+ * extension, extensions/chrome): Chrome sends this Origin on their requests.
+ * They are not web pages, hold the token themselves and read no cookies of
+ * Полка, so the rule against pages on other sites does not apply to them.
+ */
+export const EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
+
+/** Bearer only: cookies are never read, and a browser Origin other than Полка (or an extension) is refused. */
 async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
   const unauthenticated = () =>
     limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
   const origin = req.headers.origin;
-  if (origin !== undefined && origin !== config.APP_ORIGIN)
+  if (
+    origin !== undefined &&
+    origin !== config.APP_ORIGIN &&
+    !EXTENSION_ORIGIN.test(origin)
+  )
     throw new Problem(
       403,
       "forbidden",

@@ -1,0 +1,31 @@
+<!doctype html>
+<!--
+  Synthetic fixture for tests/extension-extract.test.ts: a ChatGPT
+  conversation whose last assistant message ends with an HTML code block
+  (a header with the language and a copy control inside <pre>, the code in
+  <code class="language-html">). Modelled on public descriptions of
+  chatgpt.com; not copied from its markup.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Landing page draft</title>
+</head>
+<body>
+<main>
+  <article data-message-author-role="user"><p>Сделай лендинг.</p></article>
+  <article data-message-author-role="assistant">
+    <p>Первая версия:</p>
+    <pre><div class="code-header">html<button>Copy code</button></div><code class="language-html">&lt;h1&gt;Старая версия&lt;/h1&gt;</code></pre>
+  </article>
+  <article data-message-author-role="user"><p>Добавь кнопку.</p></article>
+  <article data-message-author-role="assistant">
+    <p>Готово:</p>
+    <pre><div class="code-header">html<button>Copy code</button></div><code class="language-html">&lt;!doctype html&gt;
+&lt;html&gt;&lt;head&gt;&lt;title&gt;Лендинг&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;&lt;h1&gt;Лендинг&lt;/h1&gt;&lt;button&gt;Купить&lt;/button&gt;&lt;/body&gt;&lt;/html&gt;</code></pre>
+    <p>Можно открыть в браузере.</p>
+  </article>
+</main>
+</body>
+</html>
