@@ -6,6 +6,7 @@ import { useCopy } from "../../shared/ui/CopyText.tsx";
 import {
   trackRecipientCta,
   type RecipientCtaAction,
+  type RecipientCtaPage,
 } from "../../shared/api/recipient-cta.ts";
 import { setVisitSourceRef } from "../../shared/lib/visit-source.ts";
 import {
@@ -20,37 +21,59 @@ import {
   readCardState,
 } from "../../entities/recipient-convert/card-state.ts";
 import { remixPrompt } from "../../entities/recipient-convert/remix-prompt.ts";
+import { rememberConvertReturn } from "../../entities/recipient-convert/return.ts";
 
 /*
- * The recipient page's way in for a guest (docs/specs/RECIPIENT_CONVERSION.md):
+ * A guest's way in from someone's work (docs/specs/RECIPIENT_CONVERSION.md):
  * a bar under the work («Эту страницу сделали с ИИ и сохранили на Полку»)
  * and a card that slides in once per browser, or when a bar button is
- * pressed. No modal, no page block: the work stays readable. The CSS is
- * imported by pages/recipient, because Node tests render these components.
+ * pressed. No modal, no page block: the work stays readable. Used by the
+ * recipient page (/s, page "share") and the feed material page (/discover,
+ * page "feed"). The CSS is imported by those pages, because Node tests
+ * render these components.
  */
 
 export type ConvertVariant = "try" | "remix";
+export type ConvertPage = RecipientCtaPage;
 
-/** try: the agent phrase; remix: the ready prompt for «Сделать такую же». */
-export const variantRef = (variant: ConvertVariant) =>
-  variant === "remix" ? "share-remix" : "share";
+/** The sign-up source and the phrase's ?ref=: share | share-remix | feed | feed-remix. */
+export const variantRef = (variant: ConvertVariant, page: ConvertPage = "share") =>
+  variant === "remix" ? `${page}-remix` : page;
 
 /** Seconds of reading before the card opens on its own. */
 export const AUTO_OPEN_MS = 15_000;
 
 type CardRequest = { variant: ConvertVariant; opener: HTMLElement | null };
 
-/** The sign-in page, returning to /s; the token travels in this tab only. */
+/** The sign-in page, returning to /s; a share's token travels in this tab only. */
 export const SIGN_UP_HREF = `/signup?next=${encodeURIComponent(SHARE_RETURN_PATH)}`;
+
+/** Where a sign-up started on this page comes back to. */
+export type ConvertReturn =
+  | { token: string }
+  /** A plain path with nothing secret in it (a feed material). */
+  | { path: string };
+
+const signUpHref = (back: ConvertReturn) =>
+  "path" in back ? `/signup?next=${encodeURIComponent(back.path)}` : SIGN_UP_HREF;
+
+const rememberReturn = (back: ConvertReturn) => {
+  if ("path" in back) rememberConvertReturn(back.path);
+  else rememberShareForSignIn(back.token);
+};
 
 /**
  * Just before the browser leaves for a sign-in provider from the card: the
- * press is counted and the link's token kept for the return (never in the URL).
+ * press is counted and the way back kept (a share's token never in the URL).
  */
-export function leaveForProvider(token: string, variant: ConvertVariant) {
-  setVisitSourceRef(variantRef(variant));
-  trackRecipientCta({ event: "click", action: "yandex" });
-  rememberShareForSignIn(token);
+export function leaveForProvider(
+  back: ConvertReturn,
+  variant: ConvertVariant,
+  page: ConvertPage = "share",
+) {
+  setVisitSourceRef(variantRef(variant, page));
+  trackRecipientCta({ event: "click", action: "yandex", page });
+  rememberReturn(back);
 }
 
 /**
@@ -59,23 +82,32 @@ export function leaveForProvider(token: string, variant: ConvertVariant) {
  * that holds the work; the frame inside it takes focus when touched, which
  * the window sees as its own blur.
  */
-export function useRecipientConvert({ enabled }: { enabled: boolean }) {
+export function useRecipientConvert({
+  enabled,
+  page = "share",
+}: {
+  enabled: boolean;
+  page?: ConvertPage;
+}) {
   const [card, setCard] = useState<CardRequest | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
-    trackRecipientCta({ event: "view", surface: "bar" });
-  }, [enabled]);
+    trackRecipientCta({ event: "view", surface: "bar", page });
+  }, [enabled, page]);
 
-  const open = useCallback((variant: ConvertVariant, opener: HTMLElement | null) => {
-    // The source of a sign-up that starts here (the provider link is built
-    // when the card renders, so the ref is set before that).
-    setVisitSourceRef(variantRef(variant));
-    markCardShown();
-    trackRecipientCta({ event: "view", surface: "card" });
-    setCard({ variant, opener });
-  }, []);
+  const open = useCallback(
+    (variant: ConvertVariant, opener: HTMLElement | null) => {
+      // The source of a sign-up that starts here (the provider link is built
+      // when the card renders, so the ref is set before that).
+      setVisitSourceRef(variantRef(variant, page));
+      markCardShown();
+      trackRecipientCta({ event: "view", surface: "card", page });
+      setCard({ variant, opener });
+    },
+    [page],
+  );
 
   useEffect(() => {
     if (!enabled || card || !mayAutoOpen(readCardState())) return;
@@ -122,7 +154,7 @@ export function useRecipientConvert({ enabled }: { enabled: boolean }) {
     card,
     /** A bar button: counts the press, then opens the matching card. */
     press: (variant: ConvertVariant, opener: HTMLElement | null) => {
-      trackRecipientCta({ event: "click", action: variant });
+      trackRecipientCta({ event: "click", action: variant, page });
       open(variant, opener);
     },
     close,
@@ -212,17 +244,19 @@ function CopyLine({
  */
 export function ConvertCard({
   variant,
+  page = "share",
   origin,
   revision,
-  token,
+  back,
   signIn,
   onClose,
 }: {
   variant: ConvertVariant;
+  page?: ConvertPage;
   origin: string;
   revision: Pick<Revision, "mime" | "htmlProfile" | "inlineBuild">;
-  /** The link's token: kept in this tab for the return after sign-in, never in a URL. */
-  token: string;
+  /** Where a sign-up comes back to: a share's token (kept in this tab, never in a URL) or a plain path. */
+  back: ConvertReturn;
   /** «Войти с Яндекс ID», when the installation has it (the page composes it). */
   signIn?: React.ReactNode;
   onClose: () => void;
@@ -238,16 +272,16 @@ export function ConvertCard({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const ref = variantRef(variant);
+  const ref = variantRef(variant, page);
   const phrase = connectPhrase(origin, ref);
   const prompt = remixPrompt(origin, revision, ref);
   const count = (action: RecipientCtaAction) => () => {
     setVisitSourceRef(ref);
-    trackRecipientCta({ event: "click", action });
+    trackRecipientCta({ event: "click", action, page });
   };
   const leave = (action: RecipientCtaAction) => () => {
     count(action)();
-    rememberShareForSignIn(token);
+    rememberReturn(back);
   };
   const remix = variant === "remix";
   return (
@@ -296,7 +330,7 @@ export function ConvertCard({
           </li>
         )}
         <li className="convert-path convert-path--email">
-          <a href={SIGN_UP_HREF} onClick={leave("email")}>
+          <a href={signUpHref(back)} onClick={leave("email")}>
             {signIn ? "или по почте" : "Создать полку по почте"} <ArrowUpRight size={14} />
           </a>
         </li>
@@ -312,14 +346,16 @@ export function ConvertCard({
 export function SignedInFromShare({
   created,
   origin,
+  page = "share",
   onClose,
 }: {
   /** The account is minutes old (a sign-up), not an old one signing in. */
   created: boolean;
   origin: string;
+  page?: ConvertPage;
   onClose: () => void;
 }) {
-  const phrase = connectPhrase(origin, "share");
+  const phrase = connectPhrase(origin, page);
   return (
     <div className="convert-welcome" role="status">
       <div className="convert-welcome-text">

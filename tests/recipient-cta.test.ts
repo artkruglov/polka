@@ -91,12 +91,32 @@ test("a guest's view and press are counted anonymously; bots, signed-in viewers 
   for (const row of rows) {
     assert.equal(row.actor, null);
     assert.equal(row.subject, null);
-    assert.deepEqual(Object.keys(row.props).length, 1);
+    assert.deepEqual(Object.keys(row.props).length, 2);
   }
   assert.deepEqual(
     rows.map((row) => row.props).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    [{ action: "remix" }, { surface: "bar" }, { surface: "card" }],
+    [
+      { action: "remix", path: "/s" },
+      { path: "/s", surface: "bar" },
+      { path: "/s", surface: "card" },
+    ],
   );
+  // A feed material's prompt counts under /discover; the slug is never sent.
+  const feedBefore = (
+    await db.query(
+      `SELECT coalesce(sum(count),0)::int AS n FROM analytics_daily WHERE name='recipient_cta_click' AND detail='try' AND path='/discover'`,
+    )
+  ).rows[0].n as number;
+  assert.equal((await post({ event: "click", action: "try", page: "feed" })).statusCode, 204);
+  assert.equal((await post({ event: "click", action: "try", page: "landing" })).statusCode, 400);
+  assert.equal((await post({ event: "click", action: "try", page: "feed", slug: "x" })).statusCode, 400);
+  await flushAnalytics();
+  const feedAfter = (
+    await db.query(
+      `SELECT coalesce(sum(count),0)::int AS n FROM analytics_daily WHERE name='recipient_cta_click' AND detail='try' AND path='/discover'`,
+    )
+  ).rows[0].n as number;
+  assert.equal(feedAfter, feedBefore + 1);
 });
 
 test("the report's «Получатели → регистрации» block: counts by week and ratios", async () => {
@@ -122,6 +142,7 @@ test("the report's «Получатели → регистрации» block: co
     { day: "2026-09-17", name: "recipient_cta_click", source: "", detail: "bogus", count: 9 },
     { day: "2026-09-18", name: "signup_completed", source: "ref:share", detail: "email", count: 1 },
     { day: "2026-09-18", name: "signup_completed", source: "ref:share-remix", detail: "yandex", count: 1 },
+    { day: "2026-09-18", name: "signup_completed", source: "ref:feed", detail: "email", count: 1 },
     { day: "2026-09-18", name: "signup_completed", source: "ref:habr", detail: "email", count: 7 },
     { day: "2026-09-22", name: "recipient_cta_view", source: "", detail: "bar", count: 8 },
     { day: "2026-08-01", name: "recipient_cta_view", source: "", detail: "bar", count: 999 },
@@ -134,12 +155,12 @@ test("the report's «Получатели → регистрации» block: co
     cardViews: 10,
     clicks: { try: 4, remix: 0, copy_phrase: 0, yandex: 0, email: 1 },
     clicksTotal: 5,
-    signups: 2,
-    conversion: { barToCard: 0.2, cardToClick: 0.5, clickToSignup: 0.4, barToSignup: 0.04 },
+    signups: 3,
+    conversion: { barToCard: 0.2, cardToClick: 0.5, clickToSignup: 0.6, barToSignup: 0.06 },
   });
   assert.equal(funnel.weeks[1]!.barViews, 8);
   assert.equal(funnel.weeks[1]!.conversion.barToCard, 0);
   assert.equal(funnel.weeks[1]!.conversion.cardToClick, null);
   assert.equal(funnel.total.barViews, 58);
-  assert.equal(funnel.total.signups, 2);
+  assert.equal(funnel.total.signups, 3);
 });

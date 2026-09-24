@@ -1,21 +1,26 @@
-// The recipient page's prompt, counted anonymously (apps/server/recipient-cta.ts).
-// The body is two enumerated words: never the link's token, a title or a URL.
+// The guest prompt on a shared work or a feed material, counted anonymously
+// (apps/server/recipient-cta.ts). The body is two or three enumerated words:
+// never the link's token, a title, a slug or a URL.
 
 export type RecipientCtaSurface = "bar" | "card";
 export type RecipientCtaAction = "try" | "remix" | "copy_phrase" | "yandex" | "email";
-export type RecipientCtaEvent =
+/** share: /s#<token>; feed: /discover/<slug>. */
+export type RecipientCtaPage = "share" | "feed";
+export type RecipientCtaEvent = { page?: RecipientCtaPage } & (
   | { event: "view"; surface: RecipientCtaSurface }
-  | { event: "click"; action: RecipientCtaAction };
+  | { event: "click"; action: RecipientCtaAction }
+);
 
 export const RECIPIENT_CTA_PATH = "/api/recipient-cta";
 
 /** The exact request body: what leaves the browser, and all of it. */
 export const recipientCtaBody = (input: RecipientCtaEvent): string =>
-  JSON.stringify(
-    input.event === "view"
+  JSON.stringify({
+    ...(input.event === "view"
       ? { event: "view", surface: input.surface }
-      : { event: "click", action: input.action },
-  );
+      : { event: "click", action: input.action }),
+    ...(input.page === "feed" ? { page: "feed" } : {}),
+  });
 
 type Send = (path: string, body: string) => Promise<unknown>;
 

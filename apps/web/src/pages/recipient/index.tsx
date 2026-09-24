@@ -356,13 +356,13 @@ export function RecipientScreen({
             variant={card.variant}
             origin={location.origin}
             revision={viewer.revision}
-            token={token}
+            back={{ token }}
             signIn={
               yandex.length ? (
                 <ProviderButtons
                   providers={yandex}
                   next={SHARE_RETURN_PATH}
-                  onLeave={() => leaveForProvider(token, card.variant)}
+                  onLeave={() => leaveForProvider({ token }, card.variant)}
                 />
               ) : undefined
             }

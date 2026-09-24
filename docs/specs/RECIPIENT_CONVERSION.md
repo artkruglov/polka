@@ -1,6 +1,6 @@
 # Получатель → своя полка
 
-> **Статус:** реализовано 24.09.2026. Страница получателя (`/s#<токен>`) и страница материала ленты (`/discover/<slug>`) предлагают гостю завести свою полку, не мешая читать работу. Код: `apps/web/src/features/recipient-convert`, `entities/recipient-convert`, `apps/server/recipient-cta.ts`, миграция 035.
+> **Статус:** реализовано 24.09.2026. Страница получателя (`/s#<токен>`) и страница материала Ленты (`/discover/<slug>`) предлагают гостю завести свою полку, не мешая читать работу. Код: `apps/web/src/features/recipient-convert`, `entities/recipient-convert`, `pages/recipient`, `pages/discover`, `apps/server/recipient-cta.ts`, миграция 035. Снимки: `docs/design/2026-09-24-recipient-convert/`.
 
 ## Что видит гость
 
@@ -13,9 +13,13 @@
 
 Имя автора не показывается нигде (часто это часть почты).
 
+## Страница материала Ленты (`/discover/<slug>`)
+
+Тот же принцип «документ главный»: тонкая шапка («← Лента», название, раздел бейджем, «Открыть на весь экран» — `requestFullscreen` сцены), одна строка задачи, затем **сам материал** в том же изолированном фрейме, что у получателя редакционной ссылки (`client.resolve(<токен из recipientUrl>)` → `Preview`), на всю ширину и высоту. Лицензия ушла из шапки в строку подвала «Лицензия материала: Apache-2.0 · Редакция Полки». Гость видит ту же полосу и карточку с `ref=feed` / `feed-remix`; возврат после регистрации — по обычному пути `?next=/discover/<slug>` (в нём нет секретов), метка возврата — `entities/recipient-convert/return.ts` (sessionStorage, 30 минут, один раз).
+
 ## Аналитика (без персональных данных)
 
-`POST /api/recipient-cta` принимает два слова: `{event:"view", surface: bar|card}` или `{event:"click", action: try|remix|copy_phrase|yandex|email}`. Считается только для гостей (без сессии) с браузерным User-Agent; лимит по хешу IP; ответ всегда 204. События `recipient_cta_view` и `recipient_cta_click` — анонимные строки `analytics_events` (`actor`/`subject` NULL, `path=/s`), счётчики в `analytics_daily`. Регистрация, начатая здесь, получает источник `ref:share` или `ref:share-remix` через обычный механизм источника вкладки (`shared/lib/visit-source.ts`, `setVisitSourceRef`).
+`POST /api/recipient-cta` принимает два-три слова: `{event:"view", surface: bar|card}` или `{event:"click", action: try|remix|copy_phrase|yandex|email}`, необязательно `page: share|feed`. Считается только для гостей (без сессии) с браузерным User-Agent; лимит по хешу IP; ответ всегда 204. События `recipient_cta_view` и `recipient_cta_click` — анонимные строки `analytics_events` (`actor`/`subject` NULL, `path=/s` или `/discover`), счётчики в `analytics_daily`. Регистрация, начатая здесь, получает источник `ref:share`, `ref:share-remix`, `ref:feed` или `ref:feed-remix` через обычный механизм источника вкладки (`shared/lib/visit-source.ts`, `setVisitSourceRef`).
 
 Отчёт `/ops/metrics`, `GET /api/ops/metrics` (`recipients`) и `npm run metrics`: блок «Получатели → регистрации» по неделям — открытия ссылок (`share_opened`), показы полосы, открытия карточки, нажатия по действиям, регистрации с этих источников и отношения между ними. Это отношения счётчиков, не долей людей: гость не идентифицируется.
 

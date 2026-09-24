@@ -47,6 +47,9 @@ const { kindWords, remixPrompt } = await import(
 const { isFreshAccount } = await import(
   "../apps/web/src/entities/recipient-convert/fresh-account.ts"
 );
+const { rememberConvertReturn, takeConvertReturn } = await import(
+  "../apps/web/src/entities/recipient-convert/return.ts"
+);
 const {
   AUTO_OPEN_MS,
   ConvertBar,
@@ -99,7 +102,7 @@ test("the card (try): the phrase with ref=share, one-click sign-in, email; never
       variant: "try",
       origin,
       revision: revision(),
-      token,
+      back: { token },
       signIn: React.createElement("a", { href: "/api/auth/idp/yandex/start?next=%2Fs" }, "Войти с Яндекс ID"),
       onClose: () => {},
     }),
@@ -124,7 +127,7 @@ test("the card (remix): the ready prompt names the kind, not the work, and ref=s
       variant: "remix",
       origin,
       revision: revision({ htmlProfile: "limited" }),
-      token,
+      back: { token },
       onClose: () => {},
     }),
   );
@@ -205,8 +208,48 @@ test("events carry two enumerated words: no token, no title, no address", () => 
   });
 });
 
+test("a feed material: ref feed / feed-remix, the way back is the material's plain path", () => {
+  assert.equal(variantRef("try", "feed"), "feed");
+  assert.equal(variantRef("remix", "feed"), "feed-remix");
+  const path = "/discover/handwriting-research";
+  const html = renderToStaticMarkup(
+    React.createElement(ConvertCard, {
+      variant: "try",
+      page: "feed",
+      origin,
+      revision: revision(),
+      back: { path },
+      onClose: () => {},
+    }),
+  );
+  assert.ok(html.includes(`Подключи Полку: ${origin}/connect?ref=feed<`), html);
+  assert.ok(html.includes(`href="/signup?next=${encodeURIComponent(path)}"`), html);
+  assert.ok(!html.includes(token));
+  assert.equal(
+    recipientCtaBody({ event: "click", action: "try", page: "feed" }),
+    '{"event":"click","action":"try","page":"feed"}',
+  );
+  assert.equal(
+    recipientCtaBody({ event: "view", surface: "bar", page: "share" }),
+    '{"event":"view","surface":"bar"}',
+  );
+  // Leaving for a provider from a material keeps the path, not a token.
+  leaveForProvider({ path }, "try", "feed");
+  assert.deepEqual(visitSource(), { ref: "feed" });
+  assert.equal(arrivedFromShare(), true);
+  assert.equal(takeShareAfterSignIn(), null);
+  assert.equal(takeConvertReturn("/discover/other"), false);
+  assert.equal(takeConvertReturn(path), false, "a wrong path consumed the marker");
+  leaveForProvider({ path }, "remix", "feed");
+  assert.equal(takeConvertReturn(path), true);
+  assert.equal(takeConvertReturn(path), false, "used once");
+  rememberConvertReturn(path);
+  assert.equal(takeConvertReturn(path, undefined, Date.now() + 31 * 60 * 1000), false);
+  assert.equal(rememberConvertReturn("https://evil.invalid/"), false);
+});
+
 test("leaving for a provider keeps the token in this tab only and marks the source", () => {
-  leaveForProvider(token, "remix");
+  leaveForProvider({ token }, "remix");
   assert.deepEqual(visitSource(), { ref: "share-remix" });
   assert.equal(visitSourceQuery(), "&ref=share-remix");
   assert.ok(!visitSourceQuery().includes(token));

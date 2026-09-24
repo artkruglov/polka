@@ -59,7 +59,7 @@ const DEFINITIONS = {
   sources:
     "ref:<value> from a link's ?ref=, else the referrer host, else (direct). A sign-up carries the source of the tab it came from.",
   recipients:
-    "Guests of shared works, by week of the event: links opened (a link once a day, editorial links excluded), loads that showed the bar «сделали с ИИ и сохранили на Полку» (every guest load, editorial pages too), openings of the card, presses by action, and sign-ups whose source is ref:share or ref:share-remix (the tab's source is set when the prompt is pressed). Anonymous counters; conversions are ratios of the counts, not of people.",
+    "Guests of shared works (/s) and feed materials (/discover), by week of the event: links opened (a link once a day, editorial links excluded), loads that showed the bar «сделали с ИИ и сохранили на Полку» (every guest load, editorial pages and feed materials too), openings of the card, presses by action, and sign-ups whose source is ref:share, ref:share-remix, ref:feed or ref:feed-remix (the tab's source is set when the prompt opens). Anonymous counters; conversions are ratios of the counts, not of people.",
 };
 
 /** The prompt's presses, in the report's column order (analytics.ts). */
@@ -71,6 +71,14 @@ export const RECIPIENT_ACTIONS = [
   "email",
 ] as const;
 type RecipientAction = (typeof RECIPIENT_ACTIONS)[number];
+
+/** Sign-up sources the prompt sets (apps/web/src/entities/onboarding/arrival.ts). */
+export const RECIPIENT_SOURCES = new Set([
+  "ref:share",
+  "ref:share-remix",
+  "ref:feed",
+  "ref:feed-remix",
+]);
 
 export type RecipientWeek = {
   week: string;
@@ -128,10 +136,7 @@ export function recipientFunnel(
         entry.clicks[row.detail as RecipientAction] += row.count;
         entry.clicksTotal += row.count;
       }
-    } else if (
-      row.name === "signup_completed" &&
-      (row.source === "ref:share" || row.source === "ref:share-remix")
-    )
+    } else if (row.name === "signup_completed" && RECIPIENT_SOURCES.has(row.source))
       entry.signups += row.count;
   }
   const rows: RecipientWeek[] = weeks.map((week) => {

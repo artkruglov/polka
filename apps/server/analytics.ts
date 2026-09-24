@@ -43,9 +43,12 @@ export const RECIPIENT_CTA_ACTIONS = [
   "yandex",
   "email",
 ] as const;
-export type RecipientCtaEvent =
+/** Which page showed it: a shared work (/s) or a feed material (/discover). */
+export const RECIPIENT_CTA_PAGES = ["share", "feed"] as const;
+export type RecipientCtaEvent = { page?: (typeof RECIPIENT_CTA_PAGES)[number] } & (
   | { event: "view"; surface: (typeof RECIPIENT_CTA_SURFACES)[number] }
-  | { event: "click"; action: (typeof RECIPIENT_CTA_ACTIONS)[number] };
+  | { event: "click"; action: (typeof RECIPIENT_CTA_ACTIONS)[number] }
+);
 
 /** Landing pages whose loads are counted (anonymous visitors only). */
 export const PUBLIC_PAGES = new Set([
@@ -419,21 +422,25 @@ export function trackNoteAdded(
 }
 
 /**
- * A guest of a shared work saw the prompt (the bar once per load, the card
- * each time it opens) or pressed something in it. Anonymous like a page
- * view: the path is /s for every link, and the link itself is never named.
+ * A guest of a shared work or a feed material saw the prompt (the bar once
+ * per load, the card each time it opens) or pressed something in it.
+ * Anonymous like a page view: the path is /s for every link and /discover
+ * for every material; the link or the material itself is never named.
  */
 export function trackRecipientCta(input: RecipientCtaEvent) {
   const detail = input.event === "view" ? input.surface : input.action;
+  const path = input.page === "feed" ? "/discover" : "/s";
   void write(
     event(
       input.event === "view" ? "recipient_cta_view" : "recipient_cta_click",
       {
-        props:
-          input.event === "view"
+        props: {
+          ...(input.event === "view"
             ? { surface: input.surface }
-            : { action: input.action },
-        path: "/s",
+            : { action: input.action }),
+          path,
+        },
+        path,
         detail,
       },
     ),
