@@ -202,7 +202,8 @@ const env = z
     CONTENT_MODEL_FALLBACK_FLAT_RATE: unsetIfEmpty(z.enum(["true", "false"])),
     CONTENT_CODE_MODEL_FLAT_RATE: unsetIfEmpty(z.enum(["true", "false"])),
     // NeuralDeep models served on NeuralDeep's own hardware in Russia. Its
-    // wallet models (DeepSeek, GLM, Kimi…) may be served by foreign vendors: a
+    // wallet models (DeepSeek, GLM, Kimi…) may be served by foreign vendors — and
+    // NeuralDeep's own catalogue marks gpt-oss and gemma-4 «вне РФ» too: a
     // cross-border transfer of user content, so any other model name refuses
     // to start. Add a model only after NeuralDeep confirms where it runs.
     // Empty: this default list.
@@ -213,7 +214,7 @@ const env = z
       .transform((value) =>
         (
           value?.trim() ||
-          "qwen3.6-35b-a3b,qwen3.6-35b-a3b-noreason,qwen3.6-fp8,qwen3.6-fp8-noreason,qwen3.6-unlim,qwen3.6-unlim-noreason,qwen3.8-27b,qwen3.8-27b-noreason,gemma-4-31b,gemma-4-31b-noreason,gpt-oss-120b,gpt-oss-20b"
+          "qwen3.6-35b-a3b,qwen3.6-35b-a3b-noreason,qwen3.6-fp8,qwen3.6-fp8-noreason,qwen3.6-unlim,qwen3.6-unlim-noreason,qwen3.8-27b,qwen3.8-27b-noreason"
         )
           .split(",")
           .map((entry) => entry.trim())

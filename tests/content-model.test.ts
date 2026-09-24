@@ -146,7 +146,7 @@ test("config: NeuralDeep primary, Yandex fallback; keys never cross endpoints", 
     endpoints({
       CONTENT_MODEL_PROVIDER: "neuraldeep",
       CONTENT_MODEL_URL: "https://api.neuraldeep.ru/v1",
-      CONTENT_MODEL_PRIMARY: "gemma-4-31b",
+      CONTENT_MODEL_PRIMARY: "qwen3.8-27b-noreason",
       CONTENT_MODEL_RPM: "30",
       CONTENT_MODEL_FALLBACK_PROVIDER: "yandex",
       CONTENT_MODEL_FALLBACK: "gpt://f/gpt-oss-120b/latest",
@@ -244,6 +244,12 @@ test("config: host rules for every role and the NeuralDeep model allowlist", () 
     endpoints({ ...nd, CONTENT_CODE_MODEL: "deepseek-v4-flash" }),
     /CONTENT_CODE_MODEL: «deepseek-v4-flash» is not in CONTENT_MODEL_ND_ALLOWED/,
   );
+  // NeuralDeep's catalogue marks these «вне РФ»: refused by default.
+  for (const foreign of ["gpt-oss-120b", "gemma-4-31b-noreason"])
+    refused(
+      endpoints({ ...nd, CONTENT_MODEL_PRIMARY: foreign }),
+      /not in CONTENT_MODEL_ND_ALLOWED/,
+    );
   // The operator may narrow the list; empty (as compose passes it) is the default.
   refused(
     endpoints({ ...nd, CONTENT_MODEL_ND_ALLOWED: "gemma-4-31b" }),
