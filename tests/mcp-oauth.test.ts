@@ -498,7 +498,8 @@ test("consent requires the owner's session, the starting browser, CSRF and same 
   const consent = shown.json();
   assert.equal(consent.client.name, "Claude");
   assert.equal(consent.client.redirectHost, "claude.ai");
-  assert.deepEqual(consent.scopes, ["context", "capture", "share"]);
+  // «Давать ссылку для входа» is always offered, never pre-ticked.
+  assert.deepEqual(consent.scopes, ["context", "capture", "share", "sign_in"]);
   assert.deepEqual(consent.defaultScopes, ["context", "capture", "share"]);
 
   const foreignOrigin = await decide(

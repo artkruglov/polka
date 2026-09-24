@@ -5,8 +5,13 @@ import type {
   OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client, oauthConsent } from "../../shared/api/client.ts";
+import { knownShelf } from "../../shared/lib/known-shelf.ts";
+import { visitSource } from "../../shared/lib/visit-source.ts";
+import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
+import { rememberAccount } from "../../entities/account/model/useAccount.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
+import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import "./styles.css";
 
@@ -28,8 +33,15 @@ const entryErrors: Record<string, string> = {
 type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
+  /** No session in this browser: sign in, or start without signing up. */
+  | { kind: "guest" }
   | { kind: "ready"; details: OAuthConsentDetails }
   | { kind: "leaving"; host: string; approved: boolean };
+
+const signInHere = () =>
+  location.assign(
+    `/signup?next=${encodeURIComponent(location.pathname + location.search)}`,
+  );
 
 export function OAuthConsent() {
   const account = useAccount();
@@ -69,9 +81,7 @@ export function OAuthConsent() {
       .catch((error) => {
         if (controller.signal.aborted) return;
         if (error instanceof ApiError && error.status === 401) {
-          location.assign(
-            `/signup?next=${encodeURIComponent(location.pathname + location.search)}`,
-          );
+          setState({ kind: "guest" });
           return;
         }
         setState({
@@ -83,7 +93,7 @@ export function OAuthConsent() {
         });
       });
     return () => controller.abort();
-  }, []);
+  }, [state.kind]);
 
   const decide = async (decision: "approve" | "deny") => {
     if (state.kind !== "ready" || sending.current) return;
@@ -114,9 +124,7 @@ export function OAuthConsent() {
       location.assign(result.redirectTo);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        location.assign(
-          `/signup?next=${encodeURIComponent(location.pathname + location.search)}`,
-        );
+        signInHere();
         return;
       }
       setFormError(
@@ -150,6 +158,12 @@ export function OAuthConsent() {
             <p>{state.message}</p>
           </section>
         )}
+        {state.kind === "guest" && (
+          <GuestChoice
+            requestId={requestId}
+            onStarted={() => setState({ kind: "loading" })}
+          />
+        )}
         {state.kind === "leaving" && (
           <section className="oauth-card" role="status">
             <span className="eyebrow">Подключение к Полке</span>
@@ -158,10 +172,16 @@ export function OAuthConsent() {
             </h1>
             <p>Возвращаем вас {state.host}…</p>
             {state.approved && (
-              <p>
-                Вернитесь к агенту: теперь он может сохранять работы на вашу
-                полку. Подключение видно в разделе «Агенты».
-              </p>
+              <>
+                <p>
+                  Вернитесь к агенту: теперь он может сохранять работы на вашу
+                  полку. Подключение видно в разделе «Агенты».
+                </p>
+                <AskAgentHint
+                  lead="Чтобы вернуться в эту полку из браузера, попросите агента:"
+                  tail=""
+                />
+              </>
             )}
           </section>
         )}
@@ -178,6 +198,124 @@ export function OAuthConsent() {
         )}
       </main>
     </AppShell>
+  );
+}
+
+/**
+ * Where the connector's works will go (docs/specs/SIGN_IN_PROVIDERS.md § 1):
+ * the shelf's name and how its owner signs in, so a connector lands in the
+ * shelf the person means — with a way out when it is the wrong one.
+ */
+function ShelfWhere({
+  account,
+  fallbackName,
+}: {
+  account: OAuthConsentDetails["account"];
+  fallbackName: string | null;
+}) {
+  const [busy, setBusy] = useState(false);
+  const ways = useSignInWays();
+  const switchShelf = async () => {
+    setBusy(true);
+    try {
+      await client.logout();
+    } finally {
+      signInHere();
+    }
+  };
+  if (account?.provisional)
+    return (
+      <div className="shelf-where">
+        <strong>Работы пойдут в вашу полку (временная, этот браузер).</strong>
+        <small>
+          Делиться ссылками можно будет, когда закрепите полку — войдите{" "}
+          {ways.with}. Если 30 дней ею не пользоваться, она удалится.
+        </small>
+      </div>
+    );
+  const name = account?.name ?? fallbackName;
+  if (!name) return null;
+  return (
+    <div className="shelf-where">
+      <strong>Работы будут сохраняться в полку «{name}»</strong>
+      {account?.methods.length ? ` (${account.methods.join(", ")})` : ""}.
+      <small>
+        Это не та полка?{" "}
+        <button type="button" disabled={busy} onClick={() => void switchShelf()}>
+          Выйти и войти в другую
+        </button>
+      </small>
+    </div>
+  );
+}
+
+/**
+ * No session in this browser: «Начать без регистрации» opens a provisional
+ * shelf here and connects the agent to it; «Войти» is for an existing shelf.
+ * A browser that remembers a shelf is offered that one first.
+ */
+function GuestChoice({
+  requestId,
+  onStarted,
+}: {
+  requestId: string;
+  onStarted: () => void;
+}) {
+  const hint = knownShelf();
+  const ways = useSignInWays();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const start = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await oauthConsent.startProvisional(requestId, visitSource());
+      rememberAccount(await client.session());
+      onStarted();
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status < 500
+          ? e.message
+          : "Не удалось открыть полку. Повторите попытку.",
+      );
+      setBusy(false);
+    }
+  };
+  const signIn = (
+    <Button variant={hint ? "primary" : "secondary"} onClick={signInHere} disabled={busy}>
+      {hint ? `Войти в полку «${hint.displayName}»` : "Войти в свою полку"}
+    </Button>
+  );
+  const provisional = (
+    <Button variant={hint ? "secondary" : "primary"} busy={busy} onClick={() => void start()}>
+      Начать без регистрации
+    </Button>
+  );
+  return (
+    <section className="oauth-card" aria-labelledby="oauth-guest-title">
+      <span className="eyebrow">Подключение к Полке</span>
+      <h1 id="oauth-guest-title">Куда агенту сохранять работы?</h1>
+      <p className="oauth-lead">
+        {hint
+          ? `В этом браузере вы входили в полку «${hint.displayName}». Войдите в неё — и агент будет сохранять работы туда.`
+          : `Начните без регистрации: полка откроется в этом браузере сразу. Закрепить её (войти ${ways.with}) и делиться ссылками можно потом. Уже есть полка — войдите в неё.`}
+      </p>
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="shelf-choice">
+        {hint ? (
+          <>
+            {signIn}
+            {provisional}
+          </>
+        ) : (
+          <>
+            {provisional}
+            {signIn}
+          </>
+        )}
+      </div>
+      <AskAgentHint />
+    </section>
   );
 }
 
@@ -251,11 +389,7 @@ function ConsentForm({
           </p>
         </>
       )}
-      {accountName && (
-        <p className="oauth-account">
-          Аккаунт: <strong>{accountName}</strong>
-        </p>
-      )}
+      <ShelfWhere account={details.account} fallbackName={accountName} />
       {details.replaces && (
         <Notice>
           У этого приложения уже есть доступ. Новое подключение заменит его,

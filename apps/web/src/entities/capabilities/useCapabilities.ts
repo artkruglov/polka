@@ -114,6 +114,41 @@ export function useCapabilities(): CapabilitiesState {
   return state;
 }
 
+/**
+ * How a shelf can be claimed here, in words, from what this installation
+ * offers: «через Яндекс ID, VK ID или по почте», «по почте»… Never names a
+ * provider that is not configured.
+ */
+export function useSignInWays() {
+  const state = useCapabilities();
+  const names =
+    state.status === "ready"
+      ? state.capabilities.signInProviders
+          .filter((provider) => provider.id !== "oidc")
+          .map((provider) => provider.name)
+      : [];
+  const email =
+    state.status === "ready" && state.capabilities.emailLogin !== "disabled";
+  const list = names.join(", ");
+  const via =
+    list && email
+      ? `через ${list} или по почте`
+      : list
+        ? `через ${list}`
+        : email
+          ? "по почте"
+          : "способом, который выдал оператор";
+  const withWay =
+    list && email
+      ? `с ${list} или по почте`
+      : list
+        ? `с ${list}`
+        : email
+          ? "по почте"
+          : "способом, который выдал оператор";
+  return { via, with: withWay };
+}
+
 /** Where the source code of this installation is: upstream until the server says otherwise. */
 export function useSourceUrl() {
   const state = useCapabilities();

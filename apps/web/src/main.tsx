@@ -4,6 +4,8 @@ import "./shared/styles/tokens.css";
 import "./shared/styles/base.css";
 import "./shared/ui/controls.css";
 import "./shared/ui/dialog.css";
+import "./shared/ui/onboard.css";
+import "./shared/ui/shelf-access.css";
 import "./widgets/navigation/navigation.css";
 import "./widgets/artifact-preview/styles.css";
 import "./entities/link/styles.css";

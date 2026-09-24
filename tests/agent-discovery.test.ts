@@ -112,6 +112,8 @@ test("the tool list in llms.txt is what tools/list returns for each scope", asyn
       scopes: [scope],
       audience: MCP_AUDIENCE,
       expiresAt: 0,
+      // A chat connector (OAuth): polka_open_shelf is among its tools.
+      oauth: true,
     });
     const client = new Client({ name: "llms-txt", version: "1" });
     const [clientTransport, serverTransport] =

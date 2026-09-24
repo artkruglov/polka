@@ -1,0 +1,14 @@
+/* The bookmark's landing tab: /bring's column, one state at a time. */
+.bring-main { width: 100%; max-width: 640px; margin: 0 auto; padding: 56px var(--gutter) 96px; }
+.bring-heading { margin-bottom: 28px; }
+.bring-heading h1 { font-size: clamp(34px, 4vw, 48px); line-height: 1.05; letter-spacing: -.045em; }
+.bring-heading > p { margin-top: 12px; color: var(--muted); font-size: var(--text-xl); line-height: 1.5; }
+.receive-waiting, .receive-idle p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+.receive-idle { display: grid; gap: 20px; }
+.receive-failure { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); line-height: 1.55; }
+.receive-failure svg { flex-shrink: 0; width: 18px; height: 18px; margin-top: 3px; }
+@media (max-width: 760px) {
+  .bring-main { padding: 28px var(--gutter-mobile) 48px; }
+  .bring-heading h1 { font-size: 34px; }
+  .bring-heading > p { font-size: var(--text-lg); }
+}

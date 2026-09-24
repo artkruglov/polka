@@ -1,0 +1,43 @@
+/* One shelf per person (docs/specs/SIGN_IN_PROVIDERS.md § 1, 8, 10). */
+
+/* «Попросите агента: «Открой мою Полку»» (AskAgentHint.tsx). */
+.ask-agent-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 18px 0 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.55; }
+.ask-agent-hint > svg { flex: none; color: var(--accent); }
+.ask-agent-hint > span { flex: 1 1 220px; min-width: 0; }
+.ask-agent-hint .ui-button { min-height: var(--control-height-sm); padding: 4px 10px; font-size: var(--text-sm); }
+
+/* Banners under the header: a provisional shelf, a sign-in by an agent's
+   link, a first sign-up in this browser. */
+.shelf-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; width: min(100% - 32px, 1120px); margin: 12px auto 0; padding: 12px 16px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius); background: var(--accent-soft); color: var(--ink); font-size: var(--text-sm); line-height: 1.55; }
+.shelf-banner--quiet { border-color: var(--line); background: var(--soft-3); color: var(--ink-2); }
+.shelf-banner > div { flex: 1 1 280px; min-width: 0; }
+.shelf-banner strong { font-weight: 600; }
+.shelf-banner small { display: block; margin-top: 2px; color: var(--muted); }
+.shelf-banner .ui-button { min-height: var(--control-height-sm); padding: 6px 12px; font-size: var(--text-sm); }
+.shelf-banner a:not(.ui-button) { color: var(--accent); }
+
+/* «Войти в существующую полку» / «Создать новую полку». */
+.shelf-choice { display: grid; gap: 12px; margin-top: 8px; }
+.shelf-choice .ui-button { width: 100%; min-height: 48px; }
+.shelf-where { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius); background: var(--accent-soft); font-size: var(--text-base); line-height: 1.55; }
+.shelf-where small { display: block; margin-top: 4px; color: var(--muted); font-size: var(--text-sm); }
+.shelf-where small button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+/* /claim: agents that would move, one line each, none ticked by default. */
+.claim-connections { display: grid; margin: 0 0 16px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; min-width: 0; }
+.claim-connections legend { float: left; width: 100%; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--soft-3); color: var(--ink-2); font-size: var(--text-sm); line-height: 1.5; }
+.claim-connection { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.claim-connection:last-child { border-bottom: 0; }
+.claim-connection > input { margin-top: 3px; }
+.claim-connection span { display: grid; gap: 2px; min-width: 0; }
+.claim-connection small { color: var(--muted); font-size: var(--text-sm); }
+
+/* The agents page: the phrase under the live status, the per-connection switch. */
+.agent-status-list > li.agent-status-hint { display: block; }
+.agent-status-hint .ask-agent-hint { margin: 4px 0 0; }
+.agent-status-hint .ask-agent-hint strong { color: var(--ink); }
+.agent-sign-in-links { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+@media (max-width: 720px) {
+  .shelf-banner { width: calc(100% - 32px); }
+}

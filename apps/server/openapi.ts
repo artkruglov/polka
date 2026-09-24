@@ -12,6 +12,7 @@ import {
   editsBodySchema,
   editsResponseSchema,
   publishResponseSchema,
+  signInLinkResponseSchema,
   statusResponseSchema,
 } from "./publish-api.ts";
 
@@ -283,6 +284,37 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/sign-in-link": {
+        post: {
+          operationId: "signInLink",
+          summary: "A one-time link that signs the owner's browser in",
+          description:
+            "When the owner asks to open Полка in a browser («Открой мою Полку»). For a claimed shelf returns kind hint: url = <origin>/signin?shelf=… (no secret), the shelf's sign-in page. For a provisional shelf returns kind link: url = <origin>/enter#<token>, one use within 5 minutes after the user confirms — only for an OAuth connection granted the sign_in permission. Give the url to the user exactly as returned and never open it yourself. At most 5 per connection per hour.",
+          security: [{ bearerAuth: ["context"] }],
+          responses: {
+            "200": {
+              description: "The link.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/SignInLinkResponse" },
+                },
+              },
+            },
+            "401": common["401"],
+            "403": problem(
+              "A provisional shelf and a connection without the sign_in permission (or a static token).",
+              {
+                token: {
+                  code: "forbidden",
+                  message:
+                    "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
+                },
+              },
+            ),
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/status/{artifactId}": {
         get: {
           operationId: "status",
@@ -458,6 +490,7 @@ export function openApiDocument(origin: string) {
           PUBLISH_RESPONSE_NOTES,
         ),
         StatusResponse: jsonSchema(statusResponseSchema, "output"),
+        SignInLinkResponse: jsonSchema(signInLinkResponseSchema, "output"),
         EditsRequest: jsonSchema(editsBodySchema, "input"),
         EditsResponse: jsonSchema(editsResponseSchema, "output"),
         EditProblem: jsonSchema(editProblemSchema, "output"),

@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { trackSignup, type VisitSource } from "./analytics.ts";
 import {
   randomBytes,
@@ -239,17 +240,39 @@ export async function beginEmailLogin(email: string, ip: string) {
   }
   return { id, browser, delivery: config.MAIL_MODE, expiresInSeconds: 600 };
 }
+export type EmailVerifyOptions = {
+  /**
+   * The browser is signed in to this provisional shelf (provisional.ts): an
+   * address without a shelf is attached to it (a claim) instead of opening
+   * another one.
+   */
+  provisionalId?: string | null;
+  /**
+   * The browser remembers another shelf (a localStorage hint): an address
+   * without a shelf asks «войти в существующую или создать новую» first,
+   * unless `createNew` says the person already chose.
+   */
+  knownShelf?: boolean;
+  createNew?: boolean;
+};
+
+export type EmailVerifyResult =
+  | { kind: "session"; session: string; accountId: string; created: boolean }
+  | { kind: "claimed"; accountId: string }
+  | { kind: "new-shelf" };
+
 export async function verifyEmailLogin(
   id: string,
   code: string,
   browser: string,
   ip: string,
   source?: VisitSource | null,
-) {
+  options: EmailVerifyOptions = {},
+): Promise<EmailVerifyResult> {
   if (config.MAIL_MODE === "disabled")
     throw new Problem(503, "invalid", "Вход по почте отключён.");
   await limitAttempts(`email-verify-ip:${ip}`, 40);
-  const token = await transaction(async (c) => {
+  const result = await transaction(async (c): Promise<EmailVerifyResult | null> => {
     const {
       rows: [challenge],
     } = await c.query(
@@ -301,8 +324,27 @@ export async function verifyEmailLogin(
       if (!tenant || !account) return null;
     }
     if (account && !emailLoginAllowed(challenge.email)) return null;
+    let created = false;
     if (!account) {
       if (!emailSignupAllowed(challenge.email)) return null;
+      if (options.provisionalId) {
+        // The address claims the provisional shelf this browser holds.
+        const claimed = await claimWithEmail(
+          c,
+          options.provisionalId,
+          challenge.email,
+          challenge.delivery === "smtp",
+        );
+        if (!claimed) return null;
+        await c.query(
+          "UPDATE login_challenges SET consumed_at=now() WHERE id=$1",
+          [id],
+        );
+        return { kind: "claimed", accountId: options.provisionalId };
+      }
+      // The code is right and stays usable: the person answers the question
+      // and sends it again with createNew, or signs in elsewhere.
+      if (options.knownShelf && !options.createNew) return { kind: "new-shelf" };
       await signupRoomLeft(c, ip, true, challenge.email);
       const accountId = randomUUID();
       // Unused random password keeps legacy password login separate from email identities.
@@ -324,6 +366,7 @@ export async function verifyEmailLogin(
         accountId,
       ]);
       trackSignup(c, accountId, "email", source);
+      created = true;
     } else if (challenge.delivery === "smtp")
       await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [
         account.id,
@@ -336,13 +379,47 @@ export async function verifyEmailLogin(
       "INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",
       [sha256(session), account.id],
     );
-    return session;
+    return { kind: "session", session, accountId: account.id, created };
   });
-  if (!token)
+  if (!result)
     throw new Problem(
       401,
       "unauthorized",
       "Код неверен, истёк или уже использован. Запросите новый, если нужно.",
     );
-  return token;
+  return result;
+}
+
+/**
+ * Attaches a verified address to a provisional shelf (tenant, then account
+ * locked) and marks it claimed. False when the shelf is gone or claimed.
+ */
+async function claimWithEmail(
+  c: PoolClient,
+  accountId: string,
+  email: string,
+  verified: boolean,
+) {
+  const tenant = (
+    await c.query("SELECT id FROM tenants WHERE owner_id=$1 FOR UPDATE", [
+      accountId,
+    ])
+  ).rows[0];
+  const account = (
+    await c.query(
+      `SELECT id FROM accounts WHERE id=$1 AND provisional_at IS NOT NULL
+         AND claimed_at IS NULL AND email IS NULL
+         AND NOT disabled AND deletion_requested_at IS NULL FOR UPDATE`,
+      [accountId],
+    )
+  ).rows[0];
+  if (!tenant || !account) return false;
+  await c.query(
+    `UPDATE accounts SET email=$2,
+            email_verified_at=CASE WHEN $3::boolean THEN now() ELSE NULL END
+      WHERE id=$1`,
+    [accountId, email, verified],
+  );
+  const { markClaimed } = await import("./provisional.ts");
+  return markClaimed(c, accountId, "email", email.split("@")[0]);
 }

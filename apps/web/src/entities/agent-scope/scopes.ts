@@ -6,6 +6,8 @@ export const scopeOptions: Array<{
   label: string;
   description: string;
   defaultOn: boolean;
+  /** Only for chat connectors (OAuth), never for a pasted token. */
+  oauthOnly?: boolean;
 }> = [
   {
     id: "context",
@@ -52,5 +54,13 @@ export const scopeOptions: Array<{
     description:
       "Переименовывать, перемещать, отправлять в корзину и восстанавливать работы.",
     defaultOn: false,
+  },
+  {
+    id: "sign_in",
+    label: "Давать ссылку для входа",
+    description:
+      "По просьбе «Открой мою Полку» агент даёт одноразовую ссылку, которая открывает временную полку в браузере. Закреплённую полку агент не открывает: он подсказывает, как войти.",
+    defaultOn: false,
+    oauthOnly: true,
   },
 ];

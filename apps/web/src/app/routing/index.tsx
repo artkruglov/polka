@@ -6,6 +6,8 @@ import {
   AgentConnections,
   Away,
   Bring,
+  BringReceive,
+  BookmarkletPage,
   EditorialPage,
   Enterprise,
   FirstSave,
@@ -20,6 +22,11 @@ import {
   BotPage,
   Recipient,
   Signup,
+  SignupChoose,
+  SignupLinked,
+  Claim,
+  Enter,
+  SignIn,
   Templates,
   TermsPage,
 } from "./lazy-pages.tsx";
@@ -41,6 +48,11 @@ function Route({ path }: { path: string }) {
   if (path === "/oauth/consent") return <OAuthConsent />;
   if (path === "/moderation") return <Moderation />;
   if (path === "/signup") return <Signup />;
+  if (path === "/signup/choose") return <SignupChoose />;
+  if (path === "/signup/linked") return <SignupLinked />;
+  if (path === "/claim") return <Claim />;
+  if (path === "/enter") return <Enter />;
+  if (path === "/signin") return <SignIn />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/bot") return <BotPage />;
@@ -55,6 +67,8 @@ function Route({ path }: { path: string }) {
   // The guest landing, also for people who are signed in.
   if (path === "/landing") return <Landing />;
   if (path.startsWith("/discover")) return <EditorialPage />;
+  if (path === "/bring/receive") return <BringReceive />;
+  if (path === "/bookmarklet") return <BookmarkletPage />;
   if (path.startsWith("/bring")) return <Bring />;
   return null;
 }

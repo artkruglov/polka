@@ -23,6 +23,36 @@ import {
   type ProviderProfile,
 } from "./sign-in-providers.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { isUnclaimed, markClaimed } from "./provisional.ts";
+
+/**
+ * A provisional shelf tried to take a provider identity (or its verified
+ * address) that already belongs to another shelf: the person owns both, and
+ * /claim offers to merge the provisional one into `targetId`.
+ */
+export class ClaimCollision extends Error {
+  constructor(readonly targetId: string) {
+    super("claim collision");
+  }
+}
+
+/**
+ * Whether signing in with this profile would open a NEW shelf (no linked
+ * identity, no shelf with the verified address). Read-only: the sign-in
+ * itself decides again under its locks.
+ */
+export async function wouldOpenNewShelf(profile: ProviderProfile) {
+  const {
+    rows: [row],
+  } = await db.query(
+    `SELECT EXISTS(SELECT 1 FROM account_identities
+                    WHERE provider=$1 AND subject=$2)
+         OR ($3::text IS NOT NULL AND $4::boolean
+             AND EXISTS(SELECT 1 FROM accounts WHERE email=$3)) AS known`,
+    [profile.provider, profile.subject, profile.email, profile.emailVerified],
+  );
+  return !row?.known;
+}
 
 type Account = { id: string; tenant: string };
 
@@ -144,9 +174,23 @@ export async function completeProviderSignIn(
       )
     ).rows[0];
     let account: Account | null = null;
+    // Linking to a provisional shelf claims it (provisional.ts).
+    const claiming = !!linkAccountId && (await isUnclaimed(c, linkAccountId));
     if (linkAccountId) {
-      if (linked && linked.account_id !== linkAccountId)
+      if (linked && linked.account_id !== linkAccountId) {
+        // The person owns the other shelf too: offer to merge.
+        if (claiming) throw new ClaimCollision(linked.account_id);
         throw new IdpError("linked");
+      }
+      if (claiming && !linked && profile.email && profile.emailVerified) {
+        const owner = (
+          await c.query("SELECT id FROM accounts WHERE email=$1 AND id<>$2", [
+            profile.email,
+            linkAccountId,
+          ])
+        ).rows[0];
+        if (owner) throw new ClaimCollision(owner.id);
+      }
       account = await lockActiveAccount(c, linkAccountId);
       if (!account) throw new IdpError("blocked");
     } else if (linked) {
@@ -187,6 +231,22 @@ export async function completeProviderSignIn(
           WHERE id=$1 AND email=$2`,
         [account.id, profile.email],
       );
+    if (claiming) {
+      // The provider's verified address becomes the shelf's own when free.
+      if (profile.email && profile.emailVerified)
+        await c.query(
+          `UPDATE accounts SET email=$2,email_verified_at=now()
+            WHERE id=$1 AND email IS NULL
+              AND NOT EXISTS(SELECT 1 FROM accounts WHERE email=$2)`,
+          [account.id, profile.email],
+        );
+      await markClaimed(
+        c,
+        account.id,
+        profile.provider,
+        profile.name ?? profile.email?.split("@")[0] ?? null,
+      );
+    }
     await organisationAccess(c, account, profile);
     // Linking keeps the person's current session (their Strict cookie stays
     // in the browser); signing in issues a new one.
@@ -198,6 +258,43 @@ export async function completeProviderSignIn(
     );
     return { session, accountId: account.id };
   });
+}
+
+const GENERATED_LOGIN = /^(email|yandex|vk|oidc|guest)-[0-9a-f-]{36}$/;
+
+/**
+ * Which shelf a browser is in and how its owner signs in to it: the consent
+ * page shows it so a connector lands in the shelf the person means.
+ */
+export async function shelfSummary(accountId: string) {
+  const [
+    {
+      rows: [account],
+    },
+    { rows: identities },
+  ] = await Promise.all([
+    db.query(
+      `SELECT COALESCE(display_name,name) AS display,name,email,
+              provisional_at IS NOT NULL AND claimed_at IS NULL AS provisional
+         FROM accounts WHERE id=$1`,
+      [accountId],
+    ),
+    db.query(
+      "SELECT provider FROM account_identities WHERE account_id=$1 ORDER BY created_at",
+      [accountId],
+    ),
+  ]);
+  const methods: string[] = [];
+  if (account?.email) methods.push(`почта ${account.email}`);
+  for (const { provider } of identities)
+    methods.push(PROVIDER_NAMES[provider as ProviderId]?.() ?? provider);
+  if (account && !GENERATED_LOGIN.test(account.name))
+    methods.push(`логин ${account.name}`);
+  return {
+    name: (account?.display as string) ?? "",
+    methods,
+    provisional: !!account?.provisional,
+  };
 }
 
 /** Linked providers of the signed-in person (settings). */

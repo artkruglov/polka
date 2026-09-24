@@ -595,6 +595,7 @@ export function App() {
       {panel === "share" && work && (
         <SharePanel
           artifact={work}
+          provisional={!!account?.provisional}
           onClose={() => setPanel(null)}
           onChange={async () => {
             await refreshWork();
