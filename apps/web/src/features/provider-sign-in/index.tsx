@@ -3,6 +3,10 @@ import { Building2 } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { visitSourceQuery } from "../../shared/lib/visit-source.ts";
+import {
+  knownShelf,
+  rememberSignInMethod,
+} from "../../shared/lib/known-shelf.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 import {
   loadIdentities,
@@ -56,7 +60,11 @@ function Mark({ id }: { id: SignInProvider["id"] }) {
 const label = (provider: SignInProvider) =>
   provider.id === "oidc" ? provider.name : `Войти с ${provider.name}`;
 
-/** Buttons that leave for the provider; `next` comes back after sign-in. */
+/**
+ * Buttons that leave for the provider; `next` comes back after sign-in. A
+ * browser that remembers a shelf (shared/lib/known-shelf) adds known=1: a
+ * sign-in that would open a new shelf then asks first (/signup/choose).
+ */
 export function ProviderButtons({
   providers,
   next,
@@ -68,6 +76,7 @@ export function ProviderButtons({
   onLeave?: (provider: SignInProvider) => void;
 }) {
   if (!providers.length) return null;
+  const known = knownShelf() ? "&known=1" : "";
   return (
     <div
       className="idp-buttons"
@@ -78,12 +87,59 @@ export function ProviderButtons({
         <a
           key={provider.id}
           className={`idp-button idp-button--${provider.id}`}
-          href={`/api/auth/idp/${provider.id}/start?next=${encodeURIComponent(next)}${visitSourceQuery()}`}
-          onClick={onLeave ? () => onLeave(provider) : undefined}
+          href={`/api/auth/idp/${provider.id}/start?next=${encodeURIComponent(next)}${known}${visitSourceQuery()}`}
+          onClick={() => {
+            rememberSignInMethod(provider.id);
+            onLeave?.(provider);
+          }}
         >
           <Mark id={provider.id} />
           <span>{label(provider)}</span>
         </a>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The same buttons for a signed-in shelf: they LINK the provider to it (a
+ * POST with the session, then the browser leaves). On a provisional shelf
+ * this claims it (docs/specs/SIGN_IN_PROVIDERS.md § 8).
+ */
+export function LinkProviderButtons({
+  providers,
+  onError,
+}: {
+  providers: SignInProvider[];
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!providers.length) return null;
+  return (
+    <div className="idp-buttons" role="group" aria-label="Закрепить полку">
+      {providers.map((provider) => (
+        <button
+          key={provider.id}
+          type="button"
+          className={`idp-button idp-button--${provider.id}`}
+          disabled={busy !== null}
+          onClick={async () => {
+            setBusy(provider.id);
+            try {
+              const { location: target } = await request<{ location: string }>(
+                `/auth/idp/${provider.id}/link`,
+                {},
+              );
+              location.assign(target);
+            } catch (e) {
+              onError((e as Error).message);
+              setBusy(null);
+            }
+          }}
+        >
+          <Mark id={provider.id} />
+          <span>{label(provider)}</span>
+        </button>
       ))}
     </div>
   );

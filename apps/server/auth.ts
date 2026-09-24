@@ -113,7 +113,7 @@ export async function identity(req: FastifyRequest) {
   const {
     rows: [actor],
   } = await db.query(
-    `SELECT a.id,COALESCE(a.display_name,a.name) AS name,t.id AS tenant,a.created_at AS "createdAt" FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
+    `SELECT a.id,COALESCE(a.display_name,a.name) AS name,t.id AS tenant,a.created_at AS "createdAt",(a.provisional_at IS NOT NULL AND a.claimed_at IS NULL) AS provisional,s.assurance<>'full' AS weak FROM sessions s JOIN accounts a ON a.id=s.account_id JOIN tenants t ON t.owner_id=a.id WHERE s.hash=$1 AND s.expires_at>now() AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
     [sha256(req.cookies.polka_session ?? "")],
   );
   if (!actor)
@@ -130,5 +130,24 @@ export async function identity(req: FastifyRequest) {
     tenant: string;
     /** null for accounts older than the abuse-protection migration (029). */
     createdAt: Date | null;
+    /** A provisional shelf nobody has claimed yet (provisional.ts). */
+    provisional: boolean;
+    /**
+     * The session came from an agent's sign-in link (agent-sign-in-links.ts):
+     * it browses, but cannot claim, merge, link or unlink sign-in methods,
+     * manage agents or delete the account.
+     */
+    weak: boolean;
   };
+}
+
+/** Refuses what a session opened by an agent's link may not do. */
+export function assertStrongSession(actor: { weak?: boolean }) {
+  if (actor.weak)
+    throw new Problem(
+      403,
+      "forbidden",
+      "Вы вошли по ссылке от агента. Для этого действия войдите через Яндекс ID, VK ID или по почте.",
+      { reason: "agent_link_session" },
+    );
 }
