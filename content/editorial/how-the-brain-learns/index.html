@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Как мозг на самом деле учится: три условия нейропластичности</title>
+<style>
+:root{--ink:#22262a;--muted:#5f6a70;--paper:#f2f1ec;--card:#fff;--line:#d9d8d0;--accent:#7a3b2e;--cool:#2d6a8a;--ok:#2d7350;--soft:#efe9e2;--shadow:#3a2a1f12}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:clamp(24px,6vw,72px) 16px 64px}
+header{max-width:720px}
+.kicker{color:var(--accent);font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;line-height:1.12;letter-spacing:-.02em}
+h1{font-size:clamp(2rem,5.6vw,3.8rem);margin:14px 0 12px}
+h2{font-size:clamp(1.4rem,3vw,1.95rem);margin:0 0 12px}
+h3{font-size:1.12rem;margin:0 0 6px}
+.dek{margin:0;color:var(--muted);font-size:1.12rem}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:0 0 6px}
+code{font:.92em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:5px}
+.card{margin-top:28px;padding:clamp(18px,4vw,36px);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 36px var(--shadow)}
+.lead{font-size:1.06rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}
+.tile{padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7}
+.tile h3{font-family:inherit;font-size:1rem;letter-spacing:0}
+.tile p{margin:0;color:var(--ink);font-size:.95rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-bottom:6px}
+.tag.ok{color:var(--ok)}.tag.cool{color:var(--cool)}
+table{width:100%;border-collapse:collapse;margin:10px 0 6px;font-size:.94rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll table{min-width:560px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.button{min-height:44px;border:1px solid var(--accent);border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.button.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.button[disabled]{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.js-only{display:none}.js .js-only{display:block}.js .js-only.actions{display:flex}.js .no-js{display:none}
+label{font-weight:700}
+input[type=range]{width:100%;max-width:520px;margin:6px 0 2px;accent-color:var(--accent)}
+.note,.foot{color:var(--muted);font-size:.9rem}.note{margin-top:14px}.foot{margin-top:28px}
+.quote{margin:14px 0;padding:12px 16px;border-left:4px solid var(--accent);background:#fbfaf7;border-radius:0 12px 12px 0}
+.panel{margin-top:14px;padding:16px 18px;border-radius:14px;border:1px solid var(--line);background:#fbfaf7;min-height:120px}
+.sources{font-size:.9rem;color:var(--ink)}.sources li{margin-bottom:10px;overflow-wrap:anywhere}
+.sources small{color:var(--muted)}
+.made{margin-top:28px;padding:14px 18px;border-radius:14px;background:var(--soft);font-size:.92rem}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.game{display:grid;gap:12px;max-width:560px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.swatch{height:120px;border-radius:14px;border:2px solid var(--line);cursor:pointer;font:inherit;color:transparent}
+.swatch:focus-visible{outline:3px solid #e0a044;outline-offset:3px}
+.meter{display:flex;gap:4px;align-items:flex-end;height:60px;margin-top:4px}
+.meter i{flex:1;background:var(--cool);border-radius:3px 3px 0 0;min-height:2px}
+.meter i.miss{background:var(--accent)}
+.stat{font-variant-numeric:tabular-nums}
+.verdict{min-height:1.5em;font-weight:700}
+.verdict.good{color:var(--ok)}.verdict.retry{color:var(--accent)}
+.ops{display:grid;gap:10px;margin-top:12px}
+.op{border:1px solid var(--line);border-radius:12px;background:#fbfaf7}
+.op summary{cursor:pointer;padding:12px 14px;font-weight:700;list-style:none;min-height:44px}
+.op summary::-webkit-details-marker{display:none}
+.op summary::before{content:"+";display:inline-block;width:1.2em;color:var(--accent)}
+.op[open] summary::before{content:"−"}
+.op .body{padding:0 14px 12px 32px}
+.was{color:var(--muted)}
+.myth{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.myth:last-child{border-bottom:0}
+.myth b{display:block;font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.myth .m b{color:var(--accent)}.myth .f b{color:var(--ok)}
+.help{margin-top:28px;padding:14px 18px;border-radius:14px;border:1px solid var(--line);background:#fff;font-size:.95rem}
+@media(max-width:540px){.myth{grid-template-columns:1fr}.swatch{height:96px}}
+</style>
+</head>
+<body><main>
+<header>
+<div class="kicker">Исследования · мозг</div>
+<h1>Как мозг на самом деле учится: три условия нейропластичности</h1>
+<p class="dek">«Понюхайте корицу, почувствуйте тепло — это активирует такую-то зону мозга». Приятно, но мозг от этого ничему не учится. Разбираем, что нейронаука знает о том, когда кора действительно перестраивается, и как превратить любую «практику» в тренировку.</p>
+</header>
+
+<section class="card" aria-labelledby="three">
+<h2 id="three">Три условия</h2>
+<p class="lead">Мозг меняется не от приятного стимула, а от задачи. В исследованиях пластичности раз за разом повторяются три условия:</p>
+<div class="grid">
+<div class="tile"><span class="tag">1</span><h3>Вызов на границе способности</h3><p>Задача трудная, но выполнимая: вы ошибаетесь заметно, но не постоянно.</p></div>
+<div class="tile"><span class="tag">2</span><h3>Повторение во времени</h3><p>Не один подход, а серия занятий в течение дней и недель.</p></div>
+<div class="tile"><span class="tag">3</span><h3>Обратная связь об ошибке</h3><p>Вы узнаёте, правы ли были, сразу после попытки.</p></div>
+</div>
+<h3 style="margin-top:22px">Откуда это известно</h3>
+<p><b>Внимание решает, будет ли перестройка.</b> В классических опытах лаборатории Майкла Мерцениха в начале 1990-х обезьян учили различать частоту вибрации на пальце или высоту звука. Участок коры, который отвечал за тренируемые стимулы, расширялся, и чем больше он становился, тем лучше животное различало стимулы. У животных, которые получали те же стимулы, но решали другую задачу, карта почти не менялась. Значит, важна задача различения, а не сам стимул (Recanzone et al., 1992; 1993).</p>
+<p><b>Ошибка — главный учебный сигнал.</b> Дофаминовые нейроны реагируют не на награду как таковую, а на разницу между ожидаемым и полученным: больше ожидаемого — всплеск, меньше — провал, как ожидалось — ничего (Schultz, Dayan, Montague, 1997). Мозг учится на расхождении прогноза с реальностью.</p>
+<p><b>Нужна серия, а не один раз.</b> Там, где сенсорная тренировка работает, это протокол на недели: например, тренировка обоняния, о которой ниже, длится 12 недель.</p>
+</section>
+
+<section class="card" aria-labelledby="game-h">
+<h2 id="game-h">Попробуйте: тренировка на пороге</h2>
+<p>Два квадрата отличаются по яркости. Нажмите на более светлый. Ответили верно два раза подряд — разница уменьшится. Ошиблись — увеличится. Так задача сама держится у границы ваших возможностей. По этому же принципу («лестница», staircase) измеряют пороги восприятия в лабораториях.</p>
+<p class="no-js note">Без JavaScript упражнение не работает. Его можно сделать с предметами: возьмите 5 тканей или монет, с закрытыми глазами разложите их по шершавости, откройте глаза и проверьте. Ошиблись — это и есть учебный сигнал. На следующий день возьмите образцы, которые различаются слабее.</p>
+<div class="game js-only">
+<div class="pair">
+<button class="swatch" id="left" type="button" aria-label="Левый квадрат">левый</button>
+<button class="swatch" id="right" type="button" aria-label="Правый квадрат">правый</button>
+</div>
+<div class="verdict" id="verdict" aria-live="polite">Какой светлее?</div>
+<div class="stat">Разница яркости: <b id="diff">24</b> из 255 · попыток: <b id="tries">0</b></div>
+<div class="meter" id="meter" aria-hidden="true"></div>
+<p class="note" style="margin-top:0">Столбики — разница яркости в каждой попытке; красные — ошибки. Через 20–30 попыток высота стабилизируется: это примерно ваш порог сегодня. Зависит от экрана и освещения, это демонстрация, а не тест зрения.</p>
+</div>
+</section>
+
+<section class="card" aria-labelledby="ops-h">
+<h2 id="ops-h">Как превратить практику в тренировку</h2>
+<p>Автор этого материала разобрал 51 карточку сенсорных «практик для мозга» и посчитал, какие действия они просят сделать. «Заметь / ощути» встретилось 62 раза, «дыши» — 47, «сравни» — 4, «назови словами» — 3, «предскажи» и «измерь» — ни разу. То есть почти всё — пассивное восприятие. Вот шесть активных операций, которые меняют дело.</p>
+<div class="ops">
+<details class="op" open><summary>Различать, а не замечать</summary><div class="body"><p class="was">Было: «Потрогайте кору дерева, почувствуйте разницу».</p><p>Стало: 5 образцов, разложить по шершавости с закрытыми глазами, проверить глазами. Завтра — образцы, которые различаются слабее.</p></div></details>
+<details class="op"><summary>Предсказывать</summary><div class="body"><p>Перед первым глотком или вдохом скажите вслух, что ожидаете почувствовать. Потом почувствуйте и найдите, где реальность разошлась с прогнозом. Одна добавленная фраза превращает любую практику в обучающую.</p></div></details>
+<details class="op"><summary>Повторять по протоколу</summary><div class="body"><p>Тренировка обоняния по Хуммелю: четыре запаха (роза, эвкалипт, лимон, гвоздика), по 10–20 секунд каждый, дважды в день, 12 недель. У людей с потерей обоняния, в том числе после вирусных инфекций, она улучшает обоняние чаще, чем без тренировки (Hummel et al., 2009; позднейшие обзоры). У людей с нормальным обонянием данных меньше.</p></div></details>
+<details class="op"><summary>Измерять</summary><div class="body"><p>Шкала 0–10 до и после. Или счёт сердцебиения: 30 секунд считайте удары, не трогая пульс, потом сравните с реальным. Это классическая проба на интероцепцию (Schandry, 1981). Честная оговорка: насколько эта проба измеряет именно ощущение сердца, а не знание своего пульса, в науке спорят.</p></div></details>
+<details class="op"><summary>Называть словами</summary><div class="body"><p>Дайте ощущению точное имя: не «тревога», а «сжатие под рёбрами, тёплое, пульсирует». В исследовании Либермана и соавторов (2007) называние эмоции на снимке снижало активность миндалевидного тела по сравнению с простым разглядыванием. Эффект называют affect labeling.</p></div></details>
+<details class="op"><summary>Привязывать к жизни</summary><div class="body"><p>Соедините двухминутное упражнение с тем, что вы и так делаете каждый день: дверь офиса, первый глоток кофе, красный светофор. Так упражнение становится привычкой, а не разовым действием.</p></div></details>
+</div>
+</section>
+
+<section class="card" aria-labelledby="myths">
+<h2 id="myths">Проверка популярных утверждений</h2>
+<p>В постах о «нейропрактиках» часто встречаются эффектные цифры. Вот как они выглядят при проверке.</p>
+<div class="myth"><div class="m"><b>Утверждение</b>«Заземление (хождение босиком) снижает кортизол на 31%»</div><div class="f"><b>Что известно</b>Цифры такого рода взяты из пилотных исследований на десятке участников без нормального контроля. Как установленный факт подавать нельзя.</div></div>
+<div class="myth"><div class="m"><b>Утверждение</b>«Фракталы снижают стресс до 60%»</div><div class="f"><b>Что известно</b>Исследования Ричарда Тейлора находили изменения физиологических показателей при разглядывании фрактальных узоров в лаборатории. «Минус 60% стресса» из них не следует.</div></div>
+<div class="myth"><div class="m"><b>Утверждение</b>«95% серотонина вырабатывается в кишечнике — поэтому настроение зависит от еды»</div><div class="f"><b>Что известно</b>Первая часть верна: большая часть серотонина в теле — в кишечнике. Но он почти не проходит гематоэнцефалический барьер, и серотонин мозга синтезируется в самом мозге. Прямого «кишка → настроение» из этой цифры не следует.</div></div>
+<div class="myth"><div class="m"><b>Утверждение</b>«С закрытыми глазами соматосенсорная кора активнее на 30%»</div><div class="f"><b>Что известно</b>Источника у этой цифры найти не удалось. Если точной цифры нет, лучше назвать механизм, чем придумать процент.</div></div>
+<p class="note">Правило, которое стоит взять себе: одна выдуманная цифра, замеченная специалистом, стоит дороже, чем весь эффект от красивых процентов.</p>
+</section>
+
+<section class="card" aria-labelledby="src">
+<h2 id="src">Источники</h2>
+<ol class="sources">
+<li>Recanzone G. H., Merzenich M. M., Jenkins W. M., Grajski K. A., Dinse H. R. Topographic reorganization of the hand representation in cortical area 3b of owl monkeys trained in a frequency-discrimination task. <i>Journal of Neurophysiology</i>, 1992.</li>
+<li>Recanzone G. H., Schreiner C. E., Merzenich M. M. Plasticity in the frequency representation of primary auditory cortex following discrimination training in adult owl monkeys. <i>Journal of Neuroscience</i>, 1993.</li>
+<li>Schultz W., Dayan P., Montague P. R. A neural substrate of prediction and reward. <i>Science</i>, 1997.</li>
+<li>Hummel T., Rissom K., Reden J., Hähner A., Weidenbecher M., Hüttenbrink K.-B. Effects of olfactory training in patients with olfactory loss. <i>The Laryngoscope</i>, 2009.</li>
+<li>Schandry R. Heart beat perception and emotional experience. <i>Psychophysiology</i>, 1981.</li>
+<li>Garfinkel S. N. et al. Knowing your own heart: distinguishing interoceptive accuracy from interoceptive awareness. <i>Biological Psychology</i>, 2015.</li>
+<li>Lieberman M. D. et al. Putting feelings into words: affect labeling disrupts amygdala activity in response to affective stimuli. <i>Psychological Science</i>, 2007.</li>
+<li>Levitt H. Transformed up-down methods in psychoacoustics. <i>Journal of the Acoustical Society of America</i>, 1971 — метод «лестницы», по которому устроено упражнение.</li>
+</ol>
+<p class="note">Пересказ упрощён. Выводы о животных и о людях с потерей обоняния не переносятся на всех автоматически.</p>
+</section>
+
+<div class="help"><b>Это не медицинский совет.</b> Упражнения здесь — про внимание и обучение, они не лечат тревогу, депрессию или нарушения обоняния. Если тревога или подавленность мешают жить, обратитесь к врачу. Телефон доверия: 8-800-2000-122 (бесплатно, круглосуточно).</div>
+<div class="made"><b>Подготовлено с Claude.</b> Материал вырос из разбора, который автор Полки делал с Claude для своего канала о сенсорных практиках. Цифры про карточки — из этого разбора, научные утверждения сверены с первоисточниками по списку выше.</div>
+<p class="foot">Автор: Редакция Полки</p>
+</main>
+<script>
+(function(){
+document.documentElement.classList.add('js');
+var L=document.getElementById('left'),R=document.getElementById('right'),v=document.getElementById('verdict'),dEl=document.getElementById('diff'),tEl=document.getElementById('tries'),meter=document.getElementById('meter');
+var diff=24,streak=0,tries=0,brighter=0,hist=[];
+function gray(n){return 'rgb('+n+','+n+','+n+')'}
+function round(){var base=110+Math.floor(Math.random()*30);brighter=Math.random()<.5?0:1;var a=base,b=base+diff;L.style.background=gray(brighter===0?b:a);R.style.background=gray(brighter===1?b:a);dEl.textContent=diff}
+function draw(){meter.innerHTML=hist.slice(-40).map(function(h){return '<i class="'+(h.ok?'':'miss')+'" style="height:'+Math.max(4,h.d/40*100)+'%"></i>'}).join('')}
+function pick(side){tries++;tEl.textContent=tries;var ok=side===brighter;hist.push({d:diff,ok:ok});
+if(ok){streak++;v.textContent='Верно.';v.className='verdict good';if(streak>=2){diff=Math.max(1,diff-(diff>8?3:1));streak=0}}
+else{streak=0;diff=Math.min(40,diff+(diff>8?3:2));v.textContent='Мимо — это и есть учебный сигнал. Разница увеличена.';v.className='verdict retry'}
+draw();round()}
+L.addEventListener('click',function(){pick(0)});R.addEventListener('click',function(){pick(1)});
+round();
+})();
+</script>
+</body></html>

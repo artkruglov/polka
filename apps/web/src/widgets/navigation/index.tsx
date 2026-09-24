@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import {
   Bot,
   ChevronsUpDown,
+  CodeXml,
   Compass,
   Home,
   LayoutTemplate,
@@ -20,7 +21,44 @@ import {
   useAccountState,
 } from "../../entities/account/model/useAccount.ts";
 import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
+import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
+import { formatStars, onGitHub } from "../../shared/lib/project-links.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
+
+/**
+ * The source code in the header, the way open-source products show it: the
+ * GitHub mark, and the star count once there is one worth showing. The count
+ * comes from this server (GET /api/source/stars), never from GitHub directly.
+ */
+function SourceLink() {
+  const sourceUrl = useSourceUrl();
+  const stars = formatStars(useSourceStars());
+  const github = onGitHub(sourceUrl);
+  return (
+    <a
+      className="site-github"
+      href={sourceUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={
+        github
+          ? `Открытый код на GitHub${stars ? `, ${stars} звёзд` : ""}`
+          : "Открытый код"
+      }
+    >
+      {github ? <GitHubMark size={20} /> : <CodeXml aria-hidden="true" />}
+      <span className="site-github-label">
+        {github ? "GitHub" : "Открытый код"}
+      </span>
+      {stars && (
+        <span className="site-github-stars" aria-hidden="true">
+          ★ {stars}
+        </span>
+      )}
+    </a>
+  );
+}
 
 export type Section =
   | "landing"
@@ -47,7 +85,7 @@ const links: {
 }[] = [
   { id: "shelf", label: "Моя полка", href: "/", icon: Home },
   { id: "bring", label: "Сохранить", href: "/bring", icon: Plus },
-  { id: "discover", label: "Интересное", href: "/discover", icon: Compass },
+  { id: "discover", label: "Лента", href: "/discover", icon: Compass },
   { id: "templates", label: "Шаблоны", href: "/templates", icon: LayoutTemplate },
   { id: "connections", label: "Агенты", href: "/settings/agents", icon: Bot },
 ];
@@ -148,6 +186,8 @@ function SiteHeader({
   onLoggedOut?: () => void;
 }) {
   const guest = account === null;
+  // Guests see the source everywhere; people with a shelf see it on the landing.
+  const showSource = guest || current === "landing";
   const returnTo = authReturnTo(location);
   // Shares the cached /me request; shown only when the page has no account yet.
   const accountCheck = useAccountState();
@@ -177,6 +217,11 @@ function SiteHeader({
             </a>
           ))}
         </nav>
+        {showSource && (
+          <div className="site-source">
+            <SourceLink />
+          </div>
+        )}
         {children && <div className="navigation-context">{children}</div>}
         <div className="site-account">
           {account ? (

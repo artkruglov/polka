@@ -88,7 +88,7 @@ The agent runs one command and Полка opens: sign in or create a shelf with 
     <td width="50%"><img src="docs/screenshots/agents.png" alt="The Agents page: connect an agent with one phrase, no token"><br><sub><b>Agents.</b> One phrase or one command; every connection is listed and revocable.</sub></td>
   </tr>
   <tr>
-    <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="The «Интересное» catalogue"></a><br><sub><b>Catalogue.</b> Interactive pieces from the Полка editors.</sub></td>
+    <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="The «Лента» feed"></a><br><sub><b>Лента (Feed).</b> Interactive pieces from the Полка editors.</sub></td>
     <td><a href="https://polochka.app/pricing"><img src="docs/screenshots/pricing.png" alt="For companies: cloud, self-hosting, commercial license"></a><br><sub><b>For companies.</b> Cloud, self-hosting or a commercial license.</sub></td>
   </tr>
 </table>
