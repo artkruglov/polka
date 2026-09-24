@@ -1,22 +1,29 @@
 // The model stage of the content filter (docs/specs/CONTENT_FILTER.md,
-// «Модель»). Two models on Yandex AI Studio's OpenAI-compatible endpoint: a
-// primary and a second opinion of another family, named only in the
-// configuration, with the prompt, JSON schema and text normalisation of the
-// benchmark (prompts.ts). The model's `confidence` carries no information
-// (the benchmark's primary answers ≥ 0.9 for everything): decisions use the
+// «Модели»). Two models on OpenAI-compatible endpoints (NeuralDeep, Yandex AI
+// Studio or a self-hosted server, each role its own, config.ts): a primary
+// and a second opinion of another family, named only in the configuration,
+// with the prompt, JSON schema and text normalisation of the benchmark
+// (prompts.ts). The model's `confidence` carries no information (the
+// benchmark's primary answers ≥ 0.9 for everything): decisions use the
 // category and whether the two models agree.
 //
 // The stage runs after a save commits and never blocks it
-// (content-moderation.ts, reviewRevision). A failed call falls back to the
-// second model; when both fail the revision stays «unchecked» and is retried.
-import { config } from "../config.ts";
+// (content-moderation.ts, reviewRevision). A failed or rate-limited call
+// falls back to the second model; when both fail the revision stays
+// «unchecked» and is retried.
+import { config, type ModelEndpoint, type ModelProvider } from "../config.ts";
 import { CATEGORIES, type Category } from "./lists.ts";
+import { postChat } from "./endpoints.ts";
 import { CONTENT_CATEGORIES, CONTENT_PROMPT, CONTENT_SCHEMA } from "./prompts.ts";
 
-/** One model's answer. */
+/** One model's answer. rate_limited: a 429 or the endpoint's own limits. */
 export type ModelAnswer =
   | { category: Category | "none"; reason: string; model: string; costRub: number }
-  | { failed: "timeout" | "error" | "refusal" | "unparseable" | "budget"; model: string; costRub: number };
+  | {
+      failed: "timeout" | "error" | "refusal" | "unparseable" | "budget" | "rate_limited";
+      model: string;
+      costRub: number;
+    };
 
 export const answered = (
   answer: ModelAnswer | null | undefined,
@@ -24,6 +31,8 @@ export const answered = (
 
 export interface ModelClient {
   readonly name: string;
+  /** A flat-rate key: calls cost nothing, so the daily budget does not stop them. */
+  readonly flatRate?: boolean;
   classify(input: { text?: string; image?: string }): Promise<ModelAnswer>;
 }
 
@@ -100,39 +109,82 @@ export function parseAnswer(
   };
 }
 
+type Price = [input: number, cached: number, output: number];
+type PriceEntry = { provider: ModelProvider | null; name: string; price: Price };
+
 /**
- * CONTENT_MODEL_PRICES_RUB: «<part of a model name>=<input>/<cached input>/<output>»,
- * ₽ per 1000 tokens, comma-separated. A model it does not name counts at
- * the dearest listed price (or 1.2 ₽ each), so the budget errs towards
- * stopping early.
+ * CONTENT_MODEL_PRICES_RUB: «[<provider>:]<part of a model name>=<input>/<cached
+ * input>/<output>», ₽ per 1000 tokens, comma-separated. A provider prefix
+ * (neuraldeep:gpt-oss-120b) prices a model only on that provider, since the
+ * same model costs differently elsewhere.
  */
-export function parsePrices(value: string) {
-  const prices: Array<[string, [number, number, number]]> = [];
+export function parsePrices(value: string): PriceEntry[] {
+  const prices: PriceEntry[] = [];
   for (const part of value.split(",").map((item) => item.trim()).filter(Boolean)) {
     const match = /^([^=]{1,120})=(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(part);
     if (!match) throw new Error(`CONTENT_MODEL_PRICES_RUB: «${part}»`);
-    prices.push([match[1]!.trim(), [Number(match[2]), Number(match[3]), Number(match[4])]]);
+    const scoped = /^(yandex|neuraldeep|openai-compatible):(.+)$/.exec(match[1]!.trim());
+    prices.push({
+      provider: (scoped?.[1] as ModelProvider | undefined) ?? null,
+      name: (scoped?.[2] ?? match[1]!).trim(),
+      price: [Number(match[2]), Number(match[3]), Number(match[4])],
+    });
   }
   return prices;
 }
 
-let priceTable: ReturnType<typeof parsePrices> | null = null;
-export function costOf(model: string, usage: any) {
-  priceTable ??= parsePrices(config.CONTENT_MODEL_PRICES_RUB);
-  const dearest = priceTable.reduce(
-    (max, [, price]) => Math.max(max, ...price),
-    priceTable.length ? 0 : 1.2,
-  );
-  const [input, cached, output] = priceTable.find(([name]) => model.includes(name))?.[1] ?? [
-    dearest,
-    dearest,
-    dearest,
-  ];
+// NeuralDeep's list prices (neuraldeep.ru, 09.2026), ₽ per 1M tokens in/out
+// converted to per 1000; a cached input token costs a tenth.
+const nd = (input: number, output: number): Price => [input / 1000, input / 10_000, output / 1000];
+export const NEURALDEEP_PRICES: PriceEntry[] = [
+  ["qwen3.6", nd(7.14, 40.8)],
+  ["gemma-4-31b", nd(11, 37.4)],
+  ["gpt-oss-120b", nd(5.1, 20.4)],
+  ["qwen3.8-27b", nd(24.48, 122.4)],
+].map(([name, price]) => ({ provider: "neuraldeep", name: name as string, price: price as Price }));
+
+const longest = (entries: PriceEntry[], model: string) =>
+  entries
+    .filter((entry) => model.includes(entry.name))
+    .sort((a, b) => b.name.length - a.name.length)[0]?.price;
+const dearestOf = (entries: PriceEntry[]) =>
+  entries.reduce((max, { price }) => Math.max(max, ...price), 0);
+
+let priceTable: PriceEntry[] | null = null;
+/**
+ * A call's cost in ₽, by the model's name and provider: an entry for that
+ * provider, NeuralDeep's list price, an entry for any provider (the longest
+ * matching name wins). A model none of them names counts at the dearest
+ * price known (1.2 ₽ per 1000 tokens with no table), so the budget errs
+ * towards stopping early.
+ */
+export function costOf(
+  model: string,
+  usage: any,
+  provider: ModelProvider | null = null,
+  table: PriceEntry[] = (priceTable ??= parsePrices(config.CONTENT_MODEL_PRICES_RUB)),
+) {
+  const builtIn = provider === "neuraldeep" ? NEURALDEEP_PRICES : [];
+  const known = [...table, ...builtIn];
+  const dearest = known.length ? dearestOf(known) : 1.2;
+  const [input, cached, output] = longest(
+    table.filter((entry) => provider && entry.provider === provider),
+    model,
+  ) ??
+    longest(builtIn, model) ??
+    longest(table.filter((entry) => !entry.provider), model) ?? [dearest, dearest, dearest];
   const prompt = Number(usage?.prompt_tokens ?? 0);
   const hit = Number(usage?.prompt_tokens_details?.cached_tokens ?? 0);
   const completion = Number(usage?.completion_tokens ?? 0);
   return ((prompt - hit) * input + hit * cached + completion * output) / 1000;
 }
+
+/** The cost that counts towards the budget: none on a flat-rate key. */
+export const budgetCost = (
+  endpoint: Pick<ModelEndpoint, "provider" | "flatRate">,
+  model: string,
+  usage: any,
+) => (endpoint.flatRate ? 0 : costOf(model, usage, endpoint.provider));
 
 /** Extra request fields of one model (a JSON object from the configuration). */
 export function modelOptions(value: string): Record<string, unknown> {
@@ -143,19 +195,19 @@ export function modelOptions(value: string): Record<string, unknown> {
   return parsed;
 }
 
-export function aiStudioClient(options: {
-  url: string;
+export function chatModelClient(options: {
+  endpoint: Pick<ModelEndpoint, "provider" | "url" | "key" | "rpm" | "concurrency" | "flatRate">;
   model: string;
-  key: string | null;
   timeoutMs: number;
   /** Model-specific request fields (thinking off, reasoning effort…). */
   extra: Record<string, unknown>;
   maxTokens: number;
   fetch?: typeof fetch;
 }): ModelClient {
-  const doFetch = options.fetch ?? fetch;
+  const { endpoint, model } = options;
   return {
-    name: options.model,
+    name: model,
+    flatRate: endpoint.flatRate,
     async classify(input) {
       const content = input.image
         ? [
@@ -163,45 +215,30 @@ export function aiStudioClient(options: {
             { type: "image_url", image_url: { url: input.image } },
           ]
         : userMessage(input.text ?? "");
-      try {
-        const response = await doFetch(options.url, {
-          method: "POST",
-          signal: AbortSignal.timeout(options.timeoutMs),
-          headers: {
-            "content-type": "application/json",
-            ...(options.key ? { authorization: `Api-Key ${options.key}` } : {}),
-            // Yandex does not log the request.
-            "x-data-logging-enabled": "false",
-          },
-          body: JSON.stringify({
-            model: options.model,
-            temperature: 0,
-            max_tokens: options.maxTokens,
-            ...options.extra,
-            response_format: RESPONSE_FORMAT,
-            messages: [
-              { role: "system", content: POLICY },
-              { role: "user", content },
-            ],
-          }),
-        });
-        if (!response.ok) return { failed: "error", model: options.model, costRub: 0 };
-        const body: any = await response.json();
-        const choice = body?.choices?.[0];
-        return parseAnswer(
-          choice?.message?.content,
-          choice?.finish_reason,
-          options.model,
-          costOf(options.model, body?.usage),
-        );
-      } catch (error) {
-        const name = (error as Error)?.name;
-        return {
-          failed: name === "TimeoutError" || name === "AbortError" ? "timeout" : "error",
-          model: options.model,
-          costRub: 0,
-        };
-      }
+      const result = await postChat(
+        endpoint,
+        {
+          model,
+          temperature: 0,
+          max_tokens: options.maxTokens,
+          ...options.extra,
+          response_format: RESPONSE_FORMAT,
+          messages: [
+            { role: "system", content: POLICY },
+            { role: "user", content },
+          ],
+        },
+        options.timeoutMs,
+        options.fetch,
+      );
+      if (!result.ok) return { failed: result.failed, model, costRub: 0 };
+      const choice = result.body?.choices?.[0];
+      return parseAnswer(
+        choice?.message?.content,
+        choice?.finish_reason,
+        model,
+        budgetCost(endpoint, model, result.body?.usage),
+      );
     },
   };
 }
@@ -215,31 +252,29 @@ let configured: ModelPair | null | undefined;
 export function contentModels(): ModelPair | null {
   if (override !== undefined) return override;
   if (configured !== undefined) return configured;
-  if (config.CONTENT_MODEL_PROVIDER === "off" || !config.CONTENT_MODEL_PRIMARY) {
+  const endpoints = config.CONTENT_MODEL_ENDPOINTS;
+  if (!endpoints || !config.CONTENT_MODEL_PRIMARY) {
     configured = null;
     return null;
   }
-  const url = config.CONTENT_MODEL_URL;
-  const key = config.CONTENT_MODEL_API_KEY ?? null;
   configured = {
-    primary: aiStudioClient({
-      url,
-      key,
+    primary: chatModelClient({
+      endpoint: endpoints.primary,
       model: config.CONTENT_MODEL_PRIMARY,
       timeoutMs: config.CONTENT_MODEL_TIMEOUT_MS,
       extra: modelOptions(config.CONTENT_MODEL_PRIMARY_OPTIONS),
       maxTokens: 200,
     }),
-    fallback: config.CONTENT_MODEL_FALLBACK
-      ? aiStudioClient({
-          url,
-          key,
-          model: config.CONTENT_MODEL_FALLBACK,
-          timeoutMs: config.CONTENT_MODEL_TIMEOUT_MS + 2000,
-          extra: modelOptions(config.CONTENT_MODEL_FALLBACK_OPTIONS),
-          maxTokens: 400,
-        })
-      : null,
+    fallback:
+      config.CONTENT_MODEL_FALLBACK && endpoints.fallback
+        ? chatModelClient({
+            endpoint: endpoints.fallback,
+            model: config.CONTENT_MODEL_FALLBACK,
+            timeoutMs: config.CONTENT_MODEL_TIMEOUT_MS + 2000,
+            extra: modelOptions(config.CONTENT_MODEL_FALLBACK_OPTIONS),
+            maxTokens: 400,
+          })
+        : null,
   };
   return configured;
 }

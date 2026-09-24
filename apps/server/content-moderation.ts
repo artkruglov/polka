@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { audit } from "./artifacts.ts";
-import { config } from "./config.ts";
+import { config, type ModelEndpoint } from "./config.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { inspectHtmlBounded } from "./html.ts";
 import { revokeConnectionInTransaction } from "./oauth.ts";
@@ -25,7 +25,7 @@ import {
   type ModelAnswer,
   type ModelClient,
 } from "./content-filter/model.ts";
-import { codeModelClient } from "./content-filter/code-model.ts";
+import { codeModelClient, type CodeReview } from "./content-filter/code-model.ts";
 import {
   CATEGORY_LABEL,
   NO_MODEL,
@@ -861,7 +861,9 @@ async function charge(costRub: number) {
 }
 
 async function ask(client: ModelClient, input: { text?: string; image?: string }) {
-  if (!budgetLeft()) return { failed: "budget", model: client.name, costRub: 0 } as ModelAnswer;
+  // A flat-rate key costs nothing: the budget stops only paid calls.
+  if (!client.flatRate && !budgetLeft())
+    return { failed: "budget", model: client.name, costRub: 0 } as ModelAnswer;
   const answer = await client.classify(input);
   await charge(answer.costRub);
   return answer;
@@ -911,7 +913,12 @@ export async function reviewRevision(revisionId: string) {
     const findings: ModelFinding[] = [];
     const answers: StoredModel["answers"] = [];
     let calls = 0,
-      failures = 0;
+      failures = 0,
+      // Failures only because an endpoint was at its rate limit: the model
+      // did not fail, so they do not use up the revision's attempts.
+      limited = 0;
+    const rateLimited = (answer: ModelAnswer | CodeReview | null) =>
+      !answer || ("failed" in answer && answer.failed === "rate_limited");
     const second = async (
       source: ModelFinding["source"],
       input: { text?: string; image?: string },
@@ -922,8 +929,12 @@ export async function reviewRevision(revisionId: string) {
       // gpt-oss is not multimodal: an image gets no second model.
       const canConfirm = pair.fallback && source === "text";
       if (!answered(primary)) {
+        // A failed or rate-limited primary (429): the fallback at once.
         if (canConfirm) confirm = await ask(pair.fallback!, input);
-        if (!answered(confirm)) failures++;
+        if (!answered(confirm)) {
+          failures++;
+          if (rateLimited(primary) && (!canConfirm || rateLimited(confirm))) limited++;
+        }
       } else if (primary.category !== "none" && canConfirm)
         confirm = await ask(pair.fallback!, input);
       answers.push({ source, model: pair.primary.name, answer: describe(primary) });
@@ -962,10 +973,13 @@ export async function reviewRevision(revisionId: string) {
     const codeModel = codeModelClient();
     if (material.code && codeModel) {
       calls++;
-      const review = budgetLeft() ? await codeModel.review(material.code) : null;
+      const review =
+        codeModel.flatRate || budgetLeft() ? await codeModel.review(material.code) : null;
       if (review) await charge(review.costRub);
-      if (!review || "failed" in review) failures++;
-      else {
+      if (!review || "failed" in review) {
+        failures++;
+        if (review && rateLimited(review)) limited++;
+      } else {
         answers.push({ source: "code", model: codeModel.name, answer: review.verdict });
         if (review.verdict !== "safe")
           findings.push({
@@ -979,10 +993,11 @@ export async function reviewRevision(revisionId: string) {
           });
       }
     }
+    const unchecked = calls > 0 && failures === calls;
     stored = {
-      state: calls > 0 && failures === calls ? "unchecked" : "checked",
+      state: unchecked ? "unchecked" : "checked",
       hash,
-      attempts: (previous?.attempts ?? 0) + 1,
+      attempts: (previous?.attempts ?? 0) + (unchecked && limited === failures ? 0 : 1),
       at: new Date().toISOString(),
       findings,
       answers,
@@ -1032,20 +1047,29 @@ export async function retryUnchecked(limit = 20) {
 
 /**
  * Yandex Vision's «moderation» classifier (adult, gruesome): an extra image
- * signal, off unless CONTENT_VISION_MODERATION. The folder comes from the
- * model URI gpt://<folder>/…
+ * signal, off unless CONTENT_VISION_MODERATION. The folder and the key come
+ * from the first role on Yandex AI Studio (its model URI gpt://<folder>/…).
  */
 async function visionModeration(dataUrl: string) {
-  const folder = /^gpt:\/\/([^/]+)\//.exec(config.CONTENT_MODEL_PRIMARY ?? "")?.[1];
+  const endpoints = config.CONTENT_MODEL_ENDPOINTS;
+  const yandex = [
+    [endpoints?.primary, config.CONTENT_MODEL_PRIMARY],
+    [endpoints?.fallback, config.CONTENT_MODEL_FALLBACK],
+    [endpoints?.code, config.CONTENT_CODE_MODEL],
+  ].find(([endpoint]) => (endpoint as ModelEndpoint | null)?.provider === "yandex") as
+    | [ModelEndpoint, string | undefined]
+    | undefined;
+  const folder = /^gpt:\/\/([^/]+)\//.exec(yandex?.[1] ?? "")?.[1];
+  const key = yandex?.[0].key;
   const content = dataUrl.slice(dataUrl.indexOf(",") + 1);
-  if (!folder || !config.CONTENT_MODEL_API_KEY) return null;
+  if (!folder || !key) return null;
   try {
     const response = await fetch("https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze", {
       method: "POST",
       signal: AbortSignal.timeout(config.CONTENT_MODEL_TIMEOUT_MS),
       headers: {
         "content-type": "application/json",
-        authorization: `Api-Key ${config.CONTENT_MODEL_API_KEY}`,
+        authorization: `Api-Key ${key}`,
         "x-data-logging-enabled": "false",
       },
       body: JSON.stringify({
