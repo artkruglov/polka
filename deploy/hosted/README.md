@@ -109,6 +109,34 @@ Viewer vhost в `Caddyfile`: только `127.0.0.1:4391` с фиксирова
 
 **Откат:** `HTML_LIVE_MODE=disabled` в `hosted.env` и `docker compose --env-file hosted.env up -d`. Viewer listener не поднимается, выданные ранее capability URL перестают читаться сразу (флаг проверяется при каждом чтении), статический HTML, скачивание и экспорт не меняются. Производные (`revision_derivatives`) остаются в БД и снова используются после включения.
 
+## Рендерер ссылок
+
+Рендерер нужен для снимков SPA-сайтов (Lovable, bolt.host, Replit, GitHub Pages, Gemini share), общих ссылок ChatGPT и одной попытки открыть артефакт Claude ([URL_IMPORT_SUPPORT](../../docs/specs/URL_IMPORT_SUPPORT.md#рендерер)). Без него импорт по ссылке работает для обычного HTML и Gist, а для остального остаются карточка и «Сохранить как ссылку».
+
+**Отдельная VM (рекомендуется).** Инструкции для Yandex Cloud и Fly.io — в [deploy/renderer/README.md](../renderer/README.md). В `hosted.env` основной VM:
+
+```
+URL_IMPORT_ENABLED=true
+RENDERED_IMPORT_ENABLED=true
+RENDERER_URL=https://polka-renderer.fly.dev      # или https://renderer.<ваш домен>
+RENDERER_SECRET=<openssl rand -hex 32, тот же на рендерере>
+# RENDERER_CA=<PEM>   # только для Caddy «tls internal»
+# GITHUB_TOKEN=<fine-grained без прав>   # Gist: больше 60 запросов в час
+```
+
+**На этой же VM.** `RENDERER_SECRET` в `hosted.env`, затем `docker compose --env-file hosted.env --profile renderer up -d --build`, и `RENDERER_URL=http://127.0.0.1:4395`. Контейнер стоит в своей сети `render` (172.29.0.0/24), к postgres и backup доступа нет, наружу он ходит только через egress-прокси внутри себя. Вторым слоем закройте контейнерам путь к metadata и приватным сетям:
+
+```bash
+sudo iptables -I DOCKER-USER -s 172.29.0.0/24 -d 169.254.0.0/16 -j DROP
+sudo iptables -I DOCKER-USER -s 172.29.0.0/24 -d 10.0.0.0/8 -j DROP
+sudo iptables -I DOCKER-USER -s 172.29.0.0/24 -d 192.168.0.0/16 -j DROP
+sudo netfilter-persistent save
+```
+
+**Память.** Лимит контейнера — 1,5 ГБ RAM, 1 CPU, 256 процессов. Chromium с одной страницей занимает 300–700 МБ, пиково до 1 ГБ; страницы рендерятся по одной. На одной VM с приложением (1,5 ГБ), maintenance (768 МБ) и postgres нужно от 4 ГБ RAM, спокойнее 6 ГБ. С российского IP chatgpt.com отвечает 403, а claude.ai — «недоступно в регионе», поэтому для ChatGPT и Gemini рендерер нужен за рубежом (см. «Регион» в [deploy/renderer/README.md](../renderer/README.md#регион)).
+
+**Проверка:** `curl -s https://<APP_HOST>/api/imports/capabilities` → в `sources` есть `rendered-spa`, `server-fetch`, `server-try`. **Откат:** `RENDERED_IMPORT_ENABLED=false` и `up -d`.
+
 ## Обновление
 
 ```sh

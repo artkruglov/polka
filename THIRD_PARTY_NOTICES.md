@@ -22,6 +22,15 @@ Runtime `react-runtime-v1` встраивает эти библиотеки в �
 
 Вместе с ними в страницы попадают их транзитивные зависимости. Среди них `victory-vendor` (MIT AND ISC, содержит модули d3 для recharts), `robust-predicates` (Unlicense), `delaunator` и `internmap` (ISC), а также зависимости mathjs (`complex.js`, `fraction.js`, `decimal.js` и другие, MIT). Все они входят в сводку ниже.
 
+## Рендерер (отдельный образ)
+
+Образ рендерера ([apps/renderer/Dockerfile](apps/renderer/Dockerfile)) собирается отдельно от приложения и в страницы пользователей не попадает.
+
+| Компонент | Версия | Лицензия |
+|---|---|---|
+| playwright-core | 1.63.0 | Apache-2.0 |
+| Базовый образ `mcr.microsoft.com/playwright:v1.63.0-noble` (Ubuntu, Node.js, Chromium и их зависимости) | закреплён по digest | лицензии компонентов образа; Chromium — BSD-3-Clause и сторонние лицензии, перечисленные в образе |
+
 ## Шрифт
 
 IBM Plex Sans (`apps/web/public/fonts/`), © 2017 IBM Corp., Reserved Font Name "Plex". Распространяется по SIL Open Font License 1.1: [OFL-IBMPlexSans.txt](apps/web/public/fonts/OFL-IBMPlexSans.txt).

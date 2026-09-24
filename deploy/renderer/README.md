@@ -1,6 +1,12 @@
 # Рендерер публичных ссылок на отдельной VM
 
-Рендерер — изолированный headless Chromium. Он открывает только публичные SPA-сайты из allowlist: `*.lovable.app`, `*.bolt.host`, `*.replit.app`, `*.github.io` и `gemini.google.com/share`. Результат — снимок DOM. Claude, ChatGPT, v0, Perplexity и AI Studio рендерер не открывает никогда: их условия запрещают автоматическое извлечение. Как импорт использует снимок, описано в [docs/specs/URL_IMPORT_SUPPORT.md](../../docs/specs/URL_IMPORT_SUPPORT.md), что делает бот — на странице [/bot](https://polochka.app/bot).
+Рендерер — изолированный сервис с headless Chromium. Он делает три вещи, только для адресов из таблицы провайдеров ([packages/contracts/link-providers.ts](../../packages/contracts/link-providers.ts)):
+
+- `POST /render` — снимок DOM публичного SPA-сайта: `*.lovable.app`, `*.bolt.host`, `*.replit.app`, `*.github.io`, `gemini.google.com/share`;
+- `POST /render` — одна попытка открыть артефакт Claude (`claude.ai/artifact/…`). Если Cloudflare показывает проверку, ответ `source_blocked` без повторов;
+- `POST /fetch` — один HTTP-запрос без браузера к общим ссылкам ChatGPT (`chatgpt.com/share/…`, `chatgpt.com/canvas/shared/…`): разговор уже есть в HTML страницы, а robots.txt разрешает эти пути.
+
+Перед каждым запросом рендерер сам читает robots.txt для `PolkaRenderer`. v0, Perplexity, AI Studio и `claude.site` он не открывает никогда. Как импорт использует ответ, описано в [docs/specs/URL_IMPORT_SUPPORT.md](../../docs/specs/URL_IMPORT_SUPPORT.md), что делает бот — на странице [/bot](https://polochka.app/bot).
 
 Рендерер можно запустить двумя способами:
 
@@ -17,9 +23,12 @@
 
 ## Регион
 
-Рендерер по умолчанию размещается **в России, Yandex Cloud `ru-central1`**. Ссылку вставляет пользователь, поэтому она относится к его данным (152-ФЗ). Если рендерер стоит в России, ссылка страну не покидает, и отдельная обработка за рубежом не появляется.
+Ссылку вставляет пользователь, поэтому она относится к его данным (152-ФЗ). Где стоит рендерер, там её и обрабатывают.
 
-## Yandex Cloud (по умолчанию)
+- **Yandex Cloud `ru-central1`**: ссылка не покидает Россию. Отсюда работают Lovable, bolt.host, Replit, GitHub Pages и Gist. chatgpt.com с российских IP отвечает 403, claude.ai перенаправляет на «app unavailable in region», доступность Gemini share не подтверждена. Для self-host в России это основной вариант.
+- **Fly.io, Амстердам (`ams`)**: работают ещё ChatGPT share и Gemini share. Это трансграничная передача: см. TODO в разделе «Fly.io». Для polochka.app выбран этот вариант, флаг включается после юридических шагов.
+
+## Yandex Cloud
 
 1. **VM.** Compute Cloud, зона `ru-central1-a` (или b/d). Платформа Intel Ice Lake, 2 vCPU, 2–4 ГБ RAM, 20 ГБ SSD, Ubuntu 24.04 LTS. Публичный IP нужен для исходящих запросов и Let's Encrypt. Сервисный аккаунт не назначайте: рендереру не нужны API облака.
 2. **Группа безопасности** — отдельная, только для этой VM:
@@ -68,20 +77,48 @@
 
 **Обновление:** `git pull && docker compose --env-file renderer.env up -d --build`. Базовый образ меняется только правкой digest в `apps/renderer/Dockerfile` и версии `playwright-core` в `apps/renderer/package.json` и корневом `package.json`, одновременно.
 
-## Fly.io (альтернатива)
+## Fly.io
 
-`fly.toml` в этом каталоге: регион `ams`, машины останавливаются в простое (`auto_stop_machines = "stop"`, `min_machines_running = 0`) и поднимаются при первом запросе. Первый импорт после паузы ждёт холодного старта, 5–15 с.
+[`fly.toml`](fly.toml) в этом каталоге: приложение `polka-renderer`, регион `ams`, `shared-cpu-2x` с 2 ГБ RAM. Машина останавливается в простое (`auto_stop_machines = "stop"`, `min_machines_running = 0`) и поднимается при первом запросе. Первый импорт после паузы ждёт холодного старта, 5–15 с.
 
-> **TODO перед включением Fly.io.** Амстердам — это трансграничная передача: URL, который вставил пользователь, обрабатывается за рубежом. До включения нужно (1) добавить в `docs/legal/privacy.md` обработчика (Fly.io, Нидерланды), цель и состав данных (URL страницы) и (2) подать в Роскомнадзор уведомление о трансграничной передаче (ст. 12 152-ФЗ). Пока это не сделано, для polochka.app используйте Yandex Cloud.
+> **TODO перед включением на polochka.app.** Амстердам — это трансграничная передача: URL, который вставил пользователь, и публичное содержимое страницы обрабатываются в Нидерландах (без хранения). До включения `RENDERED_IMPORT_ENABLED=true`:
+> 1. добавить в `docs/legal/privacy.md` обработчика (Fly.io, Нидерланды), цель (копия страницы по запросу пользователя), состав данных (URL страницы) и срок (не хранится);
+> 2. подать в Роскомнадзор уведомление о трансграничной передаче (ст. 12 152-ФЗ) и добавить пункт в чек-лист владельца.
+>
+> Развернуть рендерер можно заранее: пока флаг выключен, приложение к нему не обращается.
 
-```bash
-# из корня репозитория
-fly apps create <имя>
-fly secrets set RENDERER_SECRET=<секрет основной VM> --config deploy/renderer/fly.toml
-fly deploy --config deploy/renderer/fly.toml --dockerfile apps/renderer/Dockerfile .
-```
+Пошагово (владелец, из корня репозитория; облачные ресурсы этот репозиторий сам не создаёт):
 
-На основной VM: `RENDERER_URL=https://<имя>.fly.dev`. Групп безопасности у Fly нет, доступ ограничивает только HMAC-подпись. Приватная сеть Fly (`fdaa::/16`, IPv6 ULA) и metadata закрыты тем же egress-прокси.
+1. Установите [flyctl](https://fly.io/docs/flyctl/install/) и войдите: `fly auth login`.
+2. Создайте приложение. Имя из `fly.toml` занято глобально; если оно недоступно, выберите своё и поменяйте `app` в `fly.toml`:
+   ```bash
+   fly apps create polka-renderer
+   ```
+3. Секрет, общий с основной VM (его же положите в `hosted.env` и в Lockbox `polka-hosted-env`):
+   ```bash
+   openssl rand -hex 32   # скопировать
+   fly secrets set RENDERER_SECRET=<секрет> --config deploy/renderer/fly.toml --stage
+   ```
+4. Разверните. Образ собирается из корня репозитория по `apps/renderer/Dockerfile`:
+   ```bash
+   fly deploy --config deploy/renderer/fly.toml --dockerfile apps/renderer/Dockerfile .
+   ```
+5. Оставьте одну машину: рендерер обрабатывает одну страницу за раз, и одна машина проще в учёте.
+   ```bash
+   fly scale count 1 --config deploy/renderer/fly.toml
+   ```
+6. Проверьте: `curl -s https://polka-renderer.fly.dev/healthz` → `{"ok":true}`. `curl -s -X POST https://polka-renderer.fly.dev/render -d '{}'` → `401`.
+7. На основной VM в `deploy/hosted/hosted.env`:
+   ```
+   URL_IMPORT_ENABLED=true
+   RENDERER_URL=https://polka-renderer.fly.dev
+   RENDERER_SECRET=<тот же секрет>
+   RENDERED_IMPORT_ENABLED=false   # true — после TODO выше
+   ```
+   `docker compose --env-file hosted.env up -d`. После включения флага проверьте `curl -s https://<APP_HOST>/api/imports/capabilities`: в `sources` появятся `rendered-spa`, `server-fetch` и `server-try`.
+8. Логи: `fly logs --config deploy/renderer/fly.toml`. В логах только исход и длительность, без URL.
+
+Групп безопасности у Fly нет: доступ ограничивает HMAC-подпись с окном 60 с. Приватная сеть Fly (`fdaa::/16`, IPv6 ULA) и metadata закрыты тем же egress-прокси. Обновление — снова шаг 4.
 
 ## Проверка
 
