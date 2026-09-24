@@ -28,54 +28,6 @@
       "evidencePath": "content/editorial/how-presentation-editors-work/README.md"
     },
     {
-      "slug": "observability-to-ai-sre",
-      "title": "Как следят за работой сервисов: от логов до ИИ-дежурного",
-      "topic": "Исследования",
-      "task": "Понять, как устроен рынок observability и что меняют ИИ-агенты",
-      "action": "Нажимать на слои рынка и читать, кто что делает и кто покупает",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/observability-to-ai-sre/index.html",
-      "sourceSha256": "d2b975e49de9a8997af9207a606612e45e830a4d61c3b0197f06a95203d3f5b4",
-      "evidencePath": "content/editorial/observability-to-ai-sre/README.md"
-    },
-    {
-      "slug": "why-no-artifact-link",
-      "title": "Почему сервер не может забрать артефакт по ссылке",
-      "topic": "Как сделана Полка",
-      "task": "Понять, почему Полка не забирает артефакт Claude по ссылке и что работает вместо этого",
-      "action": "Пройти два пути шаг за шагом и сравнить, что видит сервер",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/why-no-artifact-link/index.html",
-      "sourceSha256": "a4ccf61bf79a10e5ba7e29cf96bd840d21bb5d74780b42684e96626b2c5b0521",
-      "evidencePath": "content/editorial/why-no-artifact-link/README.md"
-    },
-    {
-      "slug": "one-regex-froze-server",
-      "title": "Одна регулярка, которая могла остановить сервер",
-      "topic": "Как сделана Полка",
-      "task": "Разобраться, как одна проверка страницы могла заморозить весь сервер",
-      "action": "Двигать ползунок и сравнивать время до и после исправления",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/one-regex-froze-server/index.html",
-      "sourceSha256": "44d4b474d7d1d8b2ba871129afbb5fd6018bbb2da327a4c6d7019e7ae12a91e9",
-      "evidencePath": "content/editorial/one-regex-froze-server/README.md"
-    },
-    {
-      "slug": "31-sandbox-escapes",
-      "title": "31 попытка выбраться из песочницы",
-      "topic": "Как сделана Полка",
-      "task": "Посмотреть, как одна модель ломала защиту, написанную другой",
-      "action": "Фильтровать 25 приёмов по категории и по слою, который их остановил",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/31-sandbox-escapes/index.html",
-      "sourceSha256": "259deb14292eb186ed5324c4606f3e7aa0fbf603be2a698266b1afcda334ee2f",
-      "evidencePath": "content/editorial/31-sandbox-escapes/README.md"
-    },
-    {
       "slug": "fractions",
       "title": "Доли без зубрёжки",
       "topic": "Обучение",

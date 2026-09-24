@@ -2,8 +2,20 @@
   "version": 1,
   "status": "draft-owner-review",
   "publication": "requires-explicit-registration",
-  "note": "Черновики из исследований владельца, решение за владельцем. Не зарегистрированы: не входят в candidates.json и editorial-seed-hosted.ts. ai-game-makers-2026 — владелец решил пока не публиковать; how-the-brain-learns — ждёт решения.",
+  "note": "Черновики из исследований владельца, решение за владельцем. Не зарегистрированы: не входят в candidates.json. observability-to-ai-sre — готов и проверен (есть статичный снимок), владелец отложил; ai-game-makers-2026 — пока не публикуем; how-the-brain-learns — ждёт решения.",
   "items": [
+    {
+      "slug": "observability-to-ai-sre",
+      "title": "Как следят за работой сервисов: от логов до ИИ-дежурного",
+      "topic": "Исследования",
+      "task": "Понять, как устроен рынок observability и что меняют ИИ-агенты",
+      "action": "Нажимать на слои рынка и читать, кто что делает и кто покупает",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/observability-to-ai-sre/index.html",
+      "sourceSha256": "d2b975e49de9a8997af9207a606612e45e830a4d61c3b0197f06a95203d3f5b4",
+      "evidencePath": "content/editorial/observability-to-ai-sre/README.md"
+    },
     {
       "slug": "ai-game-makers-2026",
       "title": "Игра по описанию: что на самом деле умеют ИИ-конструкторы игр",
