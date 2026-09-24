@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
+import { rememberSignInMethod } from "../../shared/lib/known-shelf.ts";
 import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 
 /**
@@ -32,7 +33,16 @@ export function PasswordLoginForm({
         setBusy(true);
         setError("");
         try {
-          await client.login(name, password);
+          rememberSignInMethod("password");
+          const result = (await client.login(name, password)) as {
+            collision?: boolean;
+          };
+          // A provisional shelf in this browser met this login's shelf:
+          // /claim asks whether to merge them.
+          if (result?.collision) {
+            location.assign("/claim?collision=1");
+            return;
+          }
           await onLogin(await client.me());
         } catch (e) {
           setError((e as Error).message);

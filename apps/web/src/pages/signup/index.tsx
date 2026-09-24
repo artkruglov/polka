@@ -1,7 +1,12 @@
 import "./styles.css";
 import React, { useEffect, useState, useRef } from "react";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
-import { request } from "../../shared/api/client.ts";
+import { ApiError, request } from "../../shared/api/client.ts";
+import {
+  knownShelf,
+  rememberSignInMethod,
+} from "../../shared/lib/known-shelf.ts";
+import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
@@ -36,6 +41,17 @@ export function Signup() {
   const [cooldown, setCooldown] = useState(0);
   const next =
     safeNext(query.get("next")) || "/start";
+  // /signup/choose → «Войти в существующую полку»: after this sign-in the
+  // waiting provider is linked to the shelf (docs/specs/SIGN_IN_PROVIDERS.md § 1).
+  const linking = query.get("link") === "pending";
+  const hint = knownShelf();
+  // A code for an address without a shelf, in a browser that knows one.
+  const [askNew, setAskNew] = useState(false);
+  // A provisional shelf is claimed on /claim; this page is its email step.
+  useEffect(() => {
+    if (account?.provisional && query.get("claim") !== "1")
+      location.replace(`/claim?${new URLSearchParams({ next })}`);
+  }, [account]);
   useEffect(() => {
     loadCapabilities()
       .then(async (c) => {
@@ -92,6 +108,40 @@ export function Signup() {
       setCooldown(60);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  }
+  async function verify(createNew: boolean) {
+    if (!challenge || sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const source = visitSource();
+      rememberSignInMethod("email");
+      const result = await request<{
+        claimed?: boolean;
+        collision?: boolean;
+      }>("/auth/email/verify", {
+        id: challenge.id,
+        code,
+        ...(source ? { source } : {}),
+        // The browser remembers a shelf: ask before opening another.
+        ...(hint || linking ? { knownShelf: true } : {}),
+        ...(createNew ? { createNew: true } : {}),
+      });
+      if (result.collision) location.assign("/claim?collision=1");
+      else location.assign(result.claimed ? "/?claimed=1" : next);
+    } catch (e) {
+      if (
+        e instanceof ApiError &&
+        e.status === 409 &&
+        e.details.reason === "new_shelf"
+      )
+        setAskNew(true);
+      else setError((e as Error).message);
     } finally {
       sending.current = false;
       setBusy(false);
@@ -168,6 +218,44 @@ export function Signup() {
             подключение готово.
           </aside>
         )}
+        {linking && (
+          <aside className="onboard-note">
+            Войдите в свою полку{hint ? ` «${hint.displayName}»` : ""} любым
+            способом — сразу после входа привяжем к ней новый способ входа.
+          </aside>
+        )}
+        {account?.provisional && (
+          <aside className="onboard-note">
+            Адрес закрепит вашу временную полку: он станет способом входа, и
+            полкой можно будет делиться.
+          </aside>
+        )}
+        {askNew && (
+          <section className="shelf-where" aria-live="polite">
+            <strong>
+              Похоже, у вас уже есть полка
+              {hint ? ` «${hint.displayName}»` : ""}.
+            </strong>{" "}
+            На {email} полки нет. Войдите в существующую — или создайте
+            новую полку на этот адрес.
+            <div className="shelf-choice">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setAskNew(false);
+                  setChallenge(null);
+                  setEmail("");
+                  setCode("");
+                }}
+              >
+                Войти в существующую полку
+              </Button>
+              <Button disabled={busy} onClick={() => void verify(true)}>
+                Создать новую полку
+              </Button>
+            </div>
+          </section>
+        )}
         {mode === "loading" && (
           <p className="entry-loading" role="status">
             Проверяем способы входа…
@@ -199,29 +287,12 @@ export function Signup() {
               вручную, без публичной регистрации.
             </p>
           </div>
-        ) : mode !== "loading" && mode !== "error" ? (
+        ) : mode !== "loading" && mode !== "error" && !askNew ? (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
               if (!challenge) return send();
-              if (sending.current) return;
-              sending.current = true;
-              setBusy(true);
-              setError("");
-              try {
-                const source = visitSource();
-                await request("/auth/email/verify", {
-                  id: challenge.id,
-                  code,
-                  ...(source ? { source } : {}),
-                });
-                location.assign(next);
-              } catch (e) {
-                setError((e as Error).message);
-              } finally {
-                sending.current = false;
-                setBusy(false);
-              }
+              await verify(false);
             }}
           >
             {!challenge ? (
@@ -306,6 +377,7 @@ export function Signup() {
         {!passwordOnly && mode !== "loading" && mode !== "error" && (
           <SignupConsent />
         )}
+        {mode !== "loading" && !account?.provisional && <AskAgentHint />}
         {!passwordOnly && mode !== "loading" && (
           <a
             className="onboard-legacy"
