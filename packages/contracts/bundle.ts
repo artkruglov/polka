@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_BYTES, MAX_TITLE, MIME, uuid } from "./index.ts";
+import { MAX_BYTES, MAX_TITLE, MIME, sourceUrlSchema, uuid } from "./index.ts";
 
 const BUNDLE_MIME = [
   ...MIME,
@@ -49,31 +49,6 @@ const capturedAtSchema = z.string().refine((value) => {
       (Number(timezoneMatch[1]) <= 23 && Number(timezoneMatch[2]) <= 59))
   );
 }, "capturedAt must be an RFC3339 timestamp with timezone");
-
-const sourceUrlSchema = z
-  .string()
-  .max(2048)
-  .refine((value) => {
-    if (
-      !value.startsWith("https://") ||
-      /[\s\\\u0000-\u001f\u007f]/.test(value) ||
-      value.includes("?") ||
-      value.includes("#")
-    )
-      return false;
-    try {
-      const url = new URL(value);
-      return (
-        url.protocol === "https:" &&
-        !url.username &&
-        !url.password &&
-        !url.search &&
-        !url.hash
-      );
-    } catch {
-      return false;
-    }
-  }, "sourceUrl must be an HTTPS URL without credentials, query, or fragment");
 
 const fileSchema = z
   .object({

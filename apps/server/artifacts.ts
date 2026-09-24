@@ -560,7 +560,12 @@ export async function finalizeUploadInTransaction(
   > | null = null;
   if (input.mime === "text/html") {
     if (!htmlProfile) throw new Error("HTML profile invariant failed");
-    revisionManifest = createSingleHtmlRevisionManifest(bytes, htmlProfile);
+    revisionManifest = createSingleHtmlRevisionManifest(
+      bytes,
+      htmlProfile,
+      new Date(),
+      input.sourceUrl ?? null,
+    );
   }
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этой версии.");

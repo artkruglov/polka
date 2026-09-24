@@ -9,6 +9,8 @@ COPY apps/web ./apps/web
 COPY packages ./packages
 # /privacy and /terms render these texts; they are the only copy.
 COPY docs/legal ./docs/legal
+# /bookmarklet serves the bookmark built from these (apps/web/vite.config.ts).
+COPY extensions ./extensions
 RUN npm run build
 
 # Production dependencies only. tsx is the runtime entrypoint; esbuild's

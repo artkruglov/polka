@@ -16,6 +16,11 @@
 !content/editorial/**
 # The web bundle embeds the privacy policy and terms from here.
 !docs/legal/*.md
+# ...and the «На Полку» bookmark, built from its source and the extension's readers.
+!extensions/bookmarklet/build.ts
+!extensions/bookmarklet/src/**
+!extensions/chrome/src/extract/**
+!extensions/chrome/src/shared/**
 
 # Development and acceptance tools never run inside the image.
 scripts/test-*
