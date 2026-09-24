@@ -190,8 +190,10 @@ const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
 
 /** Bearer only: cookies are never read, and a browser Origin other than Полка is refused. */
 async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
-  // Counted before authentication, so guessing tokens is limited too.
-  await limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
+  // Only requests without a valid token count per address: agents on hosted
+  // platforms share addresses. A valid token has its connection's cap.
+  const unauthenticated = () =>
+    limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
   const origin = req.headers.origin;
   if (origin !== undefined && origin !== config.APP_ORIGIN)
     throw new Problem(
@@ -202,7 +204,10 @@ async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
   const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(
     req.headers.authorization ?? "",
   );
-  if (!match) throw unauthorized(reply);
+  if (!match) {
+    await unauthenticated();
+    throw unauthorized(reply);
+  }
   let actor: ServiceActor;
   try {
     actor = await authenticateServiceToken(
@@ -212,6 +217,7 @@ async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
       "http",
     );
   } catch {
+    await unauthenticated();
     throw unauthorized(reply, "invalid_token");
   }
   await limitAttempts(

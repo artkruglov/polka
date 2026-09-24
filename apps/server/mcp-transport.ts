@@ -17,7 +17,11 @@ import { PROTECTED_RESOURCE_METADATA_URL } from "./oauth.ts";
 
 const endpoint = new URL(MCP_AUDIENCE);
 const MCP_BODY_LIMIT = 8 * 1024 * 1024;
-/** Requests per 10 minutes, as for the publish API; every MCP message is one request. */
+/**
+ * Requests per 10 minutes, as for the publish API; every MCP message is one
+ * request. Claude.ai and ChatGPT call from shared platform addresses, so the
+ * address cap counts only requests without a valid token.
+ */
 export const MCP_LIMITS = { perIp: 600, perConnection: 300 };
 // RFC 9728 §5.1: point OAuth clients at the protected resource metadata.
 const challenge = (error?: string) =>
@@ -60,19 +64,22 @@ export async function registerMcpTransport(app: FastifyInstance) {
       const origin = request.headers.origin;
       if (origin !== undefined && origin !== config.APP_ORIGIN)
         return reply.code(403).send({ code: "forbidden" });
-      // Counted before authentication, so guessing tokens is limited too.
-      await limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
       const authorization = request.headers.authorization ?? "";
       const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
-      if (!match)
+      const unauthenticated = () =>
+        limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
+      if (!match) {
+        await unauthenticated();
         return reply
           .header("www-authenticate", challenge())
           .code(401)
           .send({ code: "unauthorized" });
+      }
       let actor: ServiceActor;
       try {
         actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
       } catch {
+        await unauthenticated();
         return reply
           .header("www-authenticate", challenge("invalid_token"))
           .code(401)
