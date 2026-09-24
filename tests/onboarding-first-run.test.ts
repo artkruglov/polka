@@ -226,6 +226,8 @@ function markup(
       works: { status: "ready", retry: () => {} },
       sample: { busy: false, stage: "", error: "", retrying: false, saved: null, save: () => {} },
       announcement: "",
+      client: "claude-code",
+      onClient: () => {},
       onDismiss: () => {},
       ...over,
     }),
@@ -240,7 +242,7 @@ test("the checklist shows the phrase, marks the current step and keeps a live re
   assert.match(html, /Скопировать фразу/);
   assert.match(html, /aria-current="step"[^>]*>[\s\S]*?Подключите агента/);
   assert.match(html, /codex mcp add polka --url https:\/\/polochka.app\/mcp/);
-  assert.match(html, /href="\/bring"[^>]*>[\s\S]*?Сохранить без агента/);
+  assert.match(html, /href="\/bring"[^>]*>[\s\S]*?Загрузить файл/);
   assert.match(html, /Сохранить пример/);
   assert.match(html, /role="status" aria-live="polite"/);
   assert.match(html, /Скрыть/);
@@ -250,14 +252,14 @@ test("the checklist shows the phrase, marks the current step and keeps a live re
 test("a done step is announced as done and the share step links the first work", () => {
   const html = markup(
     deriveFirstRun({ connections: [connection({ status: "seen" })], works: [work()] }),
-    { announcement: "Шаг выполнен: Сохраните первую работу. 2 из 3." },
+    { announcement: "Шаг выполнен: Сохраните первые работы. 2 из 3." },
   );
   assert.match(html, /2 из 3/);
   assert.match(html, /Выполнено: <\/span>Подключите агента/);
   assert.match(html, /href="\/works\/a1\?panel=share"/);
   assert.match(html, /Агент подключён и уже обращался к Полке/);
   assert.doesNotMatch(html, /Скопировать фразу|Сохранить пример/);
-  assert.match(html, /Шаг выполнен: Сохраните первую работу\. 2 из 3\./);
+  assert.match(html, /Шаг выполнен: Сохраните первые работы\. 2 из 3\./);
 });
 
 test("the page variant has no dismiss button and the complete state says what comes next", () => {

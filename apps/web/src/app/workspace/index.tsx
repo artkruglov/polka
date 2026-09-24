@@ -37,6 +37,7 @@ import {
 import { LazyLanding } from "../routing/lazy-pages.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { ReworkArtifactPanel } from "../../features/rework-artifact/index.tsx";
+import { shelfUrl } from "../../entities/artifact/agent-phrases.ts";
 import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
@@ -308,6 +309,8 @@ export function App() {
   // was ever made, never in the trash.
   const workComments = useWorkComments({
     artifactId: work?.id ?? "",
+    title: work?.title ?? "",
+    shelfUrl: work ? shelfUrl(location.origin, work.id) : "",
     enabled: !!selected && !!work && !work.trashedAt && !!work.share,
   });
   if (guestHome && (account === null || authError)) return <LazyLanding />;
@@ -463,6 +466,7 @@ export function App() {
             work && shown ? (
               <ArtifactReader
                 work={work}
+                shelfUrl={shelfUrl(location.origin, work.id)}
                 shown={shown}
                 revisions={revisions}
                 viewed={viewed}
@@ -573,6 +577,7 @@ export function App() {
       {(panel === "upload" || panel === "version") && (
         <UploadPanel
           artifact={panel === "version" ? (work ?? undefined) : undefined}
+          shelfUrl={panel === "version" && work ? shelfUrl(location.origin, work.id) : undefined}
           folders={folders}
           folderId={folderId}
           onClose={() => setPanel(null)}
@@ -679,6 +684,7 @@ export function App() {
       {panel === "rework" && work && (
         <ReworkArtifactPanel
           title={work.title}
+          shelfUrl={shelfUrl(location.origin, work.id)}
           onClose={() => setPanel(null)}
           onUpload={() => setPanel("version")}
         />

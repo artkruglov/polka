@@ -24,6 +24,7 @@ import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
+import { SKILL_INDEX_PATH, SKILL_INSTALL } from "../../entities/onboarding/agent-setup.ts";
 import {
   SOURCE_LICENSE,
   formatStars,
@@ -90,6 +91,12 @@ export function Landing() {
               <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
               <a href="/settings/agents?client=chatgpt">ChatGPT</a> ·{" "}
               <a href="/settings/agents?client=claude-ai">Claude.ai</a>.
+            </small>
+            <small className="landing-agent-skill">
+              Для Claude Code и Codex есть скилл Полки — агент будет знать, как
+              сохранять, делиться и править: <code>{SKILL_INSTALL}</code>{" "}
+              <CopyButton value={SKILL_INSTALL} variant="quiet" label="Скопировать" successText="Скопировано" />
+              <a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>
             </small>
           </div>
 

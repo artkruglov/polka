@@ -73,6 +73,7 @@ export type AgentClient =
   | "claude-code"
   | "claude-ai"
   | "chatgpt"
+  | "browser-extension"
   | "token-http"
   | "token-mcp"
   | "other";
@@ -364,6 +365,7 @@ export function oauthClientKind(
     );
   if (on("claude.ai", "claude.com", "anthropic.com")) return "claude-ai";
   if (on("chatgpt.com", "openai.com")) return "chatgpt";
+  if (on("chromiumapp.org")) return "browser-extension";
   const label = String(name ?? "").toLowerCase();
   if (/codex/.test(label)) return "codex";
   if (/claude[\s_-]*code/.test(label)) return "claude-code";

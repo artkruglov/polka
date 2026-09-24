@@ -5,7 +5,8 @@
 .agent-context-lead { color: var(--muted); font-size: var(--text-md); line-height: 1.55; }
 .agent-context-section { display: grid; gap: 12px; }
 .agent-context-section > p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
-.agent-context-text .copy-text textarea { min-height: 132px; }
+.agent-context-text details .copy-text textarea { min-height: 132px; }
+.agent-context-text details .copy-text { margin-top: 10px; }
 .agent-context-text .copy-row > .ui-button { width: 100%; min-height: 48px; }
 .agent-context-files { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
 .agent-context-files > summary { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; }

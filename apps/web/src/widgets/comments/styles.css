@@ -9,6 +9,9 @@
 .comments-share { display: grid; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: var(--text-sm); }
 .comments-share select { min-height: 36px; font-size: var(--text-sm); }
 .comments-fresh { padding: 8px 16px; border-bottom: 1px solid var(--line-soft); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-sm); font-weight: 500; }
+.comments-agent { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); font-size: var(--text-sm); line-height: 1.45; }
+.comments-agent > span { flex: 1 1 180px; }
+.comments-agent .ui-button { min-height: 32px; padding: 4px 8px; font-size: var(--text-sm); }
 .comments-share-note { padding: 10px 16px; border-bottom: 1px solid var(--line-soft); color: var(--warning); background: var(--warning-soft); font-size: var(--text-sm); line-height: 1.45; }
 .comments-work-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: var(--text-sm); }
 .comments-error { margin: 8px 16px 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); line-height: 1.45; }

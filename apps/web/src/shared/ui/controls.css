@@ -148,6 +148,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .copy-text details > summary { cursor: pointer; color: var(--accent); font-size: var(--text-base); font-weight: 500; min-height: 44px; display: flex; align-items: center; }
 .copy-text details[open] > summary { margin-bottom: var(--space-2); }
 .copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+/* «Скопировать задание агенту» (entities/onboarding/HarvestPrompt.tsx): client tabs over the task. */
+.harvest-prompt { display: grid; gap: 10px; max-width: 640px; }
+.harvest-prompt .ui-segmented { justify-self: start; }
+.harvest-prompt .copy-text textarea { font-size: var(--text-sm); line-height: 1.5; }
+@media (max-width: 760px) {
+  .harvest-prompt .ui-segmented { justify-self: stretch; flex-wrap: wrap; }
+  .harvest-prompt .ui-segmented > button { flex: 1 1 auto; white-space: nowrap; }
+  .harvest-prompt .copy-row > .ui-button { width: 100%; }
+}
 
 /* Badge */
 .ui-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: var(--radius-sm); font: 600 var(--text-sm) / 1.5 var(--font-sans); vertical-align: middle; overflow-wrap: anywhere; }

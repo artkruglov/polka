@@ -155,6 +155,21 @@ export function validRedirectUri(value: string) {
   }
 }
 
+/**
+ * A Chrome extension receives its OAuth answer at https://<id>.chromiumapp.org/
+ * (chrome.identity.launchWebAuthFlow): the browser hands that navigation to the
+ * extension with this ID and never loads it from the network. The ID is 32
+ * letters a–p. Returns the ID, or null for any other redirect.
+ */
+export function browserExtensionId(redirectUri: string): string | null {
+  const match = /^https:\/\/([a-p]{32})\.chromiumapp\.org\//.exec(redirectUri);
+  return match ? match[1] : null;
+}
+
+/** An extension listed in BROWSER_EXTENSION_IDS: the official «На Полку». */
+export const officialExtension = (id: string | null) =>
+  !!id && config.BROWSER_EXTENSION_IDS.includes(id);
+
 /** Exact match; a loopback http redirect may use any port (RFC 8252 §7.3). */
 function redirectMatches(registered: readonly string[], candidate: string) {
   if (registered.includes(candidate)) return true;
@@ -251,8 +266,29 @@ export function vettedClientName(name: string, redirectUris: string[]) {
   );
   if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts)))
     return name;
+  return unconfirmed(name);
+}
+
+const unconfirmed = (name: string) => {
   const suffix = " (имя не подтверждено)";
   return `${name.slice(0, 80 - suffix.length).trim()}${suffix}`;
+};
+
+/**
+ * «На Полку» is the name of Полка's own extension: only a client whose every
+ * redirect goes to an official extension ID may use it as is.
+ */
+export function vettedExtensionName(name: string, redirectUris: string[]) {
+  const folded = name
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я]/g, "");
+  if (!["наполку", "napolku"].includes(folded)) return name;
+  const official = redirectUris.every((uri) =>
+    officialExtension(browserExtensionId(uri)),
+  );
+  return official ? name : unconfirmed(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,8 +353,8 @@ export async function registerClient(body: unknown, ip: string) {
     );
   const clientId = `pc_${randomBytes(16).toString("base64url")}`;
   const clientSecret = method === "none" ? null : secret();
-  const clientName = vettedClientName(
-    cleanName(input.client_name),
+  const clientName = vettedExtensionName(
+    vettedClientName(cleanName(input.client_name), redirectUris),
     redirectUris,
   );
   const {
@@ -536,6 +572,7 @@ export async function authorizationDetails(
   );
   if (!row) throw expiredRequest();
   const scopes = row.requested_scopes as AgentScope[];
+  const extensionId = browserExtensionId(row.redirect_uri);
   return {
     // Which shelf the connector will save to, and how its owner signs in.
     account: await shelfSummary(actor.id),
@@ -543,6 +580,10 @@ export async function authorizationDetails(
     client: {
       name: row.client_name,
       redirectHost: new URL(row.redirect_uri).host,
+      // The consent page names a browser extension as such, not by a host.
+      extension: extensionId
+        ? { id: extensionId, official: officialExtension(extensionId) }
+        : null,
     },
     scopes,
     defaultScopes: scopes.filter((scope) =>

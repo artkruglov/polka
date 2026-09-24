@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  Synthetic fixture, written by hand for tests/extension-extract.test.ts.
+  Modelled on public descriptions of claude.ai's chat view with an open
+  artifact: a side panel whose header has the title and Copy / Download
+  buttons, and the artifact itself in iframe#frame-content titled
+  "User-generated artifact content" (served from *.claudeusercontent.com in
+  the real app). Not a copy of Claude's markup.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mortgage calculator - Claude</title>
+<style>
+  body { margin: 0; display: flex; font: 14px system-ui; }
+  .chat { flex: 1; padding: 16px; }
+  .artifact-panel { width: 640px; display: flex; flex-direction: column; border-left: 1px solid #ddd; }
+  .artifact-panel header { display: flex; justify-content: space-between; padding: 8px; }
+  iframe { width: 100%; height: 600px; border: 0; }
+</style>
+</head>
+<body>
+<main class="chat">
+  <div data-testid="user-message">Make me a mortgage calculator.</div>
+  <div class="font-claude-message">
+    <p>Here is a calculator.</p>
+    <!-- A chat message has its own copy button: not the artifact's. -->
+    <button type="button" aria-label="Copy message">Copy message</button>
+    <button type="button" class="artifact-preview">Mortgage calculator · Click to open component</button>
+  </div>
+</main>
+<aside class="artifact-panel">
+  <header>
+    <h2 class="truncate">Калькулятор ипотеки</h2>
+    <div class="actions">
+      <button type="button" aria-label="Copy" id="artifact-copy">Copy</button>
+      <button type="button" aria-label="Download">Download</button>
+      <button type="button">Publish</button>
+    </div>
+  </header>
+  <iframe id="frame-content" title="User-generated artifact content" sandbox="allow-scripts"
+    srcdoc="<!doctype html><p>Rendered artifact</p>"></iframe>
+</aside>
+<script>
+  // What the real Copy does: hand the artifact's source to the clipboard.
+  const SOURCE = [
+    'import React, { useState } from "react";',
+    '',
+    'export default function Mortgage() {',
+    '  const [rate, setRate] = useState(5);',
+    '  return (<div className="p-4">Ставка: {rate}%</div>);',
+    '}',
+  ].join("\n");
+  document.getElementById("artifact-copy").addEventListener("click", () => {
+    navigator.clipboard.writeText(SOURCE).then(() => {
+      document.getElementById("artifact-copy").textContent = "Copied";
+    });
+  });
+</script>
+</body>
+</html>

@@ -116,7 +116,7 @@ web wrappers не вызывать из внешней transaction. Подтве
 | Tool | Scope | Strict input / результат |
 |---|---|---|
 | `polka_list` | read | Существующие query/folderId/limit/cursor + `state: active\|trashed` default active. Каждый item содержит title, folderId, latest revision metadata, trashedAt, lifecycleVersion; без share/token/bytes |
-| `polka_get_artifact` | read | `{artifactId}` → та же безопасная metadata projection, включая корзину; neutral404 для чужого/несуществующего ID |
+| `polka_get_artifact` | read | `{artifactId}` (UUID или адрес страницы работы `<APP_ORIGIN>/works/<id>`, из которого берётся UUID) → та же безопасная metadata projection, включая корзину; neutral404 для чужого/несуществующего ID |
 | `polka_list_folders` | read | `{cursor?,limit?}` limit1–25 default25 → `{items:[{id,name}],nextCursor}` для выбора существующей папки |
 | `polka_update_artifact` | manage | `{key,artifactId,title?,folderId?,expectedTitle,expectedFolderId}`; title/folderId и CAS берутся из текущего metadata schema; хотя бы одно изменение обязательно |
 | `polka_trash` | manage | `{artifactId,expectedLifecycleVersion,expectedRevisionId}` → существующий ArtifactLifecycleSnapshot |
