@@ -76,7 +76,7 @@ function Detail({
           <article className="editorial-catalog-detail-card">
             <p>
               <a href="/discover" className="editorial-catalog-back">
-                <ArrowLeft aria-hidden="true" /> Интересное
+                <ArrowLeft aria-hidden="true" /> Лента
               </a>
             </p>
             <span className="editorial-catalog-eyebrow">

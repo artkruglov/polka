@@ -52,7 +52,7 @@ printf '%s' "$PASSWORD" | docker compose --env-file hosted.env run --rm -T --no-
   node --import tsx scripts/account.ts <login>
 ```
 
-## Редакционный каталог («Интересное»)
+## Лента — редакционный каталог
 
 Каталог наполняет `scripts/editorial-seed-hosted.ts` из `content/editorial/static-candidates.json` (в образе). Версию он выбирает по `HTML_LIVE_MODE` контейнера, то есть так же, как app: интерактивную при любом режиме, кроме `disabled`.
 

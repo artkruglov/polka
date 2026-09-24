@@ -4,6 +4,42 @@
   "publication": "requires-explicit-registration",
   "items": [
     {
+      "slug": "handwriting-research",
+      "title": "Почерк и грамотность младшеклассника: что работает по исследованиям",
+      "topic": "Исследования",
+      "task": "Разобраться, какие способы помогают ребёнку 7–10 лет писать разборчивее и грамотнее",
+      "action": "Попробовать «посмотри — закрой — напиши — сверь» и пройти лестницу помощи",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/handwriting-research/index.html",
+      "sourceSha256": "8864e026dabd046bf86d024912b5f371b1e5640b533f4c3c2a5473661f31b88f",
+      "evidencePath": "content/editorial/handwriting-research/README.md"
+    },
+    {
+      "slug": "how-presentation-editors-work",
+      "title": "Как устроен редактор презентаций изнутри",
+      "topic": "Исследования",
+      "task": "Понять, из каких слоёв состоит редактор презентаций и почему экспорт ломает графики",
+      "action": "Нажимать на слои схемы и сравнить живую проверку двух открытых проектов",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/how-presentation-editors-work/index.html",
+      "sourceSha256": "d75cafa0c109b455b85e55df05a5f309fea88054cf65f2f3b6793694f3933dbb",
+      "evidencePath": "content/editorial/how-presentation-editors-work/README.md"
+    },
+    {
+      "slug": "observability-to-ai-sre",
+      "title": "Как следят за работой сервисов: от логов до ИИ-дежурного",
+      "topic": "Исследования",
+      "task": "Понять, как устроен рынок observability и что меняют ИИ-агенты",
+      "action": "Нажимать на слои рынка и читать, кто что делает и кто покупает",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/observability-to-ai-sre/index.html",
+      "sourceSha256": "d2b975e49de9a8997af9207a606612e45e830a4d61c3b0197f06a95203d3f5b4",
+      "evidencePath": "content/editorial/observability-to-ai-sre/README.md"
+    },
+    {
       "slug": "why-no-artifact-link",
       "title": "Почему сервер не может забрать артефакт по ссылке",
       "topic": "Как сделана Полка",

@@ -47,7 +47,7 @@ const links: {
 }[] = [
   { id: "shelf", label: "Моя полка", href: "/", icon: Home },
   { id: "bring", label: "Сохранить", href: "/bring", icon: Plus },
-  { id: "discover", label: "Интересное", href: "/discover", icon: Compass },
+  { id: "discover", label: "Лента", href: "/discover", icon: Compass },
   { id: "templates", label: "Шаблоны", href: "/templates", icon: LayoutTemplate },
   { id: "connections", label: "Агенты", href: "/settings/agents", icon: Bot },
 ];
