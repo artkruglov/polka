@@ -23,3 +23,6 @@ __pycache__/
 # Local Claude Code state and agent worktrees.
 .claude/
 deploy/hosted/hosted.env
+
+# Chrome extension package (npm run ext:build)
+extensions/chrome/*.zip
