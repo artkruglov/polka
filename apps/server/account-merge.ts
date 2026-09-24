@@ -634,8 +634,17 @@ export async function mergeAccounts(input: {
          moved_comments AS (
            UPDATE comments SET tenant_id=$2 WHERE tenant_id=$1 RETURNING id
          ),
+         -- Reactions are never updated by the runtime (it holds no UPDATE on
+         -- them): they move as a delete and an insert of the same row.
+         old_reactions AS (
+           DELETE FROM comment_reactions WHERE tenant_id=$1 RETURNING *
+         ),
          moved_reactions AS (
-           UPDATE comment_reactions SET tenant_id=$2 WHERE tenant_id=$1 RETURNING id
+           INSERT INTO comment_reactions
+             (id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,anchor,emoji,created_at)
+           SELECT id,$2,artifact_id,share_id,revision_id,author_account_id,anchor_sig,anchor,emoji,created_at
+             FROM old_reactions
+           RETURNING id
          ),
          moved_reports AS (
            UPDATE share_reports SET tenant_id=$2 WHERE tenant_id=$1 RETURNING id
@@ -732,7 +741,12 @@ export async function mergeAccounts(input: {
         [from.id, into.id],
       );
       await c.query(
-        "UPDATE comment_reactions SET author_account_id=$2 WHERE author_account_id=$1",
+        `WITH old AS (
+           DELETE FROM comment_reactions WHERE author_account_id=$1 RETURNING *
+         )
+         INSERT INTO comment_reactions
+           (id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,anchor,emoji,created_at)
+         SELECT id,tenant_id,artifact_id,share_id,revision_id,$2,anchor_sig,anchor,emoji,created_at FROM old`,
         [from.id, into.id],
       );
       await c.query(
