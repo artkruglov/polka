@@ -223,6 +223,8 @@ export type Resolved = Viewer | ViewerUnderReview | ViewerBlocked;
 export interface Account {
   id: string;
   name: string;
+  /** From /api/session only; null for accounts made before it was recorded. */
+  createdAt?: string | null;
 }
 export type ErrorCode =
   | "invalid"

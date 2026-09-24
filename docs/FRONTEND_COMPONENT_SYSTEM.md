@@ -155,6 +155,14 @@ Reader: хлебные крошки остались только в верхн�
 
 Главная получила блок «Скопируйте своему агенту» с фразой из `entities/onboarding/connect-phrase.ts` и `CopyButton`. Снимки до/после на 1440 и 390: `docs/design/2026-09-23-doc-first/`.
 
+## Получатель → своя полка (24.09.2026)
+
+Спецификация: [specs/RECIPIENT_CONVERSION.md](specs/RECIPIENT_CONVERSION.md). `features/recipient-convert` — `ConvertBar` (полоса под работой), `ConvertCard` (карточка «Попробовать» / «Сделать такую же», `role="dialog" aria-modal="false"`), `SignedInFromShare` (строка после возврата с регистрации) и хук `useRecipientConvert` (показ полосы, автопоказ карточки один раз на браузер — 15 с или первое касание сцены, — счётчики). Кнопку «Войти с Яндекс ID» карточка получает слотом `signIn` от страницы (соседние features не импортируют друг друга): `pages/recipient` собирает `ProviderButtons` с `next="/s"` и `onLeave` → `leaveForProvider`. `entities/recipient-convert` — состояние карточки в `localStorage`, текст запроса по виду работы (`remix-prompt.ts`), «свежий» аккаунт по `createdAt` из `/api/session`. `entities/onboarding/arrival.ts` — источник вкладки `share`/`share-remix`; `FirstRunSteps` при `arrival="share"` ставит фразу первой, а с `onUpload` показывает «Загрузить файл» вместо ссылки на `/bring` (полка передаёт `setPanel("upload")`).
+
+`RecipientFrame` получил слоты `banner` (под шапкой), `footer` (в потоке, `.recipient-footer` sticky снизу — сцена уменьшается на его высоту, ничего не перекрывается) и `floating` (карточка, `position: fixed` над полосой; высота полосы — CSS-переменная `--convert-bar-height`, измеряется `ResizeObserver`).
+
+Страница материала Ленты (`pages/discover`, `/discover/<slug>`) построена так же: тонкая шапка `.feed-topbar` («← Лента», название с обрезкой, `Badge` раздела, «Открыть на весь экран»), строка задачи, сцена `.feed-stage` с тем же `Preview` по токену из `recipientUrl` (`client.resolve`), подвал «Лицензия материала: …», у гостя — `ConvertBar`/`ConvertCard` с `page="feed"` (ref `feed`/`feed-remix`, возврат по `?next=/discover/<slug>`). На телефоне полоса стоит над таб-баром (`bottom: var(--tabbar-height)`), потому что эта страница сохраняет оболочку и для гостя. CSS фичи импортирует страница (`features/recipient-convert/styles.css`), потому что компоненты рендерят Node-тесты (`tests/recipient-convert.test.ts`). `shared/api/recipient-cta.ts` отправляет `POST /api/recipient-cta` с двумя перечислимыми словами — без токена, названия и адресов; `shared/lib/visit-source.ts` получил `setVisitSourceRef` для источника регистрации, `entities/onboarding/connect-phrase.ts` — необязательный `ref`. Снимки 1440/390: `docs/design/2026-09-24-recipient-convert/`.
+
 ## Правки по ревью релиза (22.09.2026)
 
 ### Сеть и ошибки

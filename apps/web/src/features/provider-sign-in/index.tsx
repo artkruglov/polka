@@ -56,9 +56,12 @@ const label = (provider: SignInProvider) =>
 export function ProviderButtons({
   providers,
   next,
+  onLeave,
 }: {
   providers: SignInProvider[];
   next: string;
+  /** Just before the browser leaves for the provider (a count, a token to keep). */
+  onLeave?: (provider: SignInProvider) => void;
 }) {
   if (!providers.length) return null;
   return (
@@ -72,6 +75,7 @@ export function ProviderButtons({
           key={provider.id}
           className={`idp-button idp-button--${provider.id}`}
           href={`/api/auth/idp/${provider.id}/start?next=${encodeURIComponent(next)}${visitSourceQuery()}`}
+          onClick={onLeave ? () => onLeave(provider) : undefined}
         >
           <Mark id={provider.id} />
           <span>{label(provider)}</span>

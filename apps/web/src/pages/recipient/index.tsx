@@ -1,6 +1,7 @@
 import "./styles.css";
+import "../../features/recipient-convert/styles.css";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BookOpen,
@@ -29,8 +30,24 @@ import {
 } from "../../widgets/artifact-preview/index.ts";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { useSharedComments } from "../../widgets/comments/index.ts";
-import { takeShareAfterSignIn } from "../../shared/lib/share-return.ts";
-import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import {
+  SHARE_RETURN_PATH,
+  takeShareAfterSignIn,
+} from "../../shared/lib/share-return.ts";
+import {
+  useCapabilities,
+  useSourceUrl,
+} from "../../entities/capabilities/useCapabilities.ts";
+import { ProviderButtons } from "../../features/provider-sign-in/index.tsx";
+import {
+  ConvertBar,
+  ConvertCard,
+  SignedInFromShare,
+  leaveForProvider,
+  useRecipientConvert,
+} from "../../features/recipient-convert/index.tsx";
+
+import { isFreshAccount } from "../../entities/recipient-convert/fresh-account.ts";
 
 const accessRequest =
   "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
@@ -52,16 +69,25 @@ export type CommentsSlot = {
   panel?: React.ReactNode;
 };
 
-/** A reader who left to sign in (to comment) comes back to the same link. */
+/**
+ * A reader who left to sign in (to comment, or for a shelf of their own)
+ * comes back to the same link; `returned` remembers that this load is that
+ * return, so the page can say the shelf is ready.
+ */
+let returned = false;
 function initialToken() {
   if (location.hash.length > 1) return location.hash.slice(1);
   const kept = takeShareAfterSignIn();
-  if (kept) history.replaceState(null, "", `/s#${kept}`);
+  if (kept) {
+    history.replaceState(null, "", `/s#${kept}`);
+    returned = true;
+  }
   return kept ?? "";
 }
 
 export function Recipient() {
   const [token, setToken] = useState(initialToken);
+  const [cameBack] = useState(() => returned);
   const [viewer, setViewer] = useState<Resolved | null>(null);
   const [error, setError] = useState<Failure>(null);
   const [attempt, setAttempt] = useState(0);
@@ -122,6 +148,7 @@ export function Recipient() {
         viewer={viewer}
         error={error}
         token={token}
+        returned={cameBack}
         onRetry={() => setAttempt((value) => value + 1)}
         comments={
           commentable && comments.available
@@ -154,6 +181,7 @@ export function RecipientScreen({
   viewer: resolved,
   error,
   token,
+  returned = false,
   onRetry,
   comments,
   overlay,
@@ -161,6 +189,8 @@ export function RecipientScreen({
   viewer: Resolved | null;
   error: Failure;
   token: string;
+  /** This load is the return from a sign-in that started on this link. */
+  returned?: boolean;
   onRetry: () => void;
   comments?: CommentsSlot;
   /** The comment overlay in the document's frame (see useSharedComments). */
@@ -176,6 +206,16 @@ export function RecipientScreen({
       ? resolved
       : null;
   const plainText = viewer?.revision.mime === "text/plain";
+  // The way in for a guest (features/recipient-convert): only once /session
+  // has said «guest», and only when a work is actually shown.
+  const guest = account === null;
+  const convert = useRecipientConvert({ enabled: guest && viewer !== null });
+  const capabilities = useCapabilities();
+  const yandex =
+    capabilities.status === "ready"
+      ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex")
+      : [];
+  const [welcome, setWelcome] = useState(returned);
   const report = reported ? (
     <span className="report-sent">Жалоба отправлена</span>
   ) : (
@@ -281,6 +321,7 @@ export function RecipientScreen({
     : viewer.revision.mime.startsWith("image/")
       ? "image"
       : "page";
+  const card = convert.card;
   return (
     <RecipientFrame
       account={account}
@@ -291,6 +332,44 @@ export function RecipientScreen({
       note={<AboutThisPage viewer={viewer} />}
       comments={comments}
       kind={kind}
+      stageRef={convert.stageRef}
+      banner={
+        welcome && account ? (
+          <SignedInFromShare
+            created={isFreshAccount(account)}
+            origin={location.origin}
+            onClose={() => setWelcome(false)}
+          />
+        ) : undefined
+      }
+      footer={
+        guest ? (
+          <ConvertBar
+            onTry={(opener) => convert.press("try", opener)}
+            onRemix={(opener) => convert.press("remix", opener)}
+          />
+        ) : undefined
+      }
+      floating={
+        guest && card ? (
+          <ConvertCard
+            variant={card.variant}
+            origin={location.origin}
+            revision={viewer.revision}
+            back={{ token }}
+            signIn={
+              yandex.length ? (
+                <ProviderButtons
+                  providers={yandex}
+                  next={SHARE_RETURN_PATH}
+                  onLeave={() => leaveForProvider({ token }, card.variant)}
+                />
+              ) : undefined
+            }
+            onClose={convert.close}
+          />
+        ) : undefined
+      }
     >
       <Preview
         revision={viewer.revision}
@@ -322,6 +401,10 @@ function RecipientFrame({
   note,
   comments,
   kind,
+  stageRef,
+  banner,
+  footer,
+  floating,
   children,
 }: {
   account: Account | null | undefined;
@@ -331,12 +414,38 @@ function RecipientFrame({
   note?: React.ReactNode;
   comments?: CommentsSlot;
   kind?: "page" | "image" | "text";
+  /** The element holding the work (the convert card watches it for a first touch). */
+  stageRef?: React.MutableRefObject<HTMLElement | null>;
+  /** Under the top bar: the note after a sign-up. */
+  banner?: React.ReactNode;
+  /** Under the work, in the flow: the guest's bar. The stage shrinks by its height. */
+  footer?: React.ReactNode;
+  /** Above everything, positioned by itself: the convert card. */
+  floating?: React.ReactNode;
   children: React.ReactNode;
 }) {
   // Until /me answers, the page is laid out for a guest: no navigation flashes in.
   const guest = !account;
   const railId = "recipient-comments";
   const Title = titleAsHeading ? "h1" : "p";
+  // The card floats above the footer: its height goes into a CSS variable.
+  const frame = useRef<HTMLDivElement>(null);
+  const footerBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = footerBox.current;
+    const host = frame.current;
+    if (!host) return;
+    if (!node || typeof ResizeObserver === "undefined") {
+      host.style.removeProperty("--convert-bar-height");
+      return;
+    }
+    const measure = () =>
+      host.style.setProperty("--convert-bar-height", `${node.offsetHeight}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [footer !== undefined]);
   return (
     <AppShell
       current="shelf"
@@ -344,7 +453,7 @@ function RecipientFrame({
       bare={guest}
       className="recipient recipient-reader"
     >
-      <div className="recipient-frame" data-guest={guest || undefined}>
+      <div ref={frame} className="recipient-frame" data-guest={guest || undefined}>
         <header className="recipient-topbar">
           {(title || actions || comments) && (
             <div className="recipient-topbar-row">
@@ -379,9 +488,16 @@ function RecipientFrame({
             </a>
           </div>
         </header>
+        {banner}
         <div className="recipient-body">
           {kind ? (
-            <main className="recipient-stage" data-kind={kind}>
+            <main
+              ref={(node) => {
+                if (stageRef) stageRef.current = node;
+              }}
+              className="recipient-stage"
+              data-kind={kind}
+            >
               {children}
             </main>
           ) : (
@@ -398,6 +514,12 @@ function RecipientFrame({
             </aside>
           )}
         </div>
+        {footer && (
+          <div ref={footerBox} className="recipient-footer">
+            {footer}
+          </div>
+        )}
+        {floating}
       </div>
     </AppShell>
   );

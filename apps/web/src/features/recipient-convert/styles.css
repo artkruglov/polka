@@ -1,0 +1,56 @@
+/* The recipient page's way in for a guest: a bar under the work and a card
+   that slides in beside it. Imported by pages/recipient (Node tests render the
+   components without CSS). The bar sits in the page's flow (sticky at the
+   bottom), so the work above it shrinks by its height and is never covered. */
+.convert-bar { display: flex; align-items: center; gap: 12px 16px; min-height: 60px; padding: 8px var(--gutter) calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--canvas); box-shadow: 0 -6px 18px rgb(22 36 67 / 6%); }
+.convert-bar-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+.convert-bar-icon svg { width: 18px; height: 18px; }
+.convert-bar-text { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ink); font: 500 var(--text-md) / 1.35 var(--font-sans); letter-spacing: var(--tracking-snug); }
+.convert-bar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.convert-bar-actions .ui-button { min-height: 40px; white-space: nowrap; }
+.convert-bar-remix svg { width: 16px; height: 16px; }
+
+/* The card: a floating panel above the bar, not a modal. */
+.convert-card { position: fixed; right: 24px; bottom: calc(var(--convert-bar-height, 60px) + 16px + env(safe-area-inset-bottom, 0px)); z-index: 65; box-sizing: border-box; width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - var(--convert-bar-height, 60px) - 32px); overflow: auto; padding: 18px 20px 20px; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--canvas); box-shadow: var(--shadow-lg); animation: convert-card-in var(--dur-slow) var(--ease); }
+@keyframes convert-card-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .convert-card { animation: none; } }
+.convert-card-head { display: flex; align-items: flex-start; gap: 12px; }
+.convert-card-head h2 { flex: 1 1 auto; margin: 0; padding-top: 4px; color: var(--ink); font-size: var(--text-xl); line-height: var(--leading-snug); letter-spacing: var(--tracking-snug); }
+.convert-card-head h2:focus { outline: none; }
+.convert-card-head h2:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 4px; border-radius: var(--radius-xs); }
+.convert-card-lead { margin: 8px 0 14px; color: var(--ink-2); font-size: var(--text-base); line-height: var(--leading); }
+.convert-paths { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: convert-path; }
+.convert-path { display: grid; gap: 8px; }
+.convert-path > strong { color: var(--ink); font-size: var(--text-base); }
+.convert-path > small { color: var(--muted); font-size: var(--text-sm); line-height: 1.45; }
+.convert-phrase { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft-3); }
+.convert-phrase code { display: block; overflow-wrap: anywhere; color: var(--ink); font: 500 var(--text-base) / 1.45 var(--font-mono); }
+.convert-phrase[data-long] code { font-size: var(--text-sm); }
+.convert-phrase .ui-button { justify-self: start; }
+.convert-path .idp-buttons { gap: 8px; }
+.convert-path .idp-button { min-height: 44px; }
+.convert-path--email a { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--accent); font-weight: 500; }
+
+/* Back after a sign-up: one line under the top bar with the phrase. */
+.convert-welcome { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px var(--gutter); border-bottom: 1px solid var(--line); background: var(--success-soft); color: var(--ink); font-size: var(--text-base); line-height: 1.45; }
+.convert-welcome-text { flex: 1 1 320px; min-width: 0; }
+.convert-welcome-text strong { color: var(--success); }
+.convert-welcome-phrase { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: var(--radius-sm); background: var(--canvas); color: var(--ink); font: 500 var(--text-sm) / 1.5 var(--font-mono); overflow-wrap: anywhere; }
+.convert-welcome-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+.convert-welcome-actions .ui-button { min-height: 36px; }
+.convert-welcome-link { display: inline-flex; align-items: center; gap: 3px; min-height: 36px; padding: 0 6px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .convert-bar { gap: 10px; min-height: 56px; padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+  .convert-bar-actions .ui-button { min-height: 40px; padding: 6px 12px; font-size: var(--text-base); }
+  .convert-card { right: var(--gutter-mobile); left: var(--gutter-mobile); width: auto; padding: 16px; }
+  .convert-welcome { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
+}
+@media (max-width: 560px) {
+  /* One compact row: icon, the primary action, and «Сделать такую же» as an icon. */
+  .convert-bar-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .convert-bar-actions { flex: 1 1 auto; justify-content: flex-end; }
+  .convert-bar-try { flex: 1 1 auto; max-width: 260px; }
+  .convert-bar-remix { min-width: 40px; padding: 6px 10px; }
+  .convert-bar-remix > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
