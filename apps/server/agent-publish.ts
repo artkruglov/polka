@@ -301,6 +301,18 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
           }),
     };
   } catch (error) {
+    // A provisional shelf saves, but links only once claimed (provisional.ts).
+    if (
+      error instanceof Problem &&
+      error.details?.reason === "provisional"
+    )
+      return {
+        ...saved,
+        state: "saved" as const,
+        url: null,
+        linkUnavailableReason: error.message,
+        claimUrl: error.details.claimUrl as string,
+      };
     if (
       error instanceof Problem &&
       (error.code === "unsupported" ||

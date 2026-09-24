@@ -63,6 +63,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** The other fields of the problem (reason, claimUrl…). */
+    public details: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -103,12 +105,14 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   } catch {
     // An intermediary answered with HTML or nothing; keep the HTTP status.
   }
+  const { code, message, ...details } = problem as Record<string, unknown>;
   throw new ApiError(
     res.status,
-    typeof problem.code === "string" ? problem.code : "http_error",
-    typeof problem.message === "string" && problem.message
-      ? problem.message
+    typeof code === "string" ? code : "http_error",
+    typeof message === "string" && message
+      ? message
       : fallbackMessage(res.status),
+    details,
   );
 }
 
@@ -337,6 +341,15 @@ export const client = {
         signal,
         csrfToken,
       ),
+    /** «Может выдавать ссылки для входа» (OAuth connections). */
+    setSignInLinks: (id: string, enabled: boolean, csrfToken: string) =>
+      request<{ ok: true; signInLinks: boolean }>(
+        `/agent-connections/${id}/sign-in-links`,
+        { enabled },
+        "POST",
+        undefined,
+        csrfToken,
+      ),
   },
 };
 
@@ -362,6 +375,16 @@ export const oauthConsent = {
       "POST",
       signal,
       csrfToken,
+    ),
+  /** «Начать без регистрации»: a provisional shelf for this browser. */
+  startProvisional: (
+    requestId: string,
+    source: { ref?: string; referrer?: string } | null,
+  ) =>
+    json<{ ok: true }>(
+      "/oauth/authorize/provisional",
+      { request: requestId, ...(source ? { source } : {}) },
+      "POST",
     ),
 };
 

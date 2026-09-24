@@ -15,6 +15,21 @@ const Templates = page(() =>
 const Signup = page(() =>
   import("../../pages/signup/index.tsx").then((m) => m.Signup),
 );
+const SignupChoose = page(() =>
+  import("../../pages/signup/choose.tsx").then((m) => m.SignupChoose),
+);
+const SignupLinked = page(() =>
+  import("../../pages/signup/choose.tsx").then((m) => m.SignupLinked),
+);
+const Claim = page(() =>
+  import("../../pages/claim/index.tsx").then((m) => m.Claim),
+);
+const Enter = page(() =>
+  import("../../pages/enter/index.tsx").then((m) => m.Enter),
+);
+const SignIn = page(() =>
+  import("../../pages/enter/signin.tsx").then((m) => m.SignIn),
+);
 const FirstSave = page(() =>
   import("../../pages/start/index.tsx").then((m) => m.FirstSave),
 );
@@ -135,4 +150,9 @@ export {
   TermsPage,
   Pricing,
   Enterprise,
+  SignupChoose,
+  SignupLinked,
+  Claim,
+  Enter,
+  SignIn,
 };
