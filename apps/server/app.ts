@@ -158,10 +158,12 @@ export async function createApp() {
       );
   });
   app.setErrorHandler((error: any, _req, reply) => {
-    if (error instanceof Problem)
+    if (error instanceof Problem) {
+      if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
       return reply
         .code(error.status)
         .send({ code: error.code, message: error.message, ...error.details });
+    }
     if (error instanceof z.ZodError)
       return reply.code(400).send({
         code: "invalid",
@@ -603,7 +605,7 @@ export async function createApp() {
         429,
         "quota",
         "Сервер принимает несколько файлов. Повторите через минуту.",
-      );
+      ).retryIn(60);
     transfers++;
     tenantTransfers.set(tenant, mine + 1);
     reply.raw.once("close", () => {

@@ -1015,11 +1015,13 @@ function sendFailure(reply: FastifyReply, error: unknown) {
       .code(error.status)
       .send({ error: error.error, error_description: error.description });
   }
-  if (error instanceof Problem && error.status === 429)
+  if (error instanceof Problem && error.status === 429) {
+    if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
     return reply.code(429).send({
       error: "temporarily_unavailable",
       error_description: "Too many requests. Retry in a few minutes.",
     });
+  }
   // A deadlock or serialization victim committed nothing; the client may retry.
   const code = (error as { code?: unknown } | null)?.code;
   if (code === "40P01" || code === "40001")

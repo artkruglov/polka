@@ -58,15 +58,15 @@ export async function signupRoomLeft(
            ON CONFLICT(key) DO UPDATE SET
              attempts=CASE WHEN login_limits.reset_at<now() THEN 1 ELSE login_limits.attempts+1 END,
              reset_at=CASE WHEN login_limits.reset_at<now() THEN now()+interval '24 hours' ELSE login_limits.reset_at END
-           RETURNING attempts`,
+           RETURNING attempts, extract(epoch FROM reset_at-now())::float8 AS retry_after`,
           [sha256(key)],
         )
       : await c.query(
-          "SELECT attempts+1 AS attempts FROM login_limits WHERE key=$1 AND reset_at>now()",
+          "SELECT attempts+1 AS attempts, extract(epoch FROM reset_at-now())::float8 AS retry_after FROM login_limits WHERE key=$1 AND reset_at>now()",
           [sha256(key)],
         );
     if (Number(rows[0]?.attempts ?? 1) > max())
-      throw new Problem(429, "quota", message);
+      throw new Problem(429, "quota", message).retryIn(Number(rows[0]?.retry_after ?? 86_400));
   }
 }
 
