@@ -13,6 +13,8 @@
 export const CLAUDE_FRAME_SELECTORS = [
   "iframe#frame-content",
   'iframe[title="User-generated artifact content" i]',
+  // Seen 24.09.2026 on claude.ai/artifact/<id>: https://<uuid>.frame.claudeusercontent.com/_t?…
+  'iframe[src*=".frame.claudeusercontent.com"]',
   'iframe[src*=".claudeusercontent.com"]',
   'iframe[src^="https://claudeusercontent.com"]',
 ];
@@ -22,8 +24,50 @@ export function findArtifactFrames(doc: Document): HTMLIFrameElement[] {
   for (const selector of CLAUDE_FRAME_SELECTORS)
     for (const frame of doc.querySelectorAll<HTMLIFrameElement>(selector))
       seen.add(frame);
-  // The largest one is the open artifact; thumbnails in the chat are small.
-  return [...seen].sort((a, b) => area(b) - area(a));
+  // The largest one is the open artifact; thumbnails and the hidden 1×1
+  // helper frame are small and left out.
+  // (Unlaid-out frames, area 0, stay: a tab in the background may report so.)
+  return [...seen]
+    .filter((frame) => area(frame) === 0 || area(frame) >= 100 * 100)
+    .sort((a, b) => area(b) - area(a));
+}
+
+/**
+ * The artifact header's Share button (aria-label "Share, shared with …" on
+ * claude.ai/artifact/<id>); the page button goes next to it.
+ */
+export function findShareButton(root: ParentNode): HTMLElement | null {
+  return (
+    [...root.querySelectorAll<HTMLElement>("button[aria-label]")].find((button) =>
+      /^(share|поделиться)\b/i.test(button.getAttribute("aria-label") ?? ""),
+    ) ?? null
+  );
+}
+
+/**
+ * The title button of a standalone artifact page: in the header with Share,
+ * no aria-label, its text is the title, and it opens the menu with Export.
+ */
+export function findTitleMenuButton(doc: Document): HTMLElement | null {
+  // Base UI's trigger carries data-title-menu (seen 24.09.2026).
+  const marked = doc.querySelector<HTMLElement>("button[data-title-menu]");
+  if (marked) return marked;
+  const share = findShareButton(doc);
+  if (!share) return null;
+  const titled = (button: HTMLElement) =>
+    !button.hasAttribute("aria-label") &&
+    (button.textContent ?? "").trim().length > 0;
+  // Up from Share to the header that also holds the title button.
+  let header: Element | null = share.parentElement;
+  for (let depth = 0; header && depth < 6; depth++, header = header.parentElement) {
+    const candidates = [...header.querySelectorAll<HTMLElement>("button")].filter(titled);
+    if (candidates.length)
+      return (
+        candidates.find((button) => button.getAttribute("aria-haspopup") === "menu") ??
+        candidates[0]
+      );
+  }
+  return null;
 }
 
 const area = (element: Element) => {

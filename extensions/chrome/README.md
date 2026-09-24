@@ -9,7 +9,7 @@
 ## Как пользоваться
 
 - **Кнопка на панели браузера.** Откройте артефакт в Claude (он виден справа от чата) → значок «На Полку» → «Сохранить на Полку». Появится ссылка с кнопками «Копировать» и «Открыть на полке».
-- **Кнопка «На Полку» на странице.** Рядом с кнопкой Copy артефакта (или в его углу) — то же действие в один клик. Выключается в настройках.
+- **Кнопка «На Полку» на странице.** На странице артефакта `claude.ai/artifact/…` — рядом с кнопкой Share в шапке, в чате — рядом с Copy панели артефакта, иначе в углу артефакта. То же действие в один клик. Выключается в настройках.
 - **Ссылка в Полке.** Вставьте `https://claude.ai/artifact/…` в поле «Сохранить» на Полке и нажмите «Сохранить». Если расширение установлено, Полка передаст ему ссылку: оно откроет артефакт в фоновой вкладке, заберёт код, закроет вкладку и вернёт ссылку на странице Полки. Без расширения Полка покажет, как его установить, и прежний путь с файлом.
 
 Первое сохранение попросит **подключить Полку**: откроется окно Полки со входом и экраном согласия «Расширение браузера «На Полку»». Разрешения: сведения и статус, сохранять новые работы, управлять ссылками (`context capture share`). Подключение видно и отзывается на странице «Агенты».
@@ -17,7 +17,7 @@
 ## Установка для проверки (без магазина)
 
 ```sh
-npm run ext:build          # → extensions/chrome/dist и extensions/chrome/na-polku-0.1.0.zip
+npm run ext:build          # → extensions/chrome/dist и extensions/chrome/na-polku-0.1.1.zip
 ```
 
 1. Откройте `chrome://extensions`, включите «Режим разработчика».
@@ -42,10 +42,11 @@ ID распакованного расширения зависит от пут�
 
 Пробуются по порядку, побеждает первый непустой источник:
 
-1. **Кнопка Copy самого артефакта.** Скрипт в изолированном мире находит её в шапке панели и помечает; функция в мире страницы на мгновение подменяет `navigator.clipboard.writeText/write`, нажимает кнопку и забирает текст, который Claude отдал бы в буфер обмена. Ваш буфер не трогается, разрешение `clipboardRead` не нужно. Так получается исходник как есть, включая React-компоненты.
-2. **Документ во фрейме артефакта** (`*.claudeusercontent.com`). Скрипт во фрейме повторно запрашивает свой же адрес (байты страницы до выполнения её скриптов); если фрейм изолирован и запрос не проходит — сериализует живой DOM. Скрипты и стили с доменов Claude, CSP-meta и помеченные элементы просмотрщика удаляются.
-3. **Вкладка «Code»**, если открыта она: строки CodeMirror или `pre code`.
-4. **ChatGPT (экспериментально):** открытая панель canvas, иначе последний блок кода последнего ответа.
+1. **Меню артефакта → Export → Download** — на отдельной странице `claude.ai/artifact/<id>`, где нет ни Copy, ни вкладки Code (так она устроена по осмотру 24.09.2026: кнопка-название без aria-label открывает меню с Export → Download и «Copy as Markdown»). Скрипт в изолированном мире помечает кнопку-название; функция в мире страницы на время одного сохранения оборачивает `URL.createObjectURL`, `HTMLAnchorElement.prototype.click`, `EventTarget.prototype.dispatchEvent` и `window.open` и ставит перехват кликов по `a[download]`, открывает меню Base UI так, как оно реально открывается от синтетических событий (проверено на claude.ai 24.09.2026): фокус на `button[data-title-menu]` + ArrowDown, затем фокус на `[data-download-submenu]` + ArrowRight (запасные пути — нажатие мышью, Enter, наведение), и выбирает `[data-download-item]` (текст Export/Download, Экспорт/Скачать — запасной поиск) и читает Blob, который страница собиралась сохранить. Файл в «Загрузки» не попадает никогда: если скачивание оказалось переходом на адрес сервера, оно тоже останавливается, и расширение берёт фрейм. Затем всё восстанавливается, и меню закрываются: Escape на пункте меню в фокусе, затем Escape на кнопке-названии, затем нажатие вне меню, затем повторное нажатие кнопки (Escape на документе это меню не закрывает). Путь через меню пробуется один раз за сохранение и только на страницах артефакта, не в чате. «Copy as Markdown» не нажимается: он копирует отрисованный текст, а не исходник.
+2. **Кнопка Copy самого артефакта** (в чате). Скрипт в изолированном мире находит её в шапке панели и помечает; функция в мире страницы на мгновение подменяет `navigator.clipboard.writeText/write`, нажимает кнопку и забирает текст, который Claude отдал бы в буфер обмена. Ваш буфер не трогается, разрешение `clipboardRead` не нужно. Так получается исходник как есть, включая React-компоненты.
+3. **Документ во фрейме артефакта** (`iframe[title="User-generated artifact content"]`, `<uuid>.frame.claudeusercontent.com`; скрытый фрейм 1×1 рядом пропускается). Скрипт во фрейме повторно запрашивает свой же адрес (байты страницы до выполнения её скриптов); если фрейм изолирован и запрос не проходит — сериализует живой DOM. Скрипты и стили с доменов Claude, CSP-meta и помеченные элементы просмотрщика удаляются.
+4. **Вкладка «Code»**, если открыта она: строки CodeMirror или `pre code`.
+5. **ChatGPT (экспериментально):** открытая панель canvas, иначе последний блок кода последнего ответа.
 
 JSX/TSX уходит как `component` (на установке с интерактивным просмотром), HTML — как есть, SVG/Markdown/текст — одной HTML-страницей.
 
@@ -86,7 +87,8 @@ Claude и ChatGPT не документируют разметку и меняю
 - **Удаление рантайма просмотрщика** опирается на домены скриптов и маркеры; новый способ внедрения может оставить лишний скрипт — Полка сохранит страницу, но может выдать её без ссылки или статичной (причину покажет).
 - **ChatGPT**: canvas, по публичным сообщениям, заменён в 2026 году; поддержка — лучшее усилие по последнему блоку кода.
 - **Импорт по ссылке** открывает фоновую вкладку и ждёт до 20 секунд, пока Claude отрисует артефакт; медленная сеть или окно «войдите» дадут понятную ошибку.
-- **Подмена кнопки Copy** на время одного нажатия видна странице Claude (это её мир JavaScript), хоть и на доли секунды.
+- **Меню Export → Download**: пункты ищутся по атрибутам Base UI (`data-title-menu`, `data-download-submenu`, `data-download-item`), затем по `role="menuitem"` и тексту; кнопка-название без атрибута — как кнопка без aria-label рядом с Share. Сам клик по Download на настоящей странице ещё не проверялся: blob или адрес сервера — неизвестно, обе ветки обработаны. Переименование пунктов, другая локаль, меню, которое не открывается синтетическими событиями, или скачивание через сервер — и расширение перейдёт к фрейму (отрисованная копия). Меню на мгновение открывается у вас на глазах.
+- **Подмена кнопки Copy и функций скачивания** на время одного нажатия видна странице Claude (это её мир JavaScript), хоть и на доли секунды.
 
 При поломке пользователь видит сообщение и может сохранить артефакт прежним путём: Download в Claude → файл в Полку.
 
@@ -112,7 +114,7 @@ Claude и ChatGPT не документируют разметку и меняю
 - **Use:** toolbar popup → «Сохранить на Полку»; or the in-page «На Полку» button next to the artifact's Copy button; or paste the artifact link into Полка's «Сохранить» field — Полка hands it to the extension (postMessage handshake with a nonce, same window and origin only), which opens the link in a background tab, extracts, saves and reports back.
 - **Auth:** OAuth 2.1 against Полка's authorization server — dynamic client registration (public client), PKCE S256 via `chrome.identity.launchWebAuthFlow` to `https://<extension-id>.chromiumapp.org/polka`, rotating refresh tokens, revocation on disconnect. Scopes `context capture share`. The consent page names such clients «Расширение браузера» with their ID; IDs listed in the server's `BROWSER_EXTENSION_IDS` are shown as the official «Расширение браузера «На Полку»», and only they may use that name unmarked.
 - **Publishing:** `POST /api/v1/publish` with the bearer token; the API accepts `Origin: chrome-extension://<32 a–p>` in addition to Полка's own origin.
-- **Extraction** (only on user action, via `chrome.scripting`): (1) press the artifact's own Copy button with `navigator.clipboard` briefly intercepted in the page's world — exact source, no clipboard permission; (2) the document inside the `*.claudeusercontent.com` frame, refetched or serialised, with the viewer runtime stripped; (3) the Code tab; (4) ChatGPT: open canvas or the last code block (experimental).
+- **Extraction** (only on user action, via `chrome.scripting`): (0) on a standalone `claude.ai/artifact/<id>` page, which has no Copy button or Code tab, open the title menu → Export → Download with `URL.createObjectURL`, anchor clicks/dispatches and `window.open` briefly wrapped in the page's world, read the Blob and suppress the download (a server-URL download is stopped too and the frame is used instead; «Copy as Markdown» is never pressed); (1) in a chat, press the artifact's own Copy button with `navigator.clipboard` briefly intercepted in the page's world — exact source, no clipboard permission; (2) the document inside the `*.claudeusercontent.com` frame, refetched or serialised, with the viewer runtime stripped; (3) the Code tab; (4) ChatGPT: open canvas or the last code block (experimental).
 - **Permissions:** `scripting`, `storage`, `identity`; hosts `claude.ai`, `*.claudeusercontent.com`, `chatgpt.com`, `polochka.app`; optional hosts only for a self-hosted Полка the user enters. No `tabs`, `cookies`, `clipboardRead`, `webRequest`, `<all_urls>`.
 - **Privacy:** data goes only to the configured Полка; no analytics, telemetry, third parties or remote code. See [PRIVACY.md](PRIVACY.md).
 - **Fragile:** all provider selectors are undocumented and modelled on public descriptions; fixtures are synthetic. See «Что хрупко» above.

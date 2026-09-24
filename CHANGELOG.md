@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **«На Полку» на странице `claude.ai/artifact/<id>`.** У неё нет Copy и вкладки Code, поэтому исходник берётся через меню названия → Export → Download: на время одного сохранения в мире страницы перехватываются `URL.createObjectURL`, клики и `dispatchEvent` по `a[download]` и `window.open`, Blob читается, файл в «Загрузки» не попадает (скачивание с сервера тоже останавливается — тогда берётся фрейм), всё восстанавливается, меню закрывается Escape. Меню — Base UI: открывается фокусом + ArrowDown (синтетические клики и Enter его не открывают), подменю — ArrowRight, пункты ищутся по `data-title-menu`/`data-download-submenu`/`data-download-item`, затем по тексту; закрывается Escape на пункте в фокусе, иначе на кнопке, иначе нажатием вне меню. «Copy as Markdown» не нажимается. Фрейм — `*.frame.claudeusercontent.com`, скрытый фрейм 1×1 пропускается; кнопка «На Полку» стоит рядом с Share. Фикстура `claude-artifact-page.html` повторяет эту структуру.
+
 ### Added
 
 - **Расширение «На Полку» для Chrome** (`extensions/chrome`, Manifest V3, `npm run ext:build` → `dist/` и zip). Сохраняет артефакт Claude (и, экспериментально, код из ChatGPT) из браузера пользователя: значок на панели, кнопка «На Полку» рядом с артефактом, а ссылка `claude.ai/artifact/…`, вставленная в «Сохранить», передаётся расширению через `postMessage` с nonce (только то же окно и origin Полки; протокол — `packages/contracts/extension-bridge.ts`), оно открывает её в фоновой вкладке и возвращает ссылку. Без расширения карточка Claude/ChatGPT показывает, как его установить. Код берётся по нажатию: кнопка Copy артефакта с перехватом `navigator.clipboard` в мире страницы, документ во фрейме `*.claudeusercontent.com` без рантайма просмотрщика, вкладка Code. Вход — OAuth 2.1 с PKCE через `chrome.identity.launchWebAuthFlow` и DCR; сохранение — `POST /api/v1/publish`. Аналитики нет, данные уходят только на Полку. В магазин не опубликовано.
