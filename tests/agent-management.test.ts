@@ -194,6 +194,17 @@ test("agent reads are tenant-safe and preserve state-aware microsecond cursors",
     artifactId: trashedNewer.artifactId,
   });
   assert.ok(visible.trashedAt);
+  // The owner pastes the page's address: the same work, the same tenant check.
+  const byAddress = await getArtifactForAgent(actor, {
+    artifactId: `https://polochka.app/works/${trashedNewer.artifactId}?revision=x`,
+  });
+  assert.equal(byAddress.id, visible.id);
+  await assert.rejects(
+    getArtifactForAgent(actor, {
+      artifactId: `https://polochka.app/works/${foreign.artifactId}`,
+    }),
+    rejected(404, "not_found"),
+  );
   for (const secret of ["share", "token", "object_key", "url", "manifest"])
     assert.doesNotMatch(JSON.stringify(visible), new RegExp(secret, "i"));
   await assert.rejects(
