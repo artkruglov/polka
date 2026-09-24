@@ -88,6 +88,31 @@ export type OAuthConsentDetails = {
   replaces: boolean;
   expiresAt: string;
 };
+/** A provenance address: https, no credentials, query or fragment. */
+export const sourceUrlSchema = z
+  .string()
+  .max(2048)
+  .refine((value) => {
+    if (
+      !value.startsWith("https://") ||
+      /[\s\\\u0000-\u001f\u007f]/.test(value) ||
+      value.includes("?") ||
+      value.includes("#")
+    )
+      return false;
+    try {
+      const url = new URL(value);
+      return (
+        url.protocol === "https:" &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "sourceUrl must be an HTTPS URL without credentials, query, or fragment");
 export const beginUploadSchema = z
   .object({
     key: uuid,
@@ -99,11 +124,17 @@ export const beginUploadSchema = z
     artifactId: uuid.optional(),
     baseRevisionId: uuid.optional(),
     folderId: uuid.nullable().optional(),
+    /** The page an HTML file was saved from (the «На Полку» bookmark); kept in provenance. */
+    sourceUrl: sourceUrlSchema.optional(),
   })
   .strict()
   .refine(
     (x) => !!x.artifactId === !!x.baseRevisionId,
     "A revision needs its base",
+  )
+  .refine(
+    (x) => x.sourceUrl === undefined || x.mime === "text/html",
+    "Only an HTML page keeps its source address",
   );
 export type UploadInput = z.infer<typeof beginUploadSchema>;
 export const shareSchema = z

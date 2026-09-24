@@ -42,6 +42,12 @@ const Recipient = page(() =>
 const Bring = page(() =>
   import("../../pages/bring/index.tsx").then((m) => m.Bring),
 );
+const BringReceive = page(() =>
+  import("../../pages/bring-receive/index.tsx").then((m) => m.BringReceive),
+);
+const BookmarkletPage = page(() =>
+  import("../../pages/bookmarklet/index.tsx").then((m) => m.BookmarkletPage),
+);
 const Landing = page(() =>
   import("../../pages/landing/index.tsx").then((m) => m.Landing),
 );
@@ -131,6 +137,8 @@ export {
   AgentConnections,
   Recipient,
   Bring,
+  BringReceive,
+  BookmarkletPage,
   Landing,
   EditorialPage,
   LibraryInvite,
