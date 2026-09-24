@@ -592,3 +592,216 @@ test("SHARE_MODERATION=auto: no manual review of authors; a young account's unch
   for (let i = 0; i < 3; i++) await save(old, HONEST.replace("Отчёт", `Сводка ${i}`));
   assert.equal((await authorStanding(db, old.tenant)).trusted, true);
 });
+
+// ---------------------------------------------------------------------------
+// Holds that wait only for the model: released when it answers clean.
+
+/** A model that answers only when the test opens its gate. */
+function gatedModel(answer: string) {
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => (open = resolve));
+  const client: ModelClient = {
+    name: "gated",
+    async classify() {
+      await gate;
+      return answer === "fail"
+        ? { failed: "timeout", model: "gated", costRub: 0 }
+        : { category: answer as any, reason: "тест", model: "gated", costRub: 0 };
+    },
+  };
+  return { client, open };
+}
+
+/** A distinct tiny PNG each time (the same bytes would be one material). */
+const PNG = () =>
+  Buffer.concat([
+    Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex"),
+    randomBytes(8),
+  ]);
+
+async function imageLink(owner: Owner) {
+  const receipt = await save(owner, PNG(), "image/png");
+  const response = await share(owner, receipt);
+  assert.equal(response.statusCode, 200, response.body);
+  return { ...receipt, shareId: response.json().share.id as string };
+}
+
+const shareState = async (shareId: string) => {
+  const found = await row("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [shareId]);
+  return { moderation: found.moderation, moderation_reason: found.moderation_reason };
+};
+const eventsOf = async (shareId: string, action: string) =>
+  (
+    await db.query(
+      "SELECT actor,reason FROM moderation_events WHERE share_id=$1 AND action=$2",
+      [shareId, action],
+    )
+  ).rows.map((event) => ({ actor: event.actor, reason: event.reason }));
+
+test("auto: a young account's image link waits for the model and opens when it answers clean, without a letter", async () => {
+  config.SHARE_MODERATION = "auto";
+  const model = gatedModel("none");
+  setContentModels({ primary: model.client, fallback: null });
+  const young = await signedUp(0);
+  const link = await imageLink(young);
+  assert.deepEqual(await shareState(link.shareId), {
+    moderation: "held",
+    moderation_reason: "image-unchecked",
+  });
+  model.open();
+  await reviewsSettled();
+  assert.deepEqual(await shareState(link.shareId), { moderation: "none", moderation_reason: null });
+  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [
+    { actor: "filter", reason: "image-unchecked" },
+  ]);
+  // The only letter about this link is the one sent when it was made.
+  assert.equal((await lettersWith(link.shareId, 2)).length, 1);
+});
+
+test("auto: a model that fails keeps the image link waiting; a flag holds it for the flag; no model keeps it", async () => {
+  config.SHARE_MODERATION = "auto";
+  const young = await signedUp(0);
+  const failing = gatedModel("fail");
+  setContentModels({ primary: failing.client, fallback: null });
+  const failed = await imageLink(young);
+  failing.open();
+  await reviewsSettled();
+  assert.deepEqual(await shareState(failed.shareId), {
+    moderation: "held",
+    moderation_reason: "image-unchecked",
+  });
+  assert.equal((await eventsOf(failed.shareId, "share.released")).length, 0);
+  const flagging = gatedModel("csam");
+  setContentModels({ primary: flagging.client, fallback: null });
+  const flagged = await imageLink(young);
+  flagging.open();
+  await reviewsSettled();
+  assert.deepEqual(await shareState(flagged.shareId), {
+    moderation: "held",
+    moderation_reason: "content:csam",
+  });
+  assert.equal((await eventsOf(flagged.shareId, "share.released")).length, 0);
+  assert.deepEqual(
+    (await eventsOf(flagged.shareId, "share.held")).map((event) => event.reason).sort(),
+    ["content:csam", "image-unchecked"],
+  );
+  // Without any model the image waits, as before.
+  setContentModels(null);
+  const unconfigured = await imageLink(young);
+  const { reconsiderLinks } = await import("../apps/server/shares.ts");
+  assert.deepEqual(
+    (await reconsiderLinks(unconfigured.revisionId)).map((result) => result.outcome),
+    ["kept"],
+  );
+  assert.equal((await shareState(unconfigured.shareId)).moderation, "held");
+});
+
+test("a clean answer never opens a link held for another reason, or a disabled owner's link", async () => {
+  config.SHARE_MODERATION = "auto";
+  config.NEW_ACCOUNT_MAX_LINKS = 0;
+  const model = gatedModel("none");
+  setContentModels({ primary: model.client, fallback: null });
+  const young = await signedUp(0);
+  const others = [
+    ["held", "suspicious"],
+    ["held", "content:drugs"],
+    ["held", "spam:duplicate"],
+    ["held", "review-all"],
+    ["held", "model-unavailable"],
+    ["paused", "reports"],
+  ] as const;
+  const links = [];
+  for (const [state, reason] of others) {
+    const link = await imageLink(young);
+    await db.query(
+      "UPDATE shares SET moderation=$2,moderation_reason=$3 WHERE id=$1",
+      [link.shareId, state, reason],
+    );
+    links.push({ link, state, reason });
+  }
+  const disabled = await signedUp(0);
+  const theirs = await imageLink(disabled);
+  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [disabled.id]);
+  model.open();
+  await reviewsSettled();
+  for (const { link, state, reason } of links) {
+    assert.deepEqual(await shareState(link.shareId), { moderation: state, moderation_reason: reason });
+    assert.equal((await eventsOf(link.shareId, "share.released")).length, 0);
+  }
+  assert.equal((await shareState(theirs.shareId)).moderation, "held");
+});
+
+test("links held as new-account under the old mode: released by the model only under auto", async () => {
+  config.SHARE_MODERATION = "new-accounts";
+  const model = gatedModel("none");
+  setContentModels({ primary: model.client, fallback: null });
+  const young = await signedUp(0);
+  const link = await sharedLink(young, HONEST.replace("Отчёт", "Сводка новичка"));
+  assert.equal(link.moderation, "held");
+  assert.equal((await shareState(link.shareId)).moderation_reason, "new-account");
+  model.open();
+  await reviewsSettled();
+  // Still new-accounts: the operator decides.
+  assert.equal((await shareState(link.shareId)).moderation, "held");
+  config.SHARE_MODERATION = "auto";
+  const { reconsiderLinks } = await import("../apps/server/shares.ts");
+  assert.deepEqual(
+    (await reconsiderLinks(link.revisionId)).map((result) => result.outcome),
+    ["released"],
+  );
+  assert.deepEqual(await shareState(link.shareId), { moderation: "none", moderation_reason: null });
+  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [
+    { actor: "filter", reason: "new-account" },
+  ]);
+});
+
+test("recheck: a dry run changes nothing; the real run decides checked revisions now and sends the rest to the model", async () => {
+  const { recheckHeldShares, formatRecheck } = await import("../apps/server/shares.ts");
+  config.SHARE_MODERATION = "auto";
+  setContentModels(null);
+  const young = await signedUp(0);
+  // Saved while no model was configured: the image waits.
+  const image = await imageLink(young);
+  // Held under the old mode, text only.
+  const legacy = await sharedLink(young, HONEST.replace("Отчёт", "Старая сводка"));
+  await db.query(
+    "UPDATE shares SET moderation='held',moderation_reason='new-account' WHERE id=$1",
+    [legacy.shareId],
+  );
+  const other = await imageLink(young);
+  await db.query("UPDATE shares SET moderation_reason='suspicious' WHERE id=$1", [other.shareId]);
+
+  type Report = Awaited<ReturnType<typeof recheckHeldShares>>;
+  const outcome = (report: Report, shareId: string) =>
+    report.results.find((result) => result.shareId === shareId)?.outcome;
+  const dry = await recheckHeldShares(true, [young.tenant]);
+  assert.equal(dry.results.length, 2);
+  assert.equal(outcome(dry, image.shareId), "kept");
+  assert.equal(outcome(dry, legacy.shareId), "released");
+  assert.match(formatRecheck(dry), /Dry run: 2 links.*Nothing changed/);
+  assert.equal((await shareState(legacy.shareId)).moderation, "held");
+  assert.equal((await eventsOf(legacy.shareId, "share.released")).length, 0);
+
+  // No model: the image keeps waiting, the old text-only hold opens.
+  const real = await recheckHeldShares(false, [young.tenant]);
+  assert.equal(outcome(real, image.shareId), "kept");
+  assert.equal(outcome(real, legacy.shareId), "released");
+  assert.equal((await shareState(legacy.shareId)).moderation, "none");
+  assert.equal((await shareState(image.shareId)).moderation, "held");
+  assert.equal((await shareState(other.shareId)).moderation_reason, "suspicious");
+
+  // A model now: the unchecked image goes to it and opens on a clean answer.
+  setContentModels({ primary: fakeModel("m", () => "none"), fallback: null });
+  const asks = await recheckHeldShares(true, [young.tenant]);
+  assert.equal(asks.reviewed, 1);
+  assert.match(formatRecheck(asks), /would ask the model/);
+  assert.equal((await shareState(image.shareId)).moderation, "held");
+  const reviewed = await recheckHeldShares(false, [young.tenant]);
+  assert.equal(outcome(reviewed, image.shareId), "released");
+  assert.match(formatRecheck(reviewed), /Released 1;/);
+  assert.equal((await shareState(image.shareId)).moderation, "none");
+  assert.match(
+    formatRecheck(await recheckHeldShares(false, [young.tenant])),
+    /No links wait only for the model/,
+  );
+});

@@ -35,11 +35,15 @@ import {
 } from "./share-moderation.ts";
 import { db } from "./db.ts";
 import {
+  MAX_REVIEW_ATTEMPTS,
   blockRevisionInTransaction,
   modelView,
+  queueReview,
   recordEvent,
+  reviewsSettled,
   revisionBlocked,
 } from "./content-moderation.ts";
+import { contentModels } from "./content-filter/model.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
   mergeResults,
@@ -295,58 +299,289 @@ async function applyDecision(
 }
 
 /**
- * The models answered about a revision after links to it were made: decide
- * those links again, only ever more strictly (an open link may be held or
- * blocked; nothing held is opened by a model).
+ * Holds that only waited for a model to look: a young account's images
+ * (image-unchecked) and, once SHARE_MODERATION=auto replaced the review of
+ * new accounts, links held under that old mode (new-account). A model's
+ * answer may release these. Every other hold (suspicious, content:*, spam:*,
+ * model-unavailable, review-all), a pause and a block wait for a person.
  */
-export async function reconsiderLinks(revisionId: string) {
+export function releasableHold(reason: string | null | undefined) {
+  return (
+    reason === "image-unchecked" ||
+    (reason === "new-account" && config.SHARE_MODERATION === "auto")
+  );
+}
+
+/** What deciding a link again did (or, in a dry run, would do). */
+export type Reconsidered = {
+  shareId: string;
+  outcome: "released" | "held" | "blocked" | "flagged" | "kept" | "skipped";
+  /** The hold reason before, and after (when it changed). */
+  from: string | null;
+  to: string | null;
+};
+
+class DryRun extends Error {}
+
+/**
+ * Decide one link to a revision again with what is known now. An open link
+ * only gets stricter (held, blocked, reported). A link that waits only for
+ * the model (releasableHold) is released when the decision no longer holds
+ * it, or moved to the reason the content now gives. The same locks, in the
+ * same order, as creating a link: the owner's tenant, the share row, then
+ * the revision (FOR SHARE, in moderationFor).
+ */
+async function reconsiderShare(
+  shareId: string,
+  revisionId: string,
+  notices: ModerationNotice[],
+  dryRun = false,
+): Promise<Reconsidered> {
+  const result: Reconsidered = { shareId, outcome: "skipped", from: null, to: null };
+  const work = async (c: PoolClient) => {
+    const {
+      rows: [owner],
+    } = await c.query(
+      `SELECT share.tenant_id,tenant.owner_id FROM shares share
+       JOIN tenants tenant ON tenant.id=share.tenant_id WHERE share.id=$1`,
+      [shareId],
+    );
+    if (!owner) return;
+    const actor: Actor = { id: owner.owner_id, tenant: owner.tenant_id };
+    // A disabled or leaving owner: stricter decisions still apply, but
+    // nothing of theirs is released.
+    const active = await lockActiveOwnerTenant(c, actor).then(
+      () => true,
+      () => false,
+    );
+    const {
+      rows: [share],
+    } = await c.query(
+      `SELECT share.*,artifact.title FROM shares share
+       JOIN artifacts artifact ON artifact.id=share.artifact_id
+       WHERE share.id=$1 AND NOT share.revoked AND share.expires_at>now()
+       FOR UPDATE OF share`,
+      [shareId],
+    );
+    if (!share || share.revision_id !== revisionId || share.moderation === "blocked")
+      return;
+    const waiting =
+      share.moderation === "held" && releasableHold(share.moderation_reason);
+    result.from = share.moderation_reason ?? null;
+    const decision = await moderationFor(
+      c,
+      await authorStanding(c, actor.tenant),
+      actor.tenant,
+      share.title,
+      revisionId,
+      dryRun ? [] : notices,
+    );
+    const journal = {
+      actor: "filter" as const,
+      accountId: actor.id,
+      tenantId: actor.tenant,
+      artifactId: share.artifact_id,
+      revisionId,
+      shareId,
+    };
+    if (decision.block) {
+      result.outcome = "blocked";
+      result.to = `blocked:${decision.block}`;
+      if (dryRun) return;
+      await c.query("UPDATE shares SET moderation_reason=$2 WHERE id=$1", [
+        shareId,
+        result.to,
+      ]);
+      await applyDecision(c, actor, share, decision, notices);
+    } else if (waiting) {
+      if (!decision.hold) {
+        if (!active) {
+          result.outcome = "kept";
+          return;
+        }
+        result.outcome = "released";
+        if (dryRun) return;
+        await c.query(
+          `UPDATE shares SET moderation='none',moderation_reason=NULL,moderated_at=now()
+           WHERE id=$1`,
+          [shareId],
+        );
+        // No letter: nobody has to act on a link that opened by itself.
+        await recordEvent(c, {
+          ...journal,
+          action: "share.released",
+          reason: share.moderation_reason,
+        });
+        if (decision.notify)
+          await applyDecision(c, actor, share, { ...decision, hold: null }, notices);
+      } else if (decision.hold === share.moderation_reason) {
+        result.outcome = "kept";
+      } else {
+        result.outcome = "held";
+        result.to = decision.hold;
+        if (dryRun) return;
+        await c.query(
+          "UPDATE shares SET moderation_reason=$2,moderated_at=now() WHERE id=$1",
+          [shareId, decision.hold],
+        );
+        // An old new-account hold that now waits only for the model: the
+        // operator already had a letter about this link.
+        if (decision.hold === "image-unchecked")
+          await recordEvent(c, { ...journal, action: "share.held", reason: decision.hold });
+        else await applyDecision(c, actor, share, decision, notices);
+      }
+    } else if (share.moderation === "none" && decision.content?.action === "hold") {
+      result.outcome = "held";
+      result.to = decision.hold;
+      if (dryRun) return;
+      await c.query(
+        `UPDATE shares SET moderation='held',moderation_reason=$2,moderated_at=now()
+         WHERE id=$1`,
+        [shareId, decision.hold],
+      );
+      await applyDecision(c, actor, share, decision, notices);
+    } else if (share.moderation === "none" && decision.content?.action === "notify") {
+      result.outcome = "flagged";
+      if (dryRun) return;
+      await applyDecision(c, actor, share, { ...decision, hold: null, notify: true }, notices);
+    } else result.outcome = "kept";
+  };
+  try {
+    await transaction(async (c) => {
+      await work(c);
+      // A dry run undoes whatever deciding touched (spam holds of others).
+      if (dryRun) throw new DryRun();
+    });
+  } catch (error) {
+    if (!(error instanceof DryRun)) throw error;
+  }
+  return result;
+}
+
+/**
+ * The models answered about a revision after links to it were made (or the
+ * operator asked to look again): decide those links again. Open links only
+ * get stricter; a link that waited only for the model may open.
+ */
+export async function reconsiderLinks(revisionId: string, dryRun = false) {
   const { rows } = await db.query(
-    `SELECT share.id,share.tenant_id,tenant.owner_id FROM shares share
-     JOIN tenants tenant ON tenant.id=share.tenant_id
-     WHERE share.revision_id=$1 AND NOT share.revoked AND share.expires_at>now()
-       AND share.moderation IN ('none','held')`,
+    `SELECT id FROM shares
+     WHERE revision_id=$1 AND NOT revoked AND expires_at>now()
+       AND moderation IN ('none','held')
+     ORDER BY created_at,id`,
     [revisionId],
   );
   const notices: ModerationNotice[] = [];
+  const results: Reconsidered[] = [];
+  for (const row of rows)
+    results.push(await reconsiderShare(row.id, revisionId, notices, dryRun));
+  // Awaited (it never throws): a script must not close the pool under a
+  // letter still being written.
+  if (!dryRun) await dispatchModerationNotices(notices);
+  return results;
+}
+
+type Rechecked = Reconsidered & { revisionId: string; via: "model" | "now" };
+
+/**
+ * `moderation.ts recheck`: links that wait only for the model. A revision
+ * the models have not answered about is reviewed (its links are decided when
+ * they answer); a checked one, or one the models gave up on, is decided now.
+ * Without a model everything is decided now, and images keep waiting.
+ */
+export async function recheckHeldShares(
+  dryRun = false,
+  /** Only these shelves (tests share one database). */
+  tenantIds: string[] | null = null,
+) {
+  const reasons =
+    config.SHARE_MODERATION === "auto"
+      ? ["image-unchecked", "new-account"]
+      : ["image-unchecked"];
+  const { rows } = await db.query(
+    `SELECT share.id,share.revision_id,share.moderation_reason,
+       revision.content_filter->'model'->>'state' AS model_state,
+       COALESCE((revision.content_filter->'model'->>'attempts')::int,0) AS attempts
+     FROM shares share JOIN revisions revision ON revision.id=share.revision_id
+     WHERE share.moderation='held' AND share.moderation_reason=ANY($1::text[])
+       AND NOT share.revoked AND share.expires_at>now()
+       AND ($2::uuid[] IS NULL OR share.tenant_id=ANY($2::uuid[]))
+     ORDER BY share.created_at,share.id`,
+    [reasons, tenantIds],
+  );
+  const reviewing = !!contentModels() && config.CONTENT_FILTER_MODE !== "off";
+  const toReview = new Set<string>();
+  const toDecide = new Set<string>();
   for (const row of rows) {
-    const actor: Actor = { id: row.owner_id, tenant: row.tenant_id };
-    await transaction(async (c) => {
-      await lockActiveOwnerTenant(c, actor).catch(() => null);
-      const {
-        rows: [share],
-      } = await c.query(
-        `SELECT share.*,artifact.title FROM shares share
-         JOIN artifacts artifact ON artifact.id=share.artifact_id
-         WHERE share.id=$1 AND NOT share.revoked FOR UPDATE OF share`,
-        [row.id],
-      );
-      if (!share || share.moderation === "blocked") return;
-      const decision = await moderationFor(
-        c,
-        await authorStanding(c, actor.tenant),
-        actor.tenant,
-        share.title,
-        revisionId,
-        notices,
-      );
-      if (decision.block) {
-        await c.query(
-          "UPDATE shares SET moderation_reason=$2 WHERE id=$1",
-          [share.id, `blocked:${decision.block}`],
-        );
-        await applyDecision(c, actor, share, decision, notices);
-      } else if (share.moderation === "none" && decision.content?.action === "hold") {
-        await c.query(
-          `UPDATE shares SET moderation='held',moderation_reason=$2,moderated_at=now()
-           WHERE id=$1`,
-          [share.id, decision.hold],
-        );
-        await applyDecision(c, actor, share, decision, notices);
-      } else if (share.moderation === "none" && decision.content?.action === "notify")
-        await applyDecision(c, actor, share, { ...decision, hold: null, notify: true }, notices);
+    const answered =
+      row.model_state === "checked" ||
+      (row.model_state === "unchecked" && row.attempts >= MAX_REVIEW_ATTEMPTS);
+    (reviewing && !answered ? toReview : toDecide).add(row.revision_id);
+  }
+  const held = new Set(rows.map((row) => row.id as string));
+  const results: Rechecked[] = [];
+  for (const revisionId of toDecide)
+    for (const result of await reconsiderLinks(revisionId, dryRun))
+      if (held.has(result.shareId)) results.push({ ...result, revisionId, via: "now" });
+  if (!dryRun) {
+    for (const revisionId of toReview) queueReview(revisionId);
+    await reviewsSettled();
+  }
+  for (const row of rows.filter((row) => toReview.has(row.revision_id))) {
+    const {
+      rows: [now],
+    } = await db.query("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [
+      row.id,
+    ]);
+    const outcome: Reconsidered["outcome"] = dryRun
+      ? "skipped"
+      : now?.moderation === "none"
+        ? "released"
+        : now?.moderation === "blocked"
+          ? "blocked"
+          : now?.moderation_reason !== row.moderation_reason
+            ? "held"
+            : "kept";
+    results.push({
+      shareId: row.id,
+      revisionId: row.revision_id,
+      via: "model",
+      outcome,
+      from: row.moderation_reason,
+      to: now?.moderation_reason ?? null,
     });
   }
-  void dispatchModerationNotices(notices);
+  return { dryRun, reviewing, reviewed: toReview.size, results };
+}
+
+export function formatRecheck(report: Awaited<ReturnType<typeof recheckHeldShares>>) {
+  const { dryRun } = report;
+  const lines = report.results.map((result) =>
+    [
+      `share ${result.shareId}`,
+      `revision ${result.revisionId}`,
+      result.from ?? "-",
+      result.via === "model"
+        ? dryRun
+          ? "would ask the model"
+          : `model reviewed: ${result.outcome}`
+        : `${dryRun ? "would be " : ""}${result.outcome}`,
+      result.to && result.to !== result.from ? `-> ${result.to}` : "",
+    ]
+      .filter(Boolean)
+      .join("  "),
+  );
+  const count = (outcome: Reconsidered["outcome"]) =>
+    report.results.filter((result) => result.outcome === outcome).length;
+  const model = report.reviewing ? "" : " No model is configured: image holds stay.";
+  lines.push(
+    !report.results.length
+      ? "No links wait only for the model."
+      : dryRun
+        ? `Dry run: ${report.results.length} links; ${report.reviewed} revisions would be sent to the model. Nothing changed.${model}`
+        : `Released ${count("released")}; held for another reason ${count("held")}; blocked ${count("blocked")}; still waiting ${count("kept") + count("skipped")}. Revisions sent to the model: ${report.reviewed}.${model}`,
+  );
+  return lines.join("\n");
 }
 
 /** A link the filter blocked: the caller learns it after the block commits. */
