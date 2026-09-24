@@ -84,8 +84,10 @@ export function Landing() {
               />
             </div>
             <small>
-              Работает с Codex, Claude Code, Claude.ai и ChatGPT: агент выполнит
-              одну команду, Полка откроется в браузере, токен не нужен.
+              Codex и Claude Code выполнят одну команду сами — Полка откроется в
+              браузере, токен не нужен. В ChatGPT и Claude.ai добавьте коннектор
+              вручную: Настройки → Коннекторы → <code>{`${location.origin}/mcp`}</code>{" "}
+              (вход OAuth).
             </small>
           </div>
 
