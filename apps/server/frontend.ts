@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { trackPageView } from "./analytics.ts";
 import { config } from "./config.ts";
+import { indexable } from "./indexing.ts";
 
 const escape = (value: string) =>
   value
@@ -69,7 +70,8 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       .send(
         html.replace(
           "</head>",
-          () => `${linkPreviewTags(path)}\n  </head>`,
+          () =>
+            `${linkPreviewTags(path)}${indexable(path) ? "" : '\n  <meta name="robots" content="noindex,nofollow" />'}\n  </head>`,
         ),
       );
   };

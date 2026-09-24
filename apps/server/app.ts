@@ -1,5 +1,6 @@
 import { registerAgentContext } from "./agent-context.ts";
 import { connectGuide } from "./connect-guide.ts";
+import { indexable, robotsTxt } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
 import { registerOpsMetrics } from "./metrics.ts";
@@ -142,7 +143,6 @@ export async function createApp() {
     reply.headers({
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
-      "x-robots-tag": "noindex, nofollow, noarchive",
       "referrer-policy": "no-referrer",
       // frame-src is load-bearing: it is what keeps a saved page from
       // navigating the reader's tab to a look-alike site. Do not widen it.
@@ -151,6 +151,9 @@ export async function createApp() {
       "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-src ${config.HTML_LIVE_ENABLED ? config.VIEWER_ORIGIN : "'self'"}; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
     });
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
+    // Public pages may be indexed (indexing.ts); everything else stays out.
+    if (!indexable(pathname))
+      reply.header("x-robots-tag", "noindex, nofollow, noarchive");
     // /mcp, the OAuth machine endpoints and the HTTP publish API are
     // cookie-less server-to-server surfaces with their own authentication;
     // browser routes keep this check.
@@ -238,6 +241,12 @@ export async function createApp() {
   registerTemplateLibraryRoutes(app, identity);
   registerSignInRoutes(app);
   // Agent-readable setup: "Connect Полка: <origin>/connect".
+  app.get("/robots.txt", async (_req, reply) =>
+    reply
+      .header("cache-control", "public, max-age=3600")
+      .type("text/plain; charset=utf-8")
+      .send(robotsTxt(config.APP_ORIGIN)),
+  );
   app.get("/connect", async (req, reply) => {
     trackPageView(req, "/connect");
     return reply
