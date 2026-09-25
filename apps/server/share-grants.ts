@@ -6,6 +6,8 @@ import {
   isServedRuntimeProfile,
 } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
+import { autoCheckedClean } from "./content-filter/policy.ts";
+import { sensitiveInputOf } from "./content-filter/sensitive-input.ts";
 import { missing } from "./errors.ts";
 import { isStaticSingleFileBundle } from "./revision-manifest.ts";
 import { sha256 } from "./storage.ts";
@@ -62,5 +64,8 @@ export async function issueShareGrant(
     revision: revisionDTO(r),
     grant,
     expiresAt: (g.expires_at as Date).toISOString(),
+    // What the recipient's note says about this version (never the findings).
+    sensitiveInput: sensitiveInputOf(r.content_filter),
+    autoChecked: autoCheckedClean(r.content_filter),
   };
 }
