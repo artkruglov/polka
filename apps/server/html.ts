@@ -12,6 +12,10 @@ import {
   SignalCollector,
   scanScript,
 } from "./phishing-signals.ts";
+import {
+  sensitiveFields,
+  type SensitiveInput,
+} from "./content-filter/sensitive-input.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
 // scripts, forms, plugins or network. Inline styles and data: images still work.
@@ -424,6 +428,11 @@ export type HtmlInspection = {
   images?: string[];
   /** With { scripts: true }: the page's scripts (bounded), for the code model. */
   scripts?: string[];
+  /**
+   * Fields for a password, a card or a code (content-filter/sensitive-input.ts),
+   * also kept in filter.sensitiveInput. Absent: the page was not read (UNREAD).
+   */
+  sensitive?: SensitiveInput;
 };
 
 // A conservative heuristic, not a safety verdict: it only decides how honestly
@@ -464,6 +473,7 @@ export function inspectHtml(
       else if (parent === "style") content.css(value);
       else {
         collector.context(value);
+        if (parent === "label") collector.sensitive.label(value);
         if (concealed) content.hidden(value.trim().length);
       }
       if (!hidden && !unsafe) text.push(value);
@@ -480,9 +490,13 @@ export function inspectHtml(
         )
           concealed = true;
       }
+      collector.sensitive.element(tag, attrs);
       for (const { name, value } of attrs) {
         const attr = name.toLowerCase();
-        if (attr.startsWith("on")) content.code(value);
+        if (attr.startsWith("on")) {
+          content.code(value);
+          collector.sensitive.script(value);
+        }
         if (tag === "a" && attr === "download")
           content.download(
             attrs.find((item) => item.name.toLowerCase() === "href")?.value ?? "",
@@ -549,9 +563,11 @@ export function inspectHtml(
       stack.push([children[i]!, inner, tag, concealed]);
   }
   const signals = collector.list();
+  const sensitive = collector.sensitive.result();
   const findings = {
     signals,
-    filter: content.result(signals),
+    filter: { ...content.result(signals), ...sensitiveFields(sensitive) },
+    sensitive,
     ...(content.sampleWanted ? { sample: content.sample() } : {}),
     ...(content.imagesWanted ? { images: content.images } : {}),
     ...(content.scriptsWanted ? { scripts: content.scripts } : {}),
