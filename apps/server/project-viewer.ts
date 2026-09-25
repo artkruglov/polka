@@ -257,6 +257,11 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     if (!navigate) {
       const allowed = typeof dest === "string" ? RESOURCE_FOR[dest] : undefined;
       if (!allowed?.(file.mime)) throw missing();
+      // Fonts and module scripts are fetched in CORS mode, and a sandboxed
+      // page's origin is "null". The token in the path is the permission;
+      // the header adds no reader who could not already load these bytes.
+      if (dest === "font" || dest === "script")
+        reply.header("access-control-allow-origin", "*");
       return reply.type(file.mime).send(bytes);
     }
     const name = posix.basename(file.path);

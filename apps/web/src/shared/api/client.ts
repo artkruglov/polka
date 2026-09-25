@@ -441,6 +441,33 @@ export async function staticView(
   return result.url;
 }
 
+/**
+ * A project's view (docs/specs/PROJECTS.md): the viewer address of the whole
+ * project for up to 30 minutes. The owner's session, or a recipient's grant.
+ */
+export async function projectView(
+  revisionId: string,
+  grant?: string,
+  signal?: AbortSignal,
+) {
+  const response = await send(
+    grant ? "/api/view/project-view" : `/api/revisions/${revisionId}/project-view`,
+    {
+      method: "POST",
+      headers: grant ? { Authorization: `Bearer ${grant}` } : {},
+      signal,
+    },
+  );
+  const result = (await response.json()) as { url?: unknown; expiresAt?: unknown };
+  if (typeof result.url !== "string" || typeof result.expiresAt !== "string")
+    throw new ApiError(
+      response.status,
+      "invalid_response",
+      "Сервер вернул некорректный ответ. Повторите попытку.",
+    );
+  return { url: result.url, expiresAt: result.expiresAt };
+}
+
 export type PendingUpload = { file: Blob; key: string; id?: string };
 /** begin → bytes → finalize. Reusing `op` after a failure retries the same upload key. */
 export async function saveUpload(
