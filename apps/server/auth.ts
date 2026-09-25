@@ -139,7 +139,12 @@ export async function identity(
   // Returning activity for retention: one row per account and day.
   markActive(actor.id);
   actor.role = "owner";
-  const requested = options.shelf ? req.headers["x-polka-shelf"] : undefined;
+  // A GET the browser makes by itself (a cover <img>, «Открыть ↗») cannot
+  // carry a header, so it may name the shelf as ?shelf=; reading only.
+  const requested = options.shelf
+    ? (req.headers["x-polka-shelf"] ??
+      (req.method === "GET" ? (req.query as { shelf?: unknown } | undefined)?.shelf : undefined))
+    : undefined;
   if (typeof requested === "string" && requested !== actor.tenant) {
     const shelf = uuid.safeParse(requested).success
       ? await memberShelf(db, actor.id, requested)

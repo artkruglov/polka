@@ -8,7 +8,7 @@ import {
   OWNER_LINK_HINT,
   recipientAccessNote,
 } from "../../entities/link/index.tsx";
-import { bytes, staticView } from "../../shared/api/client.ts";
+import { bytes, staticView, withShelf } from "../../shared/api/client.ts";
 import {
   isImage,
   isStaticSingleFileBundle,
@@ -101,7 +101,7 @@ export function Preview({
         host={link.host}
         service={link.service}
         // The owner goes through Полка (no referrer); a recipient straight to the original.
-        href={grant ? document.url : `/api/revisions/${revision.id}/open`}
+        href={grant ? document.url : withShelf(`/api/revisions/${revision.id}/open`)}
         note={document.note}
         hint={grant ? recipientAccessNote(link.host, link.service, "recipient") : `${OWNER_LINK_HINT} ${recipientAccessNote(link.host, link.service)}`}
       />
@@ -134,7 +134,7 @@ export function Preview({
           !grant && (
             <a
               className="ui-button"
-              href={`/api/revisions/${revision.id}/export`}
+              href={withShelf(`/api/revisions/${revision.id}/export`)}
               download
             >
               Скачать весь пакет

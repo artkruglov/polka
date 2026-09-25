@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { currentShelf, withShelf } from "../../shared/api/client.ts";
 import "./styles.css";
 import {
   ArrowUpRight,
@@ -82,7 +83,7 @@ export function ShelfCard({
   open: (id: string, panel?: CardAction) => void;
 }) {
   const [ref, near] = useNearViewport<HTMLElement>();
-  const href = `/works/${a.id}`;
+  const href = withShelf(`/works/${a.id}`);
   const go = (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
     e.preventDefault();
@@ -101,11 +102,14 @@ export function ShelfCard({
             label: "Открыть оригинал",
             icon: <ExternalLink />,
             // A link work opens its original in a new tab (docs/specs/SAVED_LINKS.md).
-            onSelect: () => void window.open(`/api/revisions/${r.id}/open`, "_blank", "noopener,noreferrer"),
+            onSelect: () => void window.open(withShelf(`/api/revisions/${r.id}/open`), "_blank", "noopener,noreferrer"),
           },
         ]
       : []),
-    { id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") },
+    // Links out of a department shelf come later (docs/specs/TEAM_SHELVES.md).
+    ...(currentShelf()
+      ? []
+      : [{ id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") }]),
     { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
     { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
   ];
@@ -123,10 +127,11 @@ export function ShelfCard({
         </h3>
         <p className="shelf-card-meta">
           <span className="shelf-card-access" title={accessLabel(a)}>
-            {linked ? <Users aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}
+            {linked || a.author ? <Users aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}
             <span className="sr-only">{accessLabel(a)}. </span>
           </span>
           <span>
+            {a.author ? `${a.author.name} · ` : ""}
             {cardKind(a, cover)} · v{r.number} · {date(a.updatedAt)}
           </span>
         </p>

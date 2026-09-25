@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
+import { config } from "./config.ts";
 import { Problem, missing } from "./errors.ts";
 
 /**
@@ -33,16 +34,23 @@ export async function lockActiveOwnerTenant(
   return tenant;
 }
 
+/**
+ * The account may read this shelf: its own, or a department shelf it is an
+ * active member of (any role; docs/specs/TEAM_SHELVES.md). On a personal
+ * shelf the owner is its one member, so this is the owner check it was.
+ */
 export async function assertActiveOwner(
   c: Pick<PoolClient, "query">,
   actor: Actor,
 ) {
   const active = await c.query(
-    `SELECT 1 FROM tenants tenant
-     JOIN accounts account ON account.id=tenant.owner_id
-     WHERE tenant.id=$1 AND tenant.owner_id=$2
+    `SELECT 1 FROM tenant_members member
+     JOIN tenants tenant ON tenant.id=member.tenant_id
+     JOIN accounts account ON account.id=member.account_id
+     WHERE member.tenant_id=$1 AND member.account_id=$2 AND member.state='active'
+       AND tenant.state='active' AND ($3::boolean OR tenant.kind='personal')
        AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
-    [actor.tenant, actor.id],
+    [actor.tenant, actor.id, config.TEAM_SHELVES === "on"],
   );
   if (!active.rowCount)
     throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");

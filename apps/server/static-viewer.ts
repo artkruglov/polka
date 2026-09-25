@@ -58,7 +58,9 @@ export async function issueOwnerStaticView(
          JOIN tenants tenant ON tenant.id=r.tenant_id
          JOIN sessions session ON session.hash=$2 AND session.account_id=$3
          JOIN accounts account ON account.id=session.account_id
-           AND account.id=tenant.owner_id
+           AND tenant.state='active'
+         JOIN tenant_members member ON member.tenant_id=tenant.id
+           AND member.account_id=account.id AND member.state='active'
          WHERE r.id=$4 AND r.tenant_id=$5 AND ${STATIC_REVISION_SQL}
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
@@ -150,7 +152,10 @@ async function authorizedStaticRevision(token: string) {
              SELECT 1
              FROM sessions session
              JOIN accounts account ON account.id=session.account_id
-             JOIN tenants tenant ON tenant.owner_id=account.id
+             JOIN tenant_members member ON member.account_id=account.id
+               AND member.state='active'
+             JOIN tenants tenant ON tenant.id=member.tenant_id
+               AND tenant.state='active'
              WHERE session.hash=vg.owner_session_hash
                AND session.expires_at>now() AND NOT account.disabled
                AND account.deletion_requested_at IS NULL
