@@ -10,14 +10,29 @@ const METHOD = "polka:sign-in-method";
 const FRESH_NOTE = "polka:fresh-shelf-note";
 const ENTERED = "polka:entered-by-agent";
 
-export type SignInMethod = "email" | "password" | "yandex" | "vk" | "oidc" | "agent";
+export type SignInMethod =
+  | "email"
+  | "password"
+  | "yandex"
+  | "vk"
+  | "google"
+  | "oidc"
+  | "agent";
 export type KnownShelf = {
   displayName: string;
   method: SignInMethod | null;
   at: string;
 };
 
-const METHODS: SignInMethod[] = ["email", "password", "yandex", "vk", "oidc", "agent"];
+const METHODS: SignInMethod[] = [
+  "email",
+  "password",
+  "yandex",
+  "vk",
+  "google",
+  "oidc",
+  "agent",
+];
 
 export function knownShelf(): KnownShelf | null {
   try {
@@ -86,6 +101,8 @@ export function methodLabel(method: SignInMethod | null) {
       return "Яндекс ID";
     case "vk":
       return "VK ID";
+    case "google":
+      return "Google";
     case "oidc":
       return "единый вход компании";
     case "agent":

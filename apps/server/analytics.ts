@@ -65,6 +65,7 @@ export type SignupMethod =
   | "email"
   | "yandex"
   | "vk"
+  | "google"
   | "oidc"
   | "password"
   | "provisional";
@@ -330,12 +331,12 @@ export function trackSignup(
 
 /**
  * A provisional shelf got a sign-in method (migration 036): `method` is
- * email, yandex, vk, oidc or merge (moved into an existing shelf).
+ * email, yandex, vk, google, oidc or merge (moved into an existing shelf).
  */
 export function trackShelfClaimed(
   c: PoolClient,
   accountId: string,
-  method: "email" | "yandex" | "vk" | "oidc" | "merge",
+  method: "email" | "yandex" | "vk" | "google" | "oidc" | "merge",
 ) {
   later(
     c,
