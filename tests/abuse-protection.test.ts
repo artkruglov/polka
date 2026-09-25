@@ -739,9 +739,11 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
 test("the worker's start does not count against a page's scan deadline", async () => {
   // Loading tsx and the classifier in a fresh worker takes longer than this
   // deadline on its own; the clock starts only once the worker is ready.
-  const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(3_000)}</p>`;
+  // Just over the inline limit: its scan takes milliseconds, the worker's
+  // start (~0.2 s idle, more under load) would not fit the deadline.
+  const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(760)}</p>`;
   assert.ok(page.length > 16 * 1024);
-  const read = await inspectHtmlBounded(page, 200);
+  const read = await inspectHtmlBounded(page, 150);
   assert.deepEqual({ profile: read.profile, signals: read.signals }, { profile: "static", signals: [] });
 });
 
@@ -768,8 +770,10 @@ test("signals of a large page come back from the bounded worker; an unreadable p
 
 test("the phishing scan stays linear in the page size", () => {
   // Saving runs this on the request thread, like classifyHtml (see unit.test.ts).
-  // Linear, not a wall-clock budget: a 4× larger input may take up to ~8×
-  // as long (quadratic would be 16×), so a loaded machine cannot fail it.
+  // Linear, not a wall-clock budget: a 4× larger input (512 KB → 2 MB) may
+  // take up to ~8× as long (quadratic would be 16×), so a loaded machine
+  // cannot fail it. Below ~512 KB some scans run in a faster regexp regime,
+  // which would inflate the ratio.
   const pages = (size: number) => [
     "номер ".repeat(size / 6),
     `<p>${"подтвердите ".repeat(size / 12)}</p>`,
@@ -798,12 +802,12 @@ test("the phishing scan stays linear in the page size", () => {
     assert.ok(b < 8 * a + 150, `${label}: ${Math.round(a)} ms → ${Math.round(b)} ms`);
   };
   const MB = 1024 * 1024;
-  const largePages = pages(MB);
-  const largeScripts = scripts(MB);
-  pages(MB / 4).forEach((page, i) =>
+  const largePages = pages(2 * MB);
+  const largeScripts = scripts(2 * MB);
+  pages(MB / 2).forEach((page, i) =>
     linear(JSON.stringify(page.slice(0, 16)), () => inspectHtml(page), () => inspectHtml(largePages[i]!)),
   );
-  scripts(MB / 4).forEach((source, i) =>
+  scripts(MB / 2).forEach((source, i) =>
     linear(JSON.stringify(source.slice(0, 4)),
       () => scanScript(source, new SignalCollector()),
       () => scanScript(largeScripts[i]!, new SignalCollector())),
