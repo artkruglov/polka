@@ -12,6 +12,7 @@ import type {
   OAuthConsentDetails,
 } from "../../../../../packages/contracts/index.ts";
 import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
+import type { RevisionCover } from "../../../../../packages/contracts/cover.ts";
 import type {
   CommentAnchor,
   Reaction,
@@ -182,6 +183,11 @@ export const client = {
       `/trash${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`,
     ),
   artifact: (id: string) => request<Artifact>(`/artifacts/${id}`),
+  /** A shelf card's cover, decided once per version (docs/specs/SHELF_COVERS.md). */
+  cover: (revisionId: string, signal?: AbortSignal) =>
+    request<{ cover: RevisionCover | null }>(`/revisions/${revisionId}/cover`, undefined, "GET", signal).then(
+      ({ cover }) => cover,
+    ),
   restoreArtifact: (
     id: string,
     input: { expectedLifecycleVersion: number; expectedRevisionId: string },

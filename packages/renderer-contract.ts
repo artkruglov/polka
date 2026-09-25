@@ -43,6 +43,27 @@ export type FetchResult =
   | { error: RenderError; detail?: string };
 export const FETCH_TIMEOUT_MS = 15_000;
 
+/**
+ * POST /snapshot {html, script}: a shelf cover (docs/specs/SHELF_COVERS.md).
+ * The app sends the saved page itself; the renderer draws its first screen
+ * at 1280×800 with no network at all and answers a JPEG of 960×600.
+ * blank: the page drew nothing worth a picture (a script that needed the
+ * network, an empty shell).
+ */
+export type SnapshotRequest = { html: string; script: boolean };
+export type SnapshotResult =
+  | { image: string; blank: false }
+  | { blank: true }
+  | { error: RenderError; detail?: string };
+/** The largest page the app sends: a built interactive version fits (8 MB), base64 images of 5 MB too. */
+export const SNAPSHOT_MAX_BODY = 12 * 1024 * 1024;
+/** The largest picture the renderer answers (base64 of it is a third larger). */
+export const SNAPSHOT_MAX_IMAGE = 256 * 1024;
+export const SNAPSHOT_TIMEOUT_MS = 15_000;
+export const SNAPSHOT_VIEWPORT = { width: 1280, height: 800 } as const;
+/** 1280×800 at 0.75: 960×600, twice the widest card on a 1440 screen. */
+export const SNAPSHOT_SCALE = 0.75;
+
 const payload = (timestamp: string, method: string, path: string, body: string) =>
   `${timestamp}\n${method.toUpperCase()}\n${path}\n${createHash("sha256").update(body).digest("hex")}`;
 
