@@ -1,4 +1,5 @@
 import { TabList, tabId } from "../../shared/ui/Tabs.tsx";
+import { currentShelf } from "../../shared/api/client.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { Popover } from "../../shared/ui/Popover.tsx";
 import React, { useEffect, useId, useState } from "react";
@@ -338,7 +339,8 @@ export function ArtifactReader({
               <Maximize2 />
             </IconButton>
           )}
-          {!work.trashedAt && (
+          {/* Links out of a department shelf come later (docs/specs/TEAM_SHELVES.md). */}
+          {!work.trashedAt && !currentShelf() && (
             <Button
               variant="primary"
               className="work-bar-share"

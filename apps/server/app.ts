@@ -21,7 +21,7 @@ import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { importSources, registerUrlImports } from "./url-import/routes.ts";
 import { beginEmailLogin, verifyEmailLogin } from "./email-auth.ts";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -132,6 +132,14 @@ import {
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import {
+  addShelfMember,
+  changeShelfMemberRole,
+  listShelfEvents,
+  listShelfMembers,
+  renameShelf,
+  revokeShelfMember,
+} from "./shelf-members.ts";
 import { createFolderInTransaction, folderNameSchema } from "./folders.ts";
 import { createStarCounter } from "./source-stars.ts";
 
@@ -159,6 +167,22 @@ const encodeCursor = (date: string, id: string) =>
   Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
 const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
+
+/**
+ * Routes of the shelf itself — works, folders, uploads, trash, views — follow
+ * the shelf the web app has open (X-Polka-Shelf, docs/specs/TEAM_SHELVES.md).
+ */
+const SHELF = { shelf: true } as const;
+
+/** Links out of a department shelf come in stage 5; say so instead of «not found». */
+async function refuseTeamShelfLinks(req: FastifyRequest) {
+  if ((await identity(req, SHELF)).role !== "owner")
+    throw new Problem(
+      409,
+      "conflict",
+      "Ссылки из полок отделов появятся позже. Пока работу можно открыть коллегам на самой полке.",
+    );
+}
 
 export async function createApp() {
   const app = Fastify({
@@ -678,7 +702,7 @@ export async function createApp() {
       (
         await db.query(
           "SELECT id,name FROM folders WHERE tenant_id=$1 ORDER BY name LIMIT 100",
-          [(await identity(req)).tenant],
+          [(await identity(req, SHELF)).tenant],
         )
       ).rows,
   );
@@ -686,7 +710,14 @@ export async function createApp() {
   // department shelves while TEAM_SHELVES is on.
   app.get("/api/shelves", async (req) => {
     const actor = await identity(req);
-    return { items: await shelvesOf(actor.id) };
+    const {
+      rows: [account],
+    } = await db.query("SELECT company_admin FROM accounts WHERE id=$1", [actor.id]);
+    return {
+      items: await shelvesOf(actor.id),
+      // A company admin opens department shelves (TEAM_SHELVES on).
+      canCreate: config.TEAM_SHELVES === "on" && Boolean(account?.company_admin),
+    };
   });
   app.post("/api/shelves", async (req) => {
     const actor = await identity(req);
@@ -694,8 +725,36 @@ export async function createApp() {
     const input = z.object({ name: z.string().max(200) }).strict().parse(req.body);
     return transaction((c) => createTeamShelfInTransaction(c, actor, input.name));
   });
+  // Members of a department shelf (shelf-members.ts).
+  const shelfId = (req: FastifyRequest) => uuid.parse((req.params as any).shelfId);
+  app.get("/api/shelves/:shelfId/members", async (req) =>
+    listShelfMembers(await identity(req), shelfId(req)),
+  );
+  app.post("/api/shelves/:shelfId/members", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return addShelfMember(actor, shelfId(req), req.body);
+  });
+  app.patch("/api/shelves/:shelfId/members/:accountId", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return changeShelfMemberRole(actor, shelfId(req), uuid.parse((req.params as any).accountId), req.body);
+  });
+  app.post("/api/shelves/:shelfId/members/:accountId/revoke", async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return revokeShelfMember(actor, shelfId(req), uuid.parse((req.params as any).accountId));
+  });
+  app.patch("/api/shelves/:shelfId", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return renameShelf(actor, shelfId(req), req.body);
+  });
+  app.get("/api/shelves/:shelfId/events", async (req) =>
+    listShelfEvents(await identity(req), shelfId(req)),
+  );
   app.post("/api/folders", async (req) => {
-    const actor = await identity(req),
+    const actor = await identity(req, SHELF),
       input = z
         .object({ name: folderNameSchema })
         .strict()
@@ -703,7 +762,7 @@ export async function createApp() {
     return transaction((c) => createFolderInTransaction(c, actor, input.name));
   });
   app.get("/api/artifacts", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const q = z
       .object({
         q: z.string().max(160).default(""),
@@ -766,10 +825,10 @@ export async function createApp() {
     };
   });
   app.get("/api/artifacts/:id", async (req) =>
-    getArtifact(await identity(req), id(req)),
+    getArtifact(await identity(req, SHELF), id(req)),
   );
   app.get("/api/trash", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const query = z
       .object({ cursor: z.string().max(200).optional() })
       .strict()
@@ -805,7 +864,7 @@ export async function createApp() {
   });
   app.post("/api/artifacts/:id/trash", async (req) =>
     transitionOwnerArtifactLifecycle(
-      await identity(req),
+      await identity(req, SHELF),
       id(req),
       req.body,
       "trashed",
@@ -813,17 +872,17 @@ export async function createApp() {
   );
   app.post("/api/artifacts/:id/restore", async (req) =>
     transitionOwnerArtifactLifecycle(
-      await identity(req),
+      await identity(req, SHELF),
       id(req),
       req.body,
       "active",
     ),
   );
   app.patch("/api/artifacts/:id", async (req) =>
-    updateArtifactMetadata(await identity(req), id(req), req.body),
+    updateArtifactMetadata(await identity(req, SHELF), id(req), req.body),
   );
   app.get("/api/artifacts/:id/revisions", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     await getArtifact(actor, id(req));
     return (
       await db.query(
@@ -834,16 +893,16 @@ export async function createApp() {
     ).rows.map(revisionDTO);
   });
   app.post("/api/uploads", async (req) =>
-    beginUpload(await identity(req), req.body),
+    beginUpload(await identity(req, SHELF), req.body),
   );
   // «Сохранить как ссылку» (docs/specs/SAVED_LINKS.md).
   app.post("/api/links", { bodyLimit: 8192 }, async (req) =>
-    saveLink(await identity(req), req.body),
+    saveLink(await identity(req, SHELF), req.body),
   );
   // The owner's «Открыть ↗» on a link work: the address is read from its file
   // and the browser is sent there, without a referrer.
   app.get("/api/revisions/:id/open", async (req, reply) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const {
       rows: [r],
     } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
@@ -862,7 +921,7 @@ export async function createApp() {
   let transfers = 0;
   const tenantTransfers = new Map<string, number>();
   const transferGuard = async (req: any, reply: any) => {
-    const { tenant } = await identity(req);
+    const { tenant } = await identity(req, SHELF);
     const mine = tenantTransfers.get(tenant) ?? 0;
     if (transfers >= TRANSFER_SLOTS.total || mine >= TRANSFER_SLOTS.perTenant)
       throw new Problem(
@@ -889,20 +948,20 @@ export async function createApp() {
           "invalid",
           "Файл должен передаваться отдельным двоичным запросом.",
         );
-      return uploadBytes(await identity(req), id(req), req.body);
+      return uploadBytes(await identity(req, SHELF), id(req), req.body);
     },
   );
   app.post("/api/uploads/:id/finalize", async (req) =>
-    finalizeUpload(await identity(req), id(req)),
+    finalizeUpload(await identity(req, SHELF), id(req)),
   );
   app.get("/api/uploads/:id", async (req) => {
-    return uploadStatus(await identity(req), id(req), "single");
+    return uploadStatus(await identity(req, SHELF), id(req), "single");
   });
   app.delete("/api/uploads/:id", async (req) =>
-    abortUpload(await identity(req), id(req), "single"),
+    abortUpload(await identity(req, SHELF), id(req), "single"),
   );
   app.post("/api/bundle-uploads", { bodyLimit: 64 * 1024 }, async (req) =>
-    beginBundleUpload(await identity(req), req.body),
+    beginBundleUpload(await identity(req, SHELF), req.body),
   );
   app.put(
     "/api/bundle-uploads/:id/files/:index",
@@ -920,22 +979,22 @@ export async function createApp() {
         .min(0)
         .max(63)
         .parse((req.params as any).index);
-      return uploadBundleFile(await identity(req), id(req), index, req.body);
+      return uploadBundleFile(await identity(req, SHELF), id(req), index, req.body);
     },
   );
   app.post("/api/bundle-uploads/:id/finalize", async (req) =>
-    finalizeBundleUpload(await identity(req), id(req)),
+    finalizeBundleUpload(await identity(req, SHELF), id(req)),
   );
   app.get("/api/bundle-uploads/:id", async (req) =>
-    uploadStatus(await identity(req), id(req), "bundle"),
+    uploadStatus(await identity(req, SHELF), id(req), "bundle"),
   );
   app.delete("/api/bundle-uploads/:id", async (req) =>
-    abortUpload(await identity(req), id(req), "bundle"),
+    abortUpload(await identity(req, SHELF), id(req), "bundle"),
   );
   // Owner download and export stay available in the trash (docs/TRASH_SPEC.md:
   // R17 export); only /document, which renders the page, refuses a trashed one.
   app.get("/api/revisions/:id/bytes", async (req, reply) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const {
       rows: [r],
     } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
@@ -956,10 +1015,10 @@ export async function createApp() {
   // once per version; the picture is immutable for its key, so the browser
   // keeps it (private: it is the owner's content).
   app.get("/api/revisions/:id/cover", async (req) => ({
-    cover: await coverFor(await identity(req), id(req)),
+    cover: await coverFor(await identity(req, SHELF), id(req)),
   }));
   app.get("/api/revisions/:id/cover.jpg", async (req, reply) => {
-    const image = await coverImage(await identity(req), id(req));
+    const image = await coverImage(await identity(req, SHELF), id(req));
     reply
       .type(image.type)
       .header("cache-control", "private, max-age=31536000, immutable")
@@ -969,7 +1028,7 @@ export async function createApp() {
   });
   app.get("/api/revisions/:id/export", async (req, reply) => {
     const revisionId = id(req);
-    const result = await exportRevision(await identity(req), revisionId);
+    const result = await exportRevision(await identity(req, SHELF), revisionId);
     reply
       .type("application/json; charset=utf-8")
       .header(
@@ -979,10 +1038,10 @@ export async function createApp() {
     return result;
   });
   app.get("/api/revisions/:id/build-inline", async (req) =>
-    getInlineBuildStatus(await identity(req), id(req)),
+    getInlineBuildStatus(await identity(req, SHELF), id(req)),
   );
   app.post("/api/revisions/:id/build-inline", async (req, reply) => {
-    const result = await buildInlineRevision(await identity(req), id(req));
+    const result = await buildInlineRevision(await identity(req, SHELF), id(req));
     if (result.concurrent) reply.code(202);
     return result.status;
   });
@@ -1018,7 +1077,7 @@ export async function createApp() {
   // Where the static frame loads from: the viewer (a 60-second grant) when
   // there is one, else the app routes below. The web app asks here first.
   app.post("/api/revisions/:id/static-view", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const revisionId = id(req);
     if (!config.HTML_LIVE_ENABLED)
       return { url: `/api/revisions/${revisionId}/document` };
@@ -1031,7 +1090,7 @@ export async function createApp() {
   });
   // Projects (docs/specs/PROJECTS.md): a view of the whole folder, page by page.
   app.post("/api/revisions/:id/project-view", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     return issueOwnerProjectView(actor, req.cookies.polka_session ?? "", id(req));
   });
   app.post("/api/view/project-view/renew", async (req) => {
@@ -1069,7 +1128,7 @@ export async function createApp() {
     return target;
   });
   app.get("/api/revisions/:id/document", async (req, reply) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     const {
       rows: [r],
     } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
@@ -1089,7 +1148,7 @@ export async function createApp() {
     return sendHtml(req, reply, r);
   });
   app.post("/api/revisions/:id/live-view", async (req) => {
-    const actor = await identity(req);
+    const actor = await identity(req, SHELF);
     return issueOwnerLiveView(
       actor,
       req.cookies.polka_session ?? "",
@@ -1098,6 +1157,7 @@ export async function createApp() {
     );
   });
   app.post("/api/artifacts/:id/share", async (req) => {
+    await refuseTeamShelfLinks(req);
     return enableOwnerShare(await strongIdentity(req), id(req), req.body);
   });
   app.post("/api/shares/:id/revoke", async (req) => {

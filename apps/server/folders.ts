@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { Problem, missing } from "./errors.ts";
 import { audit, type Actor } from "./artifacts.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { lockShelf } from "./shelves.ts";
 
 /**
  * Folders of a shelf: the rules the web («ПАПКИ», +) and the agent tools
@@ -39,7 +39,7 @@ export async function createFolderInTransaction(
   rawName: string,
 ) {
   const name = folderNameSchema.parse(rawName);
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "curator");
   const {
     rows: [{ count }],
   } = await c.query("SELECT count(*) FROM folders WHERE tenant_id=$1", [
@@ -81,7 +81,7 @@ export async function renameFolderInTransaction(
   rawName: string,
 ) {
   const name = folderNameSchema.parse(rawName);
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "curator");
   const folder = await lockFolder(c, actor.tenant, folderId);
   if (folder.name === name) return { id: folder.id, name, previousName: name };
   const existing = await folderNamed(c, actor.tenant, name);
@@ -101,7 +101,7 @@ export async function deleteFolderInTransaction(
   actor: Actor,
   folderId: string,
 ) {
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "curator");
   const folder = await lockFolder(c, actor.tenant, folderId);
   const {
     rows: [counts],
@@ -156,7 +156,7 @@ export async function moveArtifactsInTransaction(
       "invalid",
       `За один раз можно перенести от 1 до ${MAX_MOVE_BATCH} работ.`,
     );
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "curator");
   const folder = folderId ? await lockFolder(c, actor.tenant, folderId) : null;
   const { rows } = await c.query(
     `SELECT id,folder_id FROM artifacts

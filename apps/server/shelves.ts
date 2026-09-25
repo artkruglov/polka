@@ -23,6 +23,22 @@ const RANK: Record<ShelfRole, number> = {
 export const atLeast = (role: ShelfRole, min: ShelfRole) =>
   role === "owner" || RANK[role] >= RANK[min];
 
+/**
+ * An author changes the works it saved; a curator and above change any. On a
+ * personal shelf the owner changes everything.
+ */
+export const mayChange = (role: ShelfRole, createdBy: string, actorId: string) =>
+  atLeast(role, "curator") || (atLeast(role, "author") && createdBy === actorId);
+
+export function assertMayChange(role: ShelfRole, createdBy: string, actorId: string) {
+  if (!mayChange(role, createdBy, actorId))
+    throw new Problem(
+      403,
+      "forbidden",
+      "Автор меняет только свои работы. Чужие работы меняют куратор и администратор полки.",
+    );
+}
+
 export const teamShelfNameSchema = z
   .string()
   .trim()
@@ -71,7 +87,8 @@ export async function shelvesOf(accountId: string): Promise<Shelf[]> {
 }
 
 /**
- * Lock the shelf, then the account, and check the account's role on it: the
+ * Lock the shelf, the account, then its membership (the order account
+ * deletion takes too), and check the account's role on it: the
  * membership twin of lockActiveOwnerTenant. A personal shelf's owner passes
  * any role, so an owner's paths behave exactly as before. A shelf the account
  * may not open is «not found», like someone else's work; a role too low is
@@ -91,14 +108,6 @@ export async function lockShelf(
     )
   ).rows[0];
   if (!tenant) throw missing();
-  const member = (
-    await c.query(
-      `SELECT role FROM tenant_members
-       WHERE tenant_id=$1 AND account_id=$2 AND state='active' FOR ${lock}`,
-      [actor.tenant, actor.id],
-    )
-  ).rows[0];
-  if (!member) throw missing();
   const account = (
     await c.query(
       `SELECT id FROM accounts
@@ -108,6 +117,14 @@ export async function lockShelf(
     )
   ).rows[0];
   if (!account) throw missing();
+  const member = (
+    await c.query(
+      `SELECT role FROM tenant_members
+       WHERE tenant_id=$1 AND account_id=$2 AND state='active' FOR ${lock}`,
+      [actor.tenant, actor.id],
+    )
+  ).rows[0];
+  if (!member) throw missing();
   if (!atLeast(member.role, min))
     throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
   return { tenant, role: member.role as ShelfRole };

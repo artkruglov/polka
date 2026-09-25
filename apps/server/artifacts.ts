@@ -55,7 +55,8 @@ import {
   derivativePreferenceSql,
   derivativeVersionSql,
 } from "./bundle-runtime-contract.ts";
-import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+import { assertActiveOwner } from "./owner-state.ts";
+import { assertMayChange, lockShelf, type ShelfRole } from "./shelves.ts";
 import { trackWorkSaved, viaFor } from "./analytics.ts";
 import { linkOfRevision, linkText } from "./saved-link-format.ts";
 import { coverDTO, coverSelectSql } from "./covers.ts";
@@ -65,7 +66,13 @@ import {
   addScriptText,
   indexRevisionText,
 } from "./search-text.ts";
-export type Actor = { id: string; tenant: string; connectionId?: string };
+export type Actor = {
+  id: string;
+  tenant: string;
+  connectionId?: string;
+  /** The role on that shelf (shelves.ts); absent means its own shelf. */
+  role?: ShelfRole;
+};
 export const audit = (
   c: PoolClient,
   actor: Actor,
@@ -195,6 +202,18 @@ export async function getArtifacts(
       ORDER BY s.artifact_id,s.created_at DESC,s.id DESC`,
     [artifacts.map((a) => a.id)],
   );
+  // On a department shelf each work says who saved it.
+  const authors =
+    actor.role && actor.role !== "owner"
+      ? new Map(
+          (
+            await db.query(
+              "SELECT id,COALESCE(display_name,name) AS name FROM accounts WHERE id=ANY($1::uuid[])",
+              [[...new Set(artifacts.map((a) => a.created_by))]],
+            )
+          ).rows.map((row) => [row.id, { id: row.id, name: row.name }]),
+        )
+      : null;
   const byId = new Map(artifacts.map((a) => [a.id, a]));
   const revisionById = new Map(revisions.map((r) => [r.id, r]));
   const shareByArtifact = new Map(shares.map((s) => [s.artifact_id, s]));
@@ -212,6 +231,7 @@ export async function getArtifacts(
         lifecycleVersion: Number(a.lifecycle_version),
         revision: revisionDTO(r),
         share: shareDTO(shareByArtifact.get(a.id), r.id),
+        ...(authors && { author: authors.get(a.created_by) ?? { id: a.created_by, name: "Бывший участник" } }),
       },
     ];
   });
@@ -225,13 +245,15 @@ export async function beginUploadInTransaction(
   actor: Actor,
   input: ReturnType<typeof beginUploadSchema.parse>,
 ) {
-  const tenant = await lockActiveOwnerTenant(c, actor);
+  const { tenant } = await lockShelf(c, actor, "author");
   const {
     rows: [old],
   } = await c.query(
     "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
     [actor.tenant, input.key],
   );
+  if (old && old.account_id !== actor.id)
+    throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
   if (old) {
     if (old.kind !== "single")
       throw new Problem(
@@ -447,7 +469,8 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
     "SELECT * FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
     [id, actor.tenant],
   );
-  if (!u) throw missing();
+  // On a department shelf an upload is its uploader's alone.
+  if (!u || u.account_id !== actor.id) throw missing();
   if (
     u.aborted ||
     (!u.receipt && new Date(u.expires_at).getTime() <= Date.now())
@@ -468,7 +491,7 @@ export async function uploadBytesInTransaction(
   id: string,
   bytes: Buffer,
 ) {
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "author");
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   const input = beginUploadSchema.parse(u.request);
@@ -580,7 +603,7 @@ export async function finalizeUploadInTransaction(
   id: string,
 ) {
   // All quota changes take the same tenant lock before upload/artifact locks.
-  const tenant = await lockActiveOwnerTenant(c, actor);
+  const { tenant } = await lockShelf(c, actor, "author");
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   if (u.receipt) return u.receipt;
@@ -784,10 +807,18 @@ async function validateUploadTarget(
     const {
       rows: [artifact],
     } = await c.query(
-      "SELECT latest_revision_id FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
+      "SELECT latest_revision_id,created_by FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
       [input.artifactId, actor.tenant],
     );
     if (!artifact) throw missing();
+    const {
+      rows: [member],
+    } = await c.query(
+      "SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'",
+      [actor.tenant, actor.id],
+    );
+    if (!member) throw missing();
+    assertMayChange(member.role, artifact.created_by, actor.id);
     if (artifact.latest_revision_id !== input.baseRevisionId)
       throw new Problem(
         409,
@@ -806,13 +837,15 @@ export async function beginBundleUploadInTransaction(
   actor: Actor,
   input: NormalizedBundleRequest,
 ) {
-  const tenant = await lockActiveOwnerTenant(c, actor);
+  const { tenant } = await lockShelf(c, actor, "author");
   const {
     rows: [old],
   } = await c.query(
     "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
     [actor.tenant, input.key],
   );
+  if (old && old.account_id !== actor.id)
+    throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
   if (old) {
     if (
       old.kind !== "bundle" ||
@@ -952,7 +985,7 @@ export async function uploadBundleFileInTransaction(
   index: number,
   bytes: Buffer,
 ) {
-  await lockActiveOwnerTenant(c, actor);
+  await lockShelf(c, actor, "author");
   const upload = await lockUpload(c, actor, id);
   if (upload.kind !== "bundle") throw missing();
   const input = normalizeBundleRequest(upload.request, true);
@@ -1022,7 +1055,7 @@ export async function finalizeBundleUploadInTransaction(
   actor: Actor,
   id: string,
 ) {
-  const tenant = await lockActiveOwnerTenant(c, actor);
+  const { tenant } = await lockShelf(c, actor, "author");
   const upload = await lockUpload(c, actor, id);
   if (upload.kind !== "bundle") throw missing();
   if (upload.receipt) return upload.receipt;
@@ -1233,8 +1266,8 @@ export async function uploadStatus(
   const {
     rows: [upload],
   } = await db.query(
-    "SELECT id,kind,request,receipt,aborted,expires_at FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3",
-    [id, actor.tenant, kind],
+    "SELECT id,kind,request,receipt,aborted,expires_at FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND account_id=$4",
+    [id, actor.tenant, kind, actor.id],
   );
   if (!upload) throw missing();
   if (kind === "bundle")
@@ -1258,15 +1291,15 @@ export async function abortUpload(
   kind: "single" | "bundle",
 ) {
   return transaction(async (c) => {
-    await lockActiveOwnerTenant(c, actor);
+    await lockShelf(c, actor, "author");
     const result = await c.query(
-      "UPDATE uploads SET aborted=true WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND receipt IS NULL",
-      [id, actor.tenant, kind],
+      "UPDATE uploads SET aborted=true WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND account_id=$4 AND receipt IS NULL",
+      [id, actor.tenant, kind, actor.id],
     );
     if (!result.rowCount) {
       const exists = await c.query(
-        "SELECT 1 FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3",
-        [id, actor.tenant, kind],
+        "SELECT 1 FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND account_id=$4",
+        [id, actor.tenant, kind, actor.id],
       );
       if (!exists.rowCount) throw missing();
     }
