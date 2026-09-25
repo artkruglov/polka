@@ -52,6 +52,9 @@ export async function backfillCovers({
        LEFT JOIN revision_covers c ON c.revision_id=r.id
        WHERE r.id>$1 AND r.mime<>$2 AND r.content_purged_at IS NULL
          AND (c.revision_id IS NULL OR c.version<$3)
+         -- Isolated by moderation: nobody reads it, the backfill neither.
+         AND NOT EXISTS(SELECT 1 FROM moderation_blocks block
+           WHERE block.revision_id=r.id AND block.isolated AND block.released_at IS NULL)
        ORDER BY r.id LIMIT $4`,
       [after, LINK_MIME, COVER_VERSION, batch],
     );
