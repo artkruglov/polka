@@ -48,6 +48,7 @@ import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
+import { useShelves } from "../../entities/shelf/model.ts";
 
 const clientDefaults = {
   http: "Скрипт (HTTP API)",
@@ -73,6 +74,7 @@ const agentConnectionSchema = z.object({
     .string()
     .refine((value) => Number.isFinite(Date.parse(value)))
     .nullable(),
+  shelf: z.object({ id: z.string().uuid(), name: z.string() }).optional(),
 });
 const agentConnectionsSchema = z.array(agentConnectionSchema);
 const issueResponseSchema = z.object({
@@ -147,6 +149,11 @@ export function AgentConnections() {
   const [clientKind, setClientKind] = useState<ClientKind>("http");
   const [httpExample, setHttpExample] = useState<"cli" | "curl">("cli");
   const [ttlDays, setTtlDays] = useState(7);
+  // Which shelf a new token works on (docs/specs/TEAM_SHELVES.md): "" is one's own.
+  const [tokenShelf, setTokenShelf] = useState("");
+  const shelves = useShelves(!!account && !account.provisional);
+  const teamShelves = shelves.items.filter((shelf) => shelf.kind === "team");
+  const tokenRole = teamShelves.find((shelf) => shelf.id === tokenShelf)?.role;
   const [scopes, setScopes] = useState<AgentScope[]>(["capture", "context"]);
   const [action, setAction] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -306,7 +313,17 @@ export function AgentConnections() {
       const audience = new URL("/mcp", location.origin).href;
       const result = issueResponseSchema.parse(
         await client.agentConnections.issue(
-          { name: cleanName, scopes, audience, ttlDays },
+          {
+            name: cleanName,
+            // A reader's agent only reads (the server refuses more).
+            scopes:
+              tokenRole === "reader"
+                ? scopes.filter((scope) => ["context", "read", "source:read"].includes(scope))
+                : scopes,
+            audience,
+            ttlDays,
+            ...(tokenShelf ? { shelfId: tokenShelf } : {}),
+          },
           csrf.csrfToken,
           controller.signal,
         ),
@@ -651,6 +668,27 @@ export function AgentConnections() {
                   ))}
                 </div>
               </fieldset>
+              {teamShelves.length > 0 && (
+                <SelectField
+                  label="Полка"
+                  hint={
+                    tokenRole === "reader"
+                      ? "Здесь вы читатель: агент сможет только читать и искать работы."
+                      : tokenShelf
+                        ? "Полка отдела: сохранённое агентом увидят все участники. Ссылок наружу с неё пока нет."
+                        : undefined
+                  }
+                  value={tokenShelf}
+                  onChange={(event) => setTokenShelf(event.target.value)}
+                >
+                  <option value="">Моя полка</option>
+                  {teamShelves.map((shelf) => (
+                    <option key={shelf.id} value={shelf.id}>
+                      {shelf.name}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
               <SelectField
                 label="Срок действия"
                 value={ttlDays}
@@ -930,6 +968,7 @@ export function AgentConnections() {
                         {connectionStatus(connection)}
                       </p>
                       <p className="agent-meta">
+                        {connection.shelf ? `Полка «${connection.shelf.name}» · ` : ""}
                         Может: {scopeLabels(connection.scopes)}
                       </p>
                       {connection.kind === "oauth" &&

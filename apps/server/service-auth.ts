@@ -13,6 +13,7 @@ import { Problem, missing } from "./errors.ts";
 import { sha256 } from "./storage.ts";
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 import { markActive, trackAgentConnected } from "./analytics.ts";
+import { lockShelf, type ShelfRole } from "./shelves.ts";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 export const MAX_ACTIVE_CONNECTIONS = 20;
@@ -28,26 +29,35 @@ export type ServiceActor = {
   expiresAt: number;
   /** Granted to a chat connector by OAuth (not a pasted static token). */
   oauth?: boolean;
+  /** The connection's shelf: the account's own, or a department's. */
+  shelf?: { kind: "personal" | "team"; name: string | null; role: ShelfRole };
 };
 
 /**
  * A connection that may act: not revoked, inside both its refresh window and
- * (for OAuth) its access-token lifetime, and owned by an active account that
- * still owns the tenant. `match` narrows by token or id; `lock` is an optional
+ * (for OAuth) its access-token lifetime, of an active account that is still
+ * an active member of the connection's shelf (its own, or a department's
+ * while TEAM_SHELVES is on; docs/specs/TEAM_SHELVES.md). `match` narrows by token or id; `lock` is an optional
  * row-lock clause for the connection row only.
  */
 const liveConnectionSql = (match: string, lock = "") =>
-  `SELECT connection.*
+  `SELECT connection.*,member.role AS shelf_role,tenant.kind AS shelf_kind,
+          tenant.name AS shelf_name
      FROM agent_connections connection
      JOIN accounts account ON account.id=connection.account_id
+     JOIN tenant_members member ON member.tenant_id=connection.tenant_id
+       AND member.account_id=account.id AND member.state='active'
      JOIN tenants tenant ON tenant.id=connection.tenant_id
-       AND tenant.owner_id=account.id
+       AND tenant.state='active' ${teamShelvesSql()}
     WHERE ${match}
       AND connection.revoked_at IS NULL AND connection.expires_at>now()
       AND (connection.access_expires_at IS NULL
         OR connection.access_expires_at>now())
       AND NOT account.disabled AND account.deletion_requested_at IS NULL
     ${lock}`;
+
+const teamShelvesSql = () =>
+  config.TEAM_SHELVES === "on" ? "" : "AND tenant.kind='personal'";
 
 const CONNECTION_BY_ID = `connection.id=$1 AND connection.tenant_id=$2
       AND connection.account_id=$3 AND connection.audience=$4`;
@@ -66,6 +76,13 @@ function serviceActorFromRow(row: any): ServiceActor {
     scopes: row.scopes,
     audience: row.audience,
     oauth: !!row.oauth_client_id,
+    ...(row.shelf_role && {
+      shelf: {
+        kind: row.shelf_kind,
+        name: row.shelf_name,
+        role: row.shelf_role,
+      },
+    }),
     // An OAuth access token lapses before its connection's refresh window.
     expiresAt: Math.floor(
       Math.min(
@@ -110,7 +127,42 @@ const connectionDTO = (row: any): AgentConnection => ({
   lastSeenAt: row.last_seen_at
     ? new Date(row.last_seen_at).toISOString()
     : null,
+  ...(row.shelf_kind === "team" && {
+    shelf: { id: row.tenant_id, name: row.shelf_name },
+  }),
 });
+
+/**
+ * Links, comments and sign-in links belong to a personal shelf for now: from
+ * a department shelf they come in stage 5 (docs/specs/TEAM_SHELVES.md).
+ */
+export function assertOwnShelf(actor: ServiceActor) {
+  if (actor.shelf?.kind === "team")
+    throw new Problem(
+      409,
+      "conflict",
+      "Ссылки и комментарии с полки отдела появятся позже. Коллеги видят работу на самой полке.",
+    );
+}
+
+/** Scopes that change the shelf: a reader connects an agent only to read it. */
+const WRITE_SCOPES: readonly AgentScope[] = [
+  "capture",
+  "revise",
+  "share",
+  "manage",
+];
+export function assertScopesFitRole(
+  role: ShelfRole,
+  scopes: readonly AgentScope[],
+) {
+  if (role === "reader" && scopes.some((scope) => WRITE_SCOPES.includes(scope)))
+    throw new Problem(
+      403,
+      "forbidden",
+      "На этой полке вы читатель: агент может только читать и искать работы.",
+    );
+}
 
 /** Lock the active owner and verify the session-bound CSRF token. */
 export async function lockOwner(
@@ -173,12 +225,19 @@ export async function issueAgentConnection(
   const token = randomBytes(32).toString("base64url");
   const connection = await transaction(async (c) => {
     await lockOwner(c, actor, sessionToken, csrfToken);
+    // To a department shelf the account belongs to (docs/specs/TEAM_SHELVES.md).
+    const tenant = input.shelfId ?? actor.tenant;
+    const shelf =
+      tenant === actor.tenant
+        ? null
+        : await lockShelf(c, { id: actor.id, tenant }, "reader");
+    if (shelf) assertScopesFitRole(shelf.role, input.scopes);
     const {
       rows: [active],
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
-       WHERE tenant_id=$1 AND revoked_at IS NULL AND expires_at>now()`,
-      [actor.tenant],
+       WHERE tenant_id=$1 AND account_id=$2 AND revoked_at IS NULL AND expires_at>now()`,
+      [tenant, actor.id],
     );
     if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
       throw new Problem(
@@ -193,21 +252,23 @@ export async function issueAgentConnection(
       `INSERT INTO agent_connections(
          id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
        ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 day')
-       RETURNING *`,
+       RETURNING *,$9::text AS shelf_kind,$10::text AS shelf_name`,
       [
         id,
-        actor.tenant,
+        tenant,
         actor.id,
         sha256(token),
         input.name,
         input.scopes,
         input.audience,
         input.ttlDays,
+        shelf ? "team" : "personal",
+        shelf?.tenant.name ?? null,
       ],
     );
     await c.query(
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.issued',$3)",
-      [actor.tenant, actor.id, id],
+      [tenant, actor.id, id],
     );
     return row;
   });
@@ -216,21 +277,24 @@ export async function issueAgentConnection(
 
 export async function listAgentConnections(actor: Actor) {
   await assertActiveOwner(db, actor);
+  // Every shelf's: its own and the department shelves it connected agents to.
   const { rows } = await db.query(
-    `SELECT * FROM (
+    `SELECT listed.*,tenant.kind AS shelf_kind,tenant.name AS shelf_name FROM (
        SELECT * FROM agent_connections
-       WHERE tenant_id=$1 AND account_id=$2
+       WHERE account_id=$1
          AND revoked_at IS NULL AND expires_at>now()
        UNION ALL
        (
          SELECT * FROM agent_connections
-         WHERE tenant_id=$1 AND account_id=$2
+         WHERE account_id=$1
            AND (revoked_at IS NOT NULL OR expires_at<=now())
          ORDER BY created_at DESC,id DESC LIMIT 100
        )
      ) listed
-     ORDER BY (revoked_at IS NULL AND expires_at>now()) DESC,created_at DESC,id DESC`,
-    [actor.tenant, actor.id],
+     JOIN tenants tenant ON tenant.id=listed.tenant_id
+     ORDER BY (listed.revoked_at IS NULL AND listed.expires_at>now()) DESC,
+       listed.created_at DESC,listed.id DESC`,
+    [actor.id],
   );
   return rows.map(connectionDTO);
 }
@@ -247,8 +311,8 @@ export async function revokeAgentConnection(
       rows: [connection],
     } = await c.query(
       `SELECT * FROM agent_connections
-       WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`,
-      [connectionId, actor.tenant, actor.id],
+       WHERE id=$1 AND account_id=$2 FOR UPDATE`,
+      [connectionId, actor.id],
     );
     if (!connection) throw missing();
     if (!connection.revoked_at) {
@@ -263,7 +327,7 @@ export async function revokeAgentConnection(
       );
       await c.query(
         "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.revoked',$3)",
-        [actor.tenant, actor.id, connectionId],
+        [connection.tenant_id, actor.id, connectionId],
       );
     }
     return { ok: true };
@@ -327,14 +391,16 @@ export async function authenticateServiceToken(
   const seen = await db.query(
     `UPDATE agent_connections connection
      SET last_seen_at=clock_timestamp()
-     FROM accounts account,tenants tenant
+     FROM accounts account,tenants tenant,tenant_members member
      WHERE connection.token_hash=$1 AND connection.audience=$2
        AND connection.revoked_at IS NULL AND connection.expires_at>now()
        AND (connection.access_expires_at IS NULL
          OR connection.access_expires_at>now())
        AND account.id=connection.account_id AND NOT account.disabled
        AND account.deletion_requested_at IS NULL
-       AND tenant.id=connection.tenant_id AND tenant.owner_id=account.id`,
+       AND tenant.id=connection.tenant_id AND tenant.state='active'
+       AND member.tenant_id=tenant.id AND member.account_id=account.id
+       AND member.state='active' ${teamShelvesSql()}`,
     [tokenHash, audience],
   );
   if (!seen.rowCount) throw unauthorized();
@@ -420,9 +486,13 @@ async function withLockedServiceActor<T>(
   operation: (c: PoolClient, actor: ServiceActor) => Promise<T>,
 ) {
   return transaction(async (c) => {
-    await lockActiveOwnerTenant(
+    // The shelf, the account and its membership: an agent acts only while
+    // its account is on the shelf. The role is checked by each operation.
+    await lockShelf(
       c,
       { id: actor.accountId, tenant: actor.tenantId },
+      "reader",
+      "UPDATE",
       unauthorized,
     );
     const {

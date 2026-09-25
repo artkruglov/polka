@@ -65,6 +65,8 @@ export const issueAgentConnectionSchema = z
     scopes: z.array(agentScopeSchema).min(1).max(AGENT_SCOPES.length),
     audience: z.string().url().max(2048),
     ttlDays: z.number().int().min(1).max(30).default(7),
+    /** A department shelf the account is a member of; absent: its own. */
+    shelfId: z.string().uuid().optional(),
   })
   .strict()
   .transform((value) => ({
@@ -84,11 +86,15 @@ export type AgentConnection = {
   createdAt: string;
   expiresAt: string;
   lastSeenAt: string | null;
+  /** A department shelf the agent works on (docs/specs/TEAM_SHELVES.md); absent: one's own. */
+  shelf?: { id: string; name: string };
 };
 /** What the consent page shows for one pending connector authorization. */
 export type OAuthConsentDetails = {
   /** The shelf the connector will save to and how its owner signs in. */
   account?: { name: string; methods: string[]; provisional: boolean };
+  /** Shelves the agent may work on: name null is one's own (docs/specs/TEAM_SHELVES.md). */
+  shelves?: { id: string; name: string | null; role: string }[];
   requestId: string;
   client: {
     name: string;
