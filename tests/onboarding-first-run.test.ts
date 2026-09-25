@@ -241,7 +241,7 @@ test("the checklist shows the phrase, marks the current step and keeps a live re
   assert.match(html, /Подключи Полку: https:\/\/polochka.app\/connect/);
   assert.match(html, /Скопировать фразу/);
   assert.match(html, /aria-current="step"[^>]*>[\s\S]*?Подключите агента/);
-  assert.match(html, /codex mcp add polka --url https:\/\/polochka.app\/mcp/);
+  assert.match(html, /codex plugin marketplace add artkruglov\/polka &amp;&amp; codex plugin add polka@polka/);
   assert.match(html, /href="\/bring"[^>]*>[\s\S]*?Загрузить файл/);
   assert.match(html, /Сохранить пример/);
   assert.match(html, /role="status" aria-live="polite"/);

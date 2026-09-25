@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
-import { Button, Chip, IconButton, LinkButton, Segmented } from "../../shared/ui/controls.tsx";
+import { Button, Chip, IconButton, Segmented } from "../../shared/ui/controls.tsx";
 import {
   Bot,
   Compass,
   FileUp,
   Folder as FolderIcon,
   Grid2X2,
-  Link as LinkIcon,
   List,
   Search,
   X,
@@ -18,8 +17,7 @@ import type {
   Folder,
 } from "../../../../../packages/contracts/index.ts";
 import { ShelfCard, seriesCounts, type CardAction } from "../../widgets/shelf-card/index.ts";
-import { FirstRunChecklist } from "../../features/first-run/index.tsx";
-import { readDismissed } from "../../entities/onboarding/dismissal.ts";
+import { AgentHero } from "../../features/agent-hero/index.tsx";
 import {
   categoryLabel,
   categoryOf,
@@ -31,7 +29,6 @@ export type { CardAction };
 type Props = {
   account: Account;
   activeFolder: Folder | undefined;
-  folderId: string | null;
   items: Artifact[];
   query: string;
   view: "grid" | "list";
@@ -46,8 +43,6 @@ type Props = {
   setPanel: (panel: "upload" | "folder") => void;
   open: (id: string, panel?: CardAction) => void;
   loadMore: () => void;
-  /** The first-run example was saved: reload the list. */
-  onSaved: () => void;
 };
 
 const categories: Category[] = ["pages", "documents", "images", "other"];
@@ -55,7 +50,6 @@ const categories: Category[] = ["pages", "documents", "images", "other"];
 export function ShelfPage({
   account,
   activeFolder,
-  folderId,
   items,
   query,
   view,
@@ -70,14 +64,9 @@ export function ShelfPage({
   setPanel,
   open,
   loadMore,
-  onSaved,
 }: Props) {
   const [category, setCategory] = useState<Category | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const libraryHeading = useRef<HTMLHeadingElement>(null);
-  // Hidden only in this browser; the steps themselves come from the API.
-  const [firstRunHidden, setFirstRunHidden] = useState(() => readDismissed(account.id));
-  const firstRun = !activeFolder && !query && !firstRunHidden;
   useEffect(() => {
     if (focusSearch) searchRef.current?.focus();
   }, [focusSearch]);
@@ -95,8 +84,6 @@ export function ShelfPage({
   }, [items, active, sort]);
   // Works that share a title prefix («Y360 Radar · …») get a small series badge.
   const series = useMemo(() => seriesCounts(items), [items]);
-  const bringHref = folderId ? `/bring?folder=${encodeURIComponent(folderId)}` : "/bring";
-  const focusTools = () => searchRef.current?.focus();
   return (
     <>
       {activeFolder ? (
@@ -105,69 +92,7 @@ export function ShelfPage({
           <h1>{activeFolder.name}</h1>
         </header>
       ) : (
-        <section className="shelf-hero" aria-label="Сохранить работу">
-          <div className="shelf-hero-top">
-            <IconButton label="Поиск по полке" onClick={focusTools}>
-              <Search />
-            </IconButton>
-          </div>
-          <h1>Сохраняйте. Делитесь. Возвращайтесь.</h1>
-          {firstRun ? (
-            <FirstRunChecklist
-              account={account}
-              works={{ items, loading }}
-              variant="card"
-              onSaved={onSaved}
-              onShare={(work) => open(work.id, "share")}
-              onUpload={() => setPanel("upload")}
-              onDismiss={() => {
-                setFirstRunHidden(true);
-                requestAnimationFrame(() => libraryHeading.current?.focus());
-              }}
-            />
-          ) : (
-          <form
-            className="shelf-hero-entry"
-            action="/bring"
-            method="get"
-            onSubmit={(e) => {
-              const input = e.currentTarget.elements.namedItem("url") as HTMLInputElement;
-              if (!input.value.trim()) e.preventDefault();
-            }}
-          >
-            <label className="shelf-hero-field">
-              <LinkIcon aria-hidden="true" />
-              <input
-                type="url"
-                name="url"
-                inputMode="url"
-                placeholder="Вставьте ссылку на артефакт"
-                aria-label="Ссылка на артефакт"
-              />
-            </label>
-            {folderId && <input type="hidden" name="folder" value={folderId} />}
-            <Button type="submit" variant="primary" className="shelf-hero-save">
-              Сохранить
-            </Button>
-            <span className="shelf-hero-divider" aria-hidden="true" />
-            <div className="shelf-hero-agent">
-              <LinkButton href="/settings/agents">
-                <Bot /> Подключить агента
-              </LinkButton>
-              <span>Агент сохранит работу на полку, когда вы попросите</span>
-            </div>
-          </form>
-          )}
-          {!firstRun && (
-            <p className="shelf-hero-fine">
-              Или{" "}
-              <button type="button" className="text-button" onClick={() => setPanel("upload")}>
-                загрузите файл с компьютера
-              </button>
-              : HTML, текст или изображение до 5 МБ.
-            </p>
-          )}
-        </section>
+        <AgentHero account={account} onUpload={() => setPanel("upload")} />
       )}
 
       <section
@@ -176,7 +101,7 @@ export function ShelfPage({
         aria-busy={loading}
       >
         <div className="shelf-library-head">
-          <h2 ref={libraryHeading} tabIndex={-1}>
+          <h2>
             {query ? "Результаты поиска" : activeFolder ? "В этой папке" : "Моя полка"}
           </h2>
           <div className="shelf-tools">
@@ -261,10 +186,15 @@ export function ShelfPage({
               </p>
             )}
           </>
-        ) : firstRun ? (
+        ) : !activeFolder && !query ? (
           <p className="shelf-empty-quiet" role="note">
             Здесь появятся ваши работы: страницы, отчёты, прототипы и изображения. Каждая хранится
-            версиями, а кто может её открыть, решаете вы. Первые шаги — выше.
+            версиями, а кто может её открыть, решаете вы. Попросите агента: «Сохрани это на Полку» —
+            или{" "}
+            <button type="button" className="text-button" onClick={() => setPanel("upload")}>
+              загрузите файл
+            </button>
+            .
           </p>
         ) : (
           <div className="shelf-empty">
@@ -291,9 +221,6 @@ export function ShelfPage({
                   <Button variant="primary" onClick={() => setPanel("upload")}>
                     <FileUp /> Загрузить файл
                   </Button>
-                  <LinkButton href={bringHref}>
-                    <LinkIcon /> Сохранить по ссылке
-                  </LinkButton>
                 </div>
                 <div className="shelf-empty-links">
                   <a href="/settings/agents"><Bot /> Подключить агента</a>

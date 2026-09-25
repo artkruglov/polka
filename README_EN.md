@@ -37,15 +37,36 @@
 
 The interface and most documentation are in Russian. Identifiers, commands and API fields are in English.
 
-## Try it in a minute
+## Get started
 
-Tell your agent (Codex, Claude Code, Claude.ai or ChatGPT):
+Your agent saves the work to Полка. Connect it once; from then on say "save this to Полка" in the chat and the reply contains a link.
+
+**Claude** (claude.ai and Claude Desktop): Settings → Connectors → **Add custom connector**, URL
 
 ```text
-Connect Полка: https://polochka.app/connect
+https://polochka.app/mcp
 ```
 
-The agent runs one command and Полка opens: sign in or create a shelf with your e-mail and press Allow. From then on, ask the agent to save your work to Полка; the reply contains a link.
+→ Add → Connect → Allow in Полка.
+
+**Claude Code**: the plugin installs the MCP server and the Полка skills in one command.
+
+```sh
+claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka
+```
+
+Then in Claude Code: `/mcp` → `plugin:polka:polka` → Authenticate.
+
+**Codex**: the same plugin for Codex.
+
+```sh
+codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka
+codex mcp login polka
+```
+
+**Another MCP client** (Cursor, Gemini CLI, Windsurf…): the remote server `https://polochka.app/mcp` (Streamable HTTP, OAuth sign-in) plus the skill `npx skills add artkruglov/polka`.
+
+Each time Полка opens: sign in to your shelf (or start without signing up) and press Allow; no token or password passes through the agent. Or tell a terminal agent: `Connect Полка: https://polochka.app/connect`. You can still upload a file from your computer without an agent. Details: [connecting agents](docs/connect-agents.md) (Russian).
 
 ## Features
 
@@ -53,7 +74,7 @@ The agent runs one command and Полка opens: sign in or create a shelf with 
   <tr>
     <td width="33%" valign="top">
       <h4>The agent saves it for you</h4>
-      In Claude.ai and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link. Claude Code and Codex connect with one command and no token; other MCP clients use a token; scripts and CI use the HTTP API.
+      In Claude (claude.ai and Desktop) and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link. Claude Code and Codex install the plugin with one command and no token; other MCP clients use the <code>/mcp</code> address; scripts and CI use the HTTP API.
     </td>
     <td width="33%" valign="top">
       <h4>Interactive for recipients</h4>
@@ -112,15 +133,15 @@ The agent hands over the work's code itself; Полка doesn't pull anything ou
 
 | From | How | Details |
 |---|---|---|
-| Claude.ai, ChatGPT | Connector `https://polochka.app/mcp` with OAuth 2.1 sign-in. The model calls `polka_publish` and returns a link | [Connector](docs/MCP_CONNECTOR.md) |
-| Claude Code, Codex | One command (`codex mcp add polka --url https://polochka.app/mcp`), then sign in and allow in the browser; no token | [Connecting agents](docs/connect-agents.md) |
+| Claude (claude.ai, Claude Desktop), ChatGPT | Connector `https://polochka.app/mcp` with OAuth 2.1 sign-in. The model calls `polka_publish` and returns a link | [Connector](docs/MCP_CONNECTOR.md) |
+| Claude Code, Codex | The Полка plugin in one command: MCP server and skills. Sign in and allow in the browser; no token | [Connecting agents](docs/connect-agents.md#плагин-полки-для-claude-code-и-codex) |
 | Other MCP clients | Token from the «Агенты» (Agents) page, Streamable HTTP at `/mcp` | [Connecting agents](docs/connect-agents.md) |
 | Scripts, CI, in-house agents | `POST /api/v1/publish` or the dependency-free CLI `scripts/polka-publish.mjs` | [HTTP API](docs/PUBLISH_API.md) |
 | By hand | Upload a file (HTML, text, PNG/JPEG/WebP up to 5 MB), or paste code on the «Сохранить» (Save) page | [FAQ](docs/faq.md) |
 
-Saving and the link were checked by hand with Claude.ai, not yet with ChatGPT ([status](docs/status.md)). You can't paste a link to a Claude or ChatGPT artifact: Полка's server can't fetch it (the sites require a login and sit behind Cloudflare), so the app tells you to use the connector, download the file or paste the code instead.
+Saving and the link were checked by hand with Claude.ai, not yet with ChatGPT ([status](docs/status.md)). There is no saving by a link to a Claude or ChatGPT artifact: Полка's server can't fetch it (the sites require a login and sit behind Cloudflare), so the agent hands over the work instead.
 
-**For agent developers:** install the skill with `npx skills add artkruglov/polka`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
+**For agent developers:** the repository is a Claude Code and Codex plugin marketplace (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`); the skill alone installs with `npx skills add artkruglov/polka`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
 
 ## Quick start
 
@@ -175,7 +196,7 @@ More on the [For companies](https://polochka.app/enterprise) page and in [COMMER
 - **Claude/ChatGPT links can't be imported.** Save through the connector, download the file or paste the code.
 - **Downloaded copies can't be revoked.** Revoking a link closes it, but it can't delete what a recipient already downloaded.
 - **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. There's no SAML or SCIM.
-- **URL import** (`URL_IMPORT_ENABLED`) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
+- **URL import** (`URL_IMPORT_ENABLED`, experimental, server and MCP only; the web app no longer offers it) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
 
 More: [docs/faq.md](docs/faq.md) (Russian).
 

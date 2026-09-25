@@ -19,19 +19,21 @@ export function clientHints(origin: string): ClientHint[] {
   return [
     {
       id: "codex",
-      client: "Codex CLI",
-      command: `codex mcp add polka --url ${mcp}`,
-      note: "Вход в браузере откроется сам. Если нет: codex mcp login polka.",
+      client: "Codex",
+      command:
+        "codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka",
+      note: "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka.",
     },
     {
       id: "claude-code",
       client: "Claude Code",
-      command: `claude mcp add --transport http --scope user polka ${mcp}`,
-      note: "Затем в Claude Code: /mcp → polka → Authenticate.",
+      command:
+        "claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka",
+      note: "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate.",
     },
     {
       id: "claude-ai",
-      client: "Claude.ai",
+      client: "Claude.ai и Claude Desktop",
       command: null,
       note: `Settings → Connectors → Add custom connector, адрес ${mcp}.`,
     },

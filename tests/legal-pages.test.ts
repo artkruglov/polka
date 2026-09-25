@@ -112,7 +112,16 @@ test("the texts keep the reviewed legal terms", () => {
   ])
     assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
   assert.doesNotMatch(privacy, /нет аналитики/);
-  assert.match(privacy, /^Редакция от 24 сентября 2026\.$/m);
+  assert.match(privacy, /^Редакция от 25 сентября 2026\.$/m);
+  // Sign in with Google (docs/specs/SIGN_IN_PROVIDERS.md, «Google»): what
+  // Google sends, what is kept, and that nothing personal goes to Google.
+  for (const phrase of [
+    "**Вход через Google**",
+    "идентификатор вашего аккаунта Google (`sub`)",
+    "Картинку профиля Полка не сохраняет",
+    "Ваших данных Полка Google не передаёт",
+  ])
+    assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
   const terms = doc("terms");
   for (const phrase of [
     "публичная оферта",

@@ -17,7 +17,9 @@ import { emailDomain } from "./mail-domains.ts";
 import { sha256 } from "./storage.ts";
 import { joinLibraryByOrganisation } from "./template-libraries.ts";
 import {
+  GENERATED_LOGIN,
   IdpError,
+  linkOnly,
   PROVIDER_NAMES,
   type ProviderId,
   type ProviderProfile,
@@ -176,6 +178,11 @@ export async function completeProviderSignIn(
     let account: Account | null = null;
     // Linking to a provisional shelf claims it (provisional.ts).
     const claiming = !!linkAccountId && (await isUnclaimed(c, linkAccountId));
+    // GOOGLE_SIGNUP=link-only: only a link made by a signed-in (claimed)
+    // owner, then sign-in through that link. No new shelf, no link by
+    // address, no claim of a provisional shelf.
+    if (linkOnly(profile.provider) && (linkAccountId ? claiming : !linked))
+      throw new IdpError("link_only");
     if (linkAccountId) {
       if (linked && linked.account_id !== linkAccountId) {
         // The person owns the other shelf too: offer to merge.
@@ -206,15 +213,21 @@ export async function completeProviderSignIn(
       }
     }
     account ??= await createShelf(c, profile, ip, source);
+    // hosted_domain: the Google Workspace domain as Google reports it now.
+    const hostedDomain =
+      profile.provider === "google" ? (profile.hostedDomain ?? null) : null;
     if (linked)
       await c.query(
-        "UPDATE account_identities SET last_used_at=clock_timestamp() WHERE id=$1",
-        [linked.id],
+        `UPDATE account_identities SET last_used_at=clock_timestamp(),
+                hosted_domain=CASE WHEN provider='google' THEN $2
+                                   ELSE hosted_domain END
+          WHERE id=$1`,
+        [linked.id, hostedDomain],
       );
     else
       await c.query(
-        `INSERT INTO account_identities(id,account_id,provider,subject,email,email_verified)
-         VALUES($1,$2,$3,$4,$5,$6)`,
+        `INSERT INTO account_identities(id,account_id,provider,subject,email,email_verified,hosted_domain)
+         VALUES($1,$2,$3,$4,$5,$6,$7)`,
         [
           randomUUID(),
           account.id,
@@ -222,6 +235,7 @@ export async function completeProviderSignIn(
           profile.subject,
           profile.email,
           !!profile.email && profile.emailVerified,
+          hostedDomain,
         ],
       );
     // A verified provider address confirms the shelf's own matching address.
@@ -260,7 +274,6 @@ export async function completeProviderSignIn(
   });
 }
 
-const GENERATED_LOGIN = /^(email|yandex|vk|oidc|guest)-[0-9a-f-]{36}$/;
 
 /**
  * Which shelf a browser is in and how its owner signs in to it: the consent
@@ -324,6 +337,7 @@ export async function listIdentities(actor: Account) {
     available: config.SIGN_IN_PROVIDERS.map((provider) => ({
       provider,
       name: PROVIDER_NAMES[provider](),
+      signup: !linkOnly(provider),
     })),
   };
 }

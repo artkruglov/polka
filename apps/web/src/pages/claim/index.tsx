@@ -214,7 +214,10 @@ export function Claim() {
             )}
             {loaded && !weak && (
               <>
-                <LinkProviderButtons providers={providers} onError={setError} />
+                <LinkProviderButtons
+                  providers={providers.filter((provider) => provider.signup)}
+                  onError={setError}
+                />
                 {emailLogin && (
                   <a
                     className="ui-button ui-button--secondary ui-button--block"

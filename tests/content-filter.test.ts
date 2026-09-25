@@ -170,24 +170,36 @@ test("malicious code: miners and executables are high, a minified bundle is noth
 });
 
 test("the content scan stays linear in the page size", () => {
-  const MB = 1024 * 1024;
-  const pages = [
-    `<p>${"к у п и т ь ".repeat(MB / 12)}</p>`,
-    `<p>${"мефедрон купить ".repeat(MB / 16)}</p>`,
-    `<p>${"1234 5678 9012 3456 ".repeat(MB / 20)}</p>`,
-    `<p>${"a.".repeat(MB / 2)}</p>`,
-    `<p>${"x".repeat(MB)}</p>`,
-    `<div style="${"url(".repeat(MB / 4)}"></div>`,
-    `<script>${"fromCharCode(".repeat(MB / 13)}</script>`,
-    `<script>${"\\x41".repeat(MB / 4)}</script>`,
-    `<p>${"нарк".repeat(MB / 4)}</p>`,
+  // Linear, not a wall-clock budget: a 4× larger page (512 KB → 2 MB) may
+  // take up to ~8× as long (quadratic would be 16×). Median of three runs; a small floor and
+  // margin absorb GC pauses, so a loaded machine cannot fail it.
+  const pages = (size: number) => [
+    `<p>${"к у п и т ь ".repeat(size / 12)}</p>`,
+    `<p>${"мефедрон купить ".repeat(size / 16)}</p>`,
+    `<p>${"1234 5678 9012 3456 ".repeat(size / 20)}</p>`,
+    `<p>${"a.".repeat(size / 2)}</p>`,
+    `<p>${"x".repeat(size)}</p>`,
+    `<div style="${"url(".repeat(size / 4)}"></div>`,
+    `<script>${"fromCharCode(".repeat(size / 13)}</script>`,
+    `<script>${"\\x41".repeat(size / 4)}</script>`,
+    `<p>${"нарк".repeat(size / 4)}</p>`,
   ];
-  for (const page of pages) {
-    const started = performance.now();
-    inspectHtml(page);
-    const elapsed = performance.now() - started;
-    assert.ok(elapsed < 3_000, `${JSON.stringify(page.slice(0, 20))}: ${Math.round(elapsed)} ms`);
-  }
+  const time = (page: string) =>
+    [0, 1, 2]
+      .map(() => {
+        const started = performance.now();
+        inspectHtml(page);
+        return performance.now() - started;
+      })
+      .sort((x, y) => x - y)[1]!;
+  const MB = 1024 * 1024;
+  const large = pages(2 * MB);
+  pages(MB / 2).forEach((page, i) => {
+    inspectHtml(page); // warm up
+    const a = Math.max(time(page), 20);
+    const b = time(large[i]!);
+    assert.ok(b < 8 * a + 150, `${JSON.stringify(page.slice(0, 20))}: ${Math.round(a)} ms → ${Math.round(b)} ms`);
+  });
 });
 
 const trusted = { trusted: true, operatorCreated: false };

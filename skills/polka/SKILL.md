@@ -30,6 +30,7 @@ One call saves the artifact and returns the link:
 - `html`: ONE self-contained HTML document up to 5 MB: CSS in <style>, images and fonts as data: URIs, no external URLs (the viewer has no network). Convert Markdown or text to semantic HTML first.
 - or `component`: a React (JSX/TSX) artifact's source as-is, where the tool description says this installation runs scripts (`componentLanguage: "tsx"` for TypeScript).
 - `expiresInDays`: 1, 7 or 30 (default 30).
+- `folderId` (optional): when the owner keeps folders, call polka_list_folders and save into the one that clearly fits the work (the same project or topic, the next issue of a series). Do not create a folder for a single work; if none fits, save without one.
 
 The tool description states exactly what this installation accepts; follow it. Without MCP, POST the same fields to https://polochka.app/api/v1/publish.
 
@@ -64,6 +65,10 @@ The owner copies these from a work's page; each names the work and its shelf add
 ## 7. Moderation
 
 A link from a new account, or a page that looks like phishing, may wait for a moderator's review. Then the response has `moderation: "held"` (or `"paused"`) and `moderationMessage`: relay that message and do not present the link as ready. Recipients see a review screen until the link is approved.
+
+## 8. Folders
+
+The owner sorts works into folders on the shelf («ПАПКИ»). To put a whole shelf in order («разложи полку», «наведи порядок в папках»), follow the `polka-organize` skill (https://polochka.app/.well-known/agent-skills/polka-organize/SKILL.md): read the shelf, propose folders, and move works only after the owner confirms.
 
 ## Never
 

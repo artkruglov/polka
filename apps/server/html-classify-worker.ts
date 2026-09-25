@@ -9,6 +9,7 @@ import { SignalCollector } from "./phishing-signals.ts";
 import { scanText } from "./content-filter/scanner.ts";
 
 // One page per worker; the parent terminates it after the answer or the deadline.
+// The deadline starts when this module has loaded and says it is ready (below).
 // The answer is the profile, the phishing signals and the content filter's
 // findings of the same walk.
 parentPort!.once(
@@ -36,3 +37,5 @@ parentPort!.once(
   parentPort!.postMessage(inspection);
   },
 );
+// Loaded and listening: the parent sends the source now and starts the clock.
+parentPort!.postMessage({ ready: true });

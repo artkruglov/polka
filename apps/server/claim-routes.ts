@@ -45,6 +45,7 @@ const METHOD_NAMES: Record<string, () => string> = {
   password: () => "логин и пароль",
   yandex: PROVIDER_NAMES.yandex,
   vk: PROVIDER_NAMES.vk,
+  google: PROVIDER_NAMES.google,
   oidc: PROVIDER_NAMES.oidc,
 };
 
