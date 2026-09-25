@@ -1,5 +1,6 @@
 import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
+import { SearchText, addScriptText } from "./search-text.ts";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 import {
   fraudScore,
@@ -428,6 +429,8 @@ export type HtmlInspection = {
   images?: string[];
   /** With { scripts: true }: the page's scripts (bounded), for the code model. */
   scripts?: string[];
+  /** With { text: true }: the visible text for search (search-text.ts). */
+  text?: string;
   /**
    * Fields for a password, a card or a code (content-filter/sensitive-input.ts),
    * also kept in filter.sensitiveInput. Absent: the page was not read (UNREAD).
@@ -464,6 +467,7 @@ export function inspectHtml(
     [parse(source) as unknown as Node, false, undefined, false],
   ];
   const content = collector.content;
+  const searchText = content.textWanted ? new SearchText() : null;
   while (stack.length) {
     const [node, hidden, parent, concealedAbove] = stack.pop()!;
     let concealed = concealedAbove;
@@ -477,6 +481,10 @@ export function inspectHtml(
         if (concealed) content.hidden(value.trim().length);
       }
       if (!hidden && !unsafe) text.push(value);
+      if (searchText && !concealed) {
+        if (parent === "script") addScriptText(value, searchText, "cyrillic");
+        else if (!hidden) searchText.add(value);
+      }
       continue;
     }
     const tag = node.tagName?.toLowerCase();
@@ -571,6 +579,7 @@ export function inspectHtml(
     ...(content.sampleWanted ? { sample: content.sample() } : {}),
     ...(content.imagesWanted ? { images: content.images } : {}),
     ...(content.scriptsWanted ? { scripts: content.scripts } : {}),
+    ...(searchText ? { text: searchText.value() } : {}),
   };
   if (unsafe) return { profile: "unsupported", ...findings };
   if (!interactive) return { profile: "static", ...findings };
@@ -603,7 +612,12 @@ export const UNREAD: HtmlInspection = {
   signals: [SCAN_INCOMPLETE],
   filter: { v: 1, hits: { fraud: fraudScore([SCAN_INCOMPLETE])! } },
 };
-export type InspectOptions = { images?: boolean; sample?: boolean; scripts?: boolean };
+export type InspectOptions = {
+  images?: boolean;
+  sample?: boolean;
+  scripts?: boolean;
+  text?: boolean;
+};
 /**
  * Runs one message through a fresh classify worker. The deadline bounds the
  * scan, not the worker's start: the worker says it is ready (tsx and the

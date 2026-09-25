@@ -514,11 +514,16 @@ export async function purgeBlock(
       [blockId],
     );
     if (!locked) return;
-    if (block.revision_id)
+    if (block.revision_id) {
       await c.query(
         "UPDATE revisions SET content_purged_at=clock_timestamp() WHERE id=$1 AND content_purged_at IS NULL",
         [block.revision_id],
       );
+      // Its text for search goes with the bytes (docs/specs/CONTENT_SEARCH.md).
+      await c.query("DELETE FROM artifact_search WHERE revision_id=$1", [
+        block.revision_id,
+      ]);
+    }
     if (block.comment_id)
       await c.query(
         `UPDATE comments SET body='',anchor=NULL,

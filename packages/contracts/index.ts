@@ -251,7 +251,15 @@ export interface Artifact {
   lifecycleVersion: number;
   revision: Revision;
   share: Share | null;
+  /**
+   * Found by its text (docs/specs/CONTENT_SEARCH.md): a fragment with the
+   * found words between SEARCH_MATCH_START and SEARCH_MATCH_END.
+   */
+  snippet?: string;
 }
+/** Around a found word in Artifact.snippet; never part of a work's text. */
+export const SEARCH_MATCH_START = "\uE000";
+export const SEARCH_MATCH_END = "\uE001";
 export interface Folder {
   id: string;
   name: string;

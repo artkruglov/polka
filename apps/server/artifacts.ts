@@ -56,6 +56,12 @@ import {
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 import { trackWorkSaved, viaFor } from "./analytics.ts";
 import { linkOfRevision, linkText } from "./saved-link-format.ts";
+import {
+  SEARCH_TEXT_CHARS,
+  SearchText,
+  addScriptText,
+  indexRevisionText,
+} from "./search-text.ts";
 export type Actor = { id: string; tenant: string; connectionId?: string };
 export const audit = (
   c: PoolClient,
@@ -358,7 +364,8 @@ async function validateBytes(
           "invalid",
           "Это не похоже на HTML-страницу. Сохраните её как текст или выберите файл .html.",
         );
-      return inspectHtmlBounded(source);
+      // The same walk gives the text for search (docs/specs/CONTENT_SEARCH.md).
+      return inspectHtmlBounded(source, undefined, { text: true });
     }
   }
   return null;
@@ -665,6 +672,18 @@ export async function finalizeUploadInTransaction(
   await c.query(
     "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
     [artifactId, revisionId],
+  );
+  await indexRevisionText(
+    c,
+    artifactId,
+    revisionId,
+    input.mime === "text/html"
+      ? inspection?.text
+      : input.mime === "text/plain"
+        ? bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4))
+        : input.mime === LINK_MIME
+          ? linkText(input.title, bytes)
+          : null,
   );
   await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
     actor.tenant,
@@ -1007,6 +1026,7 @@ export async function finalizeBundleUploadInTransaction(
     object_version: string;
   }> = [];
   let entryBytes: Buffer | null = null;
+  const scriptSources: Buffer[] = [];
   // Phishing signals of every page and script of the bundle. Pages go through
   // the same bounded (off-thread, deadline) parse as the profile.
   const signals = new SignalCollector();
@@ -1014,8 +1034,15 @@ export async function finalizeBundleUploadInTransaction(
   // Fields for secrets: every page's verdict (absent when it was not read)
   // and the scripts' (read by `signals`).
   const pageSensitive: Array<SensitiveInput | undefined> = [];
-  const inspectPage = async (bytes: Buffer) => {
-    const inspection = await inspectHtmlBounded(bytes.toString("utf8"));
+  // The entry page's visible text and the scripts' phrases, for search.
+  const searchText = new SearchText();
+  const inspectPage = async (bytes: Buffer, entry = false) => {
+    const inspection = await inspectHtmlBounded(
+      bytes.toString("utf8"),
+      undefined,
+      entry ? { text: true } : {},
+    );
+    if (inspection.text) searchText.add(inspection.text);
     for (const signal of inspection.signals) signals.add(signal);
     pageFilters.push(inspection.filter);
     pageSensitive.push(inspection.sensitive);
@@ -1035,8 +1062,10 @@ export async function finalizeBundleUploadInTransaction(
     // Phishing signals of every page and script (a lone entrypoint is read
     // below, in the same walk as its profile).
     else if (file.mime === "text/html") await inspectPage(bytes);
-    else if (file.mime === "text/javascript")
+    else if (file.mime === "text/javascript") {
       scanScript(bytes.toString("utf8"), signals);
+      scriptSources.push(bytes);
+    }
     verified.push({ file, ...stored });
   }
   const entryIndex = input.manifest.files.findIndex(
@@ -1047,10 +1076,11 @@ export async function finalizeBundleUploadInTransaction(
   // multi-file bundle stays runtime-only until a derivative is prepared.
   const htmlProfile: HtmlProfile =
     input.manifest.files.length === 1 && entryBytes
-      ? await inspectPage(entryBytes)
+      ? await inspectPage(entryBytes, true)
       : "unsupported";
   if (input.manifest.files.length !== 1 && entryBytes)
-    await inspectPage(entryBytes);
+    await inspectPage(entryBytes, true);
+  for (const source of scriptSources) addScriptText(source.toString("utf8"), searchText);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
   if (
@@ -1129,6 +1159,7 @@ export async function finalizeBundleUploadInTransaction(
     "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
     [artifactId, revisionId],
   );
+  await indexRevisionText(c, artifactId, revisionId, searchText.value());
   await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
     actor.tenant,
     input.size,
