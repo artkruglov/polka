@@ -65,6 +65,8 @@ export function OAuthConsent() {
           },
   );
   const [scopes, setScopes] = useState<AgentScope[]>([]);
+  // The shelf the agent works on (docs/specs/TEAM_SHELVES.md): null is one's own.
+  const [shelfId, setShelfId] = useState<string | null>(null);
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const sending = useRef(false);
@@ -108,7 +110,13 @@ export function OAuthConsent() {
               request: state.details.requestId,
               decision,
               // «Сведения и статус» is shown as always on, so it is always granted.
-              scopes: [...new Set<AgentScope>(["context", ...scopes])],
+              scopes: [
+                ...new Set<AgentScope>([
+                  "context",
+                  ...scopes.filter((scope) => fitsRole(chosenRole(state.details, shelfId), scope)),
+                ]),
+              ],
+              ...(shelfId ? { shelfId } : {}),
             }
           : { request: state.details.requestId, decision },
         csrf.csrfToken,
@@ -191,6 +199,8 @@ export function OAuthConsent() {
             accountName={account?.name ?? null}
             scopes={scopes}
             onToggle={toggle}
+            shelfId={shelfId}
+            onShelf={setShelfId}
             busy={busy}
             error={formError}
             onDecide={(decision) => void decide(decision)}
@@ -209,9 +219,12 @@ export function OAuthConsent() {
 function ShelfWhere({
   account,
   fallbackName,
+  team,
 }: {
   account: OAuthConsentDetails["account"];
   fallbackName: string | null;
+  /** The department shelf chosen below, if any. */
+  team?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const ways = useSignInWays();
@@ -235,6 +248,13 @@ function ShelfWhere({
     );
   const name = account?.name ?? fallbackName;
   if (!name) return null;
+  if (team)
+    return (
+      <div className="shelf-where">
+        <strong>Работы будут сохраняться на полку отдела «{team}»</strong> — их увидят все её
+        участники.
+      </div>
+    );
   return (
     <div className="shelf-where">
       <strong>Работы будут сохраняться в полку «{name}»</strong>
@@ -319,11 +339,78 @@ function GuestChoice({
   );
 }
 
+/** A reader on a department shelf connects an agent that only reads. */
+const READ_SCOPES: AgentScope[] = ["context", "read", "source:read"];
+const fitsRole = (role: string, scope: AgentScope) =>
+  role !== "reader" || READ_SCOPES.includes(scope);
+const chosenRole = (details: OAuthConsentDetails, shelfId: string | null) =>
+  details.shelves?.find((shelf) => shelf.id === shelfId)?.role ?? "owner";
+const ROLE_NAME: Record<string, string> = {
+  admin: "администратор",
+  curator: "куратор",
+  author: "автор",
+  reader: "читатель",
+};
+
+/** Which shelf the agent works on, when the account belongs to a department's. */
+function ShelfChoice({
+  details,
+  shelfId,
+  onShelf,
+  disabled,
+}: {
+  details: OAuthConsentDetails;
+  shelfId: string | null;
+  onShelf: (id: string | null) => void;
+  disabled: boolean;
+}) {
+  const teams = (details.shelves ?? []).filter((shelf) => shelf.name);
+  if (!teams.length) return null;
+  return (
+    <fieldset className="oauth-scopes oauth-shelves">
+      <legend>На какой полке будет работать приложение</legend>
+      <label className="oauth-scope" data-selected={shelfId === null}>
+        <input
+          type="radio"
+          name="shelf"
+          checked={shelfId === null}
+          disabled={disabled}
+          onChange={() => onShelf(null)}
+        />
+        <span>
+          <strong>Моя полка</strong>
+          <small>Работы видите только вы, пока не поделитесь ссылкой.</small>
+        </span>
+      </label>
+      {teams.map((shelf) => (
+        <label key={shelf.id} className="oauth-scope" data-selected={shelfId === shelf.id}>
+          <input
+            type="radio"
+            name="shelf"
+            checked={shelfId === shelf.id}
+            disabled={disabled}
+            onChange={() => onShelf(shelf.id)}
+          />
+          <span>
+            <strong>{shelf.name}</strong>
+            <small>
+              Полка отдела, вы — {ROLE_NAME[shelf.role] ?? shelf.role}. Работы видят все участники.
+              {shelf.role === "reader" ? " Приложение сможет только читать и искать." : ""}
+            </small>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function ConsentForm({
   details,
   accountName,
   scopes,
   onToggle,
+  shelfId,
+  onShelf,
   busy,
   error,
   onDecide,
@@ -332,12 +419,15 @@ function ConsentForm({
   accountName: string | null;
   scopes: AgentScope[];
   onToggle: (scope: AgentScope) => void;
+  shelfId: string | null;
+  onShelf: (id: string | null) => void;
   busy: "approve" | "deny" | null;
   error: string | null;
   onDecide: (decision: "approve" | "deny") => void;
 }) {
-  const offered = scopeOptions.filter((scope) =>
-    details.scopes.includes(scope.id),
+  const role = chosenRole(details, shelfId);
+  const offered = scopeOptions.filter(
+    (scope) => details.scopes.includes(scope.id) && fitsRole(role, scope.id),
   );
   const extension = details.client.extension;
   return (
@@ -389,7 +479,12 @@ function ConsentForm({
           </p>
         </>
       )}
-      <ShelfWhere account={details.account} fallbackName={accountName} />
+      <ShelfWhere
+        account={details.account}
+        fallbackName={accountName}
+        team={details.shelves?.find((shelf) => shelf.id === shelfId)?.name}
+      />
+      <ShelfChoice details={details} shelfId={shelfId} onShelf={onShelf} disabled={busy !== null} />
       {details.replaces && (
         <Notice>
           У этого приложения уже есть доступ. Новое подключение заменит его,

@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 044.
+-- Operator-reviewed recipe for the Polka schema through migration 045.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>44
+     OR (SELECT count(*) FROM public.schema_migrations)<>45
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>44 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 044';
+     OR (SELECT max(version) FROM public.schema_migrations)<>45 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 045';
   END IF;
 END $$;
 
@@ -186,5 +186,7 @@ GRANT USAGE, SELECT ON SEQUENCE public.tenant_member_events_id_seq TO :"runtime_
 GRANT SELECT, INSERT, DELETE ON TABLE public.project_view_grants TO :"runtime_role";
 -- Department shelf invariants (044): triggers only; the deletion trigger
 -- updates tenant_members, already granted above.
+-- Agents on department shelves (045): foreign keys and a trigger; the
+-- trigger updates agent_connections and oauth_refresh_tokens, already granted.
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 044
+\echo Runtime grants installed for the reviewed schema through migration 045

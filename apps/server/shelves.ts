@@ -99,6 +99,7 @@ export async function lockShelf(
   actor: { id: string; tenant: string },
   min: ShelfRole,
   lock: "UPDATE" | "SHARE" = "UPDATE",
+  denied: () => Error = missing,
 ) {
   const tenant = (
     await c.query(
@@ -107,7 +108,7 @@ export async function lockShelf(
       [actor.tenant, config.TEAM_SHELVES === "on"],
     )
   ).rows[0];
-  if (!tenant) throw missing();
+  if (!tenant) throw denied();
   const account = (
     await c.query(
       `SELECT id FROM accounts
@@ -116,7 +117,7 @@ export async function lockShelf(
       [actor.id],
     )
   ).rows[0];
-  if (!account) throw missing();
+  if (!account) throw denied();
   const member = (
     await c.query(
       `SELECT role FROM tenant_members
@@ -124,7 +125,7 @@ export async function lockShelf(
       [actor.tenant, actor.id],
     )
   ).rows[0];
-  if (!member) throw missing();
+  if (!member) throw denied();
   if (!atLeast(member.role, min))
     throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
   return { tenant, role: member.role as ShelfRole };

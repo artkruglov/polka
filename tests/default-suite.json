@@ -50,6 +50,7 @@
   "tests/content-search.test.ts",
   "tests/team-shelves.test.ts",
   "tests/team-shelves-web.test.ts",
+  "tests/team-shelves-agents.test.ts",
   "tests/projects.test.ts",
   "tests/restore-drill.test.ts",
   "tests/agent-management.test.ts",

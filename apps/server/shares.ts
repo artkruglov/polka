@@ -17,6 +17,7 @@ import { config } from "./config.ts";
 import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import {
+  assertOwnShelf,
   withServiceActorTransaction,
   type ServiceActor,
 } from "./service-auth.ts";
@@ -927,6 +928,7 @@ async function agentShareResponse(
 }
 
 export async function shareFromAgent(actor: ServiceActor, body: unknown) {
+  assertOwnShelf(actor);
   const input = agentShareSchema.parse(body);
   const request = canonicalAgentShareRequest(input);
   const requestHash = sha256(JSON.stringify(request));
@@ -1028,6 +1030,7 @@ export const agentMoveShareSchema = z
   .strict();
 
 export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
+  assertOwnShelf(actor);
   const input = agentMoveShareSchema.parse(body);
   const request = { ...input };
   const requestHash = sha256(JSON.stringify(request));
@@ -1127,6 +1130,7 @@ export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
 }
 
 export async function revokeShareFromAgent(actor: ServiceActor, body: unknown) {
+  assertOwnShelf(actor);
   const { shareId } = agentRevokeShareSchema.parse(body);
   return withServiceActorTransaction(actor, "share", (c, verified) =>
     revokeShareInTransaction(

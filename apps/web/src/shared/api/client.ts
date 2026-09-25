@@ -427,6 +427,8 @@ export const client = {
         scopes: AgentScope[];
         audience: string;
         ttlDays: number;
+        /** A department shelf the account belongs to; absent: its own. */
+        shelfId?: string;
       },
       csrfToken: string,
       signal?: AbortSignal,
@@ -469,7 +471,7 @@ export const oauthConsent = {
     ),
   decide: (
     input:
-      | { request: string; decision: "approve"; scopes: AgentScope[] }
+      | { request: string; decision: "approve"; scopes: AgentScope[]; shelfId?: string }
       | { request: string; decision: "deny" },
     csrfToken: string,
     signal?: AbortSignal,
