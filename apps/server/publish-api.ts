@@ -193,6 +193,7 @@ export const baseMismatchSchema = z
   .strict();
 
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
+const PROJECT_CLI_SOURCE = new URL("../../scripts/polka-publish-project.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
   reply.header(
@@ -485,5 +486,16 @@ export async function registerPublishApi(app: FastifyInstance) {
       .type("text/javascript; charset=utf-8")
       .header("content-disposition", 'attachment; filename="polka-publish.mjs"')
       .send(cli),
+  );
+  // A folder of linked pages as one project (docs/specs/PROJECTS.md).
+  const projectCli = (await readFile(PROJECT_CLI_SOURCE, "utf8")).replace(
+    /^const DEFAULT_ENDPOINT = ".*";$/m,
+    `const DEFAULT_ENDPOINT = ${JSON.stringify(config.APP_ORIGIN)};`,
+  );
+  app.get("/api/v1/cli/polka-publish-project.mjs", async (_req, reply) =>
+    reply
+      .type("text/javascript; charset=utf-8")
+      .header("content-disposition", 'attachment; filename="polka-publish-project.mjs"')
+      .send(projectCli),
   );
 }

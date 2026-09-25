@@ -11,6 +11,9 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative, sep } from "node:path";
 import { parseArgs } from "node:util";
 
+// Empty in the repository: the address is required. An installation that
+// serves this file (GET /api/v1/cli/polka-publish-project.mjs) fills in its own origin.
+const DEFAULT_ENDPOINT = "";
 const MAX_FILE = 5 * 1024 * 1024;
 const MAX_TOTAL = 48 * 1024 * 1024;
 const MAX_FILES = 400;
@@ -210,7 +213,7 @@ async function main() {
   }
   const token = process.env.POLKA_TOKEN;
   if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
-  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT;
+  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
   const manifest = {
     version: 1,
