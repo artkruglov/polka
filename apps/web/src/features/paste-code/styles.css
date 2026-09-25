@@ -5,7 +5,6 @@
 .paste-code-head .ui-badge { flex-shrink: 0; }
 .paste-code-hint { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; margin-top: -8px; }
 .paste-code .paste-code-input { min-height: 240px; resize: vertical; font: 400 var(--text-sm) / 1.55 var(--font-mono); tab-size: 2; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
-.paste-code.paste-code--embedded .paste-code-input { min-height: 176px; }
 .paste-code-kind { display: flex; gap: 8px; align-items: flex-start; margin: -4px 0 0; color: var(--success); font-size: var(--text-sm); line-height: 1.5; }
 .paste-code-kind svg { flex-shrink: 0; width: 15px; height: 15px; margin-top: 2px; }
 .paste-code-kind.warn { padding: 12px 14px; border-radius: var(--radius); background: var(--warning-soft); color: var(--warning); }

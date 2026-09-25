@@ -1,7 +1,7 @@
 // The postMessage bridge between Полка's page and the «На Полку» extension
 // (packages/contracts/extension-bridge.ts): the protocol checks, and both real
 // halves talking through a stand-in window — the page's findExtension
-// (apps/web/src/features/import-url/extension-bridge.ts) and the extension's
+// (tests/fixtures/extension-page.ts, the reference page half) and the extension's
 // content script (extensions/chrome/src/content/bridge.ts).
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +14,7 @@ import {
   parseExtensionMessage,
   parsePageMessage,
 } from "../packages/contracts/extension-bridge.ts";
-import { findExtension } from "../apps/web/src/features/import-url/extension-bridge.ts";
+import { findExtension } from "./fixtures/extension-page.ts";
 
 const ORIGIN = "https://polochka.app";
 const NONCE = "n0nce-n0nce-n0nce-n0nce";

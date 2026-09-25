@@ -7,7 +7,6 @@ import {
   Building2,
   FileUp,
   History,
-  Link2,
   LockKeyhole,
   Server,
 } from "lucide-react";
@@ -19,7 +18,7 @@ import {
 import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
-import { Button, LinkButton } from "../../shared/ui/controls.tsx";
+import { LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
@@ -48,7 +47,6 @@ export function Landing() {
   const [retry, setRetry] = useState(0);
   const catalog = useEditorialList(retry);
   const imports = useCapabilities();
-  const canImport = imports.status === "ready" && imports.capabilities.urlImport;
   const livePreview =
     imports.status === "ready" && imports.capabilities.livePreview;
   const sourceUrl = useSourceUrl();
@@ -86,15 +84,17 @@ export function Landing() {
             </div>
             <small>
               Codex и Claude Code выполнят одну команду сами — Полка откроется в
-              браузере, токен не нужен. В ChatGPT и Claude.ai коннектор
-              добавляют вручную: настройки → коннекторы → адрес{" "}
+              браузере, токен не нужен. В Claude (claude.ai и Desktop) и ChatGPT
+              коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
               <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
-              <a href="/settings/agents?client=chatgpt">ChatGPT</a> ·{" "}
-              <a href="/settings/agents?client=claude-ai">Claude.ai</a>.
+              <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
+              <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
+              <a href="/settings/agents?client=codex">Codex</a> ·{" "}
+              <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
             </small>
             <small className="landing-agent-skill">
-              Для Claude Code и Codex есть скилл Полки — агент будет знать, как
-              сохранять, делиться и править: <code>{SKILL_INSTALL}</code>{" "}
+              Claude Code и Codex ставят плагин Полки — подключение и скилл
+              сразу. Для других агентов скилл отдельно: <code>{SKILL_INSTALL}</code>{" "}
               <CopyButton value={SKILL_INSTALL} variant="quiet" label="Скопировать" successText="Скопировано" />
               <a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>
             </small>
@@ -121,22 +121,6 @@ export function Landing() {
             {stars && <span className="landing-oss-stars">· ★ {stars} на GitHub</span>}
           </a>
 
-          {canImport && (
-            <form action="/bring" className="landing-entry">
-              <Link2 aria-hidden="true" />
-              <input
-                type="url"
-                name="url"
-                required
-                aria-label="Ссылка на страницу"
-                placeholder="Вставьте ссылку на публичную HTML-страницу"
-              />
-              <Button type="submit" variant="primary">
-                Сохранить копию <ArrowUpRight size={18} />
-              </Button>
-            </form>
-          )}
-
           <nav className="landing-more" aria-label="Другие пути">
             <a href="/bring#file">
               <FileUp aria-hidden="true" /> Загрузить файл
@@ -146,14 +130,9 @@ export function Landing() {
             </a>
           </nav>
 
-          <small className="landing-fine" role="status">
-            {imports.status === "loading"
-              ? "Проверяем доступные способы сохранения…"
-              : imports.status === "failed"
-                ? "Доступность импорта ссылки не удалось проверить. Загрузка файла и подключение агента работают."
-                : canImport
-                  ? "По ссылке сохраняем самостоятельные публичные HTML-страницы. Для Claude и ChatGPT нужен экспорт файлом или передача файлов агентом."
-                  : "Агент сохраняет работы на вашу полку через MCP. Файлом можно сохранить HTML, текст или изображение до 5 МБ."}
+          <small className="landing-fine">
+            Агент сохраняет работы на вашу полку через MCP. Файлом можно
+            сохранить HTML, текст или изображение до 5 МБ.
             {livePreview &&
               " Поддерживаемые интерактивные страницы открываются в изолированном просмотре."}
           </small>

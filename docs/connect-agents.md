@@ -4,11 +4,43 @@
 
 В примерах используется адрес `https://polochka.app`. На своей установке подставьте свой `APP_ORIGIN`.
 
+## Быстрый старт: один раз на человека
+
+Работу на Полку сохраняет агент. Сохранения по ссылке на артефакт Claude или ChatGPT нет ([FAQ](faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)); файл с компьютера по-прежнему можно загрузить. Та же инструкция — вверху полки для нового пользователя и на странице «Агенты» (`/settings/agents`).
+
+| Где вы работаете | Что сделать один раз | Что приходит |
+|---|---|---|
+| **Claude** — claude.ai и Claude Desktop | Settings → Connectors → **Add custom connector**, URL `https://polochka.app/mcp` → Add → Connect → «Разрешить» в Полке | MCP-сервер (инструменты Полки) |
+| **Claude Code** | `claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka`, затем в Claude Code `/mcp` → `plugin:polka:polka` → Authenticate | MCP-сервер и все скиллы Полки |
+| **Codex** (CLI и приложение) | `codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka`, затем `codex mcp login polka` | MCP-сервер и все скиллы Полки |
+| **Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…) | Удалённый MCP-сервер `https://polochka.app/mcp` (Streamable HTTP, OAuth) и скилл `npx skills add artkruglov/polka` | MCP-сервер и скилл `polka` |
+
+Вход везде один: откроется Полка, вы входите в свою полку (или «Начать без регистрации») и нажимаете «Разрешить». Токены и пароли через агента не проходят. Потом в любом чате: «Сохрани это на Полку».
+
+**Для команды.** Разошлите коллегам строку для их клиента из таблицы — больше ничего настраивать не нужно. Плагины обновляются из репозитория: `claude plugin marketplace update polka && claude plugin update polka@polka`; в Codex — `codex plugin marketplace upgrade polka`, затем снова `codex plugin add polka@polka`. Версия плагина совпадает с версией Полки в `package.json` и растёт с релизом. Скиллы плагин берёт из каталога [`skills/`](../skills) целиком, новый скилл приходит с обновлением.
+
+## Плагин Полки для Claude Code и Codex
+
+Репозиторий [artkruglov/polka](https://github.com/artkruglov/polka) — одновременно маркетплейс и плагин для обоих клиентов:
+
+| Файл | Для чего |
+|---|---|
+| [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json), [`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json) | Маркетплейс `polka` с одним плагином `polka` (корень репозитория) для Claude Code |
+| [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json), [`.codex-plugin/plugin.json`](../.codex-plugin/plugin.json) | То же для Codex |
+| [`.mcp.json`](../.mcp.json) | Удалённый HTTP MCP-сервер `polka` → `https://polochka.app/mcp`; OAuth при первом подключении |
+| [`skills/*/SKILL.md`](../skills) | Скиллы; оба клиента находят их по каталогу, список в манифестах не перечисляется |
+
+Проверено 25.09.2026 на Claude Code 2.1.282 и Codex CLI 0.153.4 установкой из локальной копии репозитория в пустой профиль (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): `claude plugin validate .` проходит, `claude plugin details polka@polka` показывает скиллы из `skills/` и MCP-сервер `polka`, `claude mcp list` — `plugin:polka:polka: https://polochka.app/mcp (HTTP) - ! Needs authentication`; `codex mcp list` — `polka  https://polochka.app/mcp … enabled  OAuth`. Второй скилл, добавленный в `skills/`, подхватывается без правки манифестов.
+
+Внутри сессии Claude Code те же команды: `/plugin marketplace add artkruglov/polka`, затем `/plugin install polka@polka` и `/reload-plugins`. Своя установка Полки: плагин смотрит на `polochka.app`; для другого адреса подключите MCP-сервер командой из раздела [ниже](#claude-code-и-codex-без-плагина) и поставьте скилл `npx skills add <ваш APP_ORIGIN>`.
+
+В клоне этого репозитория Claude Code предложит включить проектный сервер из `.mcp.json` — это тот же `polochka.app/mcp`; для разработки можно отказаться.
+
 ## Claude.ai и ChatGPT: коннектор
 
 Полка подключается как удалённый MCP-сервер `https://polochka.app/mcp` со входом через OAuth 2.1. Client ID вводить не нужно: приложение регистрируется само (Dynamic Client Registration).
 
-**Claude.ai (Pro/Max).** Settings → Connectors → **Add custom connector**. Name: `Полка`, URL: `https://polochka.app/mcp`. Нажмите **Connect**, войдите в Полку и разрешите доступ. После этого включите коннектор в чате и попросите: «Сохрани этот артефакт на Полку и дай ссылку».
+**Claude.ai и Claude Desktop (Pro/Max).** Settings → Connectors → **Add custom connector**. Коннектор, добавленный в одном месте, виден и в другом. Name: `Полка`, URL: `https://polochka.app/mcp`. Нажмите **Connect**, войдите в Полку и разрешите доступ. После этого включите коннектор в чате и попросите: «Сохрани этот артефакт на Полку и дай ссылку».
 
 **Claude Team / Enterprise.** Владелец организации добавляет коннектор в Admin settings → Connectors. Каждый участник подключает его сам и входит в **свою** Полку. Общего токена нет.
 
@@ -32,7 +64,7 @@
 
 > Подключи Полку: https://polochka.app/connect
 
-По этой ссылке лежит инструкция для агентов. Агент сам выполнит нужную команду, откроется Полка: войдите в свою полку (или нажмите «Начать без регистрации») и нажмите «Разрешить». Токены и пароли через агента не проходят.
+По этой ссылке лежит инструкция для агентов. Агент сам выполнит нужную команду (Claude Code и Codex ставят плагин Полки), откроется Полка: войдите в свою полку (или нажмите «Начать без регистрации») и нажмите «Разрешить». Токены и пароли через агента не проходят.
 
 ChatGPT и Claude.ai в браузере команды не выполняют и, как правило, не могут открыть `/connect`: их песочницы не пускают на незнакомые домены. Там коннектор добавляет сам пользователь (раздел выше); страница `/settings/agents?client=chatgpt` или `?client=claude-ai` показывает эти шаги с кнопками копирования, а `/connect` и `llms.txt` велят агенту пересказать их, а не пытаться что-то загрузить.
 
@@ -55,7 +87,9 @@ npx skills add https://polochka.app      # с установки: /.well-known/a
 
 Скилл учит: подключиться через `/connect`, сохранить `polka_publish`, выпустить ссылку заново после новой версии, отдать человеку ссылку `…/s#…` с пояснением, что работа приватна, а ссылка без каталога, передать `moderationMessage`, если ссылка ждёт модератора, и никогда не трогать пароли и токены. `skills/polka/SKILL.md` генерируется из `apps/server/agent-discovery.ts` командой `npm run gen:skill`; тест падает, если файл устарел.
 
-## Claude Code и Codex: одной командой, без токена
+## Claude Code и Codex без плагина
+
+Обычно достаточно [плагина](#плагин-полки-для-claude-code-и-codex): он ставит и сервер, и скиллы. Без плагина — только MCP-сервер, одной командой; скилл отдельно: `npx skills add artkruglov/polka`. Если плагин уже стоит, эти команды не нужны: получится второй сервер с теми же инструментами.
 
 Оба клиента умеют входить в MCP-сервер через OAuth, как Claude.ai. Токен не нужен: клиент регистрируется сам, открывает Полку в браузере, вы входите и нажимаете «Разрешить».
 
@@ -167,7 +201,7 @@ CLI — это один файл для Node 22+ без зависимостей
 
 ## Вручную
 
-Откройте на Полке страницу **Сохранить**. Можно перетащить файл (HTML, текст, PNG/JPEG/WebP до 5 МБ) или нажать «Вставить код» и вставить HTML или JSX артефакта из чата. Если вставить ссылку на артефакт Claude или ChatGPT, Полка объяснит, почему не может забрать его сама, и предложит скачать файл ([FAQ](faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)).
+Откройте на Полке страницу **Сохранить** или нажмите «Загрузить файл» на полке. Можно перетащить файл (HTML, текст, PNG/JPEG/WebP до 5 МБ) или нажать «Вставить код» и вставить HTML или JSX артефакта из чата. Сохранить по ссылке на артефакт Claude или ChatGPT нельзя: сервер не может забрать его сам ([FAQ](faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)) — для этого и подключают агента.
 
 ## Отзыв доступа
 
