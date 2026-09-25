@@ -278,6 +278,12 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(next.includes("Этого пока нет в коде"));
   assert.equal((next.match(/в разработке/g) ?? []).length, 3);
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
+  // Team shelves are not built: the page says each employee has a shelf
+  // today and lists shared shelves first among what comes next.
+  assert.ok(html.includes("Как это работает в компании"));
+  assert.ok(html.includes("Сейчас у каждого сотрудника своя полка"));
+  assert.ok(next.indexOf("Общие полки отделов") < next.indexOf("Встраивание в ваши системы"));
+  assert.doesNotMatch(html, /Одна полка для всего/);
   const questions = (html.match(/<details>/g) ?? []).length;
   assert.ok(questions >= 5 && questions <= 7, String(questions));
   // No invented price.
