@@ -1,3 +1,11 @@
+import {
+  HEADLINE_OPTIONS,
+  plainSnippet,
+  prefixQuery,
+  searchJoin,
+  searchMatch,
+  searchSnippet,
+} from "./search-text.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -221,15 +229,18 @@ export async function listArtifactsForAgent(
     input.state === "active"
       ? "artifact.trashed_at IS NULL"
       : "artifact.trashed_at IS NOT NULL";
+  // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
   const { rows } = await db.query(
     `SELECT ${artifactColumns},
             to_char(${timestamp} AT TIME ZONE 'UTC',
-                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_date
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_date,
+            ${searchSnippet("$8", "$9")}
      FROM artifacts artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
+     ${searchJoin("artifact")}
      WHERE artifact.tenant_id=$1 AND ${statePredicate}
        AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
-       AND ($4::text IS NULL OR artifact.title ILIKE $4 ESCAPE '\\')
+       AND ${searchMatch("artifact", "$4", "$8")}
        AND ($5::timestamptz IS NULL OR (${timestamp},artifact.id)<($5,$6::uuid))
      ORDER BY ${timestamp} DESC,artifact.id DESC
      LIMIT $7`,
@@ -241,12 +252,19 @@ export async function listArtifactsForAgent(
       cursor?.date ?? null,
       cursor?.id ?? null,
       input.limit + 1,
+      input.query ? prefixQuery(input.query) : null,
+      HEADLINE_OPTIONS,
     ],
   );
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
   return {
-    items: page.map(artifactProjection),
+    items: page.map((row) => {
+      const snippet = plainSnippet(row.search_snippet);
+      return snippet
+        ? { ...artifactProjection(row), snippet }
+        : artifactProjection(row);
+    }),
     nextCursor:
       more && page.length
         ? encodeArtifactCursor(page.at(-1), input.state)
