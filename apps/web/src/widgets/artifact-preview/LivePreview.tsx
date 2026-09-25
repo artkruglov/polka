@@ -1,4 +1,5 @@
 import { Button } from "../../shared/ui/controls.tsx";
+import { currentShelf } from "../../shared/api/client.ts";
 import { CircleStop, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -333,6 +334,8 @@ export function LivePreview({
           credentials: "same-origin",
           headers: {
             ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
+            // The owner's view of a work on a department shelf (TEAM_SHELVES.md).
+            ...(!grant && currentShelf() ? { "X-Polka-Shelf": currentShelf()! } : {}),
             ...(overlay ? { "Content-Type": "application/json" } : {}),
           },
           body: overlay ? JSON.stringify({ comments: true }) : undefined,

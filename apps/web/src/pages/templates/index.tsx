@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ArrowUpRight, Eye, FileCode2, Search, Sparkles, Upload } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { request } from "../../shared/api/client.ts";
+import { request, savedWorkHref } from "../../shared/api/client.ts";
 import { Button, LinkButton, EmptyState, Badge, Segmented } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { TextCover } from "../../widgets/artifact-preview/index.ts";
@@ -243,7 +243,7 @@ export function Templates() {
                     <Sparkles /> Для агента
                   </Button>
                   {isHtmlTemplate(t) && libraryId && t.publicationId ? <Button variant="quiet" onClick={() => openPreview(t)}><Eye /> Предпросмотр</Button> :
-                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={`/works/${t.artifactId}?revision=${t.revisionId}`}>Работа <ArrowUpRight /></LinkButton> :
+                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={savedWorkHref(t.artifactId, `?revision=${t.revisionId}`)}>Работа <ArrowUpRight /></LinkButton> :
                       <Button variant="quiet" onClick={() => setSelected(t)}><FileCode2 /> Исходники</Button>}
                 </div>
               </article>

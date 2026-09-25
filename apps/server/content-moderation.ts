@@ -188,11 +188,18 @@ export async function freezeAccountInTransaction(
     [owner.accountId],
   );
   if (!account || account.disabled) return false;
+  // The account's own shelf, even when the work was saved on a department
+  // shelf: a freeze is the author's, never the colleagues' (TEAM_SHELVES.md).
+  const {
+    rows: [own],
+  } = await c.query("SELECT id FROM tenants WHERE owner_id=$1", [owner.accountId]);
+  const personal = (own?.id as string | undefined) ?? owner.tenantId;
+  // Every agent of the account, on every shelf it was connected to.
   const connections = (
     await c.query(
       `SELECT id,tenant_id,account_id FROM agent_connections
-       WHERE tenant_id=$1 AND revoked_at IS NULL ORDER BY id FOR UPDATE`,
-      [owner.tenantId],
+       WHERE account_id=$1 AND revoked_at IS NULL ORDER BY id FOR UPDATE`,
+      [owner.accountId],
     )
   ).rows;
   await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.accountId]);
@@ -202,10 +209,10 @@ export async function freezeAccountInTransaction(
   const shares = (
     await c.query(
       "UPDATE shares SET revoked=true WHERE tenant_id=$1 AND NOT revoked RETURNING id",
-      [owner.tenantId],
+      [personal],
     )
   ).rows;
-  const self = { id: owner.accountId, tenant: owner.tenantId };
+  const self = { id: owner.accountId, tenant: personal };
   for (const share of shares) await audit(c, self, "share.revoked", share.id);
   await audit(c, self, "account.disabled", owner.accountId);
   await recordEvent(c, {

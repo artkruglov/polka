@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { currentShelf, withShelf } from "../../shared/api/client.ts";
+import { shelfAccess, useTeamShelf } from "../../entities/shelf/model.ts";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import "./styles.css";
 import {
   ArrowUpRight,
@@ -83,6 +85,7 @@ export function ShelfCard({
   open: (id: string, panel?: CardAction) => void;
 }) {
   const [ref, near] = useNearViewport<HTMLElement>();
+  const access = shelfAccess(useTeamShelf(), useAccountState().account?.id);
   const href = withShelf(`/works/${a.id}`);
   const go = (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
@@ -110,8 +113,13 @@ export function ShelfCard({
     ...(currentShelf()
       ? []
       : [{ id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") }]),
-    { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
-    { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
+    // On a department shelf only who may change the work (TEAM_SHELVES.md).
+    ...(access.changes(a.author)
+      ? ([
+          { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
+          { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
+        ] satisfies MenuAction[])
+      : []),
   ];
   const linked = isLinked(a);
   return (

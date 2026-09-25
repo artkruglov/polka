@@ -10,6 +10,7 @@ import {
   BookmarkletPage,
   EditorialPage,
   Enterprise,
+  CompanyAdmin,
   FirstSave,
   Landing,
   Lazy,
@@ -61,6 +62,7 @@ function Route({ path }: { path: string }) {
   if (path === "/start") return <FirstSave />;
   if (path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
+  if (path === "/settings/company") return <CompanyAdmin />;
   if (path === "/s") return <Recipient />;
   if (path === "/away") return <Away />;
   if (path === "/mail-off") return <MailOff />;

@@ -81,6 +81,9 @@ const Pricing = page(() =>
 const Enterprise = page(() =>
   import("../../pages/enterprise/index.tsx").then((m) => m.Enterprise),
 );
+const CompanyAdmin = page(() =>
+  import("../../pages/company/index.tsx").then((m) => m.CompanyAdmin),
+);
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
@@ -134,6 +137,7 @@ export const LazyLanding = () => (
 );
 
 export {
+  CompanyAdmin,
   Templates,
   Signup,
   FirstSave,

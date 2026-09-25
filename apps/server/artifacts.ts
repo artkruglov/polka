@@ -297,30 +297,19 @@ export async function beginUploadInTransaction(
     ).rowCount
   )
     throw missing();
-  if (input.artifactId) {
-    const {
-      rows: [a],
-    } = await c.query(
-      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
-      [input.artifactId, actor.tenant],
-    );
-    if (!a) throw missing();
-    if (a.latest_revision_id !== input.baseRevisionId)
-      throw new Problem(
-        409,
-        "conflict",
-        "Работа уже изменилась. Откройте текущую версию.",
-      );
-  }
+  // The target and, on a department shelf, the right to change it.
+  await validateUploadTarget(c, actor, input);
   const {
     rows: [pending],
   } = await c.query(
-    "SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()",
-    [actor.tenant],
+    `SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count,
+            count(*) FILTER (WHERE account_id=$2) AS mine
+     FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()`,
+    [actor.tenant, actor.id],
   );
   if (
     +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
-    +pending.count >= 8
+    tooManyPending(tenant, pending)
   )
     throw new Problem(
       413,
@@ -784,6 +773,18 @@ export function normalizeBundleRequest(
   return normalized;
 }
 
+/**
+ * Unfinished uploads at once: 8 on one's own shelf; on a department shelf 8
+ * per member and 32 for the shelf, so a few members cannot block the rest.
+ */
+const tooManyPending = (
+  tenant: { kind?: string },
+  pending: { count: string | number; mine: string | number },
+) =>
+  tenant.kind === "team"
+    ? +pending.mine >= 8 || +pending.count >= 32
+    : +pending.count >= 8;
+
 async function validateUploadTarget(
   c: PoolClient,
   actor: Actor,
@@ -882,12 +883,14 @@ export async function beginBundleUploadInTransaction(
   const {
     rows: [pending],
   } = await c.query(
-    "SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()",
-    [actor.tenant],
+    `SELECT COALESCE(sum((request->>'size')::bigint),0) AS size,count(*) AS count,
+            count(*) FILTER (WHERE account_id=$2) AS mine
+     FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()`,
+    [actor.tenant, actor.id],
   );
   if (
     +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
-    +pending.count >= 8
+    tooManyPending(tenant, pending)
   )
     throw new Problem(
       413,

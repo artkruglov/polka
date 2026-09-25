@@ -63,7 +63,8 @@ const liveConnectionSql = (match: string, lock = "") =>
       AND (connection.parent_id IS NULL OR EXISTS (
         SELECT 1 FROM agent_connections parent
         WHERE parent.id=connection.parent_id AND parent.revoked_at IS NULL
-          AND parent.expires_at>now()))
+          AND parent.expires_at>now()
+          AND (parent.access_expires_at IS NULL OR parent.access_expires_at>now())))
       AND (connection.access_expires_at IS NULL
         OR connection.access_expires_at>now())
       AND NOT account.disabled AND account.deletion_requested_at IS NULL
@@ -237,9 +238,12 @@ export async function issueAgentConnection(
     );
   const token = randomBytes(32).toString("base64url");
   const connection = await transaction(async (c) => {
-    await lockOwner(c, actor, sessionToken, csrfToken);
     // To a department shelf the account belongs to (docs/specs/TEAM_SHELVES.md).
+    // Its row first: shelf before account, the order every shelf path takes.
     const tenant = input.shelfId ?? actor.tenant;
+    if (tenant !== actor.tenant)
+      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [tenant]);
+    await lockOwner(c, actor, sessionToken, csrfToken);
     const shelf =
       tenant === actor.tenant
         ? null
@@ -397,7 +401,8 @@ export async function authenticateServiceToken(
   // an OAuth connection counts when it is granted, oauth.ts). Only one of
   // two concurrent first calls claims it.
   const firstCall =
-    !row.oauth_client_id && !row.last_seen_at
+    // A project upload token is not a newly connected agent.
+    !row.oauth_client_id && !row.parent_id && !row.last_seen_at
       ? !!(
           await db.query(
             `UPDATE agent_connections SET last_seen_at=clock_timestamp()

@@ -1,4 +1,5 @@
 import "./styles.css";
+import { savedWorkHref } from "../../shared/api/client.ts";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, LockKeyhole, LogIn } from "lucide-react";
 import type { BookmarkletSource } from "../../../../../packages/contracts/bookmarklet.ts";
@@ -59,7 +60,7 @@ export function ReceivedCard({
   useEffect(() => {
     if (!upload.saved) return;
     clearPending();
-    location.assign(`/works/${upload.saved.receipt.artifactId}`);
+    location.assign(savedWorkHref(upload.saved.receipt.artifactId));
   }, [upload.saved]);
 
   const save = async () => {

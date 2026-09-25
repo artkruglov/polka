@@ -341,8 +341,11 @@ function GuestChoice({
 
 /** A reader on a department shelf connects an agent that only reads. */
 const READ_SCOPES: AgentScope[] = ["context", "read", "source:read"];
+/** Links and sign-in links belong to one's own shelf for now. */
+const OWN_SHELF_SCOPES: AgentScope[] = ["share", "sign_in"];
 const fitsRole = (role: string, scope: AgentScope) =>
-  role !== "reader" || READ_SCOPES.includes(scope);
+  (role !== "reader" || READ_SCOPES.includes(scope)) &&
+  (role === "owner" || !OWN_SHELF_SCOPES.includes(scope));
 const chosenRole = (details: OAuthConsentDetails, shelfId: string | null) =>
   details.shelves?.find((shelf) => shelf.id === shelfId)?.role ?? "owner";
 const ROLE_NAME: Record<string, string> = {

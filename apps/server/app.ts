@@ -133,6 +133,13 @@ import {
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import {
+  adminCompanyShelf,
+  findEmployee,
+  listCompanyShelfMembers,
+  listCompanyShelves,
+  offboardEmployee,
+} from "./company-admin.ts";
+import {
   addShelfMember,
   changeShelfMemberRole,
   listShelfEvents,
@@ -725,6 +732,22 @@ export async function createApp() {
     const input = z.object({ name: z.string().max(200) }).strict().parse(req.body);
     return transaction((c) => createTeamShelfInTransaction(c, actor, input.name));
   });
+  // The company admin's page (company-admin.ts): 404 for everyone else.
+  app.get("/api/company/shelves", async (req) => listCompanyShelves(await identity(req)));
+  app.get("/api/company/shelves/:shelfId/members", async (req) =>
+    listCompanyShelfMembers(await identity(req), uuid.parse((req.params as any).shelfId)),
+  );
+  app.post("/api/company/shelves/:shelfId/admin", async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return adminCompanyShelf(actor, uuid.parse((req.params as any).shelfId));
+  });
+  app.get("/api/company/people", async (req) => findEmployee(await identity(req), req.query));
+  app.post("/api/company/people/:accountId/offboard", async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return offboardEmployee(actor, uuid.parse((req.params as any).accountId));
+  });
   // Members of a department shelf (shelf-members.ts).
   const shelfId = (req: FastifyRequest) => uuid.parse((req.params as any).shelfId);
   app.get("/api/shelves/:shelfId/members", async (req) =>
@@ -921,7 +944,10 @@ export async function createApp() {
   let transfers = 0;
   const tenantTransfers = new Map<string, number>();
   const transferGuard = async (req: any, reply: any) => {
-    const { tenant } = await identity(req, SHELF);
+    // Per shelf and member: on a department shelf one member's transfers do
+    // not take every slot of the shelf (on one's own shelf it is the same).
+    const actor = await identity(req, SHELF);
+    const tenant = `${actor.tenant}:${actor.id}`;
     const mine = tenantTransfers.get(tenant) ?? 0;
     if (transfers >= TRANSFER_SLOTS.total || mine >= TRANSFER_SLOTS.perTenant)
       throw new Problem(
