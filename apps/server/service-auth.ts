@@ -19,6 +19,14 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 export const MAX_ACTIVE_CONNECTIONS = 20;
 
 export const MCP_AUDIENCE = new URL("/mcp", config.APP_ORIGIN).toString();
+/**
+ * A one-time project upload token's audience (polka_project_upload,
+ * project-upload.ts): only the project routes of the HTTP API accept it.
+ */
+export const PROJECT_UPLOAD_AUDIENCE = new URL(
+  "/api/v1/projects",
+  config.APP_ORIGIN,
+).toString();
 
 export type ServiceActor = {
   accountId: string;
@@ -51,6 +59,11 @@ const liveConnectionSql = (match: string, lock = "") =>
        AND tenant.state='active' ${teamShelvesSql()}
     WHERE ${match}
       AND connection.revoked_at IS NULL AND connection.expires_at>now()
+      -- A project upload token lives only while the connection that asked for it does.
+      AND (connection.parent_id IS NULL OR EXISTS (
+        SELECT 1 FROM agent_connections parent
+        WHERE parent.id=connection.parent_id AND parent.revoked_at IS NULL
+          AND parent.expires_at>now()))
       AND (connection.access_expires_at IS NULL
         OR connection.access_expires_at>now())
       AND NOT account.disabled AND account.deletion_requested_at IS NULL
@@ -236,7 +249,8 @@ export async function issueAgentConnection(
       rows: [active],
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
-       WHERE tenant_id=$1 AND account_id=$2 AND revoked_at IS NULL AND expires_at>now()`,
+       WHERE tenant_id=$1 AND account_id=$2 AND parent_id IS NULL
+         AND revoked_at IS NULL AND expires_at>now()`,
       [tenant, actor.id],
     );
     if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
@@ -281,12 +295,12 @@ export async function listAgentConnections(actor: Actor) {
   const { rows } = await db.query(
     `SELECT listed.*,tenant.kind AS shelf_kind,tenant.name AS shelf_name FROM (
        SELECT * FROM agent_connections
-       WHERE account_id=$1
+       WHERE account_id=$1 AND parent_id IS NULL
          AND revoked_at IS NULL AND expires_at>now()
        UNION ALL
        (
          SELECT * FROM agent_connections
-         WHERE account_id=$1
+         WHERE account_id=$1 AND parent_id IS NULL
            AND (revoked_at IS NOT NULL OR expires_at<=now())
          ORDER BY created_at DESC,id DESC LIMIT 100
        )
@@ -365,7 +379,11 @@ export async function authenticateServiceToken(
   scope?: AgentScope,
   transport: "mcp" | "http" = "mcp",
 ): Promise<ServiceActor> {
-  if (!TOKEN.test(token) || audience !== MCP_AUDIENCE) throw unauthorized();
+  if (
+    !TOKEN.test(token) ||
+    (audience !== MCP_AUDIENCE && audience !== PROJECT_UPLOAD_AUDIENCE)
+  )
+    throw unauthorized();
   const tokenHash = sha256(token);
   const {
     rows: [row],
