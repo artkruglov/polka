@@ -20,7 +20,7 @@ import type {
   Folder,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
-import { ApiError, client, withShelf } from "../../shared/api/client.ts";
+import { ApiError, client, currentShelf, withShelf } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
@@ -38,7 +38,7 @@ import { shelfUrl } from "../../entities/artifact/agent-phrases.ts";
 import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
-import { useShelves, shelfName } from "../../entities/shelf/model.ts";
+import { shelfAccess, useShelves, shelfName } from "../../entities/shelf/model.ts";
 import {
   CreateShelfPanel,
   ShelfMembersPanel,
@@ -90,8 +90,11 @@ export function App() {
     >(() => {
       // Deep links (and the shelf card menu) may open a work with its dialog.
       const requested = params.get("panel");
+      // A department shelf has no links or agent context yet (TEAM_SHELVES.md).
+      const team = currentShelf() !== null;
       return location.pathname.startsWith("/works/") &&
-        (requested === "share" || requested === "metadata" || requested === "agent-context")
+        (requested === "metadata" ||
+          (!team && (requested === "share" || requested === "agent-context")))
         ? requested
         : null;
     }),
@@ -181,7 +184,7 @@ export function App() {
     routeGeneration.current++;
     trashGeneration.current++;
     selectedRef.current = null;
-    window.history.pushState(null, "", "/trash");
+    window.history.pushState(null, "", withShelf("/trash"));
     setTrashView(true);
     setSelected(null);
     setWork(null);
@@ -421,6 +424,7 @@ export function App() {
         open(null);
       }}
       onOpenTrash={openTrash}
+      canCreateFolder={shelfAccess(team, account?.id).curate}
     />
     </>
   );
@@ -621,7 +625,7 @@ export function App() {
             setRefresh((x) => x + 1);
             open(r.artifactId);
             setNotice(
-              `Версия ${r.number} сохранена. ${r.number > 1 ? "Отправленная ссылка не изменилась." : "Пока работу видите только вы."}`,
+              `Версия ${r.number} сохранена. ${currentShelf() ? "Её видят участники полки." : r.number > 1 ? "Отправленная ссылка не изменилась." : "Пока работу видите только вы."}`,
             );
           }}
         />

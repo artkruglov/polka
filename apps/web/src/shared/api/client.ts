@@ -138,6 +138,18 @@ export function rememberShelf(id: string | null) {
   }
 }
 /**
+ * The page of a work this page just saved or lists. On a shelf page it is on
+ * that shelf; from a page outside the shelf («Сохранить», templates, the
+ * bookmarklet) it is on one's own, and the link says so, or a tab that
+ * remembers a department shelf would look for it there.
+ */
+export const savedWorkHref = (artifactId: string, query = "") => {
+  const href = `/works/${artifactId}${query}`;
+  if (shelf) return withShelf(href);
+  return rememberedShelf() ? `${href}${query ? "&" : "?"}shelf=` : href;
+};
+
+/**
  * An address the browser opens by itself (a picture, «Открыть ↗», a work
  * link) carries the shelf as ?shelf=, since it cannot carry the header.
  */

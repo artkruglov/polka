@@ -142,7 +142,8 @@ function AccountMenu({
         }
         items={[
           { id: "shelf", label: "Моя полка", icon: <Home />, onSelect: () => location.assign(rememberedShelf() ? "/?shelf=" : "/") },
-          { id: "trash", label: "Корзина", onSelect: () => location.assign("/trash") },
+          // Next to «Моя полка»: one's own trash.
+          { id: "trash", label: "Корзина", onSelect: () => location.assign(rememberedShelf() ? "/trash?shelf=" : "/trash") },
           { id: "logout", label: "Выйти", icon: <LogOut />, tone: "danger", onSelect: () => setConfirm(true) },
         ]}
       />

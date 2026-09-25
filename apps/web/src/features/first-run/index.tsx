@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { savedWorkHref } from "../../shared/api/client.ts";
 import { ArrowUpRight, Bot, Check, Link2, Upload } from "lucide-react";
 import type {
   Account,
@@ -246,7 +247,7 @@ export function FirstRunSteps({
                   {sample.saved && (
                     <p className="first-run-saved" role="status">
                       <Check /> Пример сохранён: «{sample.saved.title}». Пока его видите только вы.{" "}
-                      <a href={`/works/${sample.saved.id}`}>
+                      <a href={savedWorkHref(sample.saved.id)}>
                         Открыть <ArrowUpRight />
                       </a>
                     </p>
@@ -266,7 +267,7 @@ export function FirstRunSteps({
                   ) : (
                     <LinkButton
                       variant={tone("share")}
-                      href={`/works/${model.shareTarget.id}?panel=share`}
+                      href={savedWorkHref(model.shareTarget.id, "?panel=share")}
                     >
                       <Link2 /> Поделиться
                     </LinkButton>
