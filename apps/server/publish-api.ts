@@ -79,7 +79,11 @@ export const statusResponseSchema = z
   .object({
     id: uuid,
     title: z.string(),
+    kind: z.enum(["page", "link", "image", "text", "file"]),
+    linkHost: z.string().optional(),
     folderId: uuid.nullable(),
+    folderName: z.string().nullable(),
+    createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
     trashedAt: z.iso.datetime().nullable(),
     lifecycleVersion: z.number().int(),
