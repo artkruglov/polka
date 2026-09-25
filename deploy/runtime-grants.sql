@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 040.
+-- Operator-reviewed recipe for the Polka schema through migration 041.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>40
+     OR (SELECT count(*) FROM public.schema_migrations)<>41
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>40 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 040';
+     OR (SELECT max(version) FROM public.schema_migrations)<>41 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 041';
   END IF;
 END $$;
 
@@ -165,10 +165,14 @@ GRANT SELECT, INSERT ON TABLE public.analytics_optouts TO :"runtime_role";
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.agent_sign_in_links TO :"runtime_role";
 -- Sign-in with Google (039): a provider value and a hosted_domain column on
 -- account_identities, covered by its table-level grant above. Nothing new.
--- Search over the text of works (040): the application writes the row of a
+-- Shelf covers (040): the application and scripts/backfill-covers.ts compute
+-- and replace a version's cover; a cover goes with its revision
+-- (ON DELETE CASCADE), DELETE is for recomputing one.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.revision_covers TO :"runtime_role";
+-- Search over the text of works (041): the application writes the row of a
 -- work's latest revision when it is saved, reads it to search the owner's
 -- shelf and deletes it when the content is purged; everything else goes
 -- with the work (ON DELETE CASCADE).
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 040
+\echo Runtime grants installed for the reviewed schema through migration 041

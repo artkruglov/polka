@@ -20,6 +20,7 @@
 | features/first-run | чек-лист первых шагов (агент, работа, ссылка) и сохранение страницы-примера; CSS подключается из main.tsx, потому что `FirstRunSteps` рендерят Node-тесты | start |
 | entities/onboarding | вывод шагов из подключений и списка работ (`steps.ts`), фраза и подсказки клиентов, шаги подключения и команды плагина (`agent-setup.ts`), страница-пример, скрытие в localStorage | features/first-run, features/agent-hero, agents |
 | widgets/navigation | единая глобальная навигация desktop/mobile | страницы |
+| widgets/shelf-card | карточка работы на полке: обложка (снимок или текстовая, docs/specs/SHELF_COVERS.md), название, строка метаданных, «…»; сетка и список | pages/shelf |
 | widgets/shelf-navigation | папки и корзина; одинаковые пункты на desktop/mobile | app/workspace |
 | widgets/artifact-reader, artifact-preview | материал, версии и изолированный просмотр | app/workspace, recipient |
 | widgets/editorial-catalog | каталог и карточки | landing, discover |

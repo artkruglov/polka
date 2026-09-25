@@ -1,0 +1,71 @@
+/* Shelf cards (docs/specs/SHELF_COVERS.md): a 16:10 cover, the title, one meta line, «…». */
+.shelf-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 24px; }
+.shelf-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "cover cover" "body actions"; column-gap: 8px; row-gap: 12px; min-width: 0; }
+.shelf-cover { position: relative; grid-area: cover; overflow: hidden; aspect-ratio: 16 / 10; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--soft); transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), translate var(--dur) var(--ease); }
+.shelf-card:hover .shelf-cover { box-shadow: var(--shadow-md); border-color: var(--line-strong); translate: 0 -2px; }
+.shelf-card:focus-within .shelf-cover { border-color: var(--accent-ring); }
+@media (prefers-reduced-motion: reduce) { .shelf-card:hover .shelf-cover { translate: none; } }
+.shelf-cover .placeholder { min-height: 100%; }
+.shelf-card-body { grid-area: body; min-width: 0; }
+.shelf-card h3 { font-size: var(--text-lg); font-weight: 600; letter-spacing: -.01em; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+/* The cover already shows the heading large: the title steps back. */
+.shelf-card--echo h3 { font-size: var(--text-md); font-weight: 500; color: var(--ink-2); }
+/* The title is the card's one link, stretched over the whole card. */
+.shelf-card-link { color: inherit; outline: none; }
+.shelf-card-link::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-md); }
+.shelf-card-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 4px; }
+.shelf-card:hover .shelf-card-link { color: var(--accent-ink); }
+.shelf-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 4px; color: var(--muted); font-size: var(--text-sm); line-height: 1.4; white-space: nowrap; }
+.shelf-card-meta > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.shelf-card-snippet { margin-top: 6px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.shelf-card-snippet mark { padding: 0 2px; border-radius: 3px; background: var(--accent-soft); color: var(--ink); }
+.shelf-card-access { display: inline-flex; flex: none; }
+.shelf-card-access svg { width: 14px; height: 14px; }
+.shelf-card-actions { position: relative; z-index: 2; grid-area: actions; display: flex; align-items: flex-start; }
+.shelf-card-actions .ui-action-menu-trigger { color: var(--muted); min-width: 36px; min-height: 36px; padding: 6px; }
+.shelf-card-actions .ui-action-menu-trigger:hover { color: var(--ink); background: var(--soft-2); }
+.shelf-gallery--skeleton .shelf-card { grid-template-areas: "cover cover"; }
+
+/* Covers. */
+.card-cover { position: relative; width: 100%; height: 100%; container-type: inline-size; }
+.card-cover--picture { background: var(--canvas); }
+.card-cover--picture img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.card-cover--picture .card-cover-series { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-sm); }
+
+/* A text work: its own heading and lead, set to be read at a glance. */
+.card-cover--text,
+.card-cover--visual { display: flex; flex-direction: column; gap: clamp(6px, 2.4cqw, 12px); padding: clamp(14px, 6.5cqw, 28px) clamp(16px, 7cqw, 30px); overflow: hidden; }
+.card-cover--text { background: linear-gradient(180deg, color-mix(in srgb, var(--cover-accent) 7%, #fff), #fff 70%); border-top: 4px solid var(--cover-accent); }
+.card-cover--visual { background: linear-gradient(140deg, color-mix(in srgb, var(--cover-accent) 16%, #fff), color-mix(in srgb, var(--cover-accent) 34%, #fff)); }
+.card-cover-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.card-cover-kind { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: color-mix(in srgb, var(--cover-accent) 82%, #000); font-size: clamp(10px, 3cqw, 12px); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.card-cover-kind svg { width: 14px; height: 14px; flex: none; }
+.card-cover-series { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--cover-accent, var(--accent)) 12%, #fff); color: var(--ink-2); font-size: 11px; font-weight: 500; line-height: 1.4; }
+.card-cover-heading { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; color: var(--ink); font: 650 clamp(17px, 6.4cqw, 26px) / 1.15 var(--font-sans); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.card-cover-lead { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; margin: 0; color: var(--ink-2); font-size: clamp(12px, 3.7cqw, 15px); line-height: 1.45; overflow-wrap: anywhere; }
+.card-cover-note { margin-top: auto; color: var(--muted); font-size: 12px; }
+
+/* A link work: where it leads (the title is right below). */
+.card-cover--link { display: grid; align-content: center; justify-items: start; gap: 10px; padding: clamp(16px, 7cqw, 30px); background: var(--soft-3); }
+.card-cover--link strong { color: var(--ink); font: 600 clamp(16px, 5.6cqw, 22px) / 1.2 var(--font-sans); letter-spacing: -.02em; }
+.card-cover--link span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.card-cover--link span svg { width: 14px; height: 14px; flex: none; }
+
+/* The list view's thumbnail: a picture, or a tinted tile with the kind's icon. */
+.card-cover--tile { display: grid; place-items: center; background: color-mix(in srgb, var(--cover-accent) 13%, #fff); color: color-mix(in srgb, var(--cover-accent) 85%, #000); }
+.card-cover--tile svg { width: 22px; height: 22px; }
+
+/* List view */
+.shelf-list { display: grid; border-top: 1px solid var(--line); }
+.shelf-list .shelf-card { grid-template-columns: 96px minmax(0, 1fr) auto; grid-template-areas: "cover body actions"; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.shelf-list .shelf-cover { border-radius: var(--radius-sm); }
+.shelf-list .shelf-card:hover .shelf-cover { translate: none; box-shadow: none; }
+.shelf-list .shelf-card h3 { font-size: var(--text-md); -webkit-line-clamp: 1; }
+.shelf-list .shelf-card-snippet { margin-top: 2px; -webkit-line-clamp: 1; }
+.shelf-list .shelf-card-actions { align-items: center; }
+
+@media (max-width: 1240px) { .shelf-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .shelf-gallery { grid-template-columns: 1fr; gap: 24px; }
+  .shelf-list .shelf-card { grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; }
+}

@@ -166,6 +166,33 @@ try {
   assert.equal((await render(base, "https://example.com/", SECRET, "/fetch")).body.error, "not_allowed");
   assert.equal(robotsReads, 1, "robots.txt is read once per host and cached");
   pass("robots.txt is read by the renderer, once per host, and refuses both /render and /fetch");
+
+  // POST /snapshot (shelf covers): the page draws, but reaches nobody.
+  const snapshot = async (html: string, script = true) => {
+    const body = JSON.stringify({ html, script });
+    const response = await fetch(`${base}/snapshot`, {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json", ...signRenderRequest(SECRET, "POST", "/snapshot", body) },
+    });
+    return { status: response.status, body: (await response.json()) as any };
+  };
+  const hitsBefore = canaryHits;
+  const drawn = await snapshot(`<!doctype html><body style="margin:0;background:#0f172a">
+    <canvas id="c" width="800" height="400"></canvas>
+    <img src="https://127.0.0.1:${canaryPort}/pixel.png"><link rel="stylesheet" href="${origin}/style.css">
+    <script>const x=document.getElementById('c').getContext('2d');x.fillStyle='#38bdf8';x.fillRect(20,20,600,300);
+    fetch('https://127.0.0.1:${canaryPort}/beacon').catch(()=>{});new Image().src='${origin}/beacon';</script></body>`);
+  assert.equal(drawn.status, 200, JSON.stringify(drawn.body));
+  const jpeg = Buffer.from(drawn.body.image, "base64");
+  assert.ok(jpeg[0] === 0xff && jpeg[1] === 0xd8 && jpeg.length < 256 * 1024, "a small JPEG");
+  assert.equal(canaryHits, hitsBefore, "the snapshot page reached no server");
+  pass("/snapshot: a JPEG of the first screen; the page's requests go nowhere");
+  const empty = await snapshot(`<!doctype html><div id="root"></div><script src="https://cdn.example/app.js"></script>`);
+  assert.deepEqual(empty.body, { blank: true });
+  const unsigned = await fetch(`${base}/snapshot`, { method: "POST", body: JSON.stringify({ html: "<p>x</p>", script: false }) });
+  assert.equal(unsigned.status, 401);
+  pass("/snapshot: a shell that needed the network → blank; unsigned → 401");
 } finally {
   service.close();
   await browser.close();
