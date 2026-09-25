@@ -119,7 +119,7 @@ async function authorizedProject(token: string) {
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT r.id,r.manifest,pv.share_id FROM project_view_grants pv
+    `SELECT r.id,r.manifest,pv.share_id,pv.owner_session_hash FROM project_view_grants pv
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      JOIN tenants tenant ON tenant.id=r.tenant_id
@@ -145,6 +145,29 @@ async function authorizedProject(token: string) {
   // A link withdrawn from the feed closes with it, like /static and /document.
   if (revision?.share_id) await assertEditorialShareAccessible(db, revision.share_id);
   return revision ?? null;
+}
+
+/**
+ * A new view from a live one, for a reader still on the project: the same
+ * version and the same binding (the owner's session or the link), rechecked
+ * like a read. A recipient's first grant lives 60 seconds, so a view is
+ * renewed from itself, not from it.
+ */
+export async function renewProjectView(current: string) {
+  const revision = await authorizedProject(current);
+  if (!revision) throw missing();
+  const token = randomBytes(32).toString("base64url");
+  const {
+    rows: [grant],
+  } = await db.query(
+    `INSERT INTO project_view_grants(hash,revision_id,owner_session_hash,share_id,expires_at)
+     SELECT $1,$2,$3,$4,LEAST(now()+make_interval(mins=>$5),
+       COALESCE((SELECT expires_at FROM sessions WHERE hash=$3),
+                (SELECT expires_at FROM shares WHERE id=$4)))
+     RETURNING expires_at`,
+    [projectHash(token), revision.id, revision.owner_session_hash, revision.share_id, PROJECT_VIEW_MINUTES],
+  );
+  return viewResult(token, grant.expires_at);
 }
 
 /** The file a path names: itself, or a folder's index page or README. */
@@ -248,7 +271,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     const file = fileAt(revision.manifest, path);
     if (!file) throw missing();
     // A folder's address opens its page at its own path, so relative links work.
-    if (navigate && file.path !== path && rawPath !== "")
+    if (navigate && file.path !== path && (rawPath !== "" || file.path.includes("/")))
       return reply.redirect(base(token) + file.path.split("/").map(encodeURIComponent).join("/"), 303);
     const stored = (
       await db.query(

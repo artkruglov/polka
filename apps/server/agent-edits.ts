@@ -1,3 +1,4 @@
+import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
 // Patch edits of a saved work (docs/specs/COMMENTS.md, «Агенты»): an agent
 // sends `edits: [{oldText, newText}]` against `baseRevisionId` instead of the
 // whole file. The server applies them to the base version's text file
@@ -79,6 +80,14 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
         [input.baseRevisionId, input.artifactId, verified.tenantId],
       );
       if (!revision) throw missing();
+      // A project is saved whole (docs/specs/PROJECTS.md): a new version
+      // goes through POST /api/v1/projects or its CLI, not a patch.
+      if (revision.manifest?.runtime === PROJECT_RUNTIME)
+        throw new Problem(
+          422,
+          "unsupported",
+          "Это проект из многих файлов: правка патчем для него пока не поддерживается. Загрузите новую версию проекта целиком (polka-publish-project.mjs с --artifact и --base-revision).",
+        );
       if (artifact.latest_revision_id !== input.baseRevisionId) {
         const replay = await c.query(
           `SELECT 1 FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2

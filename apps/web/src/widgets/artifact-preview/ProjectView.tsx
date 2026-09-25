@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, FileCode2, FileText, Folder, Image, ListTree } from "lucide-react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
-import { projectView } from "../../shared/api/client.ts";
+import { projectView, renewProjectView } from "../../shared/api/client.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
 
 // A project (docs/specs/PROJECTS.md): one work of many linked pages. The
@@ -16,6 +16,9 @@ type Node = { name: string; path: string; file?: ProjectFile; children: Map<stri
 const READABLE = (mime: string) =>
   mime === "text/markdown" || mime === "text/html" || mime === "text/plain" || mime.startsWith("image/");
 const ENTRY_NAMES = ["README.md", "index.md", "index.html"];
+const plural = new Intl.PluralRules("ru");
+export const filesLabel = (count: number) =>
+  `${count} ${({ one: "файл", few: "файла" } as Record<string, string>)[plural.select(count)] ?? "файлов"}`;
 
 function buildTree(files: ProjectFile[]) {
   const root: Node = { name: "", path: "", children: new Map() };
@@ -63,13 +66,12 @@ function TreeBranch({
   depth?: number;
 }) {
   return (
-    <ul className="project-tree-list" role={depth ? "group" : "tree"}>
+    <ul className="project-tree-list">
       {ordered(node).map((child) =>
         child.file ? (
-          <li key={child.path} role="none">
+          <li key={child.path}>
             <button
               type="button"
-              role="treeitem"
               aria-current={child.path === current ? "page" : undefined}
               className="project-tree-item"
               style={{ paddingLeft: 10 + depth * 14 }}
@@ -80,10 +82,9 @@ function TreeBranch({
             </button>
           </li>
         ) : (
-          <li key={child.path} role="none">
+          <li key={child.path}>
             <button
               type="button"
-              role="treeitem"
               aria-expanded={open.has(child.path)}
               className="project-tree-item project-tree-folder"
               style={{ paddingLeft: 10 + depth * 14 }}
@@ -110,10 +111,13 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   const resources = useMemo(() => files.filter((file) => !READABLE(file.mime)), [revision.id]);
   const paths = useMemo(() => new Set(files.map((file) => file.path)), [revision.id]);
   // A recipient's address holds the link's token, so only the owner's keeps the page.
-  const [current, setCurrent] = useState(() => {
+  const [page, setPage] = useState(() => {
     const wanted = grant ? "" : pathFromHash();
     return paths.has(wanted) ? wanted : manifest.entrypoint;
   });
+  // The open page for the renewal timer, which must not restart on every page.
+  const current = useRef(page);
+  current.current = page;
   const [open, setOpen] = useState(() => {
     const folders = new Set<string>();
     for (const child of readable.children.values()) if (!child.file) folders.add(child.path);
@@ -121,16 +125,22 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   });
   const [view, setView] = useState<{ url: string; expiresAt: string } | null>(null);
   const [error, setError] = useState("");
+  // The view ran out and could not be renewed: the page stays, with a way back.
+  const [stale, setStale] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  // The page the frame was sent to; the frame then moves on by itself.
-  const [framePath, setFramePath] = useState(current);
+  // Where the frame is sent: a page, its anchor, and a count so that choosing
+  // the page the frame already shows still opens it again.
+  const [target, setTarget] = useState({ path: page, hash: "", n: 0 });
+  const anchor = useRef("");
   const frame = useRef<HTMLIFrameElement>(null);
 
   const issue = useCallback(
     (signal?: AbortSignal) =>
       projectView(revision.id, grant, signal)
         .then((next) => {
-          if (!signal?.aborted) setView(next);
+          if (signal?.aborted) return;
+          setView(next);
+          setStale(false);
         })
         .catch((e) => {
           if (!signal?.aborted) setError(e.message);
@@ -144,16 +154,29 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
     issue(abort.signal);
     return () => abort.abort();
   }, [issue]);
-  // Renew the view a minute before it ends, on the page the reader is on.
+  // Renew the view a minute before it ends, from the view itself (a link's
+  // first grant lives a minute), on the page and anchor the reader is on.
   useEffect(() => {
     if (!view) return;
-    const wait = Math.max(5_000, new Date(view.expiresAt).getTime() - Date.now() - 60_000);
+    const left = new Date(view.expiresAt).getTime() - Date.now();
+    if (left < 90_000) return;
+    const abort = new AbortController();
     const timer = setTimeout(() => {
-      setFramePath(current);
-      issue();
-    }, wait);
-    return () => clearTimeout(timer);
-  }, [view, current, issue]);
+      renewProjectView(view.url, abort.signal)
+        .then((next) => {
+          if (abort.signal.aborted) return;
+          setTarget((was) => ({ path: current.current, hash: anchor.current, n: was.n + 1 }));
+          setView(next);
+        })
+        .catch(() => {
+          if (!abort.signal.aborted) setStale(true);
+        });
+    }, left - 60_000);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [view]);
 
   const reveal = (path: string) =>
     setOpen((was) => {
@@ -163,23 +186,27 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
       return next;
     });
   useEffect(() => {
-    reveal(current);
-    if (!grant) history.replaceState(null, "", `#path=${encodeURIComponent(current)}`);
-  }, [current, grant]);
+    reveal(page);
+    // The owner's address keeps the page, once the reader has left the entry.
+    if (!grant && (page !== manifest.entrypoint || /(?:^#|&)path=/.test(location.hash)))
+      history.replaceState(null, "", `#path=${encodeURIComponent(page)}`);
+  }, [page, grant]);
 
   // Messages from the frame are hints from an untrusted page: a path of this
   // project to highlight, or a signed /away link to open in a new tab.
   useEffect(() => {
     const listen = (event: MessageEvent) => {
       if (!frame.current || event.source !== frame.current.contentWindow) return;
-      const data = event.data as { type?: unknown; path?: unknown; href?: unknown };
+      const data = event.data as { type?: unknown; path?: unknown; href?: unknown; hash?: unknown };
       if (data?.type === "polka-project-page" && typeof data.path === "string") {
         const path = data.path.replace(/\/+$/, "") || manifest.entrypoint;
-        if (paths.has(path)) setCurrent(path);
+        if (!paths.has(path)) return;
+        anchor.current = typeof data.hash === "string" ? data.hash.slice(0, 200) : "";
+        setPage(path);
       } else if (
         data?.type === "polka-project-away" &&
         typeof data.href === "string" &&
-        data.href.startsWith(`${location.origin}/away#`)
+        (data.href === `${location.origin}/away` || data.href.startsWith(`${location.origin}/away#`))
       )
         window.open(data.href, "_blank", "noopener,noreferrer");
     };
@@ -188,8 +215,9 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   }, [paths]);
 
   const choose = (path: string) => {
-    setCurrent(path);
-    setFramePath(path);
+    anchor.current = "";
+    setPage(path);
+    setTarget((was) => ({ path, hash: "", n: was.n + 1 }));
     setNavOpen(false);
   };
   const toggle = (path: string) =>
@@ -202,15 +230,17 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
 
   if (error)
     return <StatusPanel title="Проект не открылся">{error}</StatusPanel>;
-  const crumbs = current.split("/");
-  const src = view ? view.url + framePath.split("/").map(encodeURIComponent).join("/") : "";
+  const crumbs = page.split("/");
+  const src = view
+    ? view.url +
+      target.path.split("/").map(encodeURIComponent).join("/") +
+      (target.hash ? `#${encodeURIComponent(target.hash)}` : "")
+    : "";
   return (
     <div className={`project-view${navOpen ? " project-view--nav" : ""}`}>
-      <nav className="project-tree" aria-label="Содержание проекта">
-        <p className="project-tree-summary">
-          Проект · {files.length} файлов
-        </p>
-        <TreeBranch node={readable} current={current} open={open} toggle={toggle} choose={choose} />
+      <nav className="project-tree" id={`project-tree-${revision.id}`} aria-label="Содержание проекта">
+        <p className="project-tree-summary">Проект · {filesLabel(files.length)}</p>
+        <TreeBranch node={readable} current={page} open={open} toggle={toggle} choose={choose} />
         {resources.length > 0 && (
           <details className="project-tree-resources">
             <summary>Файлы проекта · {resources.length}</summary>
@@ -224,7 +254,13 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
       </nav>
       <section className="project-page" aria-label="Страница проекта">
         <header className="project-page-bar">
-          <button type="button" className="project-toc-button" onClick={() => setNavOpen((was) => !was)}>
+          <button
+            type="button"
+            className="project-toc-button"
+            aria-expanded={navOpen}
+            aria-controls={`project-tree-${revision.id}`}
+            onClick={() => setNavOpen((was) => !was)}
+          >
             <ListTree aria-hidden="true" /> Содержание
           </button>
           <ol className="project-crumbs" aria-label="Где вы в проекте">
@@ -235,12 +271,20 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
             ))}
           </ol>
         </header>
+        {stale && (
+          <p className="project-stale" role="status">
+            Просмотр закончился.{" "}
+            <button type="button" onClick={() => issue()}>
+              Обновить
+            </button>
+          </p>
+        )}
         {view ? (
           <iframe
             ref={frame}
-            key={view.url}
+            key={`${view.url}:${target.n}`}
             className="project-frame"
-            title={`Проект: ${current}`}
+            title={`Проект: ${page}`}
             src={src}
             sandbox="allow-scripts allow-forms"
             referrerPolicy="no-referrer"
