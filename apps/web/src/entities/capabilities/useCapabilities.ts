@@ -7,10 +7,6 @@ export type InstallationCapabilities = {
   emailLogin: "disabled" | "local" | "smtp";
   /** invite: codes go only to existing accounts and invited addresses. */
   emailSignup: "open" | "invite";
-  /** Server-side import of public HTML pages by URL. */
-  urlImport: boolean;
-  /** What that import copies: standalone-html, github-gist, rendered-spa (the renderer is on). */
-  urlImportSources: string[];
   /** Isolated interactive view of supported pages. */
   livePreview: boolean;
   /** This installation's source code (AGPL-3.0 § 13); a fork sets its own. */
@@ -25,9 +21,17 @@ export type InstallationCapabilities = {
   commentsMode: "on" | "owner-notes" | "off";
 };
 
-export type SignInProvider = { id: "yandex" | "vk" | "oidc"; name: string };
+export type SignInProvider = {
+  id: "yandex" | "vk" | "google" | "oidc";
+  name: string;
+  /**
+   * false: this provider signs in only to a shelf it is already linked to
+   * (GOOGLE_SIGNUP=link-only): it opens no shelf and claims none.
+   */
+  signup: boolean;
+};
 
-const PROVIDER_IDS = new Set(["yandex", "vk", "oidc"]);
+const PROVIDER_IDS = new Set(["yandex", "vk", "google", "oidc"]);
 
 export type CapabilitiesState =
   | { status: "loading"; capabilities: null }
@@ -56,10 +60,6 @@ export function loadCapabilities() {
       return {
         emailLogin,
         emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
-        urlImport: raw.urlImport === true,
-        urlImportSources: Array.isArray(raw.urlImportSources)
-          ? raw.urlImportSources.filter((x): x is string => typeof x === "string")
-          : [],
         livePreview: raw.liveExperimental === true,
         sourceUrl: httpsUrl(raw.sourceUrl) ?? SOURCE_URL,
         signInProviders: Array.isArray(raw.signInProviders)
@@ -71,7 +71,11 @@ export function loadCapabilities() {
                   PROVIDER_IDS.has((item as SignInProvider).id) &&
                   typeof (item as SignInProvider).name === "string",
               )
-              .map((item) => ({ id: item.id, name: item.name.slice(0, 60) }))
+              .map((item) => ({
+                id: item.id,
+                name: item.name.slice(0, 60),
+                signup: (item as { signup?: unknown }).signup !== false,
+              }))
           : [],
         emailSignupDomains: Array.isArray(raw.emailSignupDomains)
           ? raw.emailSignupDomains.filter(
@@ -124,7 +128,7 @@ export function useSignInWays() {
   const names =
     state.status === "ready"
       ? state.capabilities.signInProviders
-          .filter((provider) => provider.id !== "oidc")
+          .filter((provider) => provider.id !== "oidc" && provider.signup)
           .map((provider) => provider.name)
       : [];
   const email =

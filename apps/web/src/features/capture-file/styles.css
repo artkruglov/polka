@@ -13,7 +13,6 @@
 .file-field:hover, .file-field.dragging { background: var(--accent-soft); border-color: var(--accent); }
 .file-field:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .file-field[data-picked="true"] { border-style: solid; border-color: var(--accent-ring); background: var(--canvas); }
-.file-save--embedded .file-field { min-height: 140px; }
 .file-save-login { display: grid; gap: 12px; padding: 16px 18px; border-radius: var(--radius-md); background: var(--soft); }
 .file-save-login p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
 .file-save .bring-actions > .ui-button--primary { min-height: 52px; padding-inline: 24px; font-size: var(--text-md); }

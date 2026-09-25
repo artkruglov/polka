@@ -25,7 +25,6 @@ const PASTE_CODE_LOGIN = `/signup?next=${encodeURIComponent("/bring#paste")}`;
 export function PasteCode({
   initialFolderId = "",
   renderResult,
-  embedded = false,
   titled = true,
 }: {
   initialFolderId?: string;
@@ -33,8 +32,6 @@ export function PasteCode({
     saved: { receipt: Receipt; work: Artifact },
     restart: () => void,
   ) => React.ReactNode;
-  /** Rendered inside the link guide: no heading of its own, no page anchor. */
-  embedded?: boolean;
   /** False when a surrounding tab already names the card: the heading stays for screen readers. */
   titled?: boolean;
 }) {
@@ -50,8 +47,8 @@ export function PasteCode({
   const pasted = describePaste(code);
 
   useEffect(() => {
-    if (!embedded && location.hash === "#paste") card.current?.scrollIntoView();
-  }, [embedded]);
+    if (location.hash === "#paste") card.current?.scrollIntoView();
+  }, []);
 
   const edit = (next: string) => {
     setCode(next);
@@ -86,11 +83,10 @@ export function PasteCode({
 
   return (
     <section
-      className={embedded ? "paste-code paste-code--embedded" : "paste-code"}
-      id={embedded ? undefined : "paste"}
+      className="paste-code"
+      id="paste"
       ref={card}
-      aria-labelledby={embedded ? undefined : "paste-code-title"}
-      aria-label={embedded ? "Вставить код артефакта" : undefined}
+      aria-labelledby="paste-code-title"
     >
       {saved?.work ? (
         renderResult({ receipt: saved.receipt, work: saved.work }, restart)
@@ -105,22 +101,18 @@ export function PasteCode({
         />
       ) : (
         <div className="bring-entry paste-code-entry">
-          {!embedded && (
-            <>
-              <div className={titled ? "paste-code-head" : "paste-code-head sr-only"}>
-                <h2 id="paste-code-title">Вставить код</h2>
-              </div>
-              <p className="paste-code-hint">
-                Нет файла? В Claude или ChatGPT откройте артефакт, нажмите
-                «Копировать» (Copy) и вставьте код сюда. HTML сохранится
-                страницей, всё остальное — текстом.
-              </p>
-            </>
-          )}
+          <div className={titled ? "paste-code-head" : "paste-code-head sr-only"}>
+            <h2 id="paste-code-title">Вставить код</h2>
+          </div>
+          <p className="paste-code-hint">
+            Нет файла? В Claude или ChatGPT откройте артефакт, нажмите
+            «Копировать» (Copy) и вставьте код сюда. HTML сохранится
+            страницей, всё остальное — текстом.
+          </p>
           <TextAreaField
             label="Код артефакта"
             className="paste-code-input"
-            rows={embedded ? 8 : 12}
+            rows={12}
             value={code}
             spellCheck={false}
             autoCapitalize="off"

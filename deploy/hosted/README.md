@@ -235,6 +235,13 @@ rm polka.dump
 - доступ к почте (scope `email`);
 - в `hosted.env`: `VK_CLIENT_ID=<ID приложения>`. Защищённый ключ не нужен: код защищён PKCE.
 
+**Google** — пошагово в [google-oauth-setup.md](../../docs/ops/google-oauth-setup.md):
+- Google Auth Platform, клиент «Web application»;
+- Authorized redirect URI `https://<APP_HOST>/api/auth/idp/google/callback`;
+- scopes только `openid`, `email`, `profile`;
+- в `hosted.env` и Lockbox `polka-hosted-env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`;
+- `GOOGLE_SIGNUP=link-only` (по умолчанию здесь). Google — не российская система, поэтому он только входит в полку, к которой владелец привязал его в «Способах входа». Новую полку он не открывает и временную не закрепляет.
+
 **Доступ компании:** `ORG_DOMAINS=company.ru=<id библиотеки шаблонов>:reader`. Сотрудник с подтверждённой почтой `@company.ru`, вошедший через Яндекс ID (у Яндекс 360 это аккаунт организации), становится читателем библиотеки. Исключённого администратором домен обратно не добавит.
 
 После изменения — `docker compose --env-file hosted.env up -d`.

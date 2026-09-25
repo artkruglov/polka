@@ -14,12 +14,35 @@ import {
 } from "../../entities/account/model/identities.ts";
 
 /**
- * Sign-in with Яндекс ID, VK ID or the company's own IdP
+ * Sign-in with Яндекс ID, VK ID, Google or the company's own IdP
  * (docs/specs/SIGN_IN_PROVIDERS.md § 5). The texts are the providers' own
- * («Войти с …»); the marks are simplified. Replace them with the official
- * SVG buttons from each provider's design page before a public launch.
+ * («Войти с …», «Войти через Google»). The Яндекс and VK marks are
+ * simplified: replace them with the official SVG buttons from each
+ * provider's design page before a public launch. Google's is its standard
+ * four-colour «G», unmodified, as its branding guidelines require.
  */
 function Mark({ id }: { id: SignInProvider["id"] }) {
+  if (id === "google")
+    return (
+      <svg className="idp-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <path
+          fill="#EA4335"
+          d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+        />
+        <path
+          fill="#4285F4"
+          d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+        />
+        <path
+          fill="#34A853"
+          d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+        />
+      </svg>
+    );
   if (id === "yandex")
     return (
       <svg className="idp-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -58,7 +81,27 @@ function Mark({ id }: { id: SignInProvider["id"] }) {
 }
 
 const label = (provider: SignInProvider) =>
-  provider.id === "oidc" ? provider.name : `Войти с ${provider.name}`;
+  provider.id === "oidc"
+    ? provider.name
+    : provider.id === "google"
+      ? "Войти через Google"
+      : `Войти с ${provider.name}`;
+
+/**
+ * Under the buttons when a provider signs in only to a shelf it is linked to
+ * (GOOGLE_SIGNUP=link-only), so a newcomer does not expect a shelf from it.
+ */
+function LinkOnlyNote({ providers }: { providers: SignInProvider[] }) {
+  const names = providers.filter((p) => !p.signup).map((p) => p.name);
+  if (!names.length) return null;
+  return (
+    <p className="idp-note">
+      {names.join(" и ")} — для тех, кто уже привязал его к своей полке в
+      «Способах входа». Новая полка через {names.length > 1 ? "них" : "него"}{" "}
+      не открывается.
+    </p>
+  );
+}
 
 /**
  * Buttons that leave for the provider; `next` comes back after sign-in. A
@@ -97,6 +140,7 @@ export function ProviderButtons({
           <span>{label(provider)}</span>
         </a>
       ))}
+      <LinkOnlyNote providers={providers} />
     </div>
   );
 }
@@ -145,6 +189,17 @@ export function LinkProviderButtons({
   );
 }
 
+/** «Яндекс ID, VK ID или Google»: the providers this installation offers. */
+function providerList(data: AccountIdentities) {
+  const names = data.available
+    .filter((item) => item.provider !== "oidc")
+    .map((item) => item.name);
+  if (!names.length) return "способ входа";
+  return names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(", ")} или ${names.at(-1)}`;
+}
+
 const ERRORS: Record<string, string> = {
   state:
     "Вход не завершён: запрос устарел или открыт в другом браузере. Начните вход ещё раз.",
@@ -158,6 +213,8 @@ const ERRORS: Record<string, string> = {
   domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
   linked:
     "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
+  link_only:
+    "Через Google можно войти только в полку, к которой он уже привязан. Войдите через Яндекс ID, VK ID или по почте и привяжите Google в «Способах входа».",
   unavailable: "Этот способ входа сейчас выключен.",
 };
 
@@ -168,9 +225,9 @@ export function providerErrorMessage(code: string | null) {
 }
 
 /**
- * «Способы входа» in settings: link Яндекс ID or VK ID to the shelf (so a
- * person with a foreign mailbox keeps their shelf), or unlink one while
- * another way in remains.
+ * «Способы входа» in settings: link Яндекс ID, VK ID or Google to the shelf
+ * (so a person with a foreign mailbox keeps their shelf), or unlink one
+ * while another way in remains (the server refuses the last one).
  */
 export function SignInMethods() {
   const [data, setData] = useState<AccountIdentities | null>(null);
@@ -228,8 +285,9 @@ export function SignInMethods() {
       <h2 id="idp-methods-title">Способы входа</h2>
       <p className="idp-methods-lead">
         {data.email ? `Код на почту ${data.email}. ` : ""}
-        Привяжите Яндекс ID или VK ID, чтобы входить через них — например, если
-        ваша почта у иностранного сервиса.
+        Привяжите {providerList(data)}, чтобы входить через{" "}
+        {data.available.length > 1 ? "них" : "него"} — например, если ваша
+        почта у иностранного сервиса.
       </p>
       {linked && !returned && <Notice>Способ входа привязан.</Notice>}
       {returned && <Notice tone="error">{returned}</Notice>}

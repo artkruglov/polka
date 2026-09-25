@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { classify } from "../apps/web/src/features/import-url/classify-link.ts";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
 import { STATIC_HTML_CSP, VIEWER_GUARD, classifyHtml, classifyHtmlBounded, withNewTabLinks, withViewerGuard } from "../apps/server/html.ts";
 
@@ -82,38 +81,6 @@ test("Static CSP stays scriptless and networkless", () => {
   ]);
   assert.doesNotMatch(STATIC_HTML_CSP, /allow-scripts|allow-top-navigation|script-src|connect-src/);
   assert.match(STATIC_HTML_CSP, /default-src 'none'/);
-});
-
-test("importMock classifies links without issuing ids or receipts", () => {
-  const cases: [string, string, string | null][] = [
-    ["not a url", "not_https", null],
-    ["http://claude.ai/public/artifacts/abc", "not_https", null],
-    ["https://claude.ai/public/artifacts/abc-123", "provider", "claude"],
-    ["https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo", "provider", "claude"],
-    ["https://abc.claude.site/artifacts/x", "provider", "claude"],
-    ["https://chatgpt.com/share/abc", "provider", "chatgpt"],
-    ["https://chatgpt.com/canvas/shared/abc", "provider", "chatgpt"],
-    ["https://claude.ai/chat/abc", "closed", "claude"],
-    ["https://chatgpt.com/c/abc", "closed", "chatgpt"],
-    ["https://example.com/login?next=/report", "closed", null],
-    ["https://example.com/report.html", "ready", "html"],
-    ["https://example.com/bundle.zip", "unsupported_host", "zip"],
-    ["https://example.com/report", "unsupported_host", null],
-  ];
-  for (const [url, status, source] of cases) {
-    const result = classify(url);
-    assert.equal(result.status, status, url);
-    assert.equal(result.source, source, url);
-    assert.ok(result.explain.length > 0, url);
-    assert.ok(!("artifactId" in result) && !("receipt" in result), url);
-  }
-  for (const [url] of cases)
-    if (classify(url).source !== "zip")
-      assert.match(classify(url).explain, /файл/i, url);
-  // Provider artifacts explain why Полка cannot fetch them and how to bring the file.
-  const provider = classify("https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo");
-  assert.match(provider.explain, /не отдаёт такую ссылку серверу Полки/);
-  assert.match(provider.explain, /как ссылку/);
 });
 
 test("User-facing profile strings do not promise universal VPN-free availability", () => {

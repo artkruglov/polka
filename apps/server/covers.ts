@@ -14,6 +14,7 @@ import { snapshotClient, type SnapshotCall } from "./cover-snapshot-client.ts";
 import { db } from "./db.ts";
 import { missing } from "./errors.ts";
 import { readBlob } from "./storage.ts";
+import { inWorker } from "./html.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -126,26 +127,15 @@ export async function coverFactsBounded(source: string, deadlineMs = 3_000): Pro
       return unread;
     }
   }
-  const { Worker } = await import("node:worker_threads");
-  const worker = new Worker(new URL("./cover-facts-worker.mjs", import.meta.url), {
-    resourceLimits: { maxOldGenerationSizeMb: 256 },
-  });
-  try {
-    return await new Promise<CoverFacts>((resolve) => {
-      const timer = setTimeout(() => resolve(unread), deadlineMs);
-      worker.once("message", (facts: CoverFacts | null) => {
-        clearTimeout(timer);
-        resolve(facts ?? unread);
-      });
-      worker.once("error", () => {
-        clearTimeout(timer);
-        resolve(unread);
-      });
-      worker.postMessage({ source });
-    });
-  } finally {
-    await worker.terminate();
-  }
+  // The deadline starts once the worker says it is ready (html.ts inWorker):
+  // loading tsx on a busy host must not count against the page.
+  const facts = await inWorker<CoverFacts | null>(
+    { source },
+    deadlineMs,
+    unread,
+    new URL("./cover-facts-worker.mjs", import.meta.url),
+  );
+  return facts ?? unread;
 }
 
 /** Reads a version and decides its cover. */

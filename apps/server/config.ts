@@ -137,6 +137,16 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // Sign in with Google (§ «Google»): standard OpenID Connect against
+    // accounts.google.com. Off until both are set.
+    GOOGLE_CLIENT_ID: unsetIfEmpty(z.string().max(500)),
+    GOOGLE_CLIENT_SECRET: unsetIfEmpty(z.string().max(500)),
+    // on: Google signs in, links by a verified address and opens new
+    // shelves, like Яндекс ID. link-only: Google only signs in to a shelf it
+    // was linked to from «Способы входа» by a signed-in owner; it opens no
+    // shelf, links nothing by address and does not claim a provisional
+    // shelf (ч. 10 ст. 8 149-ФЗ on polochka.app).
+    GOOGLE_SIGNUP: z.enum(["on", "link-only"]).default("on"),
     OIDC_DISCOVERY_URL: unsetIfEmpty(z.string().url()),
     OIDC_CLIENT_ID: unsetIfEmpty(z.string().max(500)),
     OIDC_CLIENT_SECRET: unsetIfEmpty(z.string().max(500)),
@@ -537,8 +547,9 @@ const signInConfig = {
   SIGN_IN_PROVIDERS: [
     ...(env.YANDEX_CLIENT_ID && env.YANDEX_CLIENT_SECRET ? (["yandex"] as const) : []),
     ...(env.VK_CLIENT_ID ? (["vk"] as const) : []),
+    ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET ? (["google"] as const) : []),
     ...(oidcConfigured ? (["oidc"] as const) : []),
-  ] as Array<"yandex" | "vk" | "oidc">,
+  ] as Array<"yandex" | "vk" | "google" | "oidc">,
 };
 if (env.ACCOUNT_DELETION_ENABLED) {
   const appUrl = new URL(env.APP_ORIGIN);
