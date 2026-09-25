@@ -1084,7 +1084,15 @@ export async function finalizeBundleUploadInTransaction(
         const text = bytes.toString("utf8");
         pageFilters.push(await scanTextBounded(text));
         searchText.add(text);
-      } else if (file.mime === "text/javascript")
+      } else if (
+        // Shown to a reader as text (the viewer's code page) or drawn as a
+        // picture: filtered like text, not indexed.
+        file.mime === "application/json" ||
+        file.mime === "image/svg+xml" ||
+        file.mime === "text/css"
+      )
+        pageFilters.push(await scanTextBounded(bytes.toString("utf8")));
+      else if (file.mime === "text/javascript")
         scanScript(bytes.toString("utf8"), signals);
     } else if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     // Phishing signals of every page and script (a lone entrypoint is read

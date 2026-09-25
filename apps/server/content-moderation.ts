@@ -1,3 +1,4 @@
+import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
 // Acting on the content filter (docs/specs/CONTENT_FILTER.md): the journal,
 // blocking a revision or a comment, disabling an author, deleting blocked
 // content, and the model verdicts gathered before a link is decided.
@@ -806,12 +807,74 @@ function codeSummary(scripts: string[]) {
   return summary.trim();
 }
 
-/** What a revision shows: its text, images and scripts, bounded. */
-async function revisionMaterial(revision: any) {
+/**
+ * What a project shows (docs/specs/PROJECTS.md): the text of its documents
+ * and the visible text of its pages, each under its path, then its scripts
+ * and a few pictures, within the same bounds as a page.
+ */
+async function projectMaterial(revision: any) {
   let text = "";
   const images: string[] = [];
   const scripts: string[] = [];
-  if (revision.mime === "text/html") {
+  const files = (
+    await db.query(
+      `SELECT path,mime,object_key,object_version,size FROM revision_files
+       WHERE revision_id=$1
+       ORDER BY path=$2 DESC,
+         CASE WHEN mime IN ('text/markdown','text/html','text/plain') THEN 0 ELSE 1 END,
+         file_index`,
+      [revision.id, revision.filename],
+    )
+  ).rows;
+  for (const file of files) {
+    const room = MAX_TEXT_CHARS - text.length;
+    if (file.mime === "text/html" && room > 200) {
+      const bytes = await readBlob(file.object_key, file.object_version);
+      const inspection = await inspectHtmlBounded(bytes.toString("utf8"), undefined, {
+        sample: true,
+        images: config.CONTENT_MODEL_IMAGES && images.length < 4,
+        scripts: true,
+      });
+      text += `\n\n## ${file.path}\n${(inspection.sample ?? "").slice(0, room - 100)}`;
+      images.push(...(inspection.images ?? []));
+      scripts.push(...(inspection.scripts ?? []));
+    } else if (PROJECT_TEXT_MIME.has(file.mime) && room > 200) {
+      const bytes = await readBlob(file.object_key, file.object_version);
+      text += `\n\n## ${file.path}\n${bytes.subarray(0, room * 4).toString("utf8").slice(0, room - 100)}`;
+    } else if (file.mime === "text/javascript" && scripts.join("").length < MAX_CODE_CHARS * 4)
+      scripts.push((await readBlob(file.object_key, file.object_version)).toString("utf8"));
+    else if (
+      file.mime.startsWith("image/") &&
+      file.mime !== "image/svg+xml" &&
+      config.CONTENT_MODEL_IMAGES &&
+      images.length < 4 &&
+      Number(file.size) <= MAX_IMAGE_BYTES
+    )
+      images.push(
+        `data:${file.mime};base64,${(await readBlob(file.object_key, file.object_version)).toString("base64")}`,
+      );
+  }
+  return { text: text.trim(), images, scripts };
+}
+const PROJECT_TEXT_MIME = new Set([
+  "text/markdown",
+  "text/plain",
+  "application/json",
+  "image/svg+xml",
+  "text/css",
+]);
+
+/** What a revision shows: its text, images and scripts, bounded. */
+export async function revisionMaterial(revision: any) {
+  let text = "";
+  const images: string[] = [];
+  const scripts: string[] = [];
+  if (revision.runtime === PROJECT_RUNTIME) {
+    const project = await projectMaterial(revision);
+    text = project.text;
+    images.push(...project.images);
+    scripts.push(...project.scripts);
+  } else if (revision.mime === "text/html") {
     const bytes = await readBlob(revision.object_key, revision.object_version);
     const inspection = await inspectHtmlBounded(bytes.toString("utf8"), undefined, {
       sample: true,
@@ -895,8 +958,8 @@ export async function reviewRevision(revisionId: string) {
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT id,tenant_id,artifact_id,mime,storage_kind,object_key,object_version,
-       size,content_filter,content_purged_at
+    `SELECT id,tenant_id,artifact_id,mime,filename,storage_kind,object_key,object_version,
+       size,content_filter,content_purged_at,manifest->>'runtime' AS runtime
      FROM revisions WHERE id=$1`,
     [revisionId],
   );
@@ -905,6 +968,12 @@ export async function reviewRevision(revisionId: string) {
   const previous = revision.content_filter?.model as StoredModel | undefined;
   if (previous?.state === "unchecked" && previous.attempts >= MAX_ATTEMPTS) return null;
   const material = await revisionMaterial(revision);
+  // A project always has something to read; nothing read is not «checked».
+  if (
+    revision.runtime === PROJECT_RUNTIME &&
+    !material.text && !material.code && !material.images.length
+  )
+    return null;
   const hash = sha256(
     JSON.stringify([material.text, material.images.map((image) => sha256(image)), material.code]),
   );
