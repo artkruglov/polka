@@ -1,4 +1,5 @@
 import React from "react";
+import { savedWorkHref } from "../../shared/api/client.ts";
 import { ArrowUpRight, Check } from "lucide-react";
 import type { Receipt } from "../../../../../packages/contracts/index.ts";
 import { Button, LinkButton, Notice } from "../../shared/ui/controls.tsx";
@@ -29,7 +30,7 @@ export function SavedReceipt({
         <Button variant="primary" busy={busy} onClick={onShow}>
           Показать результат
         </Button>
-        <LinkButton href={`/works/${receipt.artifactId}`}>
+        <LinkButton href={savedWorkHref(receipt.artifactId)}>
           Открыть на полке <ArrowUpRight />
         </LinkButton>
         <Button variant="quiet" onClick={onRestart} disabled={busy}>

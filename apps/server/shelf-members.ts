@@ -140,6 +140,16 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
   const who = input.who.toLowerCase();
   return transaction(async (c) => {
     await lockTeamShelf(c, shelfId);
+    // Only the shelf's admin may look people up: nobody else learns from the
+    // answer which addresses and logins exist. Rechecked under lock below.
+    const {
+      rows: [asker],
+    } = await c.query(
+      "SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'",
+      [shelfId, actor.id],
+    );
+    if (!asker) throw missing();
+    adminOnly(asker.role);
     const found = await c.query(
       `SELECT id,COALESCE(display_name,name) AS name FROM accounts
        WHERE (email=$1 OR lower(name)=$1)

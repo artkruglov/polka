@@ -319,7 +319,10 @@ export function AgentConnections() {
             scopes:
               tokenRole === "reader"
                 ? scopes.filter((scope) => ["context", "read", "source:read"].includes(scope))
-                : scopes,
+                : // No links from a department shelf yet (TEAM_SHELVES.md).
+                  tokenShelf
+                  ? scopes.filter((scope) => scope !== "share")
+                  : scopes,
             audience,
             ttlDays,
             ...(tokenShelf ? { shelfId: tokenShelf } : {}),
@@ -720,9 +723,16 @@ export function AgentConnections() {
                     >
                       <input
                         type="checkbox"
-                        checked={scopes.includes(scope.id)}
+                        checked={
+                          scopes.includes(scope.id) &&
+                          (tokenRole !== "reader" || ["context", "read", "source:read"].includes(scope.id))
+                        }
                         onChange={() => toggleScope(scope.id)}
-                        disabled={scope.id === "context"}
+                        disabled={
+                          scope.id === "context" ||
+                          (tokenRole === "reader" && !["context", "read", "source:read"].includes(scope.id)) ||
+                          (!!tokenShelf && scope.id === "share")
+                        }
                       />
                       <span>
                         <strong>{scope.label}</strong>

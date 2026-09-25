@@ -2,6 +2,7 @@ import React from "react";
 import { Folder as FolderIcon, Plus, Trash2 } from "lucide-react";
 import type { Folder } from "../../../../../packages/contracts/index.ts";
 import { IconButton } from "../../shared/ui/controls.tsx";
+import { withShelf } from "../../shared/api/client.ts";
 /** Folders and the trash: the page-owned part of the rail. */
 export function ShelfNavigation({
   folders,
@@ -10,6 +11,7 @@ export function ShelfNavigation({
   onCreateFolder,
   onOpenFolder,
   onOpenTrash,
+  canCreateFolder = true,
 }: {
   folders: Folder[];
   folderId: string | null;
@@ -17,14 +19,18 @@ export function ShelfNavigation({
   onCreateFolder: () => void;
   onOpenFolder: (id: string) => void;
   onOpenTrash: () => void;
+  /** Folders on a department shelf are a curator's. */
+  canCreateFolder?: boolean;
 }) {
   return (
     <>
       <div className="nav-label">
         Папки
-        <IconButton size="sm" label="Создать папку" onClick={onCreateFolder}>
-          <Plus />
-        </IconButton>
+        {canCreateFolder && (
+          <IconButton size="sm" label="Создать папку" onClick={onCreateFolder}>
+            <Plus />
+          </IconButton>
+        )}
       </div>
       {folders.map((f) => (
         <a
@@ -49,7 +55,7 @@ export function ShelfNavigation({
       <div className="shelf-nav-secondary">
         <a
           className={trashView ? "nav-link active" : "nav-link"}
-          href="/trash"
+          href={withShelf("/trash")}
           aria-current={trashView ? "page" : undefined}
           onClick={(e) => {
             e.preventDefault();

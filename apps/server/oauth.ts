@@ -628,6 +628,9 @@ export async function decideAuthorization(
   await limitAttempts(`oauth-decision:${actor.id}`, 30);
   if (!TOKEN.test(browserToken)) throw expiredRequest();
   return transaction(async (c) => {
+    // A department shelf's row before the account: the order of shelf paths.
+    if (input.decision === "approve" && input.shelfId && input.shelfId !== actor.tenant)
+      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [input.shelfId]);
     await lockOwner(c, actor, sessionToken, csrfToken);
     const {
       rows: [row],

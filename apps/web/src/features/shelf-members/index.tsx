@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
+import { Building2, ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import {
   client,
@@ -115,12 +115,23 @@ export function ShelfMembersPanel({
     }
   };
 
-  const leave = () =>
-    act(async () => {
+  const [leaving, setLeaving] = useState(false);
+  const leave = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
       await client.revokeShelfMember(shelf.id, accountId);
       await loadShelves(true);
       switchShelf(null);
-    });
+    } catch (e) {
+      if (live.current) {
+        setError((e as Error).message);
+        setBusy(false);
+        setLeaving(false);
+      }
+    }
+  };
 
   return (
     <Dialog title={`Участники · ${shelf.name ?? "полка отдела"}`} busy={busy} onClose={() => !busy && onClose()}>
@@ -242,9 +253,21 @@ export function ShelfMembersPanel({
         )}
       </div>
       <div className="dialog-footer">
-        <Button variant="quiet" className="shelf-members-leave" disabled={busy} onClick={() => void leave()}>
-          Покинуть полку
-        </Button>
+        {leaving ? (
+          <span className="shelf-members-confirm">
+            Ваши агенты на этой полке отключатся.{" "}
+            <Button variant="quiet" className="shelf-members-leave" busy={busy} onClick={() => void leave()}>
+              Да, покинуть
+            </Button>
+            <Button variant="quiet" disabled={busy} onClick={() => setLeaving(false)}>
+              Остаться
+            </Button>
+          </span>
+        ) : (
+          <Button variant="quiet" className="shelf-members-leave" disabled={busy} onClick={() => setLeaving(true)}>
+            Покинуть полку
+          </Button>
+        )}
         <Button variant="primary" onClick={onClose} disabled={busy}>Готово</Button>
       </div>
     </Dialog>
@@ -272,7 +295,7 @@ export function ShelfSwitcher({
   const items = [
     ...shelves.map((shelf) => ({
       id: shelf.id,
-      label: `${shelf.id === current.id ? "✓ " : ""}${shelf.kind === "personal" ? "Моя полка" : shelf.name}`,
+      label: `${shelf.kind === "personal" ? "Моя полка" : shelf.name}${shelf.id === current.id ? " · открыта" : ""}`,
       icon: shelf.kind === "personal" ? <Home /> : <Users />,
       onSelect: () => {
         if (shelf.id !== current.id) switchShelf(shelf.kind === "personal" ? null : shelf.id);
@@ -281,7 +304,13 @@ export function ShelfSwitcher({
     ...(current.kind === "team"
       ? [{ id: "members", label: "Участники полки", icon: <Users />, onSelect: onMembers }]
       : []),
-    ...(canCreate ? [{ id: "create", label: "Новая полка отдела", icon: <Plus />, onSelect: onCreate }] : []),
+    ...(canCreate
+      ? [
+          { id: "create", label: "Новая полка отдела", icon: <Plus />, onSelect: onCreate },
+          // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4).
+          { id: "company", label: "Полки компании", icon: <Building2 />, onSelect: () => location.assign("/settings/company") },
+        ]
+      : []),
   ];
   return (
     <div className="shelf-switcher">

@@ -19,6 +19,7 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/enterprise") return "Для компаний";
   if (path === "/start") return "Первая работа";
   if (path === "/settings/agents" || path === "/connections") return "Агенты";
+  if (path === "/settings/company") return "Полки компании";
   if (path === "/s") return "Работа по ссылке";
   if (path === "/away") return "Переход по ссылке";
   if (path === "/mail-off") return "Письма о комментариях";

@@ -243,9 +243,10 @@ export async function disableAccount(login: string, reason?: string) {
       );
     const connections = (
       await c.query(
+        // Every shelf's agents of the account, its own and department shelves'.
         `SELECT id,tenant_id,account_id,oauth_client_id,revoked_at
-         FROM agent_connections WHERE tenant_id=$1 ORDER BY id FOR UPDATE`,
-        [actor.tenant],
+         FROM agent_connections WHERE account_id=$1 ORDER BY id FOR UPDATE`,
+        [actor.id],
       )
     ).rows;
     await c.query(
@@ -883,7 +884,10 @@ export async function resolveTarget(target: string) {
     const share = await db.query("SELECT id FROM shares WHERE id=$1", [value]);
     if (share.rowCount) return { kind: "share" as const, shareIds: [value] };
     const artifact = await db.query(
-      `SELECT artifact.id,artifact.tenant_id,artifact.latest_revision_id,tenant.owner_id
+      // A department shelf has no owner: the author answers for the work.
+      `SELECT artifact.id,artifact.tenant_id,artifact.latest_revision_id,
+              COALESCE(tenant.owner_id,artifact.created_by) AS owner_id,
+              tenant.owner_id IS NULL AS team
        FROM artifacts artifact JOIN tenants tenant ON tenant.id=artifact.tenant_id
        WHERE artifact.id=$1`,
       [value],
@@ -891,7 +895,8 @@ export async function resolveTarget(target: string) {
     if (artifact.rowCount) return { kind: "artifact" as const, artifact: artifact.rows[0] };
     const revision = await db.query(
       `SELECT revision.id AS latest_revision_id,revision.artifact_id AS id,
-         revision.tenant_id,tenant.owner_id
+         revision.tenant_id,COALESCE(tenant.owner_id,revision.created_by) AS owner_id,
+         tenant.owner_id IS NULL AS team
        FROM revisions revision JOIN tenants tenant ON tenant.id=revision.tenant_id
        WHERE revision.id=$1`,
       [value],
@@ -949,6 +954,7 @@ export async function takedown(
     owner_id: string;
     id: string;
     latest_revision_id: string | null;
+    team?: boolean;
   }) => {
     if (!row.latest_revision_id) return;
     // Every revision of the work that a link shows, and the latest one.
@@ -962,7 +968,11 @@ export async function takedown(
       revisions.add(share.revision_id);
     for (const revisionId of revisions) {
       const outcome = await transaction(async (c) => {
-        await lockTenantAccount(c, { id: row.owner_id, tenant: row.tenant_id });
+        if (row.team) {
+          // A department shelf: the shelf, then its author (no owner to match).
+          await c.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [row.tenant_id]);
+          await c.query("SELECT id FROM accounts WHERE id=$1 FOR UPDATE", [row.owner_id]);
+        } else await lockTenantAccount(c, { id: row.owner_id, tenant: row.tenant_id });
         return blockRevisionInTransaction(c, {
           tenantId: row.tenant_id,
           accountId: row.owner_id,

@@ -1,5 +1,7 @@
 import { TabList, tabId } from "../../shared/ui/Tabs.tsx";
 import { currentShelf } from "../../shared/api/client.ts";
+import { shelfAccess, useTeamShelf } from "../../entities/shelf/model.ts";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { Popover } from "../../shared/ui/Popover.tsx";
 import React, { useEffect, useId, useState } from "react";
@@ -93,8 +95,14 @@ export function workMenu({
   setPanel,
   onDownload,
   onCopyForAgent,
+  access = { own: true, change: true },
 }: Pick<Props, "work" | "shown" | "setPanel" | "onDownload"> & {
   onCopyForAgent: () => void;
+  /**
+   * own: one's own shelf (agent phrases resolve there); change: the role
+   * lets the account change this work (docs/specs/TEAM_SHELVES.md).
+   */
+  access?: { own: boolean; change: boolean };
 }): MenuAction[] {
   const download: MenuAction = {
     id: "download",
@@ -106,26 +114,30 @@ export function workMenu({
     onSelect: onDownload,
   };
   if (work.trashedAt) return [download];
-  return [
+  const items: (MenuAction & { needs?: "own" | "change" })[] = [
     {
+      needs: "own",
       id: "copy-for-agent",
       label: "Скопировать для агента",
       icon: <Sparkles />,
       onSelect: onCopyForAgent,
     },
     {
+      needs: "own",
       id: "agent-context",
       label: "Подробный контекст для агента",
       icon: <Bot />,
       onSelect: () => setPanel("agent-context"),
     },
     {
+      needs: "change",
       id: "version",
       label: "Новая версия",
       icon: <Upload />,
       onSelect: () => setPanel("version"),
     },
     {
+      needs: "own",
       id: "rework",
       label: "Переработать с агентом",
       icon: <WandSparkles />,
@@ -133,12 +145,14 @@ export function workMenu({
     },
     download,
     {
+      needs: "change",
       id: "metadata",
       label: "Название и папка",
       icon: <FolderIcon />,
       onSelect: () => setPanel("metadata"),
     },
     {
+      needs: "change",
       id: "trash",
       label: "В корзину",
       icon: <Trash2 />,
@@ -146,6 +160,9 @@ export function workMenu({
       onSelect: () => setPanel("trash"),
     },
   ];
+  return items
+    .filter((item) => !item.needs || access[item.needs])
+    .map(({ needs: _needs, ...item }) => item);
 }
 
 /**
@@ -174,6 +191,7 @@ export function ArtifactReader({
   notices,
 }: Props) {
   const ids = useId();
+  const access = shelfAccess(useTeamShelf(), useAccountState().account?.id);
   const panelId = `${ids}-panel`;
   const tab: ReaderTab = history ? "versions" : "work";
   // The details describe the version on screen, which may be an older one.
@@ -362,6 +380,7 @@ export function ArtifactReader({
               setPanel,
               onDownload,
               onCopyForAgent: () => void copyForAgent(),
+              access: { own: access.own, change: access.changes(work.author) },
             })}
           />
         </div>

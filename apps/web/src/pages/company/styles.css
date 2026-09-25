@@ -1,0 +1,25 @@
+.company-page { max-width: 880px; margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 20px; }
+.company-page h1 { margin: 4px 0 0; }
+.company-muted { color: var(--muted); margin: 0; }
+.company-card { border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 12px; background: var(--surface, transparent); }
+.company-card h2 { margin: 0; font-size: 1.15rem; }
+.company-find { display: flex; gap: 8px; }
+.company-find .ui-search { flex: 1; min-width: 0; }
+.company-person { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: var(--soft-2, rgba(0,0,0,.03)); }
+.company-person small { color: var(--muted); }
+.company-person p { margin: 0; }
+.company-person .ui-button { justify-self: start; }
+.company-shelves, .company-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.company-shelf { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.company-shelf-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.company-shelf-head > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.company-shelf-head small { color: var(--muted); }
+.company-shelf-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.company-members li { display: flex; justify-content: space-between; gap: 12px; padding-left: 12px; }
+.company-members li > span:first-child { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.company-members small { color: var(--muted); }
+@media (max-width: 600px) {
+  .company-page { padding: 20px 16px 48px; }
+  .company-shelf-head { flex-direction: column; }
+  .company-shelf-actions { justify-content: flex-start; }
+}
