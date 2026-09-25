@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { MAX_TITLE, uuid } from "../../../packages/contracts/index.ts";
 import type { Actor } from "../artifacts.ts";
-import { lockActiveOwnerTenant } from "../owner-state.ts";
+import { lockShelf } from "../shelves.ts";
 import { Problem, missing } from "../errors.ts";
 import { MCP_AUDIENCE } from "../service-auth.ts";
 import { publicUrl, ImportFetchError } from "./public-fetch.ts";
@@ -17,7 +17,8 @@ export const importRequestSchema = z
   })
   .strict();
 export async function authorizeImport(c: PoolClient, actor: Actor) {
-  await lockActiveOwnerTenant(c, actor);
+  // Saving on the shelf: an author or above (docs/specs/TEAM_SHELVES.md).
+  await lockShelf(c, actor, "author");
   if (actor.connectionId) {
     const result = await c.query(
       `SELECT id FROM agent_connections WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4 AND revoked_at IS NULL AND expires_at>now() AND 'capture'=ANY(scopes) FOR UPDATE`,

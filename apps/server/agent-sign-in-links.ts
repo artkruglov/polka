@@ -19,6 +19,7 @@ import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import type { ServiceActor } from "./service-auth.ts";
+import { assertOwnShelf } from "./service-auth.ts";
 import {
   GENERATED_LOGIN,
   openValue,
@@ -106,6 +107,7 @@ const staleHint = () =>
  * permission on consent and the switch on the agents page).
  */
 export async function issueSignInLink(actor: ServiceActor) {
+  assertOwnShelf(actor);
   await limitAttempts(
     `sign-in-link:${actor.connectionId}`,
     SIGN_IN_LINKS_PER_HOUR,
