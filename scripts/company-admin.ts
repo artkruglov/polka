@@ -13,20 +13,23 @@ if (!who || who.startsWith("--")) {
   process.exitCode = 2;
 } else {
   try {
+    // Exactly one account, or nothing changes: a login, or the stored
+    // (lowercase) e-mail matched exactly.
     const { rows } = await db.query(
-      `UPDATE accounts SET company_admin=$2
-       WHERE (name=$1 OR lower(email)=lower($1))
-         AND NOT disabled AND deletion_requested_at IS NULL
-       RETURNING id`,
-      [who, !revoke],
+      `SELECT id FROM accounts
+       WHERE (name=$1 OR email=lower($1))
+         AND NOT disabled AND deletion_requested_at IS NULL`,
+      [who],
     );
     if (rows.length !== 1) {
-      console.error(rows.length ? "More than one account matches." : "No active account matches.");
+      console.error(rows.length ? "More than one account matches; nothing changed." : "No active account matches.");
       process.exitCode = 1;
-    } else
+    } else {
+      await db.query("UPDATE accounts SET company_admin=$2 WHERE id=$1", [rows[0].id, !revoke]);
       console.log(
         JSON.stringify({ event: "company_admin", accountId: rows[0].id, companyAdmin: !revoke }),
       );
+    }
   } finally {
     await db.end();
   }

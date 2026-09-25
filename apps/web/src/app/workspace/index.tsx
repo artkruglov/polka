@@ -478,7 +478,7 @@ export function App() {
                   ) : null
                 }
                 onDownload={() => {
-                  void downloadRevision(shown).catch((e) =>
+                  void downloadRevision(shown, work.title).catch((e) =>
                     setError(
                       e instanceof Error
                         ? e.message

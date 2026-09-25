@@ -8,7 +8,7 @@
 //   node polka-publish-project.mjs ./Y360-v2 --dry-run
 import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, extname, join, relative, sep } from "node:path";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 // Empty in the repository: the address is required. An installation that
@@ -56,6 +56,8 @@ Options:
   --exclude <name>   Skip files or folders with this name; repeat for more
   --folder <uuid>    Save into this shelf folder
   --key <uuid>       Idempotency key; reuse it only to retry the same publish
+  --artifact <uuid>  Save a new version of this project (with --base-revision)
+  --base-revision <uuid>  The version you started from (from polka_list or the last result)
   --endpoint <url>   Полка address (or $POLKA_ENDPOINT)
   --dry-run          List what would be sent and skipped, send nothing
   --json             Print the full JSON result
@@ -92,6 +94,10 @@ async function walk(root, exclude) {
         await visit(full);
         continue;
       }
+      if (!entry.isFile()) {
+        skipped.push({ path, reason: "not a regular file" });
+        continue;
+      }
       if (SKIP_FILE.test(entry.name) || exclude.has(entry.name)) continue;
       const mime = MIME[extname(entry.name).toLowerCase()];
       const size = (await stat(full)).size;
@@ -105,19 +111,51 @@ async function walk(root, exclude) {
   }
   await visit(root);
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return { files, skipped };
+  // Полка refuses paths that differ only by case: name them now, not at upload.
+  const byCase = new Map();
+  const kept = [];
+  for (const file of files) {
+    const key = file.path.toLowerCase();
+    if (byCase.has(key))
+      skipped.push({ path: file.path, reason: `differs only by case from ${byCase.get(key)}` });
+    else {
+      byCase.set(key, file.path);
+      kept.push(file);
+    }
+  }
+  return { files: kept, skipped };
 }
 
 function titleOf(markdown) {
-  const heading = /^#\s+(.+)$/m.exec(markdown);
-  return heading ? heading[1].replace(/[*_`]/g, "").trim().slice(0, 160) : "";
+  // The first heading outside code blocks («# comment» in a shell block is not one).
+  let fenced = false;
+  for (const line of markdown.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    else if (!fenced) {
+      const heading = /^#{1,2}\s+(.+)$/.exec(line);
+      if (heading) return heading[1].replace(/[*_`]/g, "").trim();
+    }
+  }
+  return "";
 }
+
+const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, Math.min(seconds, 60) * 1000));
+// Retry-After is seconds or an HTTP date.
+const retryAfter = (value, fallback) => {
+  if (!value) return fallback;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, (at - Date.now()) / 1000) : fallback;
+};
 
 async function call(endpoint, token, method, path, body, contentType) {
   let lastError;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    const last = attempt === ATTEMPTS;
+    let response;
     try {
-      const response = await fetch(new URL(path, endpoint), {
+      response = await fetch(new URL(path.replace(/^\//, ""), endpoint.replace(/\/?$/, "/")), {
         method,
         headers: {
           authorization: `Bearer ${token}`,
@@ -126,20 +164,28 @@ async function call(endpoint, token, method, path, body, contentType) {
         body,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      const text = await response.text();
-      const json = text ? JSON.parse(text) : {};
-      if (response.ok) return json;
-      if (response.status === 429 || response.status >= 500) {
-        lastError = new CliError(json.message ?? `HTTP ${response.status}`);
-        const wait = Number(response.headers.get("retry-after") ?? attempt * 2);
-        await new Promise((resolve) => setTimeout(resolve, Math.min(wait, 60) * 1000));
-        continue;
-      }
-      throw new CliError(`${json.message ?? `HTTP ${response.status}`}${json.fields ? ` (${json.fields.join(", ")})` : ""}`);
     } catch (error) {
-      if (error instanceof CliError && !String(error.message).startsWith("HTTP 5")) throw error;
-      lastError = error;
+      // The network or a timeout: wait a little, then try again.
+      lastError = new CliError(`Network error: ${error?.message ?? error}`);
+      if (!last) await sleep(attempt * 2);
+      continue;
     }
+    const text = await response.text();
+    // A proxy in front of Полка may answer with HTML (502, 413).
+    let json = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = {};
+    }
+    if (response.ok) return json;
+    const message = `${json.message ?? `HTTP ${response.status}${text && !json.message ? ` ${text.slice(0, 120).replace(/\s+/g, " ")}` : ""}`}${json.fields ? ` (${json.fields.join(", ")})` : ""}`;
+    if (response.status === 429 || response.status >= 500) {
+      lastError = new CliError(message);
+      if (!last) await sleep(retryAfter(response.headers.get("retry-after"), attempt * 2));
+      continue;
+    }
+    throw new CliError(message);
   }
   throw lastError;
 }
@@ -153,6 +199,8 @@ async function main() {
       exclude: { type: "string", multiple: true },
       folder: { type: "string" },
       key: { type: "string" },
+      artifact: { type: "string" },
+      "base-revision": { type: "string" },
       endpoint: { type: "string" },
       "dry-run": { type: "boolean" },
       json: { type: "boolean" },
@@ -165,7 +213,8 @@ async function main() {
     return;
   }
   const root = positionals[0];
-  if (!(await stat(root)).isDirectory()) throw new CliError(`${root} is not a folder`, 2);
+  const info = await stat(root).catch(() => null);
+  if (!info?.isDirectory()) throw new CliError(`${root} is not a folder`, 2);
   const { files, skipped } = await walk(root, new Set(values.exclude ?? []));
   if (!files.length) throw new CliError("Nothing to publish in this folder.", 2);
   if (files.length > MAX_FILES)
@@ -197,11 +246,9 @@ async function main() {
     file.sha256 = createHash("sha256").update(file.bytes).digest("hex");
   }
   const title =
-    values.title ??
-    (entryFile.mime === "text/markdown" ? titleOf(entryFile.bytes.toString("utf8")) : "") ??
-    "";
+    values.title ?? (entryFile.mime === "text/markdown" ? titleOf(entryFile.bytes.toString("utf8")) : "");
   const report = {
-    title: title || basename(root.replace(/\/+$/, "")),
+    title: (title.trim() || basename(resolve(root))).slice(0, 160),
     entry,
     files: files.length,
     megabytes: Number((total / 1048576).toFixed(1)),
@@ -229,14 +276,19 @@ async function main() {
     },
     dependencies: { status: "unknown", unresolved: [] },
   };
+  if (!!values.artifact !== !!values["base-revision"])
+    throw new CliError("A new version needs both --artifact and --base-revision.", 2);
+  const key = values.key ?? randomUUID();
   const begun = await call(endpoint, token, "POST", "/api/v1/projects", JSON.stringify({
-    key: values.key ?? randomUUID(),
+    key,
     title: report.title,
     manifest,
     ...(values.folder ? { folderId: values.folder } : {}),
+    ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
   }), "application/json");
   let receipt = begun.receipt;
-  if (!receipt) {
+  // After the upload has begun, a rerun with the same key continues it.
+  if (!receipt) try {
     const byPath = new Map(files.map((file) => [file.path, file]));
     for (const { index, path } of begun.files) {
       await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, byPath.get(path).bytes, "application/octet-stream");
@@ -244,6 +296,9 @@ async function main() {
     }
     process.stderr.write("\n");
     receipt = await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/finalize`, "{}", "application/json");
+  } catch (error) {
+    if (error instanceof CliError) error.message += `\nRetry with --key ${key} to continue this upload.`;
+    throw error;
   }
   const result = { ...report, artifactId: receipt.artifactId, revisionId: receipt.revisionId, shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}` };
   if (values.json) console.log(JSON.stringify(result, null, 2));

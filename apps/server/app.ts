@@ -66,6 +66,7 @@ import {
 import {
   issueOwnerProjectView,
   issueRecipientProjectView,
+  renewProjectView,
 } from "./project-viewer.ts";
 import {
   issueOwnerLiveView,
@@ -1032,6 +1033,13 @@ export async function createApp() {
   app.post("/api/revisions/:id/project-view", async (req) => {
     const actor = await identity(req);
     return issueOwnerProjectView(actor, req.cookies.polka_session ?? "", id(req));
+  });
+  app.post("/api/view/project-view/renew", async (req) => {
+    const { token } = z
+      .object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
+      .strict()
+      .parse(req.body);
+    return renewProjectView(token);
   });
   app.post("/api/view/project-view", async (req) => {
     const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";

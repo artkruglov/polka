@@ -107,8 +107,9 @@ export function renderProjectMarkdown(
         if (!href && fragment) return `<a href="#${escapeHtml(fragment)}">${inner}</a>`;
         if (/^https?:\/\//i.test(href))
           return `<a href="${escapeHtml(awayHref(token.href))}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+        // The sandbox opens no mail client: the address is shown to copy.
         if (/^mailto:/i.test(href))
-          return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+          return `<span class="polka-mail" title="${escapeHtml(href.slice(7))}">${inner}</span>`;
         const target = resolveProjectPath(paths, path, href);
         if (!target)
           return `<span class="polka-outside" title="Этого файла нет в проекте">${inner}</span>`;
@@ -203,6 +204,7 @@ code{font:.9em/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--
 pre{background:var(--soft);padding:14px 16px;border-radius:10px;overflow:auto}pre code{background:none;padding:0}
 a.polka-path code{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .polka-outside code,.polka-outside{color:var(--muted)}
+.polka-mail{border-bottom:1px dotted var(--muted);user-select:all}
 .polka-outside code{text-decoration:line-through dotted}
 blockquote{margin-left:0;padding:0 16px;border-left:3px solid var(--line);color:var(--muted)}
 table{border-collapse:collapse;display:block;overflow:auto;max-width:100%}

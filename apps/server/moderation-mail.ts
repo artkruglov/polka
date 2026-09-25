@@ -85,7 +85,9 @@ const kindOf = (mime: string) =>
     ? "страница"
     : mime === "text/plain"
       ? "текст"
-      : "изображение";
+      : mime === "text/markdown"
+        ? "документ"
+        : "изображение";
 
 const PROFILE: Record<string, string> = {
   static: "статичная",
@@ -117,6 +119,8 @@ async function shareFacts(shareId: string) {
        (NOT share.revoked AND share.expires_at>now()) AS live,share.expires_at,
        artifact.title,revision.mime,revision.html_profile,revision.number,
        revision.storage_kind,revision.phishing_signals,revision.content_filter,
+       revision.manifest->>'runtime' AS runtime,
+       jsonb_array_length(revision.manifest->'files') AS file_count,
        revision.id AS revision_id,
        account.name,account.email,${SIGNED_UP_SQL("account")} AS signed_up,
        EXISTS(SELECT 1 FROM editorial_publications publication
@@ -226,7 +230,9 @@ function compose(
     ["Работа", `«${title}», версия ${facts.number}`],
     [
       "Тип",
-      facts.mime === "text/html"
+      facts.runtime === "project-v1"
+        ? `проект, ${facts.file_count} файлов (документы и страницы)`
+        : facts.mime === "text/html"
         ? `${kindOf(facts.mime)}, ${PROFILE[facts.html_profile] ?? facts.html_profile}${facts.storage_kind === "bundle" ? ", пакет файлов" : ""}`
         : kindOf(facts.mime),
     ],

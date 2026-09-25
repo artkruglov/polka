@@ -15,7 +15,7 @@ import {
   size,
 } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
-import { ProjectView } from "./ProjectView.tsx";
+import { ProjectView, filesLabel } from "./ProjectView.tsx";
 import { TextCover } from "./TextCover.tsx";
 import { liveKind } from "./live-plan.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
@@ -114,11 +114,11 @@ export function Preview({
         id={revision.id}
         title={title ?? readingTitle ?? "Проект"}
         eyebrow="Проект"
-        note={`${revision.manifest.files.length} файлов`}
+        note={filesLabel(revision.manifest.files.length)}
         compact
       />
     ) : (
-      <ProjectView revision={revision} grant={grant} />
+      <ProjectView key={revision.id} revision={revision} grant={grant} />
     );
   // A lone static page saved as a bundle is shown like a single HTML upload.
   if (

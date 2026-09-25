@@ -227,9 +227,21 @@ test("a link opens the whole project for a recipient until it is revoked", async
   // The view follows the link, not the 60-second grant it was issued from.
   await db.query("UPDATE grants SET expires_at=now()-interval '1 second' WHERE share_id=$1", [shared.json().share.id]);
   assert.equal((await view(url + "screens/index.html")).statusCode, 200);
+  // A reader still on the project renews the view from the view itself.
+  const renew = (current: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/view/project-view/renew",
+      headers: { origin, "content-type": "application/json" },
+      payload: JSON.stringify({ token: new URL(current).pathname.split("/")[2] }),
+    });
+  const renewed = await renew(url);
+  assert.equal(renewed.statusCode, 200, renewed.body);
+  assert.equal((await view(renewed.json().url + "02-users/stories.md")).statusCode, 200);
   // A link paused after reports closes the open project at once.
   await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [shared.json().share.id]);
   assert.equal((await view(url)).statusCode, 404);
+  assert.equal((await renew(url)).statusCode, 404);
   await db.query("UPDATE shares SET moderation='none' WHERE id=$1", [shared.json().share.id]);
   assert.equal((await view(url)).statusCode, 200);
   await db.query("UPDATE shares SET revoked=true WHERE id=$1", [shared.json().share.id]);

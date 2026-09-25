@@ -142,7 +142,8 @@ export async function coverFactsBounded(source: string, deadlineMs = 3_000): Pro
 export async function computeCoverFacts(r: any): Promise<CoverFacts> {
   if (isImageMime(r.mime))
     return { kind: "visual", genre: "image", heading: null, lead: null, accent: null, signals: EMPTY_SIGNALS };
-  if (r.mime === "text/plain") {
+  // A project's README (text/markdown) gives its cover like a text does.
+  if (r.mime === "text/plain" || r.mime === "text/markdown") {
     const text = (await readBlob(r.object_key, r.object_version)).subarray(0, 64 * 1024).toString("utf8");
     return coverFactsFromText(text, r.filename);
   }
