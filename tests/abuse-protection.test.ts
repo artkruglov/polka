@@ -368,6 +368,70 @@ test("a waiting link shows recipients the review screen only; the owner still se
   assert.equal(settled.authorIsNew, false);
 });
 
+test("the recipient learns whether the version asks for secrets and whether it was checked", async () => {
+  config.SHARE_MODERATION = "off";
+  const owner = await signedUp(10);
+  // A report: no fields for secrets; the models have not answered yet.
+  const report = await sharedLink(owner, HONEST);
+  const plain = (await resolve(report.token)).json();
+  assert.equal(plain.sensitiveInput, false);
+  assert.equal(plain.autoChecked, false);
+  const stored = (
+    await db.query("SELECT content_filter FROM revisions WHERE id=$1", [report.revisionId])
+  ).rows[0].content_filter;
+  assert.equal(stored.sensitiveInput, false);
+  assert.equal(stored.sensitiveSignals, undefined);
+  // The text model answered "none": checked automatically.
+  await db.query(
+    `UPDATE revisions SET content_filter=content_filter||jsonb_build_object('model',$2::jsonb)
+     WHERE id=$1`,
+    [
+      report.revisionId,
+      JSON.stringify({ state: "checked", hash: "x", attempts: 1, at: new Date().toISOString(), findings: [], answers: [{ source: "text", model: "qwen", answer: "none" }] }),
+    ],
+  );
+  const checked = (await resolve(report.token)).json();
+  assert.equal(checked.autoChecked, true);
+  assert.equal(checked.sensitiveInput, false);
+  // A page with a field for a password (static: no form, no password type).
+  const form = await sharedLink(
+    owner,
+    `<!doctype html><html><head><meta charset="utf-8"><title>Вход</title></head><body><h1>Вход</h1><label>Логин <input name="login"></label><label>Пароль <input name="pwd"></label></body></html>`,
+  );
+  const asks = (await resolve(form.token)).json();
+  assert.equal(asks.sensitiveInput, true);
+  assert.equal(asks.autoChecked, false);
+  const signals = (
+    await db.query("SELECT content_filter->'sensitiveSignals' AS s FROM revisions WHERE id=$1", [form.revisionId])
+  ).rows[0].s;
+  assert.deepEqual(signals, ["password", "login-password"]);
+  // Findings never reach the recipient.
+  assert.doesNotMatch(JSON.stringify(asks), /login-password|sensitiveSignals/);
+  // A version saved before the flag existed: unknown.
+  const old = await sharedLink(owner, HONEST.replace("Квартальный", "Годовой"));
+  await db.query(
+    "UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1",
+    [old.revisionId],
+  );
+  assert.equal((await resolve(old.token)).json().sensitiveInput, null);
+  // The operator's backfill fills it from the stored object, once.
+  const { backfillSensitiveInput } = await import("../apps/server/sensitive-input-backfill.ts");
+  const only = { revisionIds: [old.revisionId, form.revisionId] };
+  const dry = await backfillSensitiveInput({ dryRun: true, ...only });
+  assert.deepEqual([dry.scanned, dry.plain, dry.updated], [1, 1, 0]);
+  assert.equal((await resolve(old.token)).json().sensitiveInput, null);
+  await db.query(
+    "UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1",
+    [form.revisionId],
+  );
+  const done = await backfillSensitiveInput(only);
+  assert.deepEqual([done.scanned, done.sensitive, done.plain, done.updated], [2, 1, 1, 2]);
+  assert.equal((await resolve(old.token)).json().sensitiveInput, false);
+  assert.equal((await resolve(form.token)).json().sensitiveInput, true);
+  const again = await backfillSensitiveInput(only);
+  assert.equal(again.updated, 0, JSON.stringify(again));
+});
+
 test("reports: every report is a letter; N distinct reporters pause the link; the same reporter counts once", async () => {
   config.MODERATION_AUTOPAUSE_REPORTS = 3;
   const owner = await operatorCreated();

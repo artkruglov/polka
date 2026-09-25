@@ -138,6 +138,20 @@ export const NO_DECISION: ContentDecision = {
   unchecked: false,
 };
 
+/**
+ * The recipient may be told «Полка проверила автоматически»: the models
+ * answered (content_filter.model.state is "checked") and neither they nor
+ * the rules found anything. Before the answer, without models, after every
+ * call failed, or with any finding: false.
+ */
+export function autoCheckedClean(filter: unknown): boolean {
+  const stored = (filter as { model?: { state?: unknown; findings?: unknown } } | null)
+    ?.model;
+  if (!stored || stored.state !== "checked") return false;
+  if (Array.isArray(stored.findings) && stored.findings.length) return false;
+  return findingsOf(filter as FilterResult).length === 0;
+}
+
 /** Rules findings and model findings of one work, one per source. */
 export function findingsOf(
   filter: FilterResult | null | undefined,

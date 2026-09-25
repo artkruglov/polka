@@ -13,6 +13,7 @@ import {
   LockKeyhole,
   MessageCircle,
   TriangleAlert,
+  UserRound,
   WifiOff,
 } from "lucide-react";
 import type {
@@ -48,6 +49,7 @@ import {
 } from "../../features/recipient-convert/index.tsx";
 
 import { isFreshAccount } from "../../entities/recipient-convert/fresh-account.ts";
+import { recipientNote } from "../../entities/recipient-note/copy.ts";
 
 const accessRequest =
   "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
@@ -531,7 +533,7 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
   const [open, setOpen] = useState(false);
   const sourceUrl = useSourceUrl();
   const detailsId = useId();
-  const editorial = viewer.publisher === "editorial";
+  const note = recipientNote(viewer);
   const meta = [
     "Открыто по ссылке",
     kindOf(viewer.revision),
@@ -547,25 +549,19 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
   return (
     <div
       className="recipient-note"
-      data-tone={editorial ? "editorial" : "warning"}
+      data-tone={note.tone}
       role="note"
       aria-label="Об этой странице"
     >
       <p className="recipient-note-line">
-        {editorial ? (
-          <>
-            <BookOpen aria-hidden="true" />
-            <span>Редакция Полки</span>
-          </>
+        {note.tone === "editorial" ? (
+          <BookOpen aria-hidden="true" />
+        ) : note.tone === "quiet" ? (
+          <UserRound aria-hidden="true" />
         ) : (
-          <>
-            <TriangleAlert aria-hidden="true" />
-            <span>
-              Страница пользователя Полки, не проверена. Не вводите здесь
-              пароли, коды из SMS и данные карт.
-            </span>
-          </>
+          <TriangleAlert aria-hidden="true" />
         )}
+        <span>{note.line}</span>
         <button
           type="button"
           className="recipient-note-more"
@@ -579,20 +575,15 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
         </button>
       </p>
       <div id={detailsId} className="recipient-note-details" hidden={!open}>
-        {editorial ? (
-          <p>Эту страницу подготовила редакция Полки.</p>
-        ) : (
-          <p>
-            Эту страницу опубликовал пользователь Полки. Полка её не
-            проверяла. Не вводите здесь пароли, коды из SMS и данные карт.
-            {viewer.authorIsNew && (
-              <>
-                {" "}
-                <strong>Автор недавно на Полке.</strong>
-              </>
-            )}
-          </p>
-        )}
+        <p>
+          {note.details}
+          {note.tone !== "editorial" && viewer.authorIsNew && (
+            <>
+              {" "}
+              <strong>Автор недавно на Полке.</strong>
+            </>
+          )}
+        </p>
         <p>
           {meta.join(" · ")}. Сохранённая версия зафиксирована; владелец может
           обновить или отозвать ссылку. Аккаунт в исходном сервисе не нужен.

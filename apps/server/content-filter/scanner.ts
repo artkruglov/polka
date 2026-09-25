@@ -35,6 +35,14 @@ export type FilterResult = {
   simhash?: string;
   /** data: images the page shows (rules cannot read them). */
   images?: number;
+  /**
+   * The work asks for a password, a card, a one-time code or a seed phrase
+   * (sensitive-input.ts). Absent on revisions saved before it was recorded
+   * and on pages that could not be read: unknown.
+   */
+  sensitiveInput?: boolean;
+  /** Which kinds of field (SENSITIVE_SIGNALS ids). */
+  sensitiveSignals?: string[];
 };
 
 const MAX_TERMS = 10;

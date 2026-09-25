@@ -15,6 +15,7 @@
 // + or nested quantifiers).
 
 import { ContentScanner } from "./content-filter/scanner.ts";
+import { SensitiveInputDetector } from "./content-filter/sensitive-input.ts";
 
 export type SignalFamily = "secret" | "brand" | "urgency";
 
@@ -143,6 +144,8 @@ const MAX_PIECE = 4096;
 export class SignalCollector {
   readonly found = new Set<string>();
   readonly content: ContentScanner;
+  /** Fields for a password, a card, a code (content-filter/sensitive-input.ts). */
+  readonly sensitive = new SensitiveInputDetector();
 
   constructor(options: ConstructorParameters<typeof ContentScanner>[0] = {}) {
     this.content = new ContentScanner(options);
@@ -279,4 +282,5 @@ export function scanScript(source: string, collector: SignalCollector) {
     collector.context(text);
   });
   collector.content.code(source);
+  collector.sensitive.script(source);
 }

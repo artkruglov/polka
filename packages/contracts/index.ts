@@ -294,6 +294,14 @@ export interface Viewer {
   publisher: "editorial" | "user";
   /** The author's account is younger than NEW_ACCOUNT_DAYS. Never the name. */
   authorIsNew: boolean;
+  /**
+   * The viewed version has fields for a password, a card, a one-time code or
+   * a seed phrase (content filter, save time). null: saved before this was
+   * recorded, or not readable: unknown.
+   */
+  sensitiveInput: boolean | null;
+  /** The automatic check (rules and models) answered and found nothing. */
+  autoChecked: boolean;
 }
 /** A held or paused link: no title, no content, no grant. */
 export interface ViewerUnderReview {
