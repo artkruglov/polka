@@ -103,9 +103,9 @@ export function CardCover({
     return (
       <div className="card-cover card-cover--link" aria-hidden="true">
         <ServiceMark provider={provider} size="lg" />
-        <strong>{provider?.name ?? "Ссылка"}</strong>
+        <strong>{provider?.name ?? r.link.host}</strong>
         <span>
-          <LinkIcon /> {r.link.host}
+          <LinkIcon /> {provider ? r.link.host : "Ссылка"}
         </span>
       </div>
     );
