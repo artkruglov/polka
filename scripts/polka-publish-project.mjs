@@ -290,11 +290,16 @@ async function main() {
   // After the upload has begun, a rerun with the same key continues it.
   if (!receipt) try {
     const byPath = new Map(files.map((file) => [file.path, file]));
+    // A terminal gets one updating line; an agent's log gets a line now and then.
+    let sent = 0;
+    const total = begun.files.length;
     for (const { index, path } of begun.files) {
       await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, byPath.get(path).bytes, "application/octet-stream");
-      process.stderr.write(`\r${index + 1}/${begun.files.length} files sent`);
+      sent++;
+      if (process.stderr.isTTY) process.stderr.write(`\r${sent}/${total} files sent`);
+      else if (sent % 25 === 0 || sent === total) process.stderr.write(`${sent}/${total} files sent\n`);
     }
-    process.stderr.write("\n");
+    if (process.stderr.isTTY) process.stderr.write("\n");
     receipt = await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/finalize`, "{}", "application/json");
   } catch (error) {
     if (error instanceof CliError) error.message += `\nRetry with --key ${key} to continue this upload.`;

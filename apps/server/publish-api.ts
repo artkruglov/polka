@@ -25,6 +25,7 @@ import { Problem } from "./errors.ts";
 import {
   authenticateServiceToken,
   MCP_AUDIENCE,
+  PROJECT_UPLOAD_AUDIENCE,
   recheckServiceActor,
   type ServiceActor,
 } from "./service-auth.ts";
@@ -226,6 +227,8 @@ async function bearerActor(
   req: FastifyRequest,
   reply: FastifyReply,
   bucket: "calls" | "project-files" = "calls",
+  // The project routes also take a one-time project upload token.
+  audiences: readonly string[] = [MCP_AUDIENCE],
 ) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
@@ -249,15 +252,17 @@ async function bearerActor(
     await unauthenticated();
     throw unauthorized(reply);
   }
-  let actor: ServiceActor;
-  try {
+  let actor: ServiceActor | null = null;
+  for (const audience of audiences) {
     actor = await authenticateServiceToken(
       match[1],
-      MCP_AUDIENCE,
+      audience,
       undefined,
       "http",
-    );
-  } catch {
+    ).catch(() => null);
+    if (actor) break;
+  }
+  if (!actor) {
     await unauthenticated();
     throw unauthorized(reply, "invalid_token");
   }
@@ -354,15 +359,16 @@ export async function registerPublishApi(app: FastifyInstance) {
     },
   );
   // Projects (docs/specs/PROJECTS.md): a folder of linked pages, file by file.
+  const PROJECT_AUDIENCES = [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE];
   app.post("/api/v1/projects", { bodyLimit: 256 * 1024 }, async (req, reply) => {
-    const actor = await bearerActor(req, reply);
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     return withFieldErrors(() => beginProjectUpload(actor, req.body ?? {}));
   });
   app.put(
     "/api/v1/projects/:uploadId/files/:index",
     { bodyLimit: MAX_BYTES },
     async (req, reply) => {
-      const actor = await bearerActor(req, reply, "project-files");
+      const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
       const params = z
         .object({
           uploadId: uuid,
@@ -375,7 +381,7 @@ export async function registerPublishApi(app: FastifyInstance) {
     },
   );
   app.post("/api/v1/projects/:uploadId/finalize", async (req, reply) => {
-    const actor = await bearerActor(req, reply);
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     const uploadId = uuid.parse((req.params as { uploadId: string }).uploadId);
     const receipt = await finalizeProjectUpload(actor, uploadId);
     return {
