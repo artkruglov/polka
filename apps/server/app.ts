@@ -118,6 +118,7 @@ import {
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { createFolderInTransaction, folderNameSchema } from "./folders.ts";
 import { createStarCounter } from "./source-stars.ts";
 
 /** The GitHub star count of SOURCE_URL for the header (source-stars.ts); one cache per process. */
@@ -668,27 +669,10 @@ export async function createApp() {
   app.post("/api/folders", async (req) => {
     const actor = await identity(req),
       input = z
-        .object({ name: z.string().trim().min(1).max(80) })
+        .object({ name: folderNameSchema })
         .strict()
         .parse(req.body);
-    return transaction(async (c) => {
-      await lockActiveOwnerTenant(c, actor);
-      if (
-        +(
-          await c.query("SELECT count(*) FROM folders WHERE tenant_id=$1", [
-            actor.tenant,
-          ])
-        ).rows[0].count >= 100
-      )
-        throw new Problem(413, "quota", "В этой сборке доступно до 100 папок.");
-      const folder = { id: randomUUID(), name: input.name };
-      await c.query("INSERT INTO folders VALUES($1,$2,$3)", [
-        folder.id,
-        actor.tenant,
-        folder.name,
-      ]);
-      return folder;
-    });
+    return transaction((c) => createFolderInTransaction(c, actor, input.name));
   });
   app.get("/api/artifacts", async (req) => {
     const actor = await identity(req);
