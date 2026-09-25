@@ -33,11 +33,12 @@ import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { lockShelf, shelvesOf } from "./shelves.ts";
 import {
   lockOwner,
   MAX_ACTIVE_CONNECTIONS,
   MCP_AUDIENCE,
+  assertScopesFitRole,
 } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 
@@ -576,6 +577,12 @@ export async function authorizationDetails(
   return {
     // Which shelf the connector will save to, and how its owner signs in.
     account: await shelfSummary(actor.id),
+    // Where the agent may work: its own shelf and department shelves.
+    shelves: (await shelvesOf(actor.id)).map((shelf) => ({
+      id: shelf.id,
+      name: shelf.kind === "personal" ? null : shelf.name,
+      role: shelf.role,
+    })),
     requestId: row.id,
     client: {
       name: row.client_name,
@@ -603,6 +610,8 @@ const decisionSchema = z.discriminatedUnion("decision", [
       request: uuid,
       decision: z.literal("approve"),
       scopes: z.array(agentScopeSchema).min(1).max(AGENT_SCOPES.length),
+      /** A department shelf the account belongs to; absent: its own. */
+      shelfId: uuid.optional(),
     })
     .strict(),
   z.object({ request: uuid, decision: z.literal("deny") }).strict(),
@@ -658,13 +667,18 @@ export async function decideAuthorization(
         "invalid",
         "Сведения и статус нужны каждому подключению; остальные разрешения — только из запроса.",
       );
+    const tenant = input.shelfId ?? actor.tenant;
+    if (tenant !== actor.tenant) {
+      const shelf = await lockShelf(c, { id: actor.id, tenant }, "reader");
+      assertScopesFitRole(shelf.role, granted);
+    }
     const code = secret();
     await c.query(
       `UPDATE oauth_authorizations SET status='approved',tenant_id=$2,
          account_id=$3,granted_scopes=$4,code_hash=$5,
          code_expires_at=now()+$6*interval '1 second'
        WHERE id=$1`,
-      [row.id, actor.tenant, actor.id, granted, sha256(code), CODE_TTL_SECONDS],
+      [row.id, tenant, actor.id, granted, sha256(code), CODE_TTL_SECONDS],
     );
     return answer({ code });
   });
@@ -700,9 +714,12 @@ const lockOwnerOrInvalidGrant = (
   c: PoolClient,
   owner: { account_id: string; tenant_id: string },
 ) =>
-  lockActiveOwnerTenant(
+  // The connection's shelf, its own or a department's (docs/specs/TEAM_SHELVES.md).
+  lockShelf(
     c,
     { id: owner.account_id, tenant: owner.tenant_id },
+    "reader",
+    "UPDATE",
     () => invalidGrant(),
   );
 
@@ -784,13 +801,14 @@ async function exchangeCode(
       !timingSafeEqual(Buffer.from(challenge), Buffer.from(row.code_challenge))
     )
       return invalidGrant();
-    // One live connection per client and owner: re-authorizing replaces it.
+    // One live connection per client and account, on whichever shelf:
+    // re-authorizing replaces it, also when it moves the agent to another shelf.
     const { rows: previous } = await c.query(
       `SELECT id,tenant_id,account_id FROM agent_connections
-       WHERE tenant_id=$1 AND account_id=$2 AND oauth_client_id=$3
+       WHERE account_id=$1 AND oauth_client_id=$2
          AND revoked_at IS NULL
        ORDER BY id FOR UPDATE`,
-      [row.tenant_id, row.account_id, client.client_id],
+      [row.account_id, client.client_id],
     );
     // Check the quota before replacing anything: a refusal must leave the
     // previous connection working.
@@ -798,9 +816,9 @@ async function exchangeCode(
       rows: [active],
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
-       WHERE tenant_id=$1 AND revoked_at IS NULL AND expires_at>now()
+       WHERE tenant_id=$1 AND account_id=$3 AND revoked_at IS NULL AND expires_at>now()
          AND NOT (id = ANY($2::uuid[]))`,
-      [row.tenant_id, previous.map((connection) => connection.id)],
+      [row.tenant_id, previous.map((connection) => connection.id), row.account_id],
     );
     if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
       return new OAuthFailure(
