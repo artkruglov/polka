@@ -3,7 +3,9 @@ import { promisify } from "node:util";
 import type { FastifyRequest } from "fastify";
 import { db, transaction } from "./db.ts";
 import { sha256 } from "./storage.ts";
-import { Problem } from "./errors.ts";
+import { Problem, missing } from "./errors.ts";
+import { memberShelf, type ShelfRole } from "./shelves.ts";
+import { uuid } from "../../packages/contracts/index.ts";
 import { markActive, trackSignup } from "./analytics.ts";
 const derive = promisify(scrypt);
 export async function passwordHash(password: string) {
@@ -109,7 +111,19 @@ export async function signIn(name: string, password: string, ip: string) {
   });
   return token;
 }
-export async function identity(req: FastifyRequest) {
+/**
+ * The signed-in account and the shelf a request works on. By default its own
+ * (personal) shelf. A route that works on works — the shelf, folders, saving,
+ * search — passes { shelf: true }: then the header X-Polka-Shelf may name a
+ * department shelf the account is an active member of (docs/specs/
+ * TEAM_SHELVES.md), and `role` is its role there. Any other shelf is «not
+ * found». Account-level routes (agents, sign-in methods, deletion) never
+ * follow the header.
+ */
+export async function identity(
+  req: FastifyRequest,
+  options: { shelf?: boolean } = {},
+) {
   const {
     rows: [actor],
   } = await db.query(
@@ -124,10 +138,22 @@ export async function identity(req: FastifyRequest) {
     );
   // Returning activity for retention: one row per account and day.
   markActive(actor.id);
+  actor.role = "owner";
+  const requested = options.shelf ? req.headers["x-polka-shelf"] : undefined;
+  if (typeof requested === "string" && requested !== actor.tenant) {
+    const shelf = uuid.safeParse(requested).success
+      ? await memberShelf(db, actor.id, requested)
+      : null;
+    if (!shelf) throw missing();
+    actor.tenant = shelf.id;
+    actor.role = shelf.role;
+  }
   return actor as {
     id: string;
     name: string;
     tenant: string;
+    /** The account's role on that shelf: 'owner' on its own. */
+    role: ShelfRole;
     /** null for accounts older than the abuse-protection migration (029). */
     createdAt: Date | null;
     /** A provisional shelf nobody has claimed yet (provisional.ts). */
