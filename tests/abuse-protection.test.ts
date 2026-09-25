@@ -759,27 +759,44 @@ test("signals of a large page come back from the bounded worker; an unreadable p
 
 test("the phishing scan stays linear in the page size", () => {
   // Saving runs this on the request thread, like classifyHtml (see unit.test.ts).
-  const MB = 1024 * 1024;
-  const pages = [
-    "номер ".repeat(MB / 6),
-    `<p>${"подтвердите ".repeat(MB / 12)}</p>`,
-    `<input name="${"номер ".repeat(MB / 6)}">`,
-    `<input placeholder="${"код из ".repeat(MB / 7)}">`,
-    `<script>${"'\\".repeat(MB / 2)}</script>`,
-    `<script>${">a".repeat(MB / 2)}</script>`,
-    `<script>${"/*".repeat(MB / 2)}</script>`,
-    `<script>${"`${".repeat(MB / 3)}</script>`,
-    "<p>" + "сбер".repeat(MB / 4) + "</p>",
+  // Linear, not a wall-clock budget: a 4× larger input may take up to ~8×
+  // as long (quadratic would be 16×), so a loaded machine cannot fail it.
+  const pages = (size: number) => [
+    "номер ".repeat(size / 6),
+    `<p>${"подтвердите ".repeat(size / 12)}</p>`,
+    `<input name="${"номер ".repeat(size / 6)}">`,
+    `<input placeholder="${"код из ".repeat(size / 7)}">`,
+    `<script>${"'\\".repeat(size / 2)}</script>`,
+    `<script>${">a".repeat(size / 2)}</script>`,
+    `<script>${"/*".repeat(size / 2)}</script>`,
+    `<script>${"`${".repeat(size / 3)}</script>`,
+    "<p>" + "сбер".repeat(size / 4) + "</p>",
   ];
-  for (const page of pages) {
-    const started = performance.now();
-    inspectHtml(page);
-    const elapsed = performance.now() - started;
-    assert.ok(elapsed < 2_000, `${JSON.stringify(page.slice(0, 16))}: ${Math.round(elapsed)} ms`);
-  }
-  for (const source of [">".repeat(MB), "'".repeat(MB), "a>b<".repeat(MB / 4)]) {
-    const started = performance.now();
-    scanScript(source, new SignalCollector());
-    assert.ok(performance.now() - started < 2_000);
-  }
+  const scripts = (size: number) => [">".repeat(size), "'".repeat(size), "a>b<".repeat(size / 4)];
+  // Median of three runs; a small floor and margin absorb GC pauses.
+  const time = (run: () => void) =>
+    [0, 1, 2]
+      .map(() => {
+        const started = performance.now();
+        run();
+        return performance.now() - started;
+      })
+      .sort((x, y) => x - y)[1]!;
+  const linear = (label: string, small: () => void, large: () => void) => {
+    small(); // warm up
+    const a = Math.max(time(small), 20);
+    const b = time(large);
+    assert.ok(b < 8 * a + 150, `${label}: ${Math.round(a)} ms → ${Math.round(b)} ms`);
+  };
+  const MB = 1024 * 1024;
+  const largePages = pages(MB);
+  const largeScripts = scripts(MB);
+  pages(MB / 4).forEach((page, i) =>
+    linear(JSON.stringify(page.slice(0, 16)), () => inspectHtml(page), () => inspectHtml(largePages[i]!)),
+  );
+  scripts(MB / 4).forEach((source, i) =>
+    linear(JSON.stringify(source.slice(0, 4)),
+      () => scanScript(source, new SignalCollector()),
+      () => scanScript(largeScripts[i]!, new SignalCollector())),
+  );
 });
