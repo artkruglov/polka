@@ -273,6 +273,11 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(html.includes("SAML и SCIM пока"));
   assert.ok(html.includes('id="deploy"'));
   assert.ok(html.includes('id="request"'));
+  // What the first pilots shape is not built: every card of it says so.
+  const next = html.slice(html.indexOf("enterprise-next"), html.indexOf('id="deploy"'));
+  assert.ok(next.includes("Этого пока нет в коде"));
+  assert.equal((next.match(/в разработке/g) ?? []).length, 3);
+  assert.ok(html.includes("Как Полка работает с нашими системами?"));
   const questions = (html.match(/<details>/g) ?? []).length;
   assert.ok(questions >= 5 && questions <= 7, String(questions));
   // No invented price.
