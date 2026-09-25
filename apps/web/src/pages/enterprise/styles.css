@@ -203,6 +203,46 @@
   font-size: var(--text-xs);
 }
 
+/* How it works in a company: three numbered steps. */
+.enterprise-how {
+  margin-bottom: 88px;
+}
+.enterprise-how ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.enterprise-how li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 28px 24px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--canvas);
+}
+.enterprise-how small {
+  margin-bottom: 6px;
+  color: var(--muted-2);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.enterprise-how h3 {
+  margin-bottom: 10px;
+  font-size: var(--text-xl);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+.enterprise-how p {
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
 /* What the first pilots shape: the same cards, each marked «в разработке». */
 .enterprise-next {
   margin-bottom: 88px;
@@ -424,6 +464,9 @@
   .enterprise-plans {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .enterprise-how ol {
+    grid-template-columns: 1fr;
+  }
   .enterprise-faq,
   .enterprise-request {
     grid-template-columns: 1fr;
@@ -435,6 +478,7 @@
     padding: 28px var(--gutter-mobile) 48px;
   }
   .enterprise-hero,
+  .enterprise-how,
   .enterprise-values,
   .enterprise-next,
   .enterprise-deploy,
