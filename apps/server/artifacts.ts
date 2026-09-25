@@ -34,6 +34,11 @@ import {
 } from "./content-filter/scanner.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
+  mergeSensitive,
+  sensitiveFields,
+  type SensitiveInput,
+} from "./content-filter/sensitive-input.ts";
+import {
   blockRevisionInTransaction,
   blockedHash,
   queueReview,
@@ -565,15 +570,17 @@ export async function finalizeUploadInTransaction(
   const htmlProfile = inspection?.profile ?? null;
   // The content filter: a page's findings come with its inspection; a text
   // file is read the same way; an image has no text (the model sees it when
-  // a link is made).
-  const contentFilter: FilterResult =
-    inspection?.filter ??
-    (input.mime === "text/plain"
+  // a link is made). Only a page can ask the reader to type anything
+  // (sensitiveInput); a page that could not be read in time stays unknown.
+  const contentFilter: FilterResult = inspection?.filter ?? {
+    ...(input.mime === "text/plain"
       ? await scanTextBounded(bytes.toString("utf8"))
       : input.mime === LINK_MIME
         ? // The link's address (and the listed domains in it), title and note.
           await scanTextBounded(linkText(input.title, bytes))
-        : { v: 1, hits: {} });
+        : { v: 1 as const, hits: {} }),
+    sensitiveInput: false,
+  };
   let revisionManifest: ReturnType<
     typeof createSingleHtmlRevisionManifest
   > | null = null;
@@ -1004,10 +1011,14 @@ export async function finalizeBundleUploadInTransaction(
   // the same bounded (off-thread, deadline) parse as the profile.
   const signals = new SignalCollector();
   const pageFilters: FilterResult[] = [];
+  // Fields for secrets: every page's verdict (absent when it was not read)
+  // and the scripts' (read by `signals`).
+  const pageSensitive: Array<SensitiveInput | undefined> = [];
   const inspectPage = async (bytes: Buffer) => {
     const inspection = await inspectHtmlBounded(bytes.toString("utf8"));
     for (const signal of inspection.signals) signals.add(signal);
     pageFilters.push(inspection.filter);
+    pageSensitive.push(inspection.sensitive);
     return inspection.profile;
   };
   for (const [index, file] of input.manifest.files.entries()) {
@@ -1066,6 +1077,10 @@ export async function finalizeBundleUploadInTransaction(
   );
   const fraud = fraudScore(signals.list());
   if (fraud) contentFilter.hits.fraud = fraud;
+  Object.assign(
+    contentFilter,
+    sensitiveFields(mergeSensitive(signals.sensitive.result(), ...pageSensitive)),
+  );
   await c.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter)
        VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
