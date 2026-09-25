@@ -1456,6 +1456,7 @@ async function remapAndClose(
       "UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,clock_timestamp()) WHERE revoked_at IS NULL",
     );
     await client.query("DELETE FROM viewer_grants");
+    await client.query("DELETE FROM project_view_grants");
     await client.query("DELETE FROM grants");
     await client.query("DELETE FROM agent_connection_csrf");
     await client.query("DELETE FROM sessions");
@@ -1500,6 +1501,7 @@ async function verify(
        (SELECT count(*)::int FROM sessions) AS sessions,
        (SELECT count(*)::int FROM grants) AS grants,
        (SELECT count(*)::int FROM viewer_grants) AS viewer_grants,
+       (SELECT count(*)::int FROM project_view_grants) AS project_view_grants,
        (SELECT count(*)::int FROM agent_connection_csrf) AS csrf,
        (SELECT count(*)::int FROM login_challenges) AS challenges,
        (SELECT count(*)::int FROM upload_files uf JOIN uploads u ON u.id=uf.upload_id WHERE u.id=$1) AS dead_files,

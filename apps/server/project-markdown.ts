@@ -127,6 +127,53 @@ export function renderProjectMarkdown(
   return { title: title || posix.basename(path), body };
 }
 
+// Bounds for drawing a document (marked is quadratic on some inputs, e.g.
+// «*a *a *a …»: 48 KB take ~20 s). A small one is drawn at once; a larger
+// one in a worker with a deadline; a huge one, or one that runs out of
+// time, is shown as plain text. A version is immutable, so each drawn page
+// is kept for the next reader.
+export const MARKDOWN_INLINE_CHARS = 4 * 1024;
+export const MARKDOWN_MAX_CHARS = 512 * 1024;
+export const MARKDOWN_DEADLINE_MS = 3_000;
+const CACHE_ENTRIES = 300;
+const drawn = new Map<string, ProjectPage>();
+
+const plainPage = (source: string, path: string): ProjectPage => ({
+  title: posix.basename(path),
+  body: `<p class="polka-outside">Документ показан как текст: он слишком большой или сложный для оформления.</p><pre><code>${escapeHtml(source)}</code></pre>`,
+});
+
+export async function renderProjectMarkdownBounded(
+  source: string,
+  path: string,
+  paths: ReadonlySet<string>,
+  cacheKey: string,
+): Promise<ProjectPage> {
+  const cached = drawn.get(cacheKey);
+  if (cached) {
+    drawn.delete(cacheKey);
+    drawn.set(cacheKey, cached);
+    return cached;
+  }
+  let page: ProjectPage;
+  if (source.length > MARKDOWN_MAX_CHARS) page = plainPage(source, path);
+  else if (source.length <= MARKDOWN_INLINE_CHARS)
+    page = renderProjectMarkdown(source, path, paths);
+  else {
+    const { inWorker } = await import("./html.ts");
+    page =
+      (await inWorker<ProjectPage | null>(
+        { source, path, paths: [...paths] },
+        MARKDOWN_DEADLINE_MS,
+        null,
+        new URL("./project-markdown-worker.mjs", import.meta.url),
+      )) ?? plainPage(source, path);
+  }
+  drawn.set(cacheKey, page);
+  if (drawn.size > CACHE_ENTRIES) drawn.delete(drawn.keys().next().value!);
+  return page;
+}
+
 function splitFragment(href: string): [string, string] {
   const at = href.indexOf("#");
   return at === -1 ? [href, ""] : [href.slice(0, at), href.slice(at + 1)];

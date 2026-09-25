@@ -114,6 +114,8 @@ export async function backfillSearch(
          JOIN revisions r ON r.id=a.latest_revision_id
          LEFT JOIN artifact_search s ON s.artifact_id=a.id
          WHERE a.id>$1 AND r.content_purged_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
+                           WHERE b.revision_id=r.id AND b.released_at IS NULL)
            AND r.mime IN ('text/html','text/plain',$3)
            AND (s.artifact_id IS NULL OR s.revision_id<>r.id)
            AND ($4::uuid[] IS NULL OR a.id=ANY($4::uuid[]))
@@ -135,13 +137,24 @@ export async function backfillSearch(
       options.log?.(`${row.artifact_id} ${text.trim() ? `${text.length} chars` : "empty"}`);
       if (options.dryRun || !text.trim()) continue;
       const written = await transaction(async (c) => {
+        // Still the latest version, not purged and not blocked since it was
+        // read: text moderation erased must not come back (purgeBlock).
         const {
           rows: [current],
         } = await c.query(
-          "SELECT latest_revision_id FROM artifacts WHERE id=$1 FOR UPDATE",
-          [row.artifact_id],
+          `SELECT a.latest_revision_id,r.content_purged_at,
+             EXISTS (SELECT 1 FROM moderation_blocks b
+                     WHERE b.revision_id=r.id AND b.released_at IS NULL) AS blocked
+           FROM artifacts a JOIN revisions r ON r.id=$2
+           WHERE a.id=$1 FOR UPDATE OF a, r`,
+          [row.artifact_id, row.revision_id],
         );
-        if (current?.latest_revision_id !== row.revision_id) return false;
+        if (
+          current?.latest_revision_id !== row.revision_id ||
+          current.content_purged_at ||
+          current.blocked
+        )
+          return false;
         await indexRevisionText(c, row.artifact_id, row.revision_id, text);
         return true;
       });

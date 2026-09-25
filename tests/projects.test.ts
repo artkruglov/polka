@@ -20,6 +20,11 @@ import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
+import { revisionMaterial } from "../apps/server/content-moderation.ts";
+import {
+  MARKDOWN_DEADLINE_MS,
+  renderProjectMarkdownBounded,
+} from "../apps/server/project-markdown.ts";
 
 const app = await createApp();
 const password = randomBytes(24).toString("hex");
@@ -231,4 +236,42 @@ test("the CLI publishes a folder, skipping what a reader never opens", async () 
   } finally {
     await new Promise<void>((resolve) => app.server.close(() => resolve()));
   }
+});
+
+test("the models read every document and page of a project", async () => {
+  const { finalized } = await upload(await token(), research(), "README.md");
+  const receipt = finalized!.json();
+  const { rows: [revision] } = await db.query(
+    `SELECT id,mime,filename,storage_kind,object_key,object_version,size,manifest->>'runtime' AS runtime
+     FROM revisions WHERE id=$1`,
+    [receipt.revisionId],
+  );
+  const material = await revisionMaterial(revision);
+  assert.match(material.text, /## README\.md/);
+  assert.match(material.text, /## 02-users\/stories\.md\n# Истории\n\nМенеджер готовит/);
+  assert.match(material.text, /## screens\/index\.html/);
+});
+
+test("a big or tangled document is shown as text, not drawn on the request thread", async () => {
+  const paths = new Set(["README.md"]);
+  const small = await renderProjectMarkdownBounded("# Привет\n\nТекст.", "README.md", paths, `t:${randomUUID()}`);
+  assert.match(small.body, /<h1 id="привет">Привет<\/h1>/);
+  const started = performance.now();
+  const tangled = await renderProjectMarkdownBounded("*a ".repeat(200_000), "README.md", paths, `t:${randomUUID()}`);
+  assert.ok(performance.now() - started < MARKDOWN_DEADLINE_MS + 12_000);
+  assert.match(tangled.body, /показан как текст/);
+  const huge = await renderProjectMarkdownBounded("x".repeat(600 * 1024), "README.md", paths, `t:${randomUUID()}`);
+  assert.match(huge.body, /показан как текст/);
+});
+
+test("expired grants of every kind that maintenance may delete are cleaned up and watched", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const cleanup = await readFile(new URL("../scripts/maintenance-cleanup.ts", import.meta.url), "utf8");
+  const status = await readFile(new URL("../apps/server/ops-status.ts", import.meta.url), "utf8");
+  const drill = await readFile(new URL("../scripts/restore-drill.ts", import.meta.url), "utf8");
+  for (const table of ["viewer_grants", "project_view_grants", "grants"]) {
+    assert.ok(cleanup.includes(`DELETE FROM ${table} WHERE expires_at<now()`), `cleanup: ${table}`);
+    assert.ok(status.includes(`FROM ${table} WHERE expires_at<now()`), `ops-status: ${table}`);
+  }
+  assert.ok(drill.includes('DELETE FROM project_view_grants"'));
 });
