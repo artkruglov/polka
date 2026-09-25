@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
+import { Building2, ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import {
   client,
@@ -281,7 +281,13 @@ export function ShelfSwitcher({
     ...(current.kind === "team"
       ? [{ id: "members", label: "Участники полки", icon: <Users />, onSelect: onMembers }]
       : []),
-    ...(canCreate ? [{ id: "create", label: "Новая полка отдела", icon: <Plus />, onSelect: onCreate }] : []),
+    ...(canCreate
+      ? [
+          { id: "create", label: "Новая полка отдела", icon: <Plus />, onSelect: onCreate },
+          // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4).
+          { id: "company", label: "Полки компании", icon: <Building2 />, onSelect: () => location.assign("/settings/company") },
+        ]
+      : []),
   ];
   return (
     <div className="shelf-switcher">
