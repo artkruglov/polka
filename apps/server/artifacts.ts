@@ -392,6 +392,16 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
     [revisionId],
   );
   if (!r) throw missing();
+  // A project opens in the project viewer (docs/specs/PROJECTS.md), which
+  // needs the viewer domain; there is nothing to build for it.
+  if (r.storage_kind === "bundle" && r.manifest?.runtime === PROJECT_RUNTIME) {
+    if (config.HTML_LIVE_ENABLED) return null;
+    throw new Problem(
+      422,
+      "unsupported",
+      "Проект открывается на домене просмотра, а на этой установке он не настроен. Ссылку не выпускаем; проект можно скачать.",
+    );
+  }
   if (r.storage_kind === "bundle") {
     if (config.HTML_LIVE_ENABLED && r.derivative_id)
       return r.derivative_id as string;

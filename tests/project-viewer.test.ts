@@ -163,6 +163,8 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   assert.equal(folder.headers.location, url + "screens/index.html");
   // Resources go only to a page asking for their kind.
   assert.equal((await view(url + "screens/shared/ui.css", "style", "no-cors")).statusCode, 200);
+  // A font is fetched in CORS mode from a sandboxed page (origin "null").
+  assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).headers["access-control-allow-origin"], undefined);
   assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).headers["content-type"], "image/png");
   assert.equal((await view(url + "screens/shared/ui.css", "script", "no-cors")).statusCode, 404);
   assert.equal((await view(url + "screens/index.html", "script", "no-cors")).statusCode, 404);
@@ -186,4 +188,45 @@ test("the view ends with the session and with the trash", async () => {
   const again = await issue();
   await db.query("DELETE FROM sessions WHERE account_id=$1", [owner.id]);
   assert.equal((await view(again)).statusCode, 404);
+});
+
+test("a link opens the whole project for a recipient until it is revoked", async () => {
+  // The test above ended the owner's sessions.
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: owner.name, password },
+  });
+  cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
+  const shared = await app.inject({
+    method: "POST",
+    url: `/api/artifacts/${saved.artifactId}/share`,
+    headers: { origin, cookie },
+    payload: { expectedRevisionId: saved.revisionId, expiresInDays: 7 },
+  });
+  assert.equal(shared.statusCode, 200, shared.body);
+  const token = new URL(shared.json().share.url).hash.slice(1);
+  const resolved = await app.inject({
+    method: "POST",
+    url: "/api/resolve",
+    headers: { origin, "content-type": "application/json" },
+    payload: JSON.stringify({ token }),
+  });
+  assert.equal(resolved.statusCode, 200, resolved.body);
+  assert.equal(resolved.json().revision.manifest.runtime, "project-v1");
+  const issued = await app.inject({
+    method: "POST",
+    url: "/api/view/project-view",
+    headers: { origin, authorization: `Bearer ${resolved.json().grant}` },
+  });
+  assert.equal(issued.statusCode, 200, issued.body);
+  const url = issued.json().url as string;
+  assert.equal((await view(url)).statusCode, 200);
+  assert.equal((await view(url + "02-users/stories.md")).statusCode, 200);
+  // The view follows the link, not the 60-second grant it was issued from.
+  await db.query("UPDATE grants SET expires_at=now()-interval '1 second' WHERE share_id=$1", [shared.json().share.id]);
+  assert.equal((await view(url + "screens/index.html")).statusCode, 200);
+  await db.query("UPDATE shares SET revoked=true WHERE id=$1", [shared.json().share.id]);
+  assert.equal((await view(url)).statusCode, 404);
 });
