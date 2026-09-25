@@ -1,4 +1,4 @@
--- Operator-reviewed grants for the isolated account purge worker at schema 042.
+-- Operator-reviewed grants for the isolated account purge worker at schema 043.
 -- The worker role and password are provisioned separately. Run this recipe as
 -- the actual schema owner of a dedicated Polka database.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -58,10 +58,10 @@ BEGIN
     RAISE EXCEPTION 'Require a dedicated public schema and objects owned by schema_owner';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>42
+     OR (SELECT count(*) FROM public.schema_migrations)<>43
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>42 THEN
-    RAISE EXCEPTION 'Purge grants require exactly migrations 001 through 042';
+     OR (SELECT max(version) FROM public.schema_migrations)<>43 THEN
+    RAISE EXCEPTION 'Purge grants require exactly migrations 001 through 043';
   END IF;
 END $$;
 
@@ -93,4 +93,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner"
 ALTER DEFAULT PRIVILEGES FOR ROLE :"schema_owner" IN SCHEMA public
   REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC, :"worker_role";
 COMMIT;
-\echo Purge worker grants installed for reviewed schema through migration 042
+\echo Purge worker grants installed for reviewed schema through migration 043

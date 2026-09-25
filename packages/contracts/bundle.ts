@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { MAX_BYTES, MAX_TITLE, MIME, sourceUrlSchema, uuid } from "./index.ts";
+import {
+  MAX_BYTES,
+  MAX_TITLE,
+  MIME,
+  PROJECT_MAX_BYTES,
+  PROJECT_MAX_FILES,
+  sourceUrlSchema,
+  uuid,
+} from "./index.ts";
 
 const BUNDLE_MIME = [
   ...MIME,
@@ -8,7 +16,14 @@ const BUNDLE_MIME = [
   "application/json",
   "image/svg+xml",
   "font/woff2",
+  // Projects only (docs/specs/PROJECTS.md): documents and screen recordings.
+  "text/markdown",
+  "image/gif",
 ] as const;
+const PROJECT_ONLY_MIME = new Set<string>(["text/markdown", "image/gif"]);
+/** A project's entry: its README, an index document or an index page. */
+export const PROJECT_ENTRY_MIME = new Set<string>(["text/markdown", "text/html"]);
+export const PROJECT_RUNTIME = "project-v1";
 
 const pathSchema = z
   .string()
@@ -101,8 +116,9 @@ const manifestInputSchema = z
       "static-sandbox-v1",
       "inline-live-experimental-v1",
       "preserved-only-v1",
+      PROJECT_RUNTIME,
     ]),
-    files: z.array(fileSchema).min(1).max(64),
+    files: z.array(fileSchema).min(1).max(PROJECT_MAX_FILES),
     provenance: provenanceSchema,
     dependencies: dependenciesSchema,
   })
@@ -125,12 +141,29 @@ const manifestInputSchema = z
         });
       else paths.set(key, { path: file.path, size: file.size, index });
     }
-    if (total < 1 || total > MAX_BYTES)
+    // A project holds many pages; a bundle is one page with its resources.
+    const project = value.runtime === PROJECT_RUNTIME;
+    const maxTotal = project ? PROJECT_MAX_BYTES : MAX_BYTES;
+    if (total < 1 || total > maxTotal)
       context.addIssue({
         code: "custom",
         path: ["files"],
-        message: `total file size must be between 1 and ${MAX_BYTES} bytes`,
+        message: `total file size must be between 1 and ${maxTotal} bytes`,
       });
+    if (!project && value.files.length > 64)
+      context.addIssue({
+        code: "custom",
+        path: ["files"],
+        message: "a bundle holds at most 64 files; a project up to " + PROJECT_MAX_FILES,
+      });
+    if (!project)
+      for (const [index, file] of value.files.entries())
+        if (PROJECT_ONLY_MIME.has(file.mime))
+          context.addIssue({
+            code: "custom",
+            path: ["files", index, "mime"],
+            message: `${file.mime} is for projects only`,
+          });
     const entry = value.files.find((file) => file.path === value.entrypoint);
     if (!entry)
       context.addIssue({
@@ -139,11 +172,15 @@ const manifestInputSchema = z
         message: "entrypoint must exactly match one file path",
       });
     else {
-      if (entry.mime !== "text/html")
+      if (
+        project ? !PROJECT_ENTRY_MIME.has(entry.mime) : entry.mime !== "text/html"
+      )
         context.addIssue({
           code: "custom",
           path: ["entrypoint"],
-          message: "entrypoint must be text/html",
+          message: project
+            ? "a project's entrypoint must be text/markdown or text/html"
+            : "entrypoint must be text/html",
         });
       if (entry.size === 0)
         context.addIssue({

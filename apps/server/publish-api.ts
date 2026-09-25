@@ -1,7 +1,17 @@
 import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { HTML_PROFILES, uuid } from "../../packages/contracts/index.ts";
+import {
+  HTML_PROFILES,
+  MAX_BYTES,
+  PROJECT_MAX_FILES,
+  uuid,
+} from "../../packages/contracts/index.ts";
+import {
+  beginProjectUpload,
+  finalizeProjectUpload,
+  putProjectFile,
+} from "./project-upload.ts";
 import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
 import { reviseWithEdits } from "./agent-edits.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
@@ -31,6 +41,8 @@ export const PUBLISH_API_PATHS = new Set([
 /** The machine routes of this API: bearer only, exempt from the browser Origin rule. */
 export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
+  pathname === "/api/v1/projects" ||
+  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|finalize)$/i.test(pathname) ||
   /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
 
 export const editsBodySchema = z
@@ -43,7 +55,11 @@ export const editsBodySchema = z
     moveLink: z.boolean().default(false),
   })
   .strict();
-export const PUBLISH_API_LIMITS = { perIp: 300, perConnection: 120 };
+export const PUBLISH_API_LIMITS = {
+  perIp: 300,
+  perConnection: 120,
+  projectFilesPerConnection: 2 * PROJECT_MAX_FILES,
+};
 export const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
 
 /**
@@ -200,8 +216,16 @@ const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
  */
 export const EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
 
-/** Bearer only: cookies are never read, and a browser Origin other than Полка (or an extension) is refused. */
-async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
+/**
+ * Bearer only: cookies are never read, and a browser Origin other than Полка
+ * (or an extension) is refused. A project's files are counted apart: one
+ * project may hold PROJECT_MAX_FILES of them (docs/specs/PROJECTS.md).
+ */
+async function bearerActor(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  bucket: "calls" | "project-files" = "calls",
+) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
   const unauthenticated = () =>
@@ -237,8 +261,12 @@ async function bearerActor(req: FastifyRequest, reply: FastifyReply) {
     throw unauthorized(reply, "invalid_token");
   }
   await limitAttempts(
-    `api-v1:connection:${actor.connectionId}`,
-    PUBLISH_API_LIMITS.perConnection,
+    bucket === "calls"
+      ? `api-v1:connection:${actor.connectionId}`
+      : `api-v1:project-files:${actor.connectionId}`,
+    bucket === "calls"
+      ? PUBLISH_API_LIMITS.perConnection
+      : PUBLISH_API_LIMITS.projectFilesPerConnection,
   );
   return actor;
 }
@@ -324,6 +352,36 @@ export async function registerPublishApi(app: FastifyInstance) {
       return signInLinkResponseSchema.parse(await issueSignInLink(actor));
     },
   );
+  // Projects (docs/specs/PROJECTS.md): a folder of linked pages, file by file.
+  app.post("/api/v1/projects", { bodyLimit: 256 * 1024 }, async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return withFieldErrors(() => beginProjectUpload(actor, req.body ?? {}));
+  });
+  app.put(
+    "/api/v1/projects/:uploadId/files/:index",
+    { bodyLimit: MAX_BYTES },
+    async (req, reply) => {
+      const actor = await bearerActor(req, reply, "project-files");
+      const params = z
+        .object({
+          uploadId: uuid,
+          index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+        })
+        .parse(req.params);
+      if (!Buffer.isBuffer(req.body))
+        throw new Problem(415, "invalid", "Send the file as application/octet-stream.");
+      return putProjectFile(actor, params.uploadId, params.index, req.body);
+    },
+  );
+  app.post("/api/v1/projects/:uploadId/finalize", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    const uploadId = uuid.parse((req.params as { uploadId: string }).uploadId);
+    const receipt = await finalizeProjectUpload(actor, uploadId);
+    return {
+      ...receipt,
+      shelfUrl: `${config.APP_ORIGIN}/works/${receipt.artifactId}`,
+    };
+  });
   app.get("/api/v1/status/:artifactId", async (req, reply) => {
     const actor = await bearerActor(req, reply);
     const artifact = await withFieldErrors(() =>
