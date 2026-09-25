@@ -361,9 +361,13 @@ test("official client discovers and performs scoped management without web mutat
     [
       "polka_comments",
       "polka_context",
+      "polka_create_folder",
+      "polka_delete_folder",
       "polka_get_artifact",
       "polka_list",
       "polka_list_folders",
+      "polka_move",
+      "polka_rename_folder",
       "polka_restore",
       "polka_status",
       "polka_trash",
@@ -415,6 +419,42 @@ test("official client discovers and performs scoped management without web mutat
   assert.equal(replayed.replayed, true);
   assert.deepEqual(replayed.applied, updated.applied);
 
+  // Folders through the transport: create, move into it, a refusal as fields.
+  const createdFolder = (
+    await client.callTool({
+      name: "polka_create_folder",
+      arguments: { key: randomUUID(), name: `MCP folder ${randomUUID()}` },
+    })
+  ).structuredContent as any;
+  assert.equal(createdFolder.replayed, false);
+  const movedWorks = (
+    await client.callTool({
+      name: "polka_move",
+      arguments: {
+        key: randomUUID(),
+        artifactIds: [saved.artifactId],
+        folderId: createdFolder.applied.id,
+      },
+    })
+  ).structuredContent as any;
+  assert.deepEqual(movedWorks.applied.moved, [saved.artifactId]);
+  const notEmpty = await client.callTool({
+    name: "polka_delete_folder",
+    arguments: { key: randomUUID(), folderId: createdFolder.applied.id },
+  });
+  assert.equal(notEmpty.isError, true);
+  assert.equal((notEmpty.structuredContent as any).reason, "folder_not_empty");
+  const listedAfterMove = (
+    await client.callTool({
+      name: "polka_list",
+      arguments: { folderId: createdFolder.applied.id },
+    })
+  ).structuredContent as any;
+  assert.deepEqual(
+    listedAfterMove.items.map((item: any) => [item.id, item.folderName]),
+    [[saved.artifactId, createdFolder.applied.name]],
+  );
+
   const trashed = (
     await client.callTool({
       name: "polka_trash",
@@ -452,7 +492,15 @@ test("official client discovers and performs scoped management without web mutat
   const manageOnly = await mcpClient(manageOnlyIssued.token);
   assert.deepEqual(
     (await manageOnly.listTools()).tools.map((tool) => tool.name).sort(),
-    ["polka_restore", "polka_trash", "polka_update_artifact"],
+    [
+      "polka_create_folder",
+      "polka_delete_folder",
+      "polka_move",
+      "polka_rename_folder",
+      "polka_restore",
+      "polka_trash",
+      "polka_update_artifact",
+    ],
   );
   await manageOnly.close();
 

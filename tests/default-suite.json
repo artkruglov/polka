@@ -48,6 +48,7 @@
   "tests/shelf-pagination.test.ts",
   "tests/restore-drill.test.ts",
   "tests/agent-management.test.ts",
+  "tests/agent-folders.test.ts",
   "tests/agent-capture.test.ts",
   "tests/single-file-bundle-share.test.ts",
   "tests/mcp-oauth.test.ts",
