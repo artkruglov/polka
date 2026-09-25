@@ -126,7 +126,7 @@ test("the skill line names the same package on the landing, in /connect, llms.tx
   }
   assert.match(
     connectGuide(origin),
-    /Для Claude Code и Codex есть скилл Полки/,
+    /Плагин для Claude Code и Codex \(команды выше\) ставит их сам/,
   );
   assert.match(skillDescription(origin), /Открой на Полке работу/);
 });

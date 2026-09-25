@@ -43,13 +43,10 @@ const FILE_SAVE_LOGIN = `/signup?next=${encodeURIComponent("/bring#file")}`;
 export function FileSave({
   initialFolderId = "",
   renderPreview,
-  embedded = false,
   titled = true,
 }: {
   initialFolderId?: string;
   renderPreview: (revision: Revision, compact: boolean) => React.ReactNode;
-  /** Rendered inside the link guide: no heading of its own, no page anchor. */
-  embedded?: boolean;
   /** False when a surrounding tab already names the card: the heading stays for screen readers. */
   titled?: boolean;
 }) {
@@ -65,8 +62,8 @@ export function FileSave({
     busy = upload.busy;
 
   useEffect(() => {
-    if (!embedded && location.hash === "#file") card.current?.scrollIntoView();
-  }, [embedded]);
+    if (location.hash === "#file") card.current?.scrollIntoView();
+  }, []);
 
   const pick = (f: File | undefined) => {
     if (!f) return;
@@ -108,11 +105,10 @@ export function FileSave({
 
   return (
     <section
-      className={embedded ? "file-save file-save--embedded" : "file-save"}
-      id={embedded ? undefined : "file"}
+      className="file-save"
+      id="file"
       ref={card}
-      aria-labelledby={embedded ? undefined : "file-save-title"}
-      aria-label={embedded ? "Загрузить скачанный файл" : undefined}
+      aria-labelledby="file-save-title"
     >
       {saved?.work ? (
         <SavedWork
@@ -121,7 +117,7 @@ export function FileSave({
           renderPreview={renderPreview}
           onRestart={restart}
           restartLabel="Сохранить другой файл"
-          headingId={embedded ? undefined : "file-save-title"}
+          headingId="file-save-title"
         />
       ) : saved ? (
         <SavedReceipt
@@ -134,18 +130,14 @@ export function FileSave({
         />
       ) : (
         <div className="bring-entry file-save-entry">
-          {!embedded && (
-            <>
-              <div className={titled ? "file-save-head" : "file-save-head sr-only"}>
-                <h2 id="file-save-title">Загрузить файл</h2>
-              </div>
-              <p className="file-save-hint">
-                HTML из чата, заметка или изображение. Сначала откроется
-                сохранённый вид; интерактивный просмотр, если он доступен,
-                запускается отдельно.
-              </p>
-            </>
-          )}
+          <div className={titled ? "file-save-head" : "file-save-head sr-only"}>
+            <h2 id="file-save-title">Загрузить файл</h2>
+          </div>
+          <p className="file-save-hint">
+            HTML из чата, заметка или изображение. Сначала откроется
+            сохранённый вид; интерактивный просмотр, если он доступен,
+            запускается отдельно.
+          </p>
           <label
             className={dragging ? "file-field dragging" : "file-field"}
             data-picked={!!file}

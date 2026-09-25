@@ -25,6 +25,6 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/landing") return null;
   if (path === "/bring/receive") return "На Полку";
   if (path === "/bookmarklet") return "Закладка «На Полку»";
-  if (path.startsWith("/bring")) return "Ссылка, которую легко отправить";
+  if (path.startsWith("/bring")) return "Сохранить работу";
   return undefined;
 }
