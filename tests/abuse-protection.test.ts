@@ -736,6 +736,15 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
   );
 });
 
+test("the worker's start does not count against a page's scan deadline", async () => {
+  // Loading tsx and the classifier in a fresh worker takes longer than this
+  // deadline on its own; the clock starts only once the worker is ready.
+  const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(3_000)}</p>`;
+  assert.ok(page.length > 16 * 1024);
+  const read = await inspectHtmlBounded(page, 200);
+  assert.deepEqual({ profile: read.profile, signals: read.signals }, { profile: "static", signals: [] });
+});
+
 test("signals of a large page come back from the bounded worker; an unreadable page counts as suspicious", async () => {
   const padding = `<p>${"Обычный абзац текста страницы. ".repeat(1_000)}</p>`;
   const large = PHISHING.replace("</body>", `${padding}</body>`);

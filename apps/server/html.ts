@@ -597,12 +597,46 @@ export function classifyHtml(source: string): HtmlProfile {
  */
 export const CLASSIFY_INLINE_BYTES = 16 * 1024;
 export const CLASSIFY_DEADLINE_MS = 2_000;
+const WORKER_START_MS = 10_000;
 export const UNREAD: HtmlInspection = {
   profile: "unsupported",
   signals: [SCAN_INCOMPLETE],
   filter: { v: 1, hits: { fraud: fraudScore([SCAN_INCOMPLETE])! } },
 };
 export type InspectOptions = { images?: boolean; sample?: boolean; scripts?: boolean };
+/**
+ * Runs one message through a fresh classify worker. The deadline bounds the
+ * scan, not the worker's start: the worker says it is ready (tsx and the
+ * classifier loaded) before it gets the source, and only then does the clock
+ * start. On a loaded host loading alone can take seconds, and a normal page
+ * must not come out «unsupported» with scan:incomplete for it. Startup has
+ * its own, looser bound.
+ */
+async function inWorker<T>(message: object, deadlineMs: number, unread: T): Promise<T> {
+  const { Worker } = await import("node:worker_threads");
+  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
+    resourceLimits: { maxOldGenerationSizeMb: 256 },
+  });
+  try {
+    return await new Promise<T>((resolve) => {
+      let timer = setTimeout(() => resolve(unread), WORKER_START_MS);
+      worker.on("message", (reply: T | { ready: true }) => {
+        clearTimeout(timer);
+        if (reply && typeof reply === "object" && "ready" in reply) {
+          timer = setTimeout(() => resolve(unread), deadlineMs);
+          worker.postMessage(message);
+        } else resolve(reply as T);
+      });
+      worker.once("error", () => {
+        clearTimeout(timer);
+        resolve(unread);
+      });
+    });
+  } finally {
+    await worker.terminate();
+  }
+}
+
 export async function inspectHtmlBounded(
   source: string,
   deadlineMs = CLASSIFY_DEADLINE_MS,
@@ -610,26 +644,7 @@ export async function inspectHtmlBounded(
 ): Promise<HtmlInspection> {
   if (source.length <= CLASSIFY_INLINE_BYTES)
     return inspectHtml(source, new SignalCollector(options));
-  const { Worker } = await import("node:worker_threads");
-  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
-    resourceLimits: { maxOldGenerationSizeMb: 256 },
-  });
-  try {
-    return await new Promise<HtmlInspection>((resolve) => {
-      const timer = setTimeout(() => resolve(UNREAD), deadlineMs);
-      worker.once("message", (inspection: HtmlInspection) => {
-        clearTimeout(timer);
-        resolve(inspection);
-      });
-      worker.once("error", () => {
-        clearTimeout(timer);
-        resolve(UNREAD);
-      });
-      worker.postMessage({ source, options });
-    });
-  } finally {
-    await worker.terminate();
-  }
+  return inWorker({ source, options }, deadlineMs, UNREAD);
 }
 
 /**
@@ -642,27 +657,8 @@ export async function scanTextBounded(
   deadlineMs = CLASSIFY_DEADLINE_MS,
 ): Promise<FilterResult & { incomplete?: true }> {
   if (source.length <= CLASSIFY_INLINE_BYTES) return scanText(source);
-  const { Worker } = await import("node:worker_threads");
-  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
-    resourceLimits: { maxOldGenerationSizeMb: 256 },
-  });
   const unread = { v: 1 as const, hits: {}, incomplete: true as const };
-  try {
-    return await new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(unread), deadlineMs);
-      worker.once("message", (filter: FilterResult) => {
-        clearTimeout(timer);
-        resolve(filter);
-      });
-      worker.once("error", () => {
-        clearTimeout(timer);
-        resolve(unread);
-      });
-      worker.postMessage({ source, text: true });
-    });
-  } finally {
-    await worker.terminate();
-  }
+  return inWorker<FilterResult & { incomplete?: true }>({ source, text: true }, deadlineMs, unread);
 }
 
 export async function classifyHtmlBounded(
