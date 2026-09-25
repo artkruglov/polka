@@ -48,6 +48,7 @@
   "tests/artifact-metadata.test.ts",
   "tests/shelf-pagination.test.ts",
   "tests/content-search.test.ts",
+  "tests/team-shelves.test.ts",
   "tests/restore-drill.test.ts",
   "tests/agent-management.test.ts",
   "tests/agent-folders.test.ts",
