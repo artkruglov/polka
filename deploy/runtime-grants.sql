@@ -181,6 +181,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtim
 GRANT SELECT, INSERT, UPDATE ON TABLE public.tenant_members TO :"runtime_role";
 GRANT SELECT, INSERT ON TABLE public.tenant_member_events TO :"runtime_role";
 GRANT USAGE, SELECT ON SEQUENCE public.tenant_member_events_id_seq TO :"runtime_role";
--- Projects (043): only CHECK constraints change; no new tables.
+-- Projects (043): constraints change; the application issues project views
+-- and reads them on every request; maintenance deletes expired ones.
+GRANT SELECT, INSERT, DELETE ON TABLE public.project_view_grants TO :"runtime_role";
 COMMIT;
 \echo Runtime grants installed for the reviewed schema through migration 043

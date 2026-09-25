@@ -158,7 +158,7 @@ test("runtime has exact current grants and denied administrative paths", async (
          'comments','comment_reactions','account_identities','enterprise_requests',
          'moderation_events','moderation_blocks','analytics_events',
          'analytics_daily','analytics_active_days','analytics_optouts',
-         'artifact_search','tenant_members','tenant_member_events')
+         'artifact_search','tenant_members','tenant_member_events','project_view_grants')
        ORDER BY table_name,privilege_type`,
     )
   ).rows.map((row) => `${row.table_name}:${row.privilege_type}`);
@@ -199,6 +199,9 @@ test("runtime has exact current grants and denied administrative paths", async (
     "moderation_events:DELETE",
     "moderation_events:INSERT",
     "moderation_events:SELECT",
+    "project_view_grants:DELETE",
+    "project_view_grants:INSERT",
+    "project_view_grants:SELECT",
     "tenant_member_events:INSERT",
     "tenant_member_events:SELECT",
     "tenant_members:INSERT",
