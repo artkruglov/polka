@@ -64,6 +64,10 @@ import {
   issueRecipientStaticView,
 } from "./static-viewer.ts";
 import {
+  issueOwnerProjectView,
+  issueRecipientProjectView,
+} from "./project-viewer.ts";
+import {
   issueOwnerLiveView,
   issueRecipientLiveView,
   LIVE_HTML_PROFILE,
@@ -1023,6 +1027,15 @@ export async function createApp() {
       revisionId,
       withComments(req),
     );
+  });
+  // Projects (docs/specs/PROJECTS.md): a view of the whole folder, page by page.
+  app.post("/api/revisions/:id/project-view", async (req) => {
+    const actor = await identity(req);
+    return issueOwnerProjectView(actor, req.cookies.polka_session ?? "", id(req));
+  });
+  app.post("/api/view/project-view", async (req) => {
+    const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
+    return issueRecipientProjectView(grant);
   });
   app.post("/api/view/static-view", async (req) => {
     const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
