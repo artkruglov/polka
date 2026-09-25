@@ -1,3 +1,4 @@
+import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -324,6 +325,8 @@ async function prepare(
       !revision ||
       !buildableStorage(revision.storage_kind) ||
       revision.mime !== "text/html" ||
+      // A project opens in the project viewer; it is never built.
+      revision.manifest?.runtime === PROJECT_RUNTIME ||
       !revision.manifest_sha256
     )
       throw missing();

@@ -264,7 +264,9 @@ test("the row goes with the work", async () => {
 
 test("queries and script text: no tsquery syntax gets through", () => {
   assert.equal(prefixQuery("  "), null);
-  assert.equal(prefixQuery("Скидки & | ! (ритейл):*"), "скидки:* & ритейл:*");
+  assert.equal(prefixQuery("Скидки & | ! (ритейл):*"), "'скидки':* & 'ритейл':*");
+  assert.equal(prefixQuery("github.com anna@example.ru 3.14."), "'github.com':* & 'anna@example.ru':* & '3.14':*");
+  assert.equal(prefixQuery("it's"), "'it':* & 's':*");
   assert.equal(prefixQuery("a b c d e f g h i j")?.split(" & ").length, 8);
   const text = new SearchText();
   addScriptText(
@@ -296,4 +298,12 @@ test("the backfill does not bring back text of a purged version", async () => {
   } finally {
     await db.query("UPDATE revisions SET content_purged_at=NULL WHERE id=$1", [saved.revisionId]);
   }
+});
+
+test("an address, an e-mail and a version are found as written", async () => {
+  const saved = await saveSingle(
+    "<!doctype html><p>Код лежит на github.com/polka, пишите на anna@example.ru, версия 3.14.</p>",
+  );
+  for (const query of ["github.com", "anna@example.ru", "3.14", "githu"])
+    assert.ok((await search(query)).some((entry) => entry.id === saved.artifactId), query);
 });

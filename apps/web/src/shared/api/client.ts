@@ -468,6 +468,19 @@ export async function projectView(
   return { url: result.url, expiresAt: result.expiresAt };
 }
 
+/** A new view from the one the reader is on (its token is in its address). */
+export async function renewProjectView(url: string, signal?: AbortSignal) {
+  const token = new URL(url).pathname.split("/")[2] ?? "";
+  const result = await request<{ url: string; expiresAt: string }>(
+    "/view/project-view/renew",
+    { token },
+    "POST",
+    signal,
+  );
+  if (typeof result?.url !== "string") throw new Error("invalid_response");
+  return result;
+}
+
 export type PendingUpload = { file: Blob; key: string; id?: string };
 /** begin → bytes → finalize. Reusing `op` after a failure retries the same upload key. */
 export async function saveUpload(

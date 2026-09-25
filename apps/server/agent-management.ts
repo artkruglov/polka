@@ -252,7 +252,8 @@ export async function listArtifactsForAgent(
       cursor?.date ?? null,
       cursor?.id ?? null,
       input.limit + 1,
-      input.query ? prefixQuery(input.query) : null,
+      // The trash is found by title only, as the spec says.
+      input.query && input.state === "active" ? prefixQuery(input.query) : null,
       HEADLINE_OPTIONS,
     ],
   );

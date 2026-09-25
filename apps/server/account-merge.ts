@@ -323,6 +323,52 @@ async function sourceObjects(c: Queryable, tenant: string) {
 }
 
 const ROLE_RANK = { reader: 1, curator: 2, admin: 3 } as const;
+const SHELF_RANK = { reader: 1, author: 2, curator: 3, admin: 4 } as const;
+
+/**
+ * Department shelves (docs/specs/TEAM_SHELVES.md): the source's roles become
+ * the target's, the higher of the two where both are members. The source's
+ * own rows are revoked by the trigger on its deletion request (migration 044).
+ */
+async function moveShelfMemberships(
+  c: PoolClient,
+  from: MergeAccount,
+  into: MergeAccount,
+) {
+  const { rows } = await c.query(
+    `SELECT s.tenant_id,s.role,t.role AS target_role,t.state AS target_state
+       FROM tenant_members s
+       JOIN tenants shelf ON shelf.id=s.tenant_id AND shelf.kind='team'
+       LEFT JOIN tenant_members t ON t.tenant_id=s.tenant_id AND t.account_id=$2
+      WHERE s.account_id=$1 AND s.state='active'
+      ORDER BY s.tenant_id
+      FOR UPDATE OF s`,
+    [from.id, into.id],
+  );
+  for (const row of rows) {
+    const role = row.role as keyof typeof SHELF_RANK;
+    const target = row.target_state === "active" ? (row.target_role as keyof typeof SHELF_RANK) : null;
+    if (!target)
+      await c.query(
+        `INSERT INTO tenant_members(tenant_id,account_id,role,state,invited_by)
+         VALUES($1,$2,$3,'active',$2)
+         ON CONFLICT (tenant_id,account_id) DO UPDATE
+           SET role=EXCLUDED.role,state='active',revoked_at=NULL,joined_at=clock_timestamp()`,
+        [row.tenant_id, into.id, role],
+      );
+    else if (SHELF_RANK[role] > SHELF_RANK[target])
+      await c.query(
+        "UPDATE tenant_members SET role=$3 WHERE tenant_id=$1 AND account_id=$2",
+        [row.tenant_id, into.id, role],
+      );
+    await c.query(
+      `INSERT INTO tenant_member_events(tenant_id,actor_id,action,target_account_id,old_role,new_role)
+       VALUES($1,$2,'member_added',$2,$3,$4)`,
+      [row.tenant_id, into.id, target, target && SHELF_RANK[target] >= SHELF_RANK[role] ? target : role],
+    );
+  }
+  return rows.length;
+}
 
 async function moveMemberships(
   c: PoolClient,
@@ -758,6 +804,7 @@ export async function mergeAccounts(input: {
         [from.id, into.id],
       );
       await moveMemberships(c, from, into);
+      await moveShelfMemberships(c, from, into);
       await c.query(
         `UPDATE account_identities SET account_id=$2
           WHERE account_id=$1
