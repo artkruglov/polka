@@ -43,7 +43,9 @@ export class SearchText {
 // words joined by -, :, /, ., _ or brackets. Not what a reader sees.
 const MACHINE_STRING = /^[a-z0-9\-:/._[\]#%()=,!@ ]*$/;
 // Words and ordinary punctuation, one of them three letters or longer.
-const PLAIN_WORDS = /^(?=.*\p{L}{3})[\p{L}\p{N}\s.,!?—–-]+$/u;
+const PLAIN_WORDS = /^(?=[\s\S]*\p{L}{3})[\p{L}\p{N}\s.,!?—–-]+$/u;
+/** Longest string literal read as a phrase (docs/specs/CONTENT_SEARCH.md). */
+const MAX_PHRASE = 4096;
 
 /**
  * What a script says to a reader: JSX text, and string literals that read as
@@ -58,14 +60,17 @@ export function addScriptText(
   literals: "phrases" | "cyrillic" = "phrases",
 ) {
   scriptStrings(source, (text, kind) => {
-    if (into.full) return;
+    // A reader's phrase is short; a long literal is data or a library.
+    if (into.full || text.length > MAX_PHRASE) return;
     if (/\p{Script=Cyrillic}/u.test(text)) into.add(text);
     else if (kind === "jsx-text") {
       // Minified code has «>b?c:{» too: in a page's scripts JSX text must read as words.
       if (literals === "phrases" || PLAIN_WORDS.test(text)) into.add(text);
     } else if (
       literals === "phrases" &&
-      /\p{L}{2,}\s+\p{L}{2,}/u.test(text) &&
+      // Fixed-width letters on each side: the same strings as {2,}, and
+      // linear on a long run of letters (no backtracking over it).
+      /\p{L}{2}\s+\p{L}{2}/u.test(text) &&
       !MACHINE_STRING.test(text)
     )
       into.add(text);

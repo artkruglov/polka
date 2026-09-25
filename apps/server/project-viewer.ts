@@ -18,11 +18,12 @@ import type { Actor } from "./artifacts.ts";
 import { withSignedAwayLinks } from "./away-links.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
+import { assertEditorialShareAccessible } from "./editorial.ts";
 import { missing } from "./errors.ts";
 import {
   escapeHtml,
   projectDocumentPage,
-  renderProjectMarkdown,
+  renderProjectMarkdownBounded,
 } from "./project-markdown.ts";
 import { readBlob, sha256 } from "./storage.ts";
 
@@ -87,6 +88,7 @@ export async function issueRecipientProjectView(sourceGrant: string) {
     if (!candidate) throw missing();
     await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [candidate.tenant_id]);
     await c.query("SELECT 1 FROM shares WHERE id=$1 FOR SHARE", [candidate.share_id]);
+    await assertEditorialShareAccessible(c, candidate.share_id);
     return (
       await c.query(
         `INSERT INTO project_view_grants(hash,revision_id,share_id,expires_at)
@@ -99,7 +101,7 @@ export async function issueRecipientProjectView(sourceGrant: string) {
          JOIN tenants tenant ON tenant.id=s.tenant_id
          JOIN accounts account ON account.id=tenant.owner_id
          WHERE g.hash=$2 AND g.expires_at>now()
-           AND NOT s.revoked AND s.expires_at>now()
+           AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
            AND ${PROJECT_REVISION_SQL}
          RETURNING expires_at`,
@@ -117,7 +119,7 @@ async function authorizedProject(token: string) {
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT r.id,r.manifest FROM project_view_grants pv
+    `SELECT r.id,r.manifest,pv.share_id FROM project_view_grants pv
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      JOIN tenants tenant ON tenant.id=r.tenant_id
@@ -136,10 +138,12 @@ async function authorizedProject(token: string) {
          (pv.share_id IS NOT NULL AND EXISTS (
            SELECT 1 FROM shares s
            WHERE s.id=pv.share_id AND s.revision_id=r.id AND s.artifact_id=artifact.id
-             AND NOT s.revoked AND s.expires_at>now()))
+             AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'))
        )`,
     [projectHash(token)],
   );
+  // A link withdrawn from the feed closes with it, like /static and /document.
+  if (revision?.share_id) await assertEditorialShareAccessible(db, revision.share_id);
   return revision ?? null;
 }
 
@@ -276,7 +280,12 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     const body =
       file.mime === "text/markdown"
         ? projectDocumentPage(
-            renderProjectMarkdown(bytes.toString("utf8"), file.path, paths),
+            await renderProjectMarkdownBounded(
+              bytes.toString("utf8"),
+              file.path,
+              paths,
+              `${revision.id}:${file.path}`,
+            ),
             base(token) + NAV_SCRIPT,
           )
         : file.mime.startsWith("image/")

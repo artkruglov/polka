@@ -274,3 +274,26 @@ test("queries and script text: no tsquery syntax gets through", () => {
   );
   assert.equal(text.value(), "Итоги года");
 });
+
+test("a long run of letters in a script is read in linear time", () => {
+  const text = new SearchText();
+  const started = performance.now();
+  addScriptText(`const blob = "${"a".repeat(80_000)}"; const t = "Итоги ${"b".repeat(3_000)} года";`, text);
+  addScriptText(`const s = "${"word ".repeat(700)}";`, text);
+  assert.ok(performance.now() - started < 100, `${Math.round(performance.now() - started)} ms`);
+  assert.doesNotMatch(text.value(), /aaaa/);
+});
+
+test("the backfill does not bring back text of a purged version", async () => {
+  const saved = await saveSingle("<!doctype html><p>Удалённая модерацией сводка.</p>");
+  await db.query("DELETE FROM artifact_search WHERE artifact_id=$1", [saved.artifactId]);
+  await db.query("UPDATE revisions SET content_purged_at=now() WHERE id=$1", [saved.revisionId]);
+  try {
+    const report = await backfillSearch({ artifactIds: [saved.artifactId] });
+    assert.equal(report.indexed, 0);
+    const { rowCount } = await db.query("SELECT 1 FROM artifact_search WHERE artifact_id=$1", [saved.artifactId]);
+    assert.equal(rowCount, 0);
+  } finally {
+    await db.query("UPDATE revisions SET content_purged_at=NULL WHERE id=$1", [saved.revisionId]);
+  }
+});
