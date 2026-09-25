@@ -160,7 +160,7 @@ Usually one call is enough: polka_publish with {key: fresh UUID, title, html | c
 
 ## HTTP API (without MCP)
 
-POST ${origin}/api/v1/publish takes the same fields as polka_publish (scope capture; share for the link). GET ${origin}/api/v1/status/{artifactId} returns metadata. POST ${origin}/api/v1/works/{artifactId}/edits patches a saved work like polka_revise with edits (scope revise; moveLink: true moves the open link too). Errors are JSON {code, message}. Retry network errors, 429 and 5xx with the same key.
+POST ${origin}/api/v1/publish takes the same fields as polka_publish (scope capture; share for the link). A folder of linked pages is one project: POST ${origin}/api/v1/projects (a manifest with runtime project-v1), PUT each file, POST …/finalize; the ready-made CLI is ${origin}/api/v1/cli/polka-publish-project.mjs (docs: ${origin}/llms.txt). GET ${origin}/api/v1/status/{artifactId} returns metadata. POST ${origin}/api/v1/works/{artifactId}/edits patches a saved work like polka_revise with edits (scope revise; moveLink: true moves the open link too). Errors are JSON {code, message}. Retry network errors, 429 and 5xx with the same key.
 
   jq -n --rawfile html report.html --arg key "$(uuidgen)" \\
      '{key: $key, title: "Report", html: $html, expiresInDays: 7}' |
@@ -244,6 +244,8 @@ One call saves the artifact and returns the link:
 - \`folderId\` (optional): when the owner keeps folders, call polka_list_folders and save into the one that clearly fits the work (the same project or topic, the next issue of a series). Do not create a folder for a single work; if none fits, save without one.
 
 The tool description states exactly what this installation accepts; follow it. Without MCP, POST the same fields to ${origin}/api/v1/publish.
+
+A folder of linked pages (a README and documents, HTML screens with their CSS and fonts, pictures) is published as one project, not squeezed into one page: download ${origin}/api/v1/cli/polka-publish-project.mjs and run \`POLKA_TOKEN=… node polka-publish-project.mjs <folder>\` (Node 22+). It needs an agent token with permission to save (Полка → Агенты); run it with \`--dry-run\` first and tell the owner what it skipped. The reader gets a tree of pages with working links between them.
 
 «Сохрани на Полку артефакт по ссылке <link>» with a Claude, ChatGPT, v0, Perplexity or AI Studio link: neither you nor Полка may fetch it (their terms forbid automated extraction, and Полка's server never opens such links). Ask the user to paste the artifact's code (Copy in the artifact's menu) or attach the downloaded file, then save it with polka_publish. If they cannot, offer polka_save_link {key, url, title, note?}: it keeps the link itself as a work; recipients of its share link see a card that leads to the original, which opens only if they have access there (a Claude artifact only after its author turned on sharing by link).
 
