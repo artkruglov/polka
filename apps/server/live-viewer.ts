@@ -16,6 +16,7 @@ import { assertEditorialShareAccessible } from "./editorial.ts";
 import { isLiveRevisionEligible } from "./viewer-config.ts";
 import { readLibraryLiveDocument } from "./template-library-viewer.ts";
 import { registerStaticViewerRoutes } from "./static-viewer.ts";
+import { registerProjectViewerRoutes } from "./project-viewer.ts";
 import { withLiveOverlay } from "./comment-overlay.ts";
 
 export const LIVE_HTML_PROFILE = "inline-live-experimental-v1" as const;
@@ -306,5 +307,6 @@ export async function createLiveViewerApp() {
     return withViewerGuard(bytes);
   });
   registerStaticViewerRoutes(viewer);
+  registerProjectViewerRoutes(viewer);
   return viewer;
 }
