@@ -170,8 +170,8 @@ test("malicious code: miners and executables are high, a minified bundle is noth
 });
 
 test("the content scan stays linear in the page size", () => {
-  // Linear, not a wall-clock budget: a 4× larger page may take up to ~8× as
-  // long (quadratic would be 16×). Median of three runs; a small floor and
+  // Linear, not a wall-clock budget: a 4× larger page (512 KB → 2 MB) may
+  // take up to ~8× as long (quadratic would be 16×). Median of three runs; a small floor and
   // margin absorb GC pauses, so a loaded machine cannot fail it.
   const pages = (size: number) => [
     `<p>${"к у п и т ь ".repeat(size / 12)}</p>`,
@@ -193,8 +193,8 @@ test("the content scan stays linear in the page size", () => {
       })
       .sort((x, y) => x - y)[1]!;
   const MB = 1024 * 1024;
-  const large = pages(MB);
-  pages(MB / 4).forEach((page, i) => {
+  const large = pages(2 * MB);
+  pages(MB / 2).forEach((page, i) => {
     inspectHtml(page); // warm up
     const a = Math.max(time(page), 20);
     const b = time(large[i]!);
