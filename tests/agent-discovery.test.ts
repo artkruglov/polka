@@ -8,10 +8,13 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { AGENT_SCOPES } from "../packages/contracts/index.ts";
 import {
   HOSTED_ORIGIN,
+  ORGANIZE_SKILL_NAME,
   SKILL_NAME,
+  agentSkills,
   agentSkillsIndex,
   llmsText,
   mcpToolCatalog,
+  organizeSkillMarkdown,
   skillMarkdown,
 } from "../apps/server/agent-discovery.ts";
 import { agentPublishInputSchema } from "../apps/server/agent-publish.ts";
@@ -226,47 +229,148 @@ test("GET /.well-known/agent-skills: discovery index with a matching digest", as
       index.$schema,
       "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
     );
-    assert.equal(index.skills.length, 1);
-    const [entry] = index.skills;
-    assert.equal(entry.name, SKILL_NAME);
-    assert.equal(entry.type, "skill-md");
-    assert.ok(entry.description.length <= 1024);
-    assert.equal(
-      entry.url,
-      `${origin}/.well-known/agent-skills/${SKILL_NAME}/SKILL.md`,
+    assert.deepEqual(
+      index.skills.map((entry: any) => entry.name),
+      [SKILL_NAME, ORGANIZE_SKILL_NAME],
     );
-    const skill = await get(new URL(entry.url).pathname);
-    assertPublic(skill, "text/markdown; charset=utf-8");
-    assert.equal(
-      entry.digest,
-      `sha256:${createHash("sha256").update(skill.rawPayload).digest("hex")}`,
-    );
-    assert.match(skill.body, new RegExp(`^---\\nname: ${SKILL_NAME}\\n`));
-    assert.ok(skill.body.includes(`${origin}/connect`));
-    assert.ok(skill.body.includes("polka_publish"));
-    assert.match(skill.body, /moderation: "held"/);
-    assert.match(skill.body, /## Never/);
-    onlyOrigin(skill.body, origin);
+    for (const entry of index.skills) {
+      assert.equal(entry.type, "skill-md");
+      assert.ok(entry.description.length <= 1024);
+      assert.equal(
+        entry.url,
+        `${origin}/.well-known/agent-skills/${entry.name}/SKILL.md`,
+      );
+      const skill = await get(new URL(entry.url).pathname);
+      assertPublic(skill, "text/markdown; charset=utf-8");
+      assert.equal(
+        entry.digest,
+        `sha256:${createHash("sha256").update(skill.rawPayload).digest("hex")}`,
+      );
+      assert.match(skill.body, new RegExp(`^---\\nname: ${entry.name}\\n`));
+      assert.match(skill.body, /## Never/);
+      onlyOrigin(skill.body, origin);
+    }
+    const main = await get(`/.well-known/agent-skills/${SKILL_NAME}/SKILL.md`);
+    assert.ok(main.body.includes(`${origin}/connect`));
+    assert.ok(main.body.includes("polka_publish"));
+    assert.match(main.body, /moderation: "held"/);
+    // Saving into a fitting folder, and where sorting a whole shelf lives.
+    assert.match(main.body, /`folderId` \(optional\).*polka_list_folders/);
+    assert.ok(main.body.includes(ORGANIZE_SKILL_NAME));
   }
 });
 
-test("skills/polka/SKILL.md is the generated skill for the hosted origin", () => {
-  const committed = readFileSync(`skills/${SKILL_NAME}/SKILL.md`, "utf8");
-  assert.equal(
-    committed,
-    skillMarkdown(HOSTED_ORIGIN),
-    "skills/polka/SKILL.md is stale: run npm run gen:skill",
+test("the polka-organize skill: read all, propose, confirm, move; never delete", async () => {
+  const response = await get(
+    `/.well-known/agent-skills/${ORGANIZE_SKILL_NAME}/SKILL.md`,
   );
-  const front = committed.match(/^---\n([\s\S]*?)\n---\n/)![1];
-  assert.match(front, /^name: polka$/m);
-  const description = JSON.parse(front.match(/^description: (.*)$/m)![1]);
-  assert.ok(description.length > 100 && description.length <= 1024);
+  const body = response.body;
+  const description = JSON.parse(
+    body.match(/^---\n[\s\S]*?^description: (.*)$/m)![1],
+  );
+  for (const phrase of [
+    "разложи полку",
+    "наведи порядок в папках",
+    "структурируй работы",
+    "organize",
+  ])
+    assert.ok(description.includes(phrase), phrase);
+  // Every tool the procedure names is one the MCP server registers.
+  const tools = new Set(mcpToolCatalog().map((tool) => tool.name));
+  for (const name of new Set(body.match(/polka_[a-z_]+/g)))
+    assert.ok(tools.has(name), `${name} is not a registered tool`);
+  for (const step of [
+    "polka_list_folders",
+    "polka_list with {limit: 100}",
+    "nextCursor",
+    "3-8 folders",
+    "Y360 Radar · W36",
+    "| Папка | Работы |",
+    "polka_create_folder",
+    "polka_move",
+    "folderId from polka_list_folders",
+  ])
+    assert.ok(body.includes(step), step);
+  // It asks before it changes anything, and never trashes or renames works.
+  assert.ok(
+    body.indexOf("Change nothing on the shelf until the owner confirms") <
+      body.indexOf("## 4. Apply"),
+  );
+  assert.match(body, /Trash, delete, restore or rename works/);
+  assert.doesNotMatch(body, /polka_(trash|delete_folder|rename_folder|update_artifact)/);
+});
+
+test("the skills in skills/ are the generated ones for the hosted origin", () => {
+  for (const skill of agentSkills(HOSTED_ORIGIN)) {
+    const committed = readFileSync(`skills/${skill.name}/SKILL.md`, "utf8");
+    assert.equal(
+      committed,
+      skill.markdown,
+      `skills/${skill.name}/SKILL.md is stale: run npm run gen:skill`,
+    );
+    const front = committed.match(/^---\n([\s\S]*?)\n---\n/)![1];
+    assert.match(front, new RegExp(`^name: ${skill.name}$`, "m"));
+    const description = JSON.parse(front.match(/^description: (.*)$/m)![1]);
+    assert.equal(description, skill.description);
+    assert.ok(description.length > 100 && description.length <= 1024);
+  }
+  assert.equal(skillMarkdown(HOSTED_ORIGIN), agentSkills(HOSTED_ORIGIN)[0].markdown);
+});
+
+test("every MCP tool carries a title and a read-only or destructive hint", async () => {
+  const server = createMcpServer({
+    accountId: "00000000-0000-0000-0000-000000000000",
+    tenantId: "00000000-0000-0000-0000-000000000000",
+    connectionId: "00000000-0000-0000-0000-000000000000",
+    scopes: [...AGENT_SCOPES],
+    audience: MCP_AUDIENCE,
+    expiresAt: 0,
+    oauth: true,
+  });
+  const client = new Client({ name: "annotations", version: "1" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const { tools } = await client.listTools();
+    assert.equal(tools.length, mcpToolCatalog().length);
+    for (const tool of tools) {
+      assert.ok(tool.title?.trim(), `${tool.name} has no title`);
+      const hints = tool.annotations ?? {};
+      assert.ok(
+        typeof hints.readOnlyHint === "boolean" ||
+          typeof hints.destructiveHint === "boolean",
+        `${tool.name} has neither readOnlyHint nor destructiveHint`,
+      );
+      if (hints.readOnlyHint === false)
+        assert.equal(
+          typeof hints.destructiveHint,
+          "boolean",
+          `${tool.name} writes but does not say whether it destroys`,
+        );
+    }
+    const byName = new Map(tools.map((tool) => [tool.name, tool.annotations]));
+    assert.equal(byName.get("polka_delete_folder")?.destructiveHint, true);
+    for (const name of [
+      "polka_create_folder",
+      "polka_rename_folder",
+      "polka_move",
+    ]) {
+      assert.equal(byName.get(name)?.readOnlyHint, false, name);
+      assert.equal(byName.get(name)?.destructiveHint, false, name);
+      assert.equal(byName.get(name)?.idempotentHint, true, name);
+    }
+  } finally {
+    await client.close();
+  }
 });
 
 test("another APP_ORIGIN is substituted everywhere", () => {
   for (const text of [
     llmsText(OTHER),
     skillMarkdown(OTHER),
+    organizeSkillMarkdown(OTHER),
     JSON.stringify(openApiDocument(OTHER)),
     JSON.stringify(agentSkillsIndex(OTHER)),
     connectGuide(OTHER),
