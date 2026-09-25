@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {ArtifactReader} from '../apps/web/src/widgets/artifact-reader/index.tsx';
+import {ArtifactReader,readerTabFromSearch,withReaderTab,workMenu} from '../apps/web/src/widgets/artifact-reader/index.tsx';
 import type {Artifact,Revision} from '../packages/contracts/index.ts';
 const first:Revision={id:'r1',number:1,filename:'first.html',mime:'text/html',size:30,totalSize:30,sha256:'a'.repeat(64),storageKind:'single',htmlProfile:'static',inlineBuild:null,createdAt:'2026-09-01T00:00:00Z'};
 const latest:Revision={...first,id:'r2',number:2,filename:'second.html'};
@@ -32,4 +32,30 @@ test('reader profile describes the version on screen, not the latest one',()=>{
  const html=renderToStaticMarkup(React.createElement(ArtifactReader,{work:{...work,revision:limited},shelfUrl:'https://polochka.app/works/a',shown:first,revisions:[limited,first],viewed:first,folderName:'Исследования',history:false,setHistory:()=>{},setViewed:()=>{},setPanel:()=>{},preview:null,onDownload:()=>{}}));
  assert.match(html,/Страница · без скриптов/);
  assert.doesNotMatch(html,/ограниченный просмотр/);
+});
+test('the reader is one bar: version, tabs, details, share and «…»; the work fills the rest',()=>{
+ const html=render({...work,share:null},latest);
+ assert.match(html,/class="work-bar"/);
+ assert.match(html,/<h1 class="work-bar-title" title="Отчёт">Отчёт<\/h1>/);
+ assert.match(html,/aria-label="Версия 2 из 2: выбрать версию"/);
+ assert.match(html,/aria-label="О работе"/);
+ assert.match(html,/aria-label="Поделиться"/);
+ assert.match(html,/aria-label="Ещё действия"/);
+ // Under «Версии» the stage stays mounted (a running page keeps its state), hidden.
+ assert.match(html,/<section class="stage" hidden=""/);
+ assert.doesNotMatch(html,/Скопировать для агента|Новая версия|work-heading|work-foot/);
+});
+test('«…» holds every other action; a trashed work only downloads',()=>{
+ const labels=(artifact:Artifact,shown=latest)=>workMenu({work:artifact,shown,setPanel:()=>{},onDownload:()=>{},onCopyForAgent:()=>{}}).map((item)=>item.label);
+ assert.deepEqual(labels(work),['Скопировать для агента','Подробный контекст для агента','Новая версия','Переработать с агентом','Скачать оригинал','Название и папка','В корзину']);
+ assert.deepEqual(labels({...work,trashedAt:first.createdAt}),['Скачать оригинал']);
+ assert.deepEqual(labels({...work,trashedAt:first.createdAt},{...latest,storageKind:'bundle'}),['Скачать весь пакет']);
+});
+test('the reader tab lives in the address: ?tab=versions survives a reload, «work» leaves no trace',()=>{
+ assert.equal(readerTabFromSearch('?tab=versions'),'versions');
+ assert.equal(readerTabFromSearch('?tab=other'),'work');
+ assert.equal(readerTabFromSearch(''),'work');
+ assert.equal(withReaderTab('https://polochka.app/works/a','versions'),'/works/a?tab=versions');
+ assert.equal(withReaderTab('https://polochka.app/works/a?revision=r1&tab=versions#c','work'),'/works/a?revision=r1#c');
+ assert.equal(withReaderTab('https://polochka.app/works/a?revision=r1','versions'),'/works/a?revision=r1&tab=versions');
 });
