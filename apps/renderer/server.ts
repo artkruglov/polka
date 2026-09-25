@@ -2,20 +2,25 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { chromium, type Browser } from "playwright-core";
 import { renderable } from "../../packages/contracts/link-providers.ts";
 import {
+  SNAPSHOT_MAX_BODY,
   verifyRenderRequest,
   type FetchResult,
   type RenderResult,
+  type SnapshotResult,
 } from "../../packages/renderer-contract.ts";
 import { createEgressProxy } from "./egress-proxy.ts";
 import { fetchPage, robotsVerdict, robotsVia, type RobotsSource } from "./fetch-page.ts";
 import { proxiedGet, type ProxiedGet } from "./proxied-fetch.ts";
 import { renderPage, type RenderOptions } from "./render.ts";
+import { snapshotPage } from "./snapshot.ts";
 
 /*
  * Полка's headless renderer (docs/specs/URL_IMPORT_SUPPORT.md, «Рендерер»).
  * POST /render {url} → the rendered DOM of an allowlisted public page;
  * POST /fetch {url} → the HTML of a server-fetch page (ChatGPT share) from one
- * plain GET, no browser. Both check robots.txt for PolkaRenderer from here,
+ * plain GET, no browser; POST /snapshot {html, script} → a JPEG of the first
+ * screen of a page the app sends (a shelf cover, docs/specs/SHELF_COVERS.md),
+ * drawn with no network at all. /render and /fetch check robots.txt for PolkaRenderer from here,
  * go out only through the egress proxy and answer an error code rather than
  * retry. Every request is signed by the app
  * (packages/renderer-contract.ts). Pages are rendered one at a time; a short
@@ -48,7 +53,7 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
   if (secret.length < 32) throw new Error("RENDERER_SECRET must be at least 32 characters");
   let chain: Promise<unknown> = Promise.resolve();
   let waiting = 0;
-  const enqueue = <T extends RenderResult | FetchResult>(task: () => Promise<T>): Promise<T> => {
+  const enqueue = <T extends RenderResult | FetchResult | SnapshotResult>(task: () => Promise<T>): Promise<T> => {
     if (waiting > MAX_QUEUE) return Promise.resolve({ error: "busy" } as T);
     waiting++;
     const next = chain.then(task).finally(() => waiting--);
@@ -61,15 +66,30 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
       res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(body));
     };
     if (req.method === "GET" && req.url === "/healthz") return send(200, { ok: true });
-    const operation = req.url === "/render" ? "render" : req.url === "/fetch" ? "fetch" : null;
+    const operation =
+      req.url === "/render" ? "render" : req.url === "/fetch" ? "fetch" : req.url === "/snapshot" ? "snapshot" : null;
     if (req.method !== "POST" || !operation) return send(404, { error: "bad_request" });
     let body = "";
     try {
-      body = await readBody(req);
+      body = await readBody(req, operation === "snapshot" ? SNAPSHOT_MAX_BODY : MAX_BODY);
     } catch {
       return send(413, { error: "bad_request" });
     }
     if (!verifyRenderRequest(secret, req.headers, "POST", `/${operation}`, body)) return send(401, { error: "unauthorized" });
+    if (operation === "snapshot") {
+      let page: { html: string; script: boolean };
+      try {
+        const parsed = JSON.parse(body) as { html?: unknown; script?: unknown };
+        if (typeof parsed.html !== "string" || typeof parsed.script !== "boolean") throw new Error();
+        page = { html: parsed.html, script: parsed.script };
+      } catch {
+        return send(400, { error: "bad_request" });
+      }
+      const result = await enqueue(async () => snapshotPage(await browser(), page.html, { script: page.script }));
+      // Outcomes only: the page is the owner's and stays out of logs.
+      console.log(JSON.stringify({ event: operation, outcome: "error" in result ? result.error : result.blank ? "blank" : "ok", ms: Date.now() - started }));
+      return send("error" in result ? (result.error === "busy" ? 503 : 422) : 200, result);
+    }
     let url: string;
     try {
       const parsed = JSON.parse(body) as { url?: unknown };
@@ -97,13 +117,13 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
   });
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, limit = MAX_BODY): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_BODY) {
+      if (size > limit) {
         reject(new Error("too large"));
         req.destroy();
       } else chunks.push(chunk);

@@ -226,6 +226,11 @@ export interface Revision {
   createdAt: string;
   /** A link work (LINK_MIME): its host and service; the URL itself is in its file. */
   link?: { host: string; service: import("./link-providers.ts").LinkProviderId | null } | null;
+  /**
+   * The owner's shelf only (docs/specs/SHELF_COVERS.md): how the card looks.
+   * null: not decided yet, the card asks GET /api/revisions/:id/cover.
+   */
+  cover?: import("./cover.ts").RevisionCover | null;
 }
 export interface Share {
   id: string;
