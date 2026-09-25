@@ -15,3 +15,14 @@
 .ui-action-menu-items > button:disabled { opacity: .45; cursor: not-allowed; }
 .ui-action-menu-items svg { width: 18px; height: 18px; flex-shrink: 0; }
 .ui-action-menu-items > button.danger:hover { background: var(--danger-soft); }
+
+/* Popover: the menu's surface for details (not actions). */
+.ui-popover { position: relative; display: inline-flex; }
+.ui-popover-trigger[aria-expanded="true"] { background: var(--soft-2); color: var(--ink); }
+.ui-popover-panel {
+  position: absolute; z-index: 30; right: 0; top: calc(100% + 6px);
+  width: max-content; min-width: 240px; max-width: min(340px, calc(100vw - 32px));
+  padding: 14px 16px; background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-menu);
+  color: var(--ink-2); font: 400 var(--text-sm) / 1.5 var(--font-sans); text-align: left;
+}
+.ui-popover-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

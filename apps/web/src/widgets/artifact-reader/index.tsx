@@ -1,23 +1,27 @@
-import { Tabs } from "../../shared/ui/Tabs.tsx";
-import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
-import React from "react";
-import { Badge, Button } from "../../shared/ui/controls.tsx";
+import { TabList, tabId } from "../../shared/ui/Tabs.tsx";
+import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
+import { Popover } from "../../shared/ui/Popover.tsx";
+import React, { useEffect, useId, useState } from "react";
+import { Button, IconButton } from "../../shared/ui/controls.tsx";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
 import { improvePhrase } from "../../entities/artifact/agent-phrases.ts";
 import {
-  LockKeyhole,
-  Link as LinkIcon,
-  Upload,
-  Trash2,
-  Clock3,
-  Check,
-  Download,
-  FileText,
-  Folder as FolderIcon,
-  Image as ImageIcon,
-  Sparkles,
-  Ellipsis,
+  ArrowLeft,
   Bot,
+  Check,
+  ChevronDown,
+  Clock3,
+  Download,
+  Ellipsis,
+  Folder as FolderIcon,
+  Info,
+  Maximize2,
+  MessageCircle,
+  Share2,
+  Sparkles,
+  Trash2,
+  Upload,
+  WandSparkles,
 } from "lucide-react";
 import type {
   Artifact,
@@ -35,6 +39,25 @@ import {
 
 export type ReaderAction =
   "share" | "version" | "metadata" | "trash" | "rework" | "agent-context";
+/** The reader's views; «versions» is kept in the address as ?tab=versions. */
+export type ReaderTab = "work" | "versions";
+export const readerTabFromSearch = (search: string): ReaderTab =>
+  new URLSearchParams(search).get("tab") === "versions" ? "versions" : "work";
+/** The same address with the tab set; «work» is the default and leaves no trace. */
+export function withReaderTab(href: string, tab: ReaderTab): string {
+  const url = new URL(href);
+  if (tab === "versions") url.searchParams.set("tab", "versions");
+  else url.searchParams.delete("tab");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+/** The work's comments, when its links have any (docs/specs/COMMENTS.md). */
+export type ReaderComments = {
+  label: string;
+  count: number;
+  unread: number;
+  open: boolean;
+  onToggle: () => void;
+};
 type Props = {
   work: Artifact;
   /** The address of this page, named in the phrase the owner copies for the agent. */
@@ -42,7 +65,7 @@ type Props = {
   shown: Revision;
   revisions: Revision[];
   viewed: Revision | null;
-  /** Shown by the page's top bar; the reader only names it for assistive technology. */
+  /** The folder the work lives in; named in the details. */
   folderName: string;
   history: boolean;
   setHistory: (value: boolean) => void;
@@ -50,12 +73,85 @@ type Props = {
   setPanel: (value: ReaderAction) => void;
   preview: React.ReactNode;
   onDownload: () => void;
-  /** The page's «На весь экран» targets the stage. */
+  /** Back to the shelf. */
+  onBack?: () => void;
+  /** «На весь экран» targets the stage. */
   stageRef?: React.Ref<HTMLElement>;
+  onFullscreen?: () => void;
+  comments?: ReaderComments;
   /** Version comparison, shown under the version list in «Версии». */
   compare?: React.ReactNode;
+  /** The page's notices, under the bar. */
+  notices?: React.ReactNode;
 };
-/** Read-only composition. The page owns fetching, mutations and asynchronous races. */
+
+/** Everything but sharing and reading lives in «…», in this order. */
+export function workMenu({
+  work,
+  shown,
+  setPanel,
+  onDownload,
+  onCopyForAgent,
+}: Pick<Props, "work" | "shown" | "setPanel" | "onDownload"> & {
+  onCopyForAgent: () => void;
+}): MenuAction[] {
+  const download: MenuAction = {
+    id: "download",
+    label:
+      shown.storageKind === "bundle"
+        ? "Скачать весь пакет"
+        : "Скачать оригинал",
+    icon: <Download />,
+    onSelect: onDownload,
+  };
+  if (work.trashedAt) return [download];
+  return [
+    {
+      id: "copy-for-agent",
+      label: "Скопировать для агента",
+      icon: <Sparkles />,
+      onSelect: onCopyForAgent,
+    },
+    {
+      id: "agent-context",
+      label: "Подробный контекст для агента",
+      icon: <Bot />,
+      onSelect: () => setPanel("agent-context"),
+    },
+    {
+      id: "version",
+      label: "Новая версия",
+      icon: <Upload />,
+      onSelect: () => setPanel("version"),
+    },
+    {
+      id: "rework",
+      label: "Переработать с агентом",
+      icon: <WandSparkles />,
+      onSelect: () => setPanel("rework"),
+    },
+    download,
+    {
+      id: "metadata",
+      label: "Название и папка",
+      icon: <FolderIcon />,
+      onSelect: () => setPanel("metadata"),
+    },
+    {
+      id: "trash",
+      label: "В корзину",
+      icon: <Trash2 />,
+      tone: "danger",
+      onSelect: () => setPanel("trash"),
+    },
+  ];
+}
+
+/**
+ * The owner's work page: one slim bar (back, title, version, tabs, actions)
+ * and the work filling the rest of the screen. The page owns fetching,
+ * mutations and asynchronous races.
+ */
 export function ArtifactReader({
   work,
   shelfUrl,
@@ -69,115 +165,244 @@ export function ArtifactReader({
   setPanel,
   preview,
   onDownload,
+  onBack,
   stageRef,
+  onFullscreen,
+  comments,
   compare,
+  notices,
 }: Props) {
-  // Badge and explanation describe the version on screen, which may be an older one.
+  const ids = useId();
+  const panelId = `${ids}-panel`;
+  const tab: ReaderTab = history ? "versions" : "work";
+  // The details describe the version on screen, which may be an older one.
   const profile = profileView(shown);
-  const linked =
-    !!work.share && ["active", "behind"].includes(work.share.status);
-  const KindIcon = isImage(shown) ? ImageIcon : FileText;
+  const current = profileView(work.revision);
   const plainText = shown.mime === "text/plain" && !work.trashedAt;
   // «Скопировать для агента» copies one phrase; the full context stays in the menu.
-  const agent = useCopy(improvePhrase(work.title, shelfUrl));
+  const phrase = improvePhrase(work.title, shelfUrl);
+  const agent = useCopy(phrase);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(timer);
+  }, [copied]);
   const copyForAgent = async () => {
-    if ((await agent.copy()) === "failed") setPanel("agent-context");
+    const result = await agent.copy();
+    if (result === "failed") setPanel("agent-context");
+    else if (result === "copied") setCopied(true);
   };
+  const Title = plainText ? "p" : "h1";
   return (
-    <>
-      <header className={`work-heading${plainText ? " work-heading--quiet" : ""}`} aria-label={`${folderName} · ${work.title}`}>
-        <span className="eyebrow">
-          {work.trashedAt
-            ? "В корзине"
-            : shown.mime === "text/html"
-              ? profile.label
-              : kindOf(shown)}
-        </span>
-        {!plainText && <h1>{work.title}</h1>}
-        <div className="work-meta">
-          <Badge tone={linked ? "accent" : "neutral"}>
-            {linked ? <LinkIcon /> : <LockKeyhole />}
-            {status(work)}
-          </Badge>
-          <span>
-            {work.trashedAt
-              ? "Только скачивание"
-              : `v${shown.number} · ${date(shown.createdAt)}`}
+    <div className="work-reader">
+      <header className="work-bar" aria-label={`${folderName} · ${work.title}`}>
+        <div className="work-bar-lead">
+          {onBack && (
+            <IconButton label="Назад на полку" size="sm" onClick={onBack}>
+              <ArrowLeft />
+            </IconButton>
+          )}
+          {/* The text itself carries the large title; the bar keeps one h1 for other kinds. */}
+          <Title className="work-bar-title" title={work.title}>
+            {work.title}
+          </Title>
+        </div>
+        <div className="work-bar-nav">
+          <ActionMenu
+            label={`Версия ${shown.number} из ${revisions.length}: выбрать версию`}
+            className="work-version"
+            placement="start"
+            icon={
+              <span className="work-version-chip">
+                v{shown.number}
+                <ChevronDown aria-hidden="true" />
+              </span>
+            }
+            items={[
+              ...revisions.map((r) => ({
+                id: r.id,
+                label: `Версия ${r.number} · ${date(r.createdAt)}${
+                  work.share?.revisionId === r.id &&
+                  ["active", "behind"].includes(work.share.status)
+                    ? " · по ссылке"
+                    : ""
+                }`,
+                icon:
+                  shown.id === r.id ? (
+                    <Check />
+                  ) : (
+                    <span className="work-version-blank" />
+                  ),
+                onSelect: () => {
+                  setViewed(r.id === work.revision.id ? null : r);
+                  setHistory(false);
+                },
+              })),
+              {
+                id: "all",
+                label: "Все версии и сравнение",
+                icon: <Clock3 />,
+                onSelect: () => setHistory(true),
+              },
+            ]}
+          />
+          <TabList
+            label="Работа и версии"
+            className="work-tabs"
+            idBase={ids}
+            panelId={panelId}
+            value={tab}
+            onChange={(value) => setHistory(value === "versions")}
+            items={[
+              { id: "work", label: "Работа" },
+              {
+                id: "versions",
+                label: (
+                  <>
+                    Версии <span>{revisions.length}</span>
+                  </>
+                ),
+              },
+            ]}
+          />
+        </div>
+        <div className="work-bar-actions">
+          <span className="work-bar-status" role="status">
+            {copied && (
+              <>
+                <Check aria-hidden="true" /> Фраза для агента скопирована
+              </>
+            )}
           </span>
-          <span>{kindOf(shown)} · {size(shown.size)}</span>
+          {comments && (
+            <Button
+              variant="quiet"
+              className="work-bar-comments"
+              aria-pressed={comments.open}
+              aria-controls="work-comments"
+              aria-label={`${comments.label}: ${comments.count}${comments.unread ? `, новых ${comments.unread}` : ""}`}
+              title={comments.label}
+              onClick={comments.onToggle}
+            >
+              <MessageCircle /> {comments.count}
+              {comments.unread > 0 && (
+                <span className="work-bar-unread">+{comments.unread}</span>
+              )}
+            </Button>
+          )}
+          <Popover label="О работе" icon={<Info />} className="work-info">
+            <dl className="work-info-list">
+              <div>
+                <dt>Вид</dt>
+                <dd>
+                  {work.trashedAt
+                    ? "В корзине"
+                    : shown.mime === "text/html"
+                      ? profile.label
+                      : kindOf(shown)}
+                </dd>
+              </div>
+              <div>
+                <dt>Доступ</dt>
+                <dd>{status(work)}</dd>
+              </div>
+              <div>
+                <dt>Версия</dt>
+                <dd>
+                  v{shown.number} · {dateTime(shown.createdAt)}
+                </dd>
+              </div>
+              <div>
+                <dt>Файл</dt>
+                <dd>
+                  {shown.filename} · {size(shown.size)}
+                </dd>
+              </div>
+              <div>
+                <dt>Папка</dt>
+                <dd>{folderName}</dd>
+              </div>
+            </dl>
+            {!work.trashedAt && (
+              <p className="work-info-note">{profile.text}</p>
+            )}
+          </Popover>
+          {!work.trashedAt && onFullscreen && (
+            <IconButton
+              label="На весь экран"
+              size="sm"
+              className="work-bar-fullscreen"
+              onClick={onFullscreen}
+            >
+              <Maximize2 />
+            </IconButton>
+          )}
+          {!work.trashedAt && (
+            <Button
+              variant="primary"
+              className="work-bar-share"
+              aria-label="Поделиться"
+              onClick={() => setPanel("share")}
+              disabled={!current.linkable && !work.share}
+              title={current.linkable ? "Поделиться" : current.text}
+            >
+              <Share2 /> <span>Поделиться</span>
+            </Button>
+          )}
+          <ActionMenu
+            label="Ещё действия"
+            icon={<Ellipsis />}
+            className="work-more"
+            items={workMenu({
+              work,
+              shown,
+              setPanel,
+              onDownload,
+              onCopyForAgent: () => void copyForAgent(),
+            })}
+          />
         </div>
       </header>
-      {!work.trashedAt && shown.mime === "text/html" && (
-        <p className="work-profile" role="note">
-          {profile.text}
-        </p>
-      )}
-      <Tabs
-        label="Работа и версии"
-        value={history ? "history" : "material"}
-        onChange={(value) => setHistory(value === "history")}
-        items={[
-          { id: "material", label: "Работа" },
-          {
-            id: "history",
-            label: (
-              <>
-                <Clock3 />
-                Версии <span>{revisions.length}</span>
-              </>
-            ),
-          },
-        ]}
-        trailing={
-          !work.trashedAt ? (
-            <div className="work-actions">
-              <Button
-                busy={agent.state === "copying"}
-                onClick={() => void copyForAgent()}
-                title={improvePhrase(work.title, shelfUrl)}
-              >
-                {agent.state === "copied" ? <Check /> : <Sparkles />}
-                <span>{agent.state === "copied" ? "Скопировано" : "Скопировать для агента"}</span>
-              </Button>
-              <Button onClick={() => setPanel("version")}>
-                <Upload />
-                <span>Новая версия</span>
-              </Button>
-              <ActionMenu
-                label="Ещё действия"
-                icon={<Ellipsis />}
-                items={[
-                  { id: "agent-context", label: "Подробный контекст для агента", icon: <Bot />, onSelect: () => setPanel("agent-context") },
-                  { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => setPanel("metadata") },
-                  { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => setPanel("trash") },
-                ]}
-              />
-            </div>
-          ) : undefined
-        }
+      {notices}
+      <div
+        className="work-panel"
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId(ids, tab)}
+        tabIndex={0}
       >
         {history && (
-          <div className="reader-versions" role="group" aria-label="Выбор версии">
-            {revisions.map((r) => (
-              <Button
-                key={r.id}
-                aria-pressed={shown.id === r.id}
-                onClick={() => setViewed(r)}
-              >
-                <span>
-                  Версия {r.number}
-                  {work.share?.revisionId === r.id &&
-                    ["active", "behind"].includes(work.share.status) && (
-                      <small>по ссылке</small>
-                    )}
-                </span>
-                <small>{date(r.createdAt)}</small>
-                {shown.id === r.id && <Check />}
-              </Button>
-            ))}
+          <div className="work-versions">
+            <div
+              className="reader-versions"
+              role="group"
+              aria-label="Выбор версии"
+            >
+              {revisions.map((r) => (
+                <Button
+                  key={r.id}
+                  aria-pressed={shown.id === r.id}
+                  onClick={() => {
+                    setViewed(r.id === work.revision.id ? null : r);
+                    setHistory(false);
+                  }}
+                >
+                  <span>
+                    Версия {r.number}
+                    {work.share?.revisionId === r.id &&
+                      ["active", "behind"].includes(work.share.status) && (
+                        <small>по ссылке</small>
+                      )}
+                  </span>
+                  <small>{date(r.createdAt)}</small>
+                  {shown.id === r.id && <Check />}
+                </Button>
+              ))}
+            </div>
+            {compare}
           </div>
         )}
-        {history && compare}
         {viewed && viewed.id !== work.revision.id && (
           <p className="history-note" role="status">
             Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не
@@ -187,43 +412,38 @@ export function ArtifactReader({
             </Button>
           </p>
         )}
+        {/* Stays mounted under «Версии»: a running page keeps its state. */}
         <section
           className="stage"
           ref={stageRef}
-          data-kind={shown.mime === "text/plain" ? "text" : isImage(shown) ? "image" : "page"}
+          hidden={history}
+          aria-label={work.title}
+          data-kind={
+            shown.mime === "text/plain"
+              ? "text"
+              : isImage(shown)
+                ? "image"
+                : "page"
+          }
         >
           {work.trashedAt ? (
             <div className="preview-error">
-              Работа в корзине. Просмотр отключён; версии и оригиналы доступны для
-              скачивания.
+              <p>
+                Работа в корзине. Просмотр отключён; версии и оригиналы доступны
+                для скачивания.
+              </p>
+              <Button onClick={onDownload}>
+                <Download />
+                {shown.storageKind === "bundle"
+                  ? "Скачать весь пакет"
+                  : "Скачать оригинал"}
+              </Button>
             </div>
           ) : (
             preview
           )}
         </section>
-      </Tabs>
-      <footer className="work-foot">
-        <span className="work-foot-file">
-          <Clock3 />
-          <span>Сохранённая версия · {dateTime(shown.createdAt)}</span>
-          <em>
-            <KindIcon /> {shown.filename} · {size(shown.size)}
-          </em>
-        </span>
-        <div className="work-foot-actions">
-          <Button variant="quiet" onClick={onDownload}>
-            <Download />
-            {shown.storageKind === "bundle"
-              ? "Скачать весь пакет"
-              : "Скачать оригинал"}
-          </Button>
-          {!work.trashedAt && (
-            <Button variant="quiet" onClick={() => setPanel("rework")}>
-              <Sparkles /> Переработать с агентом
-            </Button>
-          )}
-        </div>
-      </footer>
-    </>
+      </div>
+    </div>
   );
 }

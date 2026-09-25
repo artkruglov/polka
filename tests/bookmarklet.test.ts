@@ -481,7 +481,11 @@ test("claude.ai artifact → bookmark → Полка tab → sign in → saved w
     "the work page",
     20_000,
   );
-  await until(async () => (await text(polka.sessionId)).includes("Поделиться"), "«Поделиться»");
+  // The work page's bar: «Поделиться» is an icon button on a narrow window, so find it by name.
+  await until(
+    () => evaluate(polka.sessionId, "!!document.querySelector('.work-bar button[aria-label=\"Поделиться\"]')"),
+    "«Поделиться»",
+  );
   assert.equal(await evaluate(polka.sessionId, "sessionStorage.getItem('polka.bookmarklet.pending')"), null);
 
   const work = await app.inject({

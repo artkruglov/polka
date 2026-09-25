@@ -9,11 +9,13 @@ import {
   LayoutTemplate,
   LogIn,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
 } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
-import { Avatar, Button } from "../../shared/ui/controls.tsx";
+import { Avatar, Button, IconButton } from "../../shared/ui/controls.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import {
@@ -184,18 +186,44 @@ function AccountMenu({
   );
 }
 
+/**
+ * A page that reads (the owner's work) folds the desktop rail to icons. The
+ * choice is this browser's convenience: blocked storage keeps it folded.
+ */
+const RAIL_KEY = "polka:rail:expanded";
+function readRailExpanded() {
+  try {
+    return localStorage.getItem(RAIL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeRailExpanded(expanded: boolean) {
+  try {
+    if (expanded) localStorage.setItem(RAIL_KEY, "1");
+    else localStorage.removeItem(RAIL_KEY);
+  } catch {
+    // Not remembered; the rail still switches for this visit.
+  }
+}
+
 function SiteHeader({
   current,
   account,
   children,
   actions,
   onLoggedOut,
+  collapsed = false,
+  onToggleRail,
 }: {
   current: Section;
   account: Account | null | undefined;
   children?: React.ReactNode;
   actions?: React.ReactNode;
   onLoggedOut?: () => void;
+  /** Folded to icons (only where `onToggleRail` is given). */
+  collapsed?: boolean;
+  onToggleRail?: () => void;
 }) {
   const guest = account === null;
   // Guests see the source everywhere; people with a shelf see it on the landing.
@@ -213,6 +241,17 @@ function SiteHeader({
         <div className="site-rail-top">
           <SiteBrand />
           {actions && <div className="site-rail-actions">{actions}</div>}
+          {onToggleRail && (
+            <IconButton
+              size="sm"
+              className="site-rail-toggle"
+              label={collapsed ? "Развернуть меню" : "Свернуть меню"}
+              aria-expanded={!collapsed}
+              onClick={onToggleRail}
+            >
+              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+            </IconButton>
+          )}
         </div>
         <nav className="site-nav" aria-label="Разделы">
           {links.map((link) => (
@@ -220,9 +259,10 @@ function SiteHeader({
               key={link.id}
               href={hrefOf(link)}
               aria-current={current === link.id ? "page" : undefined}
+              title={collapsed ? link.label : undefined}
             >
               <link.icon aria-hidden="true" />
-              {link.label}
+              <span className="site-nav-label">{link.label}</span>
               {link.id === "shelf" && guest && (
                 <span className="sr-only"> — нужен вход</span>
               )}
@@ -375,6 +415,7 @@ export function AppShell({
   actions,
   onLoggedOut,
   bare = false,
+  foldableRail = false,
 }: {
   current: Section;
   account: Account | null | undefined;
@@ -384,11 +425,31 @@ export function AppShell({
   actions?: React.ReactNode;
   onLoggedOut?: () => void;
   bare?: boolean;
+  /** The desktop rail starts folded to icons, with a toggle (the owner's work page). */
+  foldableRail?: boolean;
 }) {
+  const [railExpanded, setRailExpanded] = useState(readRailExpanded);
+  const folded = foldableRail && !railExpanded;
   return (
-    <div className={`app-shell${bare ? " app-shell--bare" : ""} ${className}`}>
+    <div
+      className={`app-shell${bare ? " app-shell--bare" : ""}${folded ? " app-shell--rail-folded" : ""} ${className}`}
+    >
       {!bare && (
-        <SiteHeader current={current} account={account} actions={actions} onLoggedOut={onLoggedOut}>
+        <SiteHeader
+          current={current}
+          account={account}
+          actions={actions}
+          onLoggedOut={onLoggedOut}
+          collapsed={folded}
+          onToggleRail={
+            foldableRail
+              ? () => {
+                  writeRailExpanded(folded);
+                  setRailExpanded(folded);
+                }
+              : undefined
+          }
+        >
           {navigation}
         </SiteHeader>
       )}
