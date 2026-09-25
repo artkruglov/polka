@@ -162,6 +162,8 @@ const env = z
     OIDC_ORG_LIBRARY: z.string().default(""),
     // Comments (docs/specs/SIGN_IN_PROVIDERS.md § 4): on | owner-notes | off.
     COMMENTS_MODE: z.enum(["on", "owner-notes", "off"]).default("on"),
+    // Department shelves (docs/specs/TEAM_SHELVES.md): off until a pilot.
+    TEAM_SHELVES: z.enum(["off", "on"]).default("off"),
     // Abuse protection (docs/specs/ABUSE_PROTECTION.md). When a new link
     // waits for the operator: off, flagged (looks like phishing and the
     // author is not trusted), new-accounts (any link of an untrusted
