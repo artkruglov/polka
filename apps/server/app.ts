@@ -88,6 +88,7 @@ import {
 } from "./bundle-runtime-contract.ts";
 import { LINK_MIME, MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
 import { saveLink } from "./saved-links.ts";
+import { coverFor, coverImage } from "./covers.ts";
 import { readLinkDocument } from "./saved-link-format.ts";
 import {
   issueAgentConnection,
@@ -907,6 +908,21 @@ export async function createApp() {
         `attachment; filename*=UTF-8''${encodeURIComponent(r.filename)}`,
       );
     return readBlob(r.object_key, r.object_version);
+  });
+  // Shelf covers (docs/specs/SHELF_COVERS.md). The card asks for the cover
+  // once per version; the picture is immutable for its key, so the browser
+  // keeps it (private: it is the owner's content).
+  app.get("/api/revisions/:id/cover", async (req) => ({
+    cover: await coverFor(await identity(req), id(req)),
+  }));
+  app.get("/api/revisions/:id/cover.jpg", async (req, reply) => {
+    const image = await coverImage(await identity(req), id(req));
+    reply
+      .type(image.type)
+      .header("cache-control", "private, max-age=31536000, immutable")
+      .header("content-security-policy", "sandbox; default-src 'none'")
+      .header("cross-origin-resource-policy", "same-origin");
+    return image.bytes;
   });
   app.get("/api/revisions/:id/export", async (req, reply) => {
     const revisionId = id(req);
