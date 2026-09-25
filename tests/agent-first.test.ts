@@ -45,7 +45,7 @@ import {
 } from "../apps/web/src/entities/artifact/agent-phrases.ts";
 import { FirstRunSteps } from "../apps/web/src/features/first-run/index.tsx";
 import { NextStep } from "../apps/web/src/pages/agents/index.tsx";
-import { ArtifactReader } from "../apps/web/src/widgets/artifact-reader/index.tsx";
+import { ArtifactReader, workMenu } from "../apps/web/src/widgets/artifact-reader/index.tsx";
 import { UploadPanel } from "../apps/web/src/features/upload-artifact/index.tsx";
 import { ReworkArtifactPanel } from "../apps/web/src/features/rework-artifact/index.tsx";
 
@@ -286,8 +286,11 @@ test("the work page copies one phrase; the new-version panel asks the agent firs
       onDownload: () => {},
     }),
   );
-  assert.match(reader, /Скопировать для агента/);
-  assert.ok(reader.includes(`title="${improvePhrase(work.title, url)}"`));
+  // «Скопировать для агента» is the first action in «…»; the phrase names the page.
+  assert.match(reader, /aria-label="Ещё действия"/);
+  const menu = workMenu({ work, shown: revision, setPanel: () => {}, onDownload: () => {}, onCopyForAgent: () => {} });
+  assert.equal(menu[0]?.label, "Скопировать для агента");
+  assert.match(improvePhrase(work.title, url), new RegExp(url.replace(/[.?]/g, "\\$&")));
   assert.doesNotMatch(reader, /artifactId:|revisionId:/);
 
   const version = renderToStaticMarkup(

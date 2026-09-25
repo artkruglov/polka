@@ -3,19 +3,17 @@ import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
 import { Button, IconButton, Notice } from "../../shared/ui/controls.tsx";
 import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
 import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
-import { ArtifactReader } from "../../widgets/artifact-reader/index.tsx";
+import {
+  ArtifactReader,
+  readerTabFromSearch,
+  withReaderTab,
+} from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { CompareRevisions } from "../../features/compare-revisions/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  ChevronRight,
-  Maximize2,
-  Menu,
-  MessageCircle,
-  Share2,
-} from "lucide-react";
+import { flushSync } from "react-dom";
+import { ArrowLeft, Menu } from "lucide-react";
 import { useWorkComments } from "../../widgets/comments/index.ts";
 import type {
   Artifact,
@@ -24,7 +22,6 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
-import { profileView } from "../../entities/artifact/format.ts";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
@@ -93,11 +90,26 @@ export function App() {
     [loadingMore, setLoadingMore] = useState(false),
     [mobile, setMobile] = useState(false),
     [refresh, setRefresh] = useState(0),
-    [history, setHistory] = useState(false),
+    // «Версии» survives a reload: /works/:id?tab=versions.
+    [history, setHistoryState] = useState(
+      () =>
+        location.pathname.startsWith("/works/") &&
+        readerTabFromSearch(location.search) === "versions",
+    ),
     [notice, setNotice] = useState(""),
     [trashBusy, setTrashBusy] = useState(false),
     [trashActionError, setTrashActionError] = useState("");
   const stageRef = useRef<HTMLElement>(null);
+  // The reader's tab lives in the address too (replaced, not pushed).
+  const setHistory = (value: boolean) => {
+    setHistoryState(value);
+    if (location.pathname.startsWith("/works/"))
+      window.history.replaceState(
+        window.history.state,
+        "",
+        withReaderTab(location.href, value ? "versions" : "work"),
+      );
+  };
   // The tab names the open work (the owner's own title) or the trash.
   useDocumentTitle(selected ? (work?.title ?? "Работа") : trashView ? "Корзина" : null);
   useEffect(() => setTrashActionError(""), [panel, selected]);
@@ -126,7 +138,9 @@ export function App() {
       setWork(null);
       setViewed(null);
       setPanel(null);
-      setHistory(false);
+      setHistoryState(
+        !!nextSelected && readerTabFromSearch(location.search) === "versions",
+      );
       setLoading(false);
       setError("");
       trashBusyRef.current = false;
@@ -146,7 +160,7 @@ export function App() {
     setWork(null);
     setViewed(null);
     setError("");
-    setHistory(false);
+    setHistoryState(false);
     setPanel(nextPanel);
     trashBusyRef.current = false;
     setTrashBusy(false);
@@ -386,10 +400,18 @@ export function App() {
     />
   );
 
+  const notices = (
+    <>
+      {notice && <Notice onDismiss={() => setNotice("")}>{notice}</Notice>}
+      <ErrorNotice error={error} />
+    </>
+  );
+
   return (
     <AppShell
       current="shelf"
       account={account}
+      foldableRail={!!selected}
       className={
         selected ? "app work-layout reader-layout" : "app shelf-layout"
       }
@@ -413,55 +435,8 @@ export function App() {
           workComments.available && workComments.open ? "open" : undefined
         }
       >
-        {selected && <header className="topbar">
-          <div className="top-start">
-            <IconButton label="Назад на полку" onClick={() => open(null)}><ArrowLeft /></IconButton>
-            <nav className="topbar-path" aria-label="Путь">
-              <a href="/" onClick={(e) => { e.preventDefault(); open(null); }}>
-                {folders.find((f) => f.id === work?.folderId)?.name ?? "Моя полка"}
-              </a>
-              <ChevronRight aria-hidden="true" />
-              <span aria-current="page">{work?.title ?? "Работа"}</span>
-            </nav>
-          </div>
-          {work && !work.trashedAt && (
-            <div className="topbar-actions">
-              {workComments.available && (
-                <Button
-                  variant="secondary"
-                  className="topbar-comments"
-                  aria-pressed={workComments.open}
-                  aria-controls="work-comments"
-                  aria-label={`${workComments.label}: ${workComments.count}${workComments.unread ? `, новых ${workComments.unread}` : ""}`}
-                  onClick={workComments.onToggle}
-                >
-                  <MessageCircle /> {workComments.count}
-                  {workComments.unread > 0 && (
-                    <span className="topbar-unread">+{workComments.unread}</span>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                className="topbar-fullscreen"
-                onClick={() => void stageRef.current?.requestFullscreen?.()}
-              >
-                <Maximize2 /> На весь экран
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => setPanel("share")}
-                disabled={!profileView(work.revision).linkable && !work.share}
-                title={profileView(work.revision).linkable ? undefined : profileView(work.revision).text}
-              >
-                <Share2 /> Поделиться
-              </Button>
-            </div>
-          )}
-        </header>}
         <main>
-          {notice && <Notice onDismiss={() => setNotice("")}>{notice}</Notice>}
-          <ErrorNotice error={error} />
+          {!selected && notices}
           {selected ? (
             work && shown ? (
               <ArtifactReader
@@ -478,7 +453,25 @@ export function App() {
                 setHistory={setHistory}
                 setViewed={setViewed}
                 setPanel={setPanel}
+                notices={notices}
+                onBack={() => open(null)}
                 stageRef={stageRef}
+                onFullscreen={() => {
+                  // The stage is hidden under «Версии»: show it first.
+                  if (history) flushSync(() => setHistory(false));
+                  void stageRef.current?.requestFullscreen?.();
+                }}
+                comments={
+                  workComments.available
+                    ? {
+                        label: workComments.label,
+                        count: workComments.count,
+                        unread: workComments.unread,
+                        open: workComments.open,
+                        onToggle: workComments.onToggle,
+                      }
+                    : undefined
+                }
                 compare={
                   history ? (
                     <CompareRevisions revisions={revisions} shown={shown} />
@@ -509,9 +502,22 @@ export function App() {
                   />
                 }
               />
-            ) : loading ? (
-              <div className="empty" role="status">Открываем работу…</div>
-            ) : null
+            ) : (
+              <div className="work-reader">
+                <header className="work-bar">
+                  <div className="work-bar-lead">
+                    <IconButton label="Назад на полку" size="sm" onClick={() => open(null)}>
+                      <ArrowLeft />
+                    </IconButton>
+                    <span className="work-bar-title">Работа</span>
+                  </div>
+                </header>
+                {notices}
+                {loading && (
+                  <div className="empty" role="status">Открываем работу…</div>
+                )}
+              </div>
+            )
           ) : trashView ? (
             <TrashPanel
               items={trashItems}
