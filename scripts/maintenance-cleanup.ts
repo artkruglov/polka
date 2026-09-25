@@ -326,6 +326,7 @@ export async function runMaintenanceCleanup(
   const emailChallengesRemoved = await scope.transaction(async (c) => {
     for (const sql of [
       "DELETE FROM viewer_grants WHERE expires_at<now()",
+      "DELETE FROM project_view_grants WHERE expires_at<now()",
       "DELETE FROM grants WHERE expires_at<now()",
       "DELETE FROM sessions WHERE expires_at<now()",
       "DELETE FROM agent_connection_csrf WHERE expires_at<now()",

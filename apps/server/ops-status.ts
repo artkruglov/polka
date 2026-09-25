@@ -51,6 +51,7 @@ async function maintenance(): Promise<Check> {
          SELECT expires_at FROM sessions WHERE expires_at<now()
          UNION ALL SELECT expires_at FROM grants WHERE expires_at<now()
          UNION ALL SELECT expires_at FROM viewer_grants WHERE expires_at<now()
+         UNION ALL SELECT expires_at FROM project_view_grants WHERE expires_at<now()
        ) expired`,
     );
     const overdueSeconds = Number(row.overdue);

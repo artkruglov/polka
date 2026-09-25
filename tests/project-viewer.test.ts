@@ -227,6 +227,11 @@ test("a link opens the whole project for a recipient until it is revoked", async
   // The view follows the link, not the 60-second grant it was issued from.
   await db.query("UPDATE grants SET expires_at=now()-interval '1 second' WHERE share_id=$1", [shared.json().share.id]);
   assert.equal((await view(url + "screens/index.html")).statusCode, 200);
+  // A link paused after reports closes the open project at once.
+  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [shared.json().share.id]);
+  assert.equal((await view(url)).statusCode, 404);
+  await db.query("UPDATE shares SET moderation='none' WHERE id=$1", [shared.json().share.id]);
+  assert.equal((await view(url)).statusCode, 200);
   await db.query("UPDATE shares SET revoked=true WHERE id=$1", [shared.json().share.id]);
   assert.equal((await view(url)).statusCode, 404);
 });
