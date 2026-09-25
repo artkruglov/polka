@@ -3,6 +3,8 @@ import { z } from "zod";
 // does not pull in zod; this module re-exports them.
 export {
   MAX_BYTES,
+  PROJECT_MAX_BYTES,
+  PROJECT_MAX_FILES,
   MAX_TITLE,
   MIME,
   looksLikeHtml,
