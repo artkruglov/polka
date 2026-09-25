@@ -6,6 +6,7 @@ import {
   searchSnippet,
 } from "./search-text.ts";
 import { registerAgentContext } from "./agent-context.ts";
+import { createTeamShelfInTransaction, shelvesOf } from "./shelves.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { indexable, robotsTxt } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
@@ -676,6 +677,18 @@ export async function createApp() {
         )
       ).rows,
   );
+  // Shelves the account may open (docs/specs/TEAM_SHELVES.md): its own, then
+  // department shelves while TEAM_SHELVES is on.
+  app.get("/api/shelves", async (req) => {
+    const actor = await identity(req);
+    return { items: await shelvesOf(actor.id) };
+  });
+  app.post("/api/shelves", async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    const input = z.object({ name: z.string().max(200) }).strict().parse(req.body);
+    return transaction((c) => createTeamShelfInTransaction(c, actor, input.name));
+  });
   app.post("/api/folders", async (req) => {
     const actor = await identity(req),
       input = z

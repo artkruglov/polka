@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 041.
+-- Operator-reviewed recipe for the Polka schema through migration 042.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>41
+     OR (SELECT count(*) FROM public.schema_migrations)<>42
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>41 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 041';
+     OR (SELECT max(version) FROM public.schema_migrations)<>42 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 042';
   END IF;
 END $$;
 
@@ -174,5 +174,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.revision_covers TO :"runtim
 -- shelf and deletes it when the content is purged; everything else goes
 -- with the work (ON DELETE CASCADE).
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtime_role";
+-- Department shelves (042): tenants and accounts gain columns, covered by
+-- their table grants above. The application adds and updates members (a
+-- member leaves by state='revoked', never DELETE; rows go with their shelf or
+-- account by ON DELETE CASCADE) and appends to the shelf journal.
+GRANT SELECT, INSERT, UPDATE ON TABLE public.tenant_members TO :"runtime_role";
+GRANT SELECT, INSERT ON TABLE public.tenant_member_events TO :"runtime_role";
+GRANT USAGE, SELECT ON SEQUENCE public.tenant_member_events_id_seq TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 041
+\echo Runtime grants installed for the reviewed schema through migration 042
