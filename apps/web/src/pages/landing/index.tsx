@@ -65,8 +65,9 @@ export function Landing() {
             <span>Покажите другим.</span>
           </h1>
           <p>
-            Сохраните отчёт, страницу или прототип из чата. Отправьте ссылку —
-            получателю не нужен аккаунт в Claude или ChatGPT.
+            Сохраните отчёт, страницу или прототип из любого агента. Отправьте
+            ссылку — получателю не нужен аккаунт в Claude или ChatGPT. А
+            продолжить работу можно в другом чате или другом агенте.
           </p>
 
           <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
@@ -163,8 +164,8 @@ export function Landing() {
             {
               icon: <History />,
               n: "03",
-              title: "Возвращайтесь",
-              text: "Новая версия не ломает отправленную ссылку. История сохраняется, к любой версии можно вернуться.",
+              title: "Продолжайте",
+              text: "Любой ваш агент найдёт работу на полке, прочитает исходник и сохранит новую версию. Отправленная ссылка при этом не меняется.",
               href: "/discover",
               cta: "Посмотреть примеры",
             },
@@ -198,11 +199,12 @@ export function Landing() {
         <section className="landing-selfhost" aria-labelledby="landing-selfhost-title">
           <div className="landing-selfhost-intro">
             <span className="eyebrow">Открытый код · {SOURCE_LICENSE}</span>
-            <h2 id="landing-selfhost-title">Разверните у себя в компании</h2>
+            <h2 id="landing-selfhost-title">Одна полка на всю компанию</h2>
             <p>
-              Один Docker-образ, PostgreSQL и S3-хранилище с версионированием на
-              ваших серверах. Данные не покидают вашу сеть. Для закрытых
-              доработок есть коммерческая лицензия.
+              Сотрудники работают в разных агентах, а результаты собираются в
+              одном месте на ваших серверах: один Docker-образ, PostgreSQL и
+              ваше S3-хранилище с версионированием. Данные не покидают вашу
+              сеть. Для закрытых доработок есть коммерческая лицензия.
             </p>
           </div>
           <ol className="landing-selfhost-steps">
