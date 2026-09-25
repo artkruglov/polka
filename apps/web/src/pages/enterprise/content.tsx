@@ -9,10 +9,10 @@ import {
   KeyRound,
   LibraryBig,
   Plug,
-  Search,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import type { EnterpriseInterest } from "../../../../../packages/contracts/constants.ts";
 import { Badge, LinkButton } from "../../shared/ui/controls.tsx";
@@ -101,24 +101,28 @@ const VALUES: Array<{
   },
 ];
 
-/** What the first pilots shape: none of it is on main yet, and the page says so. */
+/**
+ * What the first pilots shape, in the roadmap's order (docs/roadmap.md,
+ * stage 6): none of it is on main yet, and the page says so.
+ */
 const NEXT: Array<{ icon: React.ReactNode; title: string; points: string[] }> = [
   {
-    icon: <Search />,
-    title: "Найти и продолжить",
+    icon: <Users />,
+    title: "Общие полки отделов",
     points: [
-      "Агент читает нужный фрагмент работы, а не весь файл.",
-      "Варианты одной работы от разных агентов рядом: выбрать лучший, остальные — в историю.",
-      "Снимок полки отдела на дату: все работы в тех версиях, что были тогда.",
+      "Полка отдела с ролями: читатель, автор, куратор. Сотрудники и их агенты сохраняют туда работы и ищут в них вместе.",
+      "Работы остаются у компании, когда сотрудник уходит.",
+      "Администратор компании сам управляет участниками и полками, без оператора установки.",
     ],
   },
   {
     icon: <ShieldCheck />,
-    title: "Контроль над агентами",
+    title: "Доступ и контроль",
     points: [
-      "Подключение агента только к папке или библиотеке, в том числе только для чтения.",
+      "Ссылки только для сотрудников: открываются после входа через SSO компании.",
+      "Политики внешних ссылок: предельный срок и кто может их выпускать.",
+      "Агент подключается только к нужной полке или библиотеке, в том числе только для чтения.",
       "Журнал действий каждого агента: что сохранил, изменил, кому открыл ссылку.",
-      "Политики ссылок: предельный срок и кто может открывать ссылки наружу.",
     ],
   },
   {
@@ -128,8 +132,26 @@ const NEXT: Array<{ icon: React.ReactNode; title: string; points: string[] }> = 
       "События о новых версиях и ссылках — для Битрикс24, Jira, 1С и рабочих чатов.",
       "Выгрузка утверждённых версий в сетевые папки и диски: HTML, PDF-снимок и манифест с SHA-256.",
       "Встраивание интерактивных работ в вики и корпоративный портал.",
-      "Полка отдела как сетевая папка, а для Claude Code и Codex — выгрузка работы в папку и обратно.",
     ],
+  },
+];
+
+/** How Полка works in a company today, in three steps. */
+const HOW: Array<{ icon: React.ReactNode; title: string; text: string }> = [
+  {
+    icon: <Server />,
+    title: "Установите и подключите вход",
+    text: "Docker-образ, PostgreSQL и ваше S3-хранилище. Сотрудники входят через IdP компании по OpenID Connect или через Яндекс ID.",
+  },
+  {
+    icon: <Bot />,
+    title: "Сотрудники подключают агентов",
+    text: "Каждый говорит своему агенту одну фразу — ChatGPT, Claude, Codex или Claude Code. Права выбирает сам; все подключения видны и отзываются.",
+  },
+  {
+    icon: <LibraryBig />,
+    title: "Работы — на полках, шаблоны — в библиотеке",
+    text: "Агент сохраняет результат на полку сотрудника: с версиями и поиском по тексту. Утверждённые шаблоны лежат в общей библиотеке команды, наружу работа уходит по отзываемой ссылке.",
   },
 ];
 
@@ -188,8 +210,8 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     a: "Сейчас — через ваше S3-хранилище, вход по OpenID Connect, MCP для агентов и HTTP API для скриптов и внутренних ботов. События для ваших систем и выгрузка в сетевые папки и диски — в разработке: напишите в заявке, какие системы у вас, и мы начнём с них.",
   },
   {
-    q: "Есть ли поддержка и SLA?",
-    a: "По открытой лицензии код даётся «как есть», без гарантий. Поддержка, гарантии и SLA — по договору вместе с коммерческой лицензией; объём согласуем.",
+    q: "Видят ли коллеги работы друг друга?",
+    a: "Сейчас у каждого сотрудника своя полка. Коллеги видят работу, когда автор делится ссылкой или публикует её в библиотеке шаблонов команды. Общие полки отделов с ролями — первое, что мы делаем для пилотов.",
   },
   {
     q: "Используете ли вы наши работы для обучения ИИ?",
@@ -216,13 +238,13 @@ export function EnterpriseContent({
       <section className="enterprise-hero">
         <div>
           <span className="eyebrow">Полка для компаний</span>
-          <h1>Одна полка для всего, что компания делает с&nbsp;ИИ</h1>
+          <h1>Всё, что сотрудники делают с&nbsp;ИИ, — в&nbsp;одном месте</h1>
           <p>
             Продажи работают в ChatGPT, аналитики — в Claude, разработчики — в
-            Codex и Claude Code. Отчёты, расчёты и прототипы из всех агентов
-            собираются на одной полке: с версиями, шаблонами команды и
-            ссылками, которые можно отозвать. Агент сотрудника сохраняет
-            работу сам.
+            Codex и Claude Code. Агент каждого сам сохраняет отчёты, расчёты и
+            прототипы на Полку вашей компании: с версиями, поиском по тексту и
+            ссылками, которые можно отозвать. Утверждённые шаблоны — в общей
+            библиотеке команды.
           </p>
           <div className="enterprise-hero-actions">
             <LinkButton variant="primary" href="#request">
@@ -263,15 +285,29 @@ export function EnterpriseContent({
               <em>{item.tag}</em>
             </div>
           ))}
-          <figcaption>Пример полки команды</figcaption>
+          <figcaption>Полка сотрудника: работы из трёх агентов</figcaption>
         </figure>
+      </section>
+
+      <section className="enterprise-how" aria-labelledby="enterprise-how-title">
+        <h2 id="enterprise-how-title">Как это работает в компании</h2>
+        <ol>
+          {HOW.map((step, index) => (
+            <li key={step.title}>
+              <span className="enterprise-icon">{step.icon}</span>
+              <small>{String(index + 1).padStart(2, "0")}</small>
+              <h3>{step.title}</h3>
+              <p>{step.text}</p>
+            </li>
+          ))}
+        </ol>
       </section>
 
       <section
         className="enterprise-values"
         aria-labelledby="enterprise-values-title"
       >
-        <h2 id="enterprise-values-title">Что получает компания</h2>
+        <h2 id="enterprise-values-title">Что уже работает</h2>
         <div className="enterprise-grid">
           {VALUES.map((value) => (
             <article key={value.title}>
@@ -295,8 +331,9 @@ export function EnterpriseContent({
       >
         <h2 id="enterprise-next-title">Что делаем для первых компаний</h2>
         <p className="enterprise-next-lead">
-          Этого пока нет в коде. Порядок определяем вместе с первыми пилотами —{" "}
-          <a href="#request">напишите в заявке</a>, что нужно вам.
+          Этого пока нет в коде. Сначала — общие полки и доступ, затем
+          встраивание в системы первого заказчика.{" "}
+          <a href="#request">Напишите в заявке</a>, что нужно вам.
         </p>
         <div className="enterprise-grid">
           {NEXT.map((item) => (

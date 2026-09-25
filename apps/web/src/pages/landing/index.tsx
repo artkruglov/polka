@@ -199,12 +199,12 @@ export function Landing() {
         <section className="landing-selfhost" aria-labelledby="landing-selfhost-title">
           <div className="landing-selfhost-intro">
             <span className="eyebrow">Открытый код · {SOURCE_LICENSE}</span>
-            <h2 id="landing-selfhost-title">Одна полка на всю компанию</h2>
+            <h2 id="landing-selfhost-title">Полка для вашей компании</h2>
             <p>
-              Сотрудники работают в разных агентах, а результаты собираются в
-              одном месте на ваших серверах: один Docker-образ, PostgreSQL и
-              ваше S3-хранилище с версионированием. Данные не покидают вашу
-              сеть. Для закрытых доработок есть коммерческая лицензия.
+              Сотрудники работают в разных агентах, а результаты сохраняются
+              на Полке на ваших серверах: один Docker-образ, PostgreSQL и ваше
+              S3-хранилище с версионированием. Данные не покидают вашу сеть.
+              Для закрытых доработок есть коммерческая лицензия.
             </p>
           </div>
           <ol className="landing-selfhost-steps">
