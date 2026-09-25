@@ -3,6 +3,7 @@
 // sends each file, then finalizes. The same bundle functions as a browser
 // upload, each step in its own transaction that rechecks the connection and
 // its scope: capture for a new work, revise for a new version.
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PoolClient } from "pg";
 import {
@@ -18,10 +19,16 @@ import {
   type Actor,
 } from "./artifacts.ts";
 import { Problem, missing } from "./errors.ts";
+import { limitAttempts } from "./auth.ts";
+import { config } from "./config.ts";
 import {
+  MCP_AUDIENCE,
+  PROJECT_UPLOAD_AUDIENCE,
+  withServiceActorDerivedScopeTransaction,
   withServiceActorTransaction,
   type ServiceActor,
 } from "./service-auth.ts";
+import { sha256 } from "./storage.ts";
 
 export const beginProjectSchema = z
   .object({
@@ -136,4 +143,72 @@ export async function finalizeProjectUpload(actor: ServiceActor, uploadId: strin
     await lockProjectUpload(c, who, uploadId);
     return finalizeBundleUploadInTransaction(c, who, uploadId);
   });
+}
+
+export const PROJECT_TOKEN_MINUTES = 30;
+const PROJECT_TOKENS_PER_HOUR = 10;
+
+/**
+ * polka_project_upload: a token for the CLI (scripts/polka-publish-project.mjs)
+ * that an agent asks for over MCP, so the person copies nothing. It is a
+ * child of the asking connection: the same shelf and account, only its
+ * capture/revise scopes, the project routes only (PROJECT_UPLOAD_AUDIENCE),
+ * 30 minutes, and it stops when its parent is revoked.
+ */
+export async function issueProjectUploadToken(actor: ServiceActor) {
+  await limitAttempts(
+    `project-upload-token:${actor.connectionId}`,
+    PROJECT_TOKENS_PER_HOUR,
+    "1 hour",
+  );
+  const token = randomBytes(32).toString("base64url");
+  const row = await withServiceActorDerivedScopeTransaction(
+    actor,
+    async (_c, verified) => ({
+      scope: verified.scopes.includes("capture") ? ("capture" as const) : ("revise" as const),
+      value: null,
+    }),
+    async (c, verified) => {
+      if (verified.shelf?.role === "reader")
+        throw new Problem(
+          403,
+          "forbidden",
+          "На этой полке вы читатель: загружать проекты нельзя.",
+        );
+      if (verified.audience !== MCP_AUDIENCE)
+        throw new Problem(403, "forbidden", "Этот токен сам выдан для загрузки проекта.");
+      const scopes = verified.scopes.filter(
+        (scope) => scope === "capture" || scope === "revise",
+      );
+      const {
+        rows: [inserted],
+      } = await c.query(
+        `INSERT INTO agent_connections(
+           id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,parent_id
+         ) SELECT $1,$2,$3,$4,left('Загрузка проекта · '||parent.name,80),$5,$6,
+                  now()+make_interval(mins=>$7),parent.id
+           FROM agent_connections parent WHERE parent.id=$8
+         RETURNING expires_at`,
+        [
+          randomUUID(),
+          verified.tenantId,
+          verified.accountId,
+          sha256(token),
+          scopes,
+          PROJECT_UPLOAD_AUDIENCE,
+          PROJECT_TOKEN_MINUTES,
+          verified.connectionId,
+        ],
+      );
+      return inserted;
+    },
+  );
+  const cli = `${config.APP_ORIGIN}/api/v1/cli/polka-publish-project.mjs`;
+  return {
+    token,
+    expiresAt: new Date(row.expires_at).toISOString(),
+    cliUrl: cli,
+    command: `curl -fsSLO ${cli} && POLKA_TOKEN=${token} node polka-publish-project.mjs <folder> --dry-run`,
+    note: `The token works only for uploading a project, for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message.`,
+  };
 }

@@ -1,3 +1,4 @@
+import { issueProjectUploadToken } from "./project-upload.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { sourceForAgent, templatesForAgent } from "./agent-context.ts";
 import {
@@ -800,6 +801,28 @@ export function createMcpServer(actor: ServiceActor) {
         async (input) => asToolResult(await noteFromAgent(actor, input)),
       );
   }
+  // A folder of linked pages goes up as one project with the CLI; this hands
+  // the agent a short-lived token for it (project-upload.ts).
+  if (
+    (actor.scopes.includes("capture") || actor.scopes.includes("revise")) &&
+    actor.shelf?.role !== "reader"
+  )
+    server.registerTool(
+      "polka_project_upload",
+      {
+        title: "Token to upload a folder as a project",
+        description:
+          "For a folder of linked pages on this machine (a README and documents, HTML screens with their CSS and fonts, pictures): returns a one-time token and the exact command that downloads the Полка CLI and uploads the folder as one project (a tree of pages with working links). Run the command with --dry-run first, tell the owner what it would upload and skip, then run it again without --dry-run. For a new version of a project saved before, add --artifact <id> --base-revision <revision.id>. The token works only for project uploads, for 30 minutes, and only while this connection is live: pass it only in the environment of that command, never write it to a file, a commit or a message. Only where you can run shell commands (Claude Code, Codex); in a chat use polka_publish.",
+        inputSchema: z.object({}).strict(),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async () => withToolErrors(() => issueProjectUploadToken(actor)),
+    );
   if (
     config.HTML_LIVE_ENABLED &&
     (actor.scopes.includes("capture") || actor.scopes.includes("revise"))
