@@ -183,3 +183,29 @@ test("the schema keeps owners and department shelves apart", async () => {
     /owner role/,
   );
 });
+
+test("a personal shelf has no members but its owner; a deletion request revokes memberships", async () => {
+  await assert.rejects(
+    db.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'reader')", [admin.tenant, stranger.id]),
+    /no members but its owner/,
+  );
+  config.TEAM_SHELVES = "on";
+  const shelf = (await call("POST", "/api/shelves", admin, { name: "Закупки" })).json();
+  const leaving = await createAccount(`team-leaving-${randomBytes(5).toString("hex")}`, password);
+  await db.query(
+    "INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'author',$3)",
+    [shelf.id, leaving.id, admin.id],
+  );
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [leaving.id]);
+  const { rows: [row] } = await db.query(
+    "SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2",
+    [shelf.id, leaving.id],
+  );
+  assert.equal(row.state, "revoked");
+  // The owner's own row stays: the personal shelf goes with the account.
+  const { rows: [own] } = await db.query(
+    "SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2",
+    [leaving.tenant, leaving.id],
+  );
+  assert.equal(own.state, "active");
+});

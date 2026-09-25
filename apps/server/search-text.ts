@@ -108,8 +108,14 @@ export async function indexRevisionText(
  * Null when there is nothing to search for.
  */
 export function prefixQuery(q: string): string | null {
-  const words = (q.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, 8);
-  return words.length ? words.map((word) => `${word}:*`).join(" & ") : null;
+  // Words as Postgres's parser keeps them: an address (github.com), an
+  // e-mail or a version (3.14) is one lexeme, so it stays one quoted term.
+  // Letters, digits and . _ @ - only: no tsquery syntax can get through.
+  const words = (q.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}._@-]*/gu) ?? [])
+    .map((word) => word.replace(/[._@-]+$/, ""))
+    .filter(Boolean)
+    .slice(0, 8);
+  return words.length ? words.map((word) => `'${word}':*`).join(" & ") : null;
 }
 
 /** A fragment for an agent: the found words between «…». */
@@ -132,10 +138,20 @@ export const searchJoin = (artifact: string) =>
      AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                      WHERE b.revision_id=s.revision_id AND b.released_at IS NULL)`;
 
-/** Matches by title ($title, an ILIKE pattern) or by text ($query, a prefixQuery). */
+/**
+ * Matches by title ($title, an ILIKE pattern) or by text ($query, a
+ * prefixQuery). The text is matched in a subquery the GIN index can serve;
+ * a row of artifact_search is always its work's latest version.
+ */
 export const searchMatch = (artifact: string, title: string, query: string) =>
-  `(${title}::text IS NULL OR ${artifact}.title ILIKE ${title} ESCAPE '\\'
-    OR s.document @@ to_tsquery('russian',${query}::text))`;
+  `((${title}::text IS NULL AND ${query}::text IS NULL)
+    OR ${artifact}.title ILIKE ${title} ESCAPE '\\'
+    OR ${artifact}.id IN (
+      SELECT found.artifact_id FROM artifact_search found
+      WHERE ${query}::text IS NOT NULL
+        AND found.document @@ to_tsquery('russian',${query}::text)
+        AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
+                        WHERE b.revision_id=found.revision_id AND b.released_at IS NULL)))`;
 
 /** The fragment of the text around the found words, when the text matched. */
 export const searchSnippet = (query: string, options: string) =>

@@ -388,7 +388,7 @@ const ACTIVE_ELEMENTS = new Set([
   "embed",
   "applet",
 ]);
-const HIDDEN_TEXT = new Set(["script", "style", "template"]);
+const HIDDEN_TEXT = new Set(["script", "style", "template", "noscript"]);
 
 // Attributes whose value names or labels a field: the secret signal (a).
 const FIELD_NAMING = new Set(["name", "id", "placeholder", "aria-label"]);

@@ -40,8 +40,17 @@ export const isStaticSingleFileBundle = (r: Revision) =>
   (r.htmlProfile === "static" || r.htmlProfile === "limited") &&
   r.manifest?.files.length === 1 &&
   r.manifest.files[0].path === r.manifest.entrypoint;
-export const kindOf = (r: Pick<Revision, "mime">) =>
-  r.mime === "text/html"
+/** A folder of linked pages saved as one work (docs/specs/PROJECTS.md). */
+export const isProject = (r: Partial<Pick<Revision, "storageKind" | "manifest">>) =>
+  r.storageKind === "bundle" && r.manifest?.runtime === "project-v1";
+export const kindOf = (
+  r: Pick<Revision, "mime"> & Partial<Pick<Revision, "storageKind" | "manifest">>,
+) =>
+  isProject(r)
+    ? "Проект"
+    : r.mime === "text/markdown"
+      ? "Документ"
+      : r.mime === "text/html"
     ? "Страница"
     : r.mime === "text/plain"
       ? "Текст"
@@ -59,8 +68,15 @@ export type ProfileView = {
 // whether an isolated interactive session is available in this deployment.
 export function profileView(
   r: Pick<Revision, "mime" | "htmlProfile"> &
-    Partial<Pick<Revision, "inlineBuild">>,
+    Partial<Pick<Revision, "inlineBuild" | "storageKind" | "manifest">>,
 ): ProfileView {
+  if (isProject(r))
+    return {
+      label: "Проект",
+      text: "Получатель откроет весь проект: дерево страниц, документы и экраны, переходы по ссылкам между ними. Без сети и без входа.",
+      linkable: true,
+      badge: "Проект",
+    };
   if (r.mime === LINK_MIME)
     return {
       label: "Ссылка",
