@@ -1,0 +1,49 @@
+/* The top of the home shelf: «Подключите агента» as one compact block, or one slim line once an agent is connected. */
+.agent-hero { margin: 4px 0 var(--space-8); padding: 24px 28px 22px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); }
+.agent-hero-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.agent-hero-head h1 { max-width: 34ch; font-size: clamp(24px, 2.2vw, 30px); letter-spacing: -.035em; line-height: 1.15; }
+.agent-hero-hide { flex-shrink: 0; margin: -6px -10px 0 0; color: var(--muted); }
+.agent-hero-tabs { margin-top: 14px; gap: var(--space-5); }
+.agent-hero-tabs [role="tab"] { min-height: 44px; padding: 9px 0 11px; }
+.agent-hero-panel { display: grid; gap: 10px; max-width: 760px; padding-top: 16px; }
+.agent-hero-panel:focus-visible { outline-offset: 4px; }
+.agent-hero-lead { color: var(--ink-2); font-size: var(--text-md); line-height: var(--leading); }
+.agent-hero-copy { display: grid; gap: 6px; }
+.agent-hero-copy-lead { color: var(--muted); font-size: var(--text-sm); }
+.agent-hero-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-hero-copy-row > code { flex: 1 1 280px; min-width: 0; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 400 var(--text-base) / 1.45 var(--font-mono); overflow-wrap: anywhere; user-select: all; }
+.agent-hero-copy-row .field-note { flex-basis: 100%; }
+.agent-hero-then { color: var(--muted); font-size: var(--text-base); line-height: var(--leading); }
+.agent-hero-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: var(--text-base); }
+.agent-hero-link { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: var(--accent); font-weight: 500; }
+.agent-hero-link:hover { color: var(--accent-strong); }
+.agent-hero-link svg { width: 16px; height: 16px; }
+.agent-hero-or { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); }
+.agent-hero-upload { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: var(--text-base); }
+.agent-hero-upload svg { width: 16px; height: 16px; }
+.agent-hero-fine { color: var(--muted-2); font-size: var(--text-sm); }
+
+/* Slim: connected, hidden or still checking. One line, the shelf below. */
+.agent-hero--slim { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 20px; margin-bottom: var(--space-6); padding: 10px 12px 10px 16px; border-radius: var(--radius); }
+.agent-hero-line { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--ink-2); font-size: var(--text-base); line-height: 1.45; }
+.agent-hero-line > svg { flex-shrink: 0; width: 18px; height: 18px; color: var(--muted); }
+.agent-hero-line strong { font-weight: 600; }
+.agent-hero--slim[aria-busy="true"] .agent-hero-line { color: var(--muted); }
+.agent-hero-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+.agent-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+.agent-hero-actions .ui-button { min-height: 36px; }
+
+@media (max-width: 760px) {
+  .agent-hero { margin-bottom: var(--space-7); padding: 18px 16px 16px; }
+  .agent-hero-head h1 { font-size: 24px; }
+  .agent-hero-tabs { gap: 0 var(--space-4); }
+  .agent-hero-tabs [role="tab"] { white-space: nowrap; }
+  .agent-hero-foot .agent-hero-link { display: inline; line-height: 1.5; }
+  .agent-hero-foot .agent-hero-link svg { display: inline; vertical-align: -3px; margin-left: 2px; }
+  .agent-hero-copy-row > code { flex-basis: 100%; font-size: var(--text-sm); }
+  .agent-hero-copy-row > .ui-button { width: 100%; }
+  .agent-hero-foot { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .agent-hero--slim { align-items: flex-start; flex-direction: column; margin-bottom: var(--space-5); padding: 10px 12px; }
+  .agent-hero-line { align-items: flex-start; }
+  .agent-hero-dot { margin-top: 6px; }
+}

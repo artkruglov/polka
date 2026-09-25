@@ -13,12 +13,12 @@
 | shared/ui | Button, LinkButton, IconButton, Chip, Segmented, Avatar, ChoiceCard, TextField, SelectField, Tabs, Dialog (center/panel/wide), ActionMenu, CopyText, Notice, EmptyState, Status | features, widgets, pages |
 | shared/styles | tokens.css (единственный набор токенов) и base.css (reset, утилиты) | main.tsx |
 | entities/account, folder, artifact | состояние пользователя, папки, форматирование материала | features и выше |
-| features/import-url | форма, очередь, восстановление задания | bring |
+| features/agent-hero | верх главной полки: «Подключите агента» с переключателем клиентов (Claude, Claude Code, Codex, другой MCP-клиент) или одна строка, когда агент подключён; CSS из main.tsx для Node-тестов | shelf |
 | features/capture-file, share-artifact, upload-artifact | отдельные пользовательские действия | страницы и reader |
 | features/compare-revisions | сравнение двух версий: загрузка исходника, diff в Web Worker (`shared/lib/line-diff*.ts`), `DiffView` без CSS-импорта для Node-тестов | app/workspace передаёт в reader слотом `compare` |
-| features/paste-code | вставка кода артефакта из чата; квитанцию (`SavedWork` из capture-file) подставляет страница | bring, provider-guide через bring |
-| features/first-run | чек-лист первых шагов (агент, работа, ссылка) и сохранение страницы-примера; CSS подключается из main.tsx, потому что `FirstRunSteps` рендерят Node-тесты | shelf, start |
-| entities/onboarding | вывод шагов из подключений и списка работ (`steps.ts`), фраза и подсказки клиентов, страница-пример, скрытие в localStorage | features/first-run, shelf |
+| features/paste-code | вставка кода артефакта из чата; квитанцию (`SavedWork` из capture-file) подставляет страница | bring |
+| features/first-run | чек-лист первых шагов (агент, работа, ссылка) и сохранение страницы-примера; CSS подключается из main.tsx, потому что `FirstRunSteps` рендерят Node-тесты | start |
+| entities/onboarding | вывод шагов из подключений и списка работ (`steps.ts`), фраза и подсказки клиентов, шаги подключения и команды плагина (`agent-setup.ts`), страница-пример, скрытие в localStorage | features/first-run, features/agent-hero, agents |
 | widgets/navigation | единая глобальная навигация desktop/mobile | страницы |
 | widgets/shelf-navigation | папки и корзина; одинаковые пункты на desktop/mobile | app/workspace |
 | widgets/artifact-reader, artifact-preview | материал, версии и изолированный просмотр | app/workspace, recipient |
@@ -113,7 +113,7 @@ LivePreview и оставшиеся действия ArtifactReader переве
 
 Последняя ручная кнопка workspace (повтор соединения) и закрытие общего Dialog переведены на Button. Нативные button теперь остаются только внутри shared Button/ActionMenu/Tabs, где реализуется семантика примитива. Это не доказательство визуального соответствия всех маршрутов; оно остаётся отдельным критерием.
 
-Bring принимает контекст folder из query и передаёт initialFolderId вниз в import-url/capture-file. Обе features используют SelectField и useFolders; FileSave больше не фиксирует folderId:null. Изменение интерфейса не ослабляет серверную проверку принадлежности папки.
+Bring принимает контекст folder из query и передаёт initialFolderId вниз в capture-file и paste-code. Обе features используют SelectField и useFolders; FileSave больше не фиксирует folderId:null. Изменение интерфейса не ослабляет серверную проверку принадлежности папки.
 
 ### Badge
 
@@ -177,7 +177,7 @@ Reader: хлебные крошки остались только в верхн�
 
 ### Аккаунт и возможности установки
 
-`entities/account` держит один запрос `/me` на загрузку страницы: гостем считается только 401, остальные ошибки дают `error` и общий `retry` (`useAccountState`). Вход и выход обновляют кэш через `rememberAccount`, поэтому `app/workspace` больше не делает собственный `me()`. Возможности установки читает один кэшированный `entities/capabilities` (`/capabilities`): `emailLogin`, `urlImport`, `livePreview`. Отдельный `features/import-url/useImportCapabilities` удалён; `LivePreview` остаётся на своём запросе.
+`entities/account` держит один запрос `/me` на загрузку страницы: гостем считается только 401, остальные ошибки дают `error` и общий `retry` (`useAccountState`). Вход и выход обновляют кэш через `rememberAccount`, поэтому `app/workspace` больше не делает собственный `me()`. Возможности установки читает один кэшированный `entities/capabilities` (`/capabilities`): `emailLogin`, `livePreview` и другие. Импорта по ссылке в интерфейсе нет (с 25.09.2026); `LivePreview` остаётся на своём запросе.
 
 ### Разделение бандла
 

@@ -1,10 +1,9 @@
 // The provider table (packages/contracts/link-providers.ts): which links the
-// server never opens, which it reads through an API or the renderer, and the
-// card a Claude link gets on /bring. One table for server, web and renderer.
+// server never opens and which it reads through an API or the renderer. One
+// table for server and renderer; the web app no longer imports links
+// (2026-09-25).
 import test from "node:test";
 import assert from "node:assert/strict";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
   LINK_PROVIDERS,
   defaultLinkTitle,
@@ -12,8 +11,6 @@ import {
   matchLink,
   renderable,
 } from "../packages/contracts/link-providers.ts";
-import { classify } from "../apps/web/src/features/import-url/classify-link.ts";
-import { CLAUDE_PHRASE, ProviderGuide, agentPhrase } from "../apps/web/src/features/import-url/provider-guide.tsx";
 import { prepareImport } from "../apps/server/url-import/prepare.ts";
 
 test("each link source has its route: fetch, one try, render, API or the user's side", () => {
@@ -105,60 +102,4 @@ test("the server refuses AI-chat links it may not open, and ChatGPT/Claude witho
   // With the renderer on, extension-only links still never leave the server.
   for (const url of ["https://claude.ai/share/0b5c2f0e-1111-4222-8333-444455556666", "https://v0.app/chat/x"])
     await assert.rejects(prepareImport(url, { renderedEnabled: true }), { code: "provider_adapter_required" }, url);
-});
-
-test("web classification follows the table and this installation's sources", () => {
-  assert.equal(classify("https://v0.app/chat/x").status, "provider");
-  const share = "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed";
-  assert.equal(classify(share).status, "provider");
-  assert.equal(classify(share, ["standalone-html", "server-fetch"]).status, "ready");
-  const artifact = "https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo";
-  assert.equal(classify(artifact).status, "provider");
-  assert.equal(classify(artifact, ["server-try"]).status, "ready");
-  assert.match(classify(artifact, ["server-try"]).explain, /один раз/);
-  assert.equal(classify("https://www.perplexity.ai/page/x").source, "perplexity");
-  const gist = "https://gist.github.com/octocat/aa5a315d61ae9438b18d";
-  assert.equal(classify(gist).status, "unsupported_host");
-  assert.equal(classify(gist, ["standalone-html", "github-gist"]).status, "ready");
-  const lovable = "https://my-app.lovable.app/";
-  assert.equal(classify(lovable, ["standalone-html", "github-gist"]).status, "unsupported_host");
-  const rendered = classify(lovable, ["standalone-html", "github-gist", "rendered-spa"]);
-  assert.equal(rendered.status, "ready");
-  assert.match(rendered.explain, /интерактив может не работать/);
-});
-
-test("a Claude link the server could not open gets the card: ask Claude, keep the link, drop the file", async () => {
-  (globalThis as any).crypto ??= (await import("node:crypto")).webcrypto;
-  const url = "https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo";
-  const html = renderToStaticMarkup(
-    React.createElement(ProviderGuide, {
-      result: { ...classify(url, ["server-try"]), status: "provider" },
-      url,
-      failure: "source_blocked",
-      onFile: () => {},
-      fileSave: React.createElement("div", { "data-testid": "drop" }, "DROPZONE"),
-    }),
-  );
-  assert.match(html, /Артефакт Claude/);
-  assert.match(html, /claude\.ai/);
-  assert.match(html, /проверку на бота/);
-  // In this order: Claude itself, the link as a work, the downloaded file right in the card.
-  const ask = html.indexOf("Попросить Claude");
-  const link = html.indexOf("Сохранить как ссылку");
-  const drop = html.indexOf("Скачайте в Claude (Export → Download) и перетащите сюда");
-  assert.ok(ask >= 0 && link > ask && drop > link, `order: ${ask} ${link} ${drop}`);
-  assert.ok(html.includes(CLAUDE_PHRASE));
-  assert.match(html, /Скопировать фразу/);
-  assert.ok(html.indexOf("DROPZONE") > drop, "the drop zone is inside the card");
-  // The extension and the bookmarklet wait behind a small link.
-  assert.match(html, /<details class="url-import-oneclick"><summary>Сохранять в один клик<\/summary>/);
-  assert.match(html, /data-slot="bookmarklet">Без расширения: <a href="\/bookmarklet">/);
-  // Another service: the phrase names the link for the user's agent.
-  const v0 = "https://v0.app/chat/demo";
-  const other = renderToStaticMarkup(
-    React.createElement(ProviderGuide, { result: classify(v0), url: v0, onFile: () => {} }),
-  );
-  assert.match(other, /Попросить агента/);
-  assert.ok(other.includes(agentPhrase(v0)));
-  assert.match(other, /пока сохраняет артефакты Claude и ChatGPT/);
 });

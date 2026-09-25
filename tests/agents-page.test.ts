@@ -4,7 +4,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   AGENT_CLIENT_IDS,
+  CLAUDE_PLUGIN_INSTALL,
   CLIENT_STORAGE_KEY,
+  CODEX_PLUGIN_INSTALL,
   SAVE_PHRASE,
   agentClients,
   clientSetup,
@@ -57,14 +59,27 @@ test("every client has a card and a panel; the commands are the ones /connect gi
     assert.ok(copies.some((copy) => copy.kind === "url"));
     assert.ok(!copies.some((copy) => copy.kind === "command"), id);
   }
-  // Terminal agents: the phrase first, the command as the fallback.
-  for (const id of ["codex", "claude-code"] as const) {
+  // Terminal agents: the plugin command first (MCP server and skills in one
+  // install), the phrase for the agent as the alternative.
+  for (const [id, install] of [
+    ["codex", CODEX_PLUGIN_INSTALL],
+    ["claude-code", CLAUDE_PLUGIN_INSTALL],
+  ] as const) {
     const [first] = clientSetup(origin, id).steps;
-    assert.equal(first.copies?.[0].kind, "phrase");
-    assert.equal(first.copies?.[0].value, connectPhrase(origin));
-    assert.equal(first.copies?.[1].kind, "command");
-    assert.match(first.copies?.[1].lead ?? "", /или выполните сами/);
+    assert.equal(first.copies?.[0].kind, "command");
+    assert.equal(first.copies?.[0].value, install);
+    assert.equal(first.copies?.[1].kind, "phrase");
+    assert.equal(first.copies?.[1].value, connectPhrase(origin));
+    assert.match(first.copies?.[1].lead ?? "", /выполнит команду сам/);
   }
+  assert.equal(
+    CLAUDE_PLUGIN_INSTALL,
+    "claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka",
+  );
+  assert.equal(
+    CODEX_PLUGIN_INSTALL,
+    "codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka",
+  );
   // Codex is not the ChatGPT website; the card and the panel both say so.
   assert.match(
     agentClients.find((c) => c.id === "codex")!.hint,
@@ -97,9 +112,9 @@ test("the setup panel renders numbered steps with copy buttons for one client", 
   assert.match(claudeCode, /Подключи Полку: https:\/\/polochka\.app\/connect/);
   assert.match(
     claudeCode,
-    /claude mcp add --transport http --scope user polka/,
+    /claude plugin marketplace add artkruglov\/polka &amp;&amp; claude plugin install polka@polka/,
   );
-  assert.match(claudeCode, /или выполните сами/);
+  assert.match(claudeCode, /plugin:polka:polka/);
   assert.doesNotMatch(claudeCode, /Как только агент подключится/);
 });
 

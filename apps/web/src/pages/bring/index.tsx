@@ -5,75 +5,36 @@ import { FileSave, SavedWork } from "../../features/capture-file/index.tsx";
 import { PasteCode } from "../../features/paste-code/index.tsx";
 import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { UrlImportCard } from "../../features/import-url/card.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
-import { scrollBehavior } from "../../shared/lib/motion.ts";
 
 type Capture = "file" | "paste";
 
-/** File capture and capability-gated URL import: one column, the link first, a file or pasted code below. */
+/**
+ * Save by hand: a file from the computer or pasted code, one column. Saving
+ * by a link to a Claude/ChatGPT artifact is not offered: the agent saves the
+ * work itself (docs/connect-agents.md), and ?url= from old links is ignored.
+ */
 export function Bring() {
   const account = useAccount();
   const params = new URLSearchParams(location.search);
   const [initialFolderId] = useState(() => params.get("folder") ?? "");
-  const [pasted] = useState(() => params.get("url") ?? "");
-  // A recognised Claude/ChatGPT link shows its own file drop; the standalone one steps aside.
-  const [providerGuide, setProviderGuide] = useState(false);
   const [capture, setCapture] = useState<Capture>(() =>
     location.hash === "#paste" ? "paste" : "file",
   );
-  const toFile = () => {
-    setCapture("file");
-    requestAnimationFrame(() =>
-      document.getElementById("file")?.scrollIntoView({ behavior: scrollBehavior(), block: "start" }),
-    );
-  };
   const renderPreview = (revision: Parameters<typeof Preview>[0]["revision"], compact: boolean) => (
     <Preview revision={revision} compact={compact} />
   );
-  const renderSaved =
-    (headingId?: string) =>
-    (saved: Pick<Parameters<typeof SavedWork>[0], "receipt" | "work">, restart: () => void) => (
-      <SavedWork
-        {...saved}
-        headingId={headingId}
-        renderPreview={renderPreview}
-        onRestart={restart}
-        restartLabel="Вставить другой код"
-      />
-    );
   return (
     <AppShell current="bring" account={account} className="bring-page">
       <main className="bring-main" id="main">
         <header className="bring-heading">
-          <h1 id="bring-title">Ссылка, которую легко отправить</h1>
-          <p>Сохраните артефакт из чата на свою полку</p>
+          <h1 id="bring-title">Сохранить работу</h1>
+          <p>
+            Загрузите файл или вставьте код. Проще всего — попросить агента: он
+            сохранит работу сам.
+          </p>
         </header>
-        <UrlImportCard
-          initial={pasted}
-          initialFolderId={initialFolderId}
-          onFile={toFile}
-          accountId={account?.id}
-          onProviderChange={setProviderGuide}
-          fileSave={
-            <FileSave
-              initialFolderId={initialFolderId}
-              renderPreview={renderPreview}
-              embedded
-            />
-          }
-          pasteCode={
-            <PasteCode
-              initialFolderId={initialFolderId}
-              renderResult={renderSaved()}
-              embedded
-            />
-          }
-        />
-        <div className="bring-or" hidden={providerGuide} aria-hidden={providerGuide}>
-          <span>или</span>
-        </div>
-        <div className="bring-capture" hidden={providerGuide}>
+        <div className="bring-capture">
           <Tabs
             label="Как сохранить"
             value={capture}
@@ -92,13 +53,30 @@ export function Bring() {
             ) : (
               <PasteCode
                 initialFolderId={initialFolderId}
-                renderResult={renderSaved("paste-code-title")}
+                renderResult={(saved, restart) => (
+                  <SavedWork
+                    {...saved}
+                    headingId="paste-code-title"
+                    renderPreview={renderPreview}
+                    onRestart={restart}
+                    restartLabel="Вставить другой код"
+                  />
+                )}
                 titled={false}
               />
             )}
           </Tabs>
         </div>
         <aside className="bring-facts" aria-label="О сохранении">
+          <a className="bring-fact bring-fact--link" href="/settings/agents">
+            <Bot />
+            <div>
+              <strong>Сохраняйте прямо с агентом</strong>
+              <p>
+                Claude, Claude Code, Codex или другой MCP-клиент <ArrowUpRight />
+              </p>
+            </div>
+          </a>
           <div className="bring-fact">
             <LockKeyhole />
             <div>
@@ -113,16 +91,6 @@ export function Bring() {
               <p>Новая версия не ломает отправленную ссылку.</p>
             </div>
           </div>
-          <a className="bring-fact bring-fact--link" href="/settings/agents">
-            <Bot />
-            <div>
-              <strong>Сохраняйте прямо с агентом</strong>
-              <p>
-                Claude Code, Codex, MCP-клиент или свой скрипт через HTTP API{" "}
-                <ArrowUpRight />
-              </p>
-            </div>
-          </a>
         </aside>
       </main>
     </AppShell>

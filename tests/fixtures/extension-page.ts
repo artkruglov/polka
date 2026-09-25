@@ -5,11 +5,13 @@ import {
   type ImportStage,
   type ImportSuccess,
   type PageMessage,
-} from "../../../../../packages/contracts/extension-bridge.ts";
+} from "../../packages/contracts/extension-bridge.ts";
 
 /*
- * Полка's half of the bridge to the «На Полку» browser extension
- * (packages/contracts/extension-bridge.ts). The page says «hello» with a fresh
+ * The page's half of the bridge to the «На Полку» browser extension
+ * (packages/contracts/extension-bridge.ts), kept as the reference the
+ * extension is tested against. The web app stopped offering link import
+ * (2026-09-25), so no page ships it any more. The page says «hello» with a fresh
  * nonce; the extension's content script, present only if it is installed and
  * set up for this Полка, answers «ready». An import then goes out with the
  * same nonce and comes back as progress and one result. Only messages from

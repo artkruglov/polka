@@ -35,15 +35,36 @@
   <a href="https://polochka.app"><img src="docs/screenshots/landing.png" alt="Главная Полки: «Сделали с агентом. Покажите другим.» и фраза для агента" width="880"></a>
 </p>
 
-## Попробовать за минуту
+## Быстрый старт
 
-Скажите своему агенту — Codex, Claude Code, Claude.ai или ChatGPT:
+Работу на Полку сохраняет ваш агент. Подключите его один раз — дальше просто скажите в чате «Сохрани это на Полку», и в ответе будет ссылка.
+
+**Claude** (claude.ai и Claude Desktop): Settings → Connectors → **Add custom connector**, адрес
 
 ```text
-Подключи Полку: https://polochka.app/connect
+https://polochka.app/mcp
 ```
 
-Агент сам выполнит одну команду, откроется Полка: войдите или создайте полку по почте и нажмите «Разрешить». Дальше просто просите агента сохранить работу на Полку — в ответе будет ссылка.
+→ Add → Connect → «Разрешить» в Полке.
+
+**Claude Code** — плагин: MCP-сервер и скиллы Полки одной командой.
+
+```sh
+claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka
+```
+
+Затем в Claude Code: `/mcp` → `plugin:polka:polka` → Authenticate.
+
+**Codex** — тот же плагин для Codex.
+
+```sh
+codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka
+codex mcp login polka
+```
+
+**Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…): удалённый сервер `https://polochka.app/mcp` (Streamable HTTP, вход OAuth) и скилл `npx skills add artkruglov/polka`.
+
+Везде откроется Полка: войдите в свою полку (или «Начать без регистрации») и нажмите «Разрешить» — токены и пароли через агента не проходят. Или просто скажите агенту в терминале: `Подключи Полку: https://polochka.app/connect`. Файл с компьютера можно загрузить и без агента. Подробно — [подключение агентов](docs/connect-agents.md).
 
 ## Что умеет
 
@@ -51,7 +72,7 @@
   <tr>
     <td width="33%" valign="top">
       <h4>Агент кладёт результат сам</h4>
-      В Claude.ai и ChatGPT Полка — коннектор: «сохрани на Полку», и ссылка в ответе. Claude Code и Codex подключаются одной командой без токена, другие MCP-клиенты — по токену, скрипты и CI — через HTTP API.
+      В Claude (claude.ai и Desktop) и ChatGPT Полка — коннектор: «сохрани на Полку», и ссылка в ответе. Claude Code и Codex ставят плагин одной командой, без токена; другие MCP-клиенты — по адресу <code>/mcp</code>, скрипты и CI — через HTTP API.
     </td>
     <td width="33%" valign="top">
       <h4>Интерактив у получателя</h4>
@@ -110,15 +131,15 @@ flowchart LR
 
 | Откуда | Как | Подробно |
 |---|---|---|
-| Claude.ai, ChatGPT | Коннектор `https://polochka.app/mcp` со входом через OAuth 2.1. Модель вызывает `polka_publish` и возвращает ссылку | [Коннектор](docs/MCP_CONNECTOR.md) |
-| Claude Code, Codex | Одна команда (`codex mcp add polka --url https://polochka.app/mcp`), вход и «Разрешить» в браузере — без токена | [Подключение агентов](docs/connect-agents.md) |
+| Claude (claude.ai, Claude Desktop), ChatGPT | Коннектор `https://polochka.app/mcp` со входом через OAuth 2.1. Модель вызывает `polka_publish` и возвращает ссылку | [Коннектор](docs/MCP_CONNECTOR.md) |
+| Claude Code, Codex | Плагин Полки одной командой: MCP-сервер и скиллы. Вход и «Разрешить» в браузере — без токена | [Подключение агентов](docs/connect-agents.md#плагин-полки-для-claude-code-и-codex) |
 | Другие MCP-клиенты | Токен со страницы «Агенты», Streamable HTTP на `/mcp` | [Подключение агентов](docs/connect-agents.md) |
 | Скрипты, CI, внутренние агенты | `POST /api/v1/publish` или CLI `scripts/polka-publish.mjs` без зависимостей | [HTTP API](docs/PUBLISH_API.md) |
 | Вручную | Загрузка файла (HTML, текст, PNG/JPEG/WebP до 5 МБ) или «Вставить код» на странице «Сохранить» | [FAQ](docs/faq.md) |
 
-С Claude.ai сохранение и ссылка проверены вручную, с ChatGPT — ещё нет ([состояние](docs/status.md)). Ссылку на артефакт Claude или ChatGPT вставить нельзя: сервер не может забрать его сам, и Полка объясняет почему ([FAQ](docs/faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)).
+С Claude.ai сохранение и ссылка проверены вручную, с ChatGPT — ещё нет ([состояние](docs/status.md)). Сохранения по ссылке на артефакт Claude или ChatGPT нет: сервер не может забрать его сам ([FAQ](docs/faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)), поэтому работу передаёт агент.
 
-**Для разработчиков агентов:** скилл — `npx skills add artkruglov/polka`, справка для агентов — [/llms.txt](https://polochka.app/llms.txt), HTTP API — [/openapi.json](https://polochka.app/openapi.json).
+**Для разработчиков агентов:** репозиторий — маркетплейс плагинов Claude Code и Codex (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`), скилл отдельно — `npx skills add artkruglov/polka`, справка для агентов — [/llms.txt](https://polochka.app/llms.txt), HTTP API — [/openapi.json](https://polochka.app/openapi.json).
 
 ## Быстрый запуск
 
