@@ -203,6 +203,25 @@
   font-size: var(--text-xs);
 }
 
+/* What the first pilots shape: the same cards, each marked «в разработке». */
+.enterprise-next {
+  margin-bottom: 88px;
+}
+.enterprise-next h2 {
+  margin-bottom: 12px;
+}
+.enterprise-next-lead {
+  max-width: 640px;
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+.enterprise-next-lead a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* Deployment options. */
 .enterprise-deploy {
   margin-bottom: 88px;
@@ -417,6 +436,7 @@
   }
   .enterprise-hero,
   .enterprise-values,
+  .enterprise-next,
   .enterprise-deploy,
   .enterprise-faq {
     margin-bottom: 56px;
