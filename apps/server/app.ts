@@ -1,3 +1,10 @@
+import {
+  HEADLINE_OPTIONS,
+  prefixQuery,
+  searchJoin,
+  searchMatch,
+  searchSnippet,
+} from "./search-text.ts";
 import { registerAgentContext } from "./agent-context.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { indexable, robotsTxt } from "./indexing.ts";
@@ -690,33 +697,51 @@ export async function createApp() {
       q.cursor,
       "Обновите список: указатель страницы некорректен.",
     );
+    // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
+    const text = q.q.trim();
     const { rows } = await db.query(
-      `SELECT id,updated_at,
-              to_char(updated_at AT TIME ZONE 'UTC',
-                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_updated_at
-       FROM artifacts
-       WHERE tenant_id=$1 AND trashed_at IS NULL
-         AND ($2::uuid IS NULL OR folder_id=$2)
-         AND title ILIKE $3
-         AND ($4::timestamptz IS NULL OR (updated_at,id)<($4,$5::uuid))
-       ORDER BY updated_at DESC,id DESC LIMIT 25`,
+      `SELECT artifact.id,artifact.updated_at,
+              to_char(artifact.updated_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_updated_at,
+              ${searchSnippet("$6", "$7")}
+       FROM artifacts artifact
+       ${searchJoin("artifact")}
+       WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
+         AND ($2::uuid IS NULL OR artifact.folder_id=$2)
+         AND ${searchMatch("artifact", "$3", "$6")}
+         AND ($4::timestamptz IS NULL
+              OR (artifact.updated_at,artifact.id)<($4,$5::uuid))
+       ORDER BY artifact.updated_at DESC,artifact.id DESC LIMIT 25`,
       [
         actor.tenant,
         q.folderId ?? null,
-        `%${q.q.replace(/[\\%_]/g, "\\$&")}%`,
+        text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : null,
         cursor?.date ?? null,
         cursor?.id ?? null,
+        prefixQuery(text),
+        HEADLINE_OPTIONS,
       ],
     );
     const more = rows.length > 24,
       page = rows.slice(0, 24),
       last = page.at(-1);
+    const snippets = new Map<string, string>(
+      page
+        .filter((row) => row.search_snippet)
+        .map((row) => [row.id, row.search_snippet]),
+    );
     const items = (
       await getArtifacts(
         actor,
         page.map((artifact) => artifact.id),
       )
-    ).filter((artifact) => artifact.trashedAt === null);
+    )
+      .filter((artifact) => artifact.trashedAt === null)
+      .map((artifact) =>
+        snippets.has(artifact.id)
+          ? { ...artifact, snippet: snippets.get(artifact.id) }
+          : artifact,
+      );
     return {
       items,
       nextCursor: more ? encodeCursor(last.cursor_updated_at, last.id) : null,

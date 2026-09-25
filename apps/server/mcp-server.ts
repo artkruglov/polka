@@ -376,7 +376,7 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "List saved work",
         description:
-          "List tenant-scoped artifact metadata, newest change first: id, title, kind (page, link, image, text, file; linkHost for a link), folderId and folderName (null: «без папки»), createdAt, updatedAt and the latest revision (filename, size). Up to 100 per call (limit), then pass nextCursor; folderId filters one folder (null: works without a folder), query matches titles. Returns no bytes, manifests, grants, or share URLs.",
+          "List tenant-scoped artifact metadata, newest change first: id, title, kind (page, link, image, text, file; linkHost for a link), folderId and folderName (null: «без папки»), createdAt, updatedAt and the latest revision (filename, size). Up to 100 per call (limit), then pass nextCursor; folderId filters one folder (null: works without a folder). query matches titles and the text of each work's latest version (every word, as a prefix: «скид» finds «скидки»); an item found by its text has snippet, a fragment with the found words in «». To continue a found work, read it with polka_read_source (artifactId: id, revisionId: revision.id) and save the new version with polka_revise. Returns no bytes, manifests, grants, or share URLs.",
         inputSchema: agentArtifactListInputSchema,
         annotations: { readOnlyHint: true, openWorldHint: false },
       },

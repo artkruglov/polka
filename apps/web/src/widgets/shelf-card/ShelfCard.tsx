@@ -10,7 +10,11 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import type { Artifact } from "../../../../../packages/contracts/index.ts";
+import {
+  SEARCH_MATCH_END,
+  SEARCH_MATCH_START,
+  type Artifact,
+} from "../../../../../packages/contracts/index.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { accessLabel, date, isLinked } from "../../entities/artifact/format.ts";
 import { CardCover, useCover } from "./CardCover.tsx";
@@ -42,6 +46,22 @@ function useNearViewport<T extends Element>() {
     return () => observer.disconnect();
   }, [near]);
   return [ref, near] as const;
+}
+
+/** Where the search found the work in its text (docs/specs/CONTENT_SEARCH.md): the found words marked. */
+function SearchSnippet({ text }: { text: string }) {
+  const parts = text.split(
+    new RegExp(`(${SEARCH_MATCH_START}[^${SEARCH_MATCH_END}]*${SEARCH_MATCH_END})`, "u"),
+  );
+  return (
+    <p className="shelf-card-snippet">
+      …
+      {parts.map((part, index) =>
+        part.startsWith(SEARCH_MATCH_START) ? <mark key={index}>{part.slice(1, -1)}</mark> : part,
+      )}
+      …
+    </p>
+  );
 }
 
 /**
@@ -110,6 +130,7 @@ export function ShelfCard({
             {cardKind(a, cover)} · v{r.number} · {date(a.updatedAt)}
           </span>
         </p>
+        {a.snippet && <SearchSnippet text={a.snippet} />}
       </div>
       <div className="shelf-card-actions">
         <ActionMenu label={`Действия: ${a.title}`} icon={<Ellipsis />} items={items} />

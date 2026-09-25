@@ -17,6 +17,8 @@
 .shelf-card:hover .shelf-card-link { color: var(--accent-ink); }
 .shelf-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 4px; color: var(--muted); font-size: var(--text-sm); line-height: 1.4; white-space: nowrap; }
 .shelf-card-meta > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.shelf-card-snippet { margin-top: 6px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.shelf-card-snippet mark { padding: 0 2px; border-radius: 3px; background: var(--accent-soft); color: var(--ink); }
 .shelf-card-access { display: inline-flex; flex: none; }
 .shelf-card-access svg { width: 14px; height: 14px; }
 .shelf-card-actions { position: relative; z-index: 2; grid-area: actions; display: flex; align-items: flex-start; }
@@ -59,6 +61,7 @@
 .shelf-list .shelf-cover { border-radius: var(--radius-sm); }
 .shelf-list .shelf-card:hover .shelf-cover { translate: none; box-shadow: none; }
 .shelf-list .shelf-card h3 { font-size: var(--text-md); -webkit-line-clamp: 1; }
+.shelf-list .shelf-card-snippet { margin-top: 2px; -webkit-line-clamp: 1; }
 .shelf-list .shelf-card-actions { align-items: center; }
 
 @media (max-width: 1240px) { .shelf-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
