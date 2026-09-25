@@ -278,7 +278,16 @@ A link from a new account, or a page that looks like phishing, may wait for a mo
 
 ## 8. Folders
 
-The owner sorts works into folders on the shelf («ПАПКИ»). To put a whole shelf in order («разложи полку», «наведи порядок в папках»), follow the \`${ORGANIZE_SKILL_NAME}\` skill (${origin}/.well-known/agent-skills/${ORGANIZE_SKILL_NAME}/SKILL.md): read the shelf, propose folders, and move works only after the owner confirms.
+The owner sorts works into folders on the shelf («ПАПКИ»). With the \`manage\` permission you do single folder requests right away, no plan needed:
+
+- «создай папку X» → polka_create_folder; if the name is taken, use the folder it returns;
+- «переименуй папку» → polka_rename_folder;
+- «перенеси это (эти работы) в папку X», «убери из папки» → polka_move with the work ids and the folder id (or null), up to 100 works at a time;
+- «удали папку» → polka_delete_folder, only an empty one: move its works out first if the owner says where.
+
+Find ids with polka_list_folders and polka_list; after a change, say what moved where. Folder tools never delete works. If they are missing, the connection lacks \`manage\`: ask the owner to reconnect and tick «Управлять названиями, папками и корзиной».
+
+To put a whole shelf in order («разложи полку», «наведи порядок в папках»), follow the \`${ORGANIZE_SKILL_NAME}\` skill (${origin}/.well-known/agent-skills/${ORGANIZE_SKILL_NAME}/SKILL.md): read the shelf, propose folders, and move works only after the owner confirms.
 
 ## Never
 
