@@ -610,11 +610,17 @@ export type InspectOptions = { images?: boolean; sample?: boolean; scripts?: boo
  * classifier loaded) before it gets the source, and only then does the clock
  * start. On a loaded host loading alone can take seconds, and a normal page
  * must not come out «unsupported» with scan:incomplete for it. Startup has
- * its own, looser bound.
+ * its own, looser bound. Other readers with the same protocol (the shelf
+ * cover reader, cover-facts-worker.ts) pass their own worker script.
  */
-async function inWorker<T>(message: object, deadlineMs: number, unread: T): Promise<T> {
+export async function inWorker<T>(
+  message: object,
+  deadlineMs: number,
+  unread: T,
+  script: URL = new URL("./html-classify-worker.mjs", import.meta.url),
+): Promise<T> {
   const { Worker } = await import("node:worker_threads");
-  const worker = new Worker(new URL("./html-classify-worker.mjs", import.meta.url), {
+  const worker = new Worker(script, {
     resourceLimits: { maxOldGenerationSizeMb: 256 },
   });
   try {

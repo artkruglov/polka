@@ -50,6 +50,7 @@
     "moderation:sweep": "tsx --env-file=.env scripts/moderation.ts sweep",
     "moderation:recheck": "tsx --env-file=.env scripts/moderation.ts recheck",
     "moderation:backfill-sensitive-input": "tsx --env-file=.env scripts/backfill-sensitive-input.ts",
+    "covers:backfill": "tsx --env-file=.env scripts/backfill-covers.ts",
     "editorial:content-scan": "tsx scripts/editorial-content-scan.ts",
     "local:setup": "node scripts/local-setup.mjs",
     "infra:up": "docker compose --env-file=.env -f deploy/compose.local.yml up -d --wait",

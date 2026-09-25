@@ -514,6 +514,9 @@ export async function purgeBlock(
       [blockId],
     );
     if (!locked) return;
+    // The shelf cover (its text and picture) is derived content: it goes too.
+    if (block.revision_id)
+      await c.query("DELETE FROM revision_covers WHERE revision_id=$1", [block.revision_id]);
     if (block.revision_id)
       await c.query(
         "UPDATE revisions SET content_purged_at=clock_timestamp() WHERE id=$1 AND content_purged_at IS NULL",
