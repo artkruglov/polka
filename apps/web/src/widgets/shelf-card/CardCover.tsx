@@ -16,7 +16,7 @@ import {
   type CoverGenre,
   type RevisionCover,
 } from "../../../../../packages/contracts/cover.ts";
-import { client } from "../../shared/api/client.ts";
+import { client, withShelf } from "../../shared/api/client.ts";
 import { providerById } from "../../entities/link/index.tsx";
 import { ServiceMark } from "../../shared/ui/ServiceMark.tsx";
 import { GENRE_LABEL, cardKind, coverAccent } from "./cover-model.ts";
@@ -115,7 +115,7 @@ export function CardCover({
     return (
       <div className="card-cover card-cover--picture">
         <img
-          src={coverImageUrl(r.id, cover)}
+          src={withShelf(coverImageUrl(r.id, cover))}
           alt=""
           loading="lazy"
           decoding="async"

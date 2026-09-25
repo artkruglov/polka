@@ -60,7 +60,9 @@ export async function issueOwnerProjectView(
          JOIN tenants tenant ON tenant.id=r.tenant_id
          JOIN sessions session ON session.hash=$2 AND session.account_id=$3
          JOIN accounts account ON account.id=session.account_id
-           AND account.id=tenant.owner_id
+           AND tenant.state='active'
+         JOIN tenant_members member ON member.tenant_id=tenant.id
+           AND member.account_id=account.id AND member.state='active'
          WHERE r.id=$4 AND r.tenant_id=$5 AND ${PROJECT_REVISION_SQL}
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
@@ -122,22 +124,25 @@ async function authorizedProject(token: string) {
     `SELECT r.id,r.manifest,pv.share_id,pv.owner_session_hash FROM project_view_grants pv
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
-     JOIN tenants tenant ON tenant.id=r.tenant_id
-     JOIN accounts owner ON owner.id=tenant.owner_id
+     JOIN tenants tenant ON tenant.id=r.tenant_id AND tenant.state='active'
      WHERE pv.hash=$1 AND pv.expires_at>now() AND ${PROJECT_REVISION_SQL}
-       AND NOT owner.disabled AND owner.deletion_requested_at IS NULL
        AND r.content_purged_at IS NULL
        AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                        WHERE b.revision_id=r.id AND b.released_at IS NULL)
        AND (
          (pv.owner_session_hash IS NOT NULL AND EXISTS (
            SELECT 1 FROM sessions session
-           WHERE session.hash=pv.owner_session_hash AND session.account_id=owner.id
-             AND session.expires_at>now()))
+           JOIN accounts account ON account.id=session.account_id
+           JOIN tenant_members member ON member.account_id=account.id
+             AND member.tenant_id=tenant.id AND member.state='active'
+           WHERE session.hash=pv.owner_session_hash AND session.expires_at>now()
+             AND NOT account.disabled AND account.deletion_requested_at IS NULL))
          OR
          (pv.share_id IS NOT NULL AND EXISTS (
            SELECT 1 FROM shares s
+           JOIN accounts owner ON owner.id=tenant.owner_id
            WHERE s.id=pv.share_id AND s.revision_id=r.id AND s.artifact_id=artifact.id
+             AND NOT owner.disabled AND owner.deletion_requested_at IS NULL
              AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'))
        )`,
     [projectHash(token)],

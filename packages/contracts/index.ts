@@ -258,6 +258,8 @@ export interface Artifact {
   lifecycleVersion: number;
   revision: Revision;
   share: Share | null;
+  /** Who saved it, on a department shelf (docs/specs/TEAM_SHELVES.md). */
+  author?: { id: string; name: string };
   /**
    * Found by its text (docs/specs/CONTENT_SEARCH.md): a fragment with the
    * found words between SEARCH_MATCH_START and SEARCH_MATCH_END.

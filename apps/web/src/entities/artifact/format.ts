@@ -136,8 +136,8 @@ export const dateTime = (s: string) =>
 export const isLinked = (a: Pick<Artifact, "share">) =>
   !!a.share && ["active", "behind"].includes(a.share.status);
 /** Short access label for cards and toolbars. */
-export const accessLabel = (a: Pick<Artifact, "share">) =>
-  isLinked(a) ? "Доступно по ссылке" : "Только я";
+export const accessLabel = (a: Pick<Artifact, "share" | "author">) =>
+  isLinked(a) ? "Доступно по ссылке" : a.author ? "Участники полки" : "Только я";
 export type Category = "pages" | "documents" | "images" | "other";
 export const categoryLabel: Record<Category, string> = {
   pages: "Страницы",

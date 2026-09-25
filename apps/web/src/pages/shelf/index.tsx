@@ -18,6 +18,8 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { ShelfCard, seriesCounts, type CardAction } from "../../widgets/shelf-card/index.ts";
 import { AgentHero } from "../../features/agent-hero/index.tsx";
+import type { Shelf } from "../../shared/api/client.ts";
+import { ROLE_LABEL, atLeast } from "../../entities/shelf/model.ts";
 import {
   categoryLabel,
   categoryOf,
@@ -43,6 +45,8 @@ type Props = {
   setPanel: (panel: "upload" | "folder") => void;
   open: (id: string, panel?: CardAction) => void;
   loadMore: () => void;
+  /** A department shelf (docs/specs/TEAM_SHELVES.md); absent on one's own. */
+  team?: Shelf | null;
 };
 
 const categories: Category[] = ["pages", "documents", "images", "other"];
@@ -64,7 +68,9 @@ export function ShelfPage({
   setPanel,
   open,
   loadMore,
+  team,
 }: Props) {
+  const canSave = !team || atLeast(team.role, "author");
   const [category, setCategory] = useState<Category | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -91,6 +97,22 @@ export function ShelfPage({
           <span className="eyebrow">Папка</span>
           <h1>{activeFolder.name}</h1>
         </header>
+      ) : team ? (
+        <header className="shelf-folder-heading">
+          <span className="eyebrow">Полка отдела · вы — {ROLE_LABEL[team.role].toLowerCase()}</span>
+          <h1>{team.name}</h1>
+          <p className="shelf-team-lead">
+            Работы здесь видят все участники полки и находят поиском. Они принадлежат отделу: если
+            сотрудник уходит, работы остаются.
+          </p>
+          {canSave && (
+            <div className="button-row">
+              <Button variant="primary" onClick={() => setPanel("upload")}>
+                <FileUp /> Сохранить сюда
+              </Button>
+            </div>
+          )}
+        </header>
       ) : (
         <AgentHero account={account} onUpload={() => setPanel("upload")} />
       )}
@@ -102,7 +124,7 @@ export function ShelfPage({
       >
         <div className="shelf-library-head">
           <h2>
-            {query ? "Результаты поиска" : activeFolder ? "В этой папке" : "Моя полка"}
+            {query ? "Результаты поиска" : activeFolder ? "В этой папке" : team ? "Все работы" : "Моя полка"}
           </h2>
           <div className="shelf-tools">
             <label className="ui-search ui-search--quiet shelf-search">
@@ -186,6 +208,13 @@ export function ShelfPage({
               </p>
             )}
           </>
+        ) : team && !query ? (
+          <p className="shelf-empty-quiet" role="note">
+            {activeFolder ? "В этой папке пока пусто." : "На полке отдела пока пусто."}{" "}
+            {canSave
+              ? "Сохраните работу сюда — её увидят все участники."
+              : "Здесь появятся работы, которые сохранят участники."}
+          </p>
         ) : !activeFolder && !query ? (
           <p className="shelf-empty-quiet" role="note">
             Здесь появятся ваши работы: страницы, отчёты, прототипы и изображения. Каждая хранится

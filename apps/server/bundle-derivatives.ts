@@ -7,7 +7,8 @@ import type { PoolClient } from "pg";
 import type { InlineBuildStatus } from "../../packages/contracts/index.ts";
 import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
 import { config } from "./config.ts";
-import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
+import { assertActiveOwner } from "./owner-state.ts";
+import { lockShelf } from "./shelves.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readRevisionSource, type Actor } from "./artifacts.ts";
@@ -647,11 +648,7 @@ export async function buildInlineRevision(actor: Actor, revisionId: string) {
 function ownerTransactionRunner(actor: Actor): DerivativeTransactionRunner {
   return (operation) =>
     transaction(async (c) => {
-      await lockActiveOwnerTenant(
-        c,
-        actor,
-        () => new Problem(403, "forbidden", "Доступ к аккаунту закрыт."),
-      );
+      await lockShelf(c, actor, "author");
       return operation(c);
     });
 }

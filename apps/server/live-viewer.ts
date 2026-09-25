@@ -52,9 +52,12 @@ export async function issueOwnerLiveView(
   const grant = await transaction(async (c) => {
     const owner = await c.query(
       `SELECT 1 FROM tenants tenant
-       JOIN accounts account ON account.id=tenant.owner_id
+       JOIN tenant_members member ON member.tenant_id=tenant.id
+         AND member.state='active'
+       JOIN accounts account ON account.id=member.account_id
        JOIN sessions session ON session.account_id=account.id
-       WHERE tenant.id=$1 AND account.id=$2 AND session.hash=$3
+       WHERE tenant.id=$1 AND tenant.state='active' AND account.id=$2
+         AND session.hash=$3
          AND session.expires_at>now() AND NOT account.disabled
          AND account.deletion_requested_at IS NULL
        FOR UPDATE OF tenant`,
@@ -202,7 +205,10 @@ async function authorizedRevision(token: string) {
              SELECT 1
              FROM sessions session
              JOIN accounts account ON account.id=session.account_id
-             JOIN tenants tenant ON tenant.owner_id=account.id
+             JOIN tenant_members member ON member.account_id=account.id
+               AND member.state='active'
+             JOIN tenants tenant ON tenant.id=member.tenant_id
+               AND tenant.state='active'
              WHERE session.hash=vg.owner_session_hash
                AND session.expires_at>now() AND NOT account.disabled
                AND account.deletion_requested_at IS NULL
