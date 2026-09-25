@@ -26,11 +26,6 @@
 .landing-oss > svg { flex-shrink: 0; }
 .landing-oss:hover { color: var(--accent); }
 .landing-oss-stars { white-space: nowrap; }
-.landing-entry { display: flex; align-items: center; gap: 8px; max-width: 760px; margin-bottom: 14px; padding: 6px 6px 6px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--canvas); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.landing-entry:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.landing-entry > svg { width: 18px; height: 18px; color: var(--muted-2); flex-shrink: 0; }
-.landing-entry input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: none; padding: 8px 4px; font: 400 var(--text-lg) / 1.4 var(--font-sans); color: var(--ink); outline: none; }
-.landing-entry input::placeholder { color: var(--muted-2); }
 /* The quieter paths: a file, the page for companies. */
 .landing-more { display: flex; flex-wrap: wrap; gap: 4px 24px; margin-bottom: 14px; }
 .landing-more a { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; }
@@ -86,9 +81,6 @@
   .landing-agent { padding: 16px 16px 14px; margin-bottom: 22px; }
   .landing-agent-phrase > code { font-size: var(--text-md); }
   .landing-agent-phrase .ui-button { width: 100%; }
-  .landing-entry { flex-wrap: wrap; padding: 10px; }
-  .landing-entry > svg { display: none; }
-  .landing-entry .ui-button { width: 100%; }
   .landing-wave { margin: 28px 0 0; }
   .landing-selfhost { margin-top: 48px; padding: 28px 20px; }
   .landing-selfhost-command pre { flex-basis: 100%; padding: 12px; font-size: 12px; }

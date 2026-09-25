@@ -1,20 +1,4 @@
-/* Personal shelf: a hero with the link field, then a filterable gallery of large covers. */
-.shelf-hero { position: relative; padding: 4px 0 0; margin-bottom: var(--space-9); }
-.shelf-hero-top { position: absolute; top: -4px; right: 0; display: flex; gap: 4px; }
-.shelf-hero h1 { max-width: 28ch; margin: 24px 0 26px; font-size: clamp(34px, 3.6vw, 52px); letter-spacing: -.045em; line-height: 1.05; }
-.shelf-hero-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.shelf-hero-field { position: relative; display: flex; align-items: center; flex: 1 1 320px; min-width: 0; max-width: 620px; }
-.shelf-hero-field > svg { position: absolute; left: 16px; width: 18px; height: 18px; color: var(--muted-2); pointer-events: none; }
-.shelf-hero-field > input { width: 100%; min-height: 52px; padding: 12px 16px 12px 46px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 400 var(--text-lg) / 1.4 var(--font-sans); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.shelf-hero-field > input::placeholder { color: var(--muted-2); }
-.shelf-hero-field > input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.shelf-hero-save { min-height: 52px; padding-inline: 32px; font-size: var(--text-lg); }
-.shelf-hero-divider { width: 1px; height: 36px; background: var(--line-strong); margin: 0 4px; }
-.shelf-hero-agent { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.shelf-hero-agent > .ui-button { min-height: 52px; padding-inline: 18px; background: var(--soft); border-color: transparent; }
-.shelf-hero-agent > .ui-button:hover { background: var(--soft-2); }
-.shelf-hero-agent > span { max-width: 190px; color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
-.shelf-hero-fine { margin-top: 14px; color: var(--muted); font-size: var(--text-sm); }
+/* Personal shelf: the agent hero (features/agent-hero), then a filterable gallery of large covers. */
 .shelf-folder-heading { margin: 4px 0 var(--space-7); }
 .shelf-folder-heading h1 { margin-top: 8px; font-size: clamp(30px, 3vw, 40px); }
 
@@ -76,8 +60,6 @@
 .shelf-more { display: flex; justify-content: center; margin-top: var(--space-8); }
 .shelf-more-note { margin-top: var(--space-6); text-align: center; color: var(--muted); font-size: var(--text-sm); }
 
-/* First-run steps sit where the link field would be. */
-.shelf-hero > .first-run { margin-top: 4px; }
 .shelf-library-head h2:focus-visible { outline-offset: 6px; }
 
 /* Empty */
@@ -92,20 +74,7 @@
 .shelf-empty-links svg { width: 16px; height: 16px; color: var(--muted); }
 
 @media (max-width: 1240px) { .shelf-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) {
-  .shelf-hero-divider { display: none; }
-  .shelf-hero-agent { flex-basis: 100%; }
-}
 @media (max-width: 760px) {
-  .shelf-hero { margin-bottom: var(--space-7); }
-  .shelf-hero-top { display: none; }
-  .shelf-hero h1 { margin: 12px 0 18px; font-size: 32px; }
-  .shelf-hero-entry { flex-direction: column; align-items: stretch; gap: 10px; }
-  .shelf-hero-field { max-width: none; flex-basis: auto; }
-  .shelf-hero-save { width: 100%; }
-  .shelf-hero-agent { flex-direction: column; align-items: stretch; gap: 8px; }
-  .shelf-hero-agent > .ui-button { width: 100%; background: var(--canvas); border-color: var(--line-strong); }
-  .shelf-hero-agent > span { max-width: none; text-align: center; }
   .shelf-library-head { margin-bottom: 12px; }
   .shelf-library-head h2 { font-size: 26px; }
   .shelf-tools { width: 100%; flex-wrap: wrap; margin-left: 0; }

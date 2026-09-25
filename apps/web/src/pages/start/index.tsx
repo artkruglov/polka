@@ -1,16 +1,13 @@
 import "./styles.css";
 import React from "react";
-import { ArrowUpRight, Link2 } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { FirstRunChecklist } from "../../features/first-run/index.tsx";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 
 /** After sign-up: what Полка is in one sentence, then the three first-run steps. */
 export function FirstSave() {
   const account = useAccount();
-  const imports = useCapabilities();
-  const canImport = imports.status === "ready" && imports.capabilities.urlImport;
   return (
     <AppShell current="shelf" account={account}>
       <main className="start-main">
@@ -44,11 +41,6 @@ export function FirstSave() {
           <a className="start-link" href="/discover">
             Посмотреть примеры работ <ArrowUpRight />
           </a>
-          {canImport && (
-            <a className="start-link" href="/bring?url=">
-              <Link2 /> Есть ссылка на публичную HTML-страницу? Сохраните копию
-            </a>
-          )}
         </div>
       </main>
     </AppShell>

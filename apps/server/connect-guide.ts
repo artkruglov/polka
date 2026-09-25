@@ -9,6 +9,13 @@
 /** The skill package `npx skills add …` installs (skills/polka/SKILL.md). */
 export const SKILL_REPO = "artkruglov/polka";
 export const SKILL_INSTALL = `npx skills add ${SKILL_REPO}`;
+/**
+ * The same repository is a plugin marketplace for Claude Code and Codex: one
+ * install adds the MCP server and every skill under skills/. The web app
+ * shows the same commands (apps/web/src/entities/onboarding/agent-setup.ts).
+ */
+export const CLAUDE_PLUGIN_INSTALL = `claude plugin marketplace add ${SKILL_REPO} && claude plugin install polka@polka`;
+export const CODEX_PLUGIN_INSTALL = `codex plugin marketplace add ${SKILL_REPO} && codex plugin add polka@polka`;
 
 /**
  * The first task after connecting: the agent finds the person's best past
@@ -34,11 +41,11 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 
 Пользователь попросил подключить Полку. Определи, какой ты клиент, выполни одну команду из списка и скажи пользователю, что сделать в браузере. Больше ничего не устанавливай и не спрашивай токен.
 
-- Codex CLI: \`codex mcp add polka --url ${mcp}\` — вход в браузере откроется сам. Если не открылся: \`codex mcp login polka\`.
-- Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, затем попроси пользователя ввести \`/mcp\`, выбрать \`polka\` и нажать Authenticate.
+- Codex: \`${CODEX_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем \`codex mcp login polka\` — вход откроется в браузере. Без плагина: \`codex mcp add polka --url ${mcp}\`.
+- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем попроси пользователя ввести \`/reload-plugins\` (или перезапустить Claude Code), потом \`/mcp\`, выбрать \`plugin:polka:polka\` и нажать Authenticate. Без плагина: \`claude mcp add --transport http --scope user polka ${mcp}\`.
 - Другой MCP-клиент с OAuth: добавь удалённый Streamable HTTP-сервер ${mcp} с авторизацией OAuth.
 - Claude.ai или ChatGPT в браузере (терминала нет, эту страницу ты, скорее всего, не смог загрузить): команды не выполнить, коннектор добавляет сам пользователь. Перескажи ему шаги, ничего не запрашивай:
-  - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
+  - Claude.ai и Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
   - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Затем в чате «+» → включить коннектор «Полка». Пошагово: ${origin}/settings/agents?client=chatgpt
 
 Скажи пользователю: «Откроется Полка. Войдите в свою полку или нажмите «Начать без регистрации», затем «Разрешить».»
@@ -49,7 +56,7 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 
 ## Скилл для Claude Code и Codex
 
-Для Claude Code и Codex есть скилл Полки — агент будет знать, как сохранять, делиться и править: \`${SKILL_INSTALL}\` (или по адресу ${skills}).
+Скиллы Полки — агент будет знать, как сохранять, делиться и править. Плагин для Claude Code и Codex (команды выше) ставит их сам; для других агентов: \`${SKILL_INSTALL}\` (или по адресу ${skills}).
 
 ## Первая сессия: соберите лучшие работы
 
@@ -71,11 +78,11 @@ ${sourceUrl ? `\nИсходный код этой установки (AGPL-3.0):
 
 Your user asked to connect Полка. Work out which client you are, run the one matching command and tell the user what to do in the browser. Install nothing else and do not ask for a token.
 
-- Codex CLI: \`codex mcp add polka --url ${mcp}\`; the browser sign-in opens by itself. If it does not: \`codex mcp login polka\`.
-- Claude Code: \`claude mcp add --transport http --scope user polka ${mcp}\`, then ask the user to type \`/mcp\`, choose \`polka\` and press Authenticate.
+- Codex: \`${CODEX_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then \`codex mcp login polka\`; the sign-in opens in the browser. Without the plugin: \`codex mcp add polka --url ${mcp}\`.
+- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then ask the user to type \`/reload-plugins\` (or restart Claude Code), then \`/mcp\`, choose \`plugin:polka:polka\` and press Authenticate. Without the plugin: \`claude mcp add --transport http --scope user polka ${mcp}\`.
 - Another MCP client with OAuth: add the remote Streamable HTTP server ${mcp} with OAuth authorization.
 - Claude.ai or ChatGPT in the browser (no terminal; you most likely could not even fetch this page): you cannot run commands, the user adds the connector themselves. Tell them the steps, ask for nothing:
-  - Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
+  - Claude.ai and Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
   - ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth. Then in the chat "+" → enable the "Полка" connector. Step by step: ${origin}/settings/agents?client=chatgpt
 
 Tell the user: "Полка will open. Sign in to your shelf or press «Начать без регистрации» (start without signing up), then Allow."
@@ -86,7 +93,7 @@ Right after connecting, tell the user once: «Если понадобится о
 
 ## Skill for Claude Code and Codex
 
-The Полка skill teaches the agent how to save, share and revise: \`${SKILL_INSTALL}\` (or ${skills}).
+The Полка skills teach the agent how to save, share and revise. The Claude Code and Codex plugin (commands above) installs them; for other agents: \`${SKILL_INSTALL}\` (or ${skills}).
 
 ## First session: collect the best past work
 

@@ -63,7 +63,7 @@ export function BringReceive() {
           <LinkButton variant="primary" href={BOOKMARKLET_PAGE}>
             Установить закладку
           </LinkButton>
-          <LinkButton href="/bring">Сохранить файлом или ссылкой</LinkButton>
+          <LinkButton href="/bring">Сохранить файлом</LinkButton>
         </div>
       </div>
     );
