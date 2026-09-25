@@ -75,7 +75,7 @@ export function publishToolDescription(
           `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
           "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
         ]),
-    "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30; a new Polka account gets at most 7, and `expiresNote` says so).",
+    "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30; a new Polka account gets at most 7, and `expiresNote` says so). folderId: optional folder on the shelf; when the owner keeps folders (polka_list_folders) and one clearly fits the work, save into it.",
     'If `moderation` is "held" (or "paused"), the link exists but recipients see a "being reviewed by a Polka moderator" screen until the moderator approves it: tell the user exactly that (relay `moderationMessage`) and do not present the link as ready.',
     liveEnabled
       ? "Report the returned `url` to the user as the link. If `url` is null, tell the user the work is saved privately (shelfUrl) and relay `linkUnavailableReason`. If `interactiveUnavailableReason` is present, tell the user the scripts will not run and why; the link, if any, shows a static copy."

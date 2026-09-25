@@ -115,18 +115,25 @@ web wrappers не вызывать из внешней transaction. Подтве
 
 | Tool | Scope | Strict input / результат |
 |---|---|---|
-| `polka_list` | read | Существующие query/folderId/limit/cursor + `state: active\|trashed` default active. Каждый item содержит title, folderId, latest revision metadata, trashedAt, lifecycleVersion; без share/token/bytes |
+| `polka_list` | read | Существующие query/folderId/limit/cursor (limit 1–100, default 25) + `state: active\|trashed` default active. Каждый item содержит title, kind (`page\|link\|image\|text\|file`, у link ещё linkHost), folderId, folderName, createdAt (первая версия), latest revision metadata, trashedAt, lifecycleVersion; без share/token/bytes |
 | `polka_get_artifact` | read | `{artifactId}` (UUID или адрес страницы работы `<APP_ORIGIN>/works/<id>`, из которого берётся UUID) → та же безопасная metadata projection, включая корзину; neutral404 для чужого/несуществующего ID |
-| `polka_list_folders` | read | `{cursor?,limit?}` limit1–25 default25 → `{items:[{id,name}],nextCursor}` для выбора существующей папки |
+| `polka_list_folders` | read | `{cursor?,limit?}` limit 1–100 default 25 → `{items:[{id,name,works}],nextCursor}` для выбора существующей папки; works — работы на полке (не в корзине) |
 | `polka_update_artifact` | manage | `{key,artifactId,title?,folderId?,expectedTitle,expectedFolderId}`; title/folderId и CAS берутся из текущего metadata schema; хотя бы одно изменение обязательно |
 | `polka_trash` | manage | `{artifactId,expectedLifecycleVersion,expectedRevisionId}` → существующий ArtifactLifecycleSnapshot |
 | `polka_restore` | manage | Тот же lifecycle input/output; новые версии/ссылки автоматически не создаются |
+| `polka_create_folder` | manage | `{key,name}` → `{operation:'folder-create',key,applied:{id,name},replayed}`. Имя 1–80 после trim, уникально на полке (занятое → 409 `name_taken` с `folderId`), до 100 папок (413 `quota`). Audit `folder.created` |
+| `polka_rename_folder` | manage | `{key,folderId,name}` → applied `{id,name,previousName}`; чужая/несуществующая папка → neutral 404. Audit `folder.renamed` |
+| `polka_delete_folder` | manage | `{key,folderId}` → applied `{id,name,trashedWorksDetached}`. Только папка без работ на полке (иначе 409 `folder_not_empty`, `works`); у работ в корзине `folder_id` сбрасывается. Audit `folder.deleted` |
+| `polka_move` | manage | `{key,artifactIds[1..100] без повторов,folderId\|null}` → applied `{folderId,folderName,moved,unchanged}`. Одна транзакция: любой чужой, удалённый в корзину или неизвестный id → 404 `works_missing` с `missing`, ничего не перенесено. `updated_at` не меняется (порядок полки остаётся). Audit `artifact.moved` на каждую перенесённую работу |
 
 `polka_get_artifact` не возвращает raw `getArtifact()` DTO: тот содержит share URL.
 Нужна явная allowlist projection с запросом через текущий tenant. В корзине
 preview capability недоступна; наличие сохранённого ready derivative не выдаётся
-за разрешение запуска. Список folders — только существующие folders; создание и
-удаление folders не добавлять в этот пакет. Missing folder проверяется общим service.
+за разрешение запуска. Missing folder проверяется общим service. Создание,
+переименование и удаление папок и пакетный перенос добавлены позже (миграция 038,
+`apps/server/folders.ts` — общие правила с вебом, `apps/server/agent-folders.ts` —
+ключи идемпотентности в `agent_operations` с operation `folder-create`,
+`folder-rename`, `folder-delete`, `move`).
 
 Active list сохраняет `(updated_at,id)`, trash list использует `(trashed_at,id)`;
 в обоих cursor date содержит DB microseconds. Новые cursor envelopes включают

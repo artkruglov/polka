@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  LINK_MIME,
   artifactLifecycleSchema,
   updateArtifactMetadataFields,
   updateArtifactMetadataSchema,
@@ -18,6 +19,7 @@ import {
   withServiceActorTransaction,
 } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
+import { linkOfRevision } from "./saved-link-format.ts";
 
 const stateSchema = z.enum(["active", "trashed"]);
 const datedCursorSchema = z
@@ -42,7 +44,7 @@ export const agentArtifactListInputSchema = z
     cursor: z.string().max(512).optional(),
     query: z.string().trim().max(160).optional(),
     folderId: uuid.nullable().optional(),
-    limit: z.number().int().min(1).max(25).default(25),
+    limit: z.number().int().min(1).max(100).default(25),
     state: stateSchema.default("active"),
   })
   .strict();
@@ -72,7 +74,7 @@ export const agentGetArtifactInputSchema = z
 export const agentFolderListInputSchema = z
   .object({
     cursor: z.string().max(512).optional(),
-    limit: z.number().int().min(1).max(25).default(25),
+    limit: z.number().int().min(1).max(100).default(25),
   })
   .strict();
 
@@ -144,14 +146,31 @@ function encodeFolderCursor(row: any) {
   );
 }
 
+/**
+ * What a work is, in one word, from its latest revision: page (HTML, one
+ * file or a bundle), link (a saved link), image, text or file.
+ */
+export function workKind(mime: string) {
+  if (mime === "text/html") return "page" as const;
+  if (mime === LINK_MIME) return "link" as const;
+  if (mime.startsWith("image/")) return "image" as const;
+  if (mime.startsWith("text/")) return "text" as const;
+  return "file" as const;
+}
+
 function artifactProjection(row: any) {
   const trashedAt = row.trashed_at
     ? new Date(row.trashed_at).toISOString()
     : null;
+  const kind = workKind(row.mime);
   return {
     id: row.id,
     title: row.title,
+    kind,
+    ...(kind === "link" ? { linkHost: linkOfRevision(row.filename).host } : {}),
     folderId: row.folder_id,
+    folderName: row.folder_name ?? null,
+    createdAt: new Date(row.first_created_at ?? row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     trashedAt,
     lifecycleVersion: Number(row.lifecycle_version),
@@ -179,7 +198,12 @@ function artifactProjection(row: any) {
 const artifactColumns = `artifact.id,artifact.title,artifact.folder_id,
   artifact.updated_at,artifact.trashed_at,artifact.lifecycle_version,
   r.id AS revision_id,r.number,r.filename,r.mime,r.size,r.total_size,
-  r.storage_kind,r.html_profile,r.created_at,${inlineBuildSelect}`;
+  r.storage_kind,r.html_profile,r.created_at,${inlineBuildSelect},
+  (SELECT name FROM folders folder
+   WHERE folder.tenant_id=artifact.tenant_id
+     AND folder.id=artifact.folder_id) AS folder_name,
+  (SELECT created_at FROM revisions first
+   WHERE first.artifact_id=artifact.id AND first.number=1) AS first_created_at`;
 
 export async function listArtifactsForAgent(
   actor: ServiceActor,
@@ -290,7 +314,12 @@ export async function listFoldersForAgent(
   const input = agentFolderListInputSchema.parse(raw);
   const cursor = decodeFolderCursor(input.cursor);
   const { rows } = await db.query(
-    `SELECT id,name FROM folders
+    `SELECT id,name,
+            (SELECT count(*) FROM artifacts artifact
+             WHERE artifact.tenant_id=folder.tenant_id
+               AND artifact.folder_id=folder.id
+               AND artifact.trashed_at IS NULL) AS works
+     FROM folders folder
      WHERE tenant_id=$1
        AND ($2::text IS NULL OR (name,id)>($2,$3::uuid))
      ORDER BY name ASC,id ASC LIMIT $4`,
@@ -304,7 +333,11 @@ export async function listFoldersForAgent(
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
   return {
-    items: page.map((row) => ({ id: row.id, name: row.name })),
+    items: page.map((row) => ({
+      id: row.id,
+      name: row.name,
+      works: Number(row.works),
+    })),
     nextCursor: more && page.length ? encodeFolderCursor(page.at(-1)) : null,
   };
 }

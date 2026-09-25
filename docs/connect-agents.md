@@ -44,16 +44,20 @@ ChatGPT и Claude.ai в браузере команды не выполняют 
 |---|---|
 | `/llms.txt` | Текст для агента: что такое Полка, как подключиться (человек входит в браузере, агент не трогает пароль и токен), инструменты MCP со scope — список строится из зарегистрированных инструментов этой установки, HTTP API с примером curl, лимиты, модерация и как показать результат человеку |
 | `/openapi.json` | OpenAPI 3.1 HTTP API (`/api/v1/publish`, `/api/v1/status/:id`, CLI), собран из zod-схем маршрутов |
-| `/.well-known/agent-skills/index.json` | Индекс [Agent Skills](https://agentskills.io) со скиллом `polka` (`/.well-known/agent-skills/polka/SKILL.md`, SHA-256 в индексе) |
+| `/.well-known/agent-skills/index.json` | Индекс [Agent Skills](https://agentskills.io) со скиллами `polka` и `polka-organize` (`/.well-known/agent-skills/<имя>/SKILL.md`, SHA-256 в индексе) |
 
 Все адреса внутри берутся из `APP_ORIGIN` установки. Поставить скилл агенту:
 
 ```sh
-npx skills add artkruglov/polka          # из репозитория: skills/polka/SKILL.md
+npx skills add artkruglov/polka          # из репозитория: skills/polka и skills/polka-organize
 npx skills add https://polochka.app      # с установки: /.well-known/agent-skills/index.json
 ```
 
-Скилл учит: подключиться через `/connect`, сохранить `polka_publish`, выпустить ссылку заново после новой версии, отдать человеку ссылку `…/s#…` с пояснением, что работа приватна, а ссылка без каталога, передать `moderationMessage`, если ссылка ждёт модератора, и никогда не трогать пароли и токены. `skills/polka/SKILL.md` генерируется из `apps/server/agent-discovery.ts` командой `npm run gen:skill`; тест падает, если файл устарел.
+Скилл учит: подключиться через `/connect`, сохранить `polka_publish`, выпустить ссылку заново после новой версии, отдать человеку ссылку `…/s#…` с пояснением, что работа приватна, а ссылка без каталога, передать `moderationMessage`, если ссылка ждёт модератора, и никогда не трогать пароли и токены; сохранять в подходящую папку, если владелец ими пользуется.
+
+Скилл `polka-organize` раскладывает полку по папкам по просьбе «разложи полку», «наведи порядок в папках», «структурируй работы»: агент читает всю полку и её папки, предлагает 3–8 папок по проектам и темам (серии вроде «Y360 Radar · W36/W37/W38» — в одну), показывает план таблицей «папка → работы» и только после согласия владельца создаёт папки и переносит работы пачками. Папки владельца сохраняются, работы не удаляются, не отправляются в корзину и не переименовываются. Нужны разрешения «Читать список» и «Управлять названиями, папками и корзиной».
+
+Оба файла генерируются из `apps/server/agent-discovery.ts` командой `npm run gen:skill`; тест падает, если файл устарел.
 
 ## Claude Code и Codex: одной командой, без токена
 
@@ -114,7 +118,7 @@ codex mcp add polka --url https://polochka.app/mcp --bearer-token-env-var POLKA_
 | `polka_capture` | `capture` | Сохраняет пакет файлов (до 64 файлов, 5 МиБ) без ссылки |
 | `polka_status` | `context` | Статус своих сохранений |
 | `polka_open_shelf` | `context`, только OAuth (ссылка со входом — ещё `sign_in`) | По просьбе «Открой мою Полку»: страница входа в эту полку; для временной полки с правом `sign_in` — одноразовая ссылка на 5 минут |
-| `polka_list`, `polka_get_artifact`, `polka_list_folders` | `read` | Поиск и метаданные работ полки. `polka_get_artifact` принимает и адрес страницы работы `<APP_ORIGIN>/works/<id>` — так владелец называет работу во фразе «Открой на Полке работу «…» (адрес)» |
+| `polka_list`, `polka_get_artifact`, `polka_list_folders` | `read` | Поиск и метаданные работ полки: `polka_list` отдаёт до 100 работ за вызов (дальше `nextCursor`) с видом (`kind`: page, link, image, text, file), папкой (`folderId`, `folderName`) и датой создания; `polka_list_folders` — папки с числом работ. `polka_get_artifact` принимает и адрес страницы работы `<APP_ORIGIN>/works/<id>` — так владелец называет работу во фразе «Открой на Полке работу «…» (адрес)» |
 | `polka_revise` | `revise` | Новая версия существующей работы: целиком (manifest и файлы) или правками `edits: [{oldText, newText}]` к `baseRevisionId` |
 | `polka_comments` | `read` | Комментарии и реакции получателей по ссылкам работы: фрагмент, текст, имя автора, статус, версия. Заметки самого владельца (`author.owner`) — его задание агенту: «Поправь работу «…» по моим заметкам на Полке» |
 | `polka_resolve_comment` | `revise` | Отметить ветку решённой (или вернуть) |
@@ -122,12 +126,14 @@ codex mcp add polka --url https://polochka.app/mcp --bearer-token-env-var POLKA_
 | `polka_prepare_preview` | `capture` или `revise` | Собирает интерактивную версию для просмотра; есть, только если на установке включён интерактивный просмотр |
 | `polka_share`, `polka_revoke_share` | `share` | Выпускает и отзывает ссылку; с `moveShareId` переносит существующую ссылку (и её обсуждение) на новую версию |
 | `polka_update_artifact`, `polka_trash`, `polka_restore` | `manage` | Название, папка, корзина |
+| `polka_create_folder`, `polka_rename_folder`, `polka_delete_folder` | `manage` | Папки полки: создать, переименовать (имя уникально на полке, до 80 символов, не больше 100 папок), удалить пустую. Папку с работами удалить нельзя: отказ `folder_not_empty` называет их число |
+| `polka_move` | `manage` | Переносит до 100 работ в одну папку (или «без папки», `folderId: null`) одной транзакцией: всё или ничего; чужие, удалённые и неизвестные id перечислены в `missing`. Порядок работ на полке не меняется |
 | `polka_list_templates`, `polka_list_template_libraries`, `polka_read_source` | `source:read` | Шаблоны и их исходники точной версии |
 | `polka_import_url`, `polka_import_status`, `polka_cancel_import` | `capture` | Импорт по URL, если он включён на установке |
 
 `polka_publish` и `polka_share` возвращают `moderation: "held"` (или `"paused"`) и `moderationMessage`, пока ссылка ждёт модератора Полки: получатель до одобрения видит экран «Ссылка на проверке». У нового аккаунта ссылка живёт не больше 7 дней и открытых ссылок не больше пяти (настройки установки); отказ `quota` объясняет это словами, которые агент передаёт человеку. Правила — в [specs/ABUSE_PROTECTION.md](specs/ABUSE_PROTECTION.md).
 
-Создающие инструменты (`polka_publish`, `polka_capture`, `polka_revise`, `polka_share`, `polka_update_artifact`, `polka_import_url`) принимают ключ идемпотентности: повтор того же запроса не создаёт вторую работу. Корзина и восстановление защищены ожидаемой версией (CAS), отзыв ссылки идемпотентен по `shareId`. Полный контракт описан в [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md).
+Создающие инструменты (`polka_publish`, `polka_capture`, `polka_revise`, `polka_share`, `polka_update_artifact`, инструменты папок и `polka_move`, `polka_import_url`) принимают ключ идемпотентности: повтор того же запроса не создаёт вторую работу. Корзина и восстановление защищены ожидаемой версией (CAS), отзыв ссылки идемпотентен по `shareId`. Полный контракт описан в [specs/MCP_IMPLEMENTATION_SPEC.md](specs/MCP_IMPLEMENTATION_SPEC.md).
 
 ### Замечания получателей: прочитать, поправить, отметить
 
