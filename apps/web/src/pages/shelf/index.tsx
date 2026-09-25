@@ -18,10 +18,12 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type {
-  Account,
-  Artifact,
-  Folder,
+import {
+  SEARCH_MATCH_END,
+  SEARCH_MATCH_START,
+  type Account,
+  type Artifact,
+  type Folder,
 } from "../../../../../packages/contracts/index.ts";
 import { Preview, TextCover } from "../../widgets/artifact-preview/index.ts";
 import { LinkCover } from "../../entities/link/index.tsx";
@@ -61,6 +63,26 @@ type Props = {
 const categories: Category[] = ["pages", "documents", "images", "other"];
 
 /** The cover a card shows: the work itself when it can be drawn, otherwise a typographic cover. */
+/** Where the search found the work in its text: the found words marked. */
+function SearchSnippet({ text }: { text: string }) {
+  const parts = text.split(
+    new RegExp(`(${SEARCH_MATCH_START}[^${SEARCH_MATCH_END}]*${SEARCH_MATCH_END})`, "u"),
+  );
+  return (
+    <p className="shelf-card-snippet">
+      …
+      {parts.map((part, index) =>
+        part.startsWith(SEARCH_MATCH_START) ? (
+          <mark key={index}>{part.slice(1, -1)}</mark>
+        ) : (
+          part
+        ),
+      )}
+      …
+    </p>
+  );
+}
+
 function CardCover({ a }: { a: Artifact }) {
   const r = a.revision;
   if (r.link) return <LinkCover title={a.title} host={r.link.host} service={r.link.service} />;
@@ -280,6 +302,7 @@ export function ShelfPage({
                           {kindOf(a.revision)} · v{a.revision.number} · {date(a.updatedAt)}
                         </span>
                       </div>
+                      {a.snippet && <SearchSnippet text={a.snippet} />}
                     </div>
                     <div className="shelf-card-actions">
                       {a.revision.link ? (

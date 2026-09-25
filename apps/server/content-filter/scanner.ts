@@ -185,8 +185,18 @@ export class ContentScanner {
   private scriptChars = 0;
 
   constructor(
-    private readonly options: { images?: boolean; sample?: boolean; scripts?: boolean } = {},
+    private readonly options: {
+      images?: boolean;
+      sample?: boolean;
+      scripts?: boolean;
+      /** The page's visible text for search (docs/specs/CONTENT_SEARCH.md). */
+      text?: boolean;
+    } = {},
   ) {}
+
+  get textWanted() {
+    return !!this.options.text;
+  }
 
   get scriptsWanted() {
     return !!this.options.scripts;

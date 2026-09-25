@@ -28,6 +28,9 @@
 .shelf-card h3 { font-size: var(--text-xl); letter-spacing: -.02em; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .shelf-card h3 a:hover { color: var(--accent); }
 .shelf-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 6px; color: var(--muted); font-size: var(--text-sm); }
+.shelf-card-snippet { margin-top: 8px; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.shelf-card-snippet mark { padding: 0 2px; border-radius: 3px; background: var(--accent-soft); color: var(--ink); }
+.shelf-list .shelf-card-snippet { margin-top: 4px; -webkit-line-clamp: 1; }
 .shelf-card-access { display: inline-flex; align-items: center; gap: 6px; }
 .shelf-card-access svg { width: 15px; height: 15px; }
 .shelf-card-actions { grid-area: actions; display: flex; align-items: center; gap: 2px; padding-top: 2px; }
