@@ -39,3 +39,5 @@
   .shelf-empty { padding: 36px 20px; }
   .shelf-empty .button-row { flex-direction: column; align-items: stretch; width: 100%; }
 }
+
+.shelf-team-lead { margin: 6px 0 12px; max-width: 60ch; color: var(--muted); }

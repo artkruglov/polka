@@ -85,6 +85,68 @@ function fallbackMessage(status: number) {
   return "Не удалось выполнить запрос.";
 }
 
+// The shelf this tab works on (docs/specs/TEAM_SHELVES.md): null is the
+// account's own. It comes from ?shelf= in the address, else from this tab's
+// memory, and goes to the server as X-Polka-Shelf on every request; routes
+// that are not the shelf's own ignore it.
+const SHELF_KEY = "polka:shelf";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Only the shelf's own pages follow it: «Сохранить», templates and the rest
+// work with the account's own shelf, as their pages say.
+const SHELF_PAGES = /^\/(?:$|trash$|works\/)/;
+let shelf: string | null = (() => {
+  if (typeof location === "undefined" || !SHELF_PAGES.test(location.pathname)) return null;
+  const fromUrl = new URLSearchParams(location.search).get("shelf");
+  if (fromUrl !== null) {
+    // ?shelf= (empty) is the account's own shelf, and this tab forgets the other.
+    if (!UUID.test(fromUrl)) {
+      try {
+        sessionStorage.removeItem(SHELF_KEY);
+      } catch {
+        // Nothing remembered to forget.
+      }
+      return null;
+    }
+    return fromUrl;
+  }
+  try {
+    const kept = sessionStorage.getItem(SHELF_KEY);
+    return kept && UUID.test(kept) ? kept : null;
+  } catch {
+    return null;
+  }
+})();
+export const currentShelf = () => shelf;
+/** The department shelf this tab returns to on its shelf pages, from any page. */
+export function rememberedShelf() {
+  if (shelf) return shelf;
+  try {
+    const kept = sessionStorage.getItem(SHELF_KEY);
+    return kept && UUID.test(kept) ? kept : null;
+  } catch {
+    return null;
+  }
+}
+/** Switch this tab to a shelf (null: its own). The caller reloads the page. */
+export function rememberShelf(id: string | null) {
+  shelf = id;
+  try {
+    if (id) sessionStorage.setItem(SHELF_KEY, id);
+    else sessionStorage.removeItem(SHELF_KEY);
+  } catch {
+    // This tab forgets on reload; the address still carries ?shelf=.
+  }
+}
+/**
+ * An address the browser opens by itself (a picture, «Открыть ↗», a work
+ * link) carries the shelf as ?shelf=, since it cannot carry the header.
+ */
+export function withShelf(url: string) {
+  if (!shelf) return url;
+  const [path, hash = ""] = url.split("#");
+  return `${path}${path!.includes("?") ? "&" : "?"}shelf=${shelf}${hash ? `#${hash}` : ""}`;
+}
+
 /**
  * Every browser request goes through here. The status is checked before the
  * body is read, so an HTML error page from a proxy never reaches the UI raw.
@@ -92,6 +154,11 @@ function fallbackMessage(status: number) {
  */
 async function send(url: string, init: RequestInit): Promise<Response> {
   let res: Response;
+  if (shelf && url.startsWith("/api/")) {
+    const headers = new Headers(init.headers);
+    headers.set("X-Polka-Shelf", shelf);
+    init = { ...init, headers };
+  }
   try {
     res = await fetch(url, init);
   } catch (e) {
@@ -155,7 +222,39 @@ export function request<T>(
   return json<T>(`/api${path}`, body, method, signal, csrfToken);
 }
 
+export type ShelfRole = "owner" | "admin" | "curator" | "author" | "reader";
+export type Shelf = { id: string; kind: "personal" | "team"; name: string | null; role: ShelfRole };
+export type ShelfMember = {
+  accountId: string;
+  name: string;
+  email: string | null;
+  role: Exclude<ShelfRole, "owner">;
+  joinedAt: string;
+};
+export type ShelfEvent = {
+  id: string;
+  action: string;
+  oldRole: string | null;
+  newRole: string | null;
+  createdAt: string;
+  actorName: string | null;
+  targetName: string | null;
+};
+
 export const client = {
+  shelves: () => request<{ items: Shelf[]; canCreate: boolean }>("/shelves"),
+  createShelf: (name: string) => request<Shelf>("/shelves", { name }),
+  renameShelf: (id: string, name: string) =>
+    request<{ id: string; name: string }>(`/shelves/${id}`, { name }, "PATCH"),
+  shelfMembers: (id: string) =>
+    request<{ role: ShelfRole; items: ShelfMember[]; hasMore: boolean }>(`/shelves/${id}/members`),
+  addShelfMember: (id: string, who: string, role: ShelfMember["role"]) =>
+    request<{ accountId: string; name: string; role: ShelfMember["role"] }>(`/shelves/${id}/members`, { who, role }),
+  changeShelfMemberRole: (id: string, accountId: string, role: ShelfMember["role"]) =>
+    request(`/shelves/${id}/members/${accountId}`, { role }, "PATCH"),
+  revokeShelfMember: (id: string, accountId: string) =>
+    request(`/shelves/${id}/members/${accountId}/revoke`, {}),
+  shelfEvents: (id: string) => request<{ items: ShelfEvent[] }>(`/shelves/${id}/events`),
   me: () => request<Account>("/me"),
   /** The signed-in account, or null for a guest (200 either way). */
   session: () =>

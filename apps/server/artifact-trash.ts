@@ -7,7 +7,7 @@ import {
 import { audit, type Actor } from "./artifacts.ts";
 import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { assertMayChange, lockShelf } from "./shelves.ts";
 
 type DesiredLifecycle = "active" | "trashed";
 
@@ -42,7 +42,7 @@ export async function transitionArtifactLifecycleInTransaction(
   input: ArtifactLifecycleInput,
   desired: DesiredLifecycle,
 ): Promise<ArtifactLifecycleSnapshot> {
-  await lockActiveOwnerTenant(c, actor);
+  const { role } = await lockShelf(c, actor, "author");
   await c.query(
     `SELECT id FROM uploads
      WHERE tenant_id=$1 AND receipt IS NULL
@@ -57,6 +57,7 @@ export async function transitionArtifactLifecycleInTransaction(
     [artifactId, actor.tenant],
   );
   if (!artifact) throw missing();
+  assertMayChange(role, artifact.created_by, actor.id);
   if (artifact.latest_revision_id !== input.expectedRevisionId)
     throw conflict();
 

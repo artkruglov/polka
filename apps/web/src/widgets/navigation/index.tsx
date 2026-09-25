@@ -14,7 +14,7 @@ import {
   Plus,
 } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
+import { client, rememberedShelf } from "../../shared/api/client.ts";
 import { Avatar, Button, IconButton } from "../../shared/ui/controls.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
@@ -141,7 +141,7 @@ function AccountMenu({
           </span>
         }
         items={[
-          { id: "shelf", label: "Моя полка", icon: <Home />, onSelect: () => location.assign("/") },
+          { id: "shelf", label: "Моя полка", icon: <Home />, onSelect: () => location.assign(rememberedShelf() ? "/?shelf=" : "/") },
           { id: "trash", label: "Корзина", onSelect: () => location.assign("/trash") },
           { id: "logout", label: "Выйти", icon: <LogOut />, tone: "danger", onSelect: () => setConfirm(true) },
         ]}
@@ -234,7 +234,10 @@ function SiteHeader({
   const hrefOf = (link: (typeof links)[number]) =>
     link.id === "shelf" && guest
       ? `/?login=1&next=${encodeURIComponent("/")}`
-      : link.href;
+      : // «Моя полка» is one's own even after a department shelf was opened.
+        link.id === "shelf" && rememberedShelf()
+        ? "/?shelf="
+        : link.href;
   return (
     <>
       <header className="site-rail">

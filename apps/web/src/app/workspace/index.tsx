@@ -20,7 +20,7 @@ import type {
   Folder,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
-import { ApiError, client } from "../../shared/api/client.ts";
+import { ApiError, client, withShelf } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
@@ -38,6 +38,12 @@ import { shelfUrl } from "../../entities/artifact/agent-phrases.ts";
 import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
+import { useShelves, shelfName } from "../../entities/shelf/model.ts";
+import {
+  CreateShelfPanel,
+  ShelfMembersPanel,
+  ShelfSwitcher,
+} from "../../features/shelf-members/index.tsx";
 import "./styles.css";
 const params = new URLSearchParams(location.search);
 function resume(next: string) {
@@ -50,6 +56,10 @@ function resume(next: string) {
 }
 export function App() {
   const { account, error: authError, retry: retryAccount } = useAccountState();
+  // Department shelves (docs/specs/TEAM_SHELVES.md): which shelf this tab shows.
+  const shelves = useShelves(!!account && !account.provisional);
+  const team = shelves.current?.kind === "team" ? shelves.current : null;
+  const [shelfDialog, setShelfDialog] = useState<"create" | "members" | null>(null);
   const [folders, setFolders] = useState<Folder[]>([]),
     [folderId, setFolderId] = useState<string | null>(null),
     [items, setItems] = useState<Artifact[]>([]),
@@ -154,7 +164,7 @@ export function App() {
     routeGeneration.current++;
     trashGeneration.current++;
     selectedRef.current = id;
-    window.history.pushState(null, "", id ? `/works/${id}` : "/");
+    window.history.pushState(null, "", withShelf(id ? `/works/${id}` : "/"));
     setTrashView(false);
     setSelected(id);
     setWork(null);
@@ -384,6 +394,20 @@ export function App() {
     }
   };
   const nav = (
+    <>
+    <ShelfSwitcher
+      shelves={shelves.items}
+      current={shelves.current}
+      canCreate={shelves.canCreate}
+      onCreate={() => {
+        setShelfDialog("create");
+        setMobile(false);
+      }}
+      onMembers={() => {
+        setShelfDialog("members");
+        setMobile(false);
+      }}
+    />
     <ShelfNavigation
       folders={folders}
       folderId={folderId}
@@ -398,6 +422,7 @@ export function App() {
       }}
       onOpenTrash={openTrash}
     />
+    </>
   );
 
   const notices = (
@@ -447,7 +472,7 @@ export function App() {
                 viewed={viewed}
                 folderName={
                   folders.find((f) => f.id === work.folderId)?.name ??
-                  "Моя полка"
+                  shelfName(shelves.current)
                 }
                 history={history}
                 setHistory={setHistory}
@@ -564,6 +589,7 @@ export function App() {
               setPanel={setPanel}
               open={open}
               loadMore={() => void loadMore()}
+              team={team}
             />
           )}
         </main>
@@ -578,6 +604,10 @@ export function App() {
         <Dialog title="Папки" onClose={() => setMobile(false)}>
           <nav className="mobile-nav" aria-label="Папки и корзина (меню)">{nav}</nav>
         </Dialog>
+      )}
+      {shelfDialog === "create" && <CreateShelfPanel onClose={() => setShelfDialog(null)} />}
+      {shelfDialog === "members" && team && account && (
+        <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)} />
       )}
       {(panel === "upload" || panel === "version") && (
         <UploadPanel

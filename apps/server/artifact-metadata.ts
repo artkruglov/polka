@@ -3,7 +3,7 @@ import { updateArtifactMetadataSchema } from "../../packages/contracts/index.ts"
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { audit, getArtifact, type Actor } from "./artifacts.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { assertMayChange, lockShelf } from "./shelves.ts";
 
 export async function updateArtifactMetadata(
   actor: Actor,
@@ -23,7 +23,7 @@ export async function updateArtifactMetadataInTransaction(
   artifactId: string,
   input: ReturnType<typeof updateArtifactMetadataSchema.parse>,
 ) {
-  await lockActiveOwnerTenant(c, actor);
+  const { role } = await lockShelf(c, actor, "author");
 
   const {
     rows: [artifact],
@@ -32,6 +32,7 @@ export async function updateArtifactMetadataInTransaction(
     [artifactId, actor.tenant],
   );
   if (!artifact) throw missing();
+  assertMayChange(role, artifact.created_by, actor.id);
   if (
     artifact.title !== input.expectedTitle ||
     artifact.folder_id !== input.expectedFolderId
