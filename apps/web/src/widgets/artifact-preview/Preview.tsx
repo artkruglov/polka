@@ -15,6 +15,8 @@ import {
   size,
 } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
+import { ProjectView } from "./ProjectView.tsx";
+import { TextCover } from "./TextCover.tsx";
 import { liveKind } from "./live-plan.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
@@ -105,6 +107,19 @@ export function Preview({
       />
     );
   }
+  // A project: a tree of its pages and the project viewer (docs/specs/PROJECTS.md).
+  if (revision.storageKind === "bundle" && revision.manifest?.runtime === "project-v1")
+    return compact ? (
+      <TextCover
+        id={revision.id}
+        title={title ?? readingTitle ?? "Проект"}
+        eyebrow="Проект"
+        note={`${revision.manifest.files.length} файлов`}
+        compact
+      />
+    ) : (
+      <ProjectView revision={revision} grant={grant} />
+    );
   // A lone static page saved as a bundle is shown like a single HTML upload.
   if (
     revision.storageKind === "bundle" &&

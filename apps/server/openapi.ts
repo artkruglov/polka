@@ -451,6 +451,74 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      // Projects (docs/specs/PROJECTS.md): a folder of linked pages, file by file.
+      "/api/v1/projects": {
+        post: {
+          operationId: "beginProject",
+          summary: "Begin saving a folder of linked pages as one project",
+          description:
+            "Body: {key, title, manifest, folderId?, artifactId?, baseRevisionId?}. The manifest lists every file (path, mime, size, sha256) with runtime project-v1 and entrypoint README.md, index.md or index.html: up to 400 files, 48 MB in all, each file up to 5 MB; Markdown, HTML, CSS, JavaScript, JSON, SVG, PNG, JPEG, WebP, GIF, WOFF2 and text. Returns uploadId and the index of each path; a repeated key returns the same upload. Scope capture, or revise with artifactId and baseRevisionId for a new version. The ready-made client is GET /api/v1/cli/polka-publish-project.mjs.",
+          security: [{ bearerAuth: ["capture"] }],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { type: "object" } } },
+          },
+          responses: {
+            "200": { description: "The upload: uploadId, receipt (when already saved) and files [{index, path}]." },
+            "400": { description: "The manifest or a field is invalid." },
+            "413": { description: "The shelf is out of space or has too many uploads in progress." },
+          },
+        },
+      },
+      "/api/v1/projects/{uploadId}/files/{index}": {
+        put: {
+          operationId: "putProjectFile",
+          summary: "Send one file of a project",
+          description:
+            "The bytes of the file at this index, as application/octet-stream. Size and SHA-256 must match the manifest. Project files have their own rate limit per token (twice the file limit per 10 minutes).",
+          security: [{ bearerAuth: ["capture"] }],
+          parameters: [
+            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0, maximum: 399 } },
+          ],
+          requestBody: {
+            required: true,
+            content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } },
+          },
+          responses: { "200": { description: "Stored." }, "404": { description: "No such upload for this token." } },
+        },
+      },
+      "/api/v1/projects/{uploadId}/finalize": {
+        post: {
+          operationId: "finalizeProject",
+          summary: "Save the project once every file is sent",
+          description:
+            "Saves one version of the project and returns its receipt with shelfUrl. Every page, document and script is screened and indexed for search.",
+          security: [{ bearerAuth: ["capture"] }],
+          parameters: [
+            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: {
+            "200": { description: "The receipt: artifactId, revisionId, number, shelfUrl." },
+            "409": { description: "A file is missing, or a newer version appeared since baseRevisionId." },
+          },
+        },
+      },
+      "/api/v1/cli/polka-publish-project.mjs": {
+        get: {
+          operationId: "downloadProjectCli",
+          summary: "Download the dependency-free project CLI",
+          description:
+            "A single-file Node 22+ script that publishes a folder as one project on this installation. It reads the token only from POLKA_TOKEN; --dry-run lists what would be sent and skipped.",
+          security: [],
+          responses: {
+            "200": {
+              description: "The script, pointed at this installation.",
+              content: { "text/javascript": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
       "/api/v1/cli/polka-publish.mjs": {
         get: {
           operationId: "downloadCli",

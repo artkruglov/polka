@@ -5,12 +5,14 @@ import {
   LINK_MIME,
   linkDocumentSchema,
   MAX_BYTES,
+  PROJECT_MAX_BYTES,
   type HtmlProfile,
   type Revision,
   type Share,
   type Artifact,
 } from "../../packages/contracts/index.ts";
 import {
+  PROJECT_RUNTIME,
   beginBundleUploadSchema,
   canonicalizeManifest,
   type BundleExport,
@@ -390,6 +392,16 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
     [revisionId],
   );
   if (!r) throw missing();
+  // A project opens in the project viewer (docs/specs/PROJECTS.md), which
+  // needs the viewer domain; there is nothing to build for it.
+  if (r.storage_kind === "bundle" && r.manifest?.runtime === PROJECT_RUNTIME) {
+    if (config.HTML_LIVE_ENABLED) return null;
+    throw new Problem(
+      422,
+      "unsupported",
+      "Проект открывается на домене просмотра, а на этой установке он не настроен. Ссылку не выпускаем; проект можно скачать.",
+    );
+  }
   if (r.storage_kind === "bundle") {
     if (config.HTML_LIVE_ENABLED && r.derivative_id)
       return r.derivative_id as string;
@@ -1031,6 +1043,7 @@ export async function finalizeBundleUploadInTransaction(
   }> = [];
   let entryBytes: Buffer | null = null;
   const scriptSources: Buffer[] = [];
+  const project = input.manifest.runtime === PROJECT_RUNTIME;
   // Phishing signals of every page and script of the bundle. Pages go through
   // the same bounded (off-thread, deadline) parse as the profile.
   const signals = new SignalCollector();
@@ -1062,7 +1075,18 @@ export async function finalizeBundleUploadInTransaction(
       throw new Error("Bundle staging invariant failed");
     const bytes = await readBlob(stored.object_key, stored.object_version);
     validateBundleFileBytes(file, bytes);
-    if (file.path === input.manifest.entrypoint) entryBytes = bytes;
+    if (project) {
+      // A project (docs/specs/PROJECTS.md): every page is read like a page,
+      // every document and text like a text file, all of them for search.
+      if (file.path === input.manifest.entrypoint) entryBytes = bytes;
+      if (file.mime === "text/html") await inspectPage(bytes, true);
+      else if (file.mime === "text/markdown" || file.mime === "text/plain") {
+        const text = bytes.toString("utf8");
+        pageFilters.push(await scanTextBounded(text));
+        searchText.add(text);
+      } else if (file.mime === "text/javascript")
+        scanScript(bytes.toString("utf8"), signals);
+    } else if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     // Phishing signals of every page and script (a lone entrypoint is read
     // below, in the same walk as its profile).
     else if (file.mime === "text/html") await inspectPage(bytes);
@@ -1076,13 +1100,19 @@ export async function finalizeBundleUploadInTransaction(
     (file) => file.path === input.manifest.entrypoint,
   );
   const entry = verified[entryIndex];
+  if (!entry) throw new Error("Bundle entrypoint invariant failed");
   // A lone HTML entrypoint is classified exactly like a single upload; every
   // multi-file bundle stays runtime-only until a derivative is prepared.
-  const htmlProfile: HtmlProfile =
-    input.manifest.files.length === 1 && entryBytes
+  // A project's pages were all read above; its entry may be its README.
+  const entryMime = entry.file.mime;
+  const htmlProfile: HtmlProfile | null = project
+    ? entryMime === "text/html"
+      ? "unsupported"
+      : null
+    : input.manifest.files.length === 1 && entryBytes
       ? await inspectPage(entryBytes, true)
       : "unsupported";
-  if (input.manifest.files.length !== 1 && entryBytes)
+  if (!project && input.manifest.files.length !== 1 && entryBytes)
     await inspectPage(entryBytes, true);
   for (const source of scriptSources) addScriptText(source.toString("utf8"), searchText);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
@@ -1117,7 +1147,7 @@ export async function finalizeBundleUploadInTransaction(
   );
   await c.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter)
-       VALUES($1,$2,$3,$4,$5,$6,'text/html',$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
+       VALUES($1,$2,$3,$4,$5,$6,$17,$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
     [
       revisionId,
       actor.tenant,
@@ -1135,6 +1165,7 @@ export async function finalizeBundleUploadInTransaction(
       htmlProfile,
       signals.list(),
       contentFilter,
+      entryMime,
     ],
   );
   await screenSavedRevision(c, actor, {
@@ -1289,7 +1320,9 @@ export async function readAuthorizedRevisionSource(
     totalSize += bytes.length;
     files.push({ ...expected, bytes });
   }
-  if (totalSize !== Number(revision.total_size) || totalSize > MAX_BYTES)
+  const maxTotal =
+    manifest.runtime === PROJECT_RUNTIME ? PROJECT_MAX_BYTES : MAX_BYTES;
+  if (totalSize !== Number(revision.total_size) || totalSize > maxTotal)
     throw new Error("Revision total size mismatch");
   return {
     revision,

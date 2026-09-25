@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 042.
+-- Operator-reviewed recipe for the Polka schema through migration 043.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>42
+     OR (SELECT count(*) FROM public.schema_migrations)<>43
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>42 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 042';
+     OR (SELECT max(version) FROM public.schema_migrations)<>43 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 043';
   END IF;
 END $$;
 
@@ -181,5 +181,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtim
 GRANT SELECT, INSERT, UPDATE ON TABLE public.tenant_members TO :"runtime_role";
 GRANT SELECT, INSERT ON TABLE public.tenant_member_events TO :"runtime_role";
 GRANT USAGE, SELECT ON SEQUENCE public.tenant_member_events_id_seq TO :"runtime_role";
+-- Projects (043): constraints change; the application issues project views
+-- and reads them on every request; maintenance deletes expired ones.
+GRANT SELECT, INSERT, DELETE ON TABLE public.project_view_grants TO :"runtime_role";
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 042
+\echo Runtime grants installed for the reviewed schema through migration 043
