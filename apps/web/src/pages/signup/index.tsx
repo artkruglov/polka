@@ -157,7 +157,7 @@ export function Signup() {
     /\.[a-z]{2,}$/.test(typedDomain) &&
     !signupDomains.includes(typedDomain);
   const providerNames = providers
-    .filter((p) => p.id !== "oidc")
+    .filter((p) => p.id !== "oidc" && p.signup)
     .map((p) => p.name)
     .join(" или ");
   // Sent here by an agent's connection request (Codex, Claude Code, Claude.ai…).

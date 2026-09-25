@@ -44,7 +44,7 @@ import {
   PROVISIONAL_SESSION_SECONDS,
   renewProvisionalSession,
 } from "./provisional.ts";
-import { PROVIDER_NAMES } from "./sign-in-providers.ts";
+import { linkOnly, PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
 import {
   isStaticSingleFileBundle,
@@ -320,6 +320,8 @@ export async function createApp() {
     signInProviders: config.SIGN_IN_PROVIDERS.map((id) => ({
       id,
       name: PROVIDER_NAMES[id](),
+      // false: signs in only to a shelf it is linked to (GOOGLE_SIGNUP).
+      signup: !linkOnly(id),
     })),
     commentsMode: config.COMMENTS_MODE,
     // AGPL-3.0 § 13: the interface links users to this installation's source.
