@@ -20,6 +20,7 @@ import { Problem } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import type { ServiceActor } from "./service-auth.ts";
 import {
+  GENERATED_LOGIN,
   openValue,
   providerEnabled,
   sealValue,
@@ -80,7 +81,7 @@ export async function describeShelfHint(hint: string) {
       .filter((provider) => providerEnabled(provider)),
     // Enough to recognise one's own address, not to learn someone else's.
     email: email ? maskEmail(email) : null,
-    password: !/^(email|yandex|vk|oidc|guest)-[0-9a-f-]{36}$/.test(account.name),
+    password: !GENERATED_LOGIN.test(account.name),
   };
 }
 

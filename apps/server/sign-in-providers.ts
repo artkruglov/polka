@@ -18,8 +18,8 @@ import {
 } from "node:crypto";
 import { config } from "./config.ts";
 
-export type ProviderId = "yandex" | "vk" | "oidc";
-export const PROVIDER_IDS = ["yandex", "vk", "oidc"] as const;
+export type ProviderId = "yandex" | "vk" | "google" | "oidc";
+export const PROVIDER_IDS = ["yandex", "vk", "google", "oidc"] as const;
 
 /** What a provider told us about the person, after every check passed. */
 export type ProviderProfile = {
@@ -30,6 +30,8 @@ export type ProviderProfile = {
   /** The provider vouches for the address (and the installation trusts it). */
   emailVerified: boolean;
   name: string | null;
+  /** Google Workspace domain (the `hd` claim), lower-cased; Google only. */
+  hostedDomain?: string | null;
 };
 
 /** A refusal shown on the sign-in page by its code only. */
@@ -43,6 +45,7 @@ export class IdpError extends Error {
       | "signup"
       | "domain"
       | "linked"
+      | "link_only"
       | "unavailable",
   ) {
     super(code);
@@ -62,13 +65,38 @@ export const providerEndpoints = {
     token: "https://id.vk.ru/oauth2/auth",
     userInfo: "https://id.vk.ru/oauth2/user_info",
   },
+  google: {
+    // Standard OpenID Connect: everything else comes from this document.
+    discovery: "https://accounts.google.com/.well-known/openid-configuration",
+  },
+};
+
+/**
+ * Google's id_token names its issuer with or without the scheme
+ * (developers.google.com/identity/openid-connect/openid-connect).
+ */
+const ISSUER_ALIASES: Record<string, string> = {
+  "https://accounts.google.com": "accounts.google.com",
 };
 
 export const PROVIDER_NAMES: Record<ProviderId, () => string> = {
   yandex: () => "Яндекс ID",
   vk: () => "VK ID",
+  google: () => "Google",
   oidc: () => config.OIDC_NAME,
 };
+
+/**
+ * GOOGLE_SIGNUP=link-only: Google only signs in to a shelf it was linked to
+ * by its signed-in owner. It opens no shelf, links nothing by address and
+ * claims no provisional shelf (docs/specs/SIGN_IN_PROVIDERS.md, «Google»).
+ */
+export const linkOnly = (provider: ProviderId) =>
+  provider === "google" && config.GOOGLE_SIGNUP === "link-only";
+
+/** A login self sign-up generated (`<way>-<account id>`), not one to type. */
+export const GENERATED_LOGIN =
+  /^(email|yandex|vk|google|oidc|guest)-[0-9a-f-]{36}$/;
 
 export function providerEnabled(provider: string): provider is ProviderId {
   return (config.SIGN_IN_PROVIDERS as string[]).includes(provider);
@@ -278,24 +306,25 @@ type Discovery = {
   token_endpoint: string;
   jwks_uri: string;
 };
-let discoveryCache: { url: string; at: number; value: Discovery } | null = null;
-let jwksCache: {
-  url: string;
-  at: number;
-  keys: Array<Record<string, any>>;
-} | null = null;
+/** Per URL: the company's IdP and Google side by side. */
+const discoveryCache = new Map<string, { at: number; value: Discovery }>();
+const jwksCache = new Map<
+  string,
+  { at: number; keys: Array<Record<string, any>> }
+>();
 const CACHE_MS = 60 * 60 * 1000;
 
 /** Tests switch installations; production reads config once per hour. */
 export function resetOidcCache() {
-  discoveryCache = null;
-  jwksCache = null;
+  discoveryCache.clear();
+  jwksCache.clear();
 }
 
-async function discovery(): Promise<Discovery> {
-  const url = config.OIDC_DISCOVERY_URL!;
-  if (discoveryCache?.url === url && Date.now() - discoveryCache.at < CACHE_MS)
-    return discoveryCache.value;
+async function discovery(
+  url = config.OIDC_DISCOVERY_URL!,
+): Promise<Discovery> {
+  const cached = discoveryCache.get(url);
+  if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
   const body = await fetchJson(url);
   const value = body as Discovery;
   for (const key of [
@@ -317,21 +346,18 @@ async function discovery(): Promise<Discovery> {
     value.jwks_uri,
   ])
     providerUrl(endpoint);
-  discoveryCache = { url, at: Date.now(), value };
+  discoveryCache.set(url, { at: Date.now(), value });
   return value;
 }
 
 async function jwks(url: string, refresh: boolean) {
-  if (
-    !refresh &&
-    jwksCache?.url === url &&
-    Date.now() - jwksCache.at < CACHE_MS
-  )
-    return jwksCache.keys;
+  const cached = jwksCache.get(url);
+  if (!refresh && cached && Date.now() - cached.at < CACHE_MS)
+    return cached.keys;
   const body = await fetchJson(url);
   if (!Array.isArray(body.keys)) throw new IdpError("provider");
-  jwksCache = { url, at: Date.now(), keys: body.keys };
-  return jwksCache.keys;
+  jwksCache.set(url, { at: Date.now(), keys: body.keys });
+  return body.keys as Array<Record<string, any>>;
 }
 
 const ALGORITHMS: Record<string, { hash: string; options: object }> = {
@@ -402,8 +428,11 @@ export async function verifyIdToken(
   const skew = 120;
   const seconds = Math.floor(now / 1000);
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  const issuers = [expected.issuer];
+  if (ISSUER_ALIASES[expected.issuer])
+    issuers.push(ISSUER_ALIASES[expected.issuer]);
   if (
-    claims.iss !== expected.issuer ||
+    !issuers.includes(claims.iss) ||
     !audiences.includes(expected.audience) ||
     (audiences.length > 1 && claims.azp !== expected.audience) ||
     typeof claims.exp !== "number" ||
@@ -463,6 +492,16 @@ export async function startFlow(
     authorize = providerEndpoints.vk.authorize;
     params.client_id = config.VK_CLIENT_ID!;
     params.scope = "email";
+  } else if (provider === "google") {
+    const document = await discovery(providerEndpoints.google.discovery);
+    authorize = document.authorization_endpoint;
+    params.client_id = config.GOOGLE_CLIENT_ID!;
+    // Basic sign-in scopes only: none of them is sensitive or restricted.
+    params.scope = "openid email profile";
+    params.nonce = flow.nonce;
+    // The person picks the Google account every time: no silent sign-in
+    // into whichever account the browser happens to hold.
+    params.prompt = "select_account";
   } else {
     const document = await discovery();
     authorize = document.authorization_endpoint;
@@ -489,6 +528,7 @@ export async function finishFlow(
   if (!code) throw new IdpError("denied");
   if (flow.provider === "yandex") return yandexProfile(code, flow);
   if (flow.provider === "vk") return vkProfile(code, flow, query.device_id);
+  if (flow.provider === "google") return googleProfile(code, flow);
   return oidcProfile(code, flow);
 }
 
@@ -607,5 +647,58 @@ async function oidcProfile(code: string, flow: Flow): Promise<ProviderProfile> {
     email,
     emailVerified,
     name: text(claims.name, 80) ?? text(claims.preferred_username, 80),
+  };
+}
+
+const DOMAIN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/**
+ * Sign in with Google: the code goes to Google's token endpoint over TLS with
+ * the client secret and the PKCE verifier; the id_token that comes back is
+ * still verified in full (signature by Google's JWKS, iss, aud, azp, exp,
+ * nonce), as for any OpenID provider. The address counts only when Google
+ * says `email_verified: true`.
+ */
+async function googleProfile(
+  code: string,
+  flow: Flow,
+): Promise<ProviderProfile> {
+  const document = await discovery(providerEndpoints.google.discovery);
+  const token = await fetchJson(document.token_endpoint, {
+    ...form({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri("google"),
+      code_verifier: flow.verifier,
+    }),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      authorization: basic(
+        config.GOOGLE_CLIENT_ID!,
+        config.GOOGLE_CLIENT_SECRET!,
+      ),
+    },
+  });
+  const claims = await verifyIdToken(token.id_token, {
+    issuer: document.issuer,
+    audience: config.GOOGLE_CLIENT_ID!,
+    nonce: flow.nonce,
+    jwksUri: document.jwks_uri,
+  });
+  const email = cleanEmail(claims.email);
+  const hd = text(claims.hd, 253)?.toLowerCase() ?? null;
+  const fullName = [text(claims.given_name, 40), text(claims.family_name, 40)]
+    .filter(Boolean)
+    .join(" ");
+  // `picture` (the avatar URL) arrives with the profile scope and is not
+  // kept: Полка shows no avatars.
+  return {
+    provider: "google",
+    subject: subjectOf(claims.sub),
+    email,
+    emailVerified: !!email && claims.email_verified === true,
+    name: text(claims.name, 80) ?? (fullName || null),
+    hostedDomain: hd && DOMAIN.test(hd) ? hd : null,
   };
 }
