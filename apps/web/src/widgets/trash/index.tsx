@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import { shelfAccess, useTeamShelf } from "../../entities/shelf/model.ts";
+import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { date, size } from "../../entities/artifact/format.ts";
 import { Button, Notice, EmptyState } from "../../shared/ui/controls.tsx";
@@ -37,6 +39,8 @@ export function TrashPanel({
   onRestore,
   onOpenArtifact,
 }: TrashPanelProps) {
+  // On a department shelf only who may change a work restores it.
+  const access = shelfAccess(useTeamShelf(), useAccountState().account?.id);
   const restoring = useRef(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [restoreErrors, setRestoreErrors] = useState<Record<string, string>>(
@@ -124,6 +128,7 @@ export function TrashPanel({
                   >
                     Версии и скачать
                   </Button>
+                  {access.changes(artifact.author) && (
                   <Button
                     variant="primary"
                     type="button"
@@ -134,6 +139,7 @@ export function TrashPanel({
                       ? "Восстанавливаем…"
                       : "Восстановить"}
                   </Button>
+                  )}
                 </div>
               </article>
             );

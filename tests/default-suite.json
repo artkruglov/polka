@@ -52,6 +52,7 @@
   "tests/team-shelves-web.test.ts",
   "tests/team-shelves-agents.test.ts",
   "tests/company-admin.test.ts",
+  "tests/team-shelves-review.test.ts",
   "tests/projects.test.ts",
   "tests/project-upload-token.test.ts",
   "tests/restore-drill.test.ts",

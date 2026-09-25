@@ -125,6 +125,7 @@ async function authorizedProject(token: string) {
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      JOIN tenants tenant ON tenant.id=r.tenant_id AND tenant.state='active'
+       AND ($2::boolean OR tenant.kind='personal')
      WHERE pv.hash=$1 AND pv.expires_at>now() AND ${PROJECT_REVISION_SQL}
        AND r.content_purged_at IS NULL
        AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
@@ -145,7 +146,7 @@ async function authorizedProject(token: string) {
              AND NOT owner.disabled AND owner.deletion_requested_at IS NULL
              AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'))
        )`,
-    [projectHash(token)],
+    [projectHash(token), config.TEAM_SHELVES === "on"],
   );
   // A link withdrawn from the feed closes with it, like /static and /document.
   if (revision?.share_id) await assertEditorialShareAccessible(db, revision.share_id);

@@ -16,7 +16,7 @@ import type {
   Receipt,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
+import { client, savedWorkHref } from "../../shared/api/client.ts";
 import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { date, profileView, size } from "../../entities/artifact/format.ts";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
@@ -343,7 +343,7 @@ export function SavedWork({
       ) : null}
       <ErrorNotice error={error} />
       <div className="bring-actions">
-        <LinkButton variant={view.linkable && !link ? "secondary" : "primary"} href={`/works/${work.id}`}>
+        <LinkButton variant={view.linkable && !link ? "secondary" : "primary"} href={savedWorkHref(work.id)}>
           Открыть на полке <ArrowUpRight />
         </LinkButton>
         <Button type="button" variant="quiet" onClick={onRestart} disabled={busy}>

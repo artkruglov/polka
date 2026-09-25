@@ -944,7 +944,10 @@ export async function createApp() {
   let transfers = 0;
   const tenantTransfers = new Map<string, number>();
   const transferGuard = async (req: any, reply: any) => {
-    const { tenant } = await identity(req, SHELF);
+    // Per shelf and member: on a department shelf one member's transfers do
+    // not take every slot of the shelf (on one's own shelf it is the same).
+    const actor = await identity(req, SHELF);
+    const tenant = `${actor.tenant}:${actor.id}`;
     const mine = tenantTransfers.get(tenant) ?? 0;
     if (transfers >= TRANSFER_SLOTS.total || mine >= TRANSFER_SLOTS.perTenant)
       throw new Problem(

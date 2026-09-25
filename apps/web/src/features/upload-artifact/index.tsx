@@ -8,7 +8,7 @@ import type {
   Folder,
   Receipt,
 } from "../../../../../packages/contracts/index.ts";
-import { saveUpload, type PendingUpload } from "../../shared/api/client.ts";
+import { currentShelf, saveUpload, type PendingUpload } from "../../shared/api/client.ts";
 import {
   UPLOAD_ACCEPT,
   UPLOAD_FORMATS,
@@ -99,8 +99,12 @@ export function UploadPanel({
       <div className="dialog-body">
         <p className="muted">
           {artifact
-            ? "Отправленная ссылка останется на прежней версии. Обновить её можно отдельно после просмотра."
-            : "Сначала работу видите только вы. Поделиться ссылкой можно после сохранения."}
+            ? currentShelf()
+              ? "Участники полки увидят новую версию."
+              : "Отправленная ссылка останется на прежней версии. Обновить её можно отдельно после просмотра."
+            : currentShelf()
+              ? "Работу сразу увидят все участники полки отдела."
+              : "Сначала работу видите только вы. Поделиться ссылкой можно после сохранения."}
         </p>
         {artifact && (
           <section className="upload-agent">
