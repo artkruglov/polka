@@ -56,6 +56,7 @@ import {
 import { assertActiveOwner, lockActiveOwnerTenant } from "./owner-state.ts";
 import { trackWorkSaved, viaFor } from "./analytics.ts";
 import { linkOfRevision, linkText } from "./saved-link-format.ts";
+import { coverDTO, coverSelectSql } from "./covers.ts";
 import {
   SEARCH_TEXT_CHARS,
   SearchText,
@@ -118,6 +119,8 @@ export const revisionDTO = (r: any): Revision => ({
   totalSize: Number(r.total_size ?? r.size),
   htmlProfile: r.html_profile ?? null,
   link: r.mime === LINK_MIME ? linkOfRevision(r.filename) : null,
+  // Only the owner's shelf queries select it (coverSelectSql).
+  ...(r.cover !== undefined ? { cover: coverDTO(r) } : {}),
   inlineBuild:
     config.HTML_LIVE_ENABLED && r.inline_build
       ? {
@@ -178,7 +181,8 @@ export async function getArtifacts(
         ) FROM revision_derivatives d
         WHERE d.revision_id=r.id AND d.source_manifest_sha256=r.manifest_sha256
           AND ${derivativeVersionSql("d")}
-        ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS inline_build
+        ORDER BY ${derivativePreferenceSql("d")} LIMIT 1) AS inline_build,
+       ${coverSelectSql("r")}
      FROM revisions r WHERE r.id=ANY($1::uuid[])`,
     [artifacts.map((a) => a.latest_revision_id)],
   );

@@ -55,6 +55,10 @@ x-runtime-env: &runtime-env
   # service below (http://127.0.0.1:4395, --profile renderer) or a separate
   # VM (https://…, deploy/renderer/README.md). RENDERER_SECRET: shared with it.
   RENDERED_IMPORT_ENABLED: ${RENDERED_IMPORT_ENABLED:-false}
+  # Shelf covers of visual works drawn by the same renderer
+  # (docs/specs/SHELF_COVERS.md). Off by default: private pages travel to the
+  # renderer, so turn it on only for a renderer on this VM or in Russia.
+  COVER_SNAPSHOTS_ENABLED: ${COVER_SNAPSHOTS_ENABLED:-false}
   RENDERER_URL: ${RENDERER_URL:-}
   RENDERER_SECRET: ${RENDERER_SECRET:-}
   RENDERER_CA: ${RENDERER_CA:-}

@@ -65,6 +65,7 @@
   "tests/url-import-rendered.test.ts",
   "tests/url-import-chatgpt.test.ts",
   "tests/saved-links.test.ts",
+  "tests/shelf-covers.test.ts",
   "tests/url-import-save.test.ts",
   "tests/url-import-jobs.test.ts",
   "tests/artifact-reader.test.ts",

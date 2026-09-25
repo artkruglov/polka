@@ -1,46 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import { Button, Chip, IconButton, Segmented } from "../../shared/ui/controls.tsx";
-import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import {
-  ArrowUpRight,
   Bot,
   Compass,
-  Ellipsis,
   FileUp,
   Folder as FolderIcon,
   Grid2X2,
   List,
-  LockKeyhole,
   Search,
-  Share2,
-  Trash2,
-  Users,
   X,
 } from "lucide-react";
-import {
-  SEARCH_MATCH_END,
-  SEARCH_MATCH_START,
-  type Account,
-  type Artifact,
-  type Folder,
+import type {
+  Account,
+  Artifact,
+  Folder,
 } from "../../../../../packages/contracts/index.ts";
-import { Preview, TextCover } from "../../widgets/artifact-preview/index.ts";
-import { LinkCover } from "../../entities/link/index.tsx";
+import { ShelfCard, seriesCounts, type CardAction } from "../../widgets/shelf-card/index.ts";
 import { AgentHero } from "../../features/agent-hero/index.tsx";
 import {
-  accessLabel,
   categoryLabel,
   categoryOf,
-  date,
-  isImage,
-  isLinked,
-  kindOf,
   type Category,
 } from "../../entities/artifact/format.ts";
 
 export type ShelfSort = "newest" | "oldest" | "title";
-export type CardAction = "share" | "metadata" | "trash";
+export type { CardAction };
 type Props = {
   account: Account;
   activeFolder: Folder | undefined;
@@ -61,94 +46,6 @@ type Props = {
 };
 
 const categories: Category[] = ["pages", "documents", "images", "other"];
-
-/** The cover a card shows: the work itself when it can be drawn, otherwise a typographic cover. */
-/** Where the search found the work in its text: the found words marked. */
-function SearchSnippet({ text }: { text: string }) {
-  const parts = text.split(
-    new RegExp(`(${SEARCH_MATCH_START}[^${SEARCH_MATCH_END}]*${SEARCH_MATCH_END})`, "u"),
-  );
-  return (
-    <p className="shelf-card-snippet">
-      …
-      {parts.map((part, index) =>
-        part.startsWith(SEARCH_MATCH_START) ? (
-          <mark key={index}>{part.slice(1, -1)}</mark>
-        ) : (
-          part
-        ),
-      )}
-      …
-    </p>
-  );
-}
-
-function CardCover({ a }: { a: Artifact }) {
-  const r = a.revision;
-  if (r.link) return <LinkCover title={a.title} host={r.link.host} service={r.link.service} />;
-  const drawable =
-    isImage(r) ||
-    (r.mime === "text/html" && r.htmlProfile !== "unsupported");
-  if (drawable) return <Preview revision={r} compact />;
-  return (
-    <TextCover
-      id={a.id}
-      title={a.title}
-      eyebrow={r.mime === "text/plain" ? "Заметка" : kindOf(r)}
-      note={r.mime === "text/plain" ? undefined : "Просмотр недоступен"}
-    />
-  );
-}
-
-/** True once the element comes near the viewport; covers below the fold load no bytes or iframes until then. */
-function useNearViewport<T extends Element>() {
-  const ref = useRef<T>(null);
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    const node = ref.current;
-    if (near || !node) return;
-    if (typeof IntersectionObserver !== "function") {
-      setNear(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setNear(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [near]);
-  return [ref, near] as const;
-}
-
-function CoverLink({
-  a,
-  href,
-  onClick,
-  cta,
-}: {
-  a: Artifact;
-  href: string;
-  onClick: (e: React.MouseEvent) => void;
-  cta: boolean;
-}) {
-  const [ref, near] = useNearViewport<HTMLAnchorElement>();
-  return (
-    <a ref={ref} className="shelf-cover" href={href} onClick={onClick} aria-label={`Открыть ${a.title}`} tabIndex={-1}>
-      {near ? <CardCover a={a} /> : <div className="placeholder" aria-hidden="true" />}
-      {cta && (
-        <span className="shelf-cover-cta" aria-hidden="true">
-          Открыть <ArrowUpRight />
-        </span>
-      )}
-    </a>
-  );
-}
 
 export function ShelfPage({
   account,
@@ -185,6 +82,8 @@ export function ShelfPage({
     else if (sort === "oldest") list.sort((x, y) => x.updatedAt.localeCompare(y.updatedAt));
     return list;
   }, [items, active, sort]);
+  // Works that share a title prefix («Y360 Radar · …») get a small series badge.
+  const series = useMemo(() => seriesCounts(items), [items]);
   return (
     <>
       {activeFolder ? (
@@ -267,65 +166,9 @@ export function ShelfPage({
         ) : visible.length ? (
           <>
             <div className={view === "grid" ? "shelf-gallery" : "shelf-list"}>
-              {visible.map((a) => {
-                const href = `/works/${a.id}`;
-                const go = (e: React.MouseEvent) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-                  e.preventDefault();
-                  open(a.id);
-                };
-                const menu = (
-                  <ActionMenu
-                    label={`Действия: ${a.title}`}
-                    icon={<Ellipsis />}
-                    items={[
-                      { id: "open", label: "Открыть", icon: <ArrowUpRight />, onSelect: () => open(a.id) },
-                      { id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") },
-                      { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
-                      { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
-                    ]}
-                  />
-                );
-                return (
-                  <article className="shelf-card" key={a.id}>
-                    <CoverLink a={a} href={href} onClick={go} cta={view === "grid"} />
-                    <div className="shelf-card-body">
-                      <h3>
-                        <a href={href} onClick={go}>{a.title}</a>
-                      </h3>
-                      <div className="shelf-card-meta">
-                        <span className="shelf-card-access" title={accessLabel(a)}>
-                          {isLinked(a) ? <Users /> : <LockKeyhole />}
-                          {accessLabel(a)}
-                        </span>
-                        <span className="shelf-card-kind">
-                          {kindOf(a.revision)} · v{a.revision.number} · {date(a.updatedAt)}
-                        </span>
-                      </div>
-                      {a.snippet && <SearchSnippet text={a.snippet} />}
-                    </div>
-                    <div className="shelf-card-actions">
-                      {a.revision.link ? (
-                        // A link work opens its original in a new tab (docs/specs/SAVED_LINKS.md).
-                        <a
-                          className="shelf-card-open"
-                          href={`/api/revisions/${a.revision.id}/open`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={a.revision.link.host}
-                        >
-                          Открыть <ArrowUpRight />
-                        </a>
-                      ) : (
-                        <a className="shelf-card-open" href={href} onClick={go}>
-                          Открыть <ArrowUpRight />
-                        </a>
-                      )}
-                      {menu}
-                    </div>
-                  </article>
-                );
-              })}
+              {visible.map((a) => (
+                <ShelfCard key={a.id} a={a} view={view} series={series} open={open} />
+              ))}
             </div>
             {cursor && !active && sort === "newest" && (
               <div className="shelf-more">

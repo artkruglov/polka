@@ -30,6 +30,15 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // Shelf covers (docs/specs/SHELF_COVERS.md): pictures of the first screen
+    // of visual works, drawn once per version by the same renderer with no
+    // network at all. Off by default: the owner's private page then travels
+    // to the renderer. Needs RENDERER_URL and RENDERER_SECRET; without it
+    // cards show typographic covers.
+    COVER_SNAPSHOTS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     // https://…; plain http only for loopback or a docker-network address.
     RENDERER_URL: unsetIfEmpty(z.string().url()),
     // Shared with the renderer (openssl rand -hex 32); signs every request.
@@ -366,6 +375,12 @@ if (env.MAIL_MODE === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM))
 if (env.RENDERED_IMPORT_ENABLED) {
   if (!env.RENDERER_URL || !env.RENDERER_SECRET)
     throw new Error("RENDERED_IMPORT_ENABLED needs RENDERER_URL and RENDERER_SECRET");
+  if (!rendererUrlAllowed(env.RENDERER_URL))
+    throw new Error("RENDERER_URL must be https (plain http only for loopback or a docker-network address)");
+}
+if (env.COVER_SNAPSHOTS_ENABLED) {
+  if (!env.RENDERER_URL || !env.RENDERER_SECRET)
+    throw new Error("COVER_SNAPSHOTS_ENABLED needs RENDERER_URL and RENDERER_SECRET");
   if (!rendererUrlAllowed(env.RENDERER_URL))
     throw new Error("RENDERER_URL must be https (plain http only for loopback or a docker-network address)");
 }
