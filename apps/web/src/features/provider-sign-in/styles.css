@@ -1,11 +1,22 @@
 /* Provider buttons keep each brand's own colours (Yandex: black, VK ID:
-   #0077FF) in light and dark themes: the providers forbid recolouring. */
+   #0077FF, Google: its light theme) in light and dark themes: the providers
+   forbid recolouring. */
 .idp-buttons { display: grid; gap: 10px; }
 .idp-button { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 18px; border-radius: var(--radius-lg); font-size: var(--text-md); font-weight: 600; text-decoration: none; transition: filter var(--dur-fast); }
 .idp-button:hover { filter: brightness(1.12); }
 .idp-button:focus-visible { outline: 3px solid var(--accent-ring); outline-offset: 2px; }
 .idp-button--yandex { background: #000; color: #fff; }
 .idp-button--vk { background: #0077ff; color: #fff; }
+/* Google Identity branding (developers.google.com/identity/branding-
+   guidelines, updated 07.2026), light theme: white fill, 1px #747775 stroke
+   inside, #1F1F1F text in Roboto Medium 14/20, the standard four-colour «G»
+   at 20px, 12px padding and 10px between logo and text, rectangular 4px
+   corners; hover adds Google's shadow and an 8% #303030 overlay. */
+.idp-button--google { gap: 10px; padding: 0 12px; border: 1px solid #747775; border-radius: 4px; background: #fff; color: #1f1f1f; font-family: Roboto, Arial, sans-serif; font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.25px; }
+.idp-button--google:hover { filter: none; box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15); background: linear-gradient(rgba(48, 48, 48, 0.08), rgba(48, 48, 48, 0.08)), #fff; }
+.idp-button--google:active { background: linear-gradient(rgba(48, 48, 48, 0.12), rgba(48, 48, 48, 0.12)), #fff; }
+.idp-button--google .idp-mark { width: 20px; height: 20px; }
+.idp-note { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-loose); }
 .idp-button--oidc { border: 1px solid var(--line-strong); background: var(--canvas); color: var(--ink); }
 .idp-mark { flex: none; width: 22px; height: 22px; }
 .idp-or { display: flex; align-items: center; gap: 12px; margin: 22px 0; color: var(--muted-2); font-size: var(--text-sm); }

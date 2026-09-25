@@ -19,7 +19,7 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { sha256 } from "./storage.ts";
-import { PROVIDER_NAMES } from "./sign-in-providers.ts";
+import { linkOnly, PROVIDER_NAMES } from "./sign-in-providers.ts";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -36,7 +36,10 @@ export const PROVISIONAL_QUOTA_BYTES = 20 * 1024 * 1024;
 
 /** «через Яндекс ID, VK ID или почту», from what this installation offers. */
 export function claimMethods() {
-  const names = config.SIGN_IN_PROVIDERS.filter((id) => id !== "oidc").map(
+  // The company's IdP and a link-only Google do not claim a shelf.
+  const names = config.SIGN_IN_PROVIDERS.filter(
+    (id) => id !== "oidc" && !linkOnly(id),
+  ).map(
     (id) => PROVIDER_NAMES[id](),
   );
   if (config.MAIL_MODE !== "disabled") names.push("почту");
@@ -90,7 +93,7 @@ export const assertClaimed = assertAuthorisedForPublic;
 export async function markClaimed(
   c: PoolClient,
   accountId: string,
-  method: "email" | "yandex" | "vk" | "oidc",
+  method: "email" | "yandex" | "vk" | "google" | "oidc",
   displayName: string | null,
 ) {
   const claimed = await c.query(

@@ -42,6 +42,7 @@ import {
   PROVIDER_IDS,
   PROVIDER_NAMES,
   finishFlow,
+  linkOnly,
   openFlow,
   providerEnabled,
   safeReturnPath,
@@ -116,6 +117,10 @@ const pendingGone = () =>
     "Вход не завершён: прошло больше 10 минут или он открыт в другом браузере. Войдите ещё раз.",
   );
 
+/** GOOGLE_SIGNUP=link-only, in the words of the sign-in page. */
+export const LINK_ONLY_MESSAGE =
+  "Через Google можно войти только в полку, к которой он уже привязан. Войдите через Яндекс ID, VK ID или по почте и привяжите Google в «Способах входа».";
+
 const IDP_PROBLEMS: Partial<Record<IdpError["code"], string>> = {
   linked:
     "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
@@ -123,6 +128,7 @@ const IDP_PROBLEMS: Partial<Record<IdpError["code"], string>> = {
   signup:
     "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
   domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
+  link_only: LINK_ONLY_MESSAGE,
 };
 
 function idpProblem(error: IdpError) {
@@ -211,6 +217,11 @@ export function registerSignInRoutes(app: FastifyInstance) {
       const provider = enabledProvider(req);
       const actor = await identity(req);
       assertStrongSession(actor);
+      // A link-only provider never claims a provisional shelf.
+      if (linkOnly(provider) && actor.provisional)
+        throw new Problem(403, "forbidden", LINK_ONLY_MESSAGE, {
+          reason: "link_only",
+        });
       await limitAttempts(`idp-link:${actor.id}`, 20);
       try {
         // Linking claims a provisional shelf (provisional.ts): back to the
@@ -267,6 +278,8 @@ export function registerSignInRoutes(app: FastifyInstance) {
         !flow.link &&
         !flow.carry &&
         flow.known &&
+        // A link-only provider opens no shelf: nothing to choose.
+        !linkOnly(provider) &&
         (await wouldOpenNewShelf(profile))
       ) {
         reply.setCookie(
