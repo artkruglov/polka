@@ -50,6 +50,7 @@ const catalog = [
   { version: 44, file: "044_team_shelves_invariants.sql" },
   { version: 45, file: "045_agent_shelves.sql" },
   { version: 46, file: "046_project_upload_tokens.sql" },
+  { version: 47, file: "047_purge_team_shelf_rows.sql" },
 ] as const satisfies readonly SchemaMigration[];
 
 export const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = Object.freeze(
