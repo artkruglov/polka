@@ -62,6 +62,15 @@ export type ExtensionContext = {
   identity: (req: FastifyRequest, options?: { shelf?: boolean }) => Promise<ExtensionActor>;
   /** A transaction on the application's database role. */
   transaction: <T>(work: (c: PoolClient) => Promise<T>) => Promise<T>;
+  /**
+   * An error the core answers with this status, code and message (the person
+   * reads the message), e.g. fail(404, "not_found", "…").
+   */
+  fail: (
+    status: number,
+    code: "invalid" | "unauthorized" | "not_found" | "conflict" | "forbidden" | "quota",
+    message: string,
+  ) => Error;
   /** The core's installation settings an extension may read. */
   settings: { appOrigin: string; teamShelves: boolean };
   log: (event: Record<string, unknown>) => void;
