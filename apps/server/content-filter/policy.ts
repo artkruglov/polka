@@ -6,6 +6,8 @@ import { CATEGORIES, type Category } from "./lists.ts";
 
 export type FilterMode = "off" | "balanced" | "strict";
 
+/** Rule-only findings a model can overrule for a trusted author (see actionFor). */
+const RULES_ONLY_NOTIFY: ReadonlySet<Category> = new Set<Category>(["fraud", "spam"]);
 /** Held for review whoever the author is (balanced) or blocked (strict). */
 export const SEVERE: ReadonlySet<Category> = new Set([
   "csam",
@@ -231,12 +233,12 @@ export function decideContent(input: {
     unchecked: model.state === "pending" || model.state === "unchecked",
   };
   let bestFinding: CategoryFinding | null = null;
-  // A model reads (or has read) this work and did not call it fraud.
-  const modelClearsFraud =
+  // A model reads (or has read) this work and did not put it in this category.
+  const modelClears = (category: Category) =>
     model.state !== "none" &&
-    !model.findings.some((finding) => finding.category === "fraud");
+    !model.findings.some((finding) => finding.category === category);
   for (const finding of findings) {
-    const action = actionFor(finding, input, rulesFound, modelClearsFraud);
+    const action = actionFor(finding, input, rulesFound, modelClears(finding.category));
     const better =
       !bestFinding ||
       RANK[action] > RANK[best.action] ||
@@ -268,7 +270,7 @@ function actionFor(
   finding: CategoryFinding,
   input: { standing: Standing; mode: FilterMode; autoblock: boolean },
   rulesFound: ReadonlySet<Category>,
-  modelClearsFraud = false,
+  modelClearsCategory = false,
 ): ContentAction {
   const severe = SEVERE.has(finding.category);
   if (finding.source === "model") {
@@ -291,11 +293,17 @@ function actionFor(
   // several escape attempts block; fewer signals wait for review.
   if (finding.category === "malicious_code")
     return finding.level === "high" ? "block" : "hold";
-  // Phishing found by the rules alone in a trusted author's work, which a
-  // model has read without calling it fraud (or will read: its answer
-  // decides the open link again and holds it if it confirms fraud). The
-  // link works and the operator is told, in either mode.
-  if (finding.category === "fraud" && input.standing.trusted && modelClearsFraud)
+  // Phishing or spam found by the rules alone in a trusted author's work,
+  // which a model has read without putting it in that category (or will
+  // read: its answer decides the open link again and holds it if it
+  // confirms). The link works and the operator is told, in either mode. A
+  // research page with hundreds of sources, or a product prototype with a
+  // sign-in screen, is the owner's ordinary work.
+  if (
+    RULES_ONLY_NOTIFY.has(finding.category) &&
+    input.standing.trusted &&
+    modelClearsCategory
+  )
     return "notify";
   if (input.mode === "strict") {
     if (input.autoblock && finding.level === "high") return "block";
