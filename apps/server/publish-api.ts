@@ -85,6 +85,8 @@ export const publishResponseSchema = z
     moderation: z.enum(["held", "paused", "blocked"]).optional(),
     moderationMessage: z.string().optional(),
     expiresNote: z.string().optional(),
+    // a new version (artifactId + baseRevisionId): the work's open link moved to it.
+    linkMoved: z.boolean().optional(),
     linkUnavailableReason: z.string().optional(),
     interactiveUnavailableReason: z.string().optional(),
     // saved on a provisional shelf: where the owner claims it to share.
@@ -323,6 +325,9 @@ function publishResponse(result: PublishResult) {
     ...(shared && "expiresNote" in shared && shared.expiresNote
       ? { expiresNote: shared.expiresNote }
       : {}),
+    ...(shared && "linkMoved" in shared && shared.linkMoved
+      ? { linkMoved: true }
+      : {}),
     ...("linkUnavailableReason" in result && result.linkUnavailableReason
       ? { linkUnavailableReason: result.linkUnavailableReason }
       : {}),
@@ -338,11 +343,15 @@ function publishResponse(result: PublishResult) {
 }
 
 export async function registerPublishApi(app: FastifyInstance) {
+  // Projects and single pages or components from disk take the short upload
+  // token too (polka_project_upload), so an agent never pastes a file into
+  // a tool argument.
+  const PROJECT_AUDIENCES = [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE];
   app.post(
     "/api/v1/publish",
     { bodyLimit: PUBLISH_BODY_LIMIT },
     async (req, reply) => {
-      const actor = await bearerActor(req, reply);
+      const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
       return publishResponse(
         await withFieldErrors(() => publishFromAgent(actor, req.body ?? {})),
       );
@@ -359,7 +368,6 @@ export async function registerPublishApi(app: FastifyInstance) {
     },
   );
   // Projects (docs/specs/PROJECTS.md): a folder of linked pages, file by file.
-  const PROJECT_AUDIENCES = [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE];
   app.post("/api/v1/projects", { bodyLimit: 256 * 1024 }, async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     return withFieldErrors(() => beginProjectUpload(actor, req.body ?? {}));

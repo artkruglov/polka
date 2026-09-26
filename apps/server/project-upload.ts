@@ -149,10 +149,12 @@ export const PROJECT_TOKEN_MINUTES = 30;
 const PROJECT_TOKENS_PER_HOUR = 10;
 
 /**
- * polka_project_upload: a token for the CLI (scripts/polka-publish-project.mjs)
- * that an agent asks for over MCP, so the person copies nothing. It is a
- * child of the asking connection: the same shelf and account, only its
- * capture/revise scopes, the project routes only (PROJECT_UPLOAD_AUDIENCE),
+ * polka_project_upload: a token for the CLIs (scripts/polka-publish-project.mjs
+ * for a folder, scripts/polka-publish.mjs for one page or React component)
+ * that an agent asks for over MCP, so the person copies nothing and the agent
+ * never pastes a file into a tool argument. It is a child of the asking
+ * connection: the same shelf and account, only its capture/revise/share
+ * scopes, the project and publish routes only (PROJECT_UPLOAD_AUDIENCE),
  * 30 minutes, and it stops when its parent is revoked.
  */
 export async function issueProjectUploadToken(actor: ServiceActor) {
@@ -178,7 +180,7 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
       if (verified.audience !== MCP_AUDIENCE)
         throw new Problem(403, "forbidden", "Этот токен сам выдан для загрузки проекта.");
       const scopes = verified.scopes.filter(
-        (scope) => scope === "capture" || scope === "revise",
+        (scope) => scope === "capture" || scope === "revise" || scope === "share",
       );
       const {
         rows: [inserted],
@@ -204,11 +206,14 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
     },
   );
   const cli = `${config.APP_ORIGIN}/api/v1/cli/polka-publish-project.mjs`;
+  const pageCli = `${config.APP_ORIGIN}/api/v1/cli/polka-publish.mjs`;
   return {
     token,
     expiresAt: new Date(row.expires_at).toISOString(),
     cliUrl: cli,
     command: `curl -fsSLO ${cli} && POLKA_TOKEN=${token} node polka-publish-project.mjs <folder> --dry-run`,
-    note: `The token works only for uploading a project, for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message.`,
+    pageCliUrl: pageCli,
+    pageCommand: `curl -fsSLO ${pageCli} && POLKA_TOKEN=${token} node polka-publish.mjs <App.jsx|page.html> --title "<title>"`,
+    note: `The token works only for uploads (a project, or one page or React component), for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message. Projects show pages without running scripts; a React component (App.jsx/App.tsx) through polka-publish.mjs runs interactively.`,
   };
 }

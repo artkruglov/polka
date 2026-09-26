@@ -113,6 +113,8 @@ export default function App() {
   assert.match(html, /\.text-\\\[13px\\\]/);
   // Preflight is part of a component page, as in the chat environment.
   assert.match(html, /box-sizing:\s*border-box/);
+  // The page fills the viewport, so an app root of height:100% is visible.
+  assert.match(html, /html,body,#root\{height:100%\}/);
   assert.match(html, /Clicked /);
   assert.match(html, /localStorage/);
   assert.ok(result.size < 1024 * 1024, `${result.size} bytes`);

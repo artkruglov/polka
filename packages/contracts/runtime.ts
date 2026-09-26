@@ -150,6 +150,8 @@ const escapeHtml = (value: string) =>
  * The HTML entrypoint Полка stores next to a component published as source:
  * a root element and one module script. The component's default export is
  * rendered into #root by the runtime; the static view shows no content.
+ * html, body and #root fill the viewport, as in a Vite or CRA template: an
+ * app whose root is height:100% would otherwise collapse to nothing.
  */
 export function componentShell(title: string, file: string) {
   return `<!doctype html>
@@ -159,6 +161,7 @@ export function componentShell(title: string, file: string) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="${RUNTIME_TAILWIND_META}" content="preflight">
 <title>${escapeHtml(title)}</title>
+<style>html,body,#root{height:100%}</style>
 </head>
 <body>
 <div id="root"></div>

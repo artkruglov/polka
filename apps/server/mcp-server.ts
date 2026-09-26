@@ -817,9 +817,9 @@ export function createMcpServer(actor: ServiceActor) {
     server.registerTool(
       "polka_project_upload",
       {
-        title: "Token to upload a folder as a project",
+        title: "Token to upload a folder, a page or a component from disk",
         description:
-          "For a folder of linked pages on this machine (a README and documents, HTML screens with their CSS and fonts, pictures): returns a 30-minute token and the exact command that downloads the Полка CLI and uploads the folder as one project (a tree of pages with working links). Run the command with --dry-run first, tell the owner what it would upload and skip, then run it again without --dry-run. For a new version of a project saved before, add --artifact <id> --base-revision <revision.id>. The token works only for project uploads, for 30 minutes, and only while this connection is live: pass it only in the environment of that command, never write it to a file, a commit or a message. Only where you can run shell commands (Claude Code, Codex); in a chat use polka_publish.",
+          "For a folder of linked pages on this machine (a README and documents, HTML screens with their CSS and fonts, pictures): returns a 30-minute token and the exact command that downloads the Полка CLI and uploads the folder as one project (a tree of pages with working links). Run the command with --dry-run first, tell the owner what it would upload and skip, then run it again without --dry-run. For a new version of a project saved before, add --artifact <id> --base-revision <revision.id>. Projects show pages without running scripts: for an interactive React component on disk (App.jsx/App.tsx) or one self-contained HTML page use pageCommand (polka-publish.mjs) with the same token instead of pasting the file into polka_publish; a new version takes --artifact/--base-revision and keeps the work's link. The token works only for uploads, for 30 minutes, and only while this connection is live: pass it only in the environment of that command, never write it to a file, a commit or a message. Only where you can run shell commands (Claude Code, Codex); in a chat use polka_publish.",
         inputSchema: z.object({}).strict(),
         annotations: {
           readOnlyHint: false,
