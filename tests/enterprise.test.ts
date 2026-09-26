@@ -278,11 +278,16 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(next.includes("Этого пока нет в коде"));
   assert.equal((next.match(/в разработке/g) ?? []).length, 3);
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
-  // Team shelves are not built: the page says each employee has a shelf
-  // today and lists shared shelves first among what comes next.
+  // Department shelves work (TEAM_SHELVES stages 1–4): the page lists them
+  // among what works, links out of them as still in progress, and what comes
+  // next starts with access and control.
   assert.ok(html.includes("Как это работает в компании"));
-  assert.ok(html.includes("Сейчас у каждого сотрудника своя полка"));
-  assert.ok(next.indexOf("Общие полки отделов") < next.indexOf("Встраивание в ваши системы"));
+  const works = html.slice(html.indexOf("enterprise-values-title"), html.indexOf("enterprise-next"));
+  assert.ok(works.includes("Полки отделов"));
+  assert.ok(works.includes("Ссылки наружу и комментарии с полки отдела"));
+  assert.ok(html.includes("На общей полке отдела — да"));
+  assert.ok(!next.includes("Общие полки отделов"));
+  assert.ok(next.indexOf("Доступ и контроль") < next.indexOf("Встраивание в ваши системы"));
   assert.doesNotMatch(html, /Одна полка для всего/);
   const questions = (html.match(/<details>/g) ?? []).length;
   assert.ok(questions >= 5 && questions <= 7, String(questions));
