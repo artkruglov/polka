@@ -115,7 +115,7 @@ async function shareFacts(shareId: string) {
   const {
     rows: [row],
   } = await db.query(
-    `SELECT share.id,share.tenant_id,share.moderation,share.moderation_reason,
+    `SELECT share.id,share.tenant_id,share.moderation,share.moderation_reason,share.created_by,
        (NOT share.revoked AND share.expires_at>now()) AS live,share.expires_at,
        artifact.title,revision.mime,revision.html_profile,revision.number,
        revision.storage_kind,revision.phishing_signals,revision.content_filter,
@@ -137,7 +137,7 @@ async function shareFacts(shareId: string) {
     [shareId],
   );
   if (!row) return null;
-  const standing = await authorStanding(db, row.tenant_id);
+  const standing = await authorStanding(db, row.tenant_id, row.created_by);
   return { ...row, standing };
 }
 

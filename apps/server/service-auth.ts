@@ -147,15 +147,15 @@ const connectionDTO = (row: any): AgentConnection => ({
 });
 
 /**
- * Links, comments and sign-in links belong to a personal shelf for now: from
- * a department shelf they come in stage 5 (docs/specs/TEAM_SHELVES.md).
+ * A sign-in link opens one's own shelf: an agent connected to a department
+ * shelf has none to give (docs/specs/TEAM_SHELVES.md).
  */
 export function assertOwnShelf(actor: ServiceActor) {
   if (actor.shelf?.kind === "team")
     throw new Problem(
       409,
       "conflict",
-      "Ссылки и комментарии с полки отдела появятся позже. Коллеги видят работу на самой полке.",
+      "Ссылку для входа агент выдаёт только со своей полки. Полку отдела открывают в браузере из «Моей полки».",
     );
 }
 
