@@ -1,0 +1,17 @@
+/* The phrase for an agent, with the manual way for connectors. */
+.connect-agent { display: grid; gap: 10px; max-width: 760px; padding: 18px 20px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--soft-3); }
+.connect-agent-title { color: var(--ink); font-size: var(--text-md); font-weight: 600; letter-spacing: var(--tracking-snug); }
+.connect-agent-phrase { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.connect-agent-phrase > code { flex: 1 1 280px; min-width: 0; padding: 11px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 500 var(--text-lg) / 1.4 var(--font-sans); color: var(--ink); overflow-wrap: anywhere; user-select: all; }
+.connect-agent-phrase .ui-button { min-height: 46px; }
+.connect-agent-phrase .field-note { flex-basis: 100%; }
+.connect-agent > small { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
+.connect-agent-skill { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.connect-agent-skill code { padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); background: var(--canvas); color: var(--ink); font-size: var(--text-sm); }
+.connect-agent-skill .ui-button { min-height: 28px; padding: 2px 8px; font-size: var(--text-sm); }
+.connect-agent-skill a { color: var(--accent); }
+@media (max-width: 760px) {
+  .connect-agent { padding: 16px 16px 14px; }
+  .connect-agent-phrase > code { font-size: var(--text-md); }
+  .connect-agent-phrase .ui-button { width: 100%; }
+}

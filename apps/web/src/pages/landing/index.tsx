@@ -25,8 +25,7 @@ import { LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
-import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
-import { SKILL_INDEX_PATH, SKILL_INSTALL } from "../../entities/onboarding/agent-setup.ts";
+import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
 import {
   SOURCE_LICENSE,
   formatStars,
@@ -46,7 +45,6 @@ const selfHostCommand = (sourceUrl: string) =>
 export function Landing() {
   const account = useAccount();
   // The same phrase the first-run steps show; GET /connect explains the rest to the agent.
-  const phrase = connectPhrase(location.origin);
   const [retry, setRetry] = useState(0);
   const catalog = useEditorialList(retry);
   const imports = useCapabilities();
@@ -74,36 +72,7 @@ export function Landing() {
             чате или другом агенте.
           </p>
 
-          <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
-            <span id="landing-agent-title" className="landing-agent-title">
-              Скопируйте своему агенту
-            </span>
-            <div className="landing-agent-phrase">
-              <code>{phrase}</code>
-              <CopyButton
-                value={phrase}
-                label="Скопировать"
-                successText="Скопировано"
-                variant="primary"
-              />
-            </div>
-            <small>
-              Codex и Claude Code выполнят одну команду сами — Полка откроется в
-              браузере, токен не нужен. В Claude (claude.ai и Desktop) и ChatGPT
-              коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
-              <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
-              <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
-              <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
-              <a href="/settings/agents?client=codex">Codex</a> ·{" "}
-              <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
-            </small>
-            <small className="landing-agent-skill">
-              Claude Code и Codex ставят плагин Полки — подключение и скилл
-              сразу. Для других агентов скилл отдельно: <code>{SKILL_INSTALL}</code>{" "}
-              <CopyButton value={SKILL_INSTALL} variant="quiet" label="Скопировать" successText="Скопировано" />
-              <a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>
-            </small>
-          </div>
+          <ConnectAgent className="landing-agent" />
 
           <div className="landing-paths">
             <LinkButton variant="primary" href="/settings/agents">
