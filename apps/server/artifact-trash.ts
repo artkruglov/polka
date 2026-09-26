@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import type { PoolClient } from "pg";
 import {
   artifactLifecycleSchema,
@@ -57,6 +58,7 @@ export async function transitionArtifactLifecycleInTransaction(
     [artifactId, actor.tenant],
   );
   if (!artifact) throw missing();
+  await assertArtifactInAgentScope(c, actor, artifactId);
   assertMayChange(role, artifact.created_by, actor.id);
   if (artifact.latest_revision_id !== input.expectedRevisionId)
     throw conflict();

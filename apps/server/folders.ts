@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope, assertFolderInAgentScope, refuseFolderManagement } from "./agent-scope.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
@@ -40,6 +41,7 @@ export async function createFolderInTransaction(
 ) {
   const name = folderNameSchema.parse(rawName);
   await lockShelf(c, actor, "curator");
+  await refuseFolderManagement(c, actor);
   const {
     rows: [{ count }],
   } = await c.query("SELECT count(*) FROM folders WHERE tenant_id=$1", [
@@ -82,6 +84,7 @@ export async function renameFolderInTransaction(
 ) {
   const name = folderNameSchema.parse(rawName);
   await lockShelf(c, actor, "curator");
+  await refuseFolderManagement(c, actor);
   const folder = await lockFolder(c, actor.tenant, folderId);
   if (folder.name === name) return { id: folder.id, name, previousName: name };
   const existing = await folderNamed(c, actor.tenant, name);
@@ -102,6 +105,7 @@ export async function deleteFolderInTransaction(
   folderId: string,
 ) {
   await lockShelf(c, actor, "curator");
+  await refuseFolderManagement(c, actor);
   const folder = await lockFolder(c, actor.tenant, folderId);
   const {
     rows: [counts],
@@ -157,6 +161,9 @@ export async function moveArtifactsInTransaction(
       `За один раз можно перенести от 1 до ${MAX_MOVE_BATCH} работ.`,
     );
   await lockShelf(c, actor, "curator");
+  // An agent limited to folders moves only its works, only between its folders.
+  for (const id of ids) await assertArtifactInAgentScope(c, actor, id);
+  await assertFolderInAgentScope(c, actor, folderId);
   const folder = folderId ? await lockFolder(c, actor.tenant, folderId) : null;
   const { rows } = await c.query(
     `SELECT id,folder_id FROM artifacts

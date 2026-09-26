@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { checkLinkIssue, emitEvent } from "./extensions.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -81,6 +82,7 @@ async function lockArtifact(
   artifactId: string,
   requireActive = true,
 ) {
+  await assertArtifactInAgentScope(c, actor, artifactId);
   const {
     rows: [artifact],
   } = await c.query(

@@ -1,3 +1,4 @@
+import { scopedFolderForSave } from "../agent-scope.ts";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
@@ -57,7 +58,8 @@ export async function createImportJob(
   const request = {
     url,
     title: input.title ?? null,
-    folderId: input.folderId ?? null,
+    // An agent limited to folders imports into them (agent-scope.ts).
+    folderId: (await scopedFolderForSave(c, actor, input.folderId)) ?? null,
   };
   const hash = createHash("sha256")
     .update(JSON.stringify(request))
