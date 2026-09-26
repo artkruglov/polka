@@ -278,8 +278,8 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   // The commercial edition: what is ready says so, the rest is in progress.
   assert.ok(next.includes("Коммерческая редакция"));
   assert.ok(next.includes("облако polochka.app работает на открытом ядре") || next.includes("Облако polochka.app работает на открытом ядре"));
-  assert.equal((next.match(/в разработке/g) ?? []).length, 3);
-  assert.equal((next.match(/>есть</g) ?? []).length, 1);
+  assert.equal((next.match(/в разработке/g) ?? []).length, 2);
+  assert.equal((next.match(/>есть</g) ?? []).length, 2);
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
   // Department shelves work (TEAM_SHELVES stages 1–4): the page lists them
   // among what works, links out of them as still in progress, and what comes
