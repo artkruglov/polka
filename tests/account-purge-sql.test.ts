@@ -822,3 +822,109 @@ test("terminal purge redacts a no-email account from another library journal", a
     null,
   );
 });
+
+test("terminal purge empties the account's agents on a department shelf and keeps the shelf's works", async () => {
+  const accountId = randomUUID();
+  const tenantId = randomUUID();
+  const teamId = randomUUID();
+  const connectionId = randomUUID();
+  const uploadId = randomUUID();
+  const deletionId = randomUUID();
+  const ledgerId = randomUUID();
+  const attemptId = randomUUID();
+  const tokenHash = hash(`team-agent-${runId}`);
+  await owner.query("BEGIN");
+  try {
+    await owner.query(
+      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')",
+      [accountId, `team-member-${runId}`],
+    );
+    await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenantId, accountId]);
+    await owner.query(
+      "INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,NULL,'team',$2)",
+      [teamId, `Отдел ${runId}`],
+    );
+    await owner.query(
+      "INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'author')",
+      [teamId, accountId],
+    );
+    await owner.query(
+      `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,last_seen_at)
+       VALUES($1,$2,$3,$4,'Личный ноутбук Ивана',ARRAY['capture'],'https://example.test/mcp',
+              clock_timestamp()+interval '1 day',clock_timestamp())`,
+      [connectionId, teamId, accountId, tokenHash],
+    );
+    // A save through that agent: the shelf keeps it.
+    await owner.query(
+      `INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,kind,connection_id)
+       VALUES($1,$2,$3,$4,'{}'::jsonb,'single',$5)`,
+      [uploadId, teamId, accountId, randomUUID(), connectionId],
+    );
+    await owner.query(
+      `INSERT INTO account_deletions(
+         id,account_id,tenant_id,state,status_capability_hash,plan_expires_at,
+         artifact_count,revision_count,source_bytes,derivative_bytes,
+         policy_version,purge_max_hours,backup_retention_max_days
+       ) VALUES($1,$2,$3,'planned',$4,now()+interval '10 minutes',0,0,0,0,'test-v1',24,1)`,
+      [deletionId, accountId, tenantId, hash(`team-status-${runId}`)],
+    );
+    await owner.query(
+      "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
+      [accountId],
+    );
+    await owner.query(
+      `UPDATE account_deletions SET state='access_revoked_pending_purge',
+         requested_at=clock_timestamp(),revoked_at=clock_timestamp(),
+         working_data_policy_deadline=clock_timestamp()+interval '24 hours',
+         backup_retention_policy_deadline=clock_timestamp()+interval '1 day',
+         confirmation_session_hash=$2 WHERE id=$1`,
+      [deletionId, hash(`team-session-${runId}`)],
+    );
+    await owner.query("COMMIT");
+  } catch (error) {
+    await owner.query("ROLLBACK");
+    throw error;
+  }
+
+  assert.equal(
+    (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [attemptId, ledgerId])).rows[0]
+      .deletion_id,
+    deletionId,
+  );
+  await worker.query("SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)", [
+    deletionId,
+    attemptId,
+    `erasure/v1/${ledgerId}/${deletionId}/revoke.json`,
+    "e".repeat(64),
+    "revoke-v1",
+  ]);
+  await worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [
+    deletionId,
+    attemptId,
+  ]);
+  await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [deletionId, attemptId]);
+  await worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [
+    deletionId,
+    attemptId,
+    [],
+  ]);
+  await worker.query("SELECT terminal_erase_account_metadata($1,$2,$3)", [
+    deletionId,
+    attemptId,
+    `${"f".repeat(32)}:${"0".repeat(128)}`,
+  ]);
+
+  const connection = (
+    await owner.query(
+      "SELECT name,token_hash,last_seen_at,revoked_at FROM agent_connections WHERE id=$1",
+      [connectionId],
+    )
+  ).rows[0];
+  assert.equal(connection.name, "Удалённое подключение");
+  assert.notEqual(connection.token_hash, tokenHash);
+  assert.equal(connection.last_seen_at, null);
+  assert.ok(connection.revoked_at);
+  // The shelf and what was saved on it stay with the company.
+  assert.equal((await owner.query("SELECT 1 FROM uploads WHERE id=$1", [uploadId])).rowCount, 1);
+  assert.equal((await owner.query("SELECT 1 FROM tenants WHERE id=$1", [teamId])).rowCount, 1);
+});
