@@ -22,6 +22,7 @@
 //   npm run moderation:events [-- <id>]
 //   npm run moderation:sweep
 //   npm run moderation:recheck [-- --dry-run]
+//   npm run moderation:recheck -- --fraud [--dry-run]
 import { parseArgs } from "node:util";
 import { db } from "../apps/server/db.ts";
 import {
@@ -75,7 +76,7 @@ const USAGE = `Usage:
   moderation.ts purge-artifact <id> [--reason "…"]
   moderation.ts events [<id>]
   moderation.ts sweep
-  moderation.ts recheck [--dry-run]`;
+  moderation.ts recheck [--fraud] [--dry-run]`;
 
 const CATEGORY = new Set([
   "csam", "extremism_terror", "drugs", "weapons_explosives", "doxxing", "porn",
@@ -101,6 +102,7 @@ try {
       disable: { type: "boolean" },
       "legal-hold": { type: "boolean" },
       "dry-run": { type: "boolean" },
+      fraud: { type: "boolean" },
     },
   });
   const [command, target, ...extra] = positionals;
@@ -173,10 +175,13 @@ try {
   else if (command === "events" && extra.length === 0)
     console.log(formatEvents(await listEvents(target)));
   else if (command === "recheck" && !target) {
-    const { recheckHeldShares, formatRecheck } = await import(
-      "../apps/server/shares.ts"
-    );
-    console.log(formatRecheck(await recheckHeldShares(values["dry-run"] === true)));
+    const { recheckHeldShares, formatRecheck, recheckFraudHolds, formatFraudRecheck } =
+      await import("../apps/server/shares.ts");
+    // --fraud: links held for phishing, their versions read again under the
+    // current rules (docs/specs/CONTENT_FILTER.md, «Фишинг»).
+    if (values.fraud)
+      console.log(formatFraudRecheck(await recheckFraudHolds(values["dry-run"] === true)));
+    else console.log(formatRecheck(await recheckHeldShares(values["dry-run"] === true)));
   } else if (command === "sweep" && !target) {
     const { sweepBlocks, retryUnchecked, reviewsSettled } = await import(
       "../apps/server/content-moderation.ts"

@@ -4,7 +4,8 @@
 import type { Pool, PoolClient } from "pg";
 import { Problem } from "./errors.ts";
 import { config } from "./config.ts";
-import { isSuspicious } from "./phishing-signals.ts";
+import { isSuspicious, SCAN_INCOMPLETE } from "./phishing-signals.ts";
+import { fraudRelevant } from "./content-filter/fraud-score.ts";
 import {
   NO_DECISION,
   contentReason,
@@ -325,3 +326,57 @@ export type ModerationNotice =
       by: "filter" | "operator";
       content?: ContentDecision;
     };
+
+// ---------------------------------------------------------------------------
+// An operator's approval carries over to later versions of the same work
+// (docs/specs/ABUSE_PROTECTION.md, section 6). Approving a held link stores
+// the phishing signals of its version in that revision's
+// content_filter.approved; a later version whose fraud signals are the same
+// or fewer is not held for fraud again. A new signal (another channel, a
+// look-alike domain, a new brand or secret) holds it again, and so does a
+// model that confirms fraud: only the rules' fraud finding is waived.
+
+/** The approved signals of a work: every approved version's, together. */
+export async function approvedSignals(c: Queryable, artifactId: string) {
+  const { rows } = await c.query(
+    `SELECT content_filter->'approved'->'signals' AS signals FROM revisions
+     WHERE artifact_id=$1 AND content_filter ? 'approved'
+     ORDER BY number DESC LIMIT 50`,
+    [artifactId],
+  );
+  const approved = new Set<string>();
+  for (const row of rows)
+    if (Array.isArray(row.signals))
+      for (const signal of row.signals)
+        if (typeof signal === "string") approved.add(signal);
+  return approved;
+}
+
+/**
+ * The fraud signals of a version are all among the approved ones. A page
+ * that could not be read is never covered: nobody saw what it holds.
+ */
+export function approvedSignalsCover(
+  approved: ReadonlySet<string>,
+  signals: readonly string[],
+) {
+  if (!approved.size || signals.includes(SCAN_INCOMPLETE)) return false;
+  return fraudRelevant(signals).every((signal) => approved.has(signal));
+}
+
+/**
+ * Remember what the operator approved: the version's phishing signals (at
+ * most 64), in its content_filter. Skipped, not failed, when the row would
+ * pass its size limit. Returns the signals, or null when skipped.
+ */
+export async function rememberApproval(c: Queryable, revisionId: string) {
+  const approved = `content_filter||jsonb_build_object('approved',
+    jsonb_build_object('signals',to_jsonb(phishing_signals),'at',now()))`;
+  const { rows } = await c.query(
+    `UPDATE revisions SET content_filter=${approved}
+     WHERE id=$1 AND octet_length((${approved})::text)<=16384
+     RETURNING phishing_signals`,
+    [revisionId],
+  );
+  return (rows[0]?.phishing_signals ?? null) as string[] | null;
+}
