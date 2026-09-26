@@ -1,4 +1,5 @@
 /* Landing: quiet canvas, one confident headline, real paths only. */
+.landing-agent { margin-bottom: 28px; }
 .landing-main { width: 100%; max-width: 1280px; margin: 0 auto; padding: 64px var(--gutter) 96px; overflow-x: clip; }
 .landing-hero { max-width: 860px; }
 .landing-hero .eyebrow { margin-bottom: 22px; }
@@ -6,17 +7,6 @@
 .landing-hero h1 span { color: var(--accent); }
 .landing-hero > p { max-width: 640px; margin-bottom: 32px; color: var(--muted); font-size: clamp(16px, 1.4vw, 20px); line-height: 1.55; }
 /* The one phrase for an agent, first: copy it, paste it in the chat. */
-.landing-agent { display: grid; gap: 10px; max-width: 760px; margin-bottom: 28px; padding: 18px 20px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--soft-3); }
-.landing-agent-title { color: var(--ink); font-size: var(--text-md); font-weight: 600; letter-spacing: var(--tracking-snug); }
-.landing-agent-phrase { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.landing-agent-phrase > code { flex: 1 1 280px; min-width: 0; padding: 11px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--canvas); font: 500 var(--text-lg) / 1.4 var(--font-sans); color: var(--ink); overflow-wrap: anywhere; user-select: all; }
-.landing-agent-phrase .ui-button { min-height: 46px; }
-.landing-agent-phrase .field-note { flex-basis: 100%; }
-.landing-agent > small { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
-.landing-agent-skill { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 10px; border-top: 1px solid var(--line); }
-.landing-agent-skill code { padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); background: var(--canvas); color: var(--ink); font-size: var(--text-sm); }
-.landing-agent-skill .ui-button { min-height: 28px; padding: 2px 8px; font-size: var(--text-sm); }
-.landing-agent-skill a { color: var(--accent); }
 /* Two ways in: connect an agent here, or run your own Полка. */
 .landing-paths { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 .landing-paths .ui-button { min-height: 52px; padding: 12px 22px; font-size: var(--text-lg); border-radius: var(--radius-md); }
@@ -78,9 +68,7 @@
   .landing-paths { flex-direction: column; align-items: stretch; }
   .landing-oss { display: flex; width: auto; flex-wrap: wrap; row-gap: 2px; }
   .landing-more { gap: 0 20px; }
-  .landing-agent { padding: 16px 16px 14px; margin-bottom: 22px; }
-  .landing-agent-phrase > code { font-size: var(--text-md); }
-  .landing-agent-phrase .ui-button { width: 100%; }
+  .landing-agent { margin-bottom: 22px; }
   .landing-wave { margin: 28px 0 0; }
   .landing-selfhost { margin-top: 48px; padding: 28px 20px; }
   .landing-selfhost-command pre { flex-basis: 100%; padding: 12px; font-size: 12px; }
