@@ -37,5 +37,11 @@ parentPort!.once(
   parentPort!.postMessage(inspection);
   },
 );
+// Compile and warm the signal patterns (phishing-signals.ts) before the
+// clock starts: their first use in a fresh worker costs tens of
+// milliseconds that belong to the worker's start, not to the page.
+inspectHtml(
+  `<p>Сообщите код, переведите на карту 1234, напишите в Telegram @abcd, позвоните +7 900 000-00-00, send us code, x@example.com</p><a href="https://example.com/login">x</a><input type="password" name="password"><script>const a="https://example.ru";</script>`,
+);
 // Loaded and listening: the parent sends the source now and starts the clock.
 parentPort!.postMessage({ ready: true });

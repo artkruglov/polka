@@ -36,6 +36,8 @@ import {
   assertNewAccountLimits,
   authorStanding,
   decideModeration,
+  approvedSignals,
+  approvedSignalsCover,
   type AuthorStanding,
   type ModerationDecision,
   type ModerationNotice,
@@ -54,10 +56,12 @@ import { contentModels } from "./content-filter/model.ts";
 import { assertClaimed } from "./provisional.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import {
+  fraudScore,
   mergeResults,
   scanText,
   type FilterResult,
 } from "./content-filter/scanner.ts";
+import { rescanPhishingSignals } from "./phishing-rescan.ts";
 
 type ShareInput = z.infer<typeof shareSchema>;
 type PublishInput = z.infer<typeof publishSchema>;
@@ -171,7 +175,7 @@ async function moderationFor(
   const {
     rows: [revision],
   } = await c.query(
-    `SELECT phishing_signals,content_filter,sha256,size,mime,
+    `SELECT phishing_signals,content_filter,sha256,size,mime,artifact_id,
        EXISTS(SELECT 1 FROM revision_files file
               WHERE file.revision_id=revisions.id AND file.mime LIKE 'image/%') AS bundle_images
      FROM revisions WHERE id=$1
@@ -181,8 +185,19 @@ async function moderationFor(
      FOR SHARE OF revisions`,
     [revisionId],
   );
-  const stored = (revision?.content_filter ?? {}) as FilterResult;
+  let stored = (revision?.content_filter ?? {}) as FilterResult;
+  let signals = (revision?.phishing_signals ?? []) as string[];
   const model = modelView(stored);
+  // The operator approved a version of this work with these phishing signals:
+  // the same or fewer are not held again (approvedSignalsCover).
+  if (revision && stored.hits?.fraud) {
+    const approved = await approvedSignals(c, revision.artifact_id);
+    if (approvedSignalsCover(approved, signals)) {
+      const { fraud: _fraud, ...hits } = stored.hits;
+      stored = { ...stored, hits };
+      signals = [];
+    }
+  }
   const spam =
     config.CONTENT_FILTER_MODE !== "off" && !standing.operatorCreated && revision
       ? await duplicates(c, tenantId, { ...revision, size: Number(revision.size) })
@@ -230,7 +245,7 @@ async function moderationFor(
     !(model.state === "checked" && config.CONTENT_MODEL_IMAGES);
   return decideModeration(
     standing,
-    (revision?.phishing_signals ?? []) as string[],
+    signals,
     config.SHARE_MODERATION,
     content,
     images,
@@ -345,6 +360,15 @@ async function reconsiderShare(
   revisionId: string,
   notices: ModerationNotice[],
   dryRun = false,
+  options: {
+    /**
+     * `moderation.ts recheck --fraud`: a fraud hold (suspicious,
+     * content:fraud) may open too, when the rules no longer hold it.
+     */
+    fraudHold?: boolean;
+    /** Runs in the transaction, after the share is locked (a re-scan's update). */
+    before?: (c: PoolClient) => Promise<void>;
+  } = {},
 ): Promise<Reconsidered> {
   const result: Reconsidered = { shareId, outcome: "skipped", from: null, to: null };
   const work = async (c: PoolClient) => {
@@ -374,8 +398,11 @@ async function reconsiderShare(
     if (!share || share.revision_id !== revisionId || share.moderation === "blocked")
       return;
     const waiting =
-      share.moderation === "held" && releasableHold(share.moderation_reason);
+      share.moderation === "held" &&
+      (releasableHold(share.moderation_reason) ||
+        (!!options.fraudHold && FRAUD_HOLDS.has(share.moderation_reason)));
     result.from = share.moderation_reason ?? null;
+    await options.before?.(c);
     const decision = await moderationFor(
       c,
       await authorStanding(c, actor.tenant, owner.team ? actor.id : null),
@@ -588,6 +615,139 @@ export function formatRecheck(report: Awaited<ReturnType<typeof recheckHeldShare
       : dryRun
         ? `Dry run: ${report.results.length} links; ${report.reviewed} revisions would be sent to the model. Nothing changed.${model}`
         : `Released ${count("released")}; held for another reason ${count("held")}; blocked ${count("blocked")}; still waiting ${count("kept") + count("skipped")}. Revisions sent to the model: ${report.reviewed}.${model}`,
+  );
+  return lines.join("\n");
+}
+
+/** Holds for phishing: the old rules' reason and the content filter's. */
+const FRAUD_HOLDS: ReadonlySet<string | null> = new Set(["suspicious", "content:fraud"]);
+
+export type FraudRecheck = Reconsidered & {
+  revisionId: string;
+  /** The version's phishing signals before and after the re-scan (null: unreadable). */
+  signalsBefore: string[];
+  signalsAfter: string[] | null;
+};
+
+/**
+ * `moderation.ts recheck --fraud`: links held for phishing, decided again
+ * under the current rules (content-filter/fraud-score.ts). Each version is
+ * read again from storage, its phishing signals and fraud finding are
+ * rewritten, and its links decided as when they were made: a link the rules
+ * no longer hold opens (share.released), one held for another reason moves
+ * to it, the rest keep waiting. A version that cannot be read keeps its
+ * hold. Idempotent: a second run finds nothing to change. A dry run rolls
+ * every change back.
+ */
+export async function recheckFraudHolds(
+  dryRun = false,
+  /** Only these shelves (tests share one database). */
+  tenantIds: string[] | null = null,
+) {
+  const { rows } = await db.query(
+    `SELECT share.id,share.revision_id,revision.id AS rid,revision.mime,
+       revision.storage_kind,revision.object_key,revision.object_version,
+       revision.phishing_signals,revision.content_purged_at,share.moderation_reason
+     FROM shares share JOIN revisions revision ON revision.id=share.revision_id
+     WHERE share.moderation='held' AND share.moderation_reason=ANY($1::text[])
+       AND NOT share.revoked AND share.expires_at>now()
+       AND ($2::uuid[] IS NULL OR share.tenant_id=ANY($2::uuid[]))
+     ORDER BY share.created_at,share.id`,
+    [[...FRAUD_HOLDS], tenantIds],
+  );
+  const notices: ModerationNotice[] = [];
+  const results: FraudRecheck[] = [];
+  const rescanned = new Map<string, string[] | null>();
+  for (const row of rows) {
+    const before = (row.phishing_signals ?? []) as string[];
+    if (!rescanned.has(row.revision_id))
+      rescanned.set(
+        row.revision_id,
+        row.content_purged_at
+          ? null
+          : await rescanPhishingSignals({
+              id: row.rid,
+              mime: row.mime,
+              storage_kind: row.storage_kind,
+              object_key: row.object_key,
+              object_version: row.object_version,
+            }),
+      );
+    const after = rescanned.get(row.revision_id) ?? null;
+    if (!after) {
+      results.push({
+        shareId: row.id,
+        revisionId: row.revision_id,
+        outcome: "kept",
+        from: row.moderation_reason,
+        to: null,
+        signalsBefore: before,
+        signalsAfter: null,
+      });
+      continue;
+    }
+    const result = await reconsiderShare(row.id, row.revision_id, notices, dryRun, {
+      fraudHold: true,
+      before: async (c) => {
+        const fraud = fraudScore(after);
+        const updated = await c.query(
+          `UPDATE revisions SET phishing_signals=$2::text[],
+             content_filter=jsonb_set(content_filter,'{hits}',
+               (COALESCE(content_filter->'hits','{}'::jsonb)-'fraud')||$3::jsonb)
+           WHERE id=$1 AND (phishing_signals IS DISTINCT FROM $2::text[]
+             OR content_filter->'hits'->'fraud' IS DISTINCT FROM $4::jsonb)
+           RETURNING tenant_id,artifact_id`,
+          [
+            row.revision_id,
+            after,
+            JSON.stringify(fraud ? { fraud } : {}),
+            fraud ? JSON.stringify(fraud) : null,
+          ],
+        );
+        const [revision] = updated.rows;
+        if (revision)
+          await recordEvent(c, {
+            actor: "operator-script",
+            action: "revision.rescanned",
+            category: "fraud",
+            tenantId: revision.tenant_id,
+            artifactId: revision.artifact_id,
+            revisionId: row.revision_id,
+            reason: "фишинг: версия прочитана заново по текущим правилам",
+            details: { signalsBefore: before, signalsAfter: after, fraud },
+          });
+      },
+    });
+    results.push({ ...result, revisionId: row.revision_id, signalsBefore: before, signalsAfter: after });
+  }
+  if (!dryRun) await dispatchModerationNotices(notices);
+  return { dryRun, results };
+}
+
+export function formatFraudRecheck(report: Awaited<ReturnType<typeof recheckFraudHolds>>) {
+  const { dryRun } = report;
+  const lines = report.results.map((result) =>
+    [
+      `share ${result.shareId}`,
+      `revision ${result.revisionId}`,
+      result.from ?? "-",
+      result.signalsAfter
+        ? `${dryRun ? "would be " : ""}${result.outcome}`
+        : "unreadable: kept",
+      result.to && result.to !== result.from ? `-> ${result.to}` : "",
+      result.signalsAfter
+        ? `signals: ${result.signalsAfter.join(",") || "none"}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("  "),
+  );
+  const count = (outcome: Reconsidered["outcome"]) =>
+    report.results.filter((result) => result.outcome === outcome).length;
+  lines.push(
+    !report.results.length
+      ? "No links are held for phishing."
+      : `${dryRun ? "Dry run, nothing changed. Would release" : "Released"} ${count("released")}; held for another reason ${count("held")}; blocked ${count("blocked")}; still held ${count("kept") + count("skipped")}.`,
   );
   return lines.join("\n");
 }

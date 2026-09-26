@@ -355,7 +355,14 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck --dry-run
 # то же всерьёз: непроверенные версии отправляются модели, проверенные решаются сразу
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck
+
+# ссылки, задержанные за фишинг (suspicious, content:fraud): версии перечитываются по текущим
+# правилам, ссылки без канала вне страницы открываются; сначала посмотреть, что изменится
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck --fraud --dry-run
+docker compose --env-file hosted.env exec -T app node --import tsx scripts/moderation.ts recheck --fraud
 ```
+
+`recheck --fraud` нужен один раз после обновления правил фишинга (сентябрь 2026: фишинг только с каналом вне страницы или похожим доменом, [CONTENT_FILTER, «Фишинг»](../../docs/specs/CONTENT_FILTER.md#фишинг)). Команда печатает по строке на ссылку: исход (`released`, `held` с новой причиной, `kept`) и признаки после перечитывания. В журнал пишутся `revision.rescanned` и `share.released`. Повторный запуск ничего не меняет.
 
 Ссылка с причиной `image-unchecked` ждёт модель, а не вас: когда модель проверила версию и ничего не нашла, ссылка открывается сама (в журнале `share.released`, письма нет); если нашла — причина меняется на найденное и приходит письмо. Письмо о такой ссылке при её создании можно не разбирать. `recheck` печатает по строке на ссылку (`released`, `held` с новой причиной, `blocked`, `kept` — ждёт дальше) и итог. Модель не настроена или бюджет исчерпан — изображения ждут, а старые `new-account` без изображений при `auto` открываются. Команду стоит запустить один раз после перехода на `SHARE_MODERATION=auto` и после простоя моделей; она безопасна при повторе.
 
