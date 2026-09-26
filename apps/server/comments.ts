@@ -32,7 +32,8 @@ import { trackNoteAdded, viaFor } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import { lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
+import { lockShelf } from "./shelves.ts";
 import { isSuspicious, SignalCollector } from "./phishing-signals.ts";
 import { authorStanding } from "./share-moderation.ts";
 import {
@@ -61,7 +62,14 @@ type ShareContext = {
     revoked: boolean;
     expires_at: Date;
   };
+  /** Who answers for the link: the shelf's owner, else its issuer (letters). */
   ownerId: string;
+  /**
+   * The shelf's side of the discussion: the owner of a personal shelf; on a
+   * department shelf the link's issuer and the shelf's curators and admins
+   * (docs/specs/TEAM_SHELVES.md, stage 5b). They resolve and write notes.
+   */
+  ownerIds: string[];
   title: string;
   /** The link is open: not revoked, not expired, not held or paused. */
   open: boolean;
@@ -91,10 +99,10 @@ export const commentsOff = () =>
  * Who may write under the current mode: anyone signed in (on), the work's
  * owner only (owner-notes), nobody (off). Reactions exist only in `on`.
  */
-function assertMayWrite(context: { ownerId: string }, actorId: string) {
+function assertMayWrite(context: { ownerIds: string[] }, actorId: string) {
   const mode = commentsMode();
   if (mode === "off") throw commentsOff();
-  if (mode === "owner-notes" && actorId !== context.ownerId)
+  if (mode === "owner-notes" && !context.ownerIds.includes(actorId))
     throw recipientsDoNotComment();
 }
 
@@ -166,9 +174,6 @@ async function lockShareByToken(c: PoolClient, token: string) {
     )
   ).rows[0];
   if (!candidate) throw missing();
-  // Comments on links out of department shelves come later (TEAM_SHELVES.md):
-  // the recipient sees a discussion that is off, not an error.
-  if (candidate.kind === "team") throw commentsOff();
   const context = await lockShare(
     c,
     { id: candidate.owner_id, tenant: candidate.tenant_id },
@@ -194,7 +199,8 @@ async function lockShare(
   shareId: string,
   allowTrashed: boolean,
 ): Promise<ShareContext> {
-  await lockActiveOwnerTenant(c, owner, missing, "SHARE");
+  // The shelf and the account that answers for the link are active.
+  if (!(await lockAnsweringAccount(c, owner, "SHARE"))) throw missing();
   const artifact = (
     await c.query(
       `SELECT title,trashed_at FROM artifacts
@@ -206,7 +212,7 @@ async function lockShare(
   const share = (
     await c.query(
       `SELECT id,tenant_id,artifact_id,revision_id,revoked,expires_at,moderation,
-         expires_at>now() AS unexpired
+         created_by,expires_at>now() AS unexpired
        FROM shares WHERE id=$1 AND tenant_id=$2 AND artifact_id=$3 FOR SHARE`,
       [shareId, owner.tenant, artifactId],
     )
@@ -219,9 +225,28 @@ async function lockShare(
     ])
   ).rowCount;
   if (editorial) throw missing();
+  const {
+    rows: [shelf],
+  } = await c.query("SELECT kind,owner_id FROM tenants WHERE id=$1", [owner.tenant]);
+  const ownerIds =
+    shelf.kind === "team"
+      ? [
+          ...new Set([
+            ...(share.created_by ? [share.created_by as string] : []),
+            ...(
+              await c.query(
+                `SELECT account_id FROM tenant_members
+                 WHERE tenant_id=$1 AND state='active' AND role IN ('curator','admin')`,
+                [owner.tenant],
+              )
+            ).rows.map((row) => row.account_id as string),
+          ]),
+        ]
+      : [shelf.owner_id as string];
   return {
     share,
-    ownerId: owner.id,
+    ownerId: shelf.kind === "team" ? (share.created_by ?? owner.id) : shelf.owner_id,
+    ownerIds,
     title: artifact.title ?? "Работа",
     open:
       !share.revoked &&
@@ -276,7 +301,7 @@ async function discussion(
        AND comment.blocked_at IS NULL
        AND (comment.held_at IS NULL OR comment.author_account_id=$4::uuid
             OR ($3::boolean AND NOT comment.shadow))
-       AND ($5::boolean OR comment.author_account_id=$6::uuid)
+       AND ($5::boolean OR comment.author_account_id=ANY($6::uuid[]))
      ORDER BY comment.created_at,comment.id
      LIMIT 5000`,
     [
@@ -285,7 +310,7 @@ async function discussion(
       isOwner,
       viewerId,
       mode === "on",
-      context.ownerId,
+      context.ownerIds,
     ],
   );
   const view = (row: any): CommentView => {
@@ -298,7 +323,7 @@ async function discussion(
         ? null
         : {
             name: row.author_name,
-            owner: row.author_account_id === context.ownerId,
+            owner: context.ownerIds.includes(row.author_account_id),
             me: mine,
           },
       body: deleted ? "" : row.body,
@@ -375,7 +400,7 @@ export async function sharedComments(
   if (commentsMode() === "off") throw commentsOff();
   return transaction(async (c) => {
     const context = await lockShareByToken(c, token);
-    const isOwner = viewer?.id === context.ownerId;
+    const isOwner = !!viewer && context.ownerIds.includes(viewer.id);
     return {
       ...(await discussion(c, context, viewer?.id ?? null, isOwner)),
       viewer: viewer
@@ -397,7 +422,10 @@ export async function workCommentsInTransaction(
   owner: Actor,
   artifactId: string,
 ): Promise<WorkComments> {
-  await lockActiveOwnerTenant(c, owner, missing, "SHARE");
+  // Any member reads a department shelf's discussions (TEAM_SHELVES.md, 5b);
+  // its curators and admins (and a link's issuer) answer them.
+  const { role } = await lockShelf(c, owner, "reader", "SHARE");
+  const shelfSide = role === "owner" || role === "admin" || role === "curator";
   const artifact = (
     await c.query(
       `SELECT id,title,trashed_at,comments_seen_at FROM artifacts
@@ -415,7 +443,7 @@ export async function workCommentsInTransaction(
       shares: [],
       viewer: {
         signedIn: true,
-        owner: true,
+        owner: shelfSide,
         ...(await viewerSettings(c, owner.id)),
       },
     };
@@ -433,15 +461,10 @@ export async function workCommentsInTransaction(
     )
   ).rows;
   const result: ShareDiscussion[] = [];
-  for (const { id } of shares)
-    result.push(
-      await discussion(
-        c,
-        await lockShare(c, owner, artifactId, id, true),
-        owner.id,
-        true,
-      ),
-    );
+  for (const { id } of shares) {
+    const context = await lockShare(c, owner, artifactId, id, true);
+    result.push(await discussion(c, context, owner.id, context.ownerIds.includes(owner.id)));
+  }
   const {
     rows: [unread],
   } = await c.query(
@@ -461,7 +484,7 @@ export async function workCommentsInTransaction(
     shares: result,
     viewer: {
       signedIn: true,
-      owner: true,
+      owner: shelfSide,
       ...(await viewerSettings(c, owner.id)),
     },
   };
@@ -473,7 +496,7 @@ export function workComments(owner: Actor, artifactId: string) {
 
 export async function markCommentsSeen(owner: Actor, artifactId: string) {
   return transaction(async (c) => {
-    await lockActiveOwnerTenant(c, owner, missing, "SHARE");
+    await lockShelf(c, owner, "reader", "SHARE");
     const updated = await c.query(
       `UPDATE artifacts SET comments_seen_at=clock_timestamp()
        WHERE id=$1 AND tenant_id=$2`,
@@ -585,14 +608,14 @@ async function createInContext(
            AND comment.blocked_at IS NULL
            AND (comment.held_at IS NULL OR comment.author_account_id=$3
                 OR $4::boolean)
-           AND ($5::boolean OR comment.author_account_id=$6::uuid)`,
+           AND ($5::boolean OR comment.author_account_id=ANY($6::uuid[]))`,
         [
           input.parentId,
           share.id,
           writer.id,
-          writer.id === context.ownerId,
+          context.ownerIds.includes(writer.id),
           commentsMode() === "on",
-          context.ownerId,
+          context.ownerIds,
         ],
       )
     ).rows[0];
@@ -687,7 +710,7 @@ async function createInContext(
   trackNoteAdded(
     c,
     writer.id,
-    writer.id === context.ownerId ? "owner" : "reader",
+    context.ownerIds.includes(writer.id) ? "owner" : "reader",
     viaFor(),
   );
   return { id: created.id as string };
@@ -794,7 +817,7 @@ async function deleteInContext(
 ) {
   assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
-  const isOwner = actorId === context.ownerId;
+  const isOwner = context.ownerIds.includes(actorId);
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
   if (comment.deleted_at) return { ok: true };
   await c.query(
@@ -815,7 +838,7 @@ async function resolveInContext(
 ) {
   assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
-  const isOwner = actorId === context.ownerId;
+  const isOwner = context.ownerIds.includes(actorId);
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
   if (comment.parent_id || comment.deleted_at)
     throw new Problem(409, "conflict", "Решённой можно отметить только ветку.");

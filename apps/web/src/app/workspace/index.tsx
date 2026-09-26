@@ -338,8 +338,7 @@ export function App() {
     artifactId: work?.id ?? "",
     title: work?.title ?? "",
     shelfUrl: work ? shelfUrl(location.origin, work.id) : "",
-    // Comments on links out of a department shelf come later (TEAM_SHELVES.md).
-    enabled: !!selected && !!work && !work.trashedAt && !!work.share && !currentShelf(),
+    enabled: !!selected && !!work && !work.trashedAt && !!work.share,
   });
   if (guestHome && (account === null || authError)) return <LazyLanding />;
   if (authError)
