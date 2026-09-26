@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-26
+
 ### Added
 
 - **Обложки на полке** ([SHELF_COVERS](docs/specs/SHELF_COVERS.md); миграция 040). Карточка больше не показывает уменьшенную страницу в iframe.
@@ -313,7 +315,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/artkruglov/polka/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/artkruglov/polka/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...v0.1.0
 [0.1.0-rc.5]: https://github.com/artkruglov/polka/releases/tag/v0.1.0-rc.5

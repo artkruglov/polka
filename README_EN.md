@@ -203,7 +203,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 ## Status
 
 > [!NOTE]
-> **Current release — `v0.2.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open, up to 50 new shelves a day. The API, database schema and UI may still change.
+> **Current release — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open, up to 50 new shelves a day. The API, database schema and UI may still change.
 
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): a "Save to Полка" browser extension and running the pilot (monitoring, alerts, a restore drill); later a Telegram bot, author publications, team accounts and SSO.
 
