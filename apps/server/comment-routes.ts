@@ -95,27 +95,27 @@ export function registerCommentRoutes(app: FastifyInstance) {
 
   // The owner: every link of the work.
   app.get("/api/artifacts/:id/comments", async (req) =>
-    workComments(await identity(req), id(req)),
+    workComments(await identity(req, { shelf: true }), id(req)),
   );
   app.post("/api/artifacts/:id/comments/seen", options, async (req) =>
-    markCommentsSeen(await identity(req), id(req)),
+    markCommentsSeen(await identity(req, { shelf: true }), id(req)),
   );
   app.post("/api/artifacts/:id/comments", options, async (req) => {
-    const owner = await identity(req);
+    const owner = await identity(req, { shelf: true });
     // A note on a link is read by its recipients: not from an agent's link.
     assertStrongSession(owner);
     const { shareId, ...input } = ownerCreateCommentSchema.parse(req.body);
     return createOwnerComment(owner, id(req), shareId, input);
   });
   app.post("/api/artifacts/:id/reactions", options, async (req) => {
-    const owner = await identity(req);
+    const owner = await identity(req, { shelf: true });
     // A note on a link is read by its recipients: not from an agent's link.
     assertStrongSession(owner);
     const input = ownerReactSchema.parse(req.body);
     return reactOwner(owner, id(req), input.shareId, input.emoji, input.anchor);
   });
   app.post("/api/comments/:id/delete", options, async (req) =>
-    deleteOwnerComment(await identity(req), id(req)),
+    deleteOwnerComment(await identity(req, { shelf: true }), id(req)),
   );
   // The name under one's comments, and letters about them on or off.
   app.post("/api/account/comment-settings", options, async (req) =>
@@ -143,7 +143,7 @@ export function registerCommentRoutes(app: FastifyInstance) {
   });
   app.post("/api/comments/:id/resolve", options, async (req) =>
     resolveOwnerComment(
-      await identity(req),
+      await identity(req, { shelf: true }),
       id(req),
       resolveSchema.parse(req.body ?? {}).resolved,
     ),

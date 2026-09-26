@@ -123,7 +123,7 @@ async function facts(commentId: string) {
      JOIN artifacts artifact ON artifact.id=comment.artifact_id
      JOIN shares share ON share.id=comment.share_id
      JOIN tenants tenant ON tenant.id=comment.tenant_id
-     JOIN accounts owner ON owner.id=tenant.owner_id
+     JOIN accounts owner ON owner.id=COALESCE(tenant.owner_id,share.created_by)
      JOIN revisions revision ON revision.id=comment.revision_id
      WHERE comment.id=$1`,
     [commentId],
