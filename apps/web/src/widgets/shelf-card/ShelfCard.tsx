@@ -109,10 +109,10 @@ export function ShelfCard({
           },
         ]
       : []),
-    // Links out of a department shelf come later (docs/specs/TEAM_SHELVES.md).
-    ...(currentShelf()
-      ? []
-      : [{ id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") }]),
+    // Links out of a department shelf are a curator's (docs/specs/TEAM_SHELVES.md).
+    ...(access.curate
+      ? [{ id: "share", label: "Поделиться", icon: <Share2 />, onSelect: () => open(a.id, "share") }]
+      : []),
     // On a department shelf only who may change the work (TEAM_SHELVES.md).
     ...(access.changes(a.author)
       ? ([

@@ -55,3 +55,46 @@ export async function assertActiveOwner(
   if (!active.rowCount)
     throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
 }
+
+/**
+ * Lock a link's shelf and the account that answers for it, and tell whether
+ * both are active: a personal shelf and its owner, or a department shelf and
+ * the link's issuer (who need not be a member any more: the link is the
+ * company's). Stricter moderation still applies to an inactive one; nothing
+ * of theirs is released.
+ */
+export async function lockAnsweringAccount(
+  c: PoolClient,
+  answering: { id: string; tenant: string },
+  lock: "UPDATE" | "SHARE" = "UPDATE",
+) {
+  const tenant = (
+    await c.query(
+      `SELECT kind,owner_id FROM tenants WHERE id=$1 AND ${linkShelfOpenSql("tenants")} FOR ${lock}`,
+      [answering.tenant],
+    )
+  ).rows[0];
+  if (!tenant || (tenant.kind === "personal" && tenant.owner_id !== answering.id)) return false;
+  const account = await c.query(
+    `SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled
+       AND deletion_requested_at IS NULL FOR ${lock}`,
+    [answering.id],
+  );
+  return !!account.rowCount;
+}
+
+/**
+ * The account that answers for a link (docs/specs/TEAM_SHELVES.md, stage 5):
+ * a personal shelf's owner, else — on a department shelf, which has none —
+ * the member who issued it (shares.created_by, migration 048). Its standing
+ * is what moderation weighs, it gets the letters, and disabling it closes
+ * the link.
+ */
+export const answeringAccountSql = (tenant = "tenant", share = "share") =>
+  `COALESCE(${tenant}.owner_id,${share}.created_by)`;
+
+/** Links out of department shelves open only while TEAM_SHELVES is on. */
+export const linkShelfOpenSql = (tenant = "tenant") =>
+  config.TEAM_SHELVES === "on"
+    ? `${tenant}.state='active'`
+    : `${tenant}.state='active' AND ${tenant}.kind='personal'`;

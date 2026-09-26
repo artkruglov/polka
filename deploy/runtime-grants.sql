@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 047.
+-- Operator-reviewed recipe for the Polka schema through migration 048.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>47
+     OR (SELECT count(*) FROM public.schema_migrations)<>48
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>47 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 047';
+     OR (SELECT max(version) FROM public.schema_migrations)<>48 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 048';
   END IF;
 END $$;
 
@@ -192,5 +192,6 @@ GRANT SELECT, INSERT, DELETE ON TABLE public.project_view_grants TO :"runtime_ro
 -- agent_connections, already granted.
 -- Erasure on department shelves (047): a SECURITY DEFINER trigger run by
 -- the purge function; nothing new for the runtime role.
+-- Share issuer (048): a column of shares, already granted.
 COMMIT;
-\echo Runtime grants installed for the reviewed schema through migration 047
+\echo Runtime grants installed for the reviewed schema through migration 048
