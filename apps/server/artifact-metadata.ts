@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope, assertFolderInAgentScope } from "./agent-scope.ts";
 import type { PoolClient } from "pg";
 import { updateArtifactMetadataSchema } from "../../packages/contracts/index.ts";
 import { db, transaction } from "./db.ts";
@@ -32,6 +33,9 @@ export async function updateArtifactMetadataInTransaction(
     [artifactId, actor.tenant],
   );
   if (!artifact) throw missing();
+  await assertArtifactInAgentScope(c, actor, artifactId);
+  // Moving it: only into the agent's folders.
+  if (input.folderId !== undefined) await assertFolderInAgentScope(c, actor, input.folderId);
   assertMayChange(role, artifact.created_by, actor.id);
   if (
     artifact.title !== input.expectedTitle ||

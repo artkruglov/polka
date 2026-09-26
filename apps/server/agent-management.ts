@@ -1,3 +1,4 @@
+import { agentFolderScope, inScopeSql } from "./agent-scope.ts";
 import {
   HEADLINE_OPTIONS,
   plainSnippet,
@@ -219,6 +220,12 @@ export async function listArtifactsForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentArtifactListInputSchema.parse(raw);
+  const scope = await agentFolderScope(db, {
+    id: verified.accountId,
+    tenant: verified.tenantId,
+    connectionId: verified.connectionId,
+  });
+
   const cursor = decodeArtifactCursor(input.cursor, input.state);
   const query = input.query
     ? `%${input.query.replace(/[\\%_]/g, "\\$&")}%`
@@ -242,6 +249,7 @@ export async function listArtifactsForAgent(
        AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
        AND ${searchMatch("artifact", "$4", "$8")}
        AND ($5::timestamptz IS NULL OR (${timestamp},artifact.id)<($5,$6::uuid))
+       AND ${inScopeSql("artifact", "$10")}
      ORDER BY ${timestamp} DESC,artifact.id DESC
      LIMIT $7`,
     [
@@ -255,6 +263,7 @@ export async function listArtifactsForAgent(
       // The trash is found by title only, as the spec says.
       input.query && input.state === "active" ? prefixQuery(input.query) : null,
       HEADLINE_OPTIONS,
+      scope,
     ],
   );
   const more = rows.length > input.limit;
@@ -279,14 +288,19 @@ export async function getArtifactForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentGetArtifactInputSchema.parse(raw);
+  const scope = await agentFolderScope(db, {
+    id: verified.accountId,
+    tenant: verified.tenantId,
+    connectionId: verified.connectionId,
+  });
   const {
     rows: [row],
   } = await db.query(
     `SELECT ${artifactColumns}
      FROM artifacts artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
-     WHERE artifact.id=$1 AND artifact.tenant_id=$2`,
-    [artifactIdOf(input.artifactId), verified.tenantId],
+     WHERE artifact.id=$1 AND artifact.tenant_id=$2 AND ${inScopeSql("artifact", "$3")}`,
+    [artifactIdOf(input.artifactId), verified.tenantId, scope],
   );
   if (!row) throw missing();
   return artifactProjection(row);
@@ -302,6 +316,12 @@ export async function artifactStatusForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "context");
   const input = agentGetArtifactInputSchema.parse(raw);
+  const scope = await agentFolderScope(db, {
+    id: verified.accountId,
+    tenant: verified.tenantId,
+    connectionId: verified.connectionId,
+  });
+
   const {
     rows: [row],
   } = await db.query(
@@ -313,12 +333,14 @@ export async function artifactStatusForAgent(
          SELECT 1 FROM uploads upload
          WHERE upload.tenant_id=artifact.tenant_id
            AND upload.connection_id=$4
-           AND upload.receipt->>'artifactId'=artifact.id::text))`,
+           AND upload.receipt->>'artifactId'=artifact.id::text))
+       AND ${inScopeSql("artifact", "$5")}`,
     [
       artifactIdOf(input.artifactId),
       verified.tenantId,
       verified.scopes.includes("read"),
       verified.connectionId,
+      scope,
     ],
   );
   if (!row) throw missing();
@@ -331,6 +353,12 @@ export async function listFoldersForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentFolderListInputSchema.parse(raw);
+  const scope = await agentFolderScope(db, {
+    id: verified.accountId,
+    tenant: verified.tenantId,
+    connectionId: verified.connectionId,
+  });
+
   const cursor = decodeFolderCursor(input.cursor);
   const { rows } = await db.query(
     `SELECT id,name,
@@ -341,12 +369,14 @@ export async function listFoldersForAgent(
      FROM folders folder
      WHERE tenant_id=$1
        AND ($2::text IS NULL OR (name,id)>($2,$3::uuid))
+       AND ($5::uuid[] IS NULL OR folder.id=ANY($5::uuid[]))
      ORDER BY name ASC,id ASC LIMIT $4`,
     [
       verified.tenantId,
       cursor?.name ?? null,
       cursor?.id ?? null,
       input.limit + 1,
+      scope,
     ],
   );
   const more = rows.length > input.limit;

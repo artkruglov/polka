@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope, scopedFolderForSave } from "./agent-scope.ts";
 import { emitEvent } from "./extensions.ts";
 import { randomUUID, createHmac } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -247,6 +248,8 @@ export async function beginUploadInTransaction(
   input: ReturnType<typeof beginUploadSchema.parse>,
 ) {
   const { tenant } = await lockShelf(c, actor, "author");
+  // An agent limited to folders saves a new work into them (agent-scope.ts).
+  if (!input.artifactId) input = { ...input, folderId: await scopedFolderForSave(c, actor, input.folderId) };
   const {
     rows: [old],
   } = await c.query(
@@ -809,6 +812,9 @@ async function validateUploadTarget(
     baseRevisionId?: string;
   },
 ) {
+  // An agent limited to folders (agent-scope.ts): its works and folders only.
+  if (input.artifactId) await assertArtifactInAgentScope(c, actor, input.artifactId);
+  else await scopedFolderForSave(c, actor, input.folderId);
   if (
     input.folderId &&
     !(
@@ -854,6 +860,7 @@ export async function beginBundleUploadInTransaction(
   input: NormalizedBundleRequest,
 ) {
   const { tenant } = await lockShelf(c, actor, "author");
+  if (!input.artifactId) input = { ...input, folderId: await scopedFolderForSave(c, actor, input.folderId) };
   const {
     rows: [old],
   } = await c.query(

@@ -2,7 +2,12 @@
 // app and packages/extension-api.
 
 /** Where an extension's web module may add a section. */
-export type ExtensionSlot = "company-admin";
+export type ExtensionSlot = "company-admin" | "agent-connection";
+
+/** What a section in the agent-connection place receives: one connection. */
+export type AgentConnectionSlotProps = {
+  connection: { id: string; name: string; kind: "token" | "oauth"; shelf?: { id: string; name: string } };
+};
 
 /**
  * What the web app offers an extension's module on window.__polkaHost: the

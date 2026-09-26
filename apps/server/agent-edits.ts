@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
 // Patch edits of a saved work (docs/specs/COMMENTS.md, «Агенты»): an agent
 // sends `edits: [{oldText, newText}]` against `baseRevisionId` instead of the
@@ -65,6 +66,12 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
     actor,
     "revise",
     async (c, verified) => {
+      // An agent limited to folders revises only works in them (agent-scope.ts).
+      await assertArtifactInAgentScope(
+        c,
+        { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId },
+        input.artifactId,
+      );
       const {
         rows: [artifact],
       } = await c.query(
