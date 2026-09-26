@@ -1,3 +1,4 @@
+import { checkLinkIssue, emitEvent } from "./extensions.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
@@ -763,6 +764,14 @@ function throwIfBlocked(notices: ModerationNotice[]) {
  * (docs/specs/ABUSE_PROTECTION.md). Letters to the operator are collected in
  * `notices` and sent by the caller after commit.
  */
+/** What an extension's policy needs to know about a shelf. */
+async function shelfInfo(c: PoolClient, tenantId: string) {
+  const {
+    rows: [row],
+  } = await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [tenantId]);
+  return row as { id: string; kind: "personal" | "team"; name: string | null };
+}
+
 async function enableShareInTransaction(
   c: PoolClient,
   actor: Actor,
@@ -810,6 +819,18 @@ async function enableShareInTransaction(
   }
   if (await revisionBlocked(c, artifact.latest_revision_id)) throw blockedRefusal();
   const derivativeId = await assertLinkable(c, artifact.latest_revision_id);
+  // An extension's link policy (docs/specs/EXTENSIONS.md) may refuse it.
+  await checkLinkIssue(
+    {
+      actor: { id: actor.id, tenant: actor.tenant },
+      shelf: await shelfInfo(c, actor.tenant),
+      artifactId,
+      revisionId: artifact.latest_revision_id,
+      expiresInDays: input.expiresInDays,
+      via: actor.connectionId ? "agent" : "web",
+    },
+    c,
+  );
   const standing = await authorStanding(c, actor.tenant, actor.id);
   await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
   const decision = await moderationFor(
@@ -947,6 +968,20 @@ async function publishShareInTransaction(
     throw missing();
   if (await revisionBlocked(c, input.revisionId)) throw blockedRefusal();
   const derivativeId = await assertLinkable(c, input.revisionId);
+  await checkLinkIssue(
+    {
+      actor: { id: actor.id, tenant: actor.tenant },
+      shelf: await shelfInfo(c, actor.tenant),
+      artifactId: share.artifact_id,
+      revisionId: input.revisionId,
+      expiresInDays: Math.max(
+        1,
+        Math.ceil((new Date(share.expires_at).getTime() - Date.now()) / 86_400_000),
+      ),
+      via: actor.connectionId ? "agent" : "web",
+    },
+    c,
+  );
   // A new version is new content: an approved link of an untrusted author
   // waits again, and a suspicious version is reported like a new link. The
   // content filter decides again even for a waiting link (it may block).
@@ -992,10 +1027,10 @@ export async function enableOwnerShare(
 ) {
   const input = shareSchema.parse(body);
   const notices: ModerationNotice[] = [];
-  await transaction(async (c) => {
+  const created = await transaction(async (c) => {
     // A link out of a department shelf is a curator's (TEAM_SHELVES.md).
     await lockShelf(c, actor, "curator");
-    await enableShareInTransaction(
+    return enableShareInTransaction(
       c,
       actor,
       artifactId,
@@ -1004,16 +1039,34 @@ export async function enableOwnerShare(
       notices,
     );
   });
+  if (created?.id)
+    emitEvent({
+      type: "share.created",
+      tenantId: actor.tenant,
+      artifactId,
+      shareId: created.id,
+      revisionId: created.revision_id,
+      accountId: actor.id,
+      at: new Date().toISOString(),
+    });
   void dispatchModerationNotices(notices);
   throwIfBlocked(notices);
   return getArtifact(actor, artifactId);
 }
 
 export async function revokeOwnerShare(actor: Actor, shareId: string) {
-  return transaction(async (c) => {
+  const result = await transaction(async (c) => {
     await lockShelf(c, actor, "curator");
     return revokeShareInTransaction(c, actor, shareId);
   });
+  emitEvent({
+    type: "share.revoked",
+    tenantId: actor.tenant,
+    shareId,
+    accountId: actor.id,
+    at: new Date().toISOString(),
+  });
+  return result;
 }
 
 export async function publishOwnerShare(

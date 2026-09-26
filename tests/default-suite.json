@@ -117,5 +117,6 @@
   "tests/extension-bridge.test.ts",
   "tests/extension-extract.test.ts",
   "tests/bookmarklet.test.ts",
-  "tests/extension-oauth.test.ts"
+  "tests/extension-oauth.test.ts",
+  "tests/extensions.test.ts"
 ]
