@@ -51,6 +51,12 @@
 .recipient-stage[data-kind="image"] .work-image { flex: 1 1 0; width: 100%; height: auto; min-height: 0; max-height: none; object-fit: contain; background: none; }
 .recipient-stage[data-kind="text"] { display: block; padding: 8px var(--gutter) 64px; }
 .recipient-stage[data-kind="text"] .work-text { padding-top: 32px; }
+/* A project fills the stage edge to edge. */
+.recipient-stage .project-view { flex: 1 1 auto; min-height: 420px; border: 0; border-radius: 0; }
+.recipient-stage .project-tree { max-height: none; }
+/* On the whole screen the work is all there is. */
+.recipient-stage:fullscreen { overflow: auto; }
+.recipient-stage:fullscreen .html-preview, .recipient-stage:fullscreen .project-view { height: 100vh; min-height: 0; }
 .recipient-comments { display: flex; flex: 0 0 360px; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--canvas); overflow: auto; }
 
 /* Denied: no hint whether a work ever existed here. */
@@ -85,6 +91,6 @@
   .recipient-comments { position: fixed; inset: auto 0 0; z-index: 70; flex: none; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }
 }
 @media (max-width: 560px) {
-  .report-button > span, .recipient-note-more > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .report-button > span, .recipient-fullscreen > span, .recipient-note-more > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .recipient-topbar-actions .ui-button { min-width: 36px; padding: 6px 8px; }
 }
