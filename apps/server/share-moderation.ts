@@ -73,6 +73,8 @@ export const SIGNED_UP_SQL = (account: string) =>
 export async function authorStanding(
   c: Queryable,
   tenantId: string,
+  /** On a department shelf, the member who issues or issued the link. */
+  issuerId: string | null = null,
 ): Promise<AuthorStanding> {
   const {
     rows: [row],
@@ -100,9 +102,9 @@ export async function authorStanding(
         WHERE revision.tenant_id=tenant.id
           AND NOT EXISTS(SELECT 1 FROM moderation_blocks block
                          WHERE block.revision_id=revision.id)) AS clean_saves
-     FROM tenants tenant JOIN accounts account ON account.id=tenant.owner_id
+     FROM tenants tenant JOIN accounts account ON account.id=COALESCE(tenant.owner_id,$3::uuid)
      WHERE tenant.id=$1`,
-    [tenantId, config.NEW_ACCOUNT_DAYS],
+    [tenantId, config.NEW_ACCOUNT_DAYS, issuerId],
   );
   if (!row) throw new Error("Share owner not found");
   return {

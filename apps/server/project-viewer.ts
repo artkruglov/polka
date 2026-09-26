@@ -11,6 +11,7 @@
 // origin, network, popups or top navigation; the only script Полка adds is
 // nav.js, which tells the app which page is open.
 import { randomBytes } from "node:crypto";
+import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
 import { posix } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
@@ -101,7 +102,8 @@ export async function issueRecipientProjectView(sourceGrant: string) {
          JOIN artifacts artifact ON artifact.id=r.artifact_id
            AND artifact.id=s.artifact_id AND artifact.trashed_at IS NULL
          JOIN tenants tenant ON tenant.id=s.tenant_id
-         JOIN accounts account ON account.id=tenant.owner_id
+         JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
          WHERE g.hash=$2 AND g.expires_at>now()
            AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
@@ -141,7 +143,8 @@ async function authorizedProject(token: string) {
          OR
          (pv.share_id IS NOT NULL AND EXISTS (
            SELECT 1 FROM shares s
-           JOIN accounts owner ON owner.id=tenant.owner_id
+           JOIN accounts owner ON owner.id=${answeringAccountSql("tenant", "s")}
+             AND ${linkShelfOpenSql("tenant")}
            WHERE s.id=pv.share_id AND s.revision_id=r.id AND s.artifact_id=artifact.id
              AND NOT owner.disabled AND owner.deletion_requested_at IS NULL
              AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'))

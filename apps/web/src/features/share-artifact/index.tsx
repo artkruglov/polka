@@ -13,7 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
+import { client, currentShelf } from "../../shared/api/client.ts";
 import {
   dateLong,
   kindOf,
@@ -98,8 +98,8 @@ export function SharePanel({
               value="private"
               checked={choice === "private"}
               icon={<LockKeyhole />}
-              title="Только я"
-              description="Видно только вам"
+              title={currentShelf() ? "Только полка отдела" : "Только я"}
+              description={currentShelf() ? "Видят участники полки" : "Видно только вам"}
               onChange={() => setChoice("private")}
             />
             <ChoiceCard
@@ -224,7 +224,16 @@ export function SharePanel({
         <p className="share-review">
           <ShieldCheck aria-hidden="true" />
           <span>
-            <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Ленту» сами; по умолчанию их видите только вы.
+            {currentShelf() ? (
+              <>
+                <strong>Ссылка с полки отдела.</strong> За неё отвечаете вы: письма о жалобах и
+                проверке придут вам. Без ссылки работу видят только участники полки.
+              </>
+            ) : (
+              <>
+                <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Ленту» сами; по умолчанию их видите только вы.
+              </>
+            )}
           </span>
         </p>
         <ErrorNotice error={error} />

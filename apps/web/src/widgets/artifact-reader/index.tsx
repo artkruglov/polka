@@ -357,8 +357,8 @@ export function ArtifactReader({
               <Maximize2 />
             </IconButton>
           )}
-          {/* Links out of a department shelf come later (docs/specs/TEAM_SHELVES.md). */}
-          {!work.trashedAt && !currentShelf() && (
+          {/* Links out of a department shelf are a curator's (docs/specs/TEAM_SHELVES.md). */}
+          {!work.trashedAt && access.curate && (
             <Button
               variant="primary"
               className="work-bar-share"

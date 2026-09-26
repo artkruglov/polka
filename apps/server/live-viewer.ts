@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
 import Fastify from "fastify";
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
@@ -154,7 +155,8 @@ export async function issueRecipientLiveView(
          JOIN shares s ON s.id=g.share_id
          JOIN revisions r ON r.id=g.revision_id
          JOIN tenants tenant ON tenant.id=s.tenant_id
-         JOIN accounts account ON account.id=tenant.owner_id
+         JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
          LEFT JOIN revision_derivatives d ON d.id=g.derivative_id AND d.revision_id=g.revision_id
          WHERE g.hash=$2 AND g.expires_at>now()
            AND NOT s.revoked AND s.expires_at>now() AND r.mime='text/html'
@@ -223,7 +225,8 @@ async function authorizedRevision(token: string) {
              FROM grants g
              JOIN shares s ON s.id=g.share_id
              JOIN tenants tenant ON tenant.id=s.tenant_id
-             JOIN accounts account ON account.id=tenant.owner_id
+             JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
              WHERE g.hash=vg.source_grant_hash
                AND g.share_id=vg.share_id AND g.revision_id=vg.revision_id
                AND g.derivative_id IS NOT DISTINCT FROM vg.derivative_id
