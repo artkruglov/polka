@@ -6,9 +6,12 @@ import {
   Bot,
   Building2,
   FileUp,
+  FolderTree,
   History,
   LockKeyhole,
+  Search,
   Server,
+  Users,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import {
@@ -65,9 +68,10 @@ export function Landing() {
             <span>Покажите другим.</span>
           </h1>
           <p>
-            Сохраните отчёт, страницу или прототип из любого агента. Отправьте
-            ссылку — получателю не нужен аккаунт в Claude или ChatGPT. А
-            продолжить работу можно в другом чате или другом агенте.
+            Сохраните отчёт, страницу, прототип или целую папку связанных
+            страниц из любого агента. Отправьте ссылку — получателю не нужен
+            аккаунт в Claude или ChatGPT. А продолжить работу можно в другом
+            чате или другом агенте.
           </p>
 
           <div className="landing-agent" role="group" aria-labelledby="landing-agent-title">
@@ -132,8 +136,9 @@ export function Landing() {
           </nav>
 
           <small className="landing-fine">
-            Агент сохраняет работы на вашу полку через MCP. Файлом можно
-            сохранить HTML, текст или изображение до 5 МБ.
+            Агент сохраняет работы на вашу полку через MCP, а папку страниц —
+            одним проектом до 400 файлов. Файлом можно сохранить HTML, текст
+            или изображение до 5 МБ.
             {livePreview &&
               " Поддерживаемые интерактивные страницы открываются в изолированном просмотре."}
           </small>
@@ -182,6 +187,46 @@ export function Landing() {
           ))}
         </section>
 
+        <section className="landing-features" aria-labelledby="landing-features-title">
+          <h2 id="landing-features-title">Что умеет Полка</h2>
+          <div className="landing-features-grid">
+            {[
+              {
+                icon: <FolderTree />,
+                title: "Проект из папки",
+                text: "Исследование, документация, набор экранов — агент сохраняет всю папку одной работой. Получатель видит дерево страниц, ссылки между ними работают.",
+              },
+              {
+                icon: <Search />,
+                title: "Поиск по тексту",
+                text: "Работу находят по словам внутри, а не только по названию: вы на полке, ваш агент — когда продолжает её в другом чате.",
+              },
+              {
+                icon: <History />,
+                title: "Версии и честные ссылки",
+                text: "Каждая версия неизменна. Ссылка показывает ровно ту версию, которой вы поделились, и закрывается в один клик.",
+              },
+              {
+                icon: <Users />,
+                title: "Полки отделов",
+                text: "На своей установке компании: общая полка отдела с ролями, агенты сотрудников сохраняют туда, работы остаются у отдела.",
+                href: "/enterprise",
+              },
+            ].map((item) => (
+              <article key={item.title}>
+                <span className="landing-step-icon">{item.icon}</span>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+                {item.href && (
+                  <a href={item.href}>
+                    Для компаний <ArrowRight size={16} />
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="landing-catalog">
           <EditorialCatalog
             items={catalog.items.slice(0, 6)}
@@ -223,10 +268,11 @@ export function Landing() {
               </span>
             </li>
             <li>
-              <strong>Подключите агентов сотрудников</strong>
+              <strong>Подключите агентов и отделы</strong>
               <span>
                 Каждый копирует фразу своему агенту. Вход — по рабочей почте или
-                через OpenID Connect компании.
+                через OpenID Connect компании. Администратор заводит полки
+                отделов и участников с ролями.
               </span>
             </li>
           </ol>

@@ -86,3 +86,17 @@
   .landing-selfhost-command pre { flex-basis: 100%; padding: 12px; font-size: 12px; }
   .landing-selfhost-command .ui-button, .landing-selfhost-actions, .landing-selfhost-actions .ui-button { width: 100%; }
 }
+
+/* What Полка does: four cards after the steps. */
+.landing-features { padding: 56px 0 64px; border-bottom: 1px solid var(--line); }
+.landing-features > h2 { margin: 0 0 28px; font-size: var(--text-2xl); letter-spacing: -.03em; }
+.landing-features-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 32px; }
+.landing-features article { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.landing-features h3 { margin: 0 0 8px; font-size: var(--text-lg); letter-spacing: -.02em; }
+.landing-features p { margin: 0 0 12px; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }
+.landing-features a { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent); }
+@media (max-width: 1100px) { .landing-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .landing-features { padding: 40px 0 48px; }
+  .landing-features-grid { grid-template-columns: 1fr; gap: 24px; }
+}
