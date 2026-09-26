@@ -227,6 +227,27 @@ export function Landing() {
           </div>
         </section>
 
+        <section className="landing-trust" aria-label="Почему Полке можно доверить работы">
+          <ul>
+            <li>
+              <strong>Бесплатно</strong>
+              <span>на время пилота, без карты</span>
+            </li>
+            <li>
+              <strong>Данные в России</strong>
+              <span>Yandex Cloud; работы не идут на обучение моделей</span>
+            </li>
+            <li>
+              <strong>Открытый код</strong>
+              <span>{SOURCE_LICENSE}, можно поставить у себя</span>
+            </li>
+            <li>
+              <strong>Песочница</strong>
+              <span>страницы открываются на отдельном домене без сети</span>
+            </li>
+          </ul>
+        </section>
+
         <section className="landing-catalog">
           <EditorialCatalog
             items={catalog.items.slice(0, 6)}
@@ -241,6 +262,33 @@ export function Landing() {
           )}
         </section>
 
+        <section className="landing-faq" aria-labelledby="landing-faq-title">
+          <h2 id="landing-faq-title">Коротко о главном</h2>
+          {[
+            {
+              q: "Что увидит получатель ссылки?",
+              a: "Работу целиком — страницу, документ, интерактивный прототип или проект с деревом страниц. Без регистрации и без аккаунта в Claude или ChatGPT. Ровно ту версию, которой вы поделились.",
+            },
+            {
+              q: "Какие агенты подходят?",
+              a: "Claude и ChatGPT — через коннектор, Claude Code и Codex — одной командой, скрипты — через HTTP API. Скажите агенту «Подключи Полку» и следуйте его подсказкам.",
+            },
+            {
+              q: "Кто видит мои работы?",
+              a: "Только вы, пока вы не включите ссылку. Ссылку можно ограничить сроком 1, 7 или 30 дней и закрыть в любой момент.",
+            },
+            {
+              q: "Сколько это стоит?",
+              a: "Облако polochka.app бесплатно на время пилота. Своя установка по открытой лицензии тоже бесплатна. Для организаций есть коммерческая редакция по договору.",
+            },
+          ].map((item) => (
+            <details key={item.q}>
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </section>
+
         <section className="landing-selfhost" aria-labelledby="landing-selfhost-title">
           <div className="landing-selfhost-intro">
             <span className="eyebrow">Открытый код · {SOURCE_LICENSE}</span>
@@ -249,7 +297,9 @@ export function Landing() {
               Сотрудники работают в разных агентах, а результаты сохраняются
               на Полке на ваших серверах: один Docker-образ, PostgreSQL и ваше
               S3-хранилище с версионированием. Данные не покидают вашу сеть.
-              Для закрытых доработок есть коммерческая лицензия.
+              Открытое ядро бесплатно. Для организаций есть коммерческая
+              редакция: ссылки только для сотрудников, агент только к нужной
+              папке, журнал действий агентов для службы безопасности.
             </p>
           </div>
           <ol className="landing-selfhost-steps">
@@ -292,8 +342,8 @@ export function Landing() {
               {github ? <GitHubMark /> : <Server />}
               {github ? "Инструкция на GitHub" : "Инструкция"}
             </LinkButton>
-            <LinkButton href="/enterprise?interest=self-hosted#request">
-              Нужна помощь <ArrowUpRight size={18} />
+            <LinkButton href="/enterprise">
+              Коммерческая редакция <ArrowUpRight size={18} />
             </LinkButton>
           </div>
         </section>

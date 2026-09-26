@@ -100,3 +100,22 @@
   .landing-features { padding: 40px 0 48px; }
   .landing-features-grid { grid-template-columns: 1fr; gap: 24px; }
 }
+
+/* Why trust it: four short facts. */
+.landing-trust { padding: 32px 0; border-bottom: 1px solid var(--line); }
+.landing-trust ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 28px; }
+.landing-trust li { display: grid; gap: 4px; }
+.landing-trust strong { font-size: var(--text-lg); letter-spacing: -.02em; }
+.landing-trust span { color: var(--muted); font-size: var(--text-md); line-height: 1.5; }
+
+/* The first questions. */
+.landing-faq { padding: 48px 0; max-width: 820px; }
+.landing-faq > h2 { margin: 0 0 16px; font-size: var(--text-2xl); letter-spacing: -.03em; }
+.landing-faq details { border-bottom: 1px solid var(--line); padding: 14px 0; }
+.landing-faq summary { cursor: pointer; font-weight: 600; font-size: var(--text-lg); }
+.landing-faq p { margin: 10px 0 0; color: var(--muted); line-height: 1.6; }
+@media (max-width: 900px) { .landing-trust ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .landing-trust ul { grid-template-columns: 1fr; }
+  .landing-faq { padding: 36px 0; }
+}
