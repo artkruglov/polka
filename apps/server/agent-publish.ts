@@ -23,7 +23,7 @@ import {
   withServiceActorTransaction,
   type ServiceActor,
 } from "./service-auth.ts";
-import { shareFromAgent } from "./shares.ts";
+import { moveShareFromAgent, shareFromAgent } from "./shares.ts";
 import { NEW_ACCOUNT_MAX_DAYS, authorStanding } from "./share-moderation.ts";
 
 const MAX_HTML_MB = Math.floor(MAX_BYTES / (1024 * 1024));
@@ -36,6 +36,9 @@ export const agentPublishInputSchema = z
     component: z.string().min(1).max(7_000_000).optional(),
     componentLanguage: z.enum(["jsx", "tsx"]).optional(),
     folderId: uuid.optional(),
+    /** A new version of a work saved before: its id and latest revision. */
+    artifactId: uuid.optional(),
+    baseRevisionId: uuid.optional(),
     expiresInDays: z
       .union([z.literal(1), z.literal(7), z.literal(30)])
       .default(30),
@@ -52,7 +55,14 @@ export const agentPublishInputSchema = z
     {
       message: "componentLanguage goes with component",
     },
-  );
+  )
+  .refine(
+    (value) => (value.artifactId === undefined) === (value.baseRevisionId === undefined),
+    { message: "A new version needs both artifactId and baseRevisionId" },
+  )
+  .refine((value) => !value.artifactId || !value.folderId, {
+    message: "A new version stays in its folder: folderId goes with a new work only",
+  });
 
 /**
  * What the chat tool description tells the model about this installation.
@@ -75,6 +85,7 @@ export function publishToolDescription(
           `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
           "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
         ]),
+    "A new version of a work published before: add artifactId and baseRevisionId (its latest revision.id); the work's open link then shows the new version, keeping its address and comments.",
     "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30; a new Polka account gets at most 7, and `expiresNote` says so). folderId: optional folder on the shelf; when the owner keeps folders (polka_list_folders) and one clearly fits the work, save into it.",
     'If `moderation` is "held" (or "paused"), the link exists but recipients see a "being reviewed by a Polka moderator" screen until the moderator approves it: tell the user exactly that (relay `moderationMessage`) and do not present the link as ready.',
     liveEnabled
@@ -200,13 +211,17 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       "quota",
       `Страница больше ${MAX_HTML_MB} МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.`,
     );
-  const verified = await recheckServiceActor(actor, "capture");
+  const mode = input.artifactId ? ("revise" as const) : ("capture" as const);
+  const verified = await recheckServiceActor(actor, mode);
   const receipt = (await captureFromAgent(
     verified,
     {
       key: input.key,
       title: input.title,
       ...(input.folderId ? { folderId: input.folderId } : {}),
+      ...(input.artifactId
+        ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId }
+        : {}),
       manifest: {
         version: 1,
         entrypoint: "index.html",
@@ -232,13 +247,14 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         data: file.data,
       })),
     },
-    "capture",
+    mode,
   )) as { artifactId: string; revisionId: string; htmlProfile?: string };
   const interactive = await prepareInteractive(
     verified,
     input.key,
     receipt.revisionId,
     receipt.htmlProfile ?? null,
+    mode,
   );
   const saved = {
     artifactId: receipt.artifactId,
@@ -255,7 +271,9 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         }
       : {}),
   };
-  const current = await recheckServiceActor(verified, "context");
+  // Rechecked with the scope this call used: an upload token from
+  // polka_project_upload holds capture/revise/share but not context.
+  const current = await recheckServiceActor(verified, mode);
   if (!current.scopes.includes("share"))
     return {
       ...saved,
@@ -265,15 +283,36 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         "Saved privately. This connection was not granted the link permission (Управлять ссылками); the owner can share it from the shelf or reconnect with that permission.",
     };
   try {
-    const expiry = await publishExpiry(current, input.key, input.expiresInDays);
+    // A new version moves the work's open link (same address, same comments);
+    // only a work without one gets a new link.
+    const open = input.artifactId
+      ? (
+          await db.query(
+            `SELECT id FROM shares WHERE artifact_id=$1 AND tenant_id=$2
+               AND NOT revoked AND expires_at>now()
+             ORDER BY created_at DESC LIMIT 1`,
+            [receipt.artifactId, current.tenantId],
+          )
+        ).rows[0]
+      : undefined;
+    const expiry = open
+      ? { days: input.expiresInDays }
+      : await publishExpiry(current, input.key, input.expiresInDays);
     // The same idempotency key names the share operation, so a retry returns
     // the same link instead of issuing another.
-    const share = await shareFromAgent(current, {
-      key: input.key,
-      artifactId: receipt.artifactId,
-      expectedRevisionId: receipt.revisionId,
-      expiresInDays: expiry.days,
-    });
+    const share = open
+      ? await moveShareFromAgent(current, {
+          key: input.key,
+          artifactId: receipt.artifactId,
+          shareId: open.id,
+          expectedRevisionId: receipt.revisionId,
+        })
+      : await shareFromAgent(current, {
+          key: input.key,
+          artifactId: receipt.artifactId,
+          expectedRevisionId: receipt.revisionId,
+          expiresInDays: expiry.days,
+        });
     return {
       ...saved,
       state: share.url ? ("shared" as const) : ("saved" as const),
@@ -288,7 +327,8 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
             moderationMessage: share.moderationMessage,
           }
         : {}),
-      ...(share.url && expiry.days < input.expiresInDays
+      ...(open ? { linkMoved: true } : {}),
+      ...(!open && share.url && expiry.days < input.expiresInDays
         ? {
             expiresNote: `Ссылка выдана на ${expiry.days} дней вместо ${input.expiresInDays}: новым аккаунтам Полки ссылки выдаются не дольше чем на ${NEW_ACCOUNT_MAX_DAYS} дней.`,
           }

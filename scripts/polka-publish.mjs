@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// Publish one HTML file to Полка through POST /api/v1/publish and print the link.
+// Publish one HTML file or React component to Полка through POST /api/v1/publish
+// and print the link.
 // No dependencies: Node 22+ (global fetch). The token is read from POLKA_TOKEN only.
 //
 //   POLKA_ENDPOINT=https://polka.example.com POLKA_TOKEN=… \
 //     node polka-publish.mjs report.html --title "Отчёт" --share 7
 //   cat report.html | node polka-publish.mjs - --title "Отчёт" --endpoint https://polka.example.com
+//   node polka-publish.mjs App.jsx --title "Прототип"            (runs interactively)
+//   node polka-publish.mjs App.jsx --artifact <id> --base-revision <revision.id>
 //
 // See docs/PUBLISH_API.md.
 import { randomUUID } from "node:crypto";
@@ -20,22 +23,29 @@ const DEFAULT_ENDPOINT = "";
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
 
-const USAGE = `Usage: polka-publish <file.html|-> [options]
+const USAGE = `Usage: polka-publish <file.html|App.jsx|App.tsx|-> [options]
 
-Publishes one self-contained HTML page to your Полка shelf and prints the
-share link. Markdown and text files are published as preformatted text.
+Publishes one self-contained HTML page or one React component to your Полка
+shelf and prints the share link. A .jsx/.tsx file is sent as component source:
+Полка compiles it and the link opens it interactively. Markdown and text files
+are published as preformatted text.
 
 Options:
   --title <text>     Title on the shelf (default: the page <title> or file name)
   --share <days>     Link lifetime: 1, 7 or 30 days (default 30)
   --folder <uuid>    Save into this folder
+  --component        Send the file as React component source (default for .jsx/.tsx)
+  --artifact <uuid>  Save a new version of this work (with --base-revision);
+                     its open link shows the new version
+  --base-revision <uuid>  The work's latest revision id
   --key <uuid>       Idempotency key; reuse it only to retry the same publish
   --endpoint <url>   Полка address (required unless $POLKA_ENDPOINT is set${DEFAULT_ENDPOINT ? `; default ${DEFAULT_ENDPOINT}` : ""})
   --json             Print the full JSON response
   -h, --help         Show this help
 
 Environment:
-  POLKA_TOKEN        Agent token from Полка → Агенты (required; never pass it as an argument)
+  POLKA_TOKEN        Agent token from Полка → Агенты, or the upload token from
+                     polka_project_upload (required; never pass it as an argument)
   POLKA_ENDPOINT     Полка address, e.g. https://polka.example.com (or pass --endpoint)`;
 
 class CliError extends Error {
@@ -93,6 +103,9 @@ function parse(argv) {
         title: { type: "string" },
         share: { type: "string" },
         folder: { type: "string" },
+        component: { type: "boolean", default: false },
+        artifact: { type: "string" },
+        "base-revision": { type: "string" },
         key: { type: "string" },
         endpoint: { type: "string" },
         token: { type: "string" },
@@ -120,12 +133,21 @@ function parse(argv) {
     throw new CliError("--share must be 1, 7 or 30 (days).", 2);
   const uuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  for (const name of ["folder", "key"])
+  for (const name of ["folder", "key", "artifact", "base-revision"])
     if (values[name] !== undefined && !uuid.test(values[name]))
       throw new CliError(`--${name} must be a UUID.`, 2);
+  if ((values.artifact === undefined) !== (values["base-revision"] === undefined))
+    throw new CliError("A new version needs both --artifact and --base-revision.", 2);
+  if (values.artifact !== undefined && values.folder !== undefined)
+    throw new CliError("A new version stays in its folder: drop --folder.", 2);
+  const language = /\.tsx$/i.test(positionals[0]) ? "tsx" : "jsx";
   return {
     help: false,
     file: positionals[0],
+    component: values.component || /\.[jt]sx$/i.test(positionals[0]),
+    language,
+    artifactId: values.artifact,
+    baseRevisionId: values["base-revision"],
     title: values.title,
     share,
     folderId: values.folder,
@@ -223,10 +245,10 @@ export async function main(
           });
     if (!source.trim()) throw new CliError("The file is empty.");
     const name = options.file === "-" ? "stdin.html" : options.file;
-    const html = asHtml(source, name);
+    const html = options.component ? null : asHtml(source, name);
     const title =
       options.title?.trim() ||
-      titleFromHtml(html) ||
+      (html ? titleFromHtml(html) : "") ||
       basename(name, extname(name)) ||
       "Без названия";
     const key = options.key ?? randomUUID();
@@ -236,9 +258,14 @@ export async function main(
       {
         key,
         title: title.slice(0, 160),
-        html,
+        ...(html === null
+          ? { component: source, componentLanguage: options.language }
+          : { html }),
         ...(options.share ? { expiresInDays: options.share } : {}),
         ...(options.folderId ? { folderId: options.folderId } : {}),
+        ...(options.artifactId
+          ? { artifactId: options.artifactId, baseRevisionId: options.baseRevisionId }
+          : {}),
       },
       fetchImpl,
     );
@@ -249,7 +276,7 @@ export async function main(
     if (result.url) {
       stdout.write(`${result.url}\n`);
       stderr.write(
-        `Saved and shared${result.expiresAt ? ` until ${result.expiresAt}` : ""}. On your shelf: ${result.shelfUrl}\n`,
+        `${result.linkMoved ? "New version saved; the link now shows it" : "Saved and shared"}${result.expiresAt ? ` until ${result.expiresAt}` : ""}. Revision ${result.revisionId}. On your shelf: ${result.shelfUrl}\n`,
       );
     } else {
       stdout.write(`${result.shelfUrl}\n`);

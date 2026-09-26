@@ -137,13 +137,18 @@ test("an agent gets a token and the command, and the token uploads a project", a
   assert.equal(done.statusCode, 200, done.body);
   const { rows: [work] } = await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [done.json().artifactId]);
   assert.equal(work.tenant_id, owner.tenant);
-  // Nothing but project uploads.
+  // One page or component from disk goes through the same token
+  // (polka-publish.mjs), so the agent never pastes a file into a tool call.
+  assert.ok(issued.pageCommand.includes(`${origin}/api/v1/cli/polka-publish.mjs`));
   const publish = await api(issued.token, "POST", "/api/v1/publish", {
     key: randomUUID(),
-    title: "Не сюда",
+    title: "Страница с диска",
     html: "<!doctype html><title>x</title><p>x</p>",
   });
-  assert.equal(publish.statusCode, 401, publish.body);
+  assert.equal(publish.statusCode, 200, publish.body);
+  // The parent had no link permission, so neither has its token.
+  assert.equal(publish.json().url, null);
+  // Nothing else: no status, no MCP.
   assert.equal((await api(issued.token, "GET", `/api/v1/status/${done.json().artifactId}`)).statusCode, 401);
   assert.equal((await mcp(issued.token, "tools/list")).status, 401);
   // The owner's agents page lists the connection, not its tokens.

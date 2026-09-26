@@ -452,6 +452,102 @@ test("CLI publishes a file against a running server, retries idempotently", asyn
   }
 });
 
+test("a new version through publish keeps the work's link", async () => {
+  const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
+  const first = await publish(
+    { key: randomUUID(), title: "Прототип", html: page("Версия 1") },
+    bearer(secret),
+  );
+  assert.equal(first.statusCode, 200, first.body);
+  const v1 = first.json();
+  const second = await publish(
+    {
+      key: randomUUID(),
+      title: "Прототип",
+      html: page("Версия 2"),
+      artifactId: v1.artifactId,
+      baseRevisionId: v1.revisionId,
+    },
+    bearer(secret),
+  );
+  assert.equal(second.statusCode, 200, second.body);
+  const v2 = publishResponseSchema.parse(second.json());
+  assert.equal(v2.artifactId, v1.artifactId);
+  assert.notEqual(v2.revisionId, v1.revisionId);
+  assert.equal(v2.url, v1.url);
+  assert.equal(v2.linkMoved, true);
+  const {
+    rows: [share],
+  } = await db.query(
+    "SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
+    [v1.artifactId],
+  );
+  assert.equal(share.revision_id, v2.revisionId);
+  // A stale base is refused, and half a new version is a field error.
+  const stale = await publish(
+    {
+      key: randomUUID(),
+      title: "Прототип",
+      html: page("Версия 3"),
+      artifactId: v1.artifactId,
+      baseRevisionId: v1.revisionId,
+    },
+    bearer(secret),
+  );
+  assert.equal(stale.statusCode, 409, stale.body);
+  const half = await publish(
+    { key: randomUUID(), title: "x", html: page("x"), artifactId: v1.artifactId },
+    bearer(secret),
+  );
+  assert.equal(half.statusCode, 400, half.body);
+  // A new version needs the revise permission.
+  const { secret: captureOnly } = await token(owner, ["context", "capture", "share"]);
+  const denied = await publish(
+    {
+      key: randomUUID(),
+      title: "Прототип",
+      html: page("Версия 3"),
+      artifactId: v1.artifactId,
+      baseRevisionId: v2.revisionId,
+    },
+    bearer(captureOnly),
+  );
+  assert.equal(denied.statusCode, 403, denied.body);
+});
+
+test("CLI sends .jsx as a component and saves new versions", async () => {
+  const server = await createApp();
+  await server.listen({ host: "127.0.0.1", port: 0 });
+  try {
+    const endpoint = `http://127.0.0.1:${(server.server.address() as AddressInfo).port}`;
+    const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
+    const env = { POLKA_TOKEN: secret, POLKA_ENDPOINT: endpoint };
+    // This suite is static-only: the server refuses component source, which
+    // proves the CLI sent it as a component rather than wrapped text.
+    const jsx = join(scratch, "App.jsx");
+    await writeFile(jsx, "export default function App() { return <h1>Привет</h1>; }\n");
+    const component = await runCli([jsx, "--title", "Прототип"], env);
+    assert.equal(component.code, 1);
+    assert.match(component.stderr, /422 \(unsupported\)/);
+
+    const file = join(scratch, "versioned.html");
+    await writeFile(file, page("Версия 1"));
+    const first = JSON.parse((await runCli([file, "--json"], env)).stdout);
+    await writeFile(file, page("Версия 2"));
+    const next = await runCli(
+      [file, "--artifact", first.artifactId, "--base-revision", first.revisionId],
+      env,
+    );
+    assert.equal(next.code, 0, next.stderr);
+    assert.equal(next.stdout.trim(), first.url);
+    assert.match(next.stderr, /New version saved; the link now shows it/);
+    const half = await runCli([file, "--artifact", first.artifactId], env);
+    assert.equal(half.code, 2);
+  } finally {
+    await server.close();
+  }
+});
+
 function edits(
   artifactId: string,
   body: unknown,
