@@ -55,7 +55,7 @@ const accessRequest =
   "Привет! Ссылка на твою работу на Полке у меня не открывается — возможно, её отозвали или истёк срок. Пришлёшь новую?";
 
 /** «Unavailable» is the link's answer; a network or server failure is not, and can be retried. */
-type Failure = { kind: "unavailable" | "unreachable"; message: string } | null;
+type Failure = { kind: "unavailable" | "unreachable" | "signIn"; message: string } | null;
 
 /**
  * The comments rail (COMMENTS.md, stage 3) plugs in here: the top bar shows
@@ -111,6 +111,12 @@ export function Recipient() {
           if (!active || requestGeneration !== generation) return;
           const unreachable =
             !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
+          // An installation's link policy (docs/specs/EXTENSIONS.md): employees
+          // only, after signing in here.
+          if (e instanceof ApiError && e.status === 401 && e.details?.reason === "sign_in_required") {
+            setError({ kind: "signIn", message: e.message });
+            return;
+          }
           setError(
             unreachable
               ? {
@@ -231,6 +237,26 @@ export function RecipientScreen({
       <Flag /> <span>Пожаловаться</span>
     </Button>
   );
+  if (error?.kind === "signIn")
+    return (
+      <RecipientFrame account={account}>
+        <main className="empty recipient-denied">
+          <div className="empty-icon"><LockKeyhole /></div>
+          <h1>Войдите, чтобы открыть</h1>
+          <p role="alert">{error.message}</p>
+          <p>
+            Войдите в Полку в новой вкладке, затем вернитесь сюда и откройте работу снова. Ссылку
+            при этом копировать не нужно.
+          </p>
+          <div className="button-row">
+            <a className="ui-button ui-button--primary" href="/signin" target="_blank" rel="noopener">
+              Войти
+            </a>
+            <Button onClick={onRetry}>Я вошёл — открыть</Button>
+          </div>
+        </main>
+      </RecipientFrame>
+    );
   if (error?.kind === "unreachable")
     return (
       <RecipientFrame account={account}>

@@ -1,3 +1,4 @@
+import { emitEvent } from "./extensions.ts";
 import { randomUUID, createHmac } from "node:crypto";
 import type { PoolClient } from "pg";
 import {
@@ -584,7 +585,21 @@ async function screenSavedRevision(
 }
 
 export async function finalizeUpload(actor: Actor, id: string) {
-  return transaction((c) => finalizeUploadInTransaction(c, actor, id));
+  const receipt = await transaction((c) => finalizeUploadInTransaction(c, actor, id));
+  savedEvent(actor, receipt);
+  return receipt;
+}
+/** A version saved (docs/specs/EXTENSIONS.md): after the commit, for integrations. */
+function savedEvent(actor: Actor, receipt: { artifactId?: string; revisionId?: string } | null) {
+  if (receipt?.artifactId && receipt.revisionId)
+    emitEvent({
+      type: "revision.saved",
+      tenantId: actor.tenant,
+      artifactId: receipt.artifactId,
+      revisionId: receipt.revisionId,
+      accountId: actor.id,
+      at: new Date().toISOString(),
+    });
 }
 export async function finalizeUploadInTransaction(
   c: PoolClient,
@@ -1051,7 +1066,9 @@ async function lockBundleArtifact(
 }
 
 export async function finalizeBundleUpload(actor: Actor, id: string) {
-  return transaction((c) => finalizeBundleUploadInTransaction(c, actor, id));
+  const receipt = await transaction((c) => finalizeBundleUploadInTransaction(c, actor, id));
+  savedEvent(actor, receipt);
+  return receipt;
 }
 export async function finalizeBundleUploadInTransaction(
   c: PoolClient,

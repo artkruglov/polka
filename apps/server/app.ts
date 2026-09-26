@@ -1,3 +1,4 @@
+import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
   prefixQuery,
@@ -1247,6 +1248,19 @@ export async function createApp() {
         ))
       )
         throw missing();
+      // An extension's policy (docs/specs/EXTENSIONS.md), e.g. employees only.
+      if (extensions().length)
+        await checkLinkOpen(
+          {
+            shareId: candidate.id,
+            shelf: (
+              await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])
+            ).rows[0],
+            artifactId: candidate.artifact_id,
+            viewer: viewerAccount ? { id: viewerAccount } : null,
+          },
+          c,
+        );
       const artifact = (
         await c.query(
           "SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
@@ -1367,5 +1381,14 @@ export async function createApp() {
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);
+  // Extensions register after the core (docs/specs/EXTENSIONS.md).
+  if (!extensionsConfigured()) await loadExtensions(config.POLKA_EXTENSIONS);
+  for (const extension of extensions())
+    await extension.register?.(app, {
+      identity: (req, options) => identity(req, options ?? {}),
+      transaction,
+      settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
+      log: (event) => console.log(JSON.stringify({ extension: extension.name, ...event })),
+    });
   return app;
 }

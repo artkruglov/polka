@@ -12,6 +12,7 @@
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import { config } from "./config.ts";
+import { emitEvent } from "./extensions.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 
@@ -113,6 +114,13 @@ export async function findEmployee(actor: Actor, query: unknown) {
  * without one. Idempotent: someone already off every shelf gets an empty list.
  */
 export async function offboardEmployee(actor: Actor, accountId: string) {
+  const result = await offboardInTransaction(actor, accountId);
+  for (const shelf of result.removed)
+    emitEvent({ type: "member.revoked", tenantId: shelf.id, accountId, at: new Date().toISOString() });
+  return result;
+}
+
+async function offboardInTransaction(actor: Actor, accountId: string) {
   if (accountId === actor.id)
     throw new Problem(
       409,
