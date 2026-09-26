@@ -1,16 +1,18 @@
 import "./styles.css";
 import React, { useState } from "react";
-import { ArrowUpRight, Bot, Layers, LockKeyhole } from "lucide-react";
+import { Layers, LockKeyhole } from "lucide-react";
 import { FileSave, SavedWork } from "../../features/capture-file/index.tsx";
 import { PasteCode } from "../../features/paste-code/index.tsx";
 import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
+import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
 
 type Capture = "file" | "paste";
 
 /**
- * Save by hand: a file from the computer or pasted code, one column. Saving
+ * Save: first the agent, which saves works itself once connected; then by
+ * hand, a file from the computer or pasted code, one column. Saving
  * by a link to a Claude/ChatGPT artifact is not offered: the agent saves the
  * work itself (docs/connect-agents.md), and ?url= from old links is ignored.
  */
@@ -30,10 +32,12 @@ export function Bring() {
         <header className="bring-heading">
           <h1 id="bring-title">Сохранить работу</h1>
           <p>
-            Загрузите файл или вставьте код. Проще всего — попросить агента: он
-            сохранит работу сам.
+            Проще всего — подключить агента один раз: дальше он сохраняет
+            работы сам, а вы просто просите «сохрани на Полку».
           </p>
         </header>
+        <ConnectAgent title="Подключите агента: скопируйте ему эту фразу" className="bring-agent" />
+        <h2 className="bring-manual">Или сохраните вручную</h2>
         <div className="bring-capture">
           <Tabs
             label="Как сохранить"
@@ -68,15 +72,6 @@ export function Bring() {
           </Tabs>
         </div>
         <aside className="bring-facts" aria-label="О сохранении">
-          <a className="bring-fact bring-fact--link" href="/settings/agents">
-            <Bot />
-            <div>
-              <strong>Сохраняйте прямо с агентом</strong>
-              <p>
-                Claude, Claude Code, Codex или другой MCP-клиент <ArrowUpRight />
-              </p>
-            </div>
-          </a>
           <div className="bring-fact">
             <LockKeyhole />
             <div>
