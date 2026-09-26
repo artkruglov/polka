@@ -6,6 +6,7 @@ import { Button, Notice, StatusPanel } from "../../shared/ui/controls.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { ROLE_LABEL, switchShelf } from "../../entities/shelf/model.ts";
 import type { ShelfRole } from "../../shared/api/client.ts";
+import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
 import "./styles.css";
 
 // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4): every
@@ -224,6 +225,16 @@ export function CompanyAdmin() {
   const account = useAccount();
   const [state, setState] = useState<{ kind: "loading" } | { kind: "denied" } | { kind: "error"; message: string } | { kind: "ready"; shelves: CompanyShelf[] }>({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
+  // Sections of extensions, e.g. the commercial edition's link policy.
+  const extensionSections = useSlot("company-admin");
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    request<{ extensions?: string[] }>("/capabilities")
+      .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
+      .catch(() => {
+        // The page works without them.
+      });
+  }, [state.kind]);
   useEffect(() => {
     if (account === undefined) return;
     if (account === null) {
@@ -259,6 +270,12 @@ export function CompanyAdmin() {
         {state.kind === "ready" && (
           <>
             <Offboarding />
+            {extensionSections.map(({ id, title, Component }) => (
+              <section key={id} className="company-card" aria-label={title}>
+                <h2>{title}</h2>
+                <Component />
+              </section>
+            ))}
             <section className="company-card" aria-labelledby="shelves-title">
               <h2 id="shelves-title">Полки отделов · {state.shelves.length}</h2>
               {state.shelves.length ? (

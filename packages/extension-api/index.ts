@@ -89,4 +89,12 @@ export interface PolkaExtension {
   };
   /** After the fact, outside the transaction: integrations and journals. Errors are logged, never thrown. */
   onEvent?(event: PolkaEvent): Promise<void> | void;
+  /**
+   * The extension's part of the web app: an absolute path to one ES module
+   * the core serves as /ext/<name>.js. The app loads it and it registers its
+   * sections through window.__polkaHost (see ExtensionHost).
+   */
+  web?: { script: string };
 }
+
+export type { ExtensionHost, ExtensionSlot } from "../contracts/extensions.ts";
