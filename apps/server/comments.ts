@@ -10,6 +10,7 @@
 //
 // Bodies are plain text. Nothing here renders HTML; the web app shows the
 // text as text and links as text. Authors are shown by display name only.
+import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { assertAuthorisedForPublic } from "./provisional.ts";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -199,6 +200,8 @@ async function lockShare(
   shareId: string,
   allowTrashed: boolean,
 ): Promise<ShareContext> {
+  // An agent limited to folders discusses only works in them (agent-scope.ts).
+  await assertArtifactInAgentScope(c, owner, artifactId);
   // The shelf and the account that answers for the link are active.
   if (!(await lockAnsweringAccount(c, owner, "SHARE"))) throw missing();
   const artifact = (
@@ -426,6 +429,7 @@ export async function workCommentsInTransaction(
   // its curators and admins (and a link's issuer) answer them.
   const { role } = await lockShelf(c, owner, "reader", "SHARE");
   const shelfSide = role === "owner" || role === "admin" || role === "curator";
+  await assertArtifactInAgentScope(c, owner, artifactId);
   const artifact = (
     await c.query(
       `SELECT id,title,trashed_at,comments_seen_at FROM artifacts
