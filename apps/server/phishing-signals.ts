@@ -257,7 +257,7 @@ const BRAND_HOSTS: Array<{ id: string; tokens: string[]; official: string[] }> =
   {
     id: "google",
     tokens: ["google", "gmail"],
-    official: ["google.com", "google.ru", "google.by", "google.kz", "google.co.uk", "google.de", "googleapis.com", "gstatic.com", "googleusercontent.com", "google-analytics.com", "googletagmanager.com", "gmail.com", "googlemail.com", "withgoogle.com"],
+    official: ["google.com", "google.ru", "google.by", "google.kz", "google.co.uk", "google.de", "googleapis.com", "gstatic.com", "googleusercontent.com", "google-analytics.com", "googletagmanager.com", "gmail.com", "googlemail.com", "withgoogle.com", "googleblog.com", "blog.google", "google.dev", "googlesource.com", "g.co", "goo.gl", "youtube.com"],
   },
   { id: "microsoft", tokens: ["microsoft", "office365", "outlook"], official: ["microsoft.com", "office.com", "office365.com", "outlook.com", "live.com", "microsoftonline.com", "azure.com", "windows.net"] },
   { id: "paypal", tokens: ["paypal"], official: ["paypal.com", "paypal.me", "paypalobjects.com"] },
@@ -275,9 +275,14 @@ const BRAND_HOSTS: Array<{ id: string; tokens: string[]; official: string[] }> =
   { id: "wildberries", tokens: ["wildberries"], official: ["wildberries.ru", "wildberries.by", "wildberries.kz", "wb.ru"] },
   { id: "avito", tokens: ["avito"], official: ["avito.ru", "avito.st"] },
 ];
+// The brand stands as a word of the host: a whole label, or a part set off by
+// a hyphen or a dot (google-verify.xyz, sber.online-pay.ru), or followed by a
+// digit (google1-login.ru). A digit before it is no boundary: 9to5google.com
+// is a news site, not Google's look-alike; digits written for letters
+// (app1e-id.com) are read as letters before this test.
 const BRAND_HOST_TOKENS = BRAND_HOSTS.map((brand) => ({
   ...brand,
-  regex: new RegExp(`(?:^|[^a-z])(?:${brand.tokens.join("|")})(?:[^a-z]|$)`),
+  regex: new RegExp(`(?:^|[^a-z0-9])(?:${brand.tokens.join("|")})(?:[^a-z]|$)`),
 }));
 const isOfficial = (host: string, official: readonly string[]) =>
   official.some((domain) => host === domain || host.endsWith(`.${domain}`));
@@ -292,6 +297,10 @@ const LEET: Record<string, string> = { "0": "o", "1": "l", "3": "e" };
 // apple-id-verify.com, example.com/signin.
 const LOGIN_WORDS =
   /(?:^|[^a-z])(?:log-?in|sign-?in|signon|auth|oauth|verify|verification|secure|security|account|accounts|passport|password|id|2fa|otp|confirm|unlock|recovery|support)(?:[^a-z]|$)/;
+// A sign-in page by its path on another site: only the words of a sign-in
+// form itself. Documentation paths (/support/, /security/oauth, /id/…) are
+// the sources of an ordinary research page, not a place to type a password.
+const LOGIN_PATH_WORDS = /(?:^|[^a-z])(?:log-?in|sign-?in|signon)(?:[^a-z]|$)/;
 // An address as written: with a scheme or // (group 1: host, group 2: the
 // rest), or a bare host with a dot (group 3: host, group 4: the rest).
 const ADDRESS =
@@ -373,7 +382,7 @@ export class SignalCollector {
     if (
       match[1] &&
       /^(?:https?:)?\/\//i.test(value.trim()) &&
-      LOGIN_WORDS.test(rest.split(/[?#]/, 1)[0] ?? "") &&
+      LOGIN_PATH_WORDS.test(rest.split(/[?#]/, 1)[0] ?? "") &&
       !isOfficial(raw, ALL_OFFICIAL)
     )
       this.found.add("channel:login-link");
