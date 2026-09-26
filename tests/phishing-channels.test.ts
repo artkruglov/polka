@@ -210,6 +210,40 @@ test("channel details: look-alike domains, crypto, warnings and sign-in buttons"
   assert.ok(jsx.list().includes("channel:lookalike-login"), jsx.list().join());
 });
 
+test("a research page's sources are no look-alikes and no sign-in links (production, 26.09.2026)", () => {
+  // «Яндекс 360 + агенты: полное исследование» was held for 9to5google.com
+  // (a news site), the Google blog and help pages with /support/ or /oauth.
+  const sources = [
+    "https://9to5google.com/2026/09/01/workspace-gemini/",
+    "https://workspaceupdates.googleblog.com/2026/09/agents.html",
+    "https://support.google.com/a/answer/1",
+    "https://yandex.ru/support/yandex-360/business/mail/ru/web/security/oauth",
+    "https://www.bitrix24.ru/support/helpdesk/",
+    "https://docs.github.com/en/authentication/connecting-to-github-with-ssh",
+    "https://id.atlassian.com/manage-profile/security",
+  ];
+  const html = page(`<h1>Исследование</h1><ol>${sources.map((url) => `<li><a href="${url}">${url}</a></li>`).join("")}</ol>`);
+  const signals = inspectHtml(html).signals;
+  assert.equal(signals.some((signal) => signal.startsWith("lookalike:") || signal.startsWith("channel:")), false, signals.join());
+  // The rules still see real ones: a trailing digit, and a sign-in form elsewhere.
+  const found = (link: string) => inspectHtml(page(`<a href="${link}">Войти</a>`)).signals;
+  assert.ok(found("https://google1-login.ru/verify").includes("channel:lookalike-login"));
+  assert.ok(found("https://example.net/login?next=/docs").includes("channel:login-link"));
+});
+
+test("policy: rules-only spam of a trusted author opens once a model reads the work", () => {
+  // Hundreds of links to a hundred sites: a research page's sources.
+  const filter: FilterResult = { v: 1, hits: { spam: { score: 7, terms: ["внешних ссылок: 287", "разных сайтов в ссылках: 122"] } } };
+  const run = (standing: typeof standingTrusted, model: ModelView) =>
+    decideContent({ filter, model, standing, mode: "strict", autoblock: false, fraud: true }).action;
+  assert.equal(run(standingTrusted, { state: "checked", findings: [] }), "notify");
+  assert.equal(run(standingFresh, { state: "checked", findings: [] }), "hold");
+  assert.equal(
+    run(standingTrusted, { state: "checked", findings: [{ category: "spam", agreed: true, source: "text", reason: "спам" }] }),
+    "hold",
+  );
+});
+
 test("policy: rules-only fraud of a trusted author is reported once a model reads the work; a model's confirmation holds", () => {
   const filter: FilterResult = inspectHtml(TELEGRAM_CODE).filter;
   const run = (standing: typeof standingTrusted, model: ModelView, mode: "strict" | "balanced" = "strict") =>
@@ -234,7 +268,7 @@ test("policy: rules-only fraud of a trusted author is reported once a model read
   assert.equal(run(standingTrusted, confirmed), "hold");
   // Not trusted: held, whatever the model said.
   assert.equal(run(standingFresh, checked), "hold");
-  // Only fraud is eased: other categories of a trusted author still wait in strict.
+  // Only fraud and spam are eased: other categories of a trusted author still wait in strict.
   assert.equal(
     decideContent({
       filter: { v: 1, hits: { gambling: { score: 8, terms: ["казино"] } } },
