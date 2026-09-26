@@ -1387,6 +1387,7 @@ export async function createApp() {
     await extension.register?.(app, {
       identity: (req, options) => identity(req, options ?? {}),
       transaction,
+      fail: (status, code, message) => new Problem(status, code, message),
       settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
       log: (event) => console.log(JSON.stringify({ extension: extension.name, ...event })),
     });
