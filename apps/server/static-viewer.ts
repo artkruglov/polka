@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
 import type { FastifyInstance } from "fastify";
 import type { Actor } from "./artifacts.ts";
 import { withSignedAwayLinks } from "./away-links.ts";
@@ -119,7 +120,8 @@ export async function issueRecipientStaticView(
          JOIN artifacts artifact ON artifact.id=r.artifact_id
            AND artifact.id=s.artifact_id AND artifact.trashed_at IS NULL
          JOIN tenants tenant ON tenant.id=s.tenant_id
-         JOIN accounts account ON account.id=tenant.owner_id
+         JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
          WHERE g.hash=$2 AND g.expires_at>now() AND g.derivative_id IS NULL
            AND NOT s.revoked AND s.expires_at>now()
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
@@ -170,7 +172,8 @@ async function authorizedStaticRevision(token: string) {
              FROM grants g
              JOIN shares s ON s.id=g.share_id
              JOIN tenants tenant ON tenant.id=s.tenant_id
-             JOIN accounts account ON account.id=tenant.owner_id
+             JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
              WHERE g.hash=vg.source_grant_hash
                AND g.share_id=vg.share_id AND g.revision_id=vg.revision_id
                AND g.derivative_id IS NULL AND s.artifact_id=r.artifact_id

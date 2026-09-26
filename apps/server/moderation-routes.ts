@@ -109,7 +109,7 @@ async function describe(token: ModerationToken) {
      JOIN artifacts artifact ON artifact.id=share.artifact_id
      JOIN revisions revision ON revision.id=share.revision_id
      JOIN tenants tenant ON tenant.id=share.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
      WHERE share.id=$1`,
     [token.shareId],
   );
@@ -237,7 +237,7 @@ async function preview(token: ModerationToken) {
        JOIN artifacts artifact ON artifact.id=share.artifact_id
          AND artifact.tenant_id=share.tenant_id AND artifact.trashed_at IS NULL
        JOIN tenants tenant ON tenant.id=share.tenant_id
-       JOIN accounts account ON account.id=tenant.owner_id
+       JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
        WHERE share.id=$1 AND NOT share.revoked AND share.expires_at>now()
          AND NOT account.disabled AND account.deletion_requested_at IS NULL
        FOR SHARE OF share`,

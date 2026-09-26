@@ -58,7 +58,7 @@ export async function listReports(days = 7) {
      FROM share_reports report
      JOIN shares share ON share.id=report.share_id
      JOIN tenants tenant ON tenant.id=report.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
      LEFT JOIN artifacts artifact ON artifact.id=share.artifact_id
      WHERE report.created_at>now()-$1*interval '1 day'
      ORDER BY report.created_at DESC,report.id DESC
@@ -155,13 +155,32 @@ export function formatReports(result: Awaited<ReturnType<typeof listReports>>) {
   ].join("\n");
 }
 
+/**
+ * The shelf and the account that answers for a link, locked: a personal
+ * shelf's owner (lockTenantAccount), or on a department shelf the link's
+ * issuer, who need not own the shelf.
+ */
+async function lockShareTenantAccount(c: PoolClient, actor: Actor) {
+  const {
+    rows: [shelf],
+  } = await c.query("SELECT * FROM tenants WHERE id=$1 FOR UPDATE", [actor.tenant]);
+  if (shelf?.kind !== "team") return lockTenantAccount(c, actor);
+  const account = (
+    await c.query("SELECT * FROM accounts WHERE id=$1 FOR UPDATE", [actor.id])
+  ).rows[0];
+  if (!account) throw new ModerationError("No account answers for this link");
+  return { tenant: shelf, account };
+}
+
 async function shareOwner(shareId: string) {
   if (!z.string().uuid().safeParse(shareId).success)
     throw new ModerationError(`Not a share id: ${clean(shareId, 60)}`);
   const {
     rows: [row],
   } = await db.query(
-    `SELECT share.tenant_id,tenant.owner_id FROM shares share
+    // A department shelf has no owner: the link's issuer answers for it.
+    `SELECT share.tenant_id,COALESCE(tenant.owner_id,share.created_by) AS owner_id
+     FROM shares share
      JOIN tenants tenant ON tenant.id=share.tenant_id WHERE share.id=$1`,
     [shareId],
   );
@@ -173,7 +192,7 @@ async function shareOwner(shareId: string) {
 export async function revokeShareAsOperator(shareId: string) {
   const actor = await shareOwner(shareId);
   return transaction(async (c) => {
-    const { account } = await lockTenantAccount(c, actor);
+    const { account } = await lockShareTenantAccount(c, actor);
     const {
       rows: [before],
     } = await c.query(
@@ -380,7 +399,7 @@ export type OperatorOutcome = {
 
 async function lockOperatorShare(c: PoolClient, shareId: string) {
   const actor = await shareOwner(shareId);
-  const { account } = await lockTenantAccount(c, actor);
+  const { account } = await lockShareTenantAccount(c, actor);
   const {
     rows: [share],
   } = await c.query(
@@ -591,7 +610,7 @@ export async function listModerationQueue() {
      FROM shares share
      JOIN artifacts artifact ON artifact.id=share.artifact_id
      JOIN tenants tenant ON tenant.id=share.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
      WHERE share.moderation IN ('held','paused') AND NOT share.revoked AND share.expires_at>now()
      ORDER BY COALESCE(share.moderated_at,share.created_at),share.id
      LIMIT $1`,
@@ -808,7 +827,7 @@ async function shareRow(shareId: string) {
     rows: [row],
   } = await db.query(
     `SELECT share.id,share.tenant_id,share.artifact_id,share.revision_id,
-       tenant.owner_id
+       COALESCE(tenant.owner_id,share.created_by) AS owner_id
      FROM shares share JOIN tenants tenant ON tenant.id=share.tenant_id
      WHERE share.id=$1`,
     [shareId],
@@ -829,7 +848,7 @@ export async function blockShareAsOperator(
   const share = await shareRow(shareId);
   const freeze = options.disable === true || config.CONTENT_FILTER_MODE === "strict";
   const outcome = await transaction(async (c) => {
-    await lockTenantAccount(c, { id: share.owner_id, tenant: share.tenant_id });
+    await lockShareTenantAccount(c, { id: share.owner_id, tenant: share.tenant_id });
     const result = await blockRevisionInTransaction(c, {
       tenantId: share.tenant_id,
       accountId: share.owner_id,

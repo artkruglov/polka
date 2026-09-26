@@ -22,7 +22,12 @@ import {
   type ServiceActor,
 } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import {
+  answeringAccountSql,
+  lockActiveOwnerTenant,
+  lockAnsweringAccount,
+} from "./owner-state.ts";
+import { lockShelf } from "./shelves.ts";
 import { trackShareCreated, viaFor } from "./analytics.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
 import {
@@ -123,7 +128,7 @@ async function duplicates(
   const { rows } = await c.query(
     `SELECT revision.id,revision.tenant_id FROM revisions revision
      JOIN tenants tenant ON tenant.id=revision.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,revision.created_by)
      WHERE revision.created_at>now()-interval '1 day'
        AND revision.tenant_id<>$1 AND ${SIGNED_UP_SQL("account")}
        AND ((revision.sha256=$2 AND $3::bigint>=512)
@@ -194,8 +199,9 @@ async function moderationFor(
     const held = await c.query(
       `UPDATE shares share SET moderation='held',moderation_reason='spam:duplicate',
          moderated_at=now()
-       FROM tenants tenant JOIN accounts account ON account.id=tenant.owner_id
-       WHERE share.revision_id=ANY($1::uuid[]) AND share.moderation='none'
+       FROM tenants tenant, accounts account
+       WHERE account.id=COALESCE(tenant.owner_id,share.created_by)
+         AND share.revision_id=ANY($1::uuid[]) AND share.moderation='none'
          AND NOT share.revoked AND share.expires_at>now()
          AND tenant.id=share.tenant_id AND ${SIGNED_UP_SQL("account")}
        RETURNING share.id,share.tenant_id,share.revision_id`,
@@ -345,7 +351,9 @@ async function reconsiderShare(
     const {
       rows: [owner],
     } = await c.query(
-      `SELECT share.tenant_id,tenant.owner_id FROM shares share
+      `SELECT share.tenant_id,${answeringAccountSql("tenant", "share")} AS owner_id,
+              tenant.owner_id IS NULL AS team
+       FROM shares share
        JOIN tenants tenant ON tenant.id=share.tenant_id WHERE share.id=$1`,
       [shareId],
     );
@@ -353,10 +361,7 @@ async function reconsiderShare(
     const actor: Actor = { id: owner.owner_id, tenant: owner.tenant_id };
     // A disabled or leaving owner: stricter decisions still apply, but
     // nothing of theirs is released.
-    const active = await lockActiveOwnerTenant(c, actor).then(
-      () => true,
-      () => false,
-    );
+    const active = await lockAnsweringAccount(c, actor);
     const {
       rows: [share],
     } = await c.query(
@@ -373,7 +378,7 @@ async function reconsiderShare(
     result.from = share.moderation_reason ?? null;
     const decision = await moderationFor(
       c,
-      await authorStanding(c, actor.tenant),
+      await authorStanding(c, actor.tenant, owner.team ? actor.id : null),
       actor.tenant,
       share.title,
       revisionId,
@@ -645,7 +650,7 @@ async function enableShareInTransaction(
   }
   if (await revisionBlocked(c, artifact.latest_revision_id)) throw blockedRefusal();
   const derivativeId = await assertLinkable(c, artifact.latest_revision_id);
-  const standing = await authorStanding(c, actor.tenant);
+  const standing = await authorStanding(c, actor.tenant, actor.id);
   await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
   const decision = await moderationFor(
     c,
@@ -665,10 +670,10 @@ async function enableShareInTransaction(
   } = await c.query(
     `INSERT INTO shares(
        id,tenant_id,artifact_id,revision_id,derivative_id,token_hash,expires_at,
-       moderation,moderation_reason,moderated_at
+       moderation,moderation_reason,moderated_at,created_by
      ) VALUES($1,$2,$3,$4,$5,$6,now()+$7*interval '1 day',
        CASE WHEN $8::text IS NULL THEN 'none' ELSE 'held' END,$8,
-       CASE WHEN $8::text IS NULL THEN NULL ELSE now() END)
+       CASE WHEN $8::text IS NULL THEN NULL ELSE now() END,$9)
      RETURNING *`,
     [
       shareId,
@@ -679,6 +684,7 @@ async function enableShareInTransaction(
       sha256(tokenFor(shareId)),
       input.expiresInDays,
       holdReason,
+      actor.id,
     ],
   );
   await audit(c, actor, "share.enabled", shareId);
@@ -789,7 +795,7 @@ async function publishShareInTransaction(
   } = await c.query("SELECT title FROM artifacts WHERE id=$1", [share.artifact_id]);
   const decision = await moderationFor(
     c,
-    await authorStanding(c, actor.tenant),
+    await authorStanding(c, actor.tenant, share.created_by),
     actor.tenant,
     artifact?.title ?? null,
     input.revisionId,
@@ -827,7 +833,8 @@ export async function enableOwnerShare(
   const input = shareSchema.parse(body);
   const notices: ModerationNotice[] = [];
   await transaction(async (c) => {
-    await lockActiveOwnerTenant(c, actor);
+    // A link out of a department shelf is a curator's (TEAM_SHELVES.md).
+    await lockShelf(c, actor, "curator");
     await enableShareInTransaction(
       c,
       actor,
@@ -844,7 +851,7 @@ export async function enableOwnerShare(
 
 export async function revokeOwnerShare(actor: Actor, shareId: string) {
   return transaction(async (c) => {
-    await lockActiveOwnerTenant(c, actor);
+    await lockShelf(c, actor, "curator");
     return revokeShareInTransaction(c, actor, shareId);
   });
 }
@@ -857,7 +864,7 @@ export async function publishOwnerShare(
   const input = publishSchema.parse(body);
   const notices: ModerationNotice[] = [];
   const result = await transaction(async (c) => {
-    await lockActiveOwnerTenant(c, actor);
+    await lockShelf(c, actor, "curator");
     return publishShareInTransaction(c, actor, shareId, input, notices);
   });
   void dispatchModerationNotices(notices);

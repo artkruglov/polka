@@ -132,7 +132,7 @@ async function shareFacts(shareId: string) {
      JOIN artifacts artifact ON artifact.id=share.artifact_id
      JOIN revisions revision ON revision.id=share.revision_id
      JOIN tenants tenant ON tenant.id=share.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
      WHERE share.id=$1`,
     [shareId],
   );
@@ -308,7 +308,7 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
      FROM revisions revision
      JOIN artifacts artifact ON artifact.id=revision.artifact_id
      JOIN tenants tenant ON tenant.id=revision.tenant_id
-     JOIN accounts account ON account.id=tenant.owner_id
+     JOIN accounts account ON account.id=COALESCE(tenant.owner_id,revision.created_by)
      LEFT JOIN moderation_blocks block ON block.revision_id=revision.id
      WHERE revision.id=$1`,
     [notice.revisionId],

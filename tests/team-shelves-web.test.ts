@@ -175,7 +175,7 @@ test("a member who leaves or is removed loses the shelf; the works stay", async 
   assert.deepEqual(shelves.map((item: any) => item.kind), ["personal"]);
 });
 
-test("an upload is its uploader's; links out of a department shelf come later", async () => {
+test("an upload is its uploader's; a curator shares from the shelf and the link answers to the issuer", async () => {
   const body = Buffer.from("черновик");
   const start = await call(
     "POST",
@@ -190,15 +190,57 @@ test("an upload is its uploader's; links out of a department shelf come later", 
   assert.equal((await call("DELETE", `/api/uploads/${uploadId}`, admin, undefined, shelf.id)).statusCode, 404);
   assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, author, body, shelf.id)).statusCode, 200);
   const saved = (await call("POST", `/api/uploads/${uploadId}/finalize`, author, {}, shelf.id)).json();
-  const shared = await call(
-    "POST",
-    `/api/artifacts/${saved.artifactId}/share`,
-    author,
-    { expectedRevisionId: saved.revisionId, expiresInDays: 7 },
-    shelf.id,
-  );
-  assert.equal(shared.statusCode, 409, shared.body);
-  assert.match(shared.json().detail ?? shared.body, /полок отделов появятся позже/);
+  const share = (who: Account) =>
+    call(
+      "POST",
+      `/api/artifacts/${saved.artifactId}/share`,
+      who,
+      { expectedRevisionId: saved.revisionId, expiresInDays: 7 },
+      shelf.id,
+    );
+  // Links out of a department shelf are a curator's.
+  assert.equal((await share(author)).statusCode, 403);
+  const shared = await share(admin);
+  assert.equal(shared.statusCode, 200, shared.body);
+  const link = shared.json().share;
+  const { rows: [row] } = await db.query("SELECT created_by FROM shares WHERE id=$1", [link.id]);
+  assert.equal(row.created_by, admin.id);
+  const resolve = () =>
+    app.inject({
+      method: "POST",
+      url: "/api/resolve",
+      headers: { origin },
+      payload: { token: new URL(link.url).hash.slice(1) },
+    });
+  assert.equal((await resolve()).statusCode, 200);
+  // Comments on it are off, not an error.
+  const comments = await app.inject({
+    method: "POST",
+    url: "/api/shared/comments",
+    headers: { origin, "content-type": "application/json" },
+    payload: JSON.stringify({ token: new URL(link.url).hash.slice(1) }),
+  });
+  assert.notEqual(comments.statusCode, 200);
+  assert.notEqual(comments.statusCode, 500);
+  // With TEAM_SHELVES off the link closes; on again, it opens.
+  config.TEAM_SHELVES = "off";
+  try {
+    assert.equal((await resolve()).statusCode, 404);
+  } finally {
+    config.TEAM_SHELVES = "on";
+  }
+  assert.equal((await resolve()).statusCode, 200);
+  // The issuer disabled: the link closes, like an owner's.
+  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [admin.id]);
+  try {
+    assert.equal((await resolve()).statusCode, 404);
+  } finally {
+    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [admin.id]);
+  }
+  // A curator revokes it.
+  const revoked = await call("POST", `/api/shares/${link.id}/revoke`, admin, {}, shelf.id);
+  assert.equal(revoked.statusCode, 200, revoked.body);
+  assert.equal((await resolve()).statusCode, 404);
 });
 
 test("personal shelves behave as before", async () => {
