@@ -288,7 +288,7 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   const works = html.slice(html.indexOf("enterprise-values-title"), html.indexOf("enterprise-next"));
   assert.ok(works.includes("Полки отделов"));
   assert.ok(works.includes("Ссылки наружу с полки отдела выпускают куратор"));
-  assert.ok(works.includes("Комментарии к ссылкам с полки отдела"));
+  assert.ok(works.includes("обсуждение видят все участники полки"));
   assert.ok(html.includes("На общей полке отдела — да"));
   assert.ok(!next.includes("Общие полки отделов"));
   assert.ok(next.indexOf("Контроль ссылок") < next.indexOf("Встраивание в ваши системы"));

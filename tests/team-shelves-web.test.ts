@@ -213,15 +213,27 @@ test("an upload is its uploader's; a curator shares from the shelf and the link 
       payload: { token: new URL(link.url).hash.slice(1) },
     });
   assert.equal((await resolve()).statusCode, 200);
-  // Comments on it are off, not an error.
-  const comments = await app.inject({
+  // Comments (stage 5b): a recipient writes; the shelf reads; its curators,
+  // admins and the issuer answer — an author on the shelf does not resolve.
+  const token = new URL(link.url).hash.slice(1);
+  const written = await app.inject({
     method: "POST",
-    url: "/api/shared/comments",
-    headers: { origin, "content-type": "application/json" },
-    payload: JSON.stringify({ token: new URL(link.url).hash.slice(1) }),
+    url: "/api/shared/comments/create",
+    headers: { origin, cookie: `polka_session=${sessions.get(stranger.name)}`, "content-type": "application/json" },
+    payload: JSON.stringify({ token, body: "Уточните цифры за октябрь", displayName: "Заказчик" }),
   });
-  assert.notEqual(comments.statusCode, 200);
-  assert.notEqual(comments.statusCode, 500);
+  assert.equal(written.statusCode, 200, written.body);
+  const threads = (who: Account) =>
+    call("GET", `/api/artifacts/${saved.artifactId}/comments`, who, undefined, shelf.id);
+  const seenByAuthor = await threads(author);
+  assert.equal(seenByAuthor.statusCode, 200, seenByAuthor.body);
+  const thread = seenByAuthor.json().shares[0].threads[0];
+  assert.equal(thread.body, "Уточните цифры за октябрь");
+  assert.equal(seenByAuthor.json().viewer.owner, false);
+  assert.equal((await threads(admin)).json().viewer.owner, true);
+  assert.equal((await call("POST", `/api/comments/${thread.id}/resolve`, author, {}, shelf.id)).statusCode, 404);
+  const resolved = await call("POST", `/api/comments/${thread.id}/resolve`, admin, {}, shelf.id);
+  assert.equal(resolved.statusCode, 200, resolved.body);
   // With TEAM_SHELVES off the link closes; on again, it opens.
   config.TEAM_SHELVES = "off";
   try {
