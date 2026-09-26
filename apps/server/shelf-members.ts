@@ -12,6 +12,7 @@ import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { teamShelfNameSchema, type ShelfRole } from "./shelves.ts";
 import { config } from "./config.ts";
+import { emitEvent } from "./extensions.ts";
 
 type Actor = { id: string };
 
@@ -211,6 +212,13 @@ export async function changeShelfMemberRole(
 
 /** An admin removes a member, or a member leaves. The works stay on the shelf. */
 export async function revokeShelfMember(actor: Actor, shelfId: string, accountId: string) {
+  const result = await revokeShelfMemberInTransaction(actor, shelfId, accountId);
+  if (result.revoked)
+    emitEvent({ type: "member.revoked", tenantId: shelfId, accountId, at: new Date().toISOString() });
+  return { ok: true };
+}
+
+async function revokeShelfMemberInTransaction(actor: Actor, shelfId: string, accountId: string) {
   return transaction(async (c) => {
     await lockTeamShelf(c, shelfId);
     const active = await lockAccounts(c, [actor.id, accountId]);
@@ -219,7 +227,7 @@ export async function revokeShelfMember(actor: Actor, shelfId: string, accountId
     if (accountId !== actor.id) adminOnly(role);
     const target = memberships.get(accountId);
     if (!target) throw missing();
-    if (target.state !== "active") return { ok: true };
+    if (target.state !== "active") return { ok: true, revoked: false };
     if (target.role === "admin") await ensureAnotherAdmin(c, shelfId, accountId);
     await c.query(
       `UPDATE tenant_members SET state='revoked',revoked_at=clock_timestamp()
@@ -227,7 +235,7 @@ export async function revokeShelfMember(actor: Actor, shelfId: string, accountId
       [shelfId, accountId],
     );
     await event(c, shelfId, actor, "member_revoked", accountId, target.role, null);
-    return { ok: true };
+    return { ok: true, revoked: true };
   });
 }
 
