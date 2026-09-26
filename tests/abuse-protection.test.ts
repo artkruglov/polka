@@ -175,7 +175,7 @@ const resolve = (token: string) => call("POST", "/api/resolve", { token });
 
 const HONEST = `<!doctype html><html><head><meta charset="utf-8"><title>Отчёт</title></head><body><h1>Квартальный отчёт</h1><p>${"Выручка выросла на 12%, расходы стабильны. ".repeat(4)}</p></body></html>`;
 // Static (no form, no password input), so it can be linked everywhere.
-const PHISHING = `<!doctype html><html><head><meta charset="utf-8"><title>СберБанк Онлайн</title></head><body><h1>СберБанк</h1><p>Ваша карта заблокирована. Срочно подтвердите данные.</p><label>Номер карты <input name="card_number" placeholder="0000 0000 0000 0000"></label><input name="sms_code" placeholder="Код из SMS"></body></html>`;
+const PHISHING = `<!doctype html><html><head><meta charset="utf-8"><title>СберБанк Онлайн</title></head><body><h1>СберБанк</h1><p>Ваша карта заблокирована. Срочно подтвердите данные: позвоните по номеру +7 900 123-45-67 и продиктуйте код из SMS.</p><label>Номер карты <input name="card_number" placeholder="0000 0000 0000 0000"></label><input name="sms_code" placeholder="Код из SMS"></body></html>`;
 
 type Letter = { to: string; subject: string; text: string; html: string };
 
@@ -685,26 +685,39 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
     inspectHtml(PHISHING).signals.filter((s) => s.startsWith("secret:")),
     ["secret:card-number", "secret:sms-code"],
   );
+  // Only with an off-page channel: a look-alike sign-in page, a request to
+  // tell the code, to write to a Telegram account.
   assert.equal(
     flagged(
-      '<p>Your Apple ID has been suspended.</p><input aria-label="Password" autocomplete="current-password">',
+      '<p>Your Apple ID has been suspended.</p><a href="https://appleid-unlock.com/signin">Unlock</a>',
     ),
     true,
   );
   assert.equal(
-    flagged('<h1>Госуслуги</h1><p>Введите одноразовый код</p><input id="otp_code">'),
+    flagged('<h1>Госуслуги</h1><p>Сообщите одноразовый код оператору.</p><input id="otp_code">'),
     true,
   );
-  // An interactive page: the fields live in script strings.
+  // The same pages without the channel: a form on Полка sends nothing.
   assert.equal(
     flagged(
-      `<div id="root"></div><script>const f=document.createElement("input");f.placeholder="Пароль от Тинькофф";document.body.append(f)</script>`,
+      '<p>Your Apple ID has been suspended.</p><input aria-label="Password" autocomplete="current-password">',
+    ),
+    false,
+  );
+  assert.equal(
+    flagged('<h1>Госуслуги</h1><p>Введите одноразовый код</p><input id="otp_code">'),
+    false,
+  );
+  // An interactive page: the fields and the channel live in script strings.
+  assert.equal(
+    flagged(
+      `<div id="root"></div><script>const f=document.createElement("input");f.placeholder="Пароль от Тинькофф";const hint="Пришлите пароль в Telegram @tinkoff_help";document.body.append(f)</script>`,
     ),
     true,
   );
   const jsx = new SignalCollector();
   scanScript(
-    `export default function App(){return <main>\n  <h1>Т-Банк</h1>\n  <p>Аккаунт заблокирован</p>\n  <input placeholder="Код из SMS" />\n</main>}`,
+    `export default function App(){return <main>\n  <h1>Т-Банк</h1>\n  <p>Аккаунт заблокирован. Отправьте код из SMS нам в чат.</p>\n  <input placeholder="Код из SMS" />\n</main>}`,
     jsx,
   );
   assert.equal(isSuspicious(jsx.list()), true, jsx.list().join());
@@ -784,6 +797,12 @@ test("the phishing scan stays linear in the page size", () => {
     `<script>${"/*".repeat(size / 2)}</script>`,
     `<script>${"`${".repeat(size / 3)}</script>`,
     "<p>" + "сбер".repeat(size / 4) + "</p>",
+    // Off-page channels: verbs that pass the gate, digits, addresses.
+    `<p>${"переведите на карту ".repeat(size / 20)}</p>`,
+    `<p>${"отправьте код из смс ".repeat(size / 21)}</p>`,
+    `<p>${"позвоните +7 900 12 ".repeat(size / 20)}</p>`,
+    `<p>${"send us @abcd x@y.ru ".repeat(size / 21)}</p>`,
+    `<p>${"yandex-login.ru ".repeat(size / 16)}</p>`,
   ];
   const scripts = (size: number) => [">".repeat(size), "'".repeat(size), "a>b<".repeat(size / 4)];
   // Median of three runs; a small floor and margin absorb GC pauses.

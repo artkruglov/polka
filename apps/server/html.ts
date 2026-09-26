@@ -510,6 +510,8 @@ export function inspectHtml(
             attrs.find((item) => item.name.toLowerCase() === "href")?.value ?? "",
             value,
           );
+        // Look-alike domains and sign-in pages elsewhere (phishing-signals.ts).
+        if (URL_ATTRIBUTES.has(attr)) collector.address(value);
         if ((tag === "a" || tag === "area") && attr === "href") {
           content.link(value);
           if (concealed) content.hidden(0, true);

@@ -99,6 +99,7 @@
   "tests/sensitive-input.test.ts",
   "tests/content-model.test.ts",
   "tests/content-moderation.test.ts",
+  "tests/phishing-channels.test.ts",
   "tests/line-diff.test.ts",
   "tests/compare-revisions.test.ts",
   "tests/link-preview.test.ts",

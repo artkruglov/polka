@@ -21,6 +21,7 @@ import {
   type EventActor,
 } from "./content-moderation.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
+import { rememberApproval } from "./share-moderation.ts";
 import type { Category } from "./content-filter/lists.ts";
 import { CATEGORY_LABEL } from "./content-filter/policy.ts";
 
@@ -421,6 +422,9 @@ export async function approveShareAsOperator(
         [shareId],
       );
       await audit(c, actor, "share.approved", shareId);
+      // Later versions with the same or fewer phishing signals are not held
+      // for fraud again (share-moderation.ts, approvedSignalsCover).
+      const approvedSignals = await rememberApproval(c, share.revision_id);
       await recordEvent(c, {
         actor: journalActor,
         action: "share.approved",
@@ -429,6 +433,7 @@ export async function approveShareAsOperator(
         artifactId: share.artifact_id,
         revisionId: share.revision_id,
         shareId,
+        details: approvedSignals ? { approvedSignals } : {},
       });
       changed = true;
       notes.push("Ссылка одобрена: получатели видят работу.");
