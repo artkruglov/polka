@@ -22,7 +22,6 @@ import {
   workCommentsInTransaction,
 } from "./comments.ts";
 import {
-  assertOwnShelf,
   withServiceActorTransaction,
   type ServiceActor,
 } from "./service-auth.ts";
@@ -55,7 +54,6 @@ const reactionsOn = (groups: ReactionGroup[], sig: string) =>
     .map((group) => ({ emoji: group.emoji, count: group.count }));
 
 export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
-  assertOwnShelf(actor);
   const input = agentCommentsInputSchema.parse(raw);
   const artifactId = artifactIdOf(input.artifactId);
   return withServiceActorTransaction(actor, "read", async (c, verified) => {
@@ -126,7 +124,6 @@ export const agentNoteInputSchema = z
  * read. In COMMENTS_MODE=on it is an ordinary comment of the owner.
  */
 export async function noteFromAgent(actor: ServiceActor, raw: unknown) {
-  assertOwnShelf(actor);
   const input = agentNoteInputSchema.parse(raw);
   const { artifactId: ref, shareId, ...note } = input;
   const artifactId = artifactIdOf(ref);
@@ -159,7 +156,6 @@ export async function resolveCommentFromAgent(
   actor: ServiceActor,
   raw: unknown,
 ) {
-  assertOwnShelf(actor);
   const input = agentResolveCommentInputSchema.parse(raw);
   return withServiceActorTransaction(actor, "revise", (c, verified) =>
     resolveCommentInTransaction(

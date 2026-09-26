@@ -232,7 +232,7 @@ Tell the user: "Полка will open. Sign in to your shelf or press «Нача�
 
 Without MCP (scripts, CI): the user creates a token at ${origin}/settings/agents (section «Для разработчиков») and exports it themselves with \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only as \`Authorization: Bearer $POLKA_TOKEN\` from the environment.
 
-A company's Полка may have department shelves. polka_context.shelf names the shelf this connection saves to and the user's role there. On a department shelf (kind team) every member sees what you save: say so before saving anything personal. A reader (canSave false) only reads and searches. Links and comments are not available on a department shelf yet: colleagues open the work on the shelf itself.
+A company's Полка may have department shelves. polka_context.shelf names the shelf this connection saves to and the user's role there. On a department shelf (kind team) every member sees what you save: say so before saving anything personal. A reader (canSave false) only reads and searches. There links are issued by the shelf's curators and admins (the issuer answers for them), and every member reads the comments; only curators and admins answer and resolve them.
 
 ## 2. Save and get a link: polka_publish
 

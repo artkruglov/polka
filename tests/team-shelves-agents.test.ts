@@ -162,11 +162,41 @@ test("an author's agent saves to the department shelf and knows where it is", as
   assert.equal(result.capabilities.share, false);
   const tools = (await mcp(token, "tools/list")).message.result.tools.map((tool: any) => tool.name);
   assert.ok(tools.includes("polka_publish"));
-  for (const name of ["polka_share", "polka_comments", "polka_note", "polka_resolve_comment"])
+  // An author's agent reads the discussions; links and answers are a curator's.
+  assert.ok(tools.includes("polka_comments"));
+  for (const name of ["polka_share", "polka_note", "polka_resolve_comment"])
     assert.ok(!tools.includes(name), name);
   // The owner's list shows the connection with its shelf.
   const list = await app.inject({ method: "GET", url: "/api/agent-connections", headers: { origin, cookie: author.cookie } });
   assert.equal(list.json().find((item: any) => item.id === issued.json().connection.id).shelf.name, "Отдел продаж");
+});
+
+test("an admin's agent publishes with a link from the department shelf", async () => {
+  const issued = await issue(admin, { scopes: ["context", "capture", "share"], shelfId: shelf.id });
+  assert.equal(issued.statusCode, 200, issued.body);
+  const saved = await publish(issued.json().token, "Отчёт со ссылкой");
+  assert.equal(saved.statusCode, 200, saved.body);
+  assert.equal(saved.json().state, "shared");
+  const { rows: [share] } = await db.query(
+    "SELECT created_by,tenant_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
+    [saved.json().artifactId],
+  );
+  assert.deepEqual(share, { created_by: admin.id, tenant_id: shelf.id });
+  // An author's agent asking for a link through the HTTP API is refused.
+  const authorToken = (await issue(author, { scopes: ["context", "capture", "share"], shelfId: shelf.id })).json().token;
+  const refused = await app.inject({
+    method: "POST",
+    url: "/api/v1/publish",
+    remoteAddress: address(),
+    headers: { authorization: `Bearer ${authorToken}`, "content-type": "application/json" },
+    payload: JSON.stringify({
+      key: randomUUID(),
+      title: "Без ссылки",
+      html: "<!doctype html><html><head><meta charset=\"utf-8\"><title>x</title></head><body><h1>x</h1><p>Текст отдела.</p></body></html>",
+      expiresInDays: 7,
+    }),
+  });
+  assert.notEqual(refused.json().state, "shared");
 });
 
 test("a reader connects an agent only to read; its role is checked on every save", async () => {
