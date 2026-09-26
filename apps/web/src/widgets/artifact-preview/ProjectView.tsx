@@ -231,46 +231,52 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   if (error)
     return <StatusPanel title="Проект не открылся">{error}</StatusPanel>;
   const crumbs = page.split("/");
+  // One page and nothing to choose: no tree, no bar — just the page.
+  const single = readable.children.size === 1 && !![...readable.children.values()][0]!.file;
   const src = view
     ? view.url +
       target.path.split("/").map(encodeURIComponent).join("/") +
       (target.hash ? `#${encodeURIComponent(target.hash)}` : "")
     : "";
   return (
-    <div className={`project-view${navOpen ? " project-view--nav" : ""}`}>
-      <nav className="project-tree" id={`project-tree-${revision.id}`} aria-label="Содержание проекта">
-        <p className="project-tree-summary">Проект · {filesLabel(files.length)}</p>
-        <TreeBranch node={readable} current={page} open={open} toggle={toggle} choose={choose} />
-        {resources.length > 0 && (
-          <details className="project-tree-resources">
-            <summary>Файлы проекта · {resources.length}</summary>
-            <ul>
-              {resources.map((file) => (
-                <li key={file.path}>{file.path}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </nav>
+    <div className={`project-view${navOpen ? " project-view--nav" : ""}${single ? " project-view--single" : ""}`}>
+      {!single && (
+        <nav className="project-tree" id={`project-tree-${revision.id}`} aria-label="Содержание проекта">
+          <p className="project-tree-summary">Проект · {filesLabel(files.length)}</p>
+          <TreeBranch node={readable} current={page} open={open} toggle={toggle} choose={choose} />
+          {resources.length > 0 && (
+            <details className="project-tree-resources">
+              <summary>Файлы проекта · {resources.length}</summary>
+              <ul>
+                {resources.map((file) => (
+                  <li key={file.path}>{file.path}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </nav>
+      )}
       <section className="project-page" aria-label="Страница проекта">
-        <header className="project-page-bar">
-          <button
-            type="button"
-            className="project-toc-button"
-            aria-expanded={navOpen}
-            aria-controls={`project-tree-${revision.id}`}
-            onClick={() => setNavOpen((was) => !was)}
-          >
-            <ListTree aria-hidden="true" /> Содержание
-          </button>
-          <ol className="project-crumbs" aria-label="Где вы в проекте">
-            {crumbs.map((part, index) => (
-              <li key={index} aria-current={index === crumbs.length - 1 ? "page" : undefined}>
-                {part}
-              </li>
-            ))}
-          </ol>
-        </header>
+        {!single && (
+          <header className="project-page-bar">
+            <button
+              type="button"
+              className="project-toc-button"
+              aria-expanded={navOpen}
+              aria-controls={`project-tree-${revision.id}`}
+              onClick={() => setNavOpen((was) => !was)}
+            >
+              <ListTree aria-hidden="true" /> Содержание
+            </button>
+            <ol className="project-crumbs" aria-label="Где вы в проекте">
+              {crumbs.map((part, index) => (
+                <li key={index} aria-current={index === crumbs.length - 1 ? "page" : undefined}>
+                  {part}
+                </li>
+              ))}
+            </ol>
+          </header>
+        )}
         {stale && (
           <p className="project-stale" role="status">
             Просмотр закончился.{" "}
