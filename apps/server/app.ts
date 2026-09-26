@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
@@ -342,6 +343,10 @@ export async function createApp() {
   // Product metrics for the operator: the same token (metrics.ts).
   registerOpsMetrics(app);
   app.get("/api/capabilities", async () => ({
+    // Extensions with a part in the web app (docs/specs/EXTENSIONS.md).
+    extensions: extensions()
+      .filter((extension) => extension.web?.script)
+      .map((extension) => extension.name),
     profile: "file-v1",
     formats: MIME,
     maxBytes: MAX_BYTES,
@@ -1383,6 +1388,20 @@ export async function createApp() {
   await registerPublishApi(app);
   // Extensions register after the core (docs/specs/EXTENSIONS.md).
   if (!extensionsConfigured()) await loadExtensions(config.POLKA_EXTENSIONS);
+  // Their web modules, read once: /ext/<name>.js from this origin (script-src 'self').
+  const webModules = new Map<string, Buffer>();
+  for (const extension of extensions())
+    if (extension.web?.script) webModules.set(extension.name, await readFile(extension.web.script));
+  app.get("/ext/:file", async (req, reply) => {
+    const match = /^([a-z][a-z0-9-]{1,30})\.js$/.exec((req.params as { file: string }).file);
+    const module = match && webModules.get(match[1]!);
+    if (!module) throw missing();
+    return reply
+      .type("text/javascript; charset=utf-8")
+      .header("cache-control", "no-cache")
+      .header("x-content-type-options", "nosniff")
+      .send(module);
+  });
   for (const extension of extensions())
     await extension.register?.(app, {
       identity: (req, options) => identity(req, options ?? {}),
