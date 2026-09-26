@@ -14,6 +14,14 @@ import { Button, TextField, Notice } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
 import { SignupConsent } from "./consent.tsx";
 import {
+  OutsideDomainHelp,
+  SPAM_HINT,
+  codeScreenNotice,
+  outsideSignupDomains,
+  signupDomainsPhrase,
+  typedDomainOf,
+} from "./code-help.tsx";
+import {
   ProviderButtons,
   providerErrorMessage,
 } from "../../features/provider-sign-in/index.tsx";
@@ -149,13 +157,23 @@ export function Signup() {
   const passwordOnly = mode === "disabled";
   // The domain rule is public; the server answers the same either way, so
   // only the interface can say in advance why a code may not come.
-  const typedDomain = email.includes("@")
-    ? email.slice(email.lastIndexOf("@") + 1).trim().toLowerCase()
-    : "";
-  const outsideDomains =
-    signupDomains !== "any" &&
-    /\.[a-z]{2,}$/.test(typedDomain) &&
-    !signupDomains.includes(typedDomain);
+  const typedDomain = typedDomainOf(email);
+  const outsideDomains = outsideSignupDomains(typedDomain, signupDomains);
+  // After «Получить код» too: the code screen keeps saying why it may not come.
+  const codeNotice = challenge
+    ? codeScreenNotice({
+        email,
+        delivery: challenge.delivery,
+        inviteOnly,
+        signupDomains,
+        loginDomains,
+      })
+    : null;
+  const changeAddress = () => {
+    setChallenge(null);
+    setCode("");
+    setError("");
+  };
   const providerNames = providers
     .filter((p) => p.id !== "oidc" && p.signup)
     .map((p) => p.name)
@@ -190,6 +208,8 @@ export function Signup() {
             : challenge
               ? challenge.delivery === "local"
                 ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
+                : codeNotice?.kind === "never"
+                ? `Код на ${email} не придёт.`
                 : outsideDomains && !inviteOnly
                 ? `Если у адреса ${email} уже есть полка, код придёт в течение минуты. Он действует 10 минут.`
                 : inviteOnly
@@ -286,7 +306,20 @@ export function Signup() {
               вручную, без публичной регистрации.
             </p>
           </div>
-        ) : mode !== "loading" && mode !== "error" && !askNew ? (
+        ) : null}
+        {!passwordOnly && codeNotice && !askNew && (
+          <OutsideDomainHelp
+            notice={codeNotice}
+            providers={providers}
+            next={next}
+            busy={busy}
+            onChangeAddress={changeAddress}
+          />
+        )}
+        {passwordOnly ? null : mode !== "loading" &&
+          mode !== "error" &&
+          !askNew &&
+          codeNotice?.kind !== "never" ? (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -320,6 +353,9 @@ export function Signup() {
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 />
+                {challenge.delivery !== "local" && (
+                  <p className="onboard-fine code-spam-hint">{SPAM_HINT}</p>
+                )}
                 {challenge.delivery === "local" && (
                   <p className="onboard-note">
                     Файл для разработчика:{" "}
@@ -333,7 +369,7 @@ export function Signup() {
               <Notice>
                 {loginDomains === "signup"
                   ? `Код на адреса ${typedDomain} на этой Полке не отправляется.`
-                  : `Новые полки по почте открываются на адресах Яндекса, Mail.ru, Рамблера и VK. Если на ${typedDomain} полки у вас ещё нет, код не придёт.`}
+                  : `Новые полки по почте открываются ${signupDomainsPhrase(signupDomains)}. Если на ${typedDomain} полки у вас ещё нет, код не придёт.`}
                 {providerNames
                   ? ` Войдите с ${providerNames} — полка откроется сразу.`
                   : ""}
@@ -359,16 +395,11 @@ export function Signup() {
                     ? `Повторить через ${cooldown} с`
                     : "Отправить новый код"}
                 </Button>
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setChallenge(null);
-                    setError("");
-                  }}
-                >
-                  Другая почта
-                </Button>
+                {!codeNotice && (
+                  <Button type="button" disabled={busy} onClick={changeAddress}>
+                    Изменить адрес
+                  </Button>
+                )}
               </div>
             )}
           </form>

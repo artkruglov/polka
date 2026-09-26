@@ -14,6 +14,13 @@
 .onboard form > .ui-notice { margin: 0; }
 .onboard-secondary { display: flex; flex-wrap: wrap; gap: 10px; }
 .onboard-password { display: grid; gap: 20px; }
+/* The code screen for an address outside the sign-up list (pages/signup/code-help.tsx). */
+.code-help { display: grid; gap: 14px; margin-bottom: 18px; }
+.code-help .ui-notice { margin: 0; }
+.code-help > .ui-button { justify-self: start; }
+.code-help-lead { margin: 4px 0 -4px; color: var(--ink-2); font-size: var(--text-sm); }
+.code-help .idp-or { margin: 8px 0 0; }
+.onboard form > .code-spam-hint { margin: -8px 0 0; }
 .onboard-fine { color: var(--muted-2); font-size: var(--text-sm); line-height: 1.6; }
 .onboard-consent { margin-top: 16px; }
 .onboard-consent a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }

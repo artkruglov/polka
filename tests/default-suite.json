@@ -119,5 +119,7 @@
   "tests/bookmarklet.test.ts",
   "tests/extension-oauth.test.ts",
   "tests/extensions.test.ts",
-  "tests/agent-scope.test.ts"
+  "tests/agent-scope.test.ts",
+  "tests/login-code-mail.test.ts",
+  "tests/signup-code-help.test.ts"
 ]

@@ -14,6 +14,7 @@ import { assertNotDisposable, signupSpamKeys } from "./signup-guards.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
 import { domainAllowed } from "./mail-domains.ts";
+import { HOSTED_MAIL_SITE, loginCodeMail } from "./mail-templates/login-code.ts";
 import {
   LOCAL_MAIL_DIRECTORY,
   LOCAL_MAIL_NOTICE,
@@ -158,6 +159,18 @@ export async function deliverLocalEmailChallenge(
   });
 }
 
+/** The code letter with this installation's address and contact in the footer. */
+function loginCodeLetter(code: string) {
+  const hosted = config.APP_ORIGIN === HOSTED_MAIL_SITE.origin;
+  return loginCodeMail({
+    code,
+    origin: config.APP_ORIGIN,
+    contact: hosted
+      ? HOSTED_MAIL_SITE.contact
+      : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
+  });
+}
+
 export async function beginEmailLogin(email: string, ip: string) {
   if (config.MAIL_MODE === "disabled")
     throw new Problem(
@@ -221,11 +234,7 @@ export async function beginEmailLogin(email: string, ip: string) {
           expiresInSeconds: 600,
         };
     } else {
-      await sendSmtpMail({
-        to: email,
-        subject: "Код для входа в Полку",
-        text: `Ваш код: ${code.slice(0, 4)} ${code.slice(4)}\nОн действует 10 минут. Если вы не запрашивали вход, проигнорируйте это письмо.`,
-      });
+      await sendSmtpMail({ to: email, ...loginCodeLetter(code) });
     }
   } catch {
     await db.query(
