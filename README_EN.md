@@ -91,12 +91,26 @@ Each time Полка opens: sign in to your shelf (or start without signing up) 
       Links last 1, 7 or 30 days, can be revoked at any time, and recipients can report them. Private works stay out of the catalogue and search indexes.
     </td>
     <td valign="top">
-      <h4>Shelf and templates</h4>
-      Folders, search, trash and restore. Team template libraries have roles, invitations and an audit log. An agent reads a pinned template version and builds new work from it.
+      <h4>Shelf, folders and search</h4>
+      Covers with the heading and the opening lines, full-text search across works, trash. The agent sorts the shelf into folders itself ("sort my shelf") and saves new work into the fitting folder. Team template libraries.
     </td>
     <td valign="top">
       <h4>Data stays in Russia</h4>
       polochka.app runs on Yandex Cloud: the database, files, backups and e-mail are stored and processed in Russia (<a href="docs/legal/privacy.md">privacy policy</a>, Russian). Or run Полка yourself.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Projects</h4>
+      A folder of linked pages — HTML, Markdown and React components — becomes one work: a file tree, links between pages that work, and one link for the whole project.
+    </td>
+    <td valign="top">
+      <h4>Department shelves</h4>
+      A department gets its own shelf: members and roles, the agent picks the shelf when it connects, links and discussions, a company admin page.
+    </td>
+    <td valign="top">
+      <h4>Calm moderation</h4>
+      Rules and models check every link. A prototype with a sign-in screen or a research page with hundreds of sources isn't held; recipients see a warning only when a page asks for a password, a code or card details.
     </td>
   </tr>
 </table>
@@ -195,7 +209,7 @@ More on the [For companies](https://polochka.app/enterprise) page and in [COMMER
 - **Interactive mode needs a separate viewer domain.** Without one (`HTML_LIVE_MODE=disabled`), recipients see a static page with scripts off.
 - **Claude/ChatGPT links can't be imported.** Save through the connector, download the file or paste the code.
 - **Downloaded copies can't be revoked.** Revoking a link closes it, but it can't delete what a recipient already downloaded.
-- **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. There's no SAML or SCIM.
+- **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID, Google or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. There's no SAML or SCIM.
 - **URL import** (`URL_IMPORT_ENABLED`, experimental, server and MCP only; the web app no longer offers it) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
 
 More: [docs/faq.md](docs/faq.md) (Russian).
@@ -205,7 +219,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 > [!NOTE]
 > **Current release — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open, up to 50 new shelves a day. The API, database schema and UI may still change.
 
-What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): a "Save to Полка" browser extension and running the pilot (monitoring, alerts, a restore drill); later a Telegram bot, author publications, team accounts and SSO.
+What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 
 ## Documentation
 
