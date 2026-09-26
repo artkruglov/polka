@@ -99,7 +99,7 @@ async function describe(token: ModerationToken) {
   const {
     rows: [row],
   } = await db.query(
-    `SELECT share.id,share.tenant_id,share.moderation,share.moderation_reason,
+    `SELECT share.id,share.tenant_id,share.moderation,share.moderation_reason,share.created_by,
        (NOT share.revoked AND share.expires_at>now()) AS live,share.expires_at,
        artifact.title,revision.mime,revision.html_profile,revision.number,
        revision.phishing_signals,revision.content_filter,
@@ -114,7 +114,7 @@ async function describe(token: ModerationToken) {
     [token.shareId],
   );
   if (!row) throw missing();
-  const standing = await authorStanding(db, row.tenant_id);
+  const standing = await authorStanding(db, row.tenant_id, row.created_by);
   const csam = csamSignal(undefined, row);
   const findings = findingsOf(row.content_filter, modelView(row.content_filter));
   const { rows: reports } = await db.query(

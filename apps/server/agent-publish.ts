@@ -184,7 +184,7 @@ async function publishExpiry(
     [actor.tenantId, key],
   );
   if (prior?.days) return { days: Number(prior.days) };
-  const standing = await authorStanding(db, actor.tenantId);
+  const standing = await authorStanding(db, actor.tenantId, actor.accountId);
   return { days: standing.trusted ? requested : NEW_ACCOUNT_MAX_DAYS };
 }
 
