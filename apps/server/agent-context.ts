@@ -1,3 +1,4 @@
+import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -224,9 +225,12 @@ export const sourceForAgent = (actor: ServiceActor, input: unknown) => {
   const run = q.libraryId
     ? withFreshServiceActorTransaction
     : withServiceActorTransaction;
-  return run(actor, "source:read", (c, a) =>
-    readAgentSource(c, { id: a.accountId, tenant: a.tenantId }, q),
-  );
+  return run(actor, "source:read", async (c, a) => {
+    const owner = { id: a.accountId, tenant: a.tenantId, connectionId: a.connectionId };
+    // An agent limited to folders reads only works in them (agent-scope.ts).
+    if (!q.libraryId) await assertArtifactInAgentScope(c, owner, q.artifactId);
+    return readAgentSource(c, owner, q);
+  });
 };
 export async function listTemplates(
   c: PoolClient,
@@ -308,6 +312,7 @@ export async function publishTemplate(
   input: unknown,
 ) {
   const v = templateReleaseInput.parse(input);
+  await assertArtifactInAgentScope(c, actor, artifactId);
   const context = await buildAgentContext(c, actor, {
     artifactId,
     revisionId: v.revisionId,

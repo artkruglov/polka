@@ -59,7 +59,7 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
   return withServiceActorTransaction(actor, "read", async (c, verified) => {
     const work = await workCommentsInTransaction(
       c,
-      { id: verified.accountId, tenant: verified.tenantId },
+      { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId },
       artifactId,
     );
     const {

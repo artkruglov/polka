@@ -18,7 +18,7 @@ import {
   type AgentConnection,
   type AgentScope,
 } from "../../../../../packages/contracts/index.ts";
-import { ApiError, client } from "../../shared/api/client.ts";
+import { ApiError, client, request } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 import {
@@ -49,6 +49,7 @@ import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
+import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
 
 const clientDefaults = {
   http: "Скрипт (HTTP API)",
@@ -152,6 +153,16 @@ export function AgentConnections() {
   // Which shelf a new token works on (docs/specs/TEAM_SHELVES.md): "" is one's own.
   const [tokenShelf, setTokenShelf] = useState("");
   const shelves = useShelves(!!account && !account.provisional);
+  // Extensions' parts of this page (docs/specs/EXTENSIONS.md).
+  const connectionSections = useSlot("agent-connection");
+  useEffect(() => {
+    if (!account) return;
+    request<{ extensions?: string[] }>("/capabilities")
+      .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
+      .catch(() => {
+        // The page works without them.
+      });
+  }, [account]);
   const teamShelves = shelves.items.filter((shelf) => shelf.kind === "team");
   const tokenRole = teamShelves.find((shelf) => shelf.id === tokenShelf)?.role;
   const [scopes, setScopes] = useState<AgentScope[]>(["capture", "context"]);
@@ -981,6 +992,13 @@ export function AgentConnections() {
                         {connection.shelf ? `Полка «${connection.shelf.name}» · ` : ""}
                         Может: {scopeLabels(connection.scopes)}
                       </p>
+                      {/* Extensions' sections for one connection, e.g. the folder it is limited to. */}
+                      {isActive(connection) &&
+                        connectionSections.map(({ id, Component }) => (
+                          <div key={id} className="agent-extension">
+                            <Component connection={{ id: connection.id, name: connection.name, kind: connection.kind, shelf: connection.shelf }} />
+                          </div>
+                        ))}
                       {connection.kind === "oauth" &&
                         isActive(connection) &&
                         connection.scopes.includes("sign_in") && (

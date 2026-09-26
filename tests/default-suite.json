@@ -118,5 +118,6 @@
   "tests/extension-extract.test.ts",
   "tests/bookmarklet.test.ts",
   "tests/extension-oauth.test.ts",
-  "tests/extensions.test.ts"
+  "tests/extensions.test.ts",
+  "tests/agent-scope.test.ts"
 ]

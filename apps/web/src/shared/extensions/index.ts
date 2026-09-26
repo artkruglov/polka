@@ -8,7 +8,6 @@ import type { ExtensionHost, ExtensionSlot } from "../../../../../packages/contr
 import { request } from "../api/client.ts";
 import { Badge, Button, Notice, SelectField, TextField } from "../ui/controls.tsx";
 import { ErrorNotice } from "../ui/index.tsx";
-import "./styles.css";
 
 /** A vertical stack with the app's spacing. */
 function Stack({ children, as = "div", ...props }: { children?: React.ReactNode; as?: "div" | "form" } & Record<string, unknown>) {
@@ -44,7 +43,7 @@ function Checkbox({
 const Fine = ({ children }: { children?: React.ReactNode }) =>
   React.createElement("small", { className: "ext-fine" }, children);
 
-export type ExtensionSection = { id: string; title: string; Component: React.ComponentType };
+export type ExtensionSection = { id: string; title: string; Component: React.ComponentType<any> };
 
 const sections = new Map<ExtensionSlot, ExtensionSection[]>();
 const listeners = new Set<() => void>();

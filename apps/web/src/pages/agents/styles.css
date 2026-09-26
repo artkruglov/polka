@@ -165,3 +165,4 @@
   .agent-details div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .agent-secret-row { flex-direction: column; }
 }
+.agent-extension { margin-top: 8px; }

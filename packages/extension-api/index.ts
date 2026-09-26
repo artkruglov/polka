@@ -21,6 +21,9 @@ export type ExtensionActor = {
 
 export type ShelfInfo = { id: string; kind: "personal" | "team"; name: string | null };
 
+/** An agent's connection; a project upload token is reported as the connection that asked for it. */
+export type AgentConnectionInfo = { connectionId: string; accountId: string; tenantId: string };
+
 /** A link about to be issued (or moved to a new version). */
 export type LinkIssue = {
   actor: { id: string; tenant: string };
@@ -86,6 +89,13 @@ export interface PolkaExtension {
     linkIssue?(issue: LinkIssue, c: PoolClient): Promise<LinkIssueDecision>;
     /** Before a link opens for a recipient. */
     linkOpen?(open: LinkOpen, c: PoolClient): Promise<LinkOpenDecision>;
+    /**
+     * The folders an agent's connection is limited to, or null for the whole
+     * shelf. The core applies it to every agent action (apps/server/
+     * agent-scope.ts): works outside are «not found», new works go to these
+     * folders, and the agent does not manage folders.
+     */
+    agentScope?(connection: AgentConnectionInfo, c: Pick<PoolClient, "query">): Promise<{ folderIds: string[] } | null>;
   };
   /** After the fact, outside the transaction: integrations and journals. Errors are logged, never thrown. */
   onEvent?(event: PolkaEvent): Promise<void> | void;
