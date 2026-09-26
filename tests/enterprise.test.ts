@@ -275,8 +275,11 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(html.includes('id="request"'));
   // What the first pilots shape is not built: every card of it says so.
   const next = html.slice(html.indexOf("enterprise-next"), html.indexOf('id="deploy"'));
-  assert.ok(next.includes("Этого пока нет в коде"));
+  // The commercial edition: what is ready says so, the rest is in progress.
+  assert.ok(next.includes("Коммерческая редакция"));
+  assert.ok(next.includes("облако polochka.app работает на открытом ядре") || next.includes("Облако polochka.app работает на открытом ядре"));
   assert.equal((next.match(/в разработке/g) ?? []).length, 3);
+  assert.equal((next.match(/>есть</g) ?? []).length, 1);
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
   // Department shelves work (TEAM_SHELVES stages 1–4): the page lists them
   // among what works, links out of them as still in progress, and what comes
@@ -288,7 +291,8 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(works.includes("Комментарии к ссылкам с полки отдела"));
   assert.ok(html.includes("На общей полке отдела — да"));
   assert.ok(!next.includes("Общие полки отделов"));
-  assert.ok(next.indexOf("Доступ и контроль") < next.indexOf("Встраивание в ваши системы"));
+  assert.ok(next.indexOf("Контроль ссылок") < next.indexOf("Встраивание в ваши системы"));
+  assert.doesNotMatch(html, /Лицензионного ключа нет/);
   assert.doesNotMatch(html, /Одна полка для всего/);
   const questions = (html.match(/<details>/g) ?? []).length;
   assert.ok(questions >= 5 && questions <= 7, String(questions));
