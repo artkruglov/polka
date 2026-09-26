@@ -141,7 +141,8 @@ export function commentSignals(body: string) {
   const secret = signals.some((signal) => signal.startsWith("secret:"));
   return {
     signals,
-    // A request for a secret next to a brand, urgency or a link.
+    // A page's phishing (an off-page channel, a look-alike domain), or a
+    // request for a secret next to a link.
     suspicious:
       isSuspicious(signals) || (secret && signals.includes("link:address")),
   };

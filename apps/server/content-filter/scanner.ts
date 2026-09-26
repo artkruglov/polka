@@ -20,6 +20,7 @@ import {
   scanCode,
   type CodeSignal,
 } from "./code-signals.ts";
+import { fraudRelevant, fraudScoreOf } from "./fraud-score.ts";
 
 export type CategoryHit = {
   score: number;
@@ -565,16 +566,23 @@ export class ContentScanner {
   }
 }
 
-/** Phishing signals (phishing-signals.ts) as the fraud category. */
+/**
+ * Phishing signals (phishing-signals.ts) as the fraud category: only a page
+ * that sends the reader off the page (content-filter/fraud-score.ts). Terms:
+ * the channels first, so the operator sees why.
+ */
 export function fraudScore(signals: readonly string[]): CategoryHit | null {
-  const has = (prefix: string) => signals.some((signal) => signal.startsWith(prefix));
   if (signals.includes("scan:incomplete"))
     return { score: 6, terms: ["страница не прочитана за отведённое время"] };
-  if (!has("secret:") || !(has("brand:") || has("urgency:"))) return null;
-  const score = 4 + (has("brand:") ? 3 : 0) + (has("urgency:") ? 3 : 0);
+  const { score } = fraudScoreOf(signals);
+  if (!score) return null;
+  const rank = (signal: string) =>
+    signal.startsWith("channel:") ? 0 : signal.startsWith("lookalike:") ? 1 : 2;
   return {
     score,
-    terms: signals.filter((signal) => !signal.startsWith("link:")).slice(0, MAX_TERMS),
+    terms: fraudRelevant(signals)
+      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+      .slice(0, MAX_TERMS),
   };
 }
 

@@ -199,6 +199,10 @@ export function findingsOf(
  * strict (the hosted default, with SHARE_MODERATION=auto): anything flagged
  * waits, whoever the author is; with CONTENT_FILTER_AUTOBLOCK the rules' high
  * score blocks too. Every block disables the author until review.
+ *
+ * Both modes: fraud that only the rules found in a trusted author's work is
+ * reported, not held, once a model reads it and does not call it fraud (the
+ * model's answer decides the open link again).
  */
 export function decideContent(input: {
   filter: FilterResult | null | undefined;
@@ -227,8 +231,12 @@ export function decideContent(input: {
     unchecked: model.state === "pending" || model.state === "unchecked",
   };
   let bestFinding: CategoryFinding | null = null;
+  // A model reads (or has read) this work and did not call it fraud.
+  const modelClearsFraud =
+    model.state !== "none" &&
+    !model.findings.some((finding) => finding.category === "fraud");
   for (const finding of findings) {
-    const action = actionFor(finding, input, rulesFound);
+    const action = actionFor(finding, input, rulesFound, modelClearsFraud);
     const better =
       !bestFinding ||
       RANK[action] > RANK[best.action] ||
@@ -260,6 +268,7 @@ function actionFor(
   finding: CategoryFinding,
   input: { standing: Standing; mode: FilterMode; autoblock: boolean },
   rulesFound: ReadonlySet<Category>,
+  modelClearsFraud = false,
 ): ContentAction {
   const severe = SEVERE.has(finding.category);
   if (finding.source === "model") {
@@ -282,6 +291,12 @@ function actionFor(
   // several escape attempts block; fewer signals wait for review.
   if (finding.category === "malicious_code")
     return finding.level === "high" ? "block" : "hold";
+  // Phishing found by the rules alone in a trusted author's work, which a
+  // model has read without calling it fraud (or will read: its answer
+  // decides the open link again and holds it if it confirms fraud). The
+  // link works and the operator is told, in either mode.
+  if (finding.category === "fraud" && input.standing.trusted && modelClearsFraud)
+    return "notify";
   if (input.mode === "strict") {
     if (input.autoblock && finding.level === "high") return "block";
     return "hold";
