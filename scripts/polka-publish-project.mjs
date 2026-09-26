@@ -43,12 +43,20 @@ const SKIP_FILE = /^\.|\.pyc$/;
 // A path segment Полка accepts (packages/contracts/bundle.ts).
 const SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 const ENTRY_ORDER = ["README.md", "index.md", "index.html"];
+// React source: a project shows files as they are and does not build it, so
+// a lone component goes to Полка as a component, which it builds.
+const COMPONENT = /\.[jt]sx$/i;
+const MAX_COMPONENT = 7_000_000;
 
 const USAGE = `Usage: polka-publish-project <folder> [options]
 
 Publishes a folder of linked pages (Markdown, HTML with its CSS, scripts,
 fonts and pictures) to your Полка shelf as one project: a tree of pages with
 links between them. Prints the project's address on the shelf.
+
+A folder whose only page is one React component (App.jsx or App.tsx, without
+README.md, index.md or index.html) is saved as that component instead: Полка
+builds it and it runs. A project does not build .jsx/.tsx files.
 
 Options:
   --title <text>     Title on the shelf (default: the first heading of README.md or the folder name)
@@ -80,6 +88,7 @@ class CliError extends Error {
 async function walk(root, exclude) {
   const files = [];
   const skipped = [];
+  const components = [];
   async function visit(dir) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
@@ -101,7 +110,8 @@ async function walk(root, exclude) {
       if (SKIP_FILE.test(entry.name) || exclude.has(entry.name)) continue;
       const mime = MIME[extname(entry.name).toLowerCase()];
       const size = (await stat(full)).size;
-      if (!mime) skipped.push({ path, reason: "unsupported type" });
+      if (COMPONENT.test(entry.name)) components.push({ path, full, size });
+      else if (!mime) skipped.push({ path, reason: "unsupported type" });
       else if (!path.split("/").every((segment) => SEGMENT.test(segment) && !segment.endsWith(".")) || path.split("/").length > 8 || path.length > 200)
         skipped.push({ path, reason: "name outside [A-Za-z0-9._-] or too deep" });
       else if (size > MAX_FILE) skipped.push({ path, reason: `larger than 5 MB (${(size / 1048576).toFixed(1)} MB)` });
@@ -123,7 +133,8 @@ async function walk(root, exclude) {
       kept.push(file);
     }
   }
-  return { files: kept, skipped };
+  components.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { files: kept, skipped, components };
 }
 
 function titleOf(markdown) {
@@ -190,6 +201,56 @@ async function call(endpoint, token, method, path, body, contentType) {
   throw lastError;
 }
 
+/** One component from the folder, through POST /api/v1/publish: Полка builds it. */
+async function publishComponent(values, file, skipped) {
+  if (file.size > MAX_COMPONENT) throw new CliError(`${file.path} is over 7 MB; a component holds at most 7 MB.`, 2);
+  const source = await readFile(file.full, "utf8");
+  if (!source.trim()) throw new CliError(`${file.path} is empty.`, 2);
+  const report = {
+    as: "component",
+    title: (values.title?.trim() || basename(file.path, extname(file.path))).slice(0, 160),
+    entry: file.path,
+    files: 1,
+    megabytes: Number((file.size / 1048576).toFixed(1)),
+    skipped,
+  };
+  if (values["dry-run"]) {
+    console.log(JSON.stringify({ ...report, dryRun: true, paths: [file.path] }, null, 2));
+    return;
+  }
+  const token = process.env.POLKA_TOKEN;
+  if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
+  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
+  if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
+  if (!!values.artifact !== !!values["base-revision"])
+    throw new CliError("A new version needs both --artifact and --base-revision.", 2);
+  const key = values.key ?? randomUUID();
+  const receipt = await call(endpoint, token, "POST", "/api/v1/publish", JSON.stringify({
+    key,
+    title: report.title,
+    component: source,
+    componentLanguage: /\.tsx$/i.test(file.path) ? "tsx" : "jsx",
+    ...(values.folder ? { folderId: values.folder } : {}),
+    ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
+  }), "application/json");
+  const result = {
+    ...report,
+    artifactId: receipt.artifactId,
+    revisionId: receipt.revisionId,
+    shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}`,
+    ...(receipt.url ? { url: receipt.url } : {}),
+  };
+  if (values.json) console.log(JSON.stringify(result, null, 2));
+  else {
+    console.log(`Saved «${result.title}» as a React component: Полка builds it, and it runs.`);
+    console.log(result.url ?? result.shelfUrl);
+    if (skipped.length) {
+      console.log(`Skipped ${skipped.length}:`);
+      for (const item of skipped) console.log(`  ${item.path} — ${item.reason}`);
+    }
+  }
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -215,7 +276,23 @@ async function main() {
   const root = positionals[0];
   const info = await stat(root).catch(() => null);
   if (!info?.isDirectory()) throw new CliError(`${root} is not a folder`, 2);
-  const { files, skipped } = await walk(root, new Set(values.exclude ?? []));
+  const { files, skipped, components } = await walk(root, new Set(values.exclude ?? []));
+  const hasEntry = values.entry
+    ? files.some((file) => file.path === values.entry)
+    : ENTRY_ORDER.some((name) => files.some((file) => file.path === name));
+  const wanted = values.entry && components.find((file) => file.path === values.entry);
+  if (wanted || (!hasEntry && components.length === 1))
+    return publishComponent(values, wanted || components[0], skipped);
+  if (!hasEntry && components.length > 1)
+    throw new CliError(
+      `This folder is a React app (${components.length} .jsx/.tsx files): a project shows files as they are and does not build React.\n` +
+        "  - one self-contained component: pass --entry <file.jsx> to save it as a component, which Полка builds;\n" +
+        "  - an app of many files: build it with relative paths (e.g. vite build --base ./) and publish the output folder (dist).",
+      2,
+    );
+  // Beside pages, React source is kept out: a project would not run it.
+  for (const file of components)
+    skipped.push({ path: file.path, reason: "React source: a project does not build it; save it alone with --entry" });
   if (!files.length) throw new CliError("Nothing to publish in this folder.", 2);
   if (files.length > MAX_FILES)
     throw new CliError(`${files.length} files; a project holds at most ${MAX_FILES}. Use --exclude.`, 2);
