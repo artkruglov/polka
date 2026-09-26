@@ -62,13 +62,13 @@ const AUTH_METHODS = [
 type AuthMethod = (typeof AUTH_METHODS)[number];
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** Checked by default on the consent page; the rest stay opt-in. */
-export const OAUTH_DEFAULT_SCOPES: readonly AgentScope[] = [
-  "context",
-  "capture",
-  "read",
-  "share",
-];
+/**
+ * Checked by default on the consent page: everything offered (owner's decision,
+ * 25.09.2026 — an agent should just work). Every action behind them is
+ * reversible (trash, empty folders only, new versions keep old ones), and a
+ * sign-in link opens only a temporary shelf; the owner can untick any of them.
+ */
+export const OAUTH_DEFAULT_SCOPES: readonly AgentScope[] = AGENT_SCOPES;
 export const OAUTH_BROWSER_COOKIE = "polka_oauth";
 export const OAUTH_MACHINE_PATHS = new Set([
   "/oauth/token",
@@ -212,7 +212,7 @@ export function offeredScopes(scope: string | undefined): AgentScope[] {
   );
   if (!known.size) return [...AGENT_SCOPES];
   known.add("context");
-  // Offered on every consent page (unticked): the owner decides.
+  // Offered on every consent page (ticked, like the rest): the owner decides.
   known.add("sign_in");
   return AGENT_SCOPES.filter((item) => known.has(item));
 }
