@@ -11,6 +11,7 @@ import {
   Ban,
   Info,
   LockKeyhole,
+  Maximize2,
   MessageCircle,
   TriangleAlert,
   UserRound,
@@ -237,6 +238,19 @@ export function RecipientScreen({
       <Flag /> <span>Пожаловаться</span>
     </Button>
   );
+  // The work alone on the screen: no bars, no navigation (Esc returns).
+  const fullscreen =
+    typeof document !== "undefined" && document.fullscreenEnabled ? (
+      <Button
+        variant="quiet"
+        className="recipient-fullscreen"
+        aria-label="На весь экран"
+        title="На весь экран"
+        onClick={() => void convert.stageRef.current?.requestFullscreen?.()}
+      >
+        <Maximize2 /> <span>На весь экран</span>
+      </Button>
+    ) : null;
   if (error?.kind === "signIn")
     return (
       <RecipientFrame account={account}>
@@ -356,7 +370,12 @@ export function RecipientScreen({
       title={viewer.title}
       // Plain text is set as an article with its own h1; the bar repeats it quietly.
       titleAsHeading={!plainText}
-      actions={report}
+      actions={
+        <>
+          {kind !== "text" && fullscreen}
+          {report}
+        </>
+      }
       note={<AboutThisPage viewer={viewer} />}
       comments={comments}
       kind={kind}
@@ -419,7 +438,7 @@ export function RecipientScreen({
 
 /**
  * Document first. A guest gets no app navigation at all; a signed-in viewer
- * keeps the shell. Either way the work fills the rest of the viewport under a
+ * keeps the shell with its rail folded. Either way the work fills the rest of the viewport under a
  * thin bar: title and actions, then the one-line note about the page.
  */
 function RecipientFrame({
@@ -480,6 +499,8 @@ function RecipientFrame({
       current="shelf"
       account={account}
       bare={guest}
+      // A signed-in viewer keeps the app, folded to icons: the work comes first.
+      foldableRail
       className="recipient recipient-reader"
     >
       <div ref={frame} className="recipient-frame" data-guest={guest || undefined}>
