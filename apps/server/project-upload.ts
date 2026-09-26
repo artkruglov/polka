@@ -214,6 +214,6 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
     command: `curl -fsSLO ${cli} && POLKA_TOKEN=${token} node polka-publish-project.mjs <folder> --dry-run`,
     pageCliUrl: pageCli,
     pageCommand: `curl -fsSLO ${pageCli} && POLKA_TOKEN=${token} node polka-publish.mjs <App.jsx|page.html> --title "<title>"`,
-    note: `The token works only for uploads (a project, or one page or React component), for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message. Projects show pages without running scripts; a React component (App.jsx/App.tsx) through polka-publish.mjs runs interactively.`,
+    note: `The token works only for uploads (a project, or one page or React component), for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message. A project does not build .jsx/.tsx or load scripts from CDNs; a folder whose only page is one React component is saved as that component and runs, and so does a component sent through polka-publish.mjs.`,
   };
 }

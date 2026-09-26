@@ -238,6 +238,61 @@ test("the CLI publishes a folder, skipping what a reader never opens", async () 
   }
 });
 
+const runCli = (args: string[], env: Record<string, string>) =>
+  new Promise<{ code: number; out: string; err: string }>((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], { env: { ...process.env, ...env } });
+    let out = "", err = "";
+    child.stdout.on("data", (chunk) => (out += chunk));
+    child.stderr.on("data", (chunk) => (err += chunk));
+    child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
+  });
+
+test("the CLI saves a folder of one React component as that component, which Полка builds", async () => {
+  const root = join(scratch, "prototype");
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, "App.jsx"), "export default function App() { return <h1>Прототип</h1>; }\n");
+  await writeFile(join(root, "notes.txt"), "заметки");
+  const dry = await runCli([root, "--dry-run"], {});
+  assert.equal(dry.code, 0, dry.err);
+  assert.deepEqual({ as: JSON.parse(dry.out).as, entry: JSON.parse(dry.out).entry }, { as: "component", entry: "App.jsx" });
+  // Components are saved where pages may run (HTML_LIVE_ENABLED).
+  const live = config.HTML_LIVE_ENABLED;
+  config.HTML_LIVE_ENABLED = true;
+  await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  try {
+    const endpoint = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+    const run = await runCli([root, "--json", "--title", "Прототип"], { POLKA_TOKEN: await token(), POLKA_ENDPOINT: endpoint });
+    assert.equal(run.code, 0, run.err);
+    const result = JSON.parse(run.out);
+    assert.equal(result.as, "component");
+    const { rows: [saved] } = await db.query(
+      "SELECT a.title, r.manifest->>'runtime' AS runtime FROM revisions r JOIN artifacts a ON a.id=r.artifact_id WHERE r.id=$1",
+      [result.revisionId],
+    );
+    assert.equal(saved.title, "Прототип");
+    assert.notEqual(saved.runtime, "project-v1");
+  } finally {
+    config.HTML_LIVE_ENABLED = live;
+    await new Promise<void>((resolve) => app.server.close(() => resolve()));
+  }
+});
+
+test("the CLI explains a React app of many files instead of saving a blank project", async () => {
+  const root = join(scratch, "react-app");
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(join(root, "src", "App.tsx"), "export default function App() { return null; }\n");
+  await writeFile(join(root, "src", "Card.tsx"), "export function Card() { return null; }\n");
+  const run = await runCli([root, "--dry-run"], {});
+  assert.equal(run.code, 2);
+  assert.match(run.err, /React app \(2 \.jsx\/\.tsx files\)/);
+  assert.match(run.err, /vite build --base \.\//);
+  // Beside a README the component is kept out, with the reason.
+  await writeFile(join(root, "README.md"), "# Приложение\n");
+  const beside = await runCli([root, "--dry-run"], {});
+  assert.equal(beside.code, 0, beside.err);
+  assert.ok(JSON.parse(beside.out).skipped.some((item: any) => item.path === "src/App.tsx" && /React source/.test(item.reason)));
+});
+
 test("the models read every document and page of a project", async () => {
   const { finalized } = await upload(await token(), research(), "README.md");
   const receipt = finalized!.json();
