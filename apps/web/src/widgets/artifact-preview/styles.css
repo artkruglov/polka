@@ -53,6 +53,7 @@
 
 /* A project (docs/specs/PROJECTS.md): the tree of its pages beside the page. */
 .project-view { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 0; min-height: min(78vh, 900px); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; background: var(--canvas); }
+.project-view--single { grid-template-columns: minmax(0, 1fr); }
 .project-tree { overflow: auto; max-height: min(78vh, 900px); padding: 12px 8px 16px; border-right: 1px solid var(--line); background: var(--soft); font-size: var(--text-sm); }
 .project-tree-summary { margin: 2px 10px 10px; color: var(--muted-2); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }
 .project-tree-list { margin: 0; padding: 0; list-style: none; }
