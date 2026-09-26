@@ -42,13 +42,13 @@ test("every page shell offers the source code and the page for companies", () =>
     assert.match(read(`apps/web/src/pages/${page}/index.tsx`), /<LegalLinks \/>/, page);
 });
 
-test("/pricing: the cloud, self-hosting under the AGPL and a commercial license", () => {
+test("/pricing: the cloud, self-hosting the open core under the AGPL and the commercial edition", () => {
   const html = render(React.createElement(PricingPlans));
   assert.equal((html.match(/<article>/g) ?? []).length, 3);
   for (const heading of [
     "Облако polochka.app",
     "Своя установка",
-    "Коммерческая лицензия",
+    "Коммерческая редакция",
   ])
     assert.ok(html.includes(`<h2>${heading}</h2>`), heading);
   assert.match(html, /Бесплатно на время пилота/);
