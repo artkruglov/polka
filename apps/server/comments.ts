@@ -154,16 +154,20 @@ async function lockShareByToken(c: PoolClient, token: string) {
   const tokenHash = sha256(token);
   const candidate = (
     await c.query(
-      `SELECT share.id,share.tenant_id,share.artifact_id,account.id AS owner_id
+      `SELECT share.id,share.tenant_id,share.artifact_id,account.id AS owner_id,
+              tenant.kind
        FROM shares share
        JOIN tenants tenant ON tenant.id=share.tenant_id
-       JOIN accounts account ON account.id=tenant.owner_id
+       JOIN accounts account ON account.id=COALESCE(tenant.owner_id,share.created_by)
        WHERE share.token_hash=$1 AND NOT account.disabled
          AND account.deletion_requested_at IS NULL`,
       [tokenHash],
     )
   ).rows[0];
   if (!candidate) throw missing();
+  // Comments on links out of department shelves come later (TEAM_SHELVES.md):
+  // the recipient sees a discussion that is off, not an error.
+  if (candidate.kind === "team") throw commentsOff();
   const context = await lockShare(
     c,
     { id: candidate.owner_id, tenant: candidate.tenant_id },

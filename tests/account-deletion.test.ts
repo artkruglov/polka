@@ -767,7 +767,7 @@ test("confirmed deletion atomically closes access while preserving source data f
           `SELECT 1 FROM pg_stat_activity
            WHERE datname=current_database() AND pid<>pg_backend_pid() AND state='active'
              AND wait_event_type='Lock'
-             AND query LIKE '%SELECT * FROM tenants%owner_id%FOR SHARE%'`,
+             AND query LIKE '%SELECT kind,owner_id FROM tenants%FOR SHARE%'`,
         )
       ).rowCount;
       if (!blocked) await new Promise((resolve) => setTimeout(resolve, 25));

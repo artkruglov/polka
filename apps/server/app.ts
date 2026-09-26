@@ -131,7 +131,12 @@ import {
   createAccountDeletionPlan,
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
-import { lockActiveOwnerTenant } from "./owner-state.ts";
+import {
+  answeringAccountSql,
+  linkShelfOpenSql,
+  lockActiveOwnerTenant,
+  lockAnsweringAccount,
+} from "./owner-state.ts";
 import {
   adminCompanyShelf,
   findEmployee,
@@ -181,15 +186,6 @@ const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
  */
 const SHELF = { shelf: true } as const;
 
-/** Links out of a department shelf come in stage 5; say so instead of «not found». */
-async function refuseTeamShelfLinks(req: FastifyRequest) {
-  if ((await identity(req, SHELF)).role !== "owner")
-    throw new Problem(
-      409,
-      "conflict",
-      "Ссылки из полок отделов появятся позже. Пока работу можно открыть коллегам на самой полке.",
-    );
-}
 
 export async function createApp() {
   const app = Fastify({
@@ -297,8 +293,11 @@ export async function createApp() {
   });
   const id = (req: any) => uuid.parse(req.params.id);
   // Agents, tokens and deletion need a real sign-in, not an agent's link.
-  const strongIdentity = async (req: Parameters<typeof identity>[0]) => {
-    const actor = await identity(req);
+  const strongIdentity = async (
+    req: Parameters<typeof identity>[0],
+    options: Parameters<typeof identity>[1] = {},
+  ) => {
+    const actor = await identity(req, options);
     assertStrongSession(actor);
     return actor;
   };
@@ -1182,15 +1181,16 @@ export async function createApp() {
       withComments(req),
     );
   });
+  // Links follow the shelf: on a department shelf they are a curator's
+  // (docs/specs/TEAM_SHELVES.md, stage 5).
   app.post("/api/artifacts/:id/share", async (req) => {
-    await refuseTeamShelfLinks(req);
-    return enableOwnerShare(await strongIdentity(req), id(req), req.body);
+    return enableOwnerShare(await strongIdentity(req, SHELF), id(req), req.body);
   });
   app.post("/api/shares/:id/revoke", async (req) => {
-    return revokeOwnerShare(await strongIdentity(req), id(req));
+    return revokeOwnerShare(await strongIdentity(req, SHELF), id(req));
   });
   app.post("/api/shares/:id/publish", async (req) => {
-    return publishOwnerShare(await strongIdentity(req), id(req), req.body);
+    return publishOwnerShare(await strongIdentity(req, SHELF), id(req), req.body);
   });
   app.post("/api/resolve", async (req) => {
     const { token } = z
@@ -1230,19 +1230,23 @@ export async function createApp() {
                     AND account.created_at>now()-$2*interval '1 day') AS author_is_new
            FROM shares share
            JOIN tenants tenant ON tenant.id=share.tenant_id
-           JOIN accounts account ON account.id=tenant.owner_id
+           JOIN accounts account ON account.id=${answeringAccountSql("tenant", "share")}
+           AND ${linkShelfOpenSql("tenant")}
            WHERE share.token_hash=$1 AND NOT account.disabled
              AND account.deletion_requested_at IS NULL`,
           [tokenHash, config.NEW_ACCOUNT_DAYS],
         )
       ).rows[0];
       if (!candidate) throw missing();
-      await lockActiveOwnerTenant(
-        c,
-        { id: candidate.account_id, tenant: candidate.tenant_id },
-        missing,
-        "SHARE",
-      );
+      // The shelf and the account that answers for the link (owner or issuer).
+      if (
+        !(await lockAnsweringAccount(
+          c,
+          { id: candidate.account_id, tenant: candidate.tenant_id },
+          "SHARE",
+        ))
+      )
+        throw missing();
       const artifact = (
         await c.query(
           "SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
@@ -1299,7 +1303,8 @@ export async function createApp() {
          JOIN revisions r ON r.id=g.revision_id
          JOIN artifacts a ON a.id=r.artifact_id AND a.id=s.artifact_id
          JOIN tenants tenant ON tenant.id=s.tenant_id
-         JOIN accounts account ON account.id=tenant.owner_id
+         JOIN accounts account ON account.id=${answeringAccountSql("tenant", "s")}
+           AND ${linkShelfOpenSql("tenant")}
          LEFT JOIN revision_derivatives d ON d.id=g.derivative_id AND d.revision_id=g.revision_id
          WHERE g.hash=$1 AND g.expires_at>now() AND NOT s.revoked AND s.expires_at>now()
            AND a.trashed_at IS NULL
