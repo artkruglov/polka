@@ -5,6 +5,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { PolkaEvent, PolkaExtension } from "../packages/extension-api/index.ts";
 import { loadExtensions, useExtensions } from "../apps/server/extensions.ts";
 import { createAccount } from "../apps/server/auth.ts";
@@ -15,6 +16,7 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 const events: PolkaEvent[] = [];
 const policy: PolkaExtension = {
   name: "policy",
+  web: { script: fileURLToPath(new URL("./fixtures/extension-web.js", import.meta.url)) },
   register(app, context) {
     app.get("/api/ext/policy/whoami", async (req) => ({ name: (await context.identity(req)).name }));
   },
@@ -94,6 +96,17 @@ test("an extension's policy refuses a link and asks recipients to sign in; event
 
   const whoami = await call("GET", "/api/ext/policy/whoami");
   assert.equal(whoami.json().name, owner.name);
+});
+
+test("an extension's web module is served from this origin and named in capabilities", async () => {
+  const capabilities = (await call("GET", "/api/capabilities", undefined, false)).json();
+  assert.deepEqual(capabilities.extensions, ["policy"]);
+  const module = await call("GET", "/ext/policy.js", undefined, false);
+  assert.equal(module.statusCode, 200);
+  assert.match(String(module.headers["content-type"]), /text\/javascript/);
+  assert.match(module.body, /addSection\("company-admin"/);
+  assert.equal((await call("GET", "/ext/other.js", undefined, false)).statusCode, 404);
+  assert.equal((await call("GET", "/ext/..%2Fsecret.js", undefined, false)).statusCode, 404);
 });
 
 test("an extension loads by path and must name itself", async () => {
