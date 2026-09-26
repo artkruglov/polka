@@ -76,7 +76,7 @@ test("a component from disk compiles, and its new version keeps the link", async
   assert.equal(first.statusCode, 200, first.body);
   const v1 = publishResponseSchema.parse(first.json());
   assert.equal(v1.state, "shared");
-  assert.equal(v1.interactiveReady, true, v1.interactiveUnavailableReason);
+  assert.equal(v1.interactiveReady, true, v1.interactiveUnavailableReason ?? "");
   assert.equal(v1.scriptsRunForRecipients, true);
 
   const second = await publish({
@@ -92,7 +92,7 @@ test("a component from disk compiles, and its new version keeps the link", async
   assert.notEqual(v2.revisionId, v1.revisionId);
   assert.equal(v2.url, v1.url);
   assert.equal(v2.linkMoved, true);
-  assert.equal(v2.interactiveReady, true, v2.interactiveUnavailableReason);
+  assert.equal(v2.interactiveReady, true, v2.interactiveUnavailableReason ?? "");
   assert.equal(v2.scriptsRunForRecipients, true);
   const {
     rows: [share],
