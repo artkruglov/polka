@@ -164,7 +164,7 @@ export function withShelf(url: string) {
  * body is read, so an HTML error page from a proxy never reaches the UI raw.
  * A network failure becomes ApiError with status 0.
  */
-async function send(url: string, init: RequestInit): Promise<Response> {
+export async function send(url: string, init: RequestInit = {}): Promise<Response> {
   let res: Response;
   if (shelf && url.startsWith("/api/")) {
     const headers = new Headers(init.headers);
@@ -174,7 +174,8 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   try {
     res = await fetch(url, init);
   } catch (e) {
-    if (init.signal?.aborted) throw e;
+    // A cancelled request stays a cancellation, for the caller to ignore.
+    if (init.signal?.aborted || (e instanceof Error && e.name === "AbortError")) throw e;
     throw new ApiError(0, "network", fallbackMessage(0));
   }
   if (res.ok) return res;
