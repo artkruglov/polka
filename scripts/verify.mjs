@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// Everything to check before a push or a deploy, run locally in order. The
-// GitHub Actions workflow (.github/workflows/verify.yml) runs the same steps
-// through --only, so the licence allowlist and the gitleaks digest live here
-// alone. Needs the local infrastructure (npm run infra:up) and .env. Stops at
+// Everything to check before a push or a deploy, run locally in order (the
+// project has no hosted CI by the owner's choice). --only runs chosen steps;
+// the licence allowlist and the gitleaks digest live here alone. Needs the local infrastructure (npm run infra:up) and .env. Stops at
 // the first failing step.
 //
 //   npm run verify                 all steps

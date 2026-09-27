@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-09-27
+
 ### Security
 
 Исправления по итогам проверки безопасности перед запуском.
@@ -22,7 +24,6 @@
 
 ### Added
 
-- **CI в GitHub Actions** ([.github/workflows/verify.yml](.github/workflows/verify.yml)): на каждый push в `main` и pull request — те же шаги, что `npm run verify` (типы, ссылки, сборка, основной и live-наборы, права ролей БД, лицензии, gitleaks, сборка и smoke-проверка образов). Шаги вызываются через `node scripts/verify.mjs --only=<шаг>`, поэтому список лицензий и digest gitleaks заданы в одном месте; `--print-steps` перечисляет шаги. Проверка renderer — только вручную. Dependabot еженедельно предлагает обновления npm, Docker и actions, minor и patch — одним pull request.
 - **`npm run local:setup` включает локальный интерактивный просмотр** (`HTML_LIVE_MODE=local`, только loopback) и записывает в `.env` порты и имя compose-проекта (`POLKA_LOCAL_PROJECT`, `POLKA_LOCAL_PG_PORT`, `POLKA_LOCAL_S3_PORT`, `PORT`, `VIEWER_PORT`; по умолчанию прежние). Второй клон поднимается рядом с первым, если при setup задать другие значения. В конце setup печатает всю оставшуюся последовательность команд.
 
 ### Changed
@@ -274,7 +275,6 @@
 ### Changed
 
 - Пустая полка объясняет, что здесь появится, вместо набора одинаковых кнопок; после «Разрешить» страница согласия говорит вернуться к агенту.
-- **Облачного CI больше нет.** GitHub Actions и Dependabot убраны из репозитория. Все прежние проверки CI выполняет локально `npm run verify` (типы, ссылки, сборка, основной и live-наборы, права ролей БД, лицензии, секреты в истории, сборка образов); `--quick` — быстрый вариант.
 
 ### Security
 
@@ -307,7 +307,6 @@
 ### Changed
 
 - Образ содержит `NOTICE` и `THIRD_PARTY_NOTICES.md`.
-- CI собирает backup-образ и проверяет hosted compose; Dependabot следит за npm, actions и образами.
 - Документация сверена с кодом: OAuth `resource` необязателен, коннектор проверен с Claude.ai (ChatGPT — ещё нет), приёмка изоляции viewer на hosted пока не записана, runbook первого запуска hosted дополнен.
 
 ### Known issues
@@ -373,7 +372,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/artkruglov/polka/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/artkruglov/polka/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/artkruglov/polka/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/artkruglov/polka/compare/v0.1.0-rc.5...v0.1.0

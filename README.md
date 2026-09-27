@@ -23,7 +23,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="Проверки CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="Лицензия AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/коммерческая_лицензия-есть-1f4fff" alt="Есть коммерческая лицензия"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=версия&color=0f1420" alt="Последняя версия"></a>
@@ -187,7 +186,7 @@ npm run check          # слои frontend + TypeScript
 npm run build
 npm test               # временные БД и bucket, после прогона удаляются
 npm test -- --live     # наборы с включённым локальным viewer
-npm run verify         # всё перед push; то же проверяет GitHub Actions (.github/workflows/verify.yml)
+npm run verify         # всё перед push: облачного CI нет, проверки локальные
 ```
 
 </details>
@@ -222,7 +221,7 @@ npm run verify         # всё перед push; то же проверяет Gi
 ## Статус
 
 > [!NOTE]
-> **Текущий релиз — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). Hosted-пилот работает на https://polochka.app; регистрация по почте открыта для любого адреса, до 50 новых полок в сутки. API, схема БД и интерфейс ещё могут меняться.
+> **Текущий релиз — `v0.3.1`** ([CHANGELOG](CHANGELOG.md)). Hosted-пилот работает на https://polochka.app; регистрация по почте открыта для любого адреса, до 50 новых полок в сутки. API, схема БД и интерфейс ещё могут меняться.
 
 Что сделано и что нет — [docs/status.md](docs/status.md); что дальше — [docs/roadmap.md](docs/roadmap.md): эксплуатация пилота (проверка восстановления, инструкция обновления), публикация расширения браузера и проверка коннектора ChatGPT, затем варианты работы, снимок полки на дату и `polka pull/push`; позже — Telegram-бот, SAML и SCIM.
 

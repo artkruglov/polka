@@ -62,5 +62,5 @@
 
 ## Проверки
 
-- `npm test` запускает интеграционные тесты на временных PostgreSQL и S3, `npm test -- --live` — наборы с включённым viewer. `npm run verify` запускает это вместе с проверкой прав ролей БД, лицензий зависимостей, секретов в истории и сборкой Docker-образов. Те же проверки идут в GitHub Actions ([.github/workflows/verify.yml](../.github/workflows/verify.yml)) на каждый push в `main` и pull request; перед деплоем `npm run verify` по-прежнему запускается локально.
+- `npm test` запускает интеграционные тесты на временных PostgreSQL и S3, `npm test -- --live` — наборы с включённым viewer. `npm run verify` запускает это вместе с проверкой прав ролей БД, лицензий зависимостей, секретов в истории и сборкой Docker-образов. Облачного CI нет, проверки локальные; перед деплоем `npm run verify` по-прежнему запускается локально.
 - Быстрый запуск из [README](../README.md) проверен 22.09.2026 на чистом клоне: `npm ci` → `local:setup` → `infra:up` → `db:migrate` → `storage:bootstrap-local` → `account:create` → `build` → `dev`. После этого сработали `/api/health`, главная страница и вход созданным аккаунтом.

@@ -3,7 +3,7 @@
 **Как проверено / How it was tested**
 
 **Проверки / Checks**
-- [ ] `npm run verify` локально и зелёный CI (`verify` в GitHub Actions) / `npm run verify` locally and a green `verify` workflow
+- [ ] `npm run verify` локально / `npm run verify` locally
 - [ ] Новая миграция и `deploy/runtime-grants.sql` (если меняется схема) / New migration and grants (if the schema changes)
 - [ ] Документация и `CHANGELOG.md` обновлены / Docs and `CHANGELOG.md` updated
 
