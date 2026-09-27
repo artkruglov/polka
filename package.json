@@ -68,6 +68,7 @@
     "maintenance:watch": "tsx --env-file=.env scripts/maintenance-runner.ts",
     "check:layers": "node scripts/check-frontend-layers.mjs",
     "check:links": "node scripts/check-doc-links.mjs",
+    "ops:uptime": "node scripts/ci/uptime.mjs",
     "gen:skill": "tsx --env-file=.env scripts/gen-skill.ts",
     "verify": "node scripts/verify.mjs",
     "test:live": "tsx --env-file=.env scripts/test-isolated.ts --live",
