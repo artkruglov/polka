@@ -13,11 +13,11 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import {
   SEARCH_MATCH_END,
   SEARCH_MATCH_START,
-  type Artifact,
-} from "../../../../../packages/contracts/index.ts";
+} from "../../../../../packages/contracts/constants.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { accessLabel, date, isLinked } from "../../entities/artifact/format.ts";
 import { CardCover, useCover } from "./CardCover.tsx";

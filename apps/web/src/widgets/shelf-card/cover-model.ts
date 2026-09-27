@@ -4,7 +4,7 @@ import { hueOf, kindOf } from "../../entities/artifact/format.ts";
 import {
   SEARCH_MATCH_END,
   SEARCH_MATCH_START,
-} from "../../../../../packages/contracts/index.ts";
+} from "../../../../../packages/contracts/constants.ts";
 
 const WORD = /[\p{L}\p{N}]/u;
 
@@ -28,6 +28,11 @@ export function snippetBesideTitle(snippet: string, title: string): string | nul
       if (ch.toLocaleLowerCase("ru") !== titleChars[matched]) return snippet;
       matched++;
     }
+  }
+  // A mark that closes right after the title closes with it.
+  while (open && chars[index] === SEARCH_MATCH_END) {
+    open = false;
+    index++;
   }
   // The title must end on a word boundary, not inside a longer word.
   if (matched < titleChars.length || WORD.test(chars[index] ?? "")) return snippet;

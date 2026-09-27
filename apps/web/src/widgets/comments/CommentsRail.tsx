@@ -20,13 +20,15 @@ import {
 import {
   COMMENT_MAX_CHARS,
   REACTIONS,
-  type CommentAnchor,
-  type CommentThread,
-  type CommentView,
-  type CommentViewer,
-  type Reaction,
-  type ReactionGroup,
-  type ShareDiscussion,
+} from "../../../../../packages/contracts/comment-constants.ts";
+import type {
+  CommentAnchor,
+  CommentThread,
+  CommentView,
+  CommentViewer,
+  Reaction,
+  ReactionGroup,
+  ShareDiscussion,
 } from "../../../../../packages/contracts/comments.ts";
 import { dateTime } from "../../entities/artifact/format.ts";
 import { Button } from "../../shared/ui/controls.tsx";
