@@ -83,11 +83,53 @@ let profile = "";
 let socket: WebSocket | undefined;
 let nextId = 0;
 const pending = new Map<number, (message: any) => void>();
-const contexts: Array<{ id: number; frameId: string; isDefault: boolean }> = [];
+// Execution contexts as Chrome reports them (Runtime.executionContextCreated),
+// for the page and for every auto-attached frame target (by session).
+const contexts: Array<{
+  id: number;
+  frameId: string;
+  isDefault: boolean;
+  sessionId?: string;
+}> = [];
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+// Upper bound for anything the browser should do; a slow machine may use all
+// of it, a fast one returns as soon as the event arrives.
+const CEILING_MS = 20_000;
 
-// Chrome puts a sandboxed frame in its own process: it is a separate target
-// the page session auto-attaches to (flat sessions), not a child frame.
+// One-shot waiters on CDP events (messages without an id).
+const waiters = new Set<(message: any) => void>();
+function nextEvent(match: (message: any) => boolean, timeout: number) {
+  return new Promise<any>((resolve) => {
+    const done = (value: any) => {
+      clearTimeout(timer);
+      waiters.delete(waiter);
+      resolve(value);
+    };
+    const waiter = (message: any) => {
+      if (match(message)) done(message);
+    };
+    const timer = setTimeout(() => done(undefined), timeout);
+    waiters.add(waiter);
+  });
+}
+
+/** Re-reads `read` until `ok`, up to the ceiling; for effects with no CDP event. */
+async function until<T>(
+  read: () => Promise<T>,
+  ok: (value: T) => boolean,
+  label: string,
+) {
+  const deadline = Date.now() + CEILING_MS;
+  for (;;) {
+    const value = await read();
+    if (ok(value)) return value;
+    if (Date.now() > deadline) throw new Error(`timed out: ${label}`);
+    await wait(25);
+  }
+}
+
+// Chrome may put a sandboxed frame in its own process: a separate target the
+// page session auto-attaches to (flat sessions), with its own contexts.
 const frameSessions: string[] = [];
 
 function send(
@@ -130,39 +172,54 @@ async function evaluate(
   return value.result?.value;
 }
 
-/** Opens the shell around one frame; returns evaluators for both. */
+/** Opens the shell around one frame; returns evaluators for both. Waits for
+ * the page's load event (it includes the frame's load) and for the frame's
+ * own execution context, reported by Chrome, showing the frame's document. */
 async function open(frame: string, sandbox: string) {
   const name = `/parent-${frames.size}-${Date.now()}`;
+  const url = `${viewer()}${frame}`;
   frames.set(name, {
-    body: Buffer.from(parentPage(`${viewer()}${frame}`, sandbox)),
+    body: Buffer.from(parentPage(url, sandbox)),
     csp: "",
   });
   contexts.length = 0;
   frameSessions.length = 0;
+  const loaded = nextEvent(
+    (message) => message.method === "Page.loadEventFired" && !message.sessionId,
+    CEILING_MS,
+  );
   await send("Page.navigate", { url: `${shell()}${name}` });
-  // Either an out-of-process frame target, or a child frame of the page.
-  let session: string | undefined;
-  let child: string | undefined;
-  for (let attempt = 0; attempt < 50 && !session && !child; attempt++) {
-    await wait(100);
-    session = frameSessions.at(-1);
-    const tree = await send("Page.getFrameTree");
-    child = tree.frameTree.childFrames?.[0]?.frame?.id;
-  }
-  assert.ok(session || child, "the frame did not load");
-  let context: number | undefined;
-  if (!session)
-    for (let attempt = 0; attempt < 50 && !context; attempt++) {
-      await wait(100);
-      context = contexts.find(
-        (item) => item.frameId === child && item.isDefault,
-      )?.id;
+  assert.ok(await loaded, "the page did not load");
+  const top: string = (await send("Page.getFrameTree")).frameTree.frame.id;
+  // The frame's default context: in the page's session for an in-process
+  // frame, in the frame target's session for an out-of-process one (whose
+  // frame is not in the page's frame tree). A context of the frame's initial
+  // about:blank is replaced by the document's.
+  const deadline = Date.now() + CEILING_MS;
+  let context: (typeof contexts)[number] | undefined;
+  while (!context) {
+    const candidate = contexts.findLast(
+      (item) => item.frameId !== top && item.isDefault,
+    );
+    if (candidate) {
+      const shown = await evaluate(
+        "location.href + ' ' + document.readyState",
+        candidate.id,
+        candidate.sessionId,
+      ).catch(() => "");
+      if (shown === `${url} complete`) context = candidate;
     }
-  assert.ok(session || context, "no execution context for the frame");
-  await wait(600);
+    if (context) break;
+    assert.ok(Date.now() < deadline, "no execution context for the frame");
+    await nextEvent(
+      (message) => message.method === "Runtime.executionContextCreated",
+      250,
+    );
+  }
+  const { id, sessionId } = context;
   return {
     parent: (expression: string) => evaluate(expression),
-    frame: (expression: string) => evaluate(expression, context, session),
+    frame: (expression: string) => evaluate(expression, id, sessionId),
   };
 }
 
@@ -243,15 +300,15 @@ before(async () => {
     if (message.id && pending.has(message.id)) {
       pending.get(message.id)!(message);
       pending.delete(message.id);
-    } else if (
-      message.method === "Runtime.executionContextCreated" &&
-      !message.sessionId
-    ) {
+      return;
+    }
+    if (message.method === "Runtime.executionContextCreated") {
       const context = message.params.context;
       contexts.push({
         id: context.id,
         frameId: context.auxData?.frameId,
         isDefault: !!context.auxData?.isDefault,
+        sessionId: message.sessionId,
       });
     } else if (
       message.method === "Target.attachedToTarget" &&
@@ -263,6 +320,7 @@ before(async () => {
         .then(() => frameSessions.push(sessionId))
         .catch(() => {});
     }
+    for (const waiter of [...waiters]) waiter(message);
   });
   await send("Page.enable");
   await send("Runtime.enable");
@@ -315,6 +373,11 @@ test(
       STATIC_OVERLAY_SANDBOX,
     );
     // The overlay announced itself to the shell, from the opaque origin.
+    await until(
+      () => parent(fromFrame(".length")),
+      (count) => count > 0,
+      "the overlay's first message",
+    );
     assert.deepEqual(
       await parent(fromFrame(".map((m) => [m.origin, m.data.type])[0]")),
       ["null", "polka:ready"],
@@ -371,7 +434,18 @@ test(
       { id: "dup", exact: "Выручка выросла на 12%.", prefix: "", suffix: "" },
       { id: "gone", exact: "Этого текста нет", prefix: "", suffix: "" }
     ] })`);
-    await wait(500);
+    // Positions are also reported without anchors (layout, scroll): wait for
+    // the report that follows these anchors.
+    await until(
+      () =>
+        parent(
+          fromFrame(
+            ".filter((m) => m.data.type === 'polka:positions').map((m) => Object.keys(m.data.positions).join()).at(-1) ?? ''",
+          ),
+        ),
+      (keys) => keys === "a1",
+      "positions of the anchors",
+    );
     assert.deepEqual(
       await parent(
         fromFrame(
@@ -402,7 +476,11 @@ test(
       getSelection().removeAllRanges();
       getSelection().addRange(range);
     })()`);
-    await wait(500);
+    await until(
+      () => parent(fromFrame(".filter((m) => m.data.type === 'polka:selection').length")),
+      (count) => count > 0,
+      "polka:selection",
+    );
     const selection = await parent(
       fromFrame(
         ".filter((m) => m.data.type === 'polka:selection').at(-1).data",
@@ -413,8 +491,11 @@ test(
     assert.equal(selection.anchor.suffix.startsWith(". Итоги"), true);
     assert.ok(selection.rect.bottom > selection.rect.top);
     await parent(`window.toFrame({ type: "polka:clearSelection" })`);
-    await wait(100);
-    assert.equal(await frame("getSelection().isCollapsed"), true);
+    await until(
+      () => frame("getSelection().isCollapsed"),
+      (collapsed) => collapsed === true,
+      "the selection cleared",
+    );
   },
 );
 
@@ -488,7 +569,11 @@ test(
     await parent(`window.toFrame({ type: "polka:anchors", anchors: [
       { id: "a1", exact: "выручка выросла", prefix: "", suffix: "" }
     ] })`);
-    await wait(500);
+    await until(
+      () => parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').length")),
+      (count) => count > 0,
+      "polka:resolved",
+    );
     assert.deepEqual(
       await parent(
         fromFrame(
@@ -502,14 +587,15 @@ test(
     await frame(
       "document.getElementById('root').textContent = 'Новый текст без цитаты'",
     );
-    await wait(600);
-    assert.deepEqual(
-      await parent(
-        fromFrame(
-          ".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing",
+    await until(
+      () =>
+        parent(
+          fromFrame(
+            ".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing.join()",
+          ),
         ),
-      ),
-      ["a1"],
+      (missing) => missing === "a1",
+      "the overlay follows the re-rendered text",
     );
   },
 );
