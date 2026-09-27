@@ -74,11 +74,11 @@ test("every client has a card and a panel; the commands are the ones /connect gi
   }
   assert.equal(
     CLAUDE_PLUGIN_INSTALL,
-    "claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka",
+    "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka",
   );
   assert.equal(
     CODEX_PLUGIN_INSTALL,
-    "codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka",
+    "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
   );
   // Codex is not the ChatGPT website; the card and the panel both say so.
   assert.match(
@@ -112,7 +112,7 @@ test("the setup panel renders numbered steps with copy buttons for one client", 
   assert.match(claudeCode, /Подключи Полку: https:\/\/polochka\.app\/connect/);
   assert.match(
     claudeCode,
-    /claude plugin marketplace add artkruglov\/polka &amp;&amp; claude plugin install polka@polka/,
+    /claude plugin marketplace add artkruglov\/polka-plugin &amp;&amp; claude plugin install polka@polka/,
   );
   assert.match(claudeCode, /plugin:polka:polka/);
   assert.doesNotMatch(claudeCode, /Как только агент подключится/);

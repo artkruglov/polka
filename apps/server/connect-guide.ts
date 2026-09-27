@@ -7,7 +7,7 @@
  */
 
 /** The skill package `npx skills add …` installs (skills/polka/SKILL.md). */
-export const SKILL_REPO = "artkruglov/polka";
+export const SKILL_REPO = "artkruglov/polka-plugin";
 export const SKILL_INSTALL = `npx skills add ${SKILL_REPO}`;
 /**
  * The same repository is a plugin marketplace for Claude Code and Codex: one

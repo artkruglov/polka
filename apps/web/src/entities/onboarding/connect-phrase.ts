@@ -21,14 +21,14 @@ export function clientHints(origin: string): ClientHint[] {
       id: "codex",
       client: "Codex",
       command:
-        "codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka",
+        "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
       note: "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka.",
     },
     {
       id: "claude-code",
       client: "Claude Code",
       command:
-        "claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka",
+        "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka",
       note: "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate.",
     },
     {

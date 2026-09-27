@@ -50,7 +50,7 @@ https://polochka.app/mcp
 **Claude Code** — плагин: MCP-сервер и скиллы Полки одной командой.
 
 ```sh
-claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka
+claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka
 ```
 
 Затем в Claude Code: `/mcp` → `plugin:polka:polka` → Authenticate.
@@ -58,11 +58,11 @@ claude plugin marketplace add artkruglov/polka && claude plugin install polka@po
 **Codex** — тот же плагин для Codex.
 
 ```sh
-codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka
+codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka
 codex mcp login polka
 ```
 
-**Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…): удалённый сервер `https://polochka.app/mcp` (Streamable HTTP, вход OAuth) и скилл `npx skills add artkruglov/polka`.
+**Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…): удалённый сервер `https://polochka.app/mcp` (Streamable HTTP, вход OAuth) и скилл `npx skills add artkruglov/polka-plugin`.
 
 Везде откроется Полка: войдите в свою полку (или «Начать без регистрации») и нажмите «Разрешить» — токены и пароли через агента не проходят. Или просто скажите агенту в терминале: `Подключи Полку: https://polochka.app/connect`. Файл с компьютера можно загрузить и без агента. Подробно — [подключение агентов](docs/connect-agents.md).
 
@@ -153,7 +153,7 @@ flowchart LR
 
 С Claude.ai сохранение и ссылка проверены вручную, с ChatGPT — ещё нет ([состояние](docs/status.md)). Сохранения по ссылке на артефакт Claude или ChatGPT нет: сервер не может забрать его сам ([FAQ](docs/faq.md#почему-нельзя-вставить-ссылку-на-артефакт-claude-или-chatgpt)), поэтому работу передаёт агент.
 
-**Для разработчиков агентов:** репозиторий — маркетплейс плагинов Claude Code и Codex (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`), скилл отдельно — `npx skills add artkruglov/polka`, справка для агентов — [/llms.txt](https://polochka.app/llms.txt), HTTP API — [/openapi.json](https://polochka.app/openapi.json).
+**Для разработчиков агентов:** плагин Claude Code и Codex (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`) лежит здесь, а ставится из лёгкой копии [artkruglov/polka-plugin](https://github.com/artkruglov/polka-plugin), её собирает `scripts/plugin-repo.mjs`, скилл отдельно — `npx skills add artkruglov/polka-plugin`, справка для агентов — [/llms.txt](https://polochka.app/llms.txt), HTTP API — [/openapi.json](https://polochka.app/openapi.json).
 
 ## Быстрый запуск
 
