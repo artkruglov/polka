@@ -459,7 +459,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
 ## Мониторинг
 
-Внешней системы алертов в репозитории нет. Есть то, что к ней подключается:
+Отдельной системы мониторинга не нужно: статус оператора и скрипт внешней проверки с алертами в Telegram или webhook.
 
 - **Статус оператора** — `GET /api/ops/status` с `Authorization: Bearer <OPS_STATUS_TOKEN>`. Задайте `OPS_STATUS_TOKEN` в `hosted.env` (`openssl rand -hex 32`) и примените `docker compose --env-file hosted.env up -d`; без токена маршрута нет (404). Ответ 200 или 503 и проверки:
 
@@ -470,7 +470,26 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
   | `backup` | самому новому дампу в `BACKUP_BUCKET/postgres/` 26 часов и больше, или дампов нет. Ключу приложения нужно право на листинг этого бакета |
   | `disk` | свободно меньше 10% диска VM |
 
-- **Скрипт внешней проверки** — `node scripts/ci/uptime.mjs` с `APP_ORIGIN`, `VIEWER_ORIGIN` и `OPS_STATUS_TOKEN`: приложение и viewer отвечают, TLS-сертификатам больше 14 дней, статус зелёный. Код выхода 1 при сбое. Запускайте его по расписанию с машины вне VM (cron, любой uptime-сервис с проверкой HTTP-кода статуса).
+- **Скрипт внешней проверки** — `npm run ops:uptime` (`node scripts/ci/uptime.mjs`, без зависимостей, Node 20+) с `APP_ORIGIN`, `VIEWER_ORIGIN` и `OPS_STATUS_TOKEN`: приложение и viewer отвечают, TLS-сертификатам больше 14 дней, статус зелёный. Каждая проверка — до трёх попыток с паузой 20 секунд. Код выхода 1 при сбое.
+- **Алерты.** Скрипт пишет, когда набор упавших проверок меняется: «не проходит — app health, operator status» и «все проверки снова проходят». Повторных сообщений, пока ничего не изменилось, нет; недоставленное сообщение отправится при следующем запуске. Куда:
+  - `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` — бот Telegram (создайте его у @BotFather, напишите ему и возьмите `chat.id` из `https://api.telegram.org/bot<токен>/getUpdates`);
+  - `ALERT_WEBHOOK_URL` — `POST {"text": …}` (входящий webhook Slack, Mattermost и совместимых).
+
+  Прошлый результат хранится в `~/.polka-uptime-state.json` (другой путь — `UPTIME_STATE_FILE`). В сообщениях только имена проверок, без ответов сервера.
+
+Запускайте с машины **вне** VM, иначе падение VM никто не заметит. Пример для cron раз в 5 минут (переменные — в файле с правами `600`):
+
+```sh
+# /home/ops/polka-uptime.env:
+# APP_ORIGIN=https://polka.example.com
+# VIEWER_ORIGIN=https://polka-viewer.example.net
+# OPS_STATUS_TOKEN=…
+# TELEGRAM_BOT_TOKEN=…
+# TELEGRAM_CHAT_ID=…
+*/5 * * * * cd /home/ops/polka && node --env-file=/home/ops/polka-uptime.env scripts/ci/uptime.mjs >/dev/null 2>&1
+```
+
+Для проверки алерта один раз запустите скрипт с заведомо неверным `APP_ORIGIN` и тем же `UPTIME_STATE_FILE` — придёт сообщение о сбое, при следующем обычном запуске — о восстановлении.
 
 ## Метрики продукта
 
