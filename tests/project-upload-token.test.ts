@@ -148,12 +148,32 @@ test("an agent gets a token and the command, and the token uploads a project", a
   assert.equal(publish.statusCode, 200, publish.body);
   // The parent had no link permission, so neither has its token.
   assert.equal(publish.json().url, null);
+  // The parent cannot read sources, so neither can its token: no pull.
+  assert.equal(issued.pullCommand, undefined);
+  assert.equal((await api(issued.token, "GET", `/api/v1/works/${done.json().artifactId}/files`)).statusCode, 403);
   // Nothing else: no status, no MCP.
   assert.equal((await api(issued.token, "GET", `/api/v1/status/${done.json().artifactId}`)).statusCode, 401);
   assert.equal((await mcp(issued.token, "tools/list")).status, 401);
   // The owner's agents page lists the connection, not its tokens.
   const listed = await app.inject({ method: "GET", url: "/api/agent-connections", headers: { origin, cookie } });
   assert.ok(listed.json().every((item: any) => !item.name.startsWith("Загрузка проекта")));
+});
+
+test("a connection that reads sources gets a token that pulls too", async () => {
+  const parent = await connect(["context", "capture", "revise", "source:read"]);
+  const issued = await uploadToken(parent.secret);
+  assert.ok(issued.pullCommand.includes(`${origin}/api/v1/cli/polka-pull.mjs`));
+  const begun = await beginProject(issued.token);
+  const { uploadId, files } = begun.json();
+  await api(issued.token, "PUT", `/api/v1/projects/${uploadId}/files/${files[0].index}`, readme);
+  const done = (await api(issued.token, "POST", `/api/v1/projects/${uploadId}/finalize`)).json();
+  const listed = await api(issued.token, "GET", `/api/v1/works/${done.artifactId}/files`);
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.deepEqual(listed.json().files.map((file: any) => file.path), ["README.md"]);
+  const bytes = await api(issued.token, "GET", `/api/v1/works/${done.artifactId}/revisions/${done.revisionId}/files/0`);
+  assert.equal(bytes.statusCode, 200, bytes.body);
+  assert.deepEqual(bytes.rawPayload, readme);
+  assert.equal((await app.inject({ method: "GET", url: "/api/v1/cli/polka-pull.mjs" })).statusCode, 200);
 });
 
 test("the token stops with the connection that asked for it", async () => {

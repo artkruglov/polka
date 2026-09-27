@@ -396,3 +396,62 @@ test("one file of a project is patched; S3 copies the rest into the new version"
   });
   assert.equal(image.statusCode, 422, image.body);
 });
+
+test("pull a project into a folder, change it, push: only changed files are sent", async () => {
+  const pullPath = fileURLToPath(new URL("../scripts/polka-pull.mjs", import.meta.url));
+  const node = (script: string, args: string[], env: Record<string, string>) =>
+    new Promise<{ code: number; out: string; err: string }>((resolve) => {
+      const child = spawn(process.execPath, [script, ...args], { env: { ...process.env, ...env } });
+      let out = "", err = "";
+      child.stdout.on("data", (chunk) => (out += chunk));
+      child.stderr.on("data", (chunk) => (err += chunk));
+      child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
+    });
+  const { readFile: read } = await import("node:fs/promises");
+  const secret = await token(["context", "capture", "revise", "source:read"]);
+  const first = (await upload(secret, research(), "README.md")).finalized!.json();
+  await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  try {
+    const env = {
+      POLKA_TOKEN: secret,
+      POLKA_ENDPOINT: `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`,
+    };
+    const folder = join(scratch, "pulled");
+    const pulled = await node(pullPath, [first.artifactId, folder, "--json"], env);
+    assert.equal(pulled.code, 0, pulled.err);
+    assert.equal(JSON.parse(pulled.out).files, research().length);
+    for (const f of research()) assert.deepEqual(await read(join(folder, f.path)), f.bytes, f.path);
+    const state = JSON.parse(await read(join(folder, ".polka.json"), "utf8"));
+    assert.equal(state.revisionId, first.revisionId);
+    // Reading needs source:read, like polka_read_source.
+    const denied = await app.inject({
+      method: "GET",
+      url: `/api/v1/works/${first.artifactId}/files`,
+      headers: { authorization: `Bearer ${await token(["context", "capture", "revise"])}` },
+    });
+    assert.equal(denied.statusCode, 403, denied.body);
+    // A non-empty folder is not overwritten by accident.
+    assert.equal((await node(pullPath, [first.artifactId, folder], env)).code, 2);
+
+    await writeFile(join(folder, "02-users/stories.md"), "# Истории\n\nМенеджер согласует договор поставки.\n");
+    await writeFile(join(folder, "03-plan.md"), "# План\n");
+    const pushed = await node(cliPath, [folder, "--json"], env);
+    assert.equal(pushed.code, 0, pushed.err);
+    const result = JSON.parse(pushed.out);
+    assert.equal(result.artifactId, first.artifactId);
+    assert.equal(result.files, research().length + 1);
+    // Five files unchanged were copied by Полка; two were sent.
+    assert.equal(result.unchanged, research().length - 1);
+    const next = JSON.parse(await read(join(folder, ".polka.json"), "utf8"));
+    assert.equal(next.revisionId, result.revisionId);
+    const { rows: [search] } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
+    assert.match(search.body, /договор поставки/);
+
+    // Pushing from the old version again is refused: it is not the latest.
+    await writeFile(join(folder, ".polka.json"), JSON.stringify(state));
+    const stale = await node(cliPath, [folder], env);
+    assert.notEqual(stale.code, 0);
+  } finally {
+    await new Promise<void>((resolve) => app.server.close(() => resolve()));
+  }
+});

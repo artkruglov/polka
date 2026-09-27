@@ -10,10 +10,12 @@ import {
 import {
   beginProjectUpload,
   finalizeProjectUpload,
+  reuseProjectFiles,
   putProjectFile,
 } from "./project-upload.ts";
 import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
 import { reviseWithEdits } from "./agent-edits.ts";
+import { workFileForAgent, workFilesForAgent } from "./work-files.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
@@ -43,7 +45,7 @@ export const PUBLISH_API_PATHS = new Set([
 export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
   pathname === "/api/v1/projects" ||
-  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|finalize)$/i.test(pathname) ||
+  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|finalize|reuse)$/i.test(pathname) ||
   /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
 
 export const editsBodySchema = z
@@ -197,6 +199,7 @@ export const baseMismatchSchema = z
 
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
 const PROJECT_CLI_SOURCE = new URL("../../scripts/polka-publish-project.mjs", import.meta.url);
+const PULL_CLI_SOURCE = new URL("../../scripts/polka-pull.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
   reply.header(
@@ -388,6 +391,40 @@ export async function registerPublishApi(app: FastifyInstance) {
       return putProjectFile(actor, params.uploadId, params.index, req.body);
     },
   );
+  // polka push: the files a new version keeps unchanged are copied, not sent.
+  app.post("/api/v1/projects/:uploadId/reuse", async (req, reply) => {
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
+    return reuseProjectFiles(actor, uuid.parse((req.params as { uploadId: string }).uploadId));
+  });
+  // polka pull: a version's files, listed, then one by one (work-files.ts).
+  app.get("/api/v1/works/:artifactId/files", async (req, reply) => {
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
+    const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
+    const { revisionId } = z
+      .object({ revisionId: uuid.optional() })
+      .parse(req.query ?? {});
+    return withFieldErrors(() => workFilesForAgent(actor, artifactId, revisionId));
+  });
+  app.get(
+    "/api/v1/works/:artifactId/revisions/:revisionId/files/:index",
+    async (req, reply) => {
+      const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
+      const params = z
+        .object({
+          artifactId: uuid,
+          revisionId: uuid,
+          index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+        })
+        .parse(req.params);
+      const file = await workFileForAgent(actor, params.artifactId, params.revisionId, params.index);
+      return reply
+        .type("application/octet-stream")
+        .header("cache-control", "no-store")
+        .header("x-content-type-options", "nosniff")
+        .header("x-polka-sha256", file.sha256)
+        .send(file.bytes);
+    },
+  );
   app.post("/api/v1/projects/:uploadId/finalize", async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     const uploadId = uuid.parse((req.params as { uploadId: string }).uploadId);
@@ -511,5 +548,16 @@ export async function registerPublishApi(app: FastifyInstance) {
       .type("text/javascript; charset=utf-8")
       .header("content-disposition", 'attachment; filename="polka-publish-project.mjs"')
       .send(projectCli),
+  );
+  // A saved version back into a folder (polka pull).
+  const pullCli = (await readFile(PULL_CLI_SOURCE, "utf8")).replace(
+    /^const DEFAULT_ENDPOINT = ".*";$/m,
+    `const DEFAULT_ENDPOINT = ${JSON.stringify(config.APP_ORIGIN)};`,
+  );
+  app.get("/api/v1/cli/polka-pull.mjs", async (_req, reply) =>
+    reply
+      .type("text/javascript; charset=utf-8")
+      .header("content-disposition", 'attachment; filename="polka-pull.mjs"')
+      .send(pullCli),
   );
 }

@@ -7,7 +7,7 @@
 //     node polka-publish-project.mjs ./Y360-v2 --title "Яндекс 360 + агенты"
 //   node polka-publish-project.mjs ./Y360-v2 --dry-run
 import { createHash, randomUUID } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -66,10 +66,15 @@ Options:
   --key <uuid>       Idempotency key; reuse it only to retry the same publish
   --artifact <uuid>  Save a new version of this project (with --base-revision)
   --base-revision <uuid>  The version you started from (from polka_list or the last result)
+  --new              Save as a new project even if the folder was pulled (.polka.json)
   --endpoint <url>   Полка address (or $POLKA_ENDPOINT)
   --dry-run          List what would be sent and skipped, send nothing
   --json             Print the full JSON result
   -h, --help         Show this help
+
+A folder downloaded with polka-pull.mjs has .polka.json: publishing it saves
+the next version of that project (no --artifact needed), sends only the files
+that changed (Полка copies the rest) and records the new version there.
 
 Skipped without asking: hidden files, node_modules, __pycache__, .git, *.pyc,
 files over 5 MB, unsupported types and names outside [A-Za-z0-9._-].
@@ -262,6 +267,7 @@ async function main() {
       key: { type: "string" },
       artifact: { type: "string" },
       "base-revision": { type: "string" },
+      new: { type: "boolean" },
       endpoint: { type: "string" },
       "dry-run": { type: "boolean" },
       json: { type: "boolean" },
@@ -276,6 +282,20 @@ async function main() {
   const root = positionals[0];
   const info = await stat(root).catch(() => null);
   if (!info?.isDirectory()) throw new CliError(`${root} is not a folder`, 2);
+  // A folder from polka-pull.mjs: its next version, unless told otherwise.
+  const statePath = join(root, ".polka.json");
+  const pulled = values.artifact || values.new
+    ? null
+    : await readFile(statePath, "utf8").then(JSON.parse, () => null);
+  if (pulled) {
+    if (pulled.runtime !== "project-v1")
+      throw new CliError(
+        `This folder holds «${pulled.title}», which is not a project. Publish one page with polka-publish.mjs --artifact ${pulled.artifactId} --base-revision ${pulled.revisionId}, or pass --new to save the folder as a new project.`,
+        2,
+      );
+    values.artifact = pulled.artifactId;
+    values["base-revision"] = pulled.revisionId;
+  }
   const { files, skipped, components } = await walk(root, new Set(values.exclude ?? []));
   const hasEntry = values.entry
     ? files.some((file) => file.path === values.entry)
@@ -337,8 +357,10 @@ async function main() {
   }
   const token = process.env.POLKA_TOKEN;
   if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
-  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
+  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? pulled?.endpoint ?? (DEFAULT_ENDPOINT || undefined);
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
+  if (pulled?.endpoint && pulled.endpoint !== endpoint.replace(/\/$/, ""))
+    throw new CliError(`This folder was pulled from ${pulled.endpoint}, not ${endpoint}. Pass --new to save it there as a new project.`, 2);
   const manifest = {
     version: 1,
     entrypoint: entry,
@@ -367,10 +389,18 @@ async function main() {
   // After the upload has begun, a rerun with the same key continues it.
   if (!receipt) try {
     const byPath = new Map(files.map((file) => [file.path, file]));
+    // A new version: Полка copies the files the base version already has.
+    const reused = new Set(
+      values.artifact
+        ? (await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/reuse`, "{}", "application/json")).reused ?? []
+        : [],
+    );
+    report.unchanged = reused.size;
+    const toSend = begun.files.filter(({ index }) => !reused.has(index));
     // A terminal gets one updating line; an agent's log gets a line now and then.
     let sent = 0;
-    const total = begun.files.length;
-    for (const { index, path } of begun.files) {
+    const total = toSend.length;
+    for (const { index, path } of toSend) {
       await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, byPath.get(path).bytes, "application/octet-stream");
       sent++;
       if (process.stderr.isTTY) process.stderr.write(`\r${sent}/${total} files sent`);
@@ -383,9 +413,14 @@ async function main() {
     throw error;
   }
   const result = { ...report, artifactId: receipt.artifactId, revisionId: receipt.revisionId, shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}` };
+  // The pulled folder now holds this version: the next publish builds on it.
+  if (pulled)
+    await writeFile(statePath, `${JSON.stringify({ ...pulled, revisionId: receipt.revisionId, number: receipt.number ?? pulled.number, title: report.title, pushedAt: new Date().toISOString() }, null, 2)}\n`);
   if (values.json) console.log(JSON.stringify(result, null, 2));
   else {
-    console.log(`Saved «${result.title}»: ${result.files} files, ${result.megabytes} MB.`);
+    console.log(
+      `Saved «${result.title}»: ${result.files} files, ${result.megabytes} MB${result.unchanged ? ` (${result.unchanged} unchanged, copied by Полка)` : ""}.`,
+    );
     console.log(result.shelfUrl);
     if (skipped.length) {
       console.log(`Skipped ${skipped.length}:`);

@@ -488,6 +488,62 @@ export function openApiDocument(origin: string) {
           responses: { "200": { description: "Stored." }, "404": { description: "No such upload for this token." } },
         },
       },
+      "/api/v1/projects/{uploadId}/reuse": {
+        post: {
+          operationId: "reuseProjectFiles",
+          summary: "Keep the unchanged files of a new project version without sending them",
+          description:
+            "For an upload begun with artifactId and baseRevisionId: every file whose path, mime, size and SHA-256 are those of a file in the base version is copied inside the store. Returns reused [index]; send only the other files. Safe to repeat.",
+          security: [{ bearerAuth: ["revise"] }],
+          parameters: [
+            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: { "200": { description: "reused: the indexes now stored." }, "404": { description: "No such upload for this token." } },
+        },
+      },
+      "/api/v1/works/{artifactId}/files": {
+        get: {
+          operationId: "listWorkFiles",
+          summary: "List the files of a saved version (polka pull)",
+          description:
+            "The latest version by default, or ?revisionId=. Returns title, revisionId, number, latestRevisionId, runtime, entrypoint and files [{index, path, mime, size, sha256}]. Scope source:read. The ready-made client is GET /api/v1/cli/polka-pull.mjs.",
+          security: [{ bearerAuth: ["source:read"] }],
+          parameters: [
+            { name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "revisionId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: { "200": { description: "The version and its files." }, "404": { description: "No such work or version for this token." } },
+        },
+      },
+      "/api/v1/works/{artifactId}/revisions/{revisionId}/files/{index}": {
+        get: {
+          operationId: "getWorkFile",
+          summary: "Download one file of a saved version",
+          description: "The file's bytes as application/octet-stream; X-Polka-Sha256 is its SHA-256. Scope source:read.",
+          security: [{ bearerAuth: ["source:read"] }],
+          parameters: [
+            { name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "revisionId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0, maximum: 399 } },
+          ],
+          responses: { "200": { description: "The bytes." }, "410": { description: "Blocked or deleted by moderation." } },
+        },
+      },
+      "/api/v1/cli/polka-pull.mjs": {
+        get: {
+          operationId: "downloadPullCli",
+          summary: "Download the dependency-free pull CLI",
+          description:
+            "A single-file Node 22+ script that downloads a version of a work into a folder and records it in .polka.json, so polka-publish-project.mjs of that folder saves the next version and sends only changed files. It reads the token only from POLKA_TOKEN.",
+          security: [],
+          responses: {
+            "200": {
+              description: "The script, pointed at this installation.",
+              content: { "text/javascript": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
       "/api/v1/projects/{uploadId}/finalize": {
         post: {
           operationId: "finalizeProject",
