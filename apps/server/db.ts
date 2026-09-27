@@ -17,19 +17,14 @@ export const DATABASE_SESSION = {
 } as const;
 
 /*
- * Known limitation, to be fixed after launch: an upload holds its
- * transaction — the shelf lock (lockShelf) and the upload row, and so one
- * pooled connection — for the whole S3 PUT of its bytes:
- *   artifacts.ts  uploadBytesInTransaction (putImmutable of a single file),
- *                 uploadBundleFileInTransaction (each file of a bundle),
- *                 finalizeBundleUploadInTransaction (reads the staged files
- *                 back from S3 under the same lock);
- *   project-upload.ts putProjectFile / finalizeProjectUpload (the same, for
- *                 projects from the CLI).
- * A slow object store therefore serialises writers on one shelf and can
- * drain the pool. Until the upload path stages bytes outside the
- * transaction, the pool is larger (DATABASE_POOL_MAX, default 20) and an
- * abandoned transaction is cut off by idle_in_transaction_session_timeout.
+ * Uploads keep object storage out of their transactions: the S3 PUT of the
+ * bytes and the reading back and inspection of staged files at finalize run
+ * before the transaction (artifacts.ts: stageUploadBytes, stageBundleFile,
+ * prepareUploadFinalize, prepareBundleFinalize), which then only rechecks
+ * and records under the shelf lock. A slow object store therefore delays
+ * that upload alone, not the shelf or the pool. Two small writes stay
+ * inside: the link document of a saved link (saved-links.ts) and a built
+ * page (bundle-derivatives.ts, under the work's row lock, not the shelf's).
  */
 export const db = new pg.Pool({
   connectionString: config.DATABASE_URL,

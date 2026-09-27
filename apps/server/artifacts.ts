@@ -471,6 +471,23 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
     "SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
     [id, actor.tenant],
   );
+  return checkedUpload(u, actor);
+}
+/**
+ * The upload without a lock, for the work done before its transaction: the
+ * S3 PUT of its bytes and the reading of staged files at finalize. Whatever
+ * it decides is checked again under the lock; only this row's owner gets it.
+ */
+async function readUpload(actor: Actor, id: string) {
+  const {
+    rows: [u],
+  } = await db.query(
+    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2",
+    [id, actor.tenant],
+  );
+  return checkedUpload(u, actor);
+}
+function checkedUpload(u: any, actor: Actor) {
   // On a department shelf an upload is its uploader's alone.
   if (!u || u.account_id !== actor.id) throw missing();
   // Expiry by the database's clock, the one that set expires_at.
@@ -483,24 +500,45 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
   return u;
 }
 export async function uploadBytes(actor: Actor, id: string, bytes: Buffer) {
-  return transaction((c) => uploadBytesInTransaction(c, actor, id, bytes));
+  const staged = await stageUploadBytes(actor, id, bytes);
+  return transaction((c) => uploadBytesInTransaction(c, actor, id, bytes, staged));
 }
+/**
+ * The S3 PUT of an upload's bytes, before the transaction that records it,
+ * so a slow object store holds neither the shelf lock nor a pooled
+ * connection. Null when there is nothing to store (already saved). A version
+ * that is then not recorded (the upload was aborted or the record failed)
+ * stays under the upload's prefix, which the maintenance reconciliation
+ * deletes once the upload expires (scripts/maintenance-cleanup.ts).
+ */
+export async function stageUploadBytes(actor: Actor, id: string, bytes: Buffer) {
+  const u = await readUpload(actor, id);
+  if (u.kind !== "single") throw missing();
+  await validateBytes(bytes, beginUploadSchema.parse(u.request));
+  if (u.receipt) return null;
+  return putImmutable(`${actor.tenant}/${id}`, bytes);
+}
+/**
+ * Records the bytes under the shelf lock. `staged` is the version
+ * stageUploadBytes stored (and checked the bytes for); without it the bytes
+ * are checked and stored here, inside the transaction: only saved-links.ts
+ * does that, for its small link document in one transaction.
+ */
 export async function uploadBytesInTransaction(
   c: PoolClient,
   actor: Actor,
   id: string,
   bytes: Buffer,
+  staged?: string | null,
 ) {
   await lockShelf(c, actor, "author");
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   const input = beginUploadSchema.parse(u.request);
-  await validateBytes(bytes, input);
+  if (staged === undefined) await validateBytes(bytes, input);
   if (u.receipt) return { stored: true };
   await validateUploadTarget(c, actor, input);
-  // Known limitation (db.ts): the S3 PUT runs under lockShelf, inside the
-  // transaction. To be moved out of it after launch.
-  const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
+  const version = staged ?? (await putImmutable(`${actor.tenant}/${id}`, bytes));
   await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [
     id,
     version,
@@ -597,7 +635,10 @@ async function screenSavedRevision(
 }
 
 export async function finalizeUpload(actor: Actor, id: string) {
-  const receipt = await transaction((c) => finalizeUploadInTransaction(c, actor, id));
+  const prepared = await prepareUploadFinalize(actor, id);
+  const receipt = await transaction((c) =>
+    finalizeUploadInTransaction(c, actor, id, prepared),
+  );
   savedEvent(actor, receipt);
   return receipt;
 }
@@ -613,21 +654,19 @@ function savedEvent(actor: Actor, receipt: { artifactId?: string; revisionId?: s
       at: new Date().toISOString(),
     });
 }
-export async function finalizeUploadInTransaction(
-  c: PoolClient,
+type SingleInspection = Awaited<ReturnType<typeof inspectSingleUpload>>;
+/**
+ * A single upload's stored bytes, read back and inspected (page profile,
+ * content filter, manifest). Slow for a large page, so finalize does it
+ * before its transaction (prepareUploadFinalize).
+ */
+async function inspectSingleUpload(
   actor: Actor,
   id: string,
+  objectVersion: string,
+  input: ReturnType<typeof beginUploadSchema.parse>,
 ) {
-  // All quota changes take the same tenant lock before upload/artifact locks.
-  const { tenant } = await lockShelf(c, actor, "author");
-  const u = await lockUpload(c, actor, id);
-  if (u.kind !== "single") throw missing();
-  if (u.receipt) return u.receipt;
-  if (!u.object_version)
-    throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
-  const input = beginUploadSchema.parse(u.request);
-  await validateUploadTarget(c, actor, input);
-  const bytes = await readBlob(`${actor.tenant}/${id}`, u.object_version);
+  const bytes = await readBlob(`${actor.tenant}/${id}`, objectVersion);
   const inspection = await validateBytes(bytes, input);
   const htmlProfile = inspection?.profile ?? null;
   // The content filter: a page's findings come with its inspection; a text
@@ -655,6 +694,34 @@ export async function finalizeUploadInTransaction(
       input.sourceUrl ?? null,
     );
   }
+  return { objectVersion, bytes, inspection, htmlProfile, contentFilter, revisionManifest };
+}
+/** The inspection of a finalize, before its transaction; null when there is none to do. */
+export async function prepareUploadFinalize(actor: Actor, id: string) {
+  const u = await readUpload(actor, id);
+  if (u.kind !== "single" || u.receipt || !u.object_version) return null;
+  return inspectSingleUpload(actor, id, u.object_version, beginUploadSchema.parse(u.request));
+}
+export async function finalizeUploadInTransaction(
+  c: PoolClient,
+  actor: Actor,
+  id: string,
+  prepared?: SingleInspection | null,
+) {
+  // All quota changes take the same tenant lock before upload/artifact locks.
+  const { tenant } = await lockShelf(c, actor, "author");
+  const u = await lockUpload(c, actor, id);
+  if (u.kind !== "single") throw missing();
+  if (u.receipt) return u.receipt;
+  if (!u.object_version)
+    throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
+  const input = beginUploadSchema.parse(u.request);
+  await validateUploadTarget(c, actor, input);
+  // Inspected before the lock, unless the bytes were sent again since.
+  const { bytes, inspection, htmlProfile, contentFilter, revisionManifest } =
+    prepared && prepared.objectVersion === u.object_version
+      ? prepared
+      : await inspectSingleUpload(actor, id, u.object_version, input);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этой версии.");
   if (
@@ -1008,16 +1075,43 @@ export async function uploadBundleFile(
   index: number,
   bytes: Buffer,
 ) {
+  const staged = await stageBundleFile(actor, id, index, bytes);
   return transaction((c) =>
-    uploadBundleFileInTransaction(c, actor, id, index, bytes),
+    uploadBundleFileInTransaction(c, actor, id, index, bytes, staged),
   );
 }
+/**
+ * A bundle file's S3 PUT before its transaction, like stageUploadBytes.
+ * Null when there is nothing to store (saved, or this file already sent).
+ */
+export async function stageBundleFile(
+  actor: Actor,
+  id: string,
+  index: number,
+  bytes: Buffer,
+) {
+  const upload = await readUpload(actor, id);
+  if (upload.kind !== "bundle") throw missing();
+  const input = normalizeBundleRequest(upload.request, true);
+  const expected = input.manifest.files[index];
+  if (!expected) throw missing();
+  validateBundleFileBytes(expected, bytes);
+  if (upload.receipt) return null;
+  const sent = await db.query(
+    "SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2",
+    [id, index],
+  );
+  if (sent.rowCount) return null;
+  return putImmutable(bundleFileKey(actor.tenant, id, input.manifest, index), bytes);
+}
+/** Records a bundle file under the shelf lock; `staged` as in uploadBytesInTransaction. */
 export async function uploadBundleFileInTransaction(
   c: PoolClient,
   actor: Actor,
   id: string,
   index: number,
   bytes: Buffer,
+  staged?: string | null,
 ) {
   await lockShelf(c, actor, "author");
   const upload = await lockUpload(c, actor, id);
@@ -1025,7 +1119,7 @@ export async function uploadBundleFileInTransaction(
   const input = normalizeBundleRequest(upload.request, true);
   const expected = input.manifest.files[index];
   if (!expected) throw missing();
-  validateBundleFileBytes(expected, bytes);
+  if (staged === undefined) validateBundleFileBytes(expected, bytes);
   if (upload.receipt) return { stored: true, index };
   await validateUploadTarget(c, actor, input);
   const existing = (
@@ -1036,9 +1130,7 @@ export async function uploadBundleFileInTransaction(
   ).rows[0];
   if (existing) return { stored: true, index };
   const objectKey = bundleFileKey(actor.tenant, id, input.manifest, index);
-  // Known limitation (db.ts): the S3 PUT runs under lockShelf, inside the
-  // transaction. To be moved out of it after launch.
-  const objectVersion = await putImmutable(objectKey, bytes);
+  const objectVersion = staged ?? (await putImmutable(objectKey, bytes));
   await c.query(
     "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
     [id, index, objectKey, objectVersion],
@@ -1084,14 +1176,38 @@ async function lockBundleArtifact(
 }
 
 export async function finalizeBundleUpload(actor: Actor, id: string) {
-  const receipt = await transaction((c) => finalizeBundleUploadInTransaction(c, actor, id));
+  const prepared = await prepareBundleFinalize(actor, id);
+  const receipt = await transaction((c) =>
+    finalizeBundleUploadInTransaction(c, actor, id, prepared),
+  );
   savedEvent(actor, receipt);
   return receipt;
+}
+type StagedFile = { file_index: number; object_key: string; object_version: string };
+type BundleInspection = Awaited<ReturnType<typeof inspectBundle>>;
+/**
+ * The inspection of a bundle's finalize, before its transaction: every file
+ * read back from S3, the pages parsed, the texts filtered. Null when there
+ * is none to do (saved, or files still missing: the transaction says so).
+ */
+export async function prepareBundleFinalize(actor: Actor, id: string) {
+  const upload = await readUpload(actor, id);
+  if (upload.kind !== "bundle" || upload.receipt) return null;
+  const input = normalizeBundleRequest(upload.request, true);
+  const staged: StagedFile[] = (
+    await db.query(
+      "SELECT file_index,object_key,object_version FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
+      [id],
+    )
+  ).rows;
+  if (staged.length !== input.manifest.files.length) return null;
+  return inspectBundle(actor, id, input, staged);
 }
 export async function finalizeBundleUploadInTransaction(
   c: PoolClient,
   actor: Actor,
   id: string,
+  prepared?: BundleInspection | null,
 ) {
   const { tenant } = await lockShelf(c, actor, "author");
   const upload = await lockUpload(c, actor, id);
@@ -1099,14 +1215,117 @@ export async function finalizeBundleUploadInTransaction(
   if (upload.receipt) return upload.receipt;
   const input = normalizeBundleRequest(upload.request, true);
   await validateUploadTarget(c, actor, input);
-  const staged = (
+  const staged: StagedFile[] = (
     await c.query(
-      "SELECT * FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
+      "SELECT file_index,object_key,object_version FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
       [id],
     )
   ).rows;
   if (staged.length !== input.manifest.files.length)
     throw new Problem(409, "conflict", "Переданы не все файлы пакета.");
+  // Sent files are never replaced, so the inspection made before the lock
+  // holds; it is redone only if the rows somehow differ.
+  const same =
+    prepared?.staged.length === staged.length &&
+    staged.every(
+      (row, index) =>
+        prepared.staged[index].file_index === row.file_index &&
+        prepared.staged[index].object_key === row.object_key &&
+        prepared.staged[index].object_version === row.object_version,
+    );
+  const { verified, entry, htmlProfile, contentFilter, signals, searchText } =
+    same ? prepared! : await inspectBundle(actor, id, input, staged);
+  if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
+    throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
+  if (
+    !(
+      await c.query(
+        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
+        [actor.id],
+      )
+    ).rowCount
+  )
+    throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
+  const { artifactId, number } = await lockBundleArtifact(c, actor, input);
+  const revisionId = randomUUID();
+  const manifestSha256 = sha256(JSON.stringify(input.manifest));
+  await c.query(
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter)
+       VALUES($1,$2,$3,$4,$5,$6,$17,$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
+    [
+      revisionId,
+      actor.tenant,
+      artifactId,
+      number,
+      actor.id,
+      input.manifest.entrypoint,
+      entry.file.size,
+      entry.file.sha256,
+      entry.object_key,
+      entry.object_version,
+      input.manifest,
+      manifestSha256,
+      input.size,
+      htmlProfile,
+      signals,
+      contentFilter,
+      entry.file.mime,
+    ],
+  );
+  await screenSavedRevision(c, actor, {
+    artifactId,
+    revisionId,
+    sha256: entry.file.sha256,
+    filter: contentFilter,
+    fileHashes: input.manifest.files.map((file) => file.sha256),
+  });
+  for (const [index, stored] of verified.entries())
+    await c.query(
+      `INSERT INTO revision_files(revision_id,file_index,path,mime,size,sha256,object_key,object_version)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        revisionId,
+        index,
+        stored.file.path,
+        stored.file.mime,
+        stored.file.size,
+        stored.file.sha256,
+        stored.object_key,
+        stored.object_version,
+      ],
+    );
+  await c.query(
+    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
+    [artifactId, revisionId],
+  );
+  await indexRevisionText(c, artifactId, revisionId, searchText);
+  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
+    actor.tenant,
+    input.size,
+  ]);
+  const receipt = {
+    uploadId: id,
+    artifactId,
+    revisionId,
+    number,
+    sha256: entry.file.sha256,
+    htmlProfile,
+    manifestSha256,
+    storageKind: "bundle" as const,
+    totalSize: input.size,
+  };
+  await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
+  await audit(c, actor, "revision.saved", revisionId);
+  await trackSaved(c, actor, revisionId, number);
+  return receipt;
+}
+/** Reads and inspects every staged file of a bundle (see prepareBundleFinalize). */
+async function inspectBundle(
+  actor: Actor,
+  id: string,
+  input: NormalizedBundleRequest,
+  staged: StagedFile[],
+) {
   const verified: Array<{
     file: BundleManifest["files"][number];
     object_key: string;
@@ -1204,20 +1423,6 @@ export async function finalizeBundleUploadInTransaction(
   if (!project && input.manifest.files.length !== 1 && entryBytes)
     await inspectPage(entryBytes, true);
   for (const source of scriptSources) addScriptText(source.toString("utf8"), searchText);
-  if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
-    throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
-  if (
-    !(
-      await c.query(
-        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
-        [actor.id],
-      )
-    ).rowCount
-  )
-    throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
-  const { artifactId, number } = await lockBundleArtifact(c, actor, input);
-  const revisionId = randomUUID();
-  const manifestSha256 = sha256(JSON.stringify(input.manifest));
   // Every page's findings and the scripts' (read by `signals`), with fraud
   // counted once from all the phishing signals together.
   const withoutFraud = (filter: FilterResult): FilterResult => {
@@ -1234,75 +1439,15 @@ export async function finalizeBundleUploadInTransaction(
     contentFilter,
     sensitiveFields(mergeSensitive(signals.sensitive.result(), ...pageSensitive)),
   );
-  await c.query(
-    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size,phishing_signals,content_filter)
-       VALUES($1,$2,$3,$4,$5,$6,$17,$7,$8,$9,$10,$14,$11,$12,'bundle',$13,$15,$16)`,
-    [
-      revisionId,
-      actor.tenant,
-      artifactId,
-      number,
-      actor.id,
-      input.manifest.entrypoint,
-      entry.file.size,
-      entry.file.sha256,
-      entry.object_key,
-      entry.object_version,
-      input.manifest,
-      manifestSha256,
-      input.size,
-      htmlProfile,
-      signals.list(),
-      contentFilter,
-      entryMime,
-    ],
-  );
-  await screenSavedRevision(c, actor, {
-    artifactId,
-    revisionId,
-    sha256: entry.file.sha256,
-    filter: contentFilter,
-    fileHashes: input.manifest.files.map((file) => file.sha256),
-  });
-  for (const [index, stored] of verified.entries())
-    await c.query(
-      `INSERT INTO revision_files(revision_id,file_index,path,mime,size,sha256,object_key,object_version)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [
-        revisionId,
-        index,
-        stored.file.path,
-        stored.file.mime,
-        stored.file.size,
-        stored.file.sha256,
-        stored.object_key,
-        stored.object_version,
-      ],
-    );
-  await c.query(
-    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-    [artifactId, revisionId],
-  );
-  await indexRevisionText(c, artifactId, revisionId, searchText.value());
-  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
-    actor.tenant,
-    input.size,
-  ]);
-  const receipt = {
-    uploadId: id,
-    artifactId,
-    revisionId,
-    number,
-    sha256: entry.file.sha256,
+  return {
+    staged,
+    verified,
+    entry,
     htmlProfile,
-    manifestSha256,
-    storageKind: "bundle" as const,
-    totalSize: input.size,
+    contentFilter,
+    signals: signals.list(),
+    searchText: searchText.value(),
   };
-  await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
-  await audit(c, actor, "revision.saved", revisionId);
-  await trackSaved(c, actor, revisionId, number);
-  return receipt;
 }
 
 export async function uploadStatus(
