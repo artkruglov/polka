@@ -4,6 +4,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import pg from "pg";
 import type { PolkaExtension } from "../packages/extension-api/index.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createAccount } from "../apps/server/auth.ts";
@@ -132,4 +133,64 @@ test("an agent limited to a folder saves there, sees only it and does not manage
   // The unlimited agent sees both.
   const all = await mcp(whole.secret, "polka_list", {});
   assert.deepEqual(all.value.items.map((item: any) => item.title).sort(), ["Личное", "Отчёт"]);
+});
+
+test("a limited agent's retried upload with a source address is the same upload, not a conflict", async () => {
+  const { beginUpload, sameUploadRequest } = await import("../apps/server/artifacts.ts");
+  const bytes = Buffer.from(page("Источник"));
+  const body = {
+    key: randomUUID(),
+    title: "Источник",
+    filename: "page.html",
+    mime: "text/html" as const,
+    size: bytes.length,
+    sha256: sha256(bytes),
+    sourceUrl: "https://example.com/report",
+  };
+  // The scope adds folderId after sourceUrl; the stored request, parsed
+  // again, has it before: the order of fields must not matter.
+  const actor = { id: owner.id, tenant: owner.tenant, connectionId: limited.id };
+  const first = await beginUpload(actor, body);
+  const retried = await beginUpload(actor, body);
+  assert.equal(retried.uploadId, first.uploadId);
+  // Another file under the same key is still refused.
+  await assert.rejects(beginUpload(actor, { ...body, title: "Другое" }), (error: any) => error.status === 409);
+  assert.equal(sameUploadRequest({ ...body, folderId: reports }, { folderId: reports, ...body }), true);
+  assert.equal(sameUploadRequest({ ...body, folderId: reports }, { ...body, folderId: other }), false);
+});
+
+test("every MCP tool answers a failure as a structured error, never with the raw database text", async () => {
+  const errors: string[] = [];
+  const logged = console.error;
+  const query = pg.Client.prototype.query;
+  console.error = (line: unknown) => void errors.push(String(line));
+  pg.Client.prototype.query = function (this: pg.Client, ...args: unknown[]) {
+    const text = typeof args[0] === "string" ? args[0] : (args[0] as { text?: string } | undefined)?.text;
+    // The folder list meets a real database error (42P01, naming a relation).
+    if (text?.includes("FROM folders")) args = ["SELECT * FROM internal_secret", ...args.slice(1).filter((arg) => typeof arg === "function")];
+    return (query as (...rest: unknown[]) => unknown).apply(this, args);
+  } as typeof query;
+  let failed;
+  try {
+    failed = await mcp(whole.secret, "polka_list_folders", {});
+  } finally {
+    pg.Client.prototype.query = query;
+    console.error = logged;
+  }
+  assert.equal(failed.error, true);
+  assert.equal(failed.value.code, "internal");
+  assert.match(failed.value.message, /Не удалось завершить действие/);
+  assert.doesNotMatch(JSON.stringify(failed.value), /internal_secret|relation/);
+  const entry = errors
+    .map((line) => JSON.parse(line))
+    .find((item) => item.event === "mcp.tool.failed");
+  assert.deepEqual(
+    { tool: entry?.tool, code: entry?.code, sqlstate: entry?.sqlstate },
+    { tool: "polka_list_folders", code: "internal", sqlstate: "42P01" },
+  );
+  // A refusal keeps its code and words, whichever tool refuses.
+  const refused = await mcp(limited.secret, "polka_create_folder", { key: randomUUID(), name: "Ещё" });
+  assert.equal(refused.error, true);
+  assert.equal(refused.value.code, "forbidden");
+  assert.match(refused.value.message, /Агент, подключённый к папке/);
 });

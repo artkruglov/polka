@@ -9,7 +9,9 @@ import { after, before, test } from "node:test";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createApp } from "../apps/server/app.ts";
+import pg from "pg";
+import { anonymous, createApp } from "../apps/server/app.ts";
+import { Problem } from "../apps/server/errors.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
@@ -1409,4 +1411,44 @@ test("polka_open_shelf is offered to OAuth connections only", () => {
     );
   assert.ok(tools(true).includes("polka_open_shelf"));
   assert.ok(!tools(false).includes("polka_open_shelf"));
+});
+
+test("a sign-in check that fails is the request's failure, not a guest; the 500 is logged with its route", async () => {
+  assert.equal(anonymous(new Problem(401, "unauthorized", "Войдите")), null);
+  assert.equal(anonymous(new Problem(403, "forbidden", "Нельзя")), null);
+  assert.throws(() => anonymous(new Problem(404, "not_found", "Нет")), Problem);
+  assert.throws(() => anonymous(new Error("connection terminated")), /connection terminated/);
+  const errors: string[] = [];
+  const logged = console.error;
+  const query = pg.Client.prototype.query;
+  console.error = (line: unknown) => void errors.push(String(line));
+  // The session lookup meets a broken database (a real SQL error).
+  pg.Client.prototype.query = function (this: pg.Client, ...args: unknown[]) {
+    const text = typeof args[0] === "string" ? args[0] : (args[0] as { text?: string } | undefined)?.text;
+    if (text?.includes("FROM sessions s JOIN accounts a"))
+      args = ["SELECT * FROM missing_sessions_table", ...args.slice(1).filter((arg) => typeof arg === "function")];
+    return (query as (...rest: unknown[]) => unknown).apply(this, args);
+  } as typeof query;
+  let entered;
+  try {
+    entered = await post("/api/auth/enter", `polka_session=${randomBytes(32).toString("base64url")}`, {
+      token: randomBytes(32).toString("base64url"),
+    });
+  } finally {
+    pg.Client.prototype.query = query;
+    console.error = logged;
+  }
+  // Treated as a guest, the browser would have been signed in to another shelf.
+  assert.equal(entered.statusCode, 500, entered.body);
+  assert.doesNotMatch(entered.body, /missing_sessions_table/);
+  const entry = errors
+    .map((line) => JSON.parse(line))
+    .find((item) => item.event === "request.failed");
+  assert.equal(entry.route, "/api/auth/enter");
+  assert.equal(entry.method, "POST");
+  assert.equal(entry.code, "42P01");
+  assert.equal(entry.error, "error");
+  assert.ok(entry.requestId);
+  assert.match(entry.at, /^at /);
+  assert.doesNotMatch(JSON.stringify(entry), /missing_sessions_table/);
 });

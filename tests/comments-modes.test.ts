@@ -9,7 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { createApp } from "../apps/server/app.ts";
 import { createOwnerNoteInTransaction } from "../apps/server/comments.ts";
 import { config } from "../apps/server/config.ts";
-import { db, transaction } from "../apps/server/db.ts";
+import { db, settled, transaction } from "../apps/server/db.ts";
 import { LOCAL_COMMENT_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import { reviewLoopGuide } from "../apps/server/mcp-server.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -19,7 +19,7 @@ const origin = config.APP_ORIGIN;
 const savedMode = config.COMMENTS_MODE;
 after(async () => {
   config.COMMENTS_MODE = savedMode;
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   await app.close();
   await db.end();
   s3.destroy();
@@ -263,7 +263,7 @@ test("owner-notes: recipients read the owner's notes and cannot write or react",
   assert.equal(page.json().unread, 0);
   assert.equal(page.json().shares[0].threads.length, 2);
   // No letters about notes.
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   assert.equal(await letters(ours), lettersBefore);
 
   // The recipient's comment and reaction are hidden, not deleted.

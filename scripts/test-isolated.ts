@@ -181,9 +181,16 @@ try {
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", interrupt);
   }
-} catch {
+} catch (error) {
+  // The real cause (a migration that fails, S3 down, a bad manifest): the
+  // run is local, against scratch resources this process created.
+  const cause = error as { stack?: unknown; code?: unknown } | null;
   console.error(
     "Isolated test run failed; configured working resources were not selected.",
+  );
+  console.error(
+    typeof cause?.code === "string" ? `[${cause.code}]` : "",
+    typeof cause?.stack === "string" ? cause.stack : String(error),
   );
   process.exitCode = 1;
 } finally {

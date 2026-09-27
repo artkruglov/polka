@@ -10,7 +10,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { domainToASCII } from "node:url";
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
-import { db } from "../apps/server/db.ts";
+import { db, settled } from "../apps/server/db.ts";
 import { inspectHtml } from "../apps/server/html.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { isSuspicious, SignalCollector, scanScript } from "../apps/server/phishing-signals.ts";
@@ -34,7 +34,7 @@ afterEach(() => {
 
 after(async () => {
   await reviewsSettled();
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   await app.close();
   await db.end();
   s3.destroy();

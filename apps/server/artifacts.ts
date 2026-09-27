@@ -7,6 +7,7 @@ import {
   LINK_MIME,
   linkDocumentSchema,
   MAX_BYTES,
+  type UploadInput,
   PROJECT_MAX_BYTES,
   type HtmlProfile,
   type Revision,
@@ -238,6 +239,16 @@ export async function getArtifacts(
     ];
   });
 }
+/** Two upload requests are the same when their fields are, in any order. */
+export function sameUploadRequest(a: UploadInput, b: UploadInput) {
+  const canonical = (value: UploadInput) =>
+    JSON.stringify(
+      Object.entries(value)
+        .filter(([, field]) => field !== undefined)
+        .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
+    );
+  return canonical(a) === canonical(b);
+}
 export async function beginUpload(actor: Actor, body: unknown) {
   const input = beginUploadSchema.parse(body);
   return transaction((c) => beginUploadInTransaction(c, actor, input));
@@ -253,7 +264,7 @@ export async function beginUploadInTransaction(
   const {
     rows: [old],
   } = await c.query(
-    "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
+    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
     [actor.tenant, input.key],
   );
   if (old && old.account_id !== actor.id)
@@ -265,19 +276,16 @@ export async function beginUploadInTransaction(
         "conflict",
         "Этот ключ уже относится к пакетной загрузке.",
       );
-    if (
-      JSON.stringify(beginUploadSchema.parse(old.request)) !==
-      JSON.stringify(input)
-    )
+    // The same request, whatever the order of its fields (the stored one
+    // has folderId where the agent's scope put it, after the rest).
+    if (!sameUploadRequest(beginUploadSchema.parse(old.request), input))
       throw new Problem(
         409,
         "conflict",
         "Этот повтор относится к другому файлу. Начните новую загрузку.",
       );
-    if (
-      old.aborted ||
-      (!old.receipt && new Date(old.expires_at).getTime() <= Date.now())
-    )
+    // Expiry by the database's clock, the one that set expires_at.
+    if (old.aborted || (!old.receipt && old.expired))
       throw new Problem(
         410,
         "expired",
@@ -459,15 +467,13 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
   const {
     rows: [u],
   } = await c.query(
-    "SELECT * FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
     [id, actor.tenant],
   );
   // On a department shelf an upload is its uploader's alone.
   if (!u || u.account_id !== actor.id) throw missing();
-  if (
-    u.aborted ||
-    (!u.receipt && new Date(u.expires_at).getTime() <= Date.now())
-  )
+  // Expiry by the database's clock, the one that set expires_at.
+  if (u.aborted || (!u.receipt && u.expired))
     throw new Problem(
       410,
       "expired",
@@ -491,6 +497,8 @@ export async function uploadBytesInTransaction(
   await validateBytes(bytes, input);
   if (u.receipt) return { stored: true };
   await validateUploadTarget(c, actor, input);
+  // Known limitation (db.ts): the S3 PUT runs under lockShelf, inside the
+  // transaction. To be moved out of it after launch.
   const version = await putImmutable(`${actor.tenant}/${id}`, bytes);
   await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [
     id,
@@ -1027,6 +1035,8 @@ export async function uploadBundleFileInTransaction(
   ).rows[0];
   if (existing) return { stored: true, index };
   const objectKey = bundleFileKey(actor.tenant, id, input.manifest, index);
+  // Known limitation (db.ts): the S3 PUT runs under lockShelf, inside the
+  // transaction. To be moved out of it after launch.
   const objectVersion = await putImmutable(objectKey, bytes);
   await c.query(
     "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
