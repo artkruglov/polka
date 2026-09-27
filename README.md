@@ -118,7 +118,7 @@ codex mcp login polka
 <table>
   <tr>
     <td width="50%"><a href="https://polochka.app/discover"><img src="docs/screenshots/recipient.png" alt="Интерактивный материал «Контраст в руках» у получателя ссылки"></a><br><sub><b>Получатель ссылки.</b> Интерактивная страница работает в песочнице, без аккаунта.</sub></td>
-    <td width="50%"><img src="docs/screenshots/agents.png" alt="Страница «Агенты»: подключить агента одной фразой, без токена"><br><sub><b>Агенты.</b> Одна фраза или одна команда; все подключения видны и отзываются.</sub></td>
+    <td width="50%"><img src="docs/screenshots/shelf.png" alt="Полка: папки, обложки работ, сортировка и фильтры"><br><sub><b>Полка.</b> Папки, обложки с заголовком и началом текста, поиск и сортировка по всей полке.</sub></td>
   </tr>
   <tr>
     <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="Лента"></a><br><sub><b>Лента.</b> Интерактивные материалы Редакции Полки.</sub></td>

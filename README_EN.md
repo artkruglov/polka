@@ -120,7 +120,7 @@ Each time Полка opens: sign in to your shelf (or start without signing up) 
 <table>
   <tr>
     <td width="50%"><a href="https://polochka.app/discover"><img src="docs/screenshots/recipient.png" alt="An interactive editorial page opened from a link"></a><br><sub><b>The recipient.</b> An interactive page runs in a sandbox, no account needed.</sub></td>
-    <td width="50%"><img src="docs/screenshots/agents.png" alt="The Agents page: connect an agent with one phrase, no token"><br><sub><b>Agents.</b> One phrase or one command; every connection is listed and revocable.</sub></td>
+    <td width="50%"><img src="docs/screenshots/shelf.png" alt="The shelf: folders, work covers, sorting and filters"><br><sub><b>The shelf.</b> Folders, covers with the heading and opening lines, search and sorting across the whole shelf.</sub></td>
   </tr>
   <tr>
     <td><a href="https://polochka.app/discover"><img src="docs/screenshots/discover.png" alt="The «Лента» feed"></a><br><sub><b>Лента (Feed).</b> Interactive pieces from the Полка editors.</sub></td>
