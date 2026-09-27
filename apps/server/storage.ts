@@ -1,3 +1,4 @@
+import { CopyObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Store } from "../../packages/storage/s3.ts";
 import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
@@ -10,6 +11,24 @@ const store = createS3Store({
 });
 export const { s3, bucket, prepareBucket, putImmutable, deleteAllVersions } =
   store;
+
+/**
+ * A copy of one object version under another key, inside the store (no
+ * bytes through Полка). Returns the new version; the bucket is versioned.
+ */
+export async function copyVersion(fromKey: string, fromVersion: string, toKey: string) {
+  const result = await s3.send(
+    new CopyObjectCommand({
+      Bucket: bucket,
+      Key: toKey,
+      CopySource: `${bucket}/${encodeURIComponent(fromKey).replace(/%2F/g, "/")}?versionId=${encodeURIComponent(fromVersion)}`,
+      MetadataDirective: "COPY",
+    }),
+  );
+  if (!result.VersionId || result.VersionId === "null")
+    throw new Error("Storage versioning required");
+  return result.VersionId;
+}
 
 /**
  * An object's bytes. A version that is gone was deleted by moderation

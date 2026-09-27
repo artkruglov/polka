@@ -1,18 +1,21 @@
 import { assertArtifactInAgentScope } from "./agent-scope.ts";
-import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
+import { PROJECT_RUNTIME, canonicalizeManifest } from "../../packages/contracts/bundle.ts";
 // Patch edits of a saved work (docs/specs/COMMENTS.md, «Агенты»): an agent
 // sends `edits: [{oldText, newText}]` against `baseRevisionId` instead of the
 // whole file. The server applies them to the base version's text file
 // (edit-patch.ts) and saves the result through the ordinary revise path
 // (captureFromAgent): the same CAS on the latest version, the same
 // idempotency by key, the same classification and phishing signals of the
-// new revision. Nothing else of the base version changes.
+// new revision. Nothing else of the base version changes. In a project the
+// other files are not read at all: S3 copies them (saveBundle), so a patch
+// works for a project of any size (docs/specs/PROJECTS.md).
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { editsSchema } from "../../packages/contracts/comments.ts";
 import { uuid } from "../../packages/contracts/index.ts";
-import { captureFromAgent } from "./agent-capture.ts";
-import { readAuthorizedRevisionSource } from "./artifacts.ts";
+import { captureFromAgent, saveBundle } from "./agent-capture.ts";
+import { authorizedRevisionFiles, readAuthorizedRevisionSource } from "./artifacts.ts";
+import { readBlob, sha256 } from "./storage.ts";
 import { db } from "./db.ts";
 import { applyEdits } from "./edit-patch.ts";
 import { Problem, missing } from "./errors.ts";
@@ -35,6 +38,7 @@ export type AgentEditsInput = z.infer<typeof agentEditsInputSchema>;
 
 const TEXT_MIMES = new Set([
   "text/html",
+  "text/markdown",
   "text/plain",
   "text/css",
   "text/javascript",
@@ -62,7 +66,7 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
   const input = agentEditsInputSchema.parse(raw);
   // The base version, read under the connection's own checks. A replay of a
   // saved key is recognized by captureFromAgent even after the work moved on.
-  const prepared = await withServiceActorTransaction(
+  const base = await withServiceActorTransaction(
     actor,
     "revise",
     async (c, verified) => {
@@ -87,14 +91,6 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
         [input.baseRevisionId, input.artifactId, verified.tenantId],
       );
       if (!revision) throw missing();
-      // A project is saved whole (docs/specs/PROJECTS.md): a new version
-      // goes through POST /api/v1/projects or its CLI, not a patch.
-      if (revision.manifest?.runtime === PROJECT_RUNTIME)
-        throw new Problem(
-          422,
-          "unsupported",
-          "Это проект из многих файлов: правка патчем для него пока не поддерживается. Загрузите новую версию проекта целиком (polka-publish-project.mjs с --artifact и --base-revision).",
-        );
       if (artifact.latest_revision_id !== input.baseRevisionId) {
         const replay = await c.query(
           `SELECT 1 FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2
@@ -104,9 +100,14 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
         if (!replay.rowCount)
           throw new BaseMismatch(artifact.latest_revision_id);
       }
-      return readAuthorizedRevisionSource(c, revision);
+      // A project's files are only located here; one of them is read below.
+      return revision.manifest?.runtime === PROJECT_RUNTIME
+        ? { project: await authorizedRevisionFiles(c, revision) }
+        : { bundle: await readAuthorizedRevisionSource(c, revision) };
     },
   );
+  if (base.project) return reviseProjectFile(actor, input, base.project);
+  const prepared = base.bundle!;
   const path = input.path ?? prepared.manifest.entrypoint;
   const target = prepared.files.find((file) => file.path === path);
   if (!target)
@@ -146,8 +147,8 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
       ? { path: file.path, encoding: "utf8" as const, data: data.toString("utf8") }
       : { path: file.path, encoding: "base64" as const, data: data.toString("base64") };
   });
-  try {
-    return (await captureFromAgent(
+  return saved(actor, input, () =>
+    captureFromAgent(
       actor,
       {
         key: input.key,
@@ -158,7 +159,72 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
         files,
       },
       "revise",
-    )) as {
+    ),
+  );
+}
+
+/** Edits one text file of a project; S3 copies the others. */
+async function reviseProjectFile(
+  actor: ServiceActor,
+  input: AgentEditsInput,
+  base: Awaited<ReturnType<typeof authorizedRevisionFiles>>,
+) {
+  const path = input.path ?? base.manifest.entrypoint;
+  const target = base.stored.find((file) => file.path === path);
+  if (!target)
+    throw new Problem(404, "not_found", `В проекте нет файла ${JSON.stringify(path)}.`);
+  if (!TEXT_MIMES.has(target.mime))
+    throw new Problem(
+      422,
+      "unsupported",
+      "Патчем правится только текстовый файл (Markdown, HTML, CSS, JavaScript, JSON, SVG, текст). Картинку или новый файл добавьте новой версией проекта целиком.",
+    );
+  const original = await readBlob(target.objectKey, target.objectVersion);
+  if (original.length !== target.size || sha256(original) !== target.sha256)
+    throw new Error("Revision file checksum mismatch");
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(original);
+  } catch {
+    throw new Problem(422, "unsupported", "Файл не в UTF-8: патч не применить.");
+  }
+  const bytes = Buffer.from(applyEdits(text, input.edits), "utf8");
+  const manifest = canonicalizeManifest({
+    ...base.manifest,
+    files: base.manifest.files.map((file) =>
+      file.path === path ? { ...file, size: bytes.length, sha256: sha256(bytes) } : file,
+    ),
+  });
+  const source = new Map(
+    base.stored.map(({ path: filePath, objectKey, objectVersion }) => [
+      filePath,
+      filePath === path ? bytes : { objectKey, objectVersion },
+    ]),
+  );
+  return saved(actor, input, () =>
+    saveBundle(
+      actor,
+      "revise",
+      {
+        key: input.key,
+        title: PATCH_TITLE,
+        artifactId: input.artifactId,
+        baseRevisionId: input.baseRevisionId,
+      },
+      manifest,
+      source,
+    ),
+  );
+}
+
+/** The save of a patched version; a version that landed meanwhile is a BaseMismatch. */
+async function saved(
+  actor: ServiceActor,
+  input: AgentEditsInput,
+  save: () => Promise<unknown>,
+) {
+  try {
+    return (await save()) as {
       uploadId: string;
       artifactId: string;
       revisionId: string;

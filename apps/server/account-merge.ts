@@ -22,10 +22,7 @@
 // Refused: the same account twice, a disabled or deleting account on either
 // side, blocked content in the source, editorial publications of the source,
 // and work in flight (an unfinished upload, URL import or preview build).
-import {
-  CopyObjectCommand,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import type { PoolClient } from "pg";
 import { actorKey } from "./analytics-keys.ts";
 import { audit } from "./artifacts.ts";
@@ -33,7 +30,7 @@ import { recordEvent } from "./content-moderation.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { requestDeletionRows } from "./provisional-maintenance.ts";
-import { bucket, s3 } from "./storage.ts";
+import { bucket, copyVersion, s3 } from "./storage.ts";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -46,19 +43,7 @@ export type ObjectMover = {
 };
 
 export const s3Mover: ObjectMover = {
-  async copy(fromKey, fromVersion, toKey) {
-    const result = await s3.send(
-      new CopyObjectCommand({
-        Bucket: bucket,
-        Key: toKey,
-        CopySource: `${bucket}/${encodeURIComponent(fromKey).replace(/%2F/g, "/")}?versionId=${encodeURIComponent(fromVersion)}`,
-        MetadataDirective: "COPY",
-      }),
-    );
-    if (!result.VersionId || result.VersionId === "null")
-      throw new Error("Storage versioning required");
-    return result.VersionId;
-  },
+  copy: copyVersion,
   async remove(key, version) {
     await s3.send(
       new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }),
