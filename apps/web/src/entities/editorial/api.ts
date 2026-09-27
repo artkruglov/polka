@@ -3,6 +3,7 @@ import {
   type EditorialPublicResponse,
 } from "../../../../../packages/editorial.ts";
 import { z } from "zod";
+import { ApiError, send } from "../../shared/api/client.ts";
 
 const editorialListSchema = z.object({ items: z.array(editorialPublicResponseSchema).max(20) }).strict();
 
@@ -42,9 +43,10 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+// Through the app's one request path (shared/api/client.ts): a network
+// failure or an error answer reads in Russian, never «Failed to fetch».
 export async function fetchEditorial(signal?: AbortSignal): Promise<EditorialPublicResponse[]> {
-  const response = await fetch("/api/editorial", { signal });
-  if (!response.ok) throw new Error("Не удалось загрузить редакционные материалы.");
+  const response = await send("/api/editorial", { signal });
   try {
     const payload = editorialListSchema.parse(await readJson(response));
     return payload.items;
@@ -57,9 +59,13 @@ export async function fetchEditorialItem(
   slug: string,
   signal?: AbortSignal,
 ): Promise<EditorialPublicResponse | null> {
-  const response = await fetch(`/api/editorial/${encodeURIComponent(slug)}`, { signal });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error("Не удалось загрузить материал.");
+  let response: Response;
+  try {
+    response = await send(`/api/editorial/${encodeURIComponent(slug)}`, { signal });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
   try {
     return editorialPublicResponseSchema.parse(await readJson(response));
   } catch {
