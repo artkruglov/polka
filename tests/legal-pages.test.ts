@@ -73,7 +73,8 @@ test("markdown renderer never emits raw HTML or unsafe links", () => {
 });
 
 // The promises the operator has to keep, and the terms the legal review
-// (docs/reviews/2026-09-23-legal) fixed on purpose. Changing one of them is a
+// (23.09.2026, docs/reviews/2026-09-23-legal in git history before 844e459)
+// fixed on purpose. Changing one of them is a
 // decision, not an edit: update the review note too.
 test("the texts keep the reviewed legal terms", () => {
   const privacy = doc("privacy");
@@ -112,7 +113,7 @@ test("the texts keep the reviewed legal terms", () => {
   ])
     assert.ok(privacy.includes(phrase), `privacy: ${phrase}`);
   assert.doesNotMatch(privacy, /нет аналитики/);
-  assert.match(privacy, /^Редакция от 25 сентября 2026\.$/m);
+  assert.match(privacy, /^Редакция от 27 сентября 2026\.$/m);
   // Sign in with Google (docs/specs/SIGN_IN_PROVIDERS.md, «Google»): what
   // Google sends, what is kept, and that nothing personal goes to Google.
   for (const phrase of [

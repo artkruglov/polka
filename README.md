@@ -23,6 +23,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="Проверки CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="Лицензия AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/коммерческая_лицензия-есть-1f4fff" alt="Есть коммерческая лицензия"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=версия&color=0f1420" alt="Последняя версия"></a>
@@ -72,7 +73,7 @@ codex mcp login polka
   <tr>
     <td width="33%" valign="top">
       <h4>Агент кладёт результат сам</h4>
-      В Claude (claude.ai и Desktop) и ChatGPT Полка — коннектор: «сохрани на Полку», и ссылка в ответе. Claude Code и Codex ставят плагин одной командой, без токена; другие MCP-клиенты — по адресу <code>/mcp</code>, скрипты и CI — через HTTP API.
+      В Claude (claude.ai и Desktop) Полка — коннектор: «сохрани на Полку», и ссылка в ответе. ChatGPT подключается тем же адресом, но с ним сохранение ещё не проверено. Claude Code и Codex ставят плагин одной командой, без токена; другие MCP-клиенты — по адресу <code>/mcp</code>, скрипты и CI — через HTTP API.
     </td>
     <td width="33%" valign="top">
       <h4>Интерактив у получателя</h4>
@@ -104,7 +105,7 @@ codex mcp login polka
     </td>
     <td valign="top">
       <h4>Полки отделов</h4>
-      У отдела своя полка: участники и роли, агент при подключении выбирает полку, ссылки и обсуждения, страница администратора компании.
+      У отдела своя полка: участники и роли, агент при подключении выбирает полку, ссылки и обсуждения, страница администратора компании. Включается настройкой <code>TEAM_SHELVES=on</code>; на polochka.app пока выключено до пилота.
     </td>
     <td valign="top">
       <h4>Спокойная модерация</h4>
@@ -141,11 +142,11 @@ flowchart LR
 
 Агент передаёт код работы сам — Полка ничего не забирает из чата. Каждое сохранение становится неизменяемой версией; ссылка привязана к версии. Чужой HTML считается враждебным: интерактивная страница открывается на отдельном домене, без cookies, API Полки и сети. Подробно: [архитектура](docs/architecture.md), [модель угроз](SECURITY.md#модель-угроз-вкратце).
 
-## Четыре способа сохранить работу
+## Пять способов сохранить работу
 
 | Откуда | Как | Подробно |
 |---|---|---|
-| Claude (claude.ai, Claude Desktop), ChatGPT | Коннектор `https://polochka.app/mcp` со входом через OAuth 2.1. Модель вызывает `polka_publish` и возвращает ссылку | [Коннектор](docs/MCP_CONNECTOR.md) |
+| Claude (claude.ai, Claude Desktop), ChatGPT (проверка идёт) | Коннектор `https://polochka.app/mcp` со входом через OAuth 2.1. Модель вызывает `polka_publish` и возвращает ссылку | [Коннектор](docs/MCP_CONNECTOR.md) |
 | Claude Code, Codex | Плагин Полки одной командой: MCP-сервер и скиллы. Вход и «Разрешить» в браузере — без токена | [Подключение агентов](docs/connect-agents.md#плагин-полки-для-claude-code-и-codex) |
 | Другие MCP-клиенты | Токен со страницы «Агенты», Streamable HTTP на `/mcp` | [Подключение агентов](docs/connect-agents.md) |
 | Скрипты, CI, внутренние агенты | `POST /api/v1/publish` или CLI `scripts/polka-publish.mjs` без зависимостей | [HTTP API](docs/PUBLISH_API.md) |
@@ -162,7 +163,7 @@ flowchart LR
 ```bash
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
-npm run local:setup              # .env с уникальными локальными секретами
+npm run local:setup              # .env с уникальными секретами и локальным интерактивным просмотром (HTML_LIVE_MODE=local)
 npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket и проверка его возможностей
@@ -170,6 +171,11 @@ npm run account:create -- demo --generate   # логин и пароль в .loc
 npm run build
 npm run dev                      # http://127.0.0.1:4390
 ```
+
+`local:setup` в конце печатает эту же последовательность. Если порты по умолчанию заняты (или это второй клон), задайте свои при создании `.env`: `POLKA_LOCAL_PROJECT=polka-two POLKA_LOCAL_PG_PORT=55432 POLKA_LOCAL_S3_PORT=9138 PORT=4490 VIEWER_PORT=4491 npm run local:setup`.
+
+> [!WARNING]
+> Если `db:migrate` падает с ошибкой аутентификации, остались volumes от прошлой установки со старым паролем. Сброс с удалением локальных данных: `docker compose --env-file=.env -f deploy/compose.local.yml down -v`, затем снова с `npm run infra:up` ([подробнее](docs/local-development.md)).
 
 Интерактивный просмотр, вход по коду и отдельные наборы тестов описаны в [docs/local-development.md](docs/local-development.md).
 
@@ -181,7 +187,7 @@ npm run check          # слои frontend + TypeScript
 npm run build
 npm test               # временные БД и bucket, после прогона удаляются
 npm test -- --live     # наборы с включённым локальным viewer
-npm run verify         # всё перед push: облачного CI нет, проверки локальные
+npm run verify         # всё перед push; то же проверяет GitHub Actions (.github/workflows/verify.yml)
 ```
 
 </details>
@@ -192,15 +198,15 @@ npm run verify         # всё перед push: облачного CI нет, �
 
 ## Для компаний
 
-| | Облако polochka.app | Своя установка (открытое ядро) | Коммерческая редакция |
+| | Облако polochka.app | Своя установка (открытое ядро) | Коммерческая редакция (не в этом репозитории) |
 |---|---|---|---|
 | Цена | Бесплатно на время пилота | Бесплатно по AGPL-3.0 | По договору |
 | Где данные | Yandex Cloud, Россия | На ваших серверах | На ваших серверах |
-| Что есть | Всё открытое ядро | Всё открытое ядро: полки отделов, роли, агенты по полкам, администратор компании, вход через IdP | Ядро и расширение для организаций: ссылки только для сотрудников, политика ссылок, агент только к папке, журнал агентов с выгрузкой в SIEM; дальше — интеграции, SAML и SCIM, установка без интернета |
+| Что есть | Открытое ядро; полки отделов выключены до пилота (`TEAM_SHELVES=off`) | Всё открытое ядро: полки отделов, роли, агенты по полкам, администратор компании, вход через IdP | Ядро и закрытое расширение для организаций: ссылки только для сотрудников, политика ссылок, агент только к папке, журнал агентов с выгрузкой в SIEM; дальше — интеграции, SAML и SCIM, установка без интернета |
 | Свои изменения кода | — | Даёте пользоваться изменённой Полкой — публикуете их по AGPL-3.0 | Можно не публиковать |
 | Поддержка и SLA | — | — | По договору |
 
-Подробнее — на странице [«Для компаний»](https://polochka.app/enterprise) и в [COMMERCIAL.md](COMMERCIAL.md): открытое ядро, коммерческая редакция и коммерческая лицензия на ядро. Вход через OpenID Connect (IdP компании), Яндекс ID и VK ID и доступ к библиотеке шаблонов по домену почты уже есть; SAML, SCIM и командных аккаунтов пока нет ([дорожная карта](docs/roadmap.md)).
+Подробнее — на странице [«Для компаний»](https://polochka.app/enterprise) и в [COMMERCIAL.md](COMMERCIAL.md): открытое ядро, коммерческая редакция и коммерческая лицензия на ядро. Вход через OpenID Connect (IdP компании), Яндекс ID, VK ID и Google и доступ к библиотеке шаблонов по домену почты уже есть; SAML, SCIM и командных аккаунтов пока нет ([дорожная карта](docs/roadmap.md)).
 
 ## Ограничения
 
@@ -216,7 +222,7 @@ npm run verify         # всё перед push: облачного CI нет, �
 ## Статус
 
 > [!NOTE]
-> **Текущий релиз — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). Hosted-пилот работает на https://polochka.app; регистрация по почте открыта, до 50 новых полок в сутки. API, схема БД и интерфейс ещё могут меняться.
+> **Текущий релиз — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). Hosted-пилот работает на https://polochka.app; регистрация по почте открыта для любого адреса, до 50 новых полок в сутки. API, схема БД и интерфейс ещё могут меняться.
 
 Что сделано и что нет — [docs/status.md](docs/status.md); что дальше — [docs/roadmap.md](docs/roadmap.md): эксплуатация пилота (проверка восстановления, инструкция обновления), публикация расширения браузера и проверка коннектора ChatGPT, затем варианты работы, снимок полки на дату и `polka pull/push`; позже — Telegram-бот, SAML и SCIM.
 

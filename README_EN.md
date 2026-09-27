@@ -23,6 +23,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="CI checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="License: AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/commercial_license-available-1f4fff" alt="Commercial license available"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=version&color=0f1420" alt="Latest version"></a>
@@ -74,7 +75,7 @@ Each time Полка opens: sign in to your shelf (or start without signing up) 
   <tr>
     <td width="33%" valign="top">
       <h4>The agent saves it for you</h4>
-      In Claude (claude.ai and Desktop) and ChatGPT, Полка is a connector: say "save this to Полка" and the reply contains a link. Claude Code and Codex install the plugin with one command and no token; other MCP clients use the <code>/mcp</code> address; scripts and CI use the HTTP API.
+      In Claude (claude.ai and Desktop), Полка is a connector: say "save this to Полка" and the reply contains a link. ChatGPT connects to the same address, but saving from it hasn't been checked yet. Claude Code and Codex install the plugin with one command and no token; other MCP clients use the <code>/mcp</code> address; scripts and CI use the HTTP API.
     </td>
     <td width="33%" valign="top">
       <h4>Interactive for recipients</h4>
@@ -106,7 +107,7 @@ Each time Полка opens: sign in to your shelf (or start without signing up) 
     </td>
     <td valign="top">
       <h4>Department shelves</h4>
-      A department gets its own shelf: members and roles, the agent picks the shelf when it connects, links and discussions, a company admin page.
+      A department gets its own shelf: members and roles, the agent picks the shelf when it connects, links and discussions, a company admin page. Turned on with <code>TEAM_SHELVES=on</code>; off on polochka.app until a pilot.
     </td>
     <td valign="top">
       <h4>Calm moderation</h4>
@@ -143,11 +144,11 @@ flowchart LR
 
 The agent hands over the work's code itself; Полка doesn't pull anything out of the chat. Every save becomes an immutable version, and a link is bound to a version. Foreign HTML is treated as hostile: an interactive page opens on a separate domain, with no access to cookies, Полка's API or the network. More: [architecture](docs/architecture.md) (Russian), [threat model](SECURITY.md#модель-угроз-вкратце).
 
-## Four ways to save a work
+## Five ways to save a work
 
 | From | How | Details |
 |---|---|---|
-| Claude (claude.ai, Claude Desktop), ChatGPT | Connector `https://polochka.app/mcp` with OAuth 2.1 sign-in. The model calls `polka_publish` and returns a link | [Connector](docs/MCP_CONNECTOR.md) |
+| Claude (claude.ai, Claude Desktop), ChatGPT (being checked) | Connector `https://polochka.app/mcp` with OAuth 2.1 sign-in. The model calls `polka_publish` and returns a link | [Connector](docs/MCP_CONNECTOR.md) |
 | Claude Code, Codex | The Полка plugin in one command: MCP server and skills. Sign in and allow in the browser; no token | [Connecting agents](docs/connect-agents.md#плагин-полки-для-claude-code-и-codex) |
 | Other MCP clients | Token from the «Агенты» (Agents) page, Streamable HTTP at `/mcp` | [Connecting agents](docs/connect-agents.md) |
 | Scripts, CI, in-house agents | `POST /api/v1/publish` or the dependency-free CLI `scripts/polka-publish.mjs` | [HTTP API](docs/PUBLISH_API.md) |
@@ -164,7 +165,7 @@ You need Node.js ≥ 22.16, npm and a running Docker.
 ```bash
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
-npm run local:setup              # .env with unique local secrets
+npm run local:setup              # .env with unique secrets and the local interactive viewer (HTML_LIVE_MODE=local)
 npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket and a capability check
@@ -172,6 +173,11 @@ npm run account:create -- demo --generate   # login and password in .local/demo-
 npm run build
 npm run dev                      # http://127.0.0.1:4390
 ```
+
+`local:setup` prints the same sequence at the end. If the default ports are taken (or this is a second clone), choose your own when `.env` is created: `POLKA_LOCAL_PROJECT=polka-two POLKA_LOCAL_PG_PORT=55432 POLKA_LOCAL_S3_PORT=9138 PORT=4490 VIEWER_PORT=4491 npm run local:setup`.
+
+> [!WARNING]
+> If `db:migrate` fails with an authentication error, volumes from an earlier install with an old password are still there. Reset, deleting the local data: `docker compose --env-file=.env -f deploy/compose.local.yml down -v`, then start again from `npm run infra:up` ([details](docs/local-development.md), Russian).
 
 The interactive viewer, e-mail code sign-in and the separate test suites are covered in [docs/local-development.md](docs/local-development.md).
 
@@ -183,7 +189,7 @@ npm run check          # frontend layers + TypeScript
 npm run build
 npm test               # throwaway database and bucket, removed afterwards
 npm test -- --live     # suites that need the local viewer
-npm run verify         # everything before a push: there is no hosted CI
+npm run verify         # everything before a push; GitHub Actions runs the same (.github/workflows/verify.yml)
 ```
 
 </details>
@@ -194,14 +200,15 @@ A deployment is one Docker image plus external PostgreSQL and versioned S3 stora
 
 ## For companies
 
-| | polochka.app cloud | Self-hosted | Commercial license |
+| | polochka.app cloud | Self-hosted (open core) | Commercial edition (not in this repository) |
 |---|---|---|---|
 | Price | Free during the pilot | Free under the AGPL-3.0 | By agreement |
 | Where the data lives | Yandex Cloud, Russia | Your servers | Your servers |
+| What's included | The open core; department shelves are off until a pilot (`TEAM_SHELVES=off`) | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM; next — integrations, SAML and SCIM, offline installation |
 | Your code changes | — | If people use your modified Полка, publish them under the AGPL-3.0 | May stay private |
 | Support and SLA | — | — | By contract |
 
-More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). Sign-in through a company IdP (OpenID Connect), Yandex ID and VK ID, and template-library access by e-mail domain already work; there are no team accounts, SAML or SCIM yet ([roadmap](docs/roadmap.md)).
+More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). Sign-in through a company IdP (OpenID Connect), Yandex ID, VK ID and Google, and template-library access by e-mail domain already work; there are no team accounts, SAML or SCIM yet ([roadmap](docs/roadmap.md)).
 
 ## Limitations
 
@@ -217,7 +224,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 ## Status
 
 > [!NOTE]
-> **Current release — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open, up to 50 new shelves a day. The API, database schema and UI may still change.
+> **Current release — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
 
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 

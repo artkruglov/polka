@@ -20,10 +20,18 @@ test("local storage bootstrap accepts only the generated loopback target", () =>
       endpoint: "http://localhost:9038",
     }),
   );
+  // POLKA_LOCAL_S3_PORT may move the local MinIO to another loopback port.
+  assert.doesNotThrow(() =>
+    assertLocalStorageBootstrapTarget({
+      ...generatedTarget,
+      endpoint: "http://127.0.0.1:9138",
+    }),
+  );
 
   for (const target of [
     { ...generatedTarget, endpoint: "https://storage.example:9038" },
-    { ...generatedTarget, endpoint: "http://127.0.0.1:9000" },
+    { ...generatedTarget, endpoint: "http://127.0.0.1" },
+    { ...generatedTarget, endpoint: "http://10.0.0.5:9038" },
     { ...generatedTarget, endpoint: "http://127.0.0.1:9038/path" },
     { ...generatedTarget, endpoint: "http://127.0.0.1:9038?host=remote" },
     { ...generatedTarget, bucket: "production" },

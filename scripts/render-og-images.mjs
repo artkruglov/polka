@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Renders the link-preview cards docs/design/og/{share,default}.svg to the
+// Renders the link-preview cards docs/assets/og/{share,default}.svg to the
 // 1200×630 PNGs in apps/web/public/og/, with headless Chrome over the
 // DevTools protocol (no dependency).
 // Fonts are inlined as data URIs, so the result does not depend on file://
@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const source = join(root, "docs/design/og");
+const source = join(root, "docs/assets/og");
 const pub = join(root, "apps/web/public");
 const chrome =
   process.env.CHROME ??

@@ -15,13 +15,26 @@ npm run build
 npm run dev
 ```
 
-Откройте http://127.0.0.1:4390/ и войдите с логином и паролем из `.local/demo-account.txt`. Не публикуйте этот файл. Повторно тот же аккаунт создавать не нужно.
+`local:setup` в конце печатает эту же последовательность. Откройте http://127.0.0.1:4390/ и войдите с логином и паролем из `.local/demo-account.txt`. Не публикуйте этот файл. Повторно тот же аккаунт создавать не нужно.
 
 Сервер отдаёт собранный `dist`. После изменений интерфейса выполните `npm run build` и перезагрузите страницу, после изменений backend перезапустите `npm run dev`.
 
 Остановить контейнеры с сохранением данных: `npm run infra:stop`. Не удаляйте volumes, `.env` и `LINK_KEY`: без ключа старые ссылки перестанут открываться.
 
-Порты 54388, 9038, 4390 и 4391 фиксированы, compose-проект называется `polka-local`. Второй клон репозитория попадает в тот же проект. Если вы пересоздали `.env`, а volumes остались от прошлой установки, пароль не совпадёт, и `db:migrate` упадёт с ошибкой аутентификации. Сброс локального окружения — удалить его вместе с данными и поднять заново, затем повторить первый запуск начиная с `db:migrate`:
+### Порты и второй клон
+
+По умолчанию PostgreSQL слушает 127.0.0.1:54388, MinIO — 127.0.0.1:9038, приложение — 4390, интерактивный viewer — 4391, compose-проект называется `polka-local`. Всё это записано в `.env`, и `deploy/compose.local.yml` берёт проект и порты оттуда. Другие значения задаются один раз, при создании `.env`:
+
+```bash
+POLKA_LOCAL_PROJECT=polka-two POLKA_LOCAL_PG_PORT=55432 POLKA_LOCAL_S3_PORT=9138 \
+PORT=4490 VIEWER_PORT=4491 npm run local:setup
+```
+
+Так второй клон репозитория получает свои контейнеры и volumes и не мешает первому. В `.env`, созданном раньше, строк `POLKA_LOCAL_*` и `HTML_LIVE_MODE` нет: действуют прежние порты и статичный показ, строки можно дописать вручную. Шаг `grants` в `npm run verify` и тесты удаления аккаунта требуют MinIO на 9038: полный прогон делайте на портах по умолчанию.
+
+### Устаревшие volumes
+
+Если вы пересоздали `.env`, а volumes остались от прошлой установки, пароль не совпадёт, и `db:migrate` упадёт с ошибкой аутентификации. Сброс локального окружения — удалить его вместе с данными и поднять заново, затем повторить первый запуск начиная с `db:migrate`:
 
 ```bash
 docker compose --env-file=.env -f deploy/compose.local.yml down -v   # удалит локальные БД и bucket
@@ -36,7 +49,8 @@ npm run build
 npm test               # основной набор (нужны запущенные infra:up и .env)
 npm test -- --live     # наборы с включённым локальным viewer
 npm test -- --live tests/trash.test.ts   # один файл из live-набора
-npm run verify         # все проверки перед push и деплоем (облачного CI нет), около минуты
+npm run verify         # все проверки перед push и деплоем, несколько минут
+npm run verify -- --print-steps   # шаги; --only=<шаг,…> запускает выбранные
 ```
 
 `npm test` запускает `scripts/test-isolated.ts`. Раннер создаёт случайную базу PostgreSQL и отдельный versioned bucket, применяет миграции, прогоняет `tests/default-suite.json` (с `--live` — `tests/live-suite.json`) и удаляет только созданные им ресурсы. В конце он печатает `test-suite.cleanup`, и ошибка очистки считается падением прогона. Рабочие `DATABASE_URL` и `S3_BUCKET` тестам не передаются.
@@ -45,15 +59,13 @@ npm run verify         # все проверки перед push и деплое
 
 Если сервер слушает порт 4390, это ещё не значит, что база и хранилище доступны. Проверьте `docker compose ps` и `/api/health`.
 
+Те же шаги на каждый push в `main` и pull request выполняет GitHub Actions ([.github/workflows/verify.yml](../.github/workflows/verify.yml)): каждый шаг там вызывает `node scripts/verify.mjs --only=<шаг>`, поэтому список разрешённых лицензий и digest образа gitleaks определены только в `scripts/verify.mjs`. Проверка renderer (`npm run test:renderer-runtime`) запускается в CI только вручную (workflow_dispatch с флагом `renderer`).
+
 ## Интерактивный просмотр
 
-По умолчанию HTML показывается статично. Чтобы проверить интерактивный режим локально:
+`npm run local:setup` записывает в `.env` `HTML_LIVE_MODE=local`: интерактивные страницы работают сразу. Чтобы посмотреть статичный показ, запустите `HTML_LIVE_MODE=disabled npm run dev` или поменяйте значение в `.env`.
 
-```bash
-HTML_LIVE_MODE=local npm run dev
-```
-
-Viewer поднимается отдельным listener на http://localhost:4391. Другой hostname (`localhost` против `127.0.0.1`) даёт браузеру отдельный origin. Режим `local` работает только на loopback. Для hosted-установки есть режим `production`, для которого нужен отдельный registrable domain ([HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md), [deploy/hosted/README.md](../deploy/hosted/README.md)). Старая переменная `HTML_LIVE_ENABLED=true` равносильна `HTML_LIVE_MODE=local`.
+Viewer поднимается отдельным listener на http://localhost:4391 (`VIEWER_PORT`). Другой hostname (`localhost` против `127.0.0.1`) даёт браузеру отдельный origin. Режим `local` работает только на loopback. Для hosted-установки есть режим `production`, для которого нужен отдельный registrable domain ([HOSTED_VIEWER_DELTA](HOSTED_VIEWER_DELTA.md), [deploy/hosted/README.md](../deploy/hosted/README.md)). Старая переменная `HTML_LIVE_ENABLED=true` равносильна `HTML_LIVE_MODE=local`.
 
 ## Вход по коду из письма
 
