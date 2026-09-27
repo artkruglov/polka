@@ -15,6 +15,8 @@ import {
   beginBundleUploadInTransaction,
   uploadBundleFileInTransaction,
   finalizeBundleUploadInTransaction,
+  prepareBundleFinalize,
+  stageBundleFile,
   normalizeBundleRequest,
   validateBundleFileBytes,
 } from "./artifacts.ts";
@@ -186,7 +188,12 @@ async function capturePrepared(
     );
     return result;
   });
+  // Bytes go to S3 and the files are read back for finalize outside the
+  // steps' transactions (artifacts.ts, stageBundleFile); each step then
+  // rechecks the connection and records under the shelf lock.
   for (const [index, file] of manifest.files.entries()) {
+    const bytes = source.get(file.path)!;
+    const staged = await stageBundleFile(owner, begun.uploadId, index, bytes);
     await run(async (c) => {
       const row = (
         await c.query(
@@ -206,10 +213,12 @@ async function capturePrepared(
         owner,
         begun.uploadId,
         index,
-        source.get(file.path)!,
+        bytes,
+        staged,
       );
     });
   }
+  const prepared = await prepareBundleFinalize(owner, begun.uploadId);
   return run(async (c) => {
     const row = (
       await c.query(
@@ -224,6 +233,7 @@ async function capturePrepared(
       c,
       owner,
       begun.uploadId,
+      prepared,
     );
     await hooks.afterSave?.(c, receipt);
     return receipt;

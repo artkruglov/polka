@@ -15,6 +15,8 @@ import {
   beginBundleUploadInTransaction,
   finalizeBundleUploadInTransaction,
   normalizeBundleRequest,
+  prepareBundleFinalize,
+  stageBundleFile,
   uploadBundleFileInTransaction,
   type Actor,
 } from "./artifacts.ts";
@@ -129,19 +131,23 @@ export async function putProjectFile(
   bytes: Buffer,
 ) {
   const scope = await scopeOf(actor, uploadId);
+  // Stored before the transaction (artifacts.ts, stageBundleFile); the
+  // transaction rechecks the connection and records it.
+  const staged = await stageBundleFile(owner(actor), uploadId, index, bytes);
   return withServiceActorTransaction(actor, scope, async (c, verified) => {
     const who = owner(verified);
     await lockProjectUpload(c, who, uploadId);
-    return uploadBundleFileInTransaction(c, who, uploadId, index, bytes);
+    return uploadBundleFileInTransaction(c, who, uploadId, index, bytes, staged);
   });
 }
 
 export async function finalizeProjectUpload(actor: ServiceActor, uploadId: string) {
   const scope = await scopeOf(actor, uploadId);
+  const prepared = await prepareBundleFinalize(owner(actor), uploadId);
   return withServiceActorTransaction(actor, scope, async (c, verified) => {
     const who = owner(verified);
     await lockProjectUpload(c, who, uploadId);
-    return finalizeBundleUploadInTransaction(c, who, uploadId);
+    return finalizeBundleUploadInTransaction(c, who, uploadId, prepared);
   });
 }
 
