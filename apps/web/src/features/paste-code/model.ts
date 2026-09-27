@@ -25,6 +25,21 @@ function textTitle(source: string) {
   return line ? clipTitle(line) : "";
 }
 
+/**
+ * A name for component source: its first heading's text, else the exported
+ * component's name spaced out («SalesDashboard» → «Sales Dashboard»).
+ */
+export function componentTitle(source: string) {
+  const heading = /<h[1-2]\b[^>]*>([^<{}]{2,})<\/h[1-2]>/i.exec(source)?.[1];
+  if (heading?.trim()) return clipTitle(heading.replace(/\s+/g, " ").trim());
+  const name =
+    /export\s+default\s+(?:async\s+)?function\s+([A-Z][A-Za-z0-9_]*)/.exec(source)?.[1] ??
+    /export\s+default\s+([A-Z][A-Za-z0-9_]*)\s*;?\s*$/m.exec(source)?.[1] ??
+    /(?:function|const)\s+([A-Z][A-Za-z0-9_]*)\s*(?:=|\()/.exec(source)?.[1];
+  if (!name || name === "App") return "";
+  return clipTitle(name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_/g, " "));
+}
+
 /** React/JSX or module source: it looks like markup but is a program, not a page. */
 const COMPONENT_SOURCE =
   /^\s*(?:import\s[^;\n]*from\s*["'][^"']+["']|import\s+["'][^"']+["']|export\s+default\b|["']use client["'])/m;
@@ -44,7 +59,7 @@ export function describePaste(source: string): PastedCode | null {
         ? htmlTitle(source) || "Страница из чата"
         : kind === "text"
           ? textTitle(source) || "Заметка из чата"
-          : "Код компонента",
+          : componentTitle(source) || "Код компонента",
     size,
     tooLarge: size > MAX_BYTES,
   };

@@ -32,7 +32,9 @@ export const moderationNote = (a: Artifact) =>
     : a.share?.moderation === "paused"
       ? "Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки. Получатели сейчас видят экран «на проверке»."
       : null;
-export const isImage = (r: Revision) => r.mime.startsWith("image/");
+/** A new link's lifetime, the same in the share dialog and after saving on /bring. */
+export const DEFAULT_LINK_DAYS = 7;
+export const isImage =(r: Revision) => r.mime.startsWith("image/");
 /** Mirrors the server: a lone static HTML entrypoint needs no runtime. */
 export const isStaticSingleFileBundle = (r: Revision) =>
   r.storageKind === "bundle" &&
@@ -118,7 +120,7 @@ export function profileView(
       : "";
   return {
     label: "Страница · нельзя отправить ссылкой",
-    text: `${refused || "Для этой страницы пока не подготовлен поддерживаемый просмотр. "}Оригинал сохранён только для вас; ссылку на него создать нельзя.`,
+    text: `${refused || "Без скриптов в этой странице почти нет текста (или в ней есть разметка, которую Полка получателям не показывает), а скрипты в статичном просмотре не запускаются. "}Оригинал сохранён только для вас; ссылку на него создать нельзя. Чтобы поделиться, попросите в чате: «Собери это в один HTML-файл с готовым текстом, без внешних ссылок» — и сохраните новую версию.`,
     linkable: false,
     badge: "Только для владельца",
   };

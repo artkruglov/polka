@@ -351,6 +351,13 @@ export function Signup() {
                   maxLength={9}
                   required
                   value={code}
+                  // The browser's own message would be in its language.
+                  onInvalid={(e) =>
+                    e.currentTarget.setCustomValidity(
+                      "Введите восемь цифр из письма.",
+                    )
+                  }
+                  onInput={(e) => e.currentTarget.setCustomValidity("")}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 />
                 {challenge.delivery !== "local" && (
