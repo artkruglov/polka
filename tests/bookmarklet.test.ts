@@ -539,7 +539,7 @@ test("forged messages are ignored: another nonce, another window, another origin
     claude.sessionId,
     `window.__replies = []; ${post("Настоящий")}`,
   );
-  await until(async () => (await text(polka.sessionId)).includes("Работа из чата"), "the card");
+  await until(async () => /работа из чата/i.test(await text(polka.sessionId)), "the card");
   assert.deepEqual(await until(() => evaluate(claude.sessionId, "__replies.length && __replies"), "the reply"), ["ready"]);
   // Only the first accepted message counts.
   await evaluate(claude.sessionId, post("Второй"));
