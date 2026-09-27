@@ -87,6 +87,9 @@ const CompanyAdmin = page(() =>
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
+const NotFound = page(() =>
+  import("../../pages/not-found/index.tsx").then((m) => m.NotFound),
+);
 
 /** A chunk that fails to load (offline, or replaced by a new release) gets a reload, not a blank page. */
 class ChunkBoundary extends React.Component<
@@ -163,4 +166,5 @@ export {
   Claim,
   Enter,
   SignIn,
+  NotFound,
 };

@@ -128,9 +128,17 @@ test("hidden or still checking: one line, and the steps come back on request", (
   assert.match(hidden, /agent-hero--slim/);
   assert.match(hidden, /Подключить агента/);
   assert.doesNotMatch(hidden, /role="tablist"/);
-  const loading = hero({ connections: { status: "loading" } });
+  // While the check runs the hero keeps the shape this browser saw last, so
+  // the shelf below does not jump (CLS): one line after an agent was seen…
+  const loading = hero({ connections: { status: "loading" }, expectConnected: true });
+  assert.match(loading, /agent-hero--slim/);
   assert.match(loading, /aria-busy="true"/);
   assert.match(loading, /Проверяем подключения/);
+  // …the steps otherwise, already in place.
+  const fresh = hero({ connections: { status: "loading" } });
+  assert.match(fresh, /role="tablist"/);
+  assert.doesNotMatch(fresh, /agent-hero--slim/);
+  assert.doesNotMatch(fresh, /Не удалось проверить подключения/);
   // A failed check still shows the steps: they work either way.
   const failed = hero({ connections: { status: "error" } });
   assert.match(failed, /role="tablist"/);
