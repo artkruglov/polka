@@ -1,8 +1,8 @@
 # Hosted viewer: ограниченный переход к staging
 
-> **Статус:** реализовано, включая режим `production` (polochka.app + polochka.page). Заголовок и первые абзацы описывают исходный переход к staging. 23.09.2026: частичная приёмка пунктов 4–6 в Chrome 153 — [reviews/2026-09-23-viewer-egress](reviews/2026-09-23-viewer-egress/README.md): найден и закрыт выход через WebRTC; Firefox, Safari и независимый счётчик (пункт 5) ещё не сделаны.
+> **Статус:** реализовано, включая режим `production` (polochka.app + polochka.page). Заголовок и первые абзацы описывают исходный переход к staging. 23.09.2026: частичная приёмка пунктов 4–6 в Chrome 153 (протокол `docs/reviews/2026-09-23-viewer-egress` — в истории git до коммита 844e459, проба — `scripts/viewer-egress-probe.mjs`): найден и закрыт выход через WebRTC; Firefox, Safari и независимый счётчик (пункт 5) ещё не сделаны.
 
-20.09.2026. Delta к [LIVE_VIEWER_SPEC](LIVE_VIEWER_SPEC.md) и [ARCHITECTURE](architecture.md). Это контракт эксперимента, не разрешение production и не изменение R06. HTML/CSS/JS остаются целью; оригиналы и производные различаются, неподдержанное содержимое сохраняется без ложного ready. Код этим документом не меняется.
+20.09.2026. Delta к [LIVE_VIEWER_SPEC](LIVE_VIEWER_SPEC.md) и [ARCHITECTURE](architecture.md). Исходно это был контракт эксперимента, без разрешения production; production разрешён 22.09.2026 (ниже). HTML/CSS/JS остаются целью; оригиналы и производные различаются, неподдержанное содержимое сохраняется без ложного ready. 
 
 ## Текущее состояние реализации
 

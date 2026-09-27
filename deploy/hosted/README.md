@@ -7,7 +7,7 @@
 | Сервис | Назначение |
 |---|---|
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
-| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции (точный набор — в `packages/migrations.ts`, сейчас по 033; 031 — из параллельной ветки), `deploy/runtime-grants.sql`, проверка versioned S3 |
+| `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции до текущей (точный набор и `CURRENT_SCHEMA_VERSION` — в `packages/migrations.ts`), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
@@ -146,7 +146,7 @@ sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' deploy/hosted/hosted.e
 cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 ```
 
-`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`, сейчас 033): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
+`up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
 
 ## Откат
 
@@ -205,12 +205,12 @@ rm polka.dump
 
 ## Вход по почте
 
-По умолчанию выключен (`MAIL_MODE=disabled`): аккаунты с паролем выдаёт оператор. С `MAIL_MODE=smtp` вход — по восьмизначному коду из письма. В режиме `EMAIL_SIGNUP=invite` (по умолчанию в этой форме установки) код получают только:
+По умолчанию выключен (`MAIL_MODE=disabled`): аккаунты с паролем выдаёт оператор. С `MAIL_MODE=smtp` вход — по восьмизначному коду из письма. В режиме `EMAIL_SIGNUP=invite` (по умолчанию в `compose.yml` и `hosted.env.example` этой формы установки; в коде по умолчанию `open`) код получают только:
 
 - аккаунты, к которым оператор привязал адрес: `docker compose --env-file hosted.env run --rm app node --import tsx scripts/account-email.ts <логин> <почта>` — вход по коду откроет полку этого аккаунта;
 - адреса и домены из `EMAIL_SIGNUP_ALLOW` (`anna@example.com,@team.example.com`) — при первом входе у них появится новая полка.
 
-Остальным форма отвечает так же, но письмо не уходит, поэтому по ней нельзя узнать, кто приглашён. `EMAIL_SIGNUP=open` открывает регистрацию любому адресу.
+Остальным форма отвечает так же, но письмо не уходит, поэтому по ней нельзя узнать, кто приглашён. `EMAIL_SIGNUP=open` открывает регистрацию любому адресу (так на polochka.app, с потолками `EMAIL_SIGNUP_DAILY_*`).
 
 Отправка через Yandex Cloud Postbox:
 
@@ -218,7 +218,7 @@ rm polka.dump
 2. Сервисный аккаунт с ролью `postbox.sender` и его API-ключ со scope `yc.postbox.send`.
 3. В `hosted.env`: `MAIL_MODE=smtp`, `SMTP_HOST=postbox.cloud.yandex.net`, `SMTP_PORT=587`, `SMTP_USER=<ID API-ключа>`, `SMTP_PASS=<секрет API-ключа>`, `MAIL_FROM=no-reply@<APP_HOST>`, затем `docker compose --env-file hosted.env up -d`.
 
-**Домены почты для новых полок.** В этой форме установки `EMAIL_SIGNUP_DOMAINS=ru-only`: новую полку по коду можно открыть только на адресах Яндекса, Mail.ru, Рамблера, VK и на домене самой установки. Причина — ч. 10 ст. 8 149-ФЗ. Существующие аккаунты на других доменах входят по коду, пока `EMAIL_LOGIN_DOMAINS=any`. Подробности — [SIGN_IN_PROVIDERS.md](../../docs/specs/SIGN_IN_PROVIDERS.md).
+**Домены почты для новых полок.** Шаблон этой формы установки (`compose.yml` и `hosted.env.example`) ставит `EMAIL_SIGNUP_DOMAINS=ru-only`: новую полку по коду можно открыть только на адресах Яндекса, Mail.ru, Рамблера, VK и на домене самой установки. Причина — ч. 10 ст. 8 149-ФЗ. Это умолчание шаблона, а не кода (в коде — `any`). На polochka.app с 26.09.2026 стоит `EMAIL_SIGNUP_DOMAINS=any`: новую полку можно открыть на любом адресе. Существующие аккаунты на других доменах входят по коду, пока `EMAIL_LOGIN_DOMAINS=any`. Подробности — [SIGN_IN_PROVIDERS.md](../../docs/specs/SIGN_IN_PROVIDERS.md).
 
 ## Вход через Яндекс ID и VK ID
 
@@ -285,6 +285,15 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/accou
 - `on` — комментарии получателей ([COMMENTS.md](../../docs/specs/COMMENTS.md));
 - `off` — обсуждений нет вовсе.
 
+## Прочие настройки
+
+- `TEAM_SHELVES` (`off` по умолчанию и на polochka.app) — полки отделов ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md)).
+- `BROWSER_EXTENSION_IDS` — ID официальной сборки расширения «На Полку»; её страница согласия подписана «Расширение браузера «На Полку»». Пусто — любое расширение показывается со своим ID.
+- `POLKA_EXTENSIONS` — модули расширений открытого ядра, установленные в образ ([EXTENSIONS.md](../../docs/specs/EXTENSIONS.md)). Пусто — только ядро.
+- `S3_SECRET_KEY` — не короче 16 символов, иначе приложение не запустится.
+- `TRUST_PROXY=127.0.0.1` и `COOKIE_SECURE=true` зафиксированы в `compose.yml`: Caddy на той же VM. Если ставите перед Полкой другой прокси, `TRUST_PROXY` должен быть его адресом. Пустой `TRUST_PROXY` за прокси превращает лимиты по IP (вход, регистрации с одного IP, API без токена) в один общий лимит на всех.
+- `ACCOUNT_DELETION_ENABLED` зафиксирован `false`: удаление аккаунта — незавершённый локальный эксперимент. `RESTORE_*` задаёт только оверлей восстановления ([RESTORE.md](../RESTORE.md)).
+
 ## Модерация
 
 Правила — [docs/specs/ABUSE_PROTECTION.md](../../docs/specs/ABUSE_PROTECTION.md) (доверие, жалобы, письма) и [docs/specs/CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md) (фильтр запрещённого содержимого, модели, блокировка, изоляция и удаление). Отдельной админки нет: оператор получает письма с кнопками только о том, что отметила автоматика, и о жалобах, а без почты пользуется скриптами ниже.
@@ -306,7 +315,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/accou
 | `CONTENT_FILTER_AUTOBLOCK` | `false` первые 2–4 недели, затем `true` | Автоблокировка: при `false` сразу блокируются только CSAM и явный вредоносный код, остальное ждёт вас; при `true` — ещё тяжёлые категории, в которых уверены правила или согласны обе модели |
 | `MODERATION_RETENTION` | пусто | Сроки изоляции по категориям поверх умолчаний (`porn=30,gambling=keep`…) |
 | `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы |
-| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила |
+| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила. При любом другом провайдере обязателен `CONTENT_MODEL_PRIMARY`: без него приложение не запустится |
 | `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки (UTC, с 03:00 по Москве); дальше только правила и одно письмо вам. Расход хранится в базе, перезапуск и деплой его не обнуляют |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 
