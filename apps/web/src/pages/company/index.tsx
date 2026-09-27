@@ -6,7 +6,7 @@ import { Button, Notice, StatusPanel } from "../../shared/ui/controls.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { ROLE_LABEL, switchShelf } from "../../entities/shelf/model.ts";
 import type { ShelfRole } from "../../shared/api/client.ts";
-import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
+import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
 import "./styles.css";
 
 // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4): every
@@ -229,11 +229,7 @@ export function CompanyAdmin() {
   const extensionSections = useSlot("company-admin");
   useEffect(() => {
     if (state.kind !== "ready") return;
-    request<{ extensions?: string[] }>("/capabilities")
-      .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
-      .catch(() => {
-        // The page works without them.
-      });
+    void ensureExtensions();
   }, [state.kind]);
   useEffect(() => {
     if (account === undefined) return;

@@ -49,7 +49,7 @@ import { DeleteShelfSection } from "./delete-shelf.tsx";
 import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
-import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
+import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
 
 const clientDefaults = {
   http: "Скрипт (HTTP API)",
@@ -157,11 +157,7 @@ export function AgentConnections() {
   const connectionSections = useSlot("agent-connection");
   useEffect(() => {
     if (!account) return;
-    request<{ extensions?: string[] }>("/capabilities")
-      .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
-      .catch(() => {
-        // The page works without them.
-      });
+    void ensureExtensions();
   }, [account]);
   const teamShelves = shelves.items.filter((shelf) => shelf.kind === "team");
   const tokenRole = teamShelves.find((shelf) => shelf.id === tokenShelf)?.role;

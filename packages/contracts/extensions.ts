@@ -2,11 +2,22 @@
 // app and packages/extension-api.
 
 /** Where an extension's web module may add a section. */
-export type ExtensionSlot = "company-admin" | "agent-connection";
+export type ExtensionSlot = "company-admin" | "agent-connection" | "share-dialog";
 
 /** What a section in the agent-connection place receives: one connection. */
 export type AgentConnectionSlotProps = {
   connection: { id: string; name: string; kind: "token" | "oauth"; shelf?: { id: string; name: string } };
+};
+
+/**
+ * What a section in the share-dialog place receives: the work in the
+ * «Поделиться» window, the department shelf it is on (null: one's own) and
+ * its link, if it has one. E.g. the rules links from this shelf follow.
+ */
+export type ShareDialogSlotProps = {
+  artifact: { id: string; title: string; revisionId: string; revisionNumber: number };
+  shelf: string | null;
+  link: { status: "active" | "behind" | "expired" | "revoked"; expiresAt: string } | null;
 };
 
 /**

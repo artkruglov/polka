@@ -107,4 +107,9 @@ export interface PolkaExtension {
   web?: { script: string };
 }
 
-export type { ExtensionHost, ExtensionSlot } from "../contracts/extensions.ts";
+export type {
+  AgentConnectionSlotProps,
+  ExtensionHost,
+  ExtensionSlot,
+  ShareDialogSlotProps,
+} from "../contracts/extensions.ts";

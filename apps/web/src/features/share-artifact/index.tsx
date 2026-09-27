@@ -1,6 +1,6 @@
 import "./styles.css";
 import { Button, ChoiceCard, IconButton, LinkButton, SelectField } from "../../shared/ui/controls.tsx";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -25,6 +25,7 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
 import { recipientAccessNote } from "../../entities/link/index.tsx";
+import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
 
 type Choice = "private" | "link";
 
@@ -45,6 +46,11 @@ export function SharePanel({
   provisional?: boolean;
 }) {
   const ways = useSignInWays();
+  // Extensions' sections (docs/specs/EXTENSIONS.md), e.g. the link rules of the shelf.
+  const extensionSections = useSlot("share-dialog");
+  useEffect(() => {
+    void ensureExtensions();
+  }, []);
   const active = !!a.share && ["active", "behind"].includes(a.share.status);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -221,6 +227,16 @@ export function SharePanel({
             <p>Следующее открытие будет недоступно. Уже полученную копию отозвать нельзя.</p>
           </div>
         )}
+
+        {extensionSections.map(({ id, Component }) => (
+          <div key={id} className="share-extension">
+            <Component
+              artifact={{ id: a.id, title: a.title, revisionId: a.revision.id, revisionNumber: a.revision.number }}
+              shelf={currentShelf()}
+              link={a.share ? { status: a.share.status, expiresAt: a.share.expiresAt } : null}
+            />
+          </div>
+        ))}
 
         <p className="share-review">
           <ShieldCheck aria-hidden="true" />
