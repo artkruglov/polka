@@ -46,6 +46,7 @@ import { ClientCards, SetupPanel } from "../../widgets/agent-setup/index.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 import { DeleteShelfSection } from "./delete-shelf.tsx";
+import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
 import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
@@ -474,7 +475,11 @@ export function AgentConnections() {
     [endpoint],
   );
 
-  const setup = selected ? clientSetup(location.origin, selected) : null;
+  // claude.ai and ChatGPT cannot reach an installation on this computer.
+  const setup =
+    selected && reachableFrom(location.origin)(selected)
+      ? clientSetup(location.origin, selected)
+      : null;
   const active = connections.filter(isActive);
   const method = identities
     ? signInMethod(identities.identities, identities.email)

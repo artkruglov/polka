@@ -9,6 +9,7 @@ import { Button } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { TabList, tabId } from "../../shared/ui/Tabs.tsx";
 import {
+  CONNECT_AGENT_TITLE,
   HERO_CLIENT_IDS,
   SAVE_PHRASE,
   heroClient,
@@ -18,6 +19,7 @@ import {
   storeClient,
   type HeroClientId,
 } from "../../entities/onboarding/agent-setup.ts";
+import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import {
   readAgentSeen,
   readDismissed,
@@ -171,18 +173,21 @@ export function AgentHeroView({
       </section>
     );
 
+  // claude.ai cannot reach an installation on this computer (127.0.0.1).
+  const tabs = HERO_CLIENT_IDS.filter(reachableFrom(origin));
+  if (!tabs.includes(selected)) selected = tabs[0]!;
   const setup = heroSetup(origin, selected);
   return (
     <section className="agent-hero" data-state="none" aria-labelledby={`${idBase}-title`}>
       <div className="agent-hero-head">
-        <h1 id={`${idBase}-title`}>Подключите агента — он сам сохранит работу на полку</h1>
+        <h1 id={`${idBase}-title`}>{CONNECT_AGENT_TITLE}</h1>
         <Button variant="quiet" className="agent-hero-hide" onClick={onHide}>
           Скрыть
         </Button>
       </div>
       <TabList
         label="Где вы работаете с ИИ"
-        items={HERO_CLIENT_IDS.map((id) => ({ id, label: heroClientNames[id] }))}
+        items={tabs.map((id) => ({ id, label: heroClientNames[id] }))}
         value={selected}
         onChange={onClient}
         idBase={idBase}
@@ -215,7 +220,8 @@ export function AgentHeroView({
       </div>
       <div className="agent-hero-foot">
         <a className="agent-hero-link" href={`/settings/agents?client=${selected}`}>
-          Пошагово и другие клиенты, включая ChatGPT <ArrowUpRight aria-hidden="true" />
+          {tabs.includes("claude-ai") ? "Пошагово и другие клиенты, включая ChatGPT" : "Пошагово и токены для скриптов"}{" "}
+          <ArrowUpRight aria-hidden="true" />
         </a>
         <span className="agent-hero-or">
           или {upload}

@@ -79,7 +79,7 @@ export function ReceivedCard({
   const component = source.language === "jsx" || source.language === "tsx";
   return (
     <section className="receive-card" aria-labelledby="receive-title">
-      <span className="receive-kicker">{snapshot ? "Снимок страницы" : "Артефакт"} · ещё не сохранено</span>
+      <span className="receive-kicker">{snapshot ? "Снимок страницы" : "Работа из чата"} · ещё не сохранено</span>
       <h2 id="receive-title" className="sr-only">
         Сохранить на полку
       </h2>
