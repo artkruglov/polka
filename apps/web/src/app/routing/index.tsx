@@ -64,7 +64,8 @@ function Route({ path }: { path: string }) {
   if (path === "/pricing") return <Pricing />;
   if (path === "/enterprise") return <Enterprise />;
   if (path === "/start") return <FirstSave />;
-  if (path === "/settings/agents" || path === "/connections")
+  // «Настройки»: agents, sign-in methods, deleting the shelf.
+  if (path === "/settings" || path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
   if (path === "/settings/company") return <CompanyAdmin />;
   if (path === "/s") return <Recipient />;

@@ -45,6 +45,7 @@ import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { ClientCards, SetupPanel } from "../../widgets/agent-setup/index.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
+import { DeleteShelfSection } from "./delete-shelf.tsx";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
 import { loadExtensions, useSlot } from "../../shared/extensions/index.ts";
@@ -501,7 +502,7 @@ export function AgentConnections() {
                   : ""}
                 {method ? ` ${signInMethodLabel(method)}` : ""}.
               </p>
-              {isFreshAccount(account.createdAt) && (
+              {isFreshAccount(account.createdAt) && method?.kind !== "login" && (
                 <p className="agent-account-fresh">
                   Эта полка создана только что. Уже есть другая полка?{" "}
                   {method?.kind === "provider" ? (
@@ -1038,6 +1039,7 @@ export function AgentConnections() {
           </p>
         </section>
         {account && <SignInMethods />}
+        {account && !account.provisional && <DeleteShelfSection />}
       </main>
       {confirmRevoke && (
         <Dialog

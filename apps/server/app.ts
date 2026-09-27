@@ -432,6 +432,9 @@ export async function createApp() {
       signup: !linkOnly(id),
     })),
     commentsMode: config.COMMENTS_MODE,
+    // Where an owner asks to delete the shelf and its data (settings,
+    // «Удалить полку»); null: the page says «оператору этой установки».
+    privacyContact: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null,
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));
