@@ -2,10 +2,12 @@ import { parentPort } from "node:worker_threads";
 import {
   UNREAD,
   inspectHtml,
+  scanScripts,
   type HtmlInspection,
   type InspectOptions,
+  type ScriptScan,
 } from "./html.ts";
-import { SignalCollector } from "./phishing-signals.ts";
+import { SCAN_INCOMPLETE, SignalCollector } from "./phishing-signals.ts";
 import { scanText } from "./content-filter/scanner.ts";
 
 // One page per worker; the parent terminates it after the answer or the deadline.
@@ -18,11 +20,24 @@ parentPort!.once(
     source,
     options,
     text,
+    scripts,
   }: {
     source: string;
     options?: InspectOptions;
     text?: boolean;
+    scripts?: string[];
   }) => {
+  // A work's scripts (html.ts, scanScriptsBounded): signals and findings.
+  if (scripts) {
+    let scan: ScriptScan;
+    try {
+      scan = scanScripts(scripts);
+    } catch {
+      scan = { signals: [SCAN_INCOMPLETE], filter: UNREAD.filter };
+    }
+    parentPort!.postMessage(scan);
+    return;
+  }
   // A plain text file: only the content filter.
   if (text) {
     parentPort!.postMessage(scanText(source));

@@ -8,9 +8,10 @@
 // A resource is served only to a page of the project asking for that kind of
 // resource (style, script, image, font), never as a page. Markdown is drawn by
 // Полка (project-markdown.ts). A page runs in a sandbox without the viewer's
-// origin, network, popups or top navigation; the only script Полка adds is
-// nav.js, which tells the app which page is open.
-import { randomBytes } from "node:crypto";
+// origin, network, popups or top navigation; the only scripts Полка adds are
+// the WebRTC guard (html.ts, VIEWER_GUARD) and nav.js, which tells the app
+// which page is open.
+import { createHash, randomBytes } from "node:crypto";
 import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
 import { posix } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -21,6 +22,7 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { assertEditorialShareAccessible } from "./editorial.ts";
 import { missing } from "./errors.ts";
+import { VIEWER_GUARD, withLeadingMarkup } from "./html.ts";
 import {
   escapeHtml,
   projectDocumentPage,
@@ -200,7 +202,7 @@ const RESOURCE_FOR: Record<string, (mime: string) => boolean> = {
   font: (mime) => mime === "font/woff2",
 };
 
-const pageCsp = (token: string) =>
+export const pageCsp = (token: string) =>
   [
     // No allow-same-origin, allow-popups or top navigation: the page cannot
     // read the viewer, open a window or leave its frame.
@@ -225,7 +227,7 @@ const documentCsp = (token: string) =>
   [
     "sandbox allow-scripts",
     "default-src 'none'",
-    `script-src ${base(token)}${NAV_SCRIPT}`,
+    `script-src ${base(token)}${NAV_SCRIPT} ${GUARD_HASH}`,
     "style-src 'unsafe-inline'",
     `img-src ${base(token)}`,
     "connect-src 'none'",
@@ -254,12 +256,24 @@ const navScript = () => `(() => {
   }, true);
 })();`;
 
-/** Polka's script first in the page's head, before any of the author's. */
-function withNavScript(html: string, token: string) {
+/**
+ * Полка's scripts first in a page, before anything of the author's: the
+ * WebRTC guard (CSP cannot stop WebRTC, and a project page runs scripts),
+ * then nav.js. They go at the very start of the document, after a leading
+ * doctype only (html.ts, withLeadingMarkup), so no script of the page, not
+ * even one before its <head>, runs earlier. The placement is a linear scan:
+ * a regex looking for <head> is quadratic on a page of unclosed "<head"
+ * tags, and this runs on every view.
+ */
+export function withProjectScripts(html: Buffer, token: string): Buffer {
   const tag = `<script src="${escapeHtml(base(token) + NAV_SCRIPT)}"></script>`;
-  const head = /<head(?:\s[^>]*)?>/i.exec(html);
-  return head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
+  return withLeadingMarkup(html, Buffer.from(VIEWER_GUARD + tag));
 }
+
+/** The guard's hash: the documents' CSP runs no other inline script. */
+const GUARD_HASH = `'sha256-${createHash("sha256")
+  .update(VIEWER_GUARD.slice("<script>".length, -"</script>".length))
+  .digest("base64")}'`;
 
 const wrapperPage = (title: string, body: string, token: string) =>
   projectDocumentPage({ title, body }, base(token) + NAV_SCRIPT);
@@ -302,11 +316,11 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     }
     const name = posix.basename(file.path);
     if (file.mime === "text/html") {
-      const page = withSignedAwayLinks(bytes, base(token) + file.path).toString("utf8");
+      const page = withSignedAwayLinks(bytes, base(token) + file.path);
       return reply
         .type("text/html; charset=utf-8")
         .header("content-security-policy", pageCsp(token))
-        .send(withNavScript(page, token));
+        .send(withProjectScripts(page, token));
     }
     const paths = new Set<string>(revision.manifest.files.map((f: { path: string }) => f.path));
     const body =
@@ -326,6 +340,8 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     return reply
       .type("text/html; charset=utf-8")
       .header("content-security-policy", documentCsp(token))
-      .send(body);
+      // Полка draws these and runs no script of the author's in them, but
+      // every HTML response of the project starts with the guard.
+      .send(withLeadingMarkup(Buffer.from(body), Buffer.from(VIEWER_GUARD)));
   });
 }

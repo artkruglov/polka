@@ -13,6 +13,8 @@ import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { resolveProjectPath } from "../apps/server/project-markdown.ts";
+import { VIEWER_GUARD } from "../apps/server/html.ts";
+import { withProjectScripts } from "../apps/server/project-viewer.ts";
 
 if (!config.HTML_LIVE_ENABLED)
   throw new Error("Run project-viewer.test.ts with HTML_LIVE_ENABLED=true");
@@ -138,7 +140,14 @@ test("a document is drawn by Полка: links resolved, the author's HTML shown
   assert.doesNotMatch(html, /javascript:/);
   assert.match(html, new RegExp(`href="${origin}/away#`));
   assert.match(html, /<img src="screens\/shot\.png" alt="скрин"/);
+  // Every HTML response starts with the WebRTC guard, allowed by its hash.
+  assert.ok(html.startsWith(`<!doctype html>${VIEWER_GUARD}`), html.slice(0, 200));
   const csp = String(response.headers["content-security-policy"]);
+  const guardHash = createHash("sha256")
+    .update(VIEWER_GUARD.slice("<script>".length, -"</script>".length))
+    .digest("base64");
+  assert.ok(csp.includes(`'sha256-${guardHash}'`), csp);
+  assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/);
   assert.match(csp, /sandbox allow-scripts(;|$)/);
   assert.match(csp, /connect-src 'none'/);
   assert.match(csp, new RegExp(`frame-ancestors ${origin}`));
@@ -151,7 +160,13 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   const url = await issue();
   const page = await view(url + "screens/index.html");
   assert.equal(page.statusCode, 200, page.body);
-  assert.match(page.body, /<head><script src="[^"]+\/__polka\/nav\.js"><\/script><title>/);
+  // Полка's scripts come first, the WebRTC guard before nav.js, right after
+  // the doctype: no script of the page runs before them.
+  assert.ok(
+    page.body.startsWith(`<!doctype html>${VIEWER_GUARD}<script src="${url}__polka/nav.js"></script><html><head><title>`),
+    page.body.slice(0, 200),
+  );
+  assert.equal(page.body.split(VIEWER_GUARD).length, 2);
   assert.match(page.body, new RegExp(`href="${origin}/away#`));
   const csp = String(page.headers["content-security-policy"]);
   assert.match(csp, /^sandbox allow-scripts allow-forms;/);
@@ -172,6 +187,28 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   assert.equal((await view(url + "__polka/nav.js", "script", "no-cors")).statusCode, 200);
   assert.equal((await view(url + "../../etc/passwd")).statusCode, 404);
   assert.equal((await view(url + "missing.md")).statusCode, 404);
+});
+
+test("placing Полка's scripts is linear in the page size", () => {
+  // Unclosed "<head" tags: a regex looking for <head> rescans the rest of
+  // the page from each one (256 KB took 4 s). A linear scan grows 4x with a
+  // 4x page; a quadratic one 16x.
+  const token = "a".repeat(43);
+  const time = (size: number) => {
+    const page = Buffer.from("<head ".repeat(Math.ceil(size / 6)).slice(0, size));
+    const started = performance.now();
+    for (let round = 0; round < 5; round++) withProjectScripts(page, token);
+    return performance.now() - started;
+  };
+  time(64 * 1024); // warm up
+  const small = time(256 * 1024);
+  const large = time(1024 * 1024);
+  assert.ok(large < 500, `${Math.round(large)} ms for 1 MB`);
+  assert.ok(large / Math.max(small, 5) < 10, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`);
+  // The markup still goes after a leading doctype, and first otherwise.
+  const placed = withProjectScripts(Buffer.from("<!DOCTYPE html><script>1</script>"), token).toString();
+  assert.ok(placed.startsWith(`<!DOCTYPE html>${VIEWER_GUARD}<script src=`), placed);
+  assert.ok(withProjectScripts(Buffer.from("<script>1</script>"), token).toString().startsWith(VIEWER_GUARD));
 });
 
 test("the view ends with the session and with the trash", async () => {

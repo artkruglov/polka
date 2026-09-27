@@ -13,7 +13,15 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { registerFrontend } from "../apps/server/frontend.ts";
-import { inspectHtml, inspectHtmlBounded } from "../apps/server/html.ts";
+import {
+  SCRIPT_CONTEXT_CHARS,
+  ScriptCollector,
+  inspectHtml,
+  inspectHtmlBounded,
+  scanScripts,
+  scanScriptsBounded,
+  workerSlots,
+} from "../apps/server/html.ts";
 import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import {
   signModerationToken,
@@ -779,6 +787,62 @@ test("signals of a large page come back from the bounded worker; an unreadable p
   // The content filter counts an unread page as possible fraud as well.
   assert.ok(nested.filter.hits.fraud);
   assert.equal(isSuspicious(nested.signals), true);
+});
+
+test("a work's scripts are read off the request thread, with a deadline and a context cap", async () => {
+  // Crafted strings the context signals chew on: 48 MB of these stalled
+  // the event loop for ~25 s when finalize read them inline.
+  const crafted = `"a.bc d.ef ",`.repeat((4 * 1024 * 1024) / 13);
+  const phishing = `const f=document.createElement("input");f.placeholder="Пароль от Тинькофф";const hint="Пришлите пароль в Telegram @tinkoff_help";`;
+  let lag = 0;
+  let last = performance.now();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    lag = Math.max(lag, now - last - 10);
+    last = now;
+  }, 10);
+  const read = await scanScriptsBounded([phishing, crafted]);
+  clearInterval(timer);
+  assert.ok(lag < 150, `the event loop stalled for ${Math.round(lag)} ms`);
+  // The same findings as reading them inline.
+  assert.deepEqual(read.signals, scanScripts([phishing, crafted]).signals);
+  assert.equal(isSuspicious(read.signals), true, read.signals.join());
+  assert.ok(read.sensitive);
+  // Small scripts stay inline and read the same.
+  assert.deepEqual((await scanScriptsBounded([phishing])).signals, scanScripts([phishing]).signals);
+  // Past the deadline: scan:incomplete, and the fields for secrets unknown.
+  const late = await scanScriptsBounded([crafted], 1, 0);
+  assert.deepEqual(late.signals, [SCAN_INCOMPLETE]);
+  assert.equal(late.sensitive, undefined);
+  // Each file hands at most SCRIPT_CONTEXT_CHARS to the context signals.
+  const collector = new ScriptCollector();
+  let chars = 0;
+  const text = collector.content.text.bind(collector.content);
+  collector.content.text = (value: string) => {
+    chars += value.length;
+    text(value);
+  };
+  scanScripts([crafted, crafted], collector);
+  assert.ok(chars > SCRIPT_CONTEXT_CHARS && chars <= 2 * SCRIPT_CONTEXT_CHARS, String(chars));
+});
+
+test("classify workers wait for a slot, and the wait is not part of the deadline", async () => {
+  const before = workerSlots().limit;
+  workerSlots(1);
+  try {
+    // Just over the inline limit, with the 150 ms deadline of the start test
+    // above: a page waiting for the one slot behind two others would miss it
+    // if the wait counted.
+    const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(760)}</p>`;
+    const reads = [0, 1, 2].map(() => inspectHtmlBounded(page, 150));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(workerSlots(), { limit: 1, running: 1, waiting: 2 });
+    for (const read of await Promise.all(reads))
+      assert.deepEqual({ profile: read.profile, signals: read.signals }, { profile: "static", signals: [] });
+    assert.deepEqual(workerSlots(), { limit: 1, running: 0, waiting: 0 });
+  } finally {
+    workerSlots(before);
+  }
 });
 
 test("the phishing scan stays linear in the page size", () => {
