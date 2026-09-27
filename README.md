@@ -193,7 +193,7 @@ npm run verify         # всё перед push: облачного CI нет, �
 
 ## Своя установка
 
-Поставка состоит из одного Docker-образа и внешних PostgreSQL и versioned S3. Образ собирается из исходников (`docker build`), опубликованного образа пока нет. Интерактивный viewer должен работать на отдельном registrable domain. Рекомендуемый путь — [deploy/hosted/README.md](deploy/hosted/README.md) (одна VM с Caddy, как на polochka.app). [deploy/BASE.md](deploy/BASE.md), [deploy/RESTORE.md](deploy/RESTORE.md) и [deploy/VIEWER_STAGING.md](deploy/VIEWER_STAGING.md) — черновики для опытных операторов. Как устроена система: [docs/architecture.md](docs/architecture.md).
+Поставка состоит из одного Docker-образа и внешних PostgreSQL и versioned S3. Образ собирается из исходников (`docker build`), опубликованного образа пока нет. Интерактивный viewer должен работать на отдельном registrable domain. Рекомендуемый путь — [deploy/hosted/README.md](deploy/hosted/README.md) (одна VM с Caddy, как на polochka.app; там же [обновление и откат](deploy/hosted/README.md#обновление)). [deploy/BASE.md](deploy/BASE.md), [deploy/RESTORE.md](deploy/RESTORE.md) и [deploy/VIEWER_STAGING.md](deploy/VIEWER_STAGING.md) — черновики для опытных операторов. Как устроена система: [docs/architecture.md](docs/architecture.md).
 
 ## Для компаний
 
@@ -223,7 +223,7 @@ npm run verify         # всё перед push: облачного CI нет, �
 > [!NOTE]
 > **Текущий релиз — `v0.3.1`** ([CHANGELOG](CHANGELOG.md)). Hosted-пилот работает на https://polochka.app; регистрация по почте открыта для любого адреса, до 50 новых полок в сутки. API, схема БД и интерфейс ещё могут меняться.
 
-Что сделано и что нет — [docs/status.md](docs/status.md); что дальше — [docs/roadmap.md](docs/roadmap.md): эксплуатация пилота (проверка восстановления, инструкция обновления), публикация расширения браузера и проверка коннектора ChatGPT, затем варианты работы, снимок полки на дату и `polka pull/push`; позже — Telegram-бот, SAML и SCIM.
+Что сделано и что нет — [docs/status.md](docs/status.md); что дальше — [docs/roadmap.md](docs/roadmap.md): эксплуатация пилота (проверка восстановления на отдельной VM, алерты мониторинга), публикация расширения браузера и проверка коннектора ChatGPT, затем варианты работы, снимок полки на дату и `polka pull/push`; позже — Telegram-бот, SAML и SCIM.
 
 ## Документация
 
