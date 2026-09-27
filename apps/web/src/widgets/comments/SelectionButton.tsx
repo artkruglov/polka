@@ -5,7 +5,7 @@ import {
   REACTIONS,
   type CommentAnchor,
   type Reaction,
-} from "../../../../../packages/contracts/comments.ts";
+} from "../../../../../packages/contracts/comment-constants.ts";
 import type { OverlaySelection } from "./bridge.ts";
 
 /**

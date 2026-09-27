@@ -9,6 +9,9 @@ export const PROJECT_MAX_FILES = 400;
 export const PROJECT_MAX_BYTES = 48 * 1024 * 1024;
 /** Longest stored title; every path that names a work uses this one limit. */
 export const MAX_TITLE = 160;
+/** Around a found word in Artifact.snippet; never part of a work's text. */
+export const SEARCH_MATCH_START = "";
+export const SEARCH_MATCH_END = "";
 export const MIME = [
   "image/png",
   "image/jpeg",
