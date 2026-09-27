@@ -17,8 +17,6 @@ import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
 import {
   markCardDismissed,
   markCardShown,
-  mayAutoOpen,
-  readCardState,
 } from "../../entities/recipient-convert/card-state.ts";
 import { remixPrompt } from "../../entities/recipient-convert/remix-prompt.ts";
 import { rememberConvertReturn } from "../../entities/recipient-convert/return.ts";
@@ -26,8 +24,7 @@ import { rememberConvertReturn } from "../../entities/recipient-convert/return.t
 /*
  * A guest's way in from someone's work (docs/specs/RECIPIENT_CONVERSION.md):
  * a bar under the work («Эту страницу сделали с ИИ и сохранили на Полку»)
- * and a card that slides in once per browser, or when a bar button is
- * pressed. No modal, no page block: the work stays readable. Used by the
+ * and a card that slides in only when a bar button is pressed. No modal, no page block: the work stays readable. Used by the
  * recipient page (/s, page "share") and the feed material page (/discover,
  * page "feed"). The CSS is imported by those pages, because Node tests
  * render these components.
@@ -39,9 +36,6 @@ export type ConvertPage = RecipientCtaPage;
 /** The sign-up source and the phrase's ?ref=: share | share-remix | feed | feed-remix. */
 export const variantRef = (variant: ConvertVariant, page: ConvertPage = "share") =>
   variant === "remix" ? `${page}-remix` : page;
-
-/** Seconds of reading before the card opens on its own. */
-export const AUTO_OPEN_MS = 15_000;
 
 type CardRequest = { variant: ConvertVariant; opener: HTMLElement | null };
 
@@ -109,37 +103,8 @@ export function useRecipientConvert({
     [page],
   );
 
-  useEffect(() => {
-    if (!enabled || card || !mayAutoOpen(readCardState())) return;
-    let done = false;
-    const stage = stageRef.current;
-    const fire = () => {
-      if (done) return;
-      done = true;
-      cleanup();
-      open("try", null);
-    };
-    const timer = setTimeout(fire, AUTO_OPEN_MS);
-    const touches = ["pointerdown", "wheel", "touchstart", "keydown"] as const;
-    for (const name of touches)
-      stage?.addEventListener(name, fire, { passive: true, once: true });
-    window.addEventListener("scroll", fire, { passive: true, once: true });
-    const onBlur = () => {
-      // Focus moved into the work's frame: the reader started using it.
-      setTimeout(() => {
-        const active = document.activeElement;
-        if (active instanceof HTMLIFrameElement && stage?.contains(active)) fire();
-      }, 0);
-    };
-    window.addEventListener("blur", onBlur);
-    const cleanup = () => {
-      clearTimeout(timer);
-      for (const name of touches) stage?.removeEventListener(name, fire);
-      window.removeEventListener("scroll", fire);
-      window.removeEventListener("blur", onBlur);
-    };
-    return cleanup;
-  }, [enabled, card !== null, open]);
+  // The card opens only when the reader presses the bar's button: never by
+  // itself on a first key, a scroll or a timer (it covered the work).
 
   const close = useCallback(() => {
     markCardDismissed();

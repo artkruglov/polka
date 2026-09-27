@@ -105,12 +105,12 @@ export function PasteCode({
             <h2 id="paste-code-title">Вставить код</h2>
           </div>
           <p className="paste-code-hint">
-            Нет файла? В Claude или ChatGPT откройте артефакт, нажмите
+            Нет файла? В Claude или ChatGPT откройте готовую страницу или код, нажмите
             «Копировать» (Copy) и вставьте код сюда. HTML сохранится
             страницей, всё остальное — текстом.
           </p>
           <TextAreaField
-            label="Код артефакта"
+            label="Код страницы"
             className="paste-code-input"
             rows={12}
             value={code}
