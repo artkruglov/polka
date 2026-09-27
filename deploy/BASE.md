@@ -31,6 +31,14 @@ docker compose --env-file deploy/base.env --env-file deploy/smtp.env \
 
 The overlay changes only the `app` service to `MAIL_MODE=smtp`; migration, storage-check, and maintenance remain mail-disabled. The existing mail adapter uses `requireTLS: true` (and `secure` for port 465), so this overlay does not claim delivery or provider compatibility. Do not put SMTP secrets in the repository or paste rendered environment values into logs.
 
+### Upgrading
+
+1. Read the [CHANGELOG](../CHANGELOG.md) from your version to the new one: it names new migrations and settings. `git diff --stat <current-tag>..<new-tag> -- deploy/migrations` shows whether the release adds a migration.
+2. If it does, take a database dump with the schema-owner role first; without it there is no way back. Extend and review the grants recipe for the new migration head (see below): the runtime role gets no access to new tables otherwise.
+3. Build and push the new image, put its digest into `POLKA_IMAGE`, run `deploy/check-base-image.mjs`, then start the same sequence: `migrate` → grants → `storage-check` → `app` → `maintenance`. Migrations run in one transaction bounded by `MIGRATION_STATEMENT_TIMEOUT_MS`; a failure rolls everything back.
+
+Rollback without a migration: the previous `POLKA_IMAGE`. With a migration, rolling back the image alone is not supported: restore the pre-upgrade dump together with the previous image. Stored objects are versioned and are not deleted by either path.
+
 ### Runtime settings passed by compose
 
 `storage-check`, `app` and `maintenance` share one environment block (`x-runtime-env`). Besides the credentials above it passes:
