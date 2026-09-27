@@ -1,5 +1,5 @@
 import "./styles.css";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -26,6 +26,7 @@ import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { Wave } from "../../shared/ui/Wave.tsx";
 import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
+import { ConnectGuide } from "../../widgets/agent-setup/index.tsx";
 import {
   SOURCE_LICENSE,
   formatStars,
@@ -55,6 +56,11 @@ export function Landing() {
   const stars = formatStars(useSourceStars());
   const guideUrl = selfHostGuideUrl(sourceUrl);
   const command = selfHostCommand(sourceUrl);
+  // polochka.app/#connect is the link to give a friend: the page renders
+  // after the browser looked for the anchor, so scroll to it here.
+  useEffect(() => {
+    if (location.hash === "#connect") document.getElementById("connect")?.scrollIntoView();
+  }, []);
   return (
     <AppShell current="landing" account={account} className="landing">
       <main className="landing-main">
@@ -75,7 +81,7 @@ export function Landing() {
           <ConnectAgent className="landing-agent" />
 
           <div className="landing-paths">
-            <LinkButton variant="primary" href="/settings/agents">
+            <LinkButton variant="primary" href="#connect">
               <Bot /> Подключить агента
             </LinkButton>
             <LinkButton href={guideUrl} target="_blank" rel="noopener noreferrer">
@@ -154,6 +160,15 @@ export function Landing() {
               </a>
             </article>
           ))}
+        </section>
+
+        <section id="connect" className="landing-connect" aria-labelledby="landing-connect-title">
+          <h2 id="landing-connect-title">Как подключить агента</h2>
+          <p>
+            Минута и один раз. Выберите, где вы работаете с ИИ, — дальше агент
+            сохраняет работы сам, а вы просите «Сохрани это на Полку».
+          </p>
+          <ConnectGuide />
         </section>
 
         <section className="landing-features" aria-labelledby="landing-features-title">
