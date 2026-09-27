@@ -7,7 +7,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
-import { db } from "../apps/server/db.ts";
+import { setCommentMailTransport } from "../apps/server/comment-mail.ts";
+import { db, settled } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const app = await createApp();
@@ -253,6 +254,69 @@ test("an upload is its uploader's; a curator shares from the shelf and the link 
   const revoked = await call("POST", `/api/shares/${link.id}/revoke`, admin, {}, shelf.id);
   assert.equal(revoked.statusCode, 200, revoked.body);
   assert.equal((await resolve()).statusCode, 404);
+});
+
+test("a curator removed from the shelf no longer answers their link's discussion", async () => {
+  const curator = await createAccount(`web-curator-${randomBytes(5).toString("hex")}`, password);
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: curator.name, password },
+  });
+  sessions.set(curator.name, login.cookies[0].value);
+  const email = `${curator.name}@example.test`;
+  await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [curator.id, email]);
+  const added = await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: curator.name, role: "curator" });
+  assert.equal(added.statusCode, 200, added.body);
+  const saved = (await save(author, "Смета", "Смета отдела на квартал", shelf.id)).json();
+  const shared = await call(
+    "POST",
+    `/api/artifacts/${saved.artifactId}/share`,
+    curator,
+    { expectedRevisionId: saved.revisionId, expiresInDays: 7 },
+    shelf.id,
+  );
+  assert.equal(shared.statusCode, 200, shared.body);
+  const token = new URL(shared.json().share.url).hash.slice(1);
+  const comment = (who: Account, body: string, extra: Record<string, unknown> = {}) =>
+    app.inject({
+      method: "POST",
+      url: `/api/shared/comments/${extra.commentId ? "resolve" : "create"}`,
+      headers: { origin, cookie: `polka_session=${sessions.get(who.name)}`, "content-type": "application/json" },
+      payload: JSON.stringify({ token, ...(extra.commentId ? {} : { body, displayName: who.name }), ...extra }),
+    });
+  const letters: string[] = [];
+  setCommentMailTransport(async (mail) => {
+    letters.push(mail.to);
+    return true;
+  });
+  try {
+    const note = await comment(curator, "Цифры сверены");
+    assert.equal(note.statusCode, 200, note.body);
+    const first = await comment(stranger, "Где итог?");
+    assert.equal(first.statusCode, 200, first.body);
+    await settled();
+    // While a curator, the issuer is the shelf's side and gets the letters.
+    assert.deepEqual(letters, [email]);
+    const before = (await call("GET", `/api/artifacts/${saved.artifactId}/comments`, admin, undefined, shelf.id)).json();
+    const byCurator = () => before.shares[0].threads.find((thread: any) => thread.body === "Цифры сверены");
+    assert.equal(byCurator().author.owner, true);
+    const removed = await call("POST", `/api/shelves/${shelf.id}/members/${curator.id}/revoke`, admin);
+    assert.equal(removed.statusCode, 200, removed.body);
+    // The link stays (it is the company's), but its issuer is no one's side now.
+    const after = (await call("GET", `/api/artifacts/${saved.artifactId}/comments`, admin, undefined, shelf.id)).json();
+    const threads = after.shares[0].threads;
+    assert.equal(threads.find((thread: any) => thread.body === "Цифры сверены").author.owner, false);
+    const strangers = threads.find((thread: any) => thread.body === "Где итог?");
+    assert.equal((await comment(curator, "", { commentId: strangers.id })).statusCode, 404);
+    const second = await comment(stranger, "Ответьте, пожалуйста");
+    assert.equal(second.statusCode, 200, second.body);
+    await settled();
+    assert.deepEqual(letters, [email]);
+  } finally {
+    setCommentMailTransport(undefined);
+  }
 });
 
 test("personal shelves behave as before", async () => {

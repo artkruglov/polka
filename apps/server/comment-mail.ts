@@ -16,7 +16,7 @@ import {
 } from "../../packages/contracts/comments.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
-import { db } from "./db.ts";
+import { db, errorFacts, inBackground } from "./db.ts";
 import { LOCAL_COMMENT_MAIL_DIRECTORY, sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
 import { describeFindings, findingsOf } from "./content-filter/policy.ts";
@@ -114,7 +114,14 @@ async function facts(commentId: string) {
        artifact.title,artifact.trashed_at,
        owner.id AS owner_id,owner.email AS owner_email,
        (NOT owner.disabled AND owner.deletion_requested_at IS NULL
-         AND owner.comment_mail) AS owner_active,
+         AND owner.comment_mail
+         -- On a department shelf the link's issuer is written to only while
+         -- they are still one of its curators or admins.
+         AND (tenant.owner_id IS NOT NULL OR EXISTS(
+           SELECT 1 FROM tenant_members member
+           WHERE member.tenant_id=tenant.id AND member.account_id=owner.id
+             AND member.state='active' AND member.role IN ('curator','admin'))))
+         AS owner_active,
        (NOT share.revoked AND share.expires_at>now() AND share.moderation='none'
          AND artifact.trashed_at IS NULL) AS share_open,
        revision.number AS revision_number
@@ -141,16 +148,41 @@ function quoteLine(row: any) {
   return exact ? [`К фрагменту: \u00ab${excerpt(exact, 120)}\u00bb`] : [];
 }
 
-async function send(to: string, subject: string, text: string) {
-  if (!(await withinDailyQuota(to))) return null;
-  return sendMail({ to, subject, text }, LOCAL_COMMENT_MAIL_DIRECTORY);
+type Transport = (
+  mail: { to: string; subject: string; text: string },
+  localDirectory: string,
+) => Promise<string | boolean>;
+let transport: Transport = sendMail;
+
+/** Tests: replace how letters about comments leave (undefined: sendMail). */
+export function setCommentMailTransport(next: Transport | undefined) {
+  transport = next ?? sendMail;
 }
 
-/** A new comment: the owner, then the other people of the thread. */
+async function send(to: string, subject: string, text: string) {
+  if (!(await withinDailyQuota(to))) return null;
+  return transport({ to, subject, text }, LOCAL_COMMENT_MAIL_DIRECTORY);
+}
+
+/**
+ * A new comment: the owner, then the other people of the thread. Each
+ * letter is on its own: one address the mail server refuses does not keep
+ * the others from theirs.
+ */
 async function sendCommentLetters(commentId: string) {
   const row = await facts(commentId);
   if (!row || row.deleted_at || row.held_at || row.blocked_at) return [];
   const sent: Array<string | boolean | null> = [];
+  let failed = 0;
+  let failure: ReturnType<typeof errorFacts> | undefined;
+  const attempt = async (letter: () => Promise<string | boolean | null>) => {
+    try {
+      sent.push(await letter());
+    } catch (error) {
+      failed++;
+      failure ??= errorFacts(error);
+    }
+  };
   const who = clean(row.author_name, 60) || "Читатель";
   const reply = !!row.parent_id;
   if (
@@ -158,8 +190,8 @@ async function sendCommentLetters(commentId: string) {
     row.owner_email &&
     row.owner_active
   )
-    sent.push(
-      await send(
+    await attempt(() =>
+      send(
         row.owner_email,
         `Полка: ${reply ? "новый ответ" : "новый комментарий"} \u2014 \u00ab${clean(row.title, 60) || "Без названия"}\u00bb`,
         [
@@ -190,8 +222,8 @@ async function sendCommentLetters(commentId: string) {
       [row.parent_id, row.share_id, row.author_account_id, row.owner_id],
     );
     for (const person of people)
-      sent.push(
-        await send(
+      await attempt(() =>
+        send(
           person.email,
           `Полка: новый ответ в обсуждении \u2014 \u00ab${clean(row.title, 60) || "Без названия"}\u00bb`,
           [
@@ -207,6 +239,17 @@ async function sendCommentLetters(commentId: string) {
         ),
       );
   }
+  // One line per comment with a lost letter: how many left, how many not.
+  if (failed)
+    console.error(
+      JSON.stringify({
+        event: "comment.mail_failed",
+        kind: "comment",
+        sent: sent.filter(Boolean).length,
+        failed,
+        code: failure?.code ?? "internal",
+      }),
+    );
   return sent;
 }
 
@@ -302,5 +345,7 @@ export async function sendCommentNotice(notice: CommentNotice) {
 
 /** After commit, without holding up the response. */
 export function dispatchCommentNotices(notices: CommentNotice[]) {
-  return Promise.all(notices.map(sendCommentNotice)).then(() => undefined);
+  return inBackground(
+    Promise.all(notices.map(sendCommentNotice)).then(() => undefined),
+  );
 }

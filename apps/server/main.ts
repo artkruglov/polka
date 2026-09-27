@@ -10,6 +10,8 @@ import { createLiveViewerApp } from "./live-viewer.ts";
 import { s3 } from "./storage.ts";
 import { EXPECTED_MIGRATION_VERSIONS } from "../../packages/migrations.ts";
 import { assertRestoreStartupGate } from "./restore-gate.ts";
+import { installProcessErrorHandlers } from "./process-errors.ts";
+installProcessErrorHandlers();
 async function closeRefusedStartup() {
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([

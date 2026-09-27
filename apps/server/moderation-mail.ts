@@ -3,7 +3,7 @@
 // an automatic pause. Sent after the transaction that caused them commits,
 // and never allowed to fail that action: a lost letter is logged, and the
 // scripts in scripts/moderation.ts still see the queue.
-import { db } from "./db.ts";
+import { db, inBackground } from "./db.ts";
 import { config } from "./config.ts";
 import { sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
@@ -398,5 +398,7 @@ export async function sendModerationNotice(notice: ModerationNotice) {
  * The returned promise settles when every letter is written or given up.
  */
 export function dispatchModerationNotices(notices: ModerationNotice[]) {
-  return Promise.all(notices.map(sendModerationNotice)).then(() => undefined);
+  return inBackground(
+    Promise.all(notices.map(sendModerationNotice)).then(() => undefined),
+  );
 }

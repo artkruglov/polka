@@ -11,7 +11,7 @@ import { ListObjectVersionsCommand } from "@aws-sdk/client-s3";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
-import { db } from "../apps/server/db.ts";
+import { db, settled } from "../apps/server/db.ts";
 import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import { bucket, readBlob, s3, sha256 } from "../apps/server/storage.ts";
 import {
@@ -76,7 +76,7 @@ afterEach(async () => {
 
 after(async () => {
   await reviewsSettled();
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   config.OPERATOR_EMAIL = defaults.OPERATOR_EMAIL;
   await app.close();
   await db.end();
@@ -343,7 +343,17 @@ test("retention: a reminder the day before, deletion when due; the journal is ap
   await takedown(link.shareId, { reason: "порнография по жалобе", category: "porn" });
   const block = await row("SELECT * FROM moderation_blocks WHERE revision_id=$1", [link.revisionId]);
   await db.query("UPDATE moderation_blocks SET delete_after=now()+interval '12 hours' WHERE id=$1", [block.id]);
+  // A letter that does not leave reminds nobody: the block waits for the
+  // next sweep instead of being marked as reminded.
+  assert.equal(
+    await remindDueBlocks(50, async () => {
+      throw new Error("SMTP refused");
+    }),
+    0,
+  );
+  assert.equal((await row("SELECT reminded_at FROM moderation_blocks WHERE id=$1", [block.id])).reminded_at, null);
   assert.ok((await remindDueBlocks()) >= 1);
+  assert.ok((await row("SELECT reminded_at FROM moderation_blocks WHERE id=$1", [block.id])).reminded_at);
   const reminder = (await lettersWith(link.revisionId, 2)).find((letter) =>
     /завтра удаляется/.test(letter.subject),
   );

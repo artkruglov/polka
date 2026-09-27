@@ -13,6 +13,10 @@ export const COMMENT_MAX_CHARS = 2000;
 export const COMMENTS_PER_SHARE_PER_DAY = 200;
 /** Comments and reactions of one author per hour. */
 export const COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR = 60;
+/** Comments of one link a reader is shown: the newest ones (`truncated`). */
+export const COMMENTS_SHOWN_PER_SHARE = 5000;
+/** Reaction groups (fragment and emoji) of one link, the oldest first. */
+export const REACTION_GROUPS_SHOWN_PER_SHARE = 1000;
 /** Letters about comments to one address per day. */
 export const COMMENT_MAIL_PER_ADDRESS_PER_DAY = 30;
 /** Characters of a comment quoted in a letter. */
@@ -185,6 +189,12 @@ export type ShareDiscussion = {
   state: "active" | "revoked" | "expired";
   threads: CommentThread[];
   reactions: ReactionGroup[];
+  /**
+   * The link has more comments or reaction groups than are shown
+   * (COMMENTS_SHOWN_PER_SHARE, REACTION_GROUPS_SHOWN_PER_SHARE): the oldest
+   * comments and the newest reaction groups are left out.
+   */
+  truncated: boolean;
 };
 
 /** The person asking, as far as comments are concerned. */

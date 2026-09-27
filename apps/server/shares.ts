@@ -930,14 +930,18 @@ async function publishShareInTransaction(
   const artifactId = await artifactIdForShare(c, actor, shareId);
   if (!artifactId) throw missing();
   await lockArtifact(c, actor, artifactId);
+  // Expiry and the days left by the database's clock, which set expires_at.
   const {
-    rows: [share],
+    rows: [row],
   } = await c.query(
-    "SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+    `SELECT *,expires_at<=now() AS expired,
+       extract(epoch FROM expires_at-now())::float8 AS seconds_left
+     FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
     [shareId, actor.tenant],
   );
-  if (!share) throw missing();
-  if (share.revoked || new Date(share.expires_at).getTime() <= Date.now())
+  if (!row) throw missing();
+  const { expired, seconds_left: secondsLeft, ...share } = row;
+  if (share.revoked || expired)
     throw new Problem(410, "expired", "Ссылка уже закрыта или истекла.");
   if (share.moderation === "blocked") throw blockedRefusal();
   if (
@@ -975,10 +979,10 @@ async function publishShareInTransaction(
       shelf: await shelfInfo(c, actor.tenant),
       artifactId: share.artifact_id,
       revisionId: input.revisionId,
-      expiresInDays: Math.max(
-        1,
-        Math.ceil((new Date(share.expires_at).getTime() - Date.now()) / 86_400_000),
-      ),
+      // Whole days left, never more than the link was issued for: rounding
+      // up turned 6 days 23 hours of a 7-day link into 7, or with a clock
+      // ahead of the database's into 8, over a new account's limit.
+      expiresInDays: Math.max(1, Math.floor(secondsLeft / 86_400)),
       via: actor.connectionId ? "agent" : "web",
     },
     c,
@@ -1121,7 +1125,7 @@ async function agentShareResponse(
   const {
     rows: [share],
   } = await c.query(
-    `SELECT share.*,artifact.trashed_at FROM shares share
+    `SELECT share.*,artifact.trashed_at,share.expires_at>now() AS unexpired FROM shares share
      JOIN artifacts artifact ON artifact.id=share.artifact_id
      WHERE share.id=$1 AND share.tenant_id=$2 AND share.artifact_id=$3`,
     [result.shareId, actor.tenantId, result.artifactId],
@@ -1130,7 +1134,7 @@ async function agentShareResponse(
     share &&
     !share.trashed_at &&
     !share.revoked &&
-    new Date(share.expires_at).getTime() > Date.now() &&
+    share.unexpired &&
     share.revision_id === result.revisionId &&
     share.derivative_id === result.derivativeId;
   const moderation = (
