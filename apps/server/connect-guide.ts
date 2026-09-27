@@ -43,6 +43,7 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 
 - Codex: \`${CODEX_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем \`codex mcp login polka\` — вход откроется в браузере. Без плагина: \`codex mcp add polka --url ${mcp}\`.
 - Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем попроси пользователя ввести \`/reload-plugins\` (или перезапустить Claude Code), потом \`/mcp\`, выбрать \`plugin:polka:polka\` и нажать Authenticate. Без плагина: \`claude mcp add --transport http --scope user polka ${mcp}\`.
+- Если плагин не ставится (ошибка git вроде \`invalid index-pack output\`, нет доступа к GitHub, песочница или фильтр разрешений его не пускает), не останавливайся и не проси пользователя чинить git: сразу выполни команду «Без плагина» для своего клиента. Ей не нужен GitHub, она подключает тот же сервер; скиллы необязательны. В Claude Code пользователь затем вводит \`/mcp\`, выбирает \`polka\` и нажимает Authenticate.
 - Другой MCP-клиент с OAuth: добавь удалённый Streamable HTTP-сервер ${mcp} с авторизацией OAuth.
 - Claude.ai или ChatGPT в браузере (терминала нет, эту страницу ты, скорее всего, не смог загрузить): команды не выполнить, коннектор добавляет сам пользователь. Перескажи ему шаги, ничего не запрашивай:
   - Claude.ai и Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
@@ -80,6 +81,7 @@ Your user asked to connect Полка. Work out which client you are, run the on
 
 - Codex: \`${CODEX_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then \`codex mcp login polka\`; the sign-in opens in the browser. Without the plugin: \`codex mcp add polka --url ${mcp}\`.
 - Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then ask the user to type \`/reload-plugins\` (or restart Claude Code), then \`/mcp\`, choose \`plugin:polka:polka\` and press Authenticate. Without the plugin: \`claude mcp add --transport http --scope user polka ${mcp}\`.
+- If the plugin does not install (a git clone error such as \`invalid index-pack output\`, no network to GitHub, a sandbox or permission filter that refuses it), do not stop and do not ask the user to fix git: run the "Without the plugin" command for your client right away. It needs nothing from GitHub and connects the same server; the skills are optional. In Claude Code the user then types \`/mcp\`, chooses \`polka\` and presses Authenticate.
 - Another MCP client with OAuth: add the remote Streamable HTTP server ${mcp} with OAuth authorization.
 - Claude.ai or ChatGPT in the browser (no terminal; you most likely could not even fetch this page): you cannot run commands, the user adds the connector themselves. Tell them the steps, ask for nothing:
   - Claude.ai and Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
