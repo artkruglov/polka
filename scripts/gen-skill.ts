@@ -1,4 +1,4 @@
-// Regenerate the skill packages `npx skills add artkruglov/polka` installs
+// Regenerate the skill packages `npx skills add artkruglov/polka-plugin` installs
 // (skills/polka/SKILL.md, skills/polka-organize/SKILL.md) from agentSkills()
 // for the hosted origin. The server serves the same texts with its own
 // APP_ORIGIN at /.well-known/agent-skills/<name>/SKILL.md;

@@ -52,7 +52,7 @@ https://polochka.app/mcp
 **Claude Code**: the plugin installs the MCP server and the Полка skills in one command.
 
 ```sh
-claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka
+claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka
 ```
 
 Then in Claude Code: `/mcp` → `plugin:polka:polka` → Authenticate.
@@ -60,11 +60,11 @@ Then in Claude Code: `/mcp` → `plugin:polka:polka` → Authenticate.
 **Codex**: the same plugin for Codex.
 
 ```sh
-codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka
+codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka
 codex mcp login polka
 ```
 
-**Another MCP client** (Cursor, Gemini CLI, Windsurf…): the remote server `https://polochka.app/mcp` (Streamable HTTP, OAuth sign-in) plus the skill `npx skills add artkruglov/polka`.
+**Another MCP client** (Cursor, Gemini CLI, Windsurf…): the remote server `https://polochka.app/mcp` (Streamable HTTP, OAuth sign-in) plus the skill `npx skills add artkruglov/polka-plugin`.
 
 Each time Полка opens: sign in to your shelf (or start without signing up) and press Allow; no token or password passes through the agent. Or tell a terminal agent: `Connect Полка: https://polochka.app/connect`. You can still upload a file from your computer without an agent. Details: [connecting agents](docs/connect-agents.md) (Russian).
 
@@ -155,7 +155,7 @@ The agent hands over the work's code itself; Полка doesn't pull anything ou
 
 Saving and the link were checked by hand with Claude.ai, not yet with ChatGPT ([status](docs/status.md)). There is no saving by a link to a Claude or ChatGPT artifact: Полка's server can't fetch it (the sites require a login and sit behind Cloudflare), so the agent hands over the work instead.
 
-**For agent developers:** the repository is a Claude Code and Codex plugin marketplace (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`); the skill alone installs with `npx skills add artkruglov/polka`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
+**For agent developers:** the Claude Code and Codex plugin (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`) lives here and installs from its light copy [artkruglov/polka-plugin](https://github.com/artkruglov/polka-plugin), built by `scripts/plugin-repo.mjs`; the skill alone installs with `npx skills add artkruglov/polka-plugin`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
 
 ## Quick start
 

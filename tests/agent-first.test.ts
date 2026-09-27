@@ -119,7 +119,7 @@ test("the harvest task is one text for terminal agents and one for web chats, th
 
 test("the skill line names the same package on the landing, in /connect, llms.txt and the skill", () => {
   assert.equal(SKILL_INSTALL, serverSkillInstall);
-  assert.equal(SKILL_INSTALL, "npx skills add artkruglov/polka");
+  assert.equal(SKILL_INSTALL, "npx skills add artkruglov/polka-plugin");
   for (const text of [connectGuide(origin), llmsText(origin)]) {
     assert.ok(text.includes(SKILL_INSTALL));
     assert.ok(text.includes(`${origin}${SKILL_INDEX_PATH}`));
