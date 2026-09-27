@@ -2,7 +2,27 @@ import "./styles.css";
 import React, { useId } from "react";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
-import { SKILL_INDEX_PATH, SKILL_INSTALL } from "../../entities/onboarding/agent-setup.ts";
+import {
+  CLAUDE_PLUGIN_INSTALL,
+  CODEX_LOGIN,
+  CODEX_PLUGIN_INSTALL,
+  SKILL_INDEX_PATH,
+  SKILL_INSTALL,
+} from "../../entities/onboarding/agent-setup.ts";
+
+/** A command to run by hand, with its copy button and what comes after. */
+function Command({ label, command, after }: { label: string; command: string; after?: React.ReactNode }) {
+  return (
+    <li>
+      <strong>{label}</strong>
+      <span className="connect-agent-command">
+        <code>{command}</code>
+        <CopyButton value={command} variant="quiet" label="Скопировать" successText="Скопировано" />
+      </span>
+      {after && <small>{after}</small>}
+    </li>
+  );
+}
 
 /**
  * The phrase an agent needs to connect Полка, with the manual way for
@@ -41,12 +61,31 @@ export function ConnectAgent({
         <a href="/settings/agents?client=codex">Codex</a> ·{" "}
         <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
       </small>
-      <small className="connect-agent-skill">
-        Claude Code и Codex ставят плагин Полки — подключение и скилл
-        сразу. Для других агентов скилл отдельно: <code>{SKILL_INSTALL}</code>{" "}
-        <CopyButton value={SKILL_INSTALL} variant="quiet" label="Скопировать" successText="Скопировано" />
-        <a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>
-      </small>
+      <details className="connect-agent-manual">
+        <summary>Команды для терминала</summary>
+        <ol>
+          <Command
+            label="Claude Code"
+            command={CLAUDE_PLUGIN_INSTALL}
+            after={<>Плагин ставит подключение и скиллы. Затем в Claude Code: <code>/mcp</code> → <code>plugin:polka:polka</code> → Authenticate.</>}
+          />
+          <Command
+            label="Codex"
+            command={CODEX_PLUGIN_INSTALL}
+            after={<>Затем <code>{CODEX_LOGIN}</code> — вход откроется в браузере.</>}
+          />
+          <Command
+            label="Если плагин не ставится"
+            command={`claude mcp add --transport http --scope user polka ${location.origin}/mcp`}
+            after={<>Для Codex: <code>{`codex mcp add polka --url ${location.origin}/mcp`}</code>. GitHub не нужен, подключение то же.</>}
+          />
+          <Command
+            label="Только скилл, для других агентов"
+            command={SKILL_INSTALL}
+            after={<a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>}
+          />
+        </ol>
+      </details>
     </div>
   );
 }
