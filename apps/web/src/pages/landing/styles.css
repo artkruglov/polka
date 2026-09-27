@@ -26,6 +26,10 @@
 .landing-wave { margin: 40px 0 8px; max-width: 1040px; }
 .landing-wave svg { height: clamp(90px, 14vw, 180px); }
 
+/* How to connect, for everyone: the same steps as on the agents page. */
+.landing-connect { padding: 56px 0 64px; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
+.landing-connect > h2 { font-size: var(--text-2xl); letter-spacing: -.03em; }
+.landing-connect > p { max-width: 62ch; margin: 8px 0 18px; color: var(--muted); font-size: var(--text-lg); line-height: 1.5; }
 .landing-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 40px; padding: 56px 0 64px; border-bottom: 1px solid var(--line); }
 .landing-steps article { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .landing-step-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 18px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent); }

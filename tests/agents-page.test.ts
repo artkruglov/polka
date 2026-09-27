@@ -19,10 +19,8 @@ import {
   storeClient,
 } from "../apps/web/src/entities/onboarding/agent-setup.ts";
 import { connectPhrase } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
-import {
-  SetupPanel,
-  connectionStatus,
-} from "../apps/web/src/pages/agents/index.tsx";
+import { connectionStatus } from "../apps/web/src/pages/agents/index.tsx";
+import { SetupPanel } from "../apps/web/src/widgets/agent-setup/index.tsx";
 import { connectGuide } from "../apps/server/connect-guide.ts";
 import { llmsText, skillMarkdown } from "../apps/server/agent-discovery.ts";
 import type { AgentConnection } from "../packages/contracts/index.ts";

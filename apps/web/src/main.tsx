@@ -12,6 +12,7 @@ import "./entities/link/styles.css";
 import "./widgets/artifact-reader/styles.css";
 import "./widgets/editorial-catalog/styles.css";
 import "./widgets/trash/styles.css";
+import "./widgets/agent-setup/styles.css";
 import "./pages/agents/styles.css";
 // Imported here, not by the feature: pages that import it are rendered in Node tests.
 import "./features/provider-sign-in/styles.css";
