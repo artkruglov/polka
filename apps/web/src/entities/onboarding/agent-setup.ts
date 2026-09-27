@@ -168,7 +168,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
   const mcp = `${origin}/mcp`;
   const say = connectPhrase(origin);
   const allow =
-    "Откроется Полка: войдите в этот же аккаунт и нажмите «Разрешить».";
+    "Откроется Полка: войдите (или создайте полку через Яндекс ID или почту) и нажмите «Разрешить».";
   const ask = `Попросите: «${SAVE_PHRASE}».`;
   switch (id) {
     case "chatgpt":
@@ -232,7 +232,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
               command(CLAUDE_PLUGIN_INSTALL),
               phrase(say, "или скажите Claude Code — он выполнит команду сам:"),
             ],
-            note: "Уже в сессии Claude Code? Введите /plugin marketplace add artkruglov/polka-plugin, затем /plugin install polka@polka.",
+            note: `Уже в сессии Claude Code? Введите /plugin marketplace add artkruglov/polka-plugin, затем /plugin install polka@polka. Если плагин не ставится (облачная сессия, нет доступа к GitHub): claude mcp add --transport http --scope user polka ${mcp}, затем /mcp → polka → Authenticate.`,
           },
           {
             text: "Перезапустите Claude Code (или введите /reload-plugins), затем /mcp → plugin:polka:polka → Authenticate.",
