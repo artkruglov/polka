@@ -4,8 +4,8 @@
        `node scripts/render-readme-assets.mjs social`. Same style as the link
        preview cards in docs/assets/og. -->
   <style>
-    @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-Regular.ttf"); font-weight: 400; }
-    @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-SemiBold.ttf"); font-weight: 600; }
+    @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-Regular.woff2"); font-weight: 400; }
+    @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-SemiBold.woff2"); font-weight: 600; }
     text { font-family: "Polka Sans", -apple-system, sans-serif; }
     .brand { font-size: 46px; font-weight: 600; letter-spacing: -2.5px; fill: #0f1420; }
     .title { font-size: 76px; font-weight: 600; letter-spacing: -2.8px; fill: #0f1420; }
