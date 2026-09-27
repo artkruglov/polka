@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -184,4 +185,22 @@ test("the repository is a Claude Code and Codex marketplace with one plugin: the
     (await json("package.json")).version,
   ]);
   assert.equal(versions.size, 1, "plugin versions follow package.json");
+});
+
+test("scripts/plugin-repo.mjs writes the light plugin repository the install commands name", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const out = await mkdtemp(join(tmpdir(), "polka-plugin-"));
+  try {
+    execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/plugin-repo.mjs", import.meta.url)), out]);
+    for (const path of [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", ".codex-plugin/plugin.json", ".agents/plugins/marketplace.json", ".mcp.json", "skills/polka/SKILL.md", "LICENSE", "README.md"])
+      assert.ok((await readFile(join(out, path))).length > 0, path);
+    assert.deepEqual(JSON.parse(await readFile(join(out, ".mcp.json"), "utf8")), await json(".mcp.json"));
+    assert.match(CLAUDE_PLUGIN_INSTALL, /^claude plugin marketplace add artkruglov\/polka-plugin /);
+    assert.match(CODEX_PLUGIN_INSTALL, /^codex plugin marketplace add artkruglov\/polka-plugin /);
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
 });

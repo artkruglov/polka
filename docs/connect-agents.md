@@ -11,9 +11,9 @@
 | Где вы работаете | Что сделать один раз | Что приходит |
 |---|---|---|
 | **Claude** — claude.ai и Claude Desktop | Settings → Connectors → **Add custom connector**, URL `https://polochka.app/mcp` → Add → Connect → «Разрешить» в Полке | MCP-сервер (инструменты Полки) |
-| **Claude Code** | `claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka`, затем в Claude Code `/mcp` → `plugin:polka:polka` → Authenticate | MCP-сервер и все скиллы Полки |
-| **Codex** (CLI и приложение) | `codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka`, затем `codex mcp login polka` | MCP-сервер и все скиллы Полки |
-| **Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…) | Удалённый MCP-сервер `https://polochka.app/mcp` (Streamable HTTP, OAuth) и скилл `npx skills add artkruglov/polka` | MCP-сервер и скилл `polka` |
+| **Claude Code** | `claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka`, затем в Claude Code `/mcp` → `plugin:polka:polka` → Authenticate | MCP-сервер и все скиллы Полки |
+| **Codex** (CLI и приложение) | `codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka`, затем `codex mcp login polka` | MCP-сервер и все скиллы Полки |
+| **Другой MCP-клиент** (Cursor, Gemini CLI, Windsurf…) | Удалённый MCP-сервер `https://polochka.app/mcp` (Streamable HTTP, OAuth) и скилл `npx skills add artkruglov/polka-plugin` | MCP-сервер и скилл `polka` |
 
 Вход везде один: откроется Полка, вы входите в свою полку (или «Начать без регистрации») и нажимаете «Разрешить». Токены и пароли через агента не проходят. Потом в любом чате: «Сохрани это на Полку».
 
@@ -21,7 +21,9 @@
 
 ## Плагин Полки для Claude Code и Codex
 
-Репозиторий [artkruglov/polka](https://github.com/artkruglov/polka) — одновременно маркетплейс и плагин для обоих клиентов:
+Плагин ставится из маленького репозитория [artkruglov/polka-plugin](https://github.com/artkruglov/polka-plugin), меньше 100 КБ. Клиент клонирует маркетплейс целиком, и клон всего ядра (десятки мегабайт истории) в облачных сессиях и на медленной сети обрывался (`invalid index-pack output`). Репозиторий плагина собирается из этого командой `node scripts/plugin-repo.mjs <папка>` после каждого изменения манифестов или скиллов и при релизе. Правки вносятся здесь, а не там. Старый адрес `artkruglov/polka` тоже остаётся маркетплейсом, для уже установленных плагинов.
+
+Файлы плагина, в обоих репозиториях одинаковые:
 
 | Файл | Для чего |
 |---|---|
@@ -30,9 +32,9 @@
 | [`.mcp.json`](../.mcp.json) | Удалённый HTTP MCP-сервер `polka` → `https://polochka.app/mcp`; OAuth при первом подключении |
 | [`skills/*/SKILL.md`](../skills) | Скиллы; оба клиента находят их по каталогу, список в манифестах не перечисляется |
 
-Проверено 25.09.2026 на Claude Code 2.1.282 и Codex CLI 0.153.4 установкой из локальной копии репозитория в пустой профиль (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): `claude plugin validate .` проходит, `claude plugin details polka@polka` показывает скиллы из `skills/` и MCP-сервер `polka`, `claude mcp list` — `plugin:polka:polka: https://polochka.app/mcp (HTTP) - ! Needs authentication`; `codex mcp list` — `polka  https://polochka.app/mcp … enabled  OAuth`. Второй скилл, добавленный в `skills/`, подхватывается без правки манифестов.
+Установка из `artkruglov/polka-plugin` проверена 27.09.2026 в пустых профилях: клон за секунду, `claude plugin install polka@polka` и `codex plugin add polka@polka` проходят. Проверено 25.09.2026 на Claude Code 2.1.282 и Codex CLI 0.153.4 установкой из локальной копии репозитория в пустой профиль (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): `claude plugin validate .` проходит, `claude plugin details polka@polka` показывает скиллы из `skills/` и MCP-сервер `polka`, `claude mcp list` — `plugin:polka:polka: https://polochka.app/mcp (HTTP) - ! Needs authentication`; `codex mcp list` — `polka  https://polochka.app/mcp … enabled  OAuth`. Второй скилл, добавленный в `skills/`, подхватывается без правки манифестов.
 
-Внутри сессии Claude Code те же команды: `/plugin marketplace add artkruglov/polka`, затем `/plugin install polka@polka` и `/reload-plugins`. Своя установка Полки: плагин смотрит на `polochka.app`; для другого адреса подключите MCP-сервер командой из раздела [ниже](#claude-code-и-codex-без-плагина) и поставьте скилл `npx skills add <ваш APP_ORIGIN>`.
+Внутри сессии Claude Code те же команды: `/plugin marketplace add artkruglov/polka-plugin`, затем `/plugin install polka@polka` и `/reload-plugins`. Своя установка Полки: плагин смотрит на `polochka.app`; для другого адреса подключите MCP-сервер командой из раздела [ниже](#claude-code-и-codex-без-плагина) и поставьте скилл `npx skills add <ваш APP_ORIGIN>`.
 
 В клоне этого репозитория Claude Code предложит включить проектный сервер из `.mcp.json` — это тот же `polochka.app/mcp`; для разработки можно отказаться.
 
@@ -81,7 +83,7 @@ ChatGPT и Claude.ai в браузере команды не выполняют 
 Все адреса внутри берутся из `APP_ORIGIN` установки. Поставить скилл агенту:
 
 ```sh
-npx skills add artkruglov/polka          # из репозитория: skills/polka и skills/polka-organize
+npx skills add artkruglov/polka-plugin          # из репозитория: skills/polka и skills/polka-organize
 npx skills add https://polochka.app      # с установки: /.well-known/agent-skills/index.json
 ```
 
@@ -93,7 +95,7 @@ npx skills add https://polochka.app      # с установки: /.well-known/a
 
 ## Claude Code и Codex без плагина
 
-Обычно достаточно [плагина](#плагин-полки-для-claude-code-и-codex): он ставит и сервер, и скиллы. Без плагина — только MCP-сервер, одной командой; скилл отдельно: `npx skills add artkruglov/polka`. Если плагин уже стоит, эти команды не нужны: получится второй сервер с теми же инструментами.
+Обычно достаточно [плагина](#плагин-полки-для-claude-code-и-codex): он ставит и сервер, и скиллы. Без плагина — только MCP-сервер, одной командой; скилл отдельно: `npx skills add artkruglov/polka-plugin`. Если плагин уже стоит, эти команды не нужны: получится второй сервер с теми же инструментами.
 
 Оба клиента умеют входить в MCP-сервер через OAuth, как Claude.ai. Токен не нужен: клиент регистрируется сам, открывает Полку в браузере, вы входите и нажимаете «Разрешить».
 

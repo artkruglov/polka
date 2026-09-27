@@ -95,7 +95,7 @@ export type ClientSetup = {
 export const SAVE_PHRASE = "Сохрани это на Полку";
 
 /** The skill Claude Code and Codex install; the server names the same repository (apps/server/connect-guide.ts). */
-export const SKILL_INSTALL = "npx skills add artkruglov/polka";
+export const SKILL_INSTALL = "npx skills add artkruglov/polka-plugin";
 /**
  * The repository is also a plugin marketplace for Claude Code
  * (.claude-plugin/) and Codex (.codex-plugin/, .agents/plugins/): one
@@ -103,9 +103,9 @@ export const SKILL_INSTALL = "npx skills add artkruglov/polka";
  * gives the agent the same commands; a test keeps them equal.
  */
 export const CLAUDE_PLUGIN_INSTALL =
-  "claude plugin marketplace add artkruglov/polka && claude plugin install polka@polka";
+  "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka";
 export const CODEX_PLUGIN_INSTALL =
-  "codex plugin marketplace add artkruglov/polka && codex plugin add polka@polka";
+  "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka";
 export const CODEX_LOGIN = "codex mcp login polka";
 export const SKILL_INDEX_PATH = "/.well-known/agent-skills";
 
@@ -232,7 +232,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
               command(CLAUDE_PLUGIN_INSTALL),
               phrase(say, "или скажите Claude Code — он выполнит команду сам:"),
             ],
-            note: "Уже в сессии Claude Code? Введите /plugin marketplace add artkruglov/polka, затем /plugin install polka@polka.",
+            note: "Уже в сессии Claude Code? Введите /plugin marketplace add artkruglov/polka-plugin, затем /plugin install polka@polka.",
           },
           {
             text: "Перезапустите Claude Code (или введите /reload-plugins), затем /mcp → plugin:polka:polka → Authenticate.",
