@@ -330,3 +330,69 @@ test("expired grants of every kind that maintenance may delete are cleaned up an
   }
   assert.ok(drill.includes('DELETE FROM project_view_grants"'));
 });
+
+test("one file of a project is patched; S3 copies the rest into the new version", async () => {
+  const secret = await token();
+  // More files than one polka_capture call may carry (64): the patch must not resend them.
+  const notes = Array.from({ length: 70 }, (_, i) =>
+    file(`notes/n${String(i).padStart(2, "0")}.md`, "text/markdown", `# Заметка ${i}\n`),
+  );
+  const files = [...research(), ...notes];
+  const first = (await upload(secret, files, "README.md")).finalized!.json();
+  const edit = (body: Record<string, unknown>) =>
+    app.inject({
+      method: "POST",
+      url: `/api/v1/works/${first.artifactId}/edits`,
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      payload: JSON.stringify(body),
+    });
+  const key = randomUUID();
+  const body = {
+    key,
+    baseRevisionId: first.revisionId,
+    path: "02-users/stories.md",
+    edits: [{ oldText: "коммерческое предложение", newText: "договор поставки" }],
+  };
+  const patched = await edit(body);
+  assert.equal(patched.statusCode, 200, patched.body);
+  const receipt = patched.json();
+  assert.equal(receipt.number, 2);
+
+  const rows = async (revisionId: string) =>
+    new Map(
+      (
+        await db.query(
+          "SELECT path,sha256,object_key,object_version FROM revision_files WHERE revision_id=$1",
+          [revisionId],
+        )
+      ).rows.map((row) => [row.path, row]),
+    );
+  const before = await rows(first.revisionId);
+  const after = await rows(receipt.revisionId);
+  assert.equal(after.size, files.length);
+  for (const [path, row] of after) {
+    // Every version owns its objects: nothing points into the old upload.
+    assert.notEqual(row.object_key, before.get(path).object_key, path);
+    if (path === "02-users/stories.md") assert.notEqual(row.sha256, before.get(path).sha256);
+    else assert.equal(row.sha256, before.get(path).sha256, path);
+  }
+  const { rows: [search] } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
+  assert.match(search.body, /договор поставки/);
+  assert.doesNotMatch(search.body, /коммерческое предложение/);
+
+  // The same key again is the same version; an old base names the latest.
+  const replay = await edit(body);
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.equal(replay.json().revisionId, receipt.revisionId);
+  const stale = await edit({ ...body, key: randomUUID() });
+  assert.equal(stale.statusCode, 409, stale.body);
+  assert.equal(stale.json().currentRevisionId, receipt.revisionId);
+  // A picture is not patched.
+  const image = await edit({
+    ...body,
+    key: randomUUID(),
+    baseRevisionId: receipt.revisionId,
+    path: "screens/shot.png",
+  });
+  assert.equal(image.statusCode, 422, image.body);
+});

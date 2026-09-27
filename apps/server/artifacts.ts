@@ -23,7 +23,7 @@ import {
 } from "../../packages/contracts/bundle.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
-import { putImmutable, readBlob, sha256 } from "./storage.ts";
+import { copyVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
@@ -47,6 +47,7 @@ import {
 import {
   blockRevisionInTransaction,
   blockedHash,
+  isolatedObject,
   queueReview,
 } from "./content-moderation.ts";
 import {
@@ -1104,13 +1105,53 @@ export async function stageBundleFile(
   if (sent.rowCount) return null;
   return putImmutable(bundleFileKey(actor.tenant, id, input.manifest, index), bytes);
 }
-/** Records a bundle file under the shelf lock; `staged` as in uploadBytesInTransaction. */
+/**
+ * A bundle file copied from a saved version of this shelf inside the store
+ * (docs/specs/PROJECTS.md, «Правка одного файла»): the file the new version
+ * keeps unchanged. Its bytes are checked against the manifest at finalize,
+ * like any sent file. A file isolated by a block is not copied, as it would
+ * not be read. Null when there is nothing to store.
+ */
+export async function stageBundleFileCopy(
+  actor: Actor,
+  id: string,
+  index: number,
+  from: { objectKey: string; objectVersion: string },
+) {
+  const upload = await readUpload(actor, id);
+  if (upload.kind !== "bundle") throw missing();
+  const input = normalizeBundleRequest(upload.request, true);
+  if (!input.manifest.files[index]) throw missing();
+  if (!from.objectKey.startsWith(`${actor.tenant}/`)) throw missing();
+  if (upload.receipt) return null;
+  const sent = await db.query(
+    "SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2",
+    [id, index],
+  );
+  if (sent.rowCount) return null;
+  if (await isolatedObject(from.objectKey))
+    throw new Problem(
+      410,
+      "expired",
+      "Файл этой версии заблокирован модератором Полки; на её основе новую версию не сохранить.",
+    );
+  return copyVersion(
+    from.objectKey,
+    from.objectVersion,
+    bundleFileKey(actor.tenant, id, input.manifest, index),
+  );
+}
+/**
+ * Records a bundle file under the shelf lock; `staged` as in
+ * uploadBytesInTransaction. `bytes` is null for a copied file
+ * (stageBundleFileCopy), which always comes staged.
+ */
 export async function uploadBundleFileInTransaction(
   c: PoolClient,
   actor: Actor,
   id: string,
   index: number,
-  bytes: Buffer,
+  bytes: Buffer | null,
   staged?: string | null,
 ) {
   await lockShelf(c, actor, "author");
@@ -1119,7 +1160,10 @@ export async function uploadBundleFileInTransaction(
   const input = normalizeBundleRequest(upload.request, true);
   const expected = input.manifest.files[index];
   if (!expected) throw missing();
-  if (staged === undefined) validateBundleFileBytes(expected, bytes);
+  if (staged === undefined) {
+    if (!bytes) throw new Error("Bundle file without bytes or a staged version");
+    validateBundleFileBytes(expected, bytes);
+  }
   if (upload.receipt) return { stored: true, index };
   await validateUploadTarget(c, actor, input);
   const existing = (
@@ -1130,7 +1174,7 @@ export async function uploadBundleFileInTransaction(
   ).rows[0];
   if (existing) return { stored: true, index };
   const objectKey = bundleFileKey(actor.tenant, id, input.manifest, index);
-  const objectVersion = staged ?? (await putImmutable(objectKey, bytes));
+  const objectVersion = staged ?? (await putImmutable(objectKey, bytes!));
   await c.query(
     "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
     [id, index, objectKey, objectVersion],
@@ -1500,7 +1544,11 @@ export async function abortUpload(
   });
 }
 
-export async function readAuthorizedRevisionSource(
+/**
+ * A revision's files as stored, checked against its manifest, without
+ * reading their bytes: where each one is, for a copy or a read of one file.
+ */
+export async function authorizedRevisionFiles(
   c: Pick<PoolClient, "query">,
   revision: any,
 ) {
@@ -1529,6 +1577,27 @@ export async function readAuthorizedRevisionSource(
         ];
   if (storedFiles.length !== manifest.files.length)
     throw new Error("Revision file count mismatch");
+  const stored = manifest.files.map((expected, index) => {
+    const row = storedFiles[index];
+    if (
+      !row ||
+      row.file_index !== index ||
+      row.path !== expected.path ||
+      row.mime !== expected.mime ||
+      Number(row.size) !== expected.size ||
+      row.sha256 !== expected.sha256
+    )
+      throw new Error("Revision file metadata mismatch");
+    return { ...expected, objectKey: row.object_key as string, objectVersion: row.object_version as string };
+  });
+  return { manifest, stored };
+}
+
+export async function readAuthorizedRevisionSource(
+  c: Pick<PoolClient, "query">,
+  revision: any,
+) {
+  const { manifest, stored } = await authorizedRevisionFiles(c, revision);
   const files: Array<{
     path: string;
     mime: string;
@@ -1537,18 +1606,8 @@ export async function readAuthorizedRevisionSource(
     bytes: Buffer;
   }> = [];
   let totalSize = 0;
-  for (const [index, expected] of manifest.files.entries()) {
-    const stored = storedFiles[index];
-    if (
-      !stored ||
-      stored.file_index !== index ||
-      stored.path !== expected.path ||
-      stored.mime !== expected.mime ||
-      Number(stored.size) !== expected.size ||
-      stored.sha256 !== expected.sha256
-    )
-      throw new Error("Revision file metadata mismatch");
-    const bytes = await readBlob(stored.object_key, stored.object_version);
+  for (const { objectKey, objectVersion, ...expected } of stored) {
+    const bytes = await readBlob(objectKey, objectVersion);
     if (bytes.length !== expected.size || sha256(bytes) !== expected.sha256)
       throw new Error("Revision file checksum mismatch");
     totalSize += bytes.length;

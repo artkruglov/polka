@@ -17,6 +17,7 @@ import {
   finalizeBundleUploadInTransaction,
   prepareBundleFinalize,
   stageBundleFile,
+  stageBundleFileCopy,
   normalizeBundleRequest,
   validateBundleFileBytes,
 } from "./artifacts.ts";
@@ -122,6 +123,9 @@ export type CaptureHooks = {
   afterSave?: (c: PoolClient, receipt: unknown) => Promise<void>;
 };
 
+/** A file of a bundle being saved: its bytes, or a stored version of this shelf to copy. */
+export type BundleFileSource = Buffer | { objectKey: string; objectVersion: string };
+
 /** Each durable upload step rechecks current scope/revocation; no nested transaction. */
 async function capturePrepared(
   actor: ServiceActor | Actor,
@@ -130,6 +134,28 @@ async function capturePrepared(
   hooks: CaptureHooks = {},
 ) {
   const { input, manifest, source } = validateAgentCapture(body, mode);
+  return saveBundle(actor, mode, input, manifest, source, hooks);
+}
+
+/**
+ * Saves a bundle through the upload steps: begin, each file, finalize. A
+ * file comes as bytes (sent to S3) or as a stored version (copied inside
+ * S3); finalize reads every one back and checks it against the manifest.
+ */
+export async function saveBundle(
+  actor: ServiceActor | Actor,
+  mode: "capture" | "revise",
+  input: {
+    key: string;
+    title: string;
+    folderId?: string;
+    artifactId?: string;
+    baseRevisionId?: string;
+  },
+  manifest: ReturnType<typeof canonicalizeManifest>,
+  source: Map<string, BundleFileSource>,
+  hooks: CaptureHooks = {},
+) {
   const service = "accountId" in actor ? actor : null;
   const owner: Actor = service
     ? {
@@ -192,8 +218,12 @@ async function capturePrepared(
   // steps' transactions (artifacts.ts, stageBundleFile); each step then
   // rechecks the connection and records under the shelf lock.
   for (const [index, file] of manifest.files.entries()) {
-    const bytes = source.get(file.path)!;
-    const staged = await stageBundleFile(owner, begun.uploadId, index, bytes);
+    const from = source.get(file.path);
+    if (!from) throw new Problem(400, "invalid", "Не передан файл manifest.");
+    const bytes = Buffer.isBuffer(from) ? from : null;
+    const staged = bytes
+      ? await stageBundleFile(owner, begun.uploadId, index, bytes)
+      : await stageBundleFileCopy(owner, begun.uploadId, index, from as { objectKey: string; objectVersion: string });
     await run(async (c) => {
       const row = (
         await c.query(

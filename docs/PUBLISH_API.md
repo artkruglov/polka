@@ -107,6 +107,7 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
 
 - Каждый `oldText` должен встречаться в файле (по умолчанию — HTML-странице) ровно один раз: сначала точно, затем после нормализации (NFKC по символу, типографские кавычки и тире, особые пробелы, CRLF и пробелы в конце строк). Меняются только найденные места; остальные байты файла сохраняются.
 - `200`: `revisionId`, `number`, `previousRevisionId`, `htmlProfile`, `shelfUrl`; для страницы со скриптами — `interactiveReady` (сборка запускается в том же вызове); с `moveLink` — `link`: `moved` и новая ссылка или причина, почему не перенесена. Ссылка переносится вместе с её обсуждением.
+- **Проект** (`project-v1`): `path` — любой текстовый файл проекта (Markdown, HTML, CSS, JavaScript, JSON, SVG, текст), по умолчанию точка входа. Остальные файлы хранилище копирует в новую версию само, их не нужно передавать, и размер проекта не важен ([PROJECTS](specs/PROJECTS.md#правка-одного-файла)). Картинку или новый файл добавляют новой версией проекта целиком.
 - `422` `{"code": "edit_failed", "editIndex", "reason", "message"}`, `reason` — `not_found`, `ambiguous` (+ `occurrences`), `overlap` (+ `otherEditIndex`), `empty_old_text`, `no_change`.
 - `409` `{"code": "conflict", "currentRevisionId"}` — правки написаны к другой версии. Тот же `key` с другим телом — `409` без `currentRevisionId`. Повтор с тем же `key` и телом возвращает ту же версию.
 
