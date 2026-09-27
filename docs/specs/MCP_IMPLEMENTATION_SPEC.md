@@ -36,6 +36,26 @@ Wire names с underscore; короткие стабильные schemas и struc
 | `polka_share` | share | key, artifactId, expectedRevisionId, TTL 1/7/30 дней; unlisted URL только после реального разрешённого share |
 | `polka_revoke_share` | share | Конкретный shareId в tenant; идемпотентный отзыв |
 
+Таблица выше — исходный срез v1. Полный список инструментов на 27.09.2026 (все 30; регистрация — `createMcpServer` в `apps/server/mcp-server.ts`). Клиент получает только те инструменты, которые разрешают scopes подключения, его полка и настройки установки:
+
+| Tool | Scope | Когда регистрируется |
+|---|---|---|
+| `polka_context`, `polka_status` | context | всегда при `context` |
+| `polka_open_shelf` | context | только OAuth-подключение и только своя полка (не полка отдела); одноразовая ссылка во временную полку — ещё при `sign_in` |
+| `polka_list`, `polka_get_artifact`, `polka_comments`, `polka_list_folders` | read | при `read` |
+| `polka_list_template_libraries`, `polka_list_templates`, `polka_read_source` | source:read | при `source:read` |
+| `polka_update_artifact`, `polka_trash`, `polka_restore`, `polka_create_folder`, `polka_rename_folder`, `polka_delete_folder`, `polka_move` | manage | при `manage` |
+| `polka_import_url`, `polka_import_status`, `polka_cancel_import` | capture | только при `URL_IMPORT_ENABLED=true` (экспериментально, по умолчанию выключено) |
+| `polka_capture`, `polka_publish`, `polka_save_link` | capture | при `capture`; ссылка в ответе `polka_publish` — ещё при `share` |
+| `polka_revise` | revise | при `revise` |
+| `polka_resolve_comment` | revise | только куратору: своя полка или роль `curator`/`admin` на полке отдела |
+| `polka_note` | revise | только куратору и только если `COMMENTS_MODE` не `off` |
+| `polka_project_upload` | capture или revise | не у читателя (`reader`) полки отдела |
+| `polka_prepare_preview` | capture или revise | только при включённом интерактивном просмотре (`HTML_LIVE_MODE` не `disabled`) |
+| `polka_share`, `polka_revoke_share` | share | только куратору: своя полка или роль `curator`/`admin` на полке отдела |
+
+Пользовательское описание инструментов — [connect-agents.md](../connect-agents.md#инструменты-mcp); тест `tests/mcp-tools-documented.test.ts` проверяет, что там упомянут каждый зарегистрированный `polka_*`.
+
 Capture/revise используют существующие begin/put/finalize application services, не loopback HTTP. Клиент читает свои локальные файлы; server не принимает локальный path для чтения. Base64 декодируется строго, utf8 превращается в bytes; проверяются manifest hashes, ≤64 файла/5MiB исходных bytes и отдельный transport cap 8MiB. Предварительно проверить весь payload до reservation. Binary representation не прогонять через модель ради пересчёта hash: клиенту дать короткий guide/локальный helper для подготовки payload.
 
 Idempotency capture сохраняет существующее tenant-wide key пространство: повтор восстанавливает тот же upload/receipt, изменённый canonical request → conflict; scope revoke проверяется до replay. Share требует отдельного operation receipt в транзакции с изменением shares: потеря ответа не создаёт новую ссылку и не отзывает предыдущую. Query/status не делает capture/build автоматически. Отсутствие share scope оставляет сохранение private; не пытаться выдать shareUrl через list/status.

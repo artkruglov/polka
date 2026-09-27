@@ -27,3 +27,8 @@ deploy/renderer/renderer.env
 
 # Chrome extension package (npm run ext:build)
 extensions/chrome/*.zip
+
+# Editors
+.vscode/
+.idea/
+*.swp

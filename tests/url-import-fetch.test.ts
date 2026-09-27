@@ -19,6 +19,16 @@ test('mixed DNS answers fail closed, public target preserves hostname and pins a
 test('fetch entry point rejects a metadata URL before making a connection',async()=>{
  const {fetchPublic}=await import('../apps/server/url-import/public-fetch.ts');
  await assert.rejects(fetchPublic('https://169.254.169.254/latest/meta-data/'),{code:'blocked_address'});
- const abort=new AbortController();abort.abort();
- await assert.rejects(fetchPublic('https://example.org',{signal:abort.signal}),{code:'timeout'});
+ // A pre-aborted signal stops before any DNS lookup: no network, no orphaned lookup.
+ const abort=new AbortController();abort.abort();let lookups=0;
+ const resolver=async():Promise<never>=>{lookups++;throw Object.assign(new Error('getaddrinfo ENOTFOUND'),{code:'ENOTFOUND'});};
+ await assert.rejects(fetchPublic('https://example.org',{signal:abort.signal,resolver}),{code:'timeout'});
+ assert.equal(lookups,0);
+ // Aborted while the lookup is pending: the late DNS failure is handled, not left unhandled.
+ const pending=new AbortController();
+ const slow=()=>new Promise<never>((_,reject)=>setTimeout(()=>reject(Object.assign(new Error('getaddrinfo ENOTFOUND'),{code:'ENOTFOUND'})),20));
+ const attempt=fetchPublic('https://example.org',{signal:pending.signal,resolver:slow});
+ pending.abort();
+ await assert.rejects(attempt,{code:'timeout'});
+ await new Promise(resolve=>setTimeout(resolve,40));
 });

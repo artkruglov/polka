@@ -24,6 +24,8 @@ export async function resolvePublicTarget(input:string,resolver:Resolver=hostnam
 }
 export type PublicResponse={url:string;contentType:string;bytes:Buffer};
 export type FetchOptions={maxBytes?:number;timeoutMs?:number;maxRedirects?:number;signal?:AbortSignal;
+ /** DNS lookup for each hop (tests inject one); default: the system resolver. */
+ resolver?:Resolver;
  /** Accept header instead of the HTML/asset default (the GitHub API wants its own). */
  accept?:string;
  /** Sent only to the first hop's host, never after a redirect to another host. */
@@ -39,12 +41,12 @@ export function hopHeaders(first:string,hop:URL,{accept,authorization,userAgent=
  * Each hop resolves once and pins that address in the TLS connection; Host/SNI
  * and certificate verification still use the original hostname.
  */
-export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=15_000,maxRedirects=3,signal,accept,authorization,userAgent=IMPORTER_USER_AGENT}:FetchOptions={}):Promise<PublicResponse> {
+export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=15_000,maxRedirects=3,signal,resolver,accept,authorization,userAgent=IMPORTER_USER_AGENT}:FetchOptions={}):Promise<PublicResponse> {
  const deadline=AbortSignal.timeout(timeoutMs);const abort=signal?AbortSignal.any([signal,deadline]):deadline;
  let next=input;
  try {
   for(let hop=0;hop<=maxRedirects;hop++){
-   const target=await abortable(resolvePublicTarget(next),abort);
+   const target=await abortable(()=>resolvePublicTarget(next,resolver),abort);
    const result=await new Promise<PublicResponse|{redirect:string}>((resolve,reject)=>{
     const req=request(target.url,{method:'GET',agent:false,family:target.family,signal:abort,
      lookup:(_host,_opts,cb)=>cb(null,target.address,target.family),
@@ -74,6 +76,9 @@ export async function fetchPublic(input:string,{maxBytes=5*1024*1024,timeoutMs=1
   throw new ImportFetchError('source_unavailable','Не удалось безопасно получить содержимое источника.');
  }
 }
-async function abortable<T>(promise:Promise<T>,signal:AbortSignal):Promise<T>{
- signal.throwIfAborted();return new Promise((resolve,reject)=>{const stop=()=>reject(signal.reason);signal.addEventListener('abort',stop,{once:true});promise.then(resolve,reject).finally(()=>signal.removeEventListener('abort',stop));});
+/** Starts the work only when not yet aborted, and keeps handling its result
+ * after an abort, so a late rejection is never left unhandled. */
+async function abortable<T>(start:()=>Promise<T>,signal:AbortSignal):Promise<T>{
+ signal.throwIfAborted();const promise=start();
+ return new Promise((resolve,reject)=>{const stop=()=>reject(signal.reason);signal.addEventListener('abort',stop,{once:true});promise.then(resolve,reject).finally(()=>signal.removeEventListener('abort',stop));});
 }

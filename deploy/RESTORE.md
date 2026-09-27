@@ -4,7 +4,7 @@ This runbook describes the current restore barrier for an already restored, dedi
 
 ## Required inputs
 
-Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (the exact set is in `packages/migrations.ts`, currently up to 036), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
+Prepare an exact backup descriptor file and a separate erasure-ledger manifest authority. The descriptor must be a regular file, be no larger than the runner limit, declare `formatVersion: 1`, the exact migration list for this release (the exact set is in `packages/migrations.ts`, up to its `CURRENT_SCHEMA_VERSION`), the expected `erasureLedgerId`, and `localMailSpool: "absent"`. The operator must independently attest that the target host has no local mail spool; the descriptor field is checked but does not inspect the host filesystem.
 
 Provide these exact values through a protected operator environment file or secret manager, never as command-line arguments:
 
@@ -26,6 +26,8 @@ The current code verifies the descriptor hash, schema list, ledger ID and ledger
 3. Apply the reviewed schema-owner/runtime/purge/restore role recipes separately. The restore role must be distinct from both runtime and ordinary purge worker; it receives only the reviewed restore function signatures and SELECT on schema_migrations. Schema-owner credentials belong only to the migration job; do not pass them to the app or restore-reconcile job.
 4. Run the one-shot `restore-reconcile` service from `deploy/compose.restore.yml` with `--confirm-closed-target`. It loads the erasure ledger before reconciliation, checks the exact backup/ledger authorities, runs the restore reconciliation, and writes a completion receipt only after the guarded operation completes.
 5. Inspect the structured completion result and receipt without copying secrets. Start only the app and its dependencies through the compose restore dependency after the restore service has completed successfully. Do not start the entire stack before review: that would also start maintenance once app is healthy. Keep maintenance/purge stopped until the normal post-restore review is complete.
+
+The overlay starts the app with `RESTORE_MODE=required` and `RESTORE_RECEIPT_PATH`, `RESTORE_RUN_ID`, `RESTORE_BACKUP_SHA256`, `RESTORE_LEDGER_ID` (from `ERASURE_LEDGER_ID`) and `RESTORE_LEDGER_MANIFEST_SHA256`. In that mode the app refuses to start unless all five are set, the receipt path is absolute, and the receipt matches them, the live database identity and the exact migration list (`apps/server/restore-gate.ts`). Outside the overlay `RESTORE_MODE` defaults to `off` and the gate is skipped.
 
 The receipt is the handoff barrier, not a backup. It binds the fresh restore generation, backup hash, target identity, schema manifest, ledger ID and ledger manifest hash. Keep it outside the backup and do not edit it. A failed run must not be converted into success by manually creating or editing a receipt.
 

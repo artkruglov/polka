@@ -2,7 +2,7 @@
   <!-- GitHub social preview (Settings → Social preview). Rendered to
        docs/assets/social-preview.png by
        `node scripts/render-readme-assets.mjs social`. Same style as the link
-       preview cards in docs/design/og. -->
+       preview cards in docs/assets/og. -->
   <style>
     @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-Regular.ttf"); font-weight: 400; }
     @font-face { font-family: "Polka Sans"; src: url("../../apps/web/public/fonts/IBMPlexSans-SemiBold.ttf"); font-weight: 600; }

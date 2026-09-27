@@ -55,6 +55,14 @@ x-runtime-env: &runtime-env
   ORG_DOMAINS: ${ORG_DOMAINS:-}
   # on | owner-notes | off (docs/specs/SIGN_IN_PROVIDERS.md § 4).
   COMMENTS_MODE: ${COMMENTS_MODE:-on}
+  # Department shelves (docs/specs/TEAM_SHELVES.md): off | on.
+  TEAM_SHELVES: ${TEAM_SHELVES:-off}
+  # Official «На Полку» extension IDs (extensions/chrome/README.md); empty:
+  # every extension is shown on the consent page with its ID.
+  BROWSER_EXTENSION_IDS: ${BROWSER_EXTENSION_IDS:-}
+  # Open-core extensions (docs/specs/EXTENSIONS.md), comma-separated; empty:
+  # the core alone. Each must be installed in the image.
+  POLKA_EXTENSIONS: ${POLKA_EXTENSIONS:-}
 
 services:
   migrate:
