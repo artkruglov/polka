@@ -6,10 +6,18 @@
 .connect-agent-phrase .ui-button { min-height: 46px; }
 .connect-agent-phrase .field-note { flex-basis: 100%; }
 .connect-agent > small { color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
-.connect-agent-skill { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 10px; border-top: 1px solid var(--line); }
-.connect-agent-skill code { padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); background: var(--canvas); color: var(--ink); font-size: var(--text-sm); }
-.connect-agent-skill .ui-button { min-height: 28px; padding: 2px 8px; font-size: var(--text-sm); }
-.connect-agent-skill a { color: var(--accent); }
+/* Commands to run by hand: folded, the phrase is enough for most. */
+.connect-agent-manual { padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); }
+.connect-agent-manual > summary { color: var(--accent); font-weight: 500; cursor: pointer; }
+.connect-agent-manual ol { display: grid; gap: 12px; margin: 10px 0 0; padding: 0; list-style: none; }
+.connect-agent-manual li { display: grid; gap: 4px; }
+.connect-agent-manual li > strong { color: var(--ink); font-weight: 600; }
+.connect-agent-manual li > small { line-height: 1.5; }
+.connect-agent-manual li a { color: var(--accent); }
+.connect-agent-manual code { overflow-wrap: anywhere; }
+.connect-agent-command { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.connect-agent-command > code { flex: 1 1 240px; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); background: var(--canvas); color: var(--ink); font-size: var(--text-sm); user-select: all; }
+.connect-agent-command .ui-button { min-height: 28px; padding: 2px 8px; font-size: var(--text-sm); }
 @media (max-width: 760px) {
   .connect-agent { padding: 16px 16px 14px; }
   .connect-agent-phrase > code { font-size: var(--text-md); }
