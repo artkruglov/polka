@@ -24,9 +24,9 @@ const chrome =
 /** An HTML page that shows one SVG filling the viewport. */
 function page(svgPath) {
   const svg = readFileSync(svgPath, "utf8").replace(
-    /url\("([^"]+\.ttf)"\)/g,
+    /url\("([^"]+\.(?:ttf|woff2))"\)/g,
     (_, font) =>
-      `url("data:font/ttf;base64,${readFileSync(join(dirname(svgPath), font)).toString("base64")}")`,
+      `url("data:font/${font.endsWith(".woff2") ? "woff2" : "ttf"};base64,${readFileSync(join(dirname(svgPath), font)).toString("base64")}")`,
   );
   return `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;overflow:hidden;background:transparent}svg{display:block;width:100vw;height:100vh}</style>${svg}`;
 }

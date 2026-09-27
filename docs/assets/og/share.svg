@@ -3,8 +3,8 @@
        the URL fragment, so a crawler never knows which work was sent. Rendered to
        apps/web/public/og/share.png by scripts/render-og-images.mjs. -->
   <style>
-    @font-face { font-family: "Polka Sans"; src: url("../../../apps/web/public/fonts/IBMPlexSans-Regular.ttf"); font-weight: 400; }
-    @font-face { font-family: "Polka Sans"; src: url("../../../apps/web/public/fonts/IBMPlexSans-SemiBold.ttf"); font-weight: 600; }
+    @font-face { font-family: "Polka Sans"; src: url("../../../apps/web/public/fonts/IBMPlexSans-Regular.woff2"); font-weight: 400; }
+    @font-face { font-family: "Polka Sans"; src: url("../../../apps/web/public/fonts/IBMPlexSans-SemiBold.woff2"); font-weight: 600; }
     text { font-family: "Polka Sans", -apple-system, sans-serif; }
     .brand { font-size: 44px; font-weight: 600; letter-spacing: -2.4px; fill: #0f1420; }
     .title { font-size: 72px; font-weight: 600; letter-spacing: -2.6px; fill: #0f1420; }
