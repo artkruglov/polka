@@ -7,6 +7,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PricingPlans } from "../apps/web/src/pages/pricing/plans.tsx";
 import { LegalLinks } from "../apps/web/src/widgets/navigation/index.tsx";
+import { isAppPage } from "../packages/contracts/app-routes.ts";
 import {
   SOURCE_LICENSE,
   SOURCE_URL,
@@ -63,7 +64,7 @@ test("/pricing: the cloud, self-hosting the open core under the AGPL and the com
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   const routes = read("apps/web/src/app/routing/index.tsx");
   assert.match(routes, /path === "\/pricing"\) return <Pricing \/>/);
-  assert.match(read("apps/server/frontend.ts"), /path === "\/pricing" \|\|/);
+  assert.ok(isAppPage("/pricing"));
   assert.match(read("apps/web/src/pages/landing/index.tsx"), /href="\/enterprise"/);
 });
 

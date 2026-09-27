@@ -1,6 +1,42 @@
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import type { CoverGenre, RevisionCover } from "../../../../../packages/contracts/cover.ts";
 import { hueOf, kindOf } from "../../entities/artifact/format.ts";
+import {
+  SEARCH_MATCH_END,
+  SEARCH_MATCH_START,
+} from "../../../../../packages/contracts/index.ts";
+
+const WORD = /[\p{L}\p{N}]/u;
+
+/**
+ * A search snippet without the title it often starts with (a page's text
+ * begins with its heading, and the card already shows the title). Null when
+ * nothing but the title is left.
+ */
+export function snippetBesideTitle(snippet: string, title: string): string | null {
+  const titleChars = [...title.toLocaleLowerCase("ru")].filter((ch) => WORD.test(ch));
+  if (!titleChars.length) return snippet;
+  const chars = [...snippet];
+  let matched = 0;
+  let index = 0;
+  let open = false;
+  for (; index < chars.length && matched < titleChars.length; index++) {
+    const ch = chars[index]!;
+    if (ch === SEARCH_MATCH_START) open = true;
+    else if (ch === SEARCH_MATCH_END) open = false;
+    else if (WORD.test(ch)) {
+      if (ch.toLocaleLowerCase("ru") !== titleChars[matched]) return snippet;
+      matched++;
+    }
+  }
+  // The title must end on a word boundary, not inside a longer word.
+  if (matched < titleChars.length || WORD.test(chars[index] ?? "")) return snippet;
+  let rest = chars.slice(index).join("").replace(/^[\s\p{P}]+/u, "");
+  // A mark opened inside the title closes inside the rest: keep the pair whole.
+  if (open) rest = SEARCH_MATCH_START + rest;
+  const words = [...rest].filter((ch) => WORD.test(ch)).length;
+  return words >= 3 ? rest : null;
+}
 
 /*
  * What a shelf card says about its cover (docs/specs/SHELF_COVERS.md). Pure
@@ -13,7 +49,8 @@ export const GENRE_LABEL: Record<CoverGenre, string> = {
   note: "Заметка",
   markdown: "Markdown",
   dashboard: "Дашборд",
-  app: "Приложение",
+  // An interactive page is still a page: one upload, one word everywhere.
+  app: "Страница",
   page: "Страница",
   image: "Изображение",
 };

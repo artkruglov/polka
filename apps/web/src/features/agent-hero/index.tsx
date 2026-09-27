@@ -18,7 +18,12 @@ import {
   storeClient,
   type HeroClientId,
 } from "../../entities/onboarding/agent-setup.ts";
-import { readDismissed, writeDismissed } from "../../entities/onboarding/dismissal.ts";
+import {
+  readAgentSeen,
+  readDismissed,
+  writeAgentSeen,
+  writeDismissed,
+} from "../../entities/onboarding/dismissal.ts";
 
 /** While the steps are on screen, how often the hero asks whether an agent has connected. */
 export const HERO_POLL_MS = 8000;
@@ -79,6 +84,8 @@ export type AgentHeroProps = {
   onHide: () => void;
   onShow: () => void;
   onUpload: () => void;
+  /** This browser last saw an agent connected (readAgentSeen). */
+  expectConnected?: boolean;
 };
 
 /**
@@ -96,6 +103,7 @@ export function AgentHeroView({
   onHide,
   onShow,
   onUpload,
+  expectConnected = false,
 }: AgentHeroProps) {
   const idBase = useId();
   const panelId = `${idBase}-panel`;
@@ -105,7 +113,10 @@ export function AgentHeroView({
     </button>
   );
 
-  if (connections.status === "loading")
+  // While the check runs, the hero keeps the shape this browser saw last
+  // (M8: no layout shift): one line when an agent was connected or the steps
+  // are hidden, the steps otherwise.
+  if (connections.status === "loading" && (expectConnected || hidden))
     return (
       <section className="agent-hero agent-hero--slim" aria-busy="true" aria-label="Агент">
         <h1 className="sr-only">Полка</h1>
@@ -235,9 +246,14 @@ export function AgentHero({
   const [polling, setPolling] = useState(!hidden);
   const connections = useAgentConnections(account.id, polling);
   const connected = connections.status === "ready" && connections.active.length > 0;
+  const [expectConnected] = useState(() => readAgentSeen(account.id));
   useEffect(() => setPolling(!hidden && !connected), [hidden, connected]);
+  useEffect(() => {
+    if (connections.status === "ready") writeAgentSeen(account.id, connected);
+  }, [account.id, connections.status, connected]);
   return (
     <AgentHeroView
+      expectConnected={expectConnected}
       origin={location.origin}
       connections={connections}
       hidden={hidden}

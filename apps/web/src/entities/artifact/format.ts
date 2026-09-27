@@ -145,13 +145,17 @@ export const categoryLabel: Record<Category, string> = {
   images: "Изображения",
   other: "Другое",
 };
-/** Client-side grouping by what the saved bytes are; the server has no categories. */
-export const categoryOf = (r: Pick<Revision, "mime" | "htmlProfile" | "storageKind">): Category =>
+/**
+ * The shelf chip a work falls under, by what the saved bytes are. Mirrors the
+ * server's shelfKindSql (apps/server/app.ts), which filters and counts: every
+ * HTML upload is a page, whatever view it gets.
+ */
+export const categoryOf = (r: Pick<Revision, "mime">): Category =>
   r.mime.startsWith("image/")
     ? "images"
-    : r.mime === "text/plain"
+    : r.mime === "text/plain" || r.mime === "text/markdown"
       ? "documents"
-      : r.mime === "text/html" && r.htmlProfile !== "unsupported"
+      : r.mime === "text/html"
         ? "pages"
         : "other";
 /** A stable hue per material so typographic covers differ without being random. */

@@ -11,7 +11,10 @@
 .shelf-sort { position: relative; display: inline-flex; }
 .shelf-sort select { appearance: auto; min-height: 40px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--ink-2); font: 400 var(--text-base) / 1.3 var(--font-sans); cursor: pointer; }
 .shelf-sort select:hover { background: var(--soft-2); }
-.shelf-chips { margin-bottom: var(--space-6); }
+.shelf-chips { min-height: 32px; margin-bottom: var(--space-6); }
+/* Offline: what is shown may be out of date. */
+.shelf-stale { margin: calc(-1 * var(--space-3)) 0 var(--space-5); color: var(--warning); font-size: var(--text-sm); }
+[data-stale] { opacity: .55; }
 
 /* Cards, covers, grid and list: widgets/shelf-card/styles.css. */
 .shelf-more { display: flex; justify-content: center; margin-top: var(--space-8); }

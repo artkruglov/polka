@@ -180,6 +180,64 @@ function decodeCursor(value: string | undefined, message: string) {
 const encodeCursor = (date: string, id: string) =>
   Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
+/**
+ * What a shelf chip groups by, from the latest version's bytes; mirrors
+ * categoryOf in apps/web/src/entities/artifact/format.ts.
+ */
+const SHELF_KINDS = ["pages", "documents", "images", "other"] as const;
+type ShelfKind = (typeof SHELF_KINDS)[number];
+const shelfKindSql = (revision: string) =>
+  `(CASE WHEN ${revision}.mime LIKE 'image/%' THEN 'images'
+         WHEN ${revision}.mime IN ('text/plain','text/markdown') THEN 'documents'
+         WHEN ${revision}.mime='text/html' THEN 'pages'
+         ELSE 'other' END)`;
+const UPDATED_KEY = `to_char(artifact.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+/** The shelf's orders: the key a page ends on, the ORDER BY, and «after the key». */
+const SHELF_ORDER = {
+  new: {
+    key: UPDATED_KEY,
+    by: "artifact.updated_at DESC,artifact.id DESC",
+    after: (key: string, id: string) =>
+      `(artifact.updated_at,artifact.id)<(${key}::timestamptz,${id})`,
+  },
+  old: {
+    key: UPDATED_KEY,
+    by: "artifact.updated_at ASC,artifact.id ASC",
+    after: (key: string, id: string) =>
+      `(artifact.updated_at,artifact.id)>(${key}::timestamptz,${id})`,
+  },
+  title: {
+    key: "lower(artifact.title)",
+    by: "lower(artifact.title) ASC,artifact.id ASC",
+    after: (key: string, id: string) =>
+      `(lower(artifact.title),artifact.id)>(${key},${id})`,
+  },
+} as const;
+type ShelfOrder = keyof typeof SHELF_ORDER;
+const listCursor = z.object({
+  sort: z.enum(["new", "old", "title"]),
+  key: z.string().max(600),
+  id: uuid,
+});
+function decodeListCursor(value: string | undefined, sort: ShelfOrder) {
+  if (!value) return null;
+  try {
+    const raw = JSON.parse(Buffer.from(value, "base64url").toString());
+    // A page loaded before orders existed carries { date, id }: newest first.
+    const legacy = pageCursor.safeParse(raw);
+    const cursor = legacy.success
+      ? { sort: "new" as const, key: legacy.data.date, id: legacy.data.id }
+      : listCursor.parse(raw);
+    if (cursor.sort !== sort) throw Error("another order");
+    if (sort !== "title") z.string().datetime().parse(cursor.key);
+    return cursor;
+  } catch {
+    throw new Problem(400, "invalid", "Обновите список: указатель страницы некорректен.");
+  }
+}
+const encodeListCursor = (sort: ShelfOrder, key: string, id: string) =>
+  Buffer.from(JSON.stringify({ sort, key, id })).toString("base64url");
+
 const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
 
 /**
@@ -795,41 +853,62 @@ export async function createApp() {
       .object({
         q: z.string().max(160).default(""),
         folderId: uuid.optional(),
-        cursor: z.string().max(200).optional(),
+        cursor: z.string().max(800).optional(),
+        // The whole shelf in this order and of this kind, not the loaded page.
+        sort: z.enum(["new", "old", "title"]).default("new"),
+        kind: z.enum(SHELF_KINDS).optional(),
       })
       .parse(req.query);
-    const cursor = decodeCursor(
-      q.cursor,
-      "Обновите список: указатель страницы некорректен.",
-    );
+    const order = SHELF_ORDER[q.sort];
+    const cursor = decodeListCursor(q.cursor, q.sort);
     // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
     const text = q.q.trim();
+    const title = text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : null;
     const { rows } = await db.query(
-      `SELECT artifact.id,artifact.updated_at,
-              to_char(artifact.updated_at AT TIME ZONE 'UTC',
-                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_updated_at,
+      `SELECT artifact.id,${order.key} AS cursor_key,
               ${searchSnippet("$6", "$7")}
        FROM artifacts artifact
+       LEFT JOIN revisions latest ON latest.id=artifact.latest_revision_id
        ${searchJoin("artifact")}
        WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
          AND ($2::uuid IS NULL OR artifact.folder_id=$2)
          AND ${searchMatch("artifact", "$3", "$6")}
-         AND ($4::timestamptz IS NULL
-              OR (artifact.updated_at,artifact.id)<($4,$5::uuid))
-       ORDER BY artifact.updated_at DESC,artifact.id DESC LIMIT 25`,
+         AND ($8::text IS NULL OR ${shelfKindSql("latest")}=$8)
+         AND ($4::text IS NULL OR ${order.after("$4", "$5::uuid")})
+       ORDER BY ${order.by} LIMIT 25`,
       [
         actor.tenant,
         q.folderId ?? null,
-        text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : null,
-        cursor?.date ?? null,
+        title,
+        cursor?.key ?? null,
         cursor?.id ?? null,
         prefixQuery(text),
         HEADLINE_OPTIONS,
+        q.kind ?? null,
       ],
     );
     const more = rows.length > 24,
       page = rows.slice(0, 24),
       last = page.at(-1);
+    // How many works of each kind match, over the whole shelf (first page only).
+    let counts: Record<ShelfKind | "all", number> | undefined;
+    if (!cursor) {
+      counts = { all: 0, pages: 0, documents: 0, images: 0, other: 0 };
+      const { rows: kinds } = await db.query(
+        `SELECT ${shelfKindSql("latest")} AS kind,count(*)::int AS count
+           FROM artifacts artifact
+           LEFT JOIN revisions latest ON latest.id=artifact.latest_revision_id
+          WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
+            AND ($2::uuid IS NULL OR artifact.folder_id=$2)
+            AND ${searchMatch("artifact", "$3", "$4")}
+          GROUP BY 1`,
+        [actor.tenant, q.folderId ?? null, title, prefixQuery(text)],
+      );
+      for (const { kind, count } of kinds as { kind: ShelfKind; count: number }[]) {
+        counts[kind] += count;
+        counts.all += count;
+      }
+    }
     const snippets = new Map<string, string>(
       page
         .filter((row) => row.search_snippet)
@@ -849,7 +928,8 @@ export async function createApp() {
       );
     return {
       items,
-      nextCursor: more ? encodeCursor(last.cursor_updated_at, last.id) : null,
+      nextCursor: more ? encodeListCursor(q.sort, last.cursor_key, last.id) : null,
+      ...(counts && { counts }),
     };
   });
   app.get("/api/artifacts/:id", async (req) =>
