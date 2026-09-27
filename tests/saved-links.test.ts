@@ -14,7 +14,7 @@ import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
-import { pageTitle, saveLink, saveLinkFromAgent } from "../apps/server/saved-links.ts";
+import { TITLE_SCAN_BYTES, pageTitle, readPageTitle, saveLink, saveLinkFromAgent } from "../apps/server/saved-links.ts";
 import { mcpToolCatalog } from "../apps/server/agent-discovery.ts";
 import { LINK_MIME } from "../packages/contracts/index.ts";
 import { LinkCard, LinkCover, recipientAccessNote } from "../apps/web/src/entities/link/index.tsx";
@@ -112,6 +112,43 @@ test("the content filter reads the address, title and note: listed domains and c
   const first = await filter(logger.revisionId);
   assert.ok(first.domains?.includes("iplogger.org"), JSON.stringify(first));
   assert.ok((await filter(gambling.revisionId)).hits?.gambling);
+});
+
+test("a page's title is read from its top, og:title first, in linear time", () => {
+  assert.equal(
+    readPageTitle(`<html><head><title>Plain &amp; simple</title><meta property="og:title" content="The  &quot;OG&quot; one"></head>`),
+    'The "OG" one',
+  );
+  assert.equal(readPageTitle(`<HEAD><TITLE lang=ru>\n  Заголовок\n</TITLE></HEAD>`), "Заголовок");
+  assert.equal(readPageTitle(`<meta name="description" content="x"><title>T</title>`), "T");
+  assert.equal(readPageTitle(`<title></title><p>no title`), null);
+  assert.equal(readPageTitle(`<titles>no</titles>`), null);
+  // Only the first 32 KB are read.
+  assert.equal(readPageTitle(" ".repeat(TITLE_SCAN_BYTES) + "<title>late</title>"), null);
+  // Crafted pages that froze the regexes (32 KB took 7 s): each shape at
+  // 32 KB and at 8 KB, and past the limit, stays fast and grows linearly.
+  const shapes = [
+    (n: number) => "<meta ".repeat(n / 6),
+    (n: number) => `<meta property="og:title"${" content='".repeat(n / 10)}`,
+    (n: number) => `<meta ${"property='og:title' ".repeat(n / 20)}`,
+    (n: number) => "<meta property='og:title' ".repeat(n / 26),
+    (n: number) => "<meta property='og:title' content='x'>".repeat(n / 38),
+    (n: number) => "<title>".repeat(n / 7),
+    (n: number) => "<title x".repeat(n / 8),
+  ];
+  for (const shape of shapes) {
+    const time = (size: number) => {
+      const page = shape(size);
+      const started = performance.now();
+      for (let round = 0; round < 5; round++) readPageTitle(page);
+      return performance.now() - started;
+    };
+    const small = time(8 * 1024);
+    const large = time(32 * 1024);
+    const huge = time(512 * 1024);
+    assert.ok(large < 200 && huge < 400, `${small.toFixed(1)} / ${large.toFixed(1)} / ${huge.toFixed(1)} ms`);
+    assert.ok(large / Math.max(small, 2) < 10, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`);
+  }
 });
 
 test("an AI chat's link is never opened for its title; agents save links with the capture scope", async () => {

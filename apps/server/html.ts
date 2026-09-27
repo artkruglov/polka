@@ -1,9 +1,11 @@
+import { availableParallelism } from "node:os";
 import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import { SearchText, addScriptText } from "./search-text.ts";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 import {
   fraudScore,
+  mergeResults,
   scanText,
   type FilterResult,
 } from "./content-filter/scanner.ts";
@@ -14,6 +16,7 @@ import {
   scanScript,
 } from "./phishing-signals.ts";
 import {
+  mergeSensitive,
   sensitiveFields,
   type SensitiveInput,
 } from "./content-filter/sensitive-input.ts";
@@ -628,6 +631,10 @@ export type InspectOptions = {
  * must not come out «unsupported» with scan:incomplete for it. Startup has
  * its own, looser bound. Other readers with the same protocol (the shelf
  * cover reader, cover-facts-worker.ts) pass their own worker script.
+ *
+ * Each worker may take a 256 MB heap, so at most one per CPU runs at a time
+ * (availableParallelism); the others wait for a slot in order. The wait is
+ * not part of the deadline either: the clock starts at the worker's "ready".
  */
 export async function inWorker<T>(
   message: object,
@@ -636,9 +643,16 @@ export async function inWorker<T>(
   script: URL = new URL("./html-classify-worker.mjs", import.meta.url),
 ): Promise<T> {
   const { Worker } = await import("node:worker_threads");
-  const worker = new Worker(script, {
-    resourceLimits: { maxOldGenerationSizeMb: 256 },
-  });
+  await acquireWorkerSlot();
+  let worker: InstanceType<typeof Worker>;
+  try {
+    worker = new Worker(script, {
+      resourceLimits: { maxOldGenerationSizeMb: 256 },
+    });
+  } catch (error) {
+    releaseWorkerSlot();
+    throw error;
+  }
   try {
     return await new Promise<T>((resolve) => {
       let timer = setTimeout(() => resolve(unread), WORKER_START_MS);
@@ -655,8 +669,46 @@ export async function inWorker<T>(
       });
     });
   } finally {
-    await worker.terminate();
+    try {
+      await worker.terminate();
+    } finally {
+      releaseWorkerSlot();
+    }
   }
+}
+
+let workerLimit = Math.max(1, availableParallelism());
+let workersRunning = 0;
+const workerQueue: Array<() => void> = [];
+
+function acquireWorkerSlot(): Promise<void> | void {
+  if (workersRunning < workerLimit) {
+    workersRunning++;
+    return;
+  }
+  return new Promise<void>((resolve) => workerQueue.push(resolve));
+}
+
+/** A freed slot goes straight to the next waiting call, in order. */
+function releaseWorkerSlot() {
+  const next = workerQueue.shift();
+  if (next && workersRunning <= workerLimit) next();
+  else {
+    workersRunning--;
+    if (next) workerQueue.unshift(next);
+  }
+}
+
+/** The worker slots now; `limit` changes their number (tests). */
+export function workerSlots(limit?: number) {
+  if (limit !== undefined) {
+    workerLimit = Math.max(1, limit);
+    while (workersRunning < workerLimit && workerQueue.length) {
+      workersRunning++;
+      workerQueue.shift()!();
+    }
+  }
+  return { limit: workerLimit, running: workersRunning, waiting: workerQueue.length };
 }
 
 export async function inspectHtmlBounded(
@@ -681,6 +733,108 @@ export async function scanTextBounded(
   if (source.length <= CLASSIFY_INLINE_BYTES) return scanText(source);
   const unread = { v: 1 as const, hits: {}, incomplete: true as const };
   return inWorker<FilterResult & { incomplete?: true }>({ source, text: true }, deadlineMs, unread);
+}
+
+/**
+ * The phishing signals and content findings of a work's scripts (a bundle's
+ * or a project's .js files, phishing-signals.ts scanScript), read together
+ * as one collector reads them. `sensitive` is absent when they were not read.
+ */
+export type ScriptScan = {
+  signals: string[];
+  filter: FilterResult;
+  sensitive?: SensitiveInput;
+};
+
+/**
+ * Of each script, at most this many characters of its strings and JSX text
+ * reach the context signals (brands, urgency, addresses, the text filter).
+ * A real page's words fit many times over; a crafted file of millions of
+ * strings would only make the scan longer.
+ */
+export const SCRIPT_CONTEXT_CHARS = 256 * 1024;
+
+/** A collector whose context() takes at most `budget` more characters. */
+export class ScriptCollector extends SignalCollector {
+  budget = SCRIPT_CONTEXT_CHARS;
+  override context(value: string) {
+    if (this.budget <= 0) return;
+    const part = value.length > this.budget ? value.slice(0, this.budget) : value;
+    this.budget -= part.length;
+    super.context(part);
+  }
+}
+
+/** Every script into one collector, each with its own context budget. */
+export function scanScripts(
+  sources: readonly string[],
+  collector = new ScriptCollector(),
+): ScriptScan {
+  for (const source of sources) {
+    collector.budget = SCRIPT_CONTEXT_CHARS;
+    scanScript(source, collector);
+  }
+  return {
+    signals: collector.list(),
+    filter: collector.content.result(),
+    sensitive: collector.sensitive.result(),
+  };
+}
+
+/** Scripts go to one worker in parts of at most this many characters. */
+export const SCRIPT_PART_CHARS = 16 * 1024 * 1024;
+/**
+ * A part's deadline: this, plus a second per MB of script (a real 3.5 MB
+ * bundle reads in ~0.4 s; 48 MB of crafted strings took ~25 s inline).
+ */
+export const SCRIPT_DEADLINE_MS = 2_000;
+const UNREAD_SCRIPTS: ScriptScan = {
+  signals: [SCAN_INCOMPLETE],
+  filter: UNREAD.filter,
+};
+
+/**
+ * scanScripts off the request thread, with a deadline, like a page
+ * (inspectHtmlBounded): small scripts are read inline, larger ones in a
+ * classify worker, part by part. A part that cannot be read in time adds
+ * SCAN_INCOMPLETE (an interactive link waits for review) and leaves the
+ * scripts' fields for secrets unknown.
+ */
+export async function scanScriptsBounded(
+  sources: readonly string[],
+  deadlineMs = SCRIPT_DEADLINE_MS,
+  msPerMb = 1_000,
+): Promise<ScriptScan> {
+  const total = sources.reduce((sum, source) => sum + source.length, 0);
+  if (total <= CLASSIFY_INLINE_BYTES) return scanScripts(sources);
+  const parts: string[][] = [[]];
+  let size = 0;
+  for (const source of sources) {
+    if (size > 0 && size + source.length > SCRIPT_PART_CHARS) {
+      parts.push([]);
+      size = 0;
+    }
+    parts.at(-1)!.push(source);
+    size += source.length;
+  }
+  const scans: ScriptScan[] = [];
+  for (const part of parts) {
+    const chars = part.reduce((sum, source) => sum + source.length, 0);
+    scans.push(
+      await inWorker<ScriptScan>(
+        { scripts: part },
+        deadlineMs + Math.ceil(chars / (1024 * 1024)) * msPerMb,
+        UNREAD_SCRIPTS,
+      ),
+    );
+  }
+  if (scans.length === 1) return scans[0]!;
+  const sensitive = mergeSensitive(...scans.map((scan) => scan.sensitive));
+  return {
+    signals: [...new Set(scans.flatMap((scan) => scan.signals))].sort(),
+    filter: mergeResults(...scans.map((scan) => scan.filter)),
+    ...(sensitive ? { sensitive } : {}),
+  };
 }
 
 export async function classifyHtmlBounded(

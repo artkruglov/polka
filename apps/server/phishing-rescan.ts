@@ -3,9 +3,9 @@
 // (shares.ts, recheckFraudHolds). The same reading as a save: a page, or
 // every page and script of a bundle (artifacts.ts).
 import { db } from "./db.ts";
-import { inspectHtmlBounded } from "./html.ts";
+import { inspectHtmlBounded, scanScriptsBounded } from "./html.ts";
 import { readBlob } from "./storage.ts";
-import { SignalCollector, scanScript } from "./phishing-signals.ts";
+import { SignalCollector } from "./phishing-signals.ts";
 
 const MAX_BUNDLE_FILES = 500;
 /** revisions.phishing_signals holds at most 64 (029_abuse_protection.sql). */
@@ -43,15 +43,16 @@ export async function rescanPhishingSignals(revision: Row): Promise<string[] | n
     )
       for (const signal of await page(revision.object_key, revision.object_version))
         collector.add(signal);
+    const scripts: string[] = [];
     for (const file of files)
       if (file.mime === "text/html")
         for (const signal of await page(file.object_key, file.object_version))
           collector.add(signal);
       else
-        scanScript(
-          (await readBlob(file.object_key, file.object_version)).toString("utf8"),
-          collector,
-        );
+        scripts.push((await readBlob(file.object_key, file.object_version)).toString("utf8"));
+    // Off the main thread with a deadline, as at saving (html.ts).
+    if (scripts.length)
+      for (const signal of (await scanScriptsBounded(scripts)).signals) collector.add(signal);
     return collector.list().slice(0, MAX_SIGNALS);
   } catch {
     return null;

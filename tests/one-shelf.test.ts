@@ -1276,7 +1276,7 @@ test("a provisional shelf's link: the page shows it first, spends it on a click,
   assert.ok(!everything.includes(token));
 });
 
-test("from a link's weak session a real sign-in offers to carry works over, never attaching the identity", async () => {
+test("from a link's weak session a real sign-in only switches shelves: no merge, never attaching the identity", async () => {
   const shelf = await linkingShelf();
   assert.equal((await publish(shelf.bearer, "Черновик")).statusCode, 200);
   const token = new URL((await signInLink(shelf.bearer)).json().url).hash.slice(1);
@@ -1311,15 +1311,31 @@ test("from a link's weak session a real sign-in offers to carry works over, neve
   );
   assert.notEqual(identity.account_id, shelf.id, "not attached to the provisional shelf");
   const claimCookie = `polka_claim=${cookieOf(back, "polka_claim")!.value}`;
+  // Whoever holds the agent's link could sign in to a shelf of their own:
+  // merging would move this shelf's works and agents there. Refused.
   const merged = await post("/api/account/claim/merge", `${weak}; ${claimCookie}`);
-  assert.equal(merged.statusCode, 200, merged.body);
-  const {
-    rows: [work],
-  } = await db.query(
-    "SELECT t.owner_id FROM artifacts a JOIN tenants t ON t.id=a.tenant_id WHERE a.title='Черновик' AND t.owner_id=$1",
-    [identity.account_id],
-  );
-  assert.ok(work, "the works moved to the shelf signed in to");
+  assert.equal(merged.statusCode, 403, merged.body);
+  assert.equal(cookieOf(merged, "polka_session"), undefined);
+  const worksOf = async (ownerId: string) =>
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM artifacts a JOIN tenants t ON t.id=a.tenant_id WHERE a.title='Черновик' AND t.owner_id=$1",
+        [ownerId],
+      )
+    ).rows[0].n;
+  assert.equal(await worksOf(identity.account_id), 0, "nothing moved");
+  assert.equal(await worksOf(shelf.id), 1, "the works stay on the linked shelf");
+  // Switching to the shelf signed in to still works (the choice was kept).
+  const switched = await post("/api/account/claim/switch", `${weak}; ${claimCookie}`);
+  assert.equal(switched.statusCode, 200, switched.body);
+  const session = cookieOf(switched, "polka_session")!.value;
+  const me = await app.inject({
+    method: "GET",
+    url: "/api/session",
+    headers: { cookie: `polka_session=${session}` },
+  });
+  assert.equal(me.json().account.id, identity.account_id);
+  assert.equal(await worksOf(shelf.id), 1);
 });
 
 test("expired links, static tokens, a switched-off connection and the hourly limit are refused", async () => {

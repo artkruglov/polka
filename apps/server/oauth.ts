@@ -227,45 +227,76 @@ const cleanName = (value: string | undefined) => {
   return name || "MCP-клиент";
 };
 
-// Names people trust are reserved for the vendors' own callback hosts, so a
-// self-registered client cannot pose as Claude or ChatGPT on the consent page.
-const RESERVED_NAMES = [
-  { words: ["claude", "anthropic"], hosts: ["claude.ai", "claude.com"] },
-  { words: ["chatgpt", "openai"], hosts: ["chatgpt.com", "openai.com"] },
+// Names people trust are reserved for their owners' callback hosts, so a
+// self-registered client cannot pose as Claude, ChatGPT or Полка itself on
+// the consent page.
+const RESERVED_NAMES: { words: string[]; hosts: () => string[] }[] = [
+  { words: ["claude", "anthropic"], hosts: () => ["claude.ai", "claude.com"] },
+  { words: ["chatgpt", "openai"], hosts: () => ["chatgpt.com", "openai.com"] },
+  {
+    words: ["polka", "polochka", "полка", "полочка"],
+    hosts: () => [new URL(config.APP_ORIGIN).hostname],
+  },
 ];
-const LOOKALIKES: Record<string, string> = {
-  а: "a",
-  с: "c",
-  е: "e",
-  о: "o",
-  р: "p",
-  х: "x",
-  у: "y",
-  і: "i",
-  ӏ: "l",
-  к: "k",
-  м: "m",
-  т: "t",
-  н: "h",
-  в: "b",
-  г: "r",
-  "0": "o",
-  "1": "l",
+
+// Confusable skeletons (in the spirit of Unicode TR39): a name is compared
+// after folding letters that look alike, in Latin, Cyrillic and Greek, into
+// one script. Two skeletons, since a look-alike can be spelled in either
+// direction: «Clauԁe» (Cyrillic ԁ) into Latin, «Пoлкa» (Latin o, a) into
+// Cyrillic. Lower case first, so «CIaude» (capital I) and «ΟpenAI» (Greek
+// capital omicron) fold as well.
+const TO_LATIN: Record<string, string> = {
+  // Cyrillic
+  а: "a", в: "b", г: "r", д: "d", е: "e", ё: "e", и: "u", к: "k", м: "m",
+  н: "h", о: "o", п: "n", р: "p", с: "c", т: "t", у: "y", х: "x", ь: "b",
+  ѕ: "s", і: "i", ї: "i", ј: "j", ӏ: "l", ԁ: "d", ԛ: "q", ԝ: "w", ү: "y",
+  һ: "h",
+  // Greek
+  α: "a", β: "b", γ: "y", ε: "e", ζ: "z", η: "n", ι: "i", κ: "k", ν: "v",
+  ο: "o", ρ: "p", σ: "o", τ: "t", υ: "u", χ: "x", ω: "w", ϲ: "c", ϳ: "j",
+  // Latin letters that look like other Latin letters
+  ı: "i", ɩ: "i", ɑ: "a", ɡ: "g",
 };
+const TO_CYRILLIC: Record<string, string> = {
+  a: "а", b: "в", c: "с", e: "е", h: "н", k: "к", m: "м", n: "п", o: "о",
+  p: "р", r: "г", t: "т", u: "и", x: "х", y: "у", "0": "о",
+  α: "а", β: "в", ε: "е", η: "п", κ: "к", λ: "л", ο: "о", π: "п", ρ: "р",
+  τ: "т", υ: "у", χ: "х", ё: "е",
+};
+/** The Latin skeleton: I, l, 1 and | are one letter, as are O and 0. */
+const latinSkeleton = (value: string) =>
+  [...value.normalize("NFKC").toLowerCase()]
+    .map((char) => TO_LATIN[char] ?? char)
+    .join("")
+    .replace(/[i1|!]/g, "l")
+    .replace(/0/g, "o")
+    .replace(/rn/g, "m")
+    .replace(/vv/g, "w")
+    .replace(/[^a-z]/g, "");
+const cyrillicSkeleton = (value: string) =>
+  [...value.normalize("NFKC").toLowerCase()]
+    .map((char) => TO_CYRILLIC[char] ?? char)
+    .join("")
+    .replace(/[^а-я]/g, "");
+const RESERVED_SKELETONS = RESERVED_NAMES.map((entry) => ({
+  ...entry,
+  skeletons: entry.words.map((word) =>
+    /[а-я]/.test(word) ? cyrillicSkeleton(word) : latinSkeleton(word),
+  ),
+}));
+
 const onHost = (uri: string, hosts: string[]) => {
   const host = new URL(uri).hostname;
   return hosts.some((known) => host === known || host.endsWith(`.${known}`));
 };
 
 export function vettedClientName(name: string, redirectUris: string[]) {
-  const folded = [...name.normalize("NFKC").toLowerCase()]
-    .map((char) => LOOKALIKES[char] ?? char)
-    .join("")
-    .replace(/[^a-z]/g, "");
-  const claimed = RESERVED_NAMES.find((entry) =>
-    entry.words.some((word) => folded.includes(word)),
+  const latin = latinSkeleton(name);
+  const cyrillic = cyrillicSkeleton(name);
+  const claimed = RESERVED_SKELETONS.find((entry) =>
+    entry.skeletons.some((word) => latin.includes(word) || cyrillic.includes(word)),
   );
-  if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts)))
+  if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts())))
     return name;
   return unconfirmed(name);
 }
