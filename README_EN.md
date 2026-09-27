@@ -23,7 +23,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="CI checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="License: AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/commercial_license-available-1f4fff" alt="Commercial license available"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=version&color=0f1420" alt="Latest version"></a>
@@ -189,7 +188,7 @@ npm run check          # frontend layers + TypeScript
 npm run build
 npm test               # throwaway database and bucket, removed afterwards
 npm test -- --live     # suites that need the local viewer
-npm run verify         # everything before a push; GitHub Actions runs the same (.github/workflows/verify.yml)
+npm run verify         # everything before a push: no hosted CI, checks run locally
 ```
 
 </details>
@@ -224,7 +223,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 ## Status
 
 > [!NOTE]
-> **Current release — `v0.3.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
+> **Current release — `v0.3.1`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
 
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 

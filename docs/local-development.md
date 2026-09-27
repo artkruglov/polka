@@ -59,7 +59,7 @@ npm run verify -- --print-steps   # шаги; --only=<шаг,…> запуска
 
 Если сервер слушает порт 4390, это ещё не значит, что база и хранилище доступны. Проверьте `docker compose ps` и `/api/health`.
 
-Те же шаги на каждый push в `main` и pull request выполняет GitHub Actions ([.github/workflows/verify.yml](../.github/workflows/verify.yml)): каждый шаг там вызывает `node scripts/verify.mjs --only=<шаг>`, поэтому список разрешённых лицензий и digest образа gitleaks определены только в `scripts/verify.mjs`. Проверка renderer (`npm run test:renderer-runtime`) запускается в CI только вручную (workflow_dispatch с флагом `renderer`).
+Облачного CI в проекте нет: все проверки запускает локально `npm run verify`. Отдельные шаги — `node scripts/verify.mjs --print-steps` и `--only=<шаг>`; список разрешённых лицензий и digest образа gitleaks определены только в `scripts/verify.mjs`. Проверка renderer — отдельная команда `npm run test:renderer-runtime`.
 
 ## Интерактивный просмотр
 
