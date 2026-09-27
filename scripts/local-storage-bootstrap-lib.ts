@@ -12,7 +12,8 @@ export function assertLocalStorageBootstrapTarget(
     endpoint.origin !== target.endpoint ||
     endpoint.protocol !== "http:" ||
     !["127.0.0.1", "localhost"].includes(endpoint.hostname) ||
-    endpoint.port !== "9038" ||
+    // Any explicit port: POLKA_LOCAL_S3_PORT in .env may move MinIO off 9038.
+    !endpoint.port ||
     target.bucket !== "polka-local" ||
     target.accessKey !== "polka-local"
   )
