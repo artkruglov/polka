@@ -1,6 +1,7 @@
 // The one place Полка sends mail from: sign-in codes (email-auth.ts) and
 // operator moderation (moderation-mail.ts), comment letters (comment-mail.ts),
-// requests from /enterprise (enterprise-requests.ts).
+// requests from /enterprise (enterprise-requests.ts), invitations to a
+// template library (template-libraries.ts).
 // MAIL_MODE=smtp sends through
 // SMTP_*; MAIL_MODE=local never sends and writes a JSON file under
 // .local/mail instead (loopback installations and tests read it there).
