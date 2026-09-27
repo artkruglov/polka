@@ -242,3 +242,10 @@ test("Deeply nested pages are classified off the request thread within a deadlin
   const scripted = `${article}<button onclick="go()">Далее</button><script>function go(){}</script>`;
   assert.equal(await classifyHtmlBounded(scripted), "limited");
 });
+
+test("the hosted proxy sends HSTS with includeSubDomains on every host", () => {
+  const caddyfile = readFileSync("deploy/hosted/Caddyfile", "utf8");
+  const hsts = caddyfile.split("\n").filter((line) => /Strict-Transport-Security/i.test(line));
+  assert.ok(hsts.length >= 2, "the app and the viewer both send HSTS");
+  for (const line of hsts) assert.match(line, /max-age=31536000; includeSubDomains"/, line);
+});

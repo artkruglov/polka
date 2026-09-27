@@ -27,10 +27,11 @@ import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
   looksLikeHtml,
+  scanScriptsBounded,
   scanTextBounded,
   type HtmlInspection,
 } from "./html.ts";
-import { SignalCollector, scanScript } from "./phishing-signals.ts";
+import { SignalCollector } from "./phishing-signals.ts";
 import {
   fraudScore,
   mergeResults,
@@ -1103,6 +1104,7 @@ export async function finalizeBundleUploadInTransaction(
   }> = [];
   let entryBytes: Buffer | null = null;
   const scriptSources: Buffer[] = [];
+  const scriptTexts: string[] = [];
   const project = input.manifest.runtime === PROJECT_RUNTIME;
   // Phishing signals of every page and script of the bundle. Pages go through
   // the same bounded (off-thread, deadline) parse as the profile.
@@ -1153,16 +1155,25 @@ export async function finalizeBundleUploadInTransaction(
       )
         pageFilters.push(await scanTextBounded(bytes.toString("utf8")));
       else if (file.mime === "text/javascript")
-        scanScript(bytes.toString("utf8"), signals);
+        scriptTexts.push(bytes.toString("utf8"));
     } else if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     // Phishing signals of every page and script (a lone entrypoint is read
     // below, in the same walk as its profile).
     else if (file.mime === "text/html") await inspectPage(bytes);
     else if (file.mime === "text/javascript") {
-      scanScript(bytes.toString("utf8"), signals);
+      scriptTexts.push(bytes.toString("utf8"));
       scriptSources.push(bytes);
     }
     verified.push({ file, ...stored });
+  }
+  // The scripts, read together off the request thread with a deadline
+  // (html.ts, scanScriptsBounded); their findings go first, as before.
+  if (scriptTexts.length) {
+    const scripts = await scanScriptsBounded(scriptTexts);
+    scriptTexts.length = 0;
+    for (const signal of scripts.signals) signals.add(signal);
+    pageFilters.unshift(scripts.filter);
+    pageSensitive.push(scripts.sensitive);
   }
   const entryIndex = input.manifest.files.findIndex(
     (file) => file.path === input.manifest.entrypoint,

@@ -43,6 +43,32 @@ export async function robotsVerdict(robots: RobotsSource, url: URL): Promise<Ren
   return robotsAllow(answer, url) ? null : "robots_disallowed";
 }
 
+/** Where a page's <title> is looked for: a real one is near the top. */
+export const TITLE_SCAN_CHARS = 32 * 1024;
+const isTagEnd = (c: number) => c === 9 || c === 10 || c === 12 || c === 13 || c === 32 || c === 47 || c === 62;
+const startsWithCi = (text: string, at: number, lower: string) =>
+  text.slice(at, at + lower.length).toLowerCase() === lower;
+
+/**
+ * The text of the first <title>…</title> (up to 300 characters, no markup)
+ * in the first 32 KB, or "". A hand-written scan, linear in that prefix: a
+ * regex like /<title[^>]*>…/ rescans the rest of the page from every
+ * "<title", and this page is whatever the address serves.
+ */
+export function readTitle(source: string): string {
+  const text = source.length > TITLE_SCAN_CHARS ? source.slice(0, TITLE_SCAN_CHARS) : source;
+  for (let lt = text.indexOf("<"); lt !== -1; lt = text.indexOf("<", lt + 1)) {
+    if (!startsWithCi(text, lt + 1, "title") || !isTagEnd(text.charCodeAt(lt + 6))) continue;
+    const open = text.indexOf(">", lt + 6);
+    if (open === -1) return "";
+    const close = text.indexOf("<", open + 1);
+    if (close === -1) return "";
+    if (close - open - 1 <= 300 && startsWithCi(text, close, "</title>")) return text.slice(open + 1, close);
+    lt = close - 1;
+  }
+  return "";
+}
+
 export async function fetchPage(
   get: ProxiedGet,
   robots: RobotsSource,
@@ -74,7 +100,7 @@ export async function fetchPage(
       continue;
     }
     const html = answer.body.toString("utf8");
-    const title = /<title[^>]*>([^<]{0,300})<\/title>/i.exec(html)?.[1] ?? "";
+    const title = readTitle(html);
     const headers = Object.fromEntries(Object.entries(answer.headers).map(([key, value]) => [key, String(Array.isArray(value) ? value[0] : value ?? "")]));
     const challenge = detectChallenge({ url: url.href, title, headers, status: answer.status, frameUrls: [], text: html.length > 5_000 ? "x".repeat(500) : "" });
     if (challenge) return { error: "source_blocked", detail: challenge };

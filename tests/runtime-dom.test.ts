@@ -10,6 +10,10 @@ import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { componentShell } from "../packages/contracts/runtime.ts";
 import { buildDerivative } from "../apps/server/react-runtime.ts";
 import { liveViewerCsp, withViewerGuard } from "../apps/server/html.ts";
+import { pageCsp, withProjectScripts } from "../apps/server/project-viewer.ts";
+
+/** Pages served the way the project viewer serves a project's page. */
+const PROJECT_TOKEN = "p".repeat(43);
 
 /**
  * The compiled pages actually running: a real browser loads each build
@@ -91,8 +95,8 @@ function send(method: string, params: Record<string, unknown> = {}) {
 }
 
 /** Loads a built page under the viewer's CSP and returns an evaluator. */
-async function open(html: string) {
-  const name = `/page-${pages.size}`;
+async function open(html: string, project = false) {
+  const name = `/${project ? "project-" : ""}page-${pages.size}`;
   pages.set(name, html);
   await send("Page.navigate", { url: origin + name });
   // The page mounts on DOMContentLoaded; give React a few frames.
@@ -122,9 +126,20 @@ async function open(html: string) {
 before(async () => {
   if (skip) return;
   server = createServer((request, response) => {
-    const html = pages.get((request.url ?? "").split("?")[0]);
+    const name = (request.url ?? "").split("?")[0] ?? "";
+    const html = pages.get(name);
     if (html === undefined) {
       response.writeHead(404).end();
+      return;
+    }
+    if (name.startsWith("/project-")) {
+      // Exactly the project viewer's page response (project-viewer.ts).
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy": pageCsp(PROJECT_TOKEN),
+        "cache-control": "no-store",
+      });
+      response.end(withProjectScripts(Buffer.from(html), PROJECT_TOKEN));
       return;
     }
     // Exactly the interactive viewer's isolation, including its sandbox.
@@ -386,5 +401,33 @@ window.early = typeof RTCPeerConnection;
       ),
       "SecurityError",
     );
+  },
+);
+
+test(
+  "a project page cannot reach WebRTC, even from a script before its head",
+  { skip },
+  async () => {
+    // Served as the project viewer serves a page: its CSP (inline scripts
+    // run) and Полка's scripts placed first.
+    const evaluate = await open(
+      `<!doctype html><script>
+window.early = typeof RTCPeerConnection;
+</script><html><head><title>rtc</title><script>window.inHead = typeof RTCDataChannel;</script></head><body><p>x</p></body></html>`,
+      true,
+    );
+    assert.equal(await evaluate("window.early"), "undefined");
+    assert.equal(await evaluate("window.inHead"), "undefined");
+    assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
+    assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
+    assert.equal(
+      await evaluate(
+        "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
+      ),
+      "TypeError",
+    );
+    assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
+    // Still a project page: its own scripts ran.
+    assert.equal(await evaluate("document.title"), "rtc");
   },
 );

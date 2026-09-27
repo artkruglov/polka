@@ -26,7 +26,7 @@ http://{$APP_HOST} {
 
 {$APP_HOST} {
 	encode gzip
-	header Strict-Transport-Security "max-age=31536000"
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy 127.0.0.1:4390 {
 		# Caddy replaces client-supplied X-Forwarded-For unless the client is a
 		# trusted proxy; the app trusts only this loopback hop (TRUST_PROXY).
@@ -43,7 +43,7 @@ http://{$VIEWER_HOST_NAME} {
 
 {$VIEWER_HOST_NAME} {
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		Cache-Control "no-store"
 		Referrer-Policy "no-referrer"
 		X-Content-Type-Options "nosniff"

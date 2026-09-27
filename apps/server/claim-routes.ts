@@ -149,6 +149,11 @@ export function registerClaimRoutes(app: FastifyInstance) {
     { bodyLimit: 1024 },
     async (req, reply) => {
       const actor = await identity(req);
+      // A session from an agent's link never merges (auth.ts, weak): whoever
+      // holds the link could sign in to a shelf of their own and move this
+      // shelf's works and agents there. It may only switch to that shelf,
+      // leaving the works here; the pending choice stays for /switch.
+      assertStrongSession(actor);
       await limitAttempts(`claim-merge:${actor.id}`, 10);
       const { connections } = z
         .object({ connections: z.array(z.string().uuid()).max(100).default([]) })
@@ -157,9 +162,6 @@ export function registerClaimRoutes(app: FastifyInstance) {
       const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
       clear(reply);
       if (!entry || entry.provisionalId !== actor.id) throw gone();
-      // A session from an agent's link merges only into a shelf this browser
-      // has just signed in to for real (a code, a password, a provider).
-      if (actor.weak && !entry.targetSession) assertStrongSession(actor);
       let report;
       try {
         report = await mergeAccounts({
