@@ -105,6 +105,7 @@ test("an extension's web module is served from this origin and named in capabili
   assert.equal(module.statusCode, 200);
   assert.match(String(module.headers["content-type"]), /text\/javascript/);
   assert.match(module.body, /addSection\("company-admin"/);
+  assert.match(module.body, /addSection\("share-dialog"/);
   assert.equal((await call("GET", "/ext/other.js", undefined, false)).statusCode, 404);
   assert.equal((await call("GET", "/ext/..%2Fsecret.js", undefined, false)).statusCode, 404);
 });

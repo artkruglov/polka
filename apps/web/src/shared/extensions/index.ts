@@ -92,6 +92,22 @@ export function loadExtensions(names: string[]) {
   return loading;
 }
 
+let requested: Promise<void> | null = null;
+
+/**
+ * Asks /api/capabilities which extensions there are and loads them, once
+ * per page; a page or window with a slot calls it when it opens. It works
+ * without them: a failed request is tried again next time.
+ */
+export function ensureExtensions() {
+  requested ??= request<{ extensions?: string[] }>("/capabilities")
+    .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
+    .catch(() => {
+      requested = null;
+    });
+  return requested;
+}
+
 const EMPTY: ExtensionSection[] = [];
 
 /** The sections extensions added to a slot; re-renders when one arrives. */
