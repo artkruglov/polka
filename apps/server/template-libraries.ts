@@ -17,6 +17,10 @@ import {
 import { config } from "./config.ts";
 import { sha256 } from "./storage.ts";
 import { assertClaimed } from "./provisional.ts";
+import { limitAttempts } from "./auth.ts";
+import { sendMail } from "./mailer.ts";
+import { libraryInviteMail } from "./mail-templates/library-invite.ts";
+import { HOSTED_MAIL_SITE } from "./mail-templates/login-code.ts";
 
 // Mutations take FOR UPDATE; read-only listings take FOR SHARE, which still
 // waits for (and rechecks after) a concurrent revoke, disable or archive but
@@ -401,9 +405,9 @@ export async function createTemplateLibraryInvitation(
 ) {
   await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInvitationInput.parse(body);
-  return transaction(async (c) => {
+  const created = await transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
-    await lockLibrary(c, libraryId);
+    const library = await lockLibrary(c, libraryId);
     requireAdmin(await lockMembers(c, libraryId, [actor.id]), actor.id);
     const existingMember = await c.query(
       `SELECT 1 FROM template_library_members
@@ -453,15 +457,76 @@ export async function createTemplateLibraryInvitation(
       input.role,
     );
     const fragment = new URLSearchParams({ token, libraryId }).toString();
+    const inviter = (
+      await c.query("SELECT name FROM accounts WHERE id=$1", [actor.id])
+    ).rows[0]?.name as string;
     return {
-      id,
-      email: input.email,
-      role: input.role,
-      expiresAt: new Date(row.expires_at).toISOString(),
-      invitationUrl: `${config.APP_ORIGIN}/library-invite#${fragment}`,
+      invitation: {
+        id,
+        email: input.email,
+        role: input.role,
+        expiresAt: new Date(row.expires_at).toISOString(),
+        invitationUrl: `${config.APP_ORIGIN}/library-invite#${fragment}`,
+      },
+      libraryName: library.name as string,
+      inviter,
     };
   });
+  const { invitation } = created;
+  return { ...invitation, mail: await sendInvitationMail(actor, created) };
 }
+
+/** Letters one admin may send a day, and one address may get from anyone. */
+export const INVITATION_MAIL_LIMITS = { perInviter: 20, perAddress: 3 };
+
+/**
+ * The invitation letter, after the invitation is saved. The link is shown
+ * to the admin either way; the letter is a convenience, so a limit or a
+ * mail failure only says it was not sent. Any claimed account can invite
+ * any address, hence the limits and the fixed text (library-invite.ts).
+ */
+async function sendInvitationMail(
+  actor: Actor,
+  created: {
+    invitation: { email: string; role: "reader" | "curator" | "admin"; expiresAt: string; invitationUrl: string };
+    libraryName: string;
+    inviter: string;
+  },
+): Promise<"sent" | "disabled" | "limited" | "failed"> {
+  if (config.MAIL_MODE === "disabled") return "disabled";
+  const { invitation } = created;
+  try {
+    await limitAttempts(`library-invite-mail:${actor.id}`, INVITATION_MAIL_LIMITS.perInviter, "24 hours");
+    await limitAttempts(`library-invite-mail-to:${invitation.email}`, INVITATION_MAIL_LIMITS.perAddress, "24 hours");
+  } catch (error) {
+    if (error instanceof Problem && error.status === 429) return "limited";
+    throw error;
+  }
+  const hosted = config.APP_ORIGIN === HOSTED_MAIL_SITE.origin;
+  try {
+    await sendMail({
+      to: invitation.email,
+      ...libraryInviteMail({
+        libraryName: created.libraryName,
+        inviter: created.inviter,
+        role: invitation.role,
+        url: invitation.invitationUrl,
+        expiresAt: new Date(invitation.expiresAt),
+        origin: config.APP_ORIGIN,
+        contact: hosted
+          ? HOSTED_MAIL_SITE.contact
+          : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
+      }),
+    }, LOCAL_INVITATION_MAIL_DIRECTORY);
+    return "sent";
+  } catch {
+    console.error(JSON.stringify({ event: "template_library.invitation_mail_failed" }));
+    return "failed";
+  }
+}
+
+/** Invitation letters in local mail mode. */
+export const LOCAL_INVITATION_MAIL_DIRECTORY = ".local/mail/invitations";
 
 export async function listTemplateLibraryInvitations(
   actor: Actor,

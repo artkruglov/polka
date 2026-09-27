@@ -412,3 +412,31 @@ test("account anonymization clears pending and accepted invitation identity", as
     accepted_membership_joined_at: null,
   });
 });
+
+test("the invitation letter is fixed text, one per call, within daily limits", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { INVITATION_MAIL_LIMITS } = await import("../apps/server/template-libraries.ts");
+  const libraryId = await library("Шаблоны\nотдела <b>продаж</b>");
+  const email = `letter-${randomBytes(5).toString("hex")}@example.test`;
+  const results: Array<{ mail: string; invitationUrl: string }> = [];
+  for (let i = 0; i <= INVITATION_MAIL_LIMITS.perAddress; i++)
+    results.push(await invite(libraryId, email, { role: "curator" }));
+  assert.deepEqual(
+    results.map((result) => result.mail),
+    [...Array(INVITATION_MAIL_LIMITS.perAddress).fill("sent"), "limited"],
+  );
+  // Local mail mode: the letters are files; the last one went to this address.
+  const { readdir } = await import("node:fs/promises");
+  const directory = ".local/mail/invitations";
+  const letters = await Promise.all(
+    (await readdir(directory)).map(async (name) => JSON.parse(await readFile(`${directory}/${name}`, "utf8"))),
+  );
+  const mine = letters.filter((letter) => letter.to === email);
+  assert.equal(mine.length, INVITATION_MAIL_LIMITS.perAddress);
+  const letter = mine.find((item) => item.text.includes(results[0].invitationUrl));
+  assert.ok(letter, "the letter carries its invitation link");
+  assert.equal(letter.subject, "Приглашение в библиотеку шаблонов Полки");
+  assert.match(letter.text, new RegExp(`«${admin.name}» приглашает вас в библиотеку «Шаблоны отдела <b>продаж</b>»`));
+  assert.match(letter.text, /читать и добавлять шаблоны/);
+  assert.equal(letter.html, undefined);
+});
