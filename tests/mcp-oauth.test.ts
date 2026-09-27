@@ -921,6 +921,32 @@ test("vendor names are reserved for the vendors' own redirect hosts", async () =
     `Open AI${unverified}`,
   );
   assert.equal(await name("My agent", ["https://evil.example/cb"]), "My agent");
+  // Confusable skeletons: capital I for l, Cyrillic ԁ, Greek capital
+  // omicron, digits for letters, and Полка's own name in either script.
+  for (const spoof of [
+    "CIaude",
+    "Clauԁe",
+    "ΟpenAI",
+    "ChatGPΤ helper",
+    "0penAI",
+    "C1aude Desktop",
+    "Anthr0pic",
+    "Полка",
+    "Пoлкa",
+    "Polka",
+    "P0lka agent",
+    "Полочка",
+  ])
+    assert.equal(
+      await name(spoof, ["https://evil.example/callback"]),
+      `${spoof}${unverified}`,
+      spoof,
+    );
+  // Ordinary names, and other forms of the Russian word, stay as they are.
+  for (const plain of ["Мой агент", "Cursor", "На полке у агента"])
+    assert.equal(await name(plain, ["https://evil.example/cb"]), plain);
+  // Полка's own name is fine from Полка's own host.
+  assert.equal(await name("Полка", [`${origin}/callback`]), "Полка");
 });
 
 test("an expired access token needs a refresh", async () => {

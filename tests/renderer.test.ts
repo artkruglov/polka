@@ -9,7 +9,7 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { detectChallenge } from "../apps/renderer/challenge.ts";
 import { createEgressProxy, egressTarget } from "../apps/renderer/egress-proxy.ts";
-import { fetchPage, robotsVia } from "../apps/renderer/fetch-page.ts";
+import { TITLE_SCAN_CHARS, fetchPage, readTitle, robotsVia } from "../apps/renderer/fetch-page.ts";
 import type { ProxiedAnswer, ProxiedGet } from "../apps/renderer/proxied-fetch.ts";
 import {
   RENDERER_USER_AGENT,
@@ -48,6 +48,26 @@ test("challenge detector: Cloudflare, Turnstile, captcha and consent walls are s
   );
   assert.equal(detectChallenge(page({ status: 403, text: "Forbidden" })), "http_403");
   assert.equal(detectChallenge(page({ status: 403 })), null, "a 403 with real content is left to the caller");
+});
+
+test("a fetched page's title is read from its top in linear time", () => {
+  assert.equal(readTitle("<html><head><TITLE lang=en>Just a moment...</TITLE>"), "Just a moment...");
+  assert.equal(readTitle("<titles>x</titles><title>y</title>"), "y");
+  assert.equal(readTitle("<title>" + "x".repeat(301) + "</title>"), "");
+  assert.equal(readTitle(" ".repeat(TITLE_SCAN_CHARS) + "<title>late</title>"), "");
+  for (const shape of [(n: number) => "<title x".repeat(n / 8), (n: number) => "<title>".repeat(n / 7)]) {
+    const time = (size: number) => {
+      const html = shape(size);
+      const started = performance.now();
+      for (let round = 0; round < 5; round++) readTitle(html);
+      return performance.now() - started;
+    };
+    const small = time(8 * 1024);
+    const large = time(32 * 1024);
+    const huge = time(4 * 1024 * 1024);
+    assert.ok(large < 200 && huge < 400, `${small.toFixed(1)} / ${large.toFixed(1)} / ${huge.toFixed(1)} ms`);
+    assert.ok(large / Math.max(small, 2) < 10, `${small.toFixed(1)} ms -> ${large.toFixed(1)} ms`);
+  }
 });
 
 test("render requests are signed over time, method, path and body; 60 s of skew", () => {

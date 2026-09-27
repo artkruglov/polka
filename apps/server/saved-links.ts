@@ -53,16 +53,62 @@ export const pageTitle: PageTitle = async (url) => {
       userAgent: RENDERER_USER_AGENT,
     });
     if (!/^text\/html/i.test(page.contentType)) return null;
-    const html = page.bytes.toString("utf8");
-    const raw =
-      /<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']{1,300})["']/i.exec(html)?.[1] ??
-      /<title[^>]*>([^<]{1,300})<\/title>/i.exec(html)?.[1];
-    const title = raw ? decodeHTML(raw).replace(/\s+/g, " ").trim().slice(0, MAX_TITLE) : "";
-    return title || null;
+    return readPageTitle(page.bytes.subarray(0, TITLE_SCAN_BYTES).toString("utf8"));
   } catch {
     return null;
   }
 };
+
+/** Where a page's titles are looked for: real ones are near the top. */
+export const TITLE_SCAN_BYTES = 32 * 1024;
+const isSpace = (c: number) => c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+const startsWithCi = (text: string, at: number, lower: string) =>
+  text.slice(at, at + lower.length).toLowerCase() === lower;
+const OG_TITLE = /property=["']og:title["']/gi;
+const CONTENT = /content=["']([^"']{1,300})["']/gi;
+
+/**
+ * The page's og:title, else its <title>, decoded and on one line; null when
+ * it has neither. Read from the first 32 KB by a hand-written scan, linear in
+ * that: this runs on the server's request thread over whatever the address
+ * serves, and regexes like /<meta[^>]+…[^>]*content=…/ over the whole page
+ * rescan it from every "<meta" (32 KB took 7 s). The two regexes left run
+ * inside one tag each and have no unbounded part that can backtrack.
+ */
+export function readPageTitle(source: string): string | null {
+  const text = source.length > TITLE_SCAN_BYTES ? source.slice(0, TITLE_SCAN_BYTES) : source;
+  let og: string | undefined;
+  let plain: string | undefined;
+  for (let lt = text.indexOf("<"); lt !== -1 && og === undefined; lt = text.indexOf("<", lt + 1)) {
+    if (startsWithCi(text, lt + 1, "meta") && isSpace(text.charCodeAt(lt + 5))) {
+      const end = text.indexOf(">", lt);
+      if (end === -1) break;
+      const tag = text.slice(lt, end);
+      OG_TITLE.lastIndex = 0;
+      if (OG_TITLE.exec(tag)) {
+        CONTENT.lastIndex = OG_TITLE.lastIndex;
+        og = CONTENT.exec(tag)?.[1];
+      }
+      lt = end;
+    } else if (
+      plain === undefined &&
+      startsWithCi(text, lt + 1, "title") &&
+      (isSpace(text.charCodeAt(lt + 6)) || text[lt + 6] === ">" || text[lt + 6] === "/")
+    ) {
+      const open = text.indexOf(">", lt + 6);
+      if (open === -1) break;
+      const close = text.indexOf("<", open + 1);
+      if (close === -1) break;
+      const length = close - open - 1;
+      if (length >= 1 && length <= 300 && startsWithCi(text, close, "</title>"))
+        plain = text.slice(open + 1, close);
+      lt = close - 1;
+    }
+  }
+  const raw = og ?? plain;
+  const title = raw ? decodeHTML(raw).replace(/\s+/g, " ").trim().slice(0, MAX_TITLE) : "";
+  return title || null;
+}
 
 type Prepared = { input: SaveLinkInput; url: URL; title: string; bytes: Buffer };
 
