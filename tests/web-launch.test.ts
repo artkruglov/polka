@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { NotFoundContent as NotFound } from "../apps/web/src/pages/not-found/content.tsx";
 import { ClaimChoice } from "../apps/web/src/pages/claim/index.tsx";
 import { snippetBesideTitle } from "../apps/web/src/widgets/shelf-card/cover-model.ts";
+import { DeleteShelf } from "../apps/web/src/pages/agents/delete-shelf.tsx";
 import { categoryOf } from "../apps/web/src/entities/artifact/format.ts";
 import { APP_PAGES, isAppPage, isMachinePath } from "../packages/contracts/app-routes.ts";
 import { SEARCH_MATCH_END as E, SEARCH_MATCH_START as S } from "../packages/contracts/constants.ts";
@@ -64,6 +65,18 @@ test("a search snippet does not repeat the title the card already shows", () => 
   assert.equal(snippetBesideTitle(other, title), other);
   const longer = `Отчёт по продажами ${S}рынка${E} и не только`;
   assert.equal(snippetBesideTitle(longer, title), longer);
+});
+
+test("the settings say how to delete the shelf, with the configured address", () => {
+  const hosted = render(React.createElement(DeleteShelf, { contact: "privacy@polochka.app" }));
+  assert.match(hosted, /id="delete-shelf"/);
+  assert.match(hosted, /<h2 id="delete-shelf-title">Удалить полку<\/h2>/);
+  assert.match(hosted, /href="mailto:privacy@polochka\.app\?subject=[^"]+">privacy@polochka\.app<\/a>/);
+  assert.match(hosted, /удалим полку и все данные/);
+  const bare = render(React.createElement(DeleteShelf, { contact: null }));
+  assert.match(bare, /Напишите оператору этой установки/);
+  assert.doesNotMatch(bare, /mailto:/);
+  assert.ok(isAppPage("/settings"));
 });
 
 test("one upload has one kind: every HTML page is a page", () => {

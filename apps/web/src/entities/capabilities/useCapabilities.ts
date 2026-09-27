@@ -19,6 +19,8 @@ export type InstallationCapabilities = {
   emailLoginDomains: "any" | "signup";
   /** on | owner-notes (only the owner writes) | off. */
   commentsMode: "on" | "owner-notes" | "off";
+  /** The operator's address for data requests (deleting the shelf), if set. */
+  privacyContact: string | null;
 };
 
 export type SignInProvider = {
@@ -87,6 +89,11 @@ export function loadCapabilities() {
           raw.commentsMode === "owner-notes" || raw.commentsMode === "off"
             ? raw.commentsMode
             : "on",
+        privacyContact:
+          typeof raw.privacyContact === "string" &&
+          /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}$/.test(raw.privacyContact)
+            ? raw.privacyContact
+            : null,
       } satisfies InstallationCapabilities;
     })
     .catch((error) => {

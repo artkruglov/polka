@@ -76,8 +76,13 @@ export function TrashPanel({
           <p className="trash-panel-kicker eyebrow">Архив хранения</p>
           <h2 id="trash-panel-title">Корзина</h2>
           <p className="trash-panel-muted">
-            Работы здесь занимают место. Старые ссылки закрыты и не оживут после
-            восстановления.
+            Работы лежат в корзине, пока вы их не восстановите: сами они не
+            удаляются и продолжают занимать место. Старые ссылки закрыты и не
+            оживут после восстановления.
+          </p>
+          <p className="trash-panel-muted">
+            Удалить работы навсегда можно вместе с полкой:{" "}
+            <a href="/settings#delete-shelf">Настройки → «Удалить полку»</a>.
           </p>
         </div>
         <Button type="button" onClick={() => onLoad()} disabled={loading}>
