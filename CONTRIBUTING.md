@@ -15,7 +15,7 @@
 
 ```bash
 npm ci
-npm run local:setup              # .env с локальными секретами
+npm run local:setup              # .env с локальными секретами и локальным интерактивным просмотром
 npm run infra:up                 # PostgreSQL и MinIO в Docker, только 127.0.0.1
 npm run db:migrate
 npm run storage:bootstrap-local
@@ -35,7 +35,7 @@ npm test -- --live     # файлы из tests/live-suite.json с включён
 
 `npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Ленты». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
 
-Облачного CI у репозитория нет: перед pull request запустите `npm run verify`. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов.
+Перед pull request запустите `npm run verify`. Те же шаги GitHub Actions выполняет на каждый push в `main` и на каждый pull request ([.github/workflows/verify.yml](.github/workflows/verify.yml)), но локальный прогон быстрее покажет ошибку. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов; `--print-steps` перечисляет шаги, `--only=<шаг,…>` запускает выбранные. Шаг `grants` полного прогона ожидает MinIO на порту по умолчанию 9038 и отказывается работать с другим.
 
 ## Правила
 

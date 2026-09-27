@@ -1,13 +1,22 @@
 #!/usr/bin/env node
-// Everything to check before a push or a deploy, run locally in order (the
-// repository has no hosted CI). Needs the local infrastructure (npm run
-// infra:up) and .env. Stops at the first failing step.
+// Everything to check before a push or a deploy, run locally in order. The
+// GitHub Actions workflow (.github/workflows/verify.yml) runs the same steps
+// through --only, so the licence allowlist and the gitleaks digest live here
+// alone. Needs the local infrastructure (npm run infra:up) and .env. Stops at
+// the first failing step.
 //
-//   npm run verify            all steps
-//   npm run verify -- --quick types, links, build and the default suite only
+//   npm run verify                 all steps
+//   npm run verify -- --quick      types, links, build and the default suite only
+//   npm run verify -- --print-steps          the step ids, one per line
+//   npm run verify -- --only=licenses,secrets  just these steps, in this order
 import { spawnSync } from "node:child_process";
 
 const quick = process.argv.includes("--quick");
+const only = process.argv
+  .find((arg) => arg.startsWith("--only="))
+  ?.slice("--only=".length)
+  .split(",")
+  .filter(Boolean);
 const node = process.execPath;
 
 const schema = () => {
@@ -28,14 +37,15 @@ const schema = () => {
 
 const docker = () => spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;
 
-// [label, command, args, run only in the full pass]
+// [id, label, command, args, run only in the full pass]
 const steps = [
-  ["types and frontend layers", "npm", ["run", "check"]],
-  ["Markdown links", "npm", ["run", "check:links"]],
-  ["web build", "npm", ["run", "build"]],
-  ["default suite", "npm", ["test"]],
-  ["live viewer suite", "npm", ["test", "--", "--live"], true],
+  ["check", "types and frontend layers", "npm", ["run", "check"]],
+  ["links", "Markdown links", "npm", ["run", "check:links"]],
+  ["build", "web build", "npm", ["run", "build"]],
+  ["test", "default suite", "npm", ["test"]],
+  ["live", "live viewer suite", "npm", ["test", "--", "--live"], true],
   [
+    "grants",
     "database role grants",
     node,
     () => [
@@ -53,6 +63,7 @@ const steps = [
   // with the AGPL-3.0; a new license needs that checked before it is added.
   // Unlicense: robust-predicates (via d3-delaunay), public-domain dedication.
   [
+    "licenses",
     "licenses of production dependencies",
     "npx",
     [
@@ -66,6 +77,7 @@ const steps = [
     true,
   ],
   [
+    "secrets",
     "secrets in history",
     "docker",
     () => [
@@ -84,8 +96,15 @@ const steps = [
     ],
     true,
   ],
-  ["application image builds", "docker", ["build", "-q", "-t", "polka:verify", "."], true],
   [
+    "image",
+    "application image builds",
+    "docker",
+    ["build", "-q", "-t", "polka:verify", "."],
+    true,
+  ],
+  [
+    "backup-image",
     "backup image builds",
     "docker",
     ["build", "-q", "-t", "polka-backup:verify", "deploy/hosted/backup"],
@@ -93,10 +112,24 @@ const steps = [
   ],
 ];
 
+if (process.argv.includes("--print-steps")) {
+  for (const [id, label, , , full] of steps)
+    console.log(`${id}\t${label}${full ? " (full pass only)" : ""}`);
+  process.exit(0);
+}
+const unknown = only?.filter((id) => !steps.some((step) => step[0] === id));
+if (unknown?.length) {
+  console.error(`Unknown step: ${unknown.join(", ")} (see --print-steps)`);
+  process.exit(2);
+}
+const selected = only
+  ? only.map((id) => steps.find((step) => step[0] === id))
+  : steps.filter((step) => !(step[4] && quick));
+
 const started = Date.now();
-for (const [label, command, args, full] of steps) {
-  if (full && quick) continue;
-  if (command === "docker" && !docker()) {
+for (const [, label, command, args] of selected) {
+  // A step asked for by name never skips silently.
+  if (command === "docker" && !only && !docker()) {
     console.log(`skip ${label}: Docker is not running`);
     continue;
   }
