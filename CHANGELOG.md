@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-27
+
 ### Added
 
 - **Место для расширений в окне «Поделиться»** (`share-dialog`, [EXTENSIONS](docs/specs/EXTENSIONS.md)). Раздел расширения стоит над примечанием внизу окна и получает работу, полку отдела и состояние ссылки. Так, например, коммерческая редакция заранее показывает правила ссылок с полки. Запрещает выпуск по-прежнему `policies.linkIssue` на сервере. Страницы с местами для расширений загружают их модули одним общим вызовом (`ensureExtensions`).
@@ -386,7 +388,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/artkruglov/polka/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/artkruglov/polka/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/artkruglov/polka/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/artkruglov/polka/compare/v0.1.0...v0.2.0
