@@ -134,7 +134,25 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
 |---|---|
 | `POST /api/v1/projects` | Начало загрузки: `key`, `title`, манифест (пути, MIME, размеры, SHA-256), `folderId`; для новой версии — `artifactId` и `baseRevisionId`. Возвращает `uploadId` |
 | `PUT /api/v1/projects/:uploadId/files/:index` | Байты одного файла, `Content-Type: application/octet-stream` (иначе `415`), до 5 МиБ. Отдельный лимит частоты: вдвое больше файлов, чем помещается в проект |
+| `POST /api/v1/projects/:uploadId/reuse` | Только для новой версии: файлы, у которых путь, тип, размер и SHA-256 совпадают с файлом базовой версии, хранилище копирует само. Ответ — `reused` (их индексы); остальные файлы отправляются как обычно |
 | `POST /api/v1/projects/:uploadId/finalize` | Сохранение версии; ответ — квитанция и `shelfUrl` |
+
+### `polka pull` и `push`
+
+Скачать сохранённую версию в папку, поменять её и сохранить следующую версию (scope `source:read` для скачивания, `revise` для новой версии):
+
+```sh
+curl -fsSLO https://polochka.app/api/v1/cli/polka-pull.mjs
+POLKA_TOKEN=… node polka-pull.mjs <artifactId или адрес работы> ./report
+# …правки в ./report…
+POLKA_TOKEN=… node polka-publish-project.mjs ./report
+```
+
+- `polka-pull.mjs` пишет файлы версии (по умолчанию последней, `--revision` — другой) и `.polka.json`: адрес установки, `artifactId`, `revisionId`. В непустую папку пишет только с `--force` и ничего в ней не удаляет. Каждый файл сверяется с SHA-256.
+- `polka-publish-project.mjs` видит `.polka.json` и сохраняет следующую версию того же проекта: изменённые и новые файлы отправляет, остальные копирует Полка (`reuse`). Потом записывает новую версию в `.polka.json`. `--new` сохраняет папку новым проектом. Если на Полке уже есть более новая версия, сохранение отказывает (`409`): скачайте её заново.
+- Маршруты: `GET /api/v1/works/:artifactId/files[?revisionId=]` — список файлов версии; `GET /api/v1/works/:artifactId/revisions/:revisionId/files/:index` — байты одного файла (заголовок `X-Polka-Sha256`).
+- Токен из `polka_project_upload` скачивает, если у подключения, которое его попросило, есть `source:read`; тогда в ответе инструмента есть `pullCommand`.
+- Синхронизации нет: версия меняется, только когда вы её сохраняете.
 
 ## Ошибки
 

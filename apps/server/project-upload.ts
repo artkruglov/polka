@@ -12,11 +12,13 @@ import {
 } from "../../packages/contracts/bundle.ts";
 import { MAX_TITLE, uuid } from "../../packages/contracts/index.ts";
 import {
+  authorizedRevisionFiles,
   beginBundleUploadInTransaction,
   finalizeBundleUploadInTransaction,
   normalizeBundleRequest,
   prepareBundleFinalize,
   stageBundleFile,
+  stageBundleFileCopy,
   uploadBundleFileInTransaction,
   type Actor,
 } from "./artifacts.ts";
@@ -141,6 +143,54 @@ export async function putProjectFile(
   });
 }
 
+/**
+ * A new version of a project sends only what changed (polka push): every
+ * file whose path, type and SHA-256 are those of a file in the base
+ * version is copied inside S3 instead of being sent. Returns the indexes
+ * now stored; the CLI sends the rest. Safe to repeat.
+ */
+export async function reuseProjectFiles(actor: ServiceActor, uploadId: string) {
+  const scope = await scopeOf(actor, uploadId);
+  if (scope !== "revise") return { reused: [] as number[] };
+  const plan = await withServiceActorTransaction(actor, scope, async (c, verified) => {
+    const who = owner(verified);
+    await lockProjectUpload(c, who, uploadId);
+    const {
+      rows: [upload],
+    } = await c.query("SELECT request FROM uploads WHERE id=$1", [uploadId]);
+    const request = normalizeBundleRequest(upload.request, true);
+    const {
+      rows: [revision],
+    } = await c.query(
+      "SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
+      [request.baseRevisionId, request.artifactId, who.tenant],
+    );
+    if (!revision?.manifest) return [];
+    const base = new Map(
+      (await authorizedRevisionFiles(c, revision)).stored.map((file) => [file.path, file]),
+    );
+    return request.manifest.files.flatMap((file, index) => {
+      const same = base.get(file.path);
+      return same && same.sha256 === file.sha256 && same.mime === file.mime && same.size === file.size
+        ? [{ index, objectKey: same.objectKey, objectVersion: same.objectVersion }]
+        : [];
+    });
+  });
+  const copied: Array<{ index: number; staged: string }> = [];
+  for (const { index, ...from } of plan) {
+    const staged = await stageBundleFileCopy(owner(actor), uploadId, index, from);
+    if (staged) copied.push({ index, staged });
+  }
+  if (copied.length)
+    await withServiceActorTransaction(actor, scope, async (c, verified) => {
+      const who = owner(verified);
+      await lockProjectUpload(c, who, uploadId);
+      for (const { index, staged } of copied)
+        await uploadBundleFileInTransaction(c, who, uploadId, index, null, staged);
+    });
+  return { reused: plan.map(({ index }) => index) };
+}
+
 export async function finalizeProjectUpload(actor: ServiceActor, uploadId: string) {
   const scope = await scopeOf(actor, uploadId);
   const prepared = await prepareBundleFinalize(owner(actor), uploadId);
@@ -185,8 +235,11 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
         );
       if (verified.audience !== MCP_AUDIENCE)
         throw new Problem(403, "forbidden", "Этот токен сам выдан для загрузки проекта.");
+      // source:read, when the connection has it, lets the CLI pull a
+      // version into a folder before pushing the next one.
       const scopes = verified.scopes.filter(
-        (scope) => scope === "capture" || scope === "revise" || scope === "share",
+        (scope) =>
+          scope === "capture" || scope === "revise" || scope === "share" || scope === "source:read",
       );
       const {
         rows: [inserted],
@@ -208,10 +261,11 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
           verified.connectionId,
         ],
       );
-      return inserted;
+      return { ...inserted, canPull: scopes.includes("source:read") };
     },
   );
   const cli = `${config.APP_ORIGIN}/api/v1/cli/polka-publish-project.mjs`;
+  const pullCli = `${config.APP_ORIGIN}/api/v1/cli/polka-pull.mjs`;
   const pageCli = `${config.APP_ORIGIN}/api/v1/cli/polka-publish.mjs`;
   return {
     token,
@@ -220,6 +274,12 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
     command: `curl -fsSLO ${cli} && POLKA_TOKEN=${token} node polka-publish-project.mjs <folder> --dry-run`,
     pageCliUrl: pageCli,
     pageCommand: `curl -fsSLO ${pageCli} && POLKA_TOKEN=${token} node polka-publish.mjs <App.jsx|page.html> --title "<title>"`,
-    note: `The token works only for uploads (a project, or one page or React component), for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message. A project does not build .jsx/.tsx or load scripts from CDNs; a folder whose only page is one React component is saved as that component and runs, and so does a component sent through polka-publish.mjs.`,
+    ...(row.canPull
+      ? {
+          pullCliUrl: pullCli,
+          pullCommand: `curl -fsSLO ${pullCli} && POLKA_TOKEN=${token} node polka-pull.mjs <artifactId> <folder>`,
+        }
+      : {}),
+    note: `The token works only for uploads (a project, or one page or React component)${row.canPull ? " and for downloading a saved version into a folder (polka-pull.mjs, which also records the version so the next polka-publish-project.mjs of that folder saves a new version and sends only changed files)" : ""}, for ${PROJECT_TOKEN_MINUTES} minutes, and only while this connection is live. Pass it in the environment of that one command; never write it to a file, a commit or a message. A project does not build .jsx/.tsx or load scripts from CDNs; a folder whose only page is one React component is saved as that component and runs, and so does a component sent through polka-publish.mjs.`,
   };
 }
