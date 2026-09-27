@@ -202,9 +202,9 @@ export async function getArtifacts(
   const { rows: shares } = await db.query(
     `SELECT DISTINCT ON (s.artifact_id) s.*,r.number
        FROM shares s JOIN revisions r ON r.id=s.revision_id
-      WHERE s.artifact_id=ANY($1::uuid[])
+      WHERE s.artifact_id=ANY($1::uuid[]) AND s.tenant_id=$2
       ORDER BY s.artifact_id,s.created_at DESC,s.id DESC`,
-    [artifacts.map((a) => a.id)],
+    [artifacts.map((a) => a.id), actor.tenant],
   );
   // On a department shelf each work says who saved it.
   const authors =

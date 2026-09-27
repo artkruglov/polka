@@ -30,6 +30,65 @@ type Collision = {
   }>;
 };
 
+type ClaimAction = "merge" | "switch" | "cancel";
+
+/**
+ * The choice when the sign-in method already opens another shelf. A session
+ * from an agent's link (weak) may only go over to that shelf: the server
+ * refuses a merge to it (403), so «Объединить» is not offered.
+ */
+export function ClaimChoice({
+  weak,
+  via,
+  busy,
+  onAct,
+}: {
+  weak: boolean;
+  /** «через Яндекс ID или по почте»: this installation's sign-in ways. */
+  via: string;
+  busy: ClaimAction | null;
+  onAct: (kind: ClaimAction) => void;
+}) {
+  return (
+    <>
+      {weak && (
+        <Notice>
+          Вы вошли по ссылке от агента. Чтобы объединить полки, войдите {via}
+          {" "}— а пока можно перейти в ту полку.
+        </Notice>
+      )}
+      <div className="shelf-choice">
+        {!weak && (
+          <Button
+            variant="primary"
+            busy={busy === "merge"}
+            disabled={busy !== null}
+            onClick={() => onAct("merge")}
+          >
+            Объединить
+          </Button>
+        )}
+        <Button
+          variant={weak ? "primary" : "secondary"}
+          busy={busy === "switch"}
+          disabled={busy !== null}
+          onClick={() => onAct("switch")}
+        >
+          {weak ? "Перейти в ту полку" : "Открыть ту полку без объединения"}
+        </Button>
+        <Button
+          variant="quiet"
+          busy={busy === "cancel"}
+          disabled={busy !== null}
+          onClick={() => onAct("cancel")}
+        >
+          Отмена
+        </Button>
+      </div>
+    </>
+  );
+}
+
 /**
  * /claim (docs/specs/SIGN_IN_PROVIDERS.md § 8): a provisional shelf gets a
  * sign-in method — Яндекс ID, VK ID or an address on an allowed domain — and
@@ -115,15 +174,19 @@ export function Claim() {
         {collision ? (
           <>
             <h1>У вас уже есть полка «{collision.targetName}».</h1>
-            <p>
-              {collision.methodName} открывает её. Объединить с ней временную
-              полку?{" "}
-              {collision.works
-                ? `Работы (${collision.works}) перейдут туда.`
-                : "Работ на временной полке нет."}{" "}
-              Временная полка закроется.
-            </p>
-            {collision.connections.length > 0 && (
+            {weak ? (
+              <p>{collision.methodName} открывает её.</p>
+            ) : (
+              <p>
+                {collision.methodName} открывает её. Объединить с ней временную
+                полку?{" "}
+                {collision.works
+                  ? `Работы (${collision.works}) перейдут туда.`
+                  : "Работ на временной полке нет."}{" "}
+                Временная полка закроется.
+              </p>
+            )}
+            {!weak && collision.connections.length > 0 && (
               <fieldset className="claim-connections">
                 <legend>
                   Какие агенты перенести? Отметьте только тех, кого подключали
@@ -159,31 +222,12 @@ export function Claim() {
               </fieldset>
             )}
             {error && <Notice tone="error">{error}</Notice>}
-            <div className="shelf-choice">
-              <Button
-                variant="primary"
-                busy={busy === "merge"}
-                disabled={busy !== null}
-                onClick={() => void act("merge")}
-              >
-                Объединить
-              </Button>
-              <Button
-                busy={busy === "switch"}
-                disabled={busy !== null}
-                onClick={() => void act("switch")}
-              >
-                Открыть ту полку без объединения
-              </Button>
-              <Button
-                variant="quiet"
-                busy={busy === "cancel"}
-                disabled={busy !== null}
-                onClick={() => void act("cancel")}
-              >
-                Отмена
-              </Button>
-            </div>
+            <ClaimChoice
+              weak={weak}
+              via={ways.via}
+              busy={busy}
+              onAct={(kind) => void act(kind)}
+            />
           </>
         ) : (
           <>

@@ -36,7 +36,7 @@ export function EditorialCatalog({
       <div className="editorial-catalog-heading">
         <div>
           <Heading id="editorial-catalog-title">Лента</Heading>
-          <p>Исследования, разборы и инструменты, сделанные с Claude.</p>
+          <p>Исследования, разборы и инструменты, сделанные с ИИ-агентами: Claude, ChatGPT, Codex и другими.</p>
         </div>
       </div>
 

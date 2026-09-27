@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Account } from "../../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../../shared/api/client.ts";
 import {
+  knownShelf,
   markFreshShelfNote,
   rememberKnownShelf,
 } from "../../../shared/lib/known-shelf.ts";
@@ -22,7 +23,14 @@ function remember(account: Account | null) {
   if (!account || account.provisional) return;
   const first = rememberKnownShelf(account.name);
   const created = account.createdAt ? Date.parse(account.createdAt) : NaN;
-  if (first && Number.isFinite(created) && Date.now() - created < 30 * 60_000)
+  // An account the operator made (login and password) was not opened by
+  // this sign-in: «Уже есть полка?» would only confuse.
+  if (
+    first &&
+    knownShelf()?.method !== "password" &&
+    Number.isFinite(created) &&
+    Date.now() - created < 30 * 60_000
+  )
     markFreshShelfNote();
 }
 

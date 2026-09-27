@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/ui/controls.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
+import { ApiError, send } from "../../shared/api/client.ts";
 import "./styles.css";
 
 type PreviewTemplate = {
@@ -220,47 +221,51 @@ function preparationError(reason: unknown) {
   return reason instanceof Error && reason.message ? reason.message : "Не удалось подготовить просмотр.";
 }
 
-async function requestPreparation(template: PreviewTemplate, signal: AbortSignal): Promise<Preparation> {
-  const response = await fetch(
-    `/api/template-libraries/${template.libraryId}/publications/${template.publicationId}/prepare-live-view`,
-    {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artifactId: template.artifactId, revisionId: template.revisionId }),
-      signal,
-    },
-  );
-  let payload: PreviewResponse = {};
+/**
+ * POST to a publication through the app's one request path
+ * (shared/api/client.ts): no connection reads «Нет связи с Полкой», never
+ * «Failed to fetch»; an error answer keeps its fields for previewError.
+ */
+async function postPublication(
+  template: PreviewTemplate,
+  action: "prepare-live-view" | "live-view",
+  signal: AbortSignal,
+): Promise<PreviewResponse> {
+  let response: Response;
+  try {
+    response = await send(
+      `/api/template-libraries/${template.libraryId}/publications/${template.publicationId}/${action}`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artifactId: template.artifactId, revisionId: template.revisionId }),
+        signal,
+      },
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status > 0)
+      throw new PreviewRequestError(error.status, {
+        ...(error.details as PreviewResponse),
+        code: error.code,
+        message: error.message,
+      } as PreviewResponse);
+    throw error;
+  }
   try {
     const result: unknown = await response.json();
-    if (result && typeof result === "object") payload = result as PreviewResponse;
+    return result && typeof result === "object" ? (result as PreviewResponse) : {};
   } catch {
-    // Keep the HTTP status when the response has no JSON body.
+    return {};
   }
-  if (!response.ok) throw new PreviewRequestError(response.status, payload);
-  return payload;
+}
+
+async function requestPreparation(template: PreviewTemplate, signal: AbortSignal): Promise<Preparation> {
+  return postPublication(template, "prepare-live-view", signal);
 }
 
 async function fetchLiveView(template: PreviewTemplate, signal: AbortSignal): Promise<LiveView> {
-  const response = await fetch(
-    `/api/template-libraries/${template.libraryId}/publications/${template.publicationId}/live-view`,
-    {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artifactId: template.artifactId, revisionId: template.revisionId }),
-      signal,
-    },
-  );
-  let payload: PreviewResponse = {};
-  try {
-    const result: unknown = await response.json();
-    if (result && typeof result === "object") payload = result as PreviewResponse;
-  } catch {
-    // Keep the HTTP status when the response has no JSON body.
-  }
-  if (!response.ok) throw new PreviewRequestError(response.status, payload);
+  const payload = await postPublication(template, "live-view", signal);
   if (typeof payload.url !== "string" || !payload.url.trim())
     throw new Error("Сервер не вернул адрес предпросмотра.");
   return { url: payload.url, expiresAt: payload.expiresAt, profile: payload.profile };

@@ -164,7 +164,7 @@ export function withShelf(url: string) {
  * body is read, so an HTML error page from a proxy never reaches the UI raw.
  * A network failure becomes ApiError with status 0.
  */
-async function send(url: string, init: RequestInit): Promise<Response> {
+export async function send(url: string, init: RequestInit = {}): Promise<Response> {
   let res: Response;
   if (shelf && url.startsWith("/api/")) {
     const headers = new Headers(init.headers);
@@ -174,7 +174,8 @@ async function send(url: string, init: RequestInit): Promise<Response> {
   try {
     res = await fetch(url, init);
   } catch (e) {
-    if (init.signal?.aborted) throw e;
+    // A cancelled request stays a cancellation, for the caller to ignore.
+    if (init.signal?.aborted || (e instanceof Error && e.name === "AbortError")) throw e;
     throw new ApiError(0, "network", fallbackMessage(0));
   }
   if (res.ok) return res;
@@ -234,6 +235,9 @@ export function request<T>(
   return json<T>(`/api${path}`, body, method, signal, csrfToken);
 }
 
+/** A shelf chip: what the latest version's bytes are (entities/artifact/format.ts). */
+export type ShelfKind = "pages" | "documents" | "images" | "other";
+export type ShelfCounts = Record<ShelfKind | "all", number>;
 export type ShelfRole = "owner" | "admin" | "curator" | "author" | "reader";
 export type Shelf = { id: string; kind: "personal" | "team"; name: string | null; role: ShelfRole };
 export type ShelfMember = {
@@ -285,9 +289,21 @@ export const client = {
       expectedFolderId: string | null;
     },
   ) => request<Artifact>(`/artifacts/${id}`, input, "PATCH"),
-  shelf: (q: string, folderId: string | null, cursor?: string) =>
-    request<{ items: Artifact[]; nextCursor: string | null }>(
-      `/artifacts?${new URLSearchParams({ q, ...(folderId ? { folderId } : {}), ...(cursor ? { cursor } : {}) })}`,
+  /** A page of the shelf; the first page also counts every kind over the whole shelf. */
+  shelf: (
+    q: string,
+    folderId: string | null,
+    cursor?: string,
+    order: { sort?: "new" | "old" | "title"; kind?: ShelfKind | null } = {},
+  ) =>
+    request<{ items: Artifact[]; nextCursor: string | null; counts?: ShelfCounts }>(
+      `/artifacts?${new URLSearchParams({
+        q,
+        ...(folderId ? { folderId } : {}),
+        ...(cursor ? { cursor } : {}),
+        ...(order.sort && order.sort !== "new" ? { sort: order.sort } : {}),
+        ...(order.kind ? { kind: order.kind } : {}),
+      })}`,
     ),
   trash: (cursor?: string) =>
     request<{ items: Artifact[]; nextCursor: string | null }>(

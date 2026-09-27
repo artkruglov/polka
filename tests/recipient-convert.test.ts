@@ -51,7 +51,6 @@ const { rememberConvertReturn, takeConvertReturn } = await import(
   "../apps/web/src/entities/recipient-convert/return.ts"
 );
 const {
-  AUTO_OPEN_MS,
   ConvertBar,
   ConvertCard,
   SIGN_UP_HREF,
@@ -187,7 +186,15 @@ test("the card opens by itself once per browser, and a dismissal is remembered",
   assert.equal(markCardShown(broken), false);
   assert.equal(markCardDismissed(broken), false);
   assert.equal(markCardDismissed(null), false);
-  assert.equal(AUTO_OPEN_MS, 15_000);
+});
+
+test("the sign-up card opens only on a press: no timer, no first key or scroll", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../apps/web/src/features/recipient-convert/index.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /AUTO_OPEN|mayAutoOpen|setTimeout\(|"scroll"|"wheel"|"pointerdown"/);
 });
 
 test("events carry two enumerated words: no token, no title, no address", () => {
@@ -310,7 +317,8 @@ test("first-run steps for an account that came from a share: the phrase leads, �
     React.createElement(FirstRunSteps, { ...props, arrival: "share" }),
   );
   assert.match(html, /data-arrival="share"/);
-  assert.match(html, /Подключите агента — и он будет сохранять работы сам/);
+  // The same heading as the shelf's hero and /bring.
+  assert.match(html, /Подключите агента — он сам сохранит работу на полку/);
   const phraseAt = html.indexOf(`Подключи Полку: ${origin}/connect`);
   const uploadAt = html.indexOf("Загрузить файл");
   assert.ok(phraseAt > 0 && uploadAt > phraseAt, `${phraseAt} ${uploadAt}`);

@@ -32,7 +32,9 @@ export const moderationNote = (a: Artifact) =>
     : a.share?.moderation === "paused"
       ? "Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки. Получатели сейчас видят экран «на проверке»."
       : null;
-export const isImage = (r: Revision) => r.mime.startsWith("image/");
+/** A new link's lifetime, the same in the share dialog and after saving on /bring. */
+export const DEFAULT_LINK_DAYS = 7;
+export const isImage =(r: Revision) => r.mime.startsWith("image/");
 /** Mirrors the server: a lone static HTML entrypoint needs no runtime. */
 export const isStaticSingleFileBundle = (r: Revision) =>
   r.storageKind === "bundle" &&
@@ -118,7 +120,7 @@ export function profileView(
       : "";
   return {
     label: "Страница · нельзя отправить ссылкой",
-    text: `${refused || "Для этой страницы пока не подготовлен поддерживаемый просмотр. "}Оригинал сохранён только для вас; ссылку на него создать нельзя.`,
+    text: `${refused || "Без скриптов в этой странице почти нет текста (или в ней есть разметка, которую Полка получателям не показывает), а скрипты в статичном просмотре не запускаются. "}Оригинал сохранён только для вас; ссылку на него создать нельзя. Чтобы поделиться, попросите в чате: «Собери это в один HTML-файл с готовым текстом, без внешних ссылок» — и сохраните новую версию.`,
     linkable: false,
     badge: "Только для владельца",
   };
@@ -145,13 +147,17 @@ export const categoryLabel: Record<Category, string> = {
   images: "Изображения",
   other: "Другое",
 };
-/** Client-side grouping by what the saved bytes are; the server has no categories. */
-export const categoryOf = (r: Pick<Revision, "mime" | "htmlProfile" | "storageKind">): Category =>
+/**
+ * The shelf chip a work falls under, by what the saved bytes are. Mirrors the
+ * server's shelfKindSql (apps/server/app.ts), which filters and counts: every
+ * HTML upload is a page, whatever view it gets.
+ */
+export const categoryOf = (r: Pick<Revision, "mime">): Category =>
   r.mime.startsWith("image/")
     ? "images"
-    : r.mime === "text/plain"
+    : r.mime === "text/plain" || r.mime === "text/markdown"
       ? "documents"
-      : r.mime === "text/html" && r.htmlProfile !== "unsupported"
+      : r.mime === "text/html"
         ? "pages"
         : "other";
 /** A stable hue per material so typographic covers differ without being random. */

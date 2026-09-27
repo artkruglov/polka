@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "../apps/server/app.ts";
@@ -164,7 +164,8 @@ test("public pages may be indexed; shared works, shelves and the API stay noinde
     assert.equal(response.headers["x-robots-tag"], undefined, url);
     assert.doesNotMatch(response.body, /<meta name="robots"/, url);
   }
-  for (const url of ["/s", "/signup", "/api/session", `/works/${randomUUID()}`]) {
+  // The bookmarklet and the extension's receiver still work, unlisted.
+  for (const url of ["/s", "/signup", "/api/session", `/works/${randomUUID()}`, "/bookmarklet", "/bring/receive"]) {
     const response = await call("GET", url);
     assert.equal(response.headers["x-robots-tag"], "noindex, nofollow, noarchive", url);
     if (String(response.headers["content-type"]).startsWith("text/html"))
@@ -176,4 +177,50 @@ test("public pages may be indexed; shared works, shelves and the API stay noinde
   assert.match(robots.body, /\nAllow: \/connect\n/);
   assert.match(robots.body, /\nDisallow: \/\n/);
   assert.doesNotMatch(robots.body, /Allow: \/s\b/);
+});
+
+test("an unknown address opens the app's 404 page; the API keeps its JSON", async () => {
+  cookie = "";
+  const html = { accept: "text/html,application/xhtml+xml,*/*;q=0.8" };
+  for (const url of ["/nope", "/settingz", "/works/abc", "/pricing/", "/discover/Bad_Slug"]) {
+    const page = await call("GET", url, undefined, html);
+    assert.equal(page.statusCode, 404, url);
+    assert.match(page.headers["content-type"] as string, /^text\/html/, url);
+    assert.match(page.body, /<div id="root"><\/div>/, url);
+    assert.match(page.body, /<meta name="robots" content="noindex,nofollow" \/>/, url);
+    assert.equal(page.headers["cache-control"], "no-cache", url);
+  }
+  // A known page is 200 as before, even without an Accept header.
+  assert.equal((await call("GET", `/works/${randomUUID()}`)).statusCode, 200);
+  for (const [url, headers] of [
+    ["/api/unknown", html],
+    ["/mcp/unknown", html],
+    ["/oauth/unknown", html],
+    ["/.well-known/unknown", html],
+    ["/nope", { accept: "application/json" }],
+    ["/nope", {}],
+  ] as const) {
+    const response = await call("GET", url, undefined, headers);
+    assert.equal(response.statusCode, 404, url);
+    assert.match(response.headers["content-type"] as string, /^application\/json/, url);
+    assert.equal(response.json().code, "not_found", url);
+  }
+  const post = await call("POST", "/nope", {}, html);
+  assert.equal(post.statusCode, 404);
+  assert.match(post.headers["content-type"] as string, /^application\/json/);
+});
+
+test("hashed bundles are cached for good, fonts for long, the shell never", async () => {
+  await mkdir(join(root, "assets"), { recursive: true });
+  await mkdir(join(root, "fonts"), { recursive: true });
+  await writeFile(join(root, "assets/index-abc123.js"), "export {};");
+  await writeFile(join(root, "fonts/IBMPlexSans-Regular.woff2"), "wOF2");
+  const asset = await call("GET", "/assets/index-abc123.js");
+  assert.equal(asset.statusCode, 200);
+  assert.equal(asset.headers["cache-control"], "public, max-age=31536000, immutable");
+  const font = await call("GET", "/fonts/IBMPlexSans-Regular.woff2");
+  assert.equal(font.statusCode, 200);
+  assert.match(font.headers["cache-control"] as string, /^public, max-age=\d{7,}$/);
+  for (const url of ["/", "/signup", `/works/${randomUUID()}`])
+    assert.equal((await call("GET", url)).headers["cache-control"], "no-cache", url);
 });

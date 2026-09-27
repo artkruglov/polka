@@ -9,6 +9,7 @@ import { Button } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { TabList, tabId } from "../../shared/ui/Tabs.tsx";
 import {
+  CONNECT_AGENT_TITLE,
   HERO_CLIENT_IDS,
   SAVE_PHRASE,
   heroClient,
@@ -18,7 +19,13 @@ import {
   storeClient,
   type HeroClientId,
 } from "../../entities/onboarding/agent-setup.ts";
-import { readDismissed, writeDismissed } from "../../entities/onboarding/dismissal.ts";
+import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
+import {
+  readAgentSeen,
+  readDismissed,
+  writeAgentSeen,
+  writeDismissed,
+} from "../../entities/onboarding/dismissal.ts";
 
 /** While the steps are on screen, how often the hero asks whether an agent has connected. */
 export const HERO_POLL_MS = 8000;
@@ -79,6 +86,8 @@ export type AgentHeroProps = {
   onHide: () => void;
   onShow: () => void;
   onUpload: () => void;
+  /** This browser last saw an agent connected (readAgentSeen). */
+  expectConnected?: boolean;
 };
 
 /**
@@ -96,6 +105,7 @@ export function AgentHeroView({
   onHide,
   onShow,
   onUpload,
+  expectConnected = false,
 }: AgentHeroProps) {
   const idBase = useId();
   const panelId = `${idBase}-panel`;
@@ -105,7 +115,10 @@ export function AgentHeroView({
     </button>
   );
 
-  if (connections.status === "loading")
+  // While the check runs, the hero keeps the shape this browser saw last
+  // (M8: no layout shift): one line when an agent was connected or the steps
+  // are hidden, the steps otherwise.
+  if (connections.status === "loading" && (expectConnected || hidden))
     return (
       <section className="agent-hero agent-hero--slim" aria-busy="true" aria-label="Агент">
         <h1 className="sr-only">Полка</h1>
@@ -160,18 +173,21 @@ export function AgentHeroView({
       </section>
     );
 
+  // claude.ai cannot reach an installation on this computer (127.0.0.1).
+  const tabs = HERO_CLIENT_IDS.filter(reachableFrom(origin));
+  if (!tabs.includes(selected)) selected = tabs[0]!;
   const setup = heroSetup(origin, selected);
   return (
     <section className="agent-hero" data-state="none" aria-labelledby={`${idBase}-title`}>
       <div className="agent-hero-head">
-        <h1 id={`${idBase}-title`}>Подключите агента — он сам сохранит работу на полку</h1>
+        <h1 id={`${idBase}-title`}>{CONNECT_AGENT_TITLE}</h1>
         <Button variant="quiet" className="agent-hero-hide" onClick={onHide}>
           Скрыть
         </Button>
       </div>
       <TabList
         label="Где вы работаете с ИИ"
-        items={HERO_CLIENT_IDS.map((id) => ({ id, label: heroClientNames[id] }))}
+        items={tabs.map((id) => ({ id, label: heroClientNames[id] }))}
         value={selected}
         onChange={onClient}
         idBase={idBase}
@@ -204,7 +220,8 @@ export function AgentHeroView({
       </div>
       <div className="agent-hero-foot">
         <a className="agent-hero-link" href={`/settings/agents?client=${selected}`}>
-          Пошагово и другие клиенты, включая ChatGPT <ArrowUpRight aria-hidden="true" />
+          {tabs.includes("claude-ai") ? "Пошагово и другие клиенты, включая ChatGPT" : "Пошагово и токены для скриптов"}{" "}
+          <ArrowUpRight aria-hidden="true" />
         </a>
         <span className="agent-hero-or">
           или {upload}
@@ -235,9 +252,14 @@ export function AgentHero({
   const [polling, setPolling] = useState(!hidden);
   const connections = useAgentConnections(account.id, polling);
   const connected = connections.status === "ready" && connections.active.length > 0;
+  const [expectConnected] = useState(() => readAgentSeen(account.id));
   useEffect(() => setPolling(!hidden && !connected), [hidden, connected]);
+  useEffect(() => {
+    if (connections.status === "ready") writeAgentSeen(account.id, connected);
+  }, [account.id, connections.status, connected]);
   return (
     <AgentHeroView
+      expectConnected={expectConnected}
       origin={location.origin}
       connections={connections}
       hidden={hidden}

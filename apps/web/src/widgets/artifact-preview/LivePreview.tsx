@@ -1,5 +1,5 @@
 import { Button } from "../../shared/ui/controls.tsx";
-import { currentShelf } from "../../shared/api/client.ts";
+import { send } from "../../shared/api/client.ts";
 import { CircleStop, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -36,26 +36,19 @@ function messageFor(error: unknown) {
     : "Интерактивную версию не удалось запустить.";
 }
 
-async function readError(response: Response) {
-  try {
-    const result = (await response.json()) as { message?: string };
-    return result.message || `Ошибка запуска (${response.status})`;
-  } catch {
-    return `Ошибка запуска (${response.status})`;
-  }
-}
-
+// Requests go through the app's one path (shared/api/client.ts): a network
+// failure or an error answer reads in Russian, and the shelf header rides
+// along on a department shelf.
 async function readBuild(
   path: string,
   method: "GET" | "POST",
   signal: AbortSignal,
 ) {
-  const response = await fetch(`/api${path}`, {
+  const response = await send(`/api${path}`, {
     method,
     credentials: "same-origin",
     signal,
   });
-  if (!response.ok) throw new Error(await readError(response));
   return (await response.json()) as InlineBuild | null;
 }
 
@@ -194,9 +187,8 @@ export function LivePreview({
   useEffect(() => {
     const abort = new AbortController();
     const currentGeneration = generation.current;
-    fetch("/api/capabilities", { signal: abort.signal })
+    send("/api/capabilities", { signal: abort.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error(await readError(response));
         const result = (await response.json()) as {
           liveExperimental?: unknown;
           liveMode?: unknown;
@@ -325,7 +317,8 @@ export function LivePreview({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(
+      // The owner's view of a work on a department shelf carries X-Polka-Shelf (send).
+      const response = await send(
         grant
           ? "/api/view/live-view"
           : `/api/revisions/${revision.id}/live-view`,
@@ -334,15 +327,12 @@ export function LivePreview({
           credentials: "same-origin",
           headers: {
             ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
-            // The owner's view of a work on a department shelf (TEAM_SHELVES.md).
-            ...(!grant && currentShelf() ? { "X-Polka-Shelf": currentShelf()! } : {}),
             ...(overlay ? { "Content-Type": "application/json" } : {}),
           },
           body: overlay ? JSON.stringify({ comments: true }) : undefined,
           signal: abort.signal,
         },
       );
-      if (!response.ok) throw new Error(await readError(response));
       const result = (await response.json()) as Partial<LiveView>;
       if (typeof result.url !== "string" || !result.url)
         throw new Error("Сервер не вернул адрес интерактивной версии.");

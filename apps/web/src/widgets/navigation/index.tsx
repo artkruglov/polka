@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Settings,
 } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
 import { client, rememberedShelf } from "../../shared/api/client.ts";
@@ -144,6 +145,8 @@ function AccountMenu({
           { id: "shelf", label: "Моя полка", icon: <Home />, onSelect: () => location.assign(rememberedShelf() ? "/?shelf=" : "/") },
           // Next to «Моя полка»: one's own trash.
           { id: "trash", label: "Корзина", onSelect: () => location.assign(rememberedShelf() ? "/trash?shelf=" : "/trash") },
+          // Agents, sign-in methods and deleting the shelf.
+          { id: "settings", label: "Настройки", icon: <Settings />, onSelect: () => location.assign("/settings") },
           { id: "logout", label: "Выйти", icon: <LogOut />, tone: "danger", onSelect: () => setConfirm(true) },
         ]}
       />

@@ -1,7 +1,10 @@
 import "./styles.css";
 import React, { useId } from "react";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
-import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
+import {
+  connectPhrase,
+  isLoopbackOrigin,
+} from "../../entities/onboarding/connect-phrase.ts";
 import {
   CLAUDE_PLUGIN_INSTALL,
   CODEX_LOGIN,
@@ -51,16 +54,28 @@ export function ConnectAgent({
           variant="primary"
         />
       </div>
-      <small>
-        Codex и Claude Code выполнят одну команду сами — Полка откроется в
-        браузере, токен не нужен. В Claude (claude.ai и Desktop) и ChatGPT
-        коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
-        <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
-        <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
-        <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
-        <a href="/settings/agents?client=codex">Codex</a> ·{" "}
-        <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
-      </small>
+      {isLoopbackOrigin(location.origin) ? (
+        // claude.ai and ChatGPT connect from their servers: not to 127.0.0.1.
+        <small>
+          Codex и Claude Code на этом компьютере выполнят одну команду сами —
+          Полка откроется в браузере. Эта Полка работает локально, поэтому
+          claude.ai и ChatGPT до неё не достанут; скриптам нужен{" "}
+          <a href="/settings/agents?client=other">токен</a>. Пошагово:{" "}
+          <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
+          <a href="/settings/agents?client=codex">Codex</a>.
+        </small>
+      ) : (
+        <small>
+          Codex и Claude Code выполнят одну команду сами — Полка откроется в
+          браузере, токен не нужен. В Claude (claude.ai и Desktop) и ChatGPT
+          коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
+          <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
+          <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
+          <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
+          <a href="/settings/agents?client=codex">Codex</a> ·{" "}
+          <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
+        </small>
+      )}
       <details className="connect-agent-manual">
         <summary>Команды для терминала</summary>
         <ol>

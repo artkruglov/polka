@@ -66,6 +66,9 @@
 
 /* Search field: icon + input in one bordered row. */
 .ui-search { position: relative; display: flex; align-items: center; min-width: 0; }
+/* The field has its own «Очистить поиск»; the browser's cross would be a second one. */
+.ui-search > input::-webkit-search-cancel-button,
+.ui-search > input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
 .ui-search > svg { position: absolute; left: 12px; width: 18px; height: 18px; color: var(--muted-2); pointer-events: none; }
 .ui-search > input {
   width: 100%; min-height: var(--control-height); padding: 8px 40px; border: 1px solid var(--line-strong); border-radius: var(--radius);

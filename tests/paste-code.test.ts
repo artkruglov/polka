@@ -49,7 +49,16 @@ export default function Counter() {
   const pasted = describePaste(component);
   assert.equal(pasted?.kind, "component");
   assert.equal(pasted?.mime, "text/plain");
-  assert.equal(pasted?.title, "Код компонента");
+  // The title comes from the component: its heading, else its name.
+  assert.equal(pasted?.title, "Счётчик");
+  assert.equal(
+    describePaste('import x from "y";\nexport default function SalesDashboard() { return null; }')?.title,
+    "Sales Dashboard",
+  );
+  assert.equal(
+    describePaste('import x from "y";\nexport default function App() { return <p>{x}</p>; }')?.title,
+    "Код компонента",
+  );
   // A real page that happens to contain a module script stays a page.
   assert.equal(
     describePaste(

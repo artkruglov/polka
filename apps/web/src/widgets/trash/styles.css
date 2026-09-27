@@ -4,6 +4,7 @@
 .trash-panel-heading h2 { font-size: clamp(30px, 3vw, 40px); letter-spacing: -.04em; }
 .trash-panel-kicker { margin-bottom: 8px; }
 .trash-panel-muted { margin-top: 8px; max-width: 60ch; color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
+.trash-panel-muted a { color: var(--accent); font-weight: 500; }
 .trash-panel-state { padding: 28px; border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); color: var(--muted); text-align: center; }
 .trash-panel-list { display: grid; gap: 12px; }
 .trash-panel-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }

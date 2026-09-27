@@ -2,7 +2,9 @@ import React from "react";
 import { App } from "../workspace/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 import { routeTitle } from "./titles.ts";
+import { isAppPage } from "../../../../../packages/contracts/app-routes.ts";
 import {
+  NotFound,
   AgentConnections,
   Away,
   Bring,
@@ -44,6 +46,8 @@ const ComponentCatalog = import.meta.env.DEV
 function Route({ path }: { path: string }) {
   if (path === "/dev/components" && ComponentCatalog)
     return <ComponentCatalog />;
+  // The same list the server serves the shell for (packages/contracts/app-routes.ts).
+  if (!isAppPage(path)) return <NotFound />;
   if (path === "/templates") return <Templates />;
   if (path === "/library-invite") return <LibraryInvite />;
   if (path === "/oauth/consent") return <OAuthConsent />;
@@ -60,7 +64,8 @@ function Route({ path }: { path: string }) {
   if (path === "/pricing") return <Pricing />;
   if (path === "/enterprise") return <Enterprise />;
   if (path === "/start") return <FirstSave />;
-  if (path === "/settings/agents" || path === "/connections")
+  // «Настройки»: agents, sign-in methods, deleting the shelf.
+  if (path === "/settings" || path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
   if (path === "/settings/company") return <CompanyAdmin />;
   if (path === "/s") return <Recipient />;

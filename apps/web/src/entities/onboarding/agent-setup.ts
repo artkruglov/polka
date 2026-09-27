@@ -93,6 +93,12 @@ export type ClientSetup = {
 };
 
 export const SAVE_PHRASE = "Сохрани это на Полку";
+/**
+ * The one way the shelf's hero, /bring and /start ask to connect an agent:
+ * the same heading and the same phrase to say afterwards.
+ */
+export const CONNECT_AGENT_TITLE = "Подключите агента — он сам сохранит работу на полку";
+export const CONNECT_AGENT_LEAD = `Подключают один раз, дальше просто просите: «${SAVE_PHRASE}».`;
 
 /** The skill Claude Code and Codex install; the server names the same repository (apps/server/connect-guide.ts). */
 export const SKILL_INSTALL = "npx skills add artkruglov/polka-plugin";

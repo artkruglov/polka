@@ -2,6 +2,7 @@
   "tests/unit.test.ts",
   "tests/server-errors.test.ts",
   "tests/mcp-tools-documented.test.ts",
+  "tests/web-launch.test.ts",
   "tests/browser-icons.test.ts",
   "tests/away-links.test.ts",
   "tests/ops-status.test.ts",

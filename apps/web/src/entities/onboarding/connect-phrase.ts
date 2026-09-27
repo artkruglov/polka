@@ -6,6 +6,30 @@
 export const connectPhrase = (origin: string, ref?: string) =>
   `Подключи Полку: ${origin}/connect${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`;
 
+/**
+ * An installation on this computer (127.0.0.1, localhost): claude.ai and
+ * ChatGPT connect from their own servers and cannot reach it, so only the
+ * paths that run here are offered — Claude Code, Codex, a token.
+ */
+export function isLoopbackOrigin(origin: string) {
+  try {
+    const host = new URL(origin).hostname;
+    return (
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host === "[::1]" ||
+      /^127(?:\.\d{1,3}){3}$/.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Web chats connect from the provider's servers: only to a public address. */
+const WEB_CHATS = new Set(["claude-ai", "chatgpt"]);
+export const reachableFrom = (origin: string) => (id: string) =>
+  !isLoopbackOrigin(origin) || !WEB_CHATS.has(id);
+
 export type ClientHint = {
   id: "codex" | "claude-code" | "claude-ai" | "chatgpt";
   client: string;
@@ -16,7 +40,7 @@ export type ClientHint = {
 
 export function clientHints(origin: string): ClientHint[] {
   const mcp = `${origin}/mcp`;
-  return [
+  return ([
     {
       id: "codex",
       client: "Codex",
@@ -43,5 +67,5 @@ export function clientHints(origin: string): ClientHint[] {
       command: null,
       note: `Settings → Apps & Connectors → Developer mode → Create, адрес ${mcp}, Authentication: OAuth.`,
     },
-  ];
+  ] satisfies ClientHint[]).filter((hint) => reachableFrom(origin)(hint.id));
 }

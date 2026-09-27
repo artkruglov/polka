@@ -32,10 +32,10 @@ export function recipientAccessNote(
   const provider = providerById(service);
   if (reader === "recipient")
     return service === "claude"
-      ? "Артефакт Claude откроется, если автор включил доступ по ссылке."
+      ? "Страница из Claude откроется, если автор включил доступ по ссылке."
       : `Оригинал хранится ${provider ? `в ${provider.name}` : `на ${host}`}: Полка его не копировала. Если он закрыт или удалён, открыть его не получится.`;
   if (service === "claude")
-    return "Получатель откроет артефакт Claude, если автор включил доступ по ссылке (Publish / «Anyone with the link»). Иначе он увидит только карточку.";
+    return "Получатель откроет страницу из Claude, если автор включил доступ по ссылке (Publish / «Anyone with the link»). Иначе он увидит только карточку.";
   if (provider && ["claude", "chatgpt", "v0", "perplexity", "aistudio", "gemini"].includes(provider.id))
     return `Получатель откроет оригинал, только если у него есть доступ к нему в ${provider.name}. Иначе он увидит только карточку.`;
   return `Получатель откроет оригинал на ${host}. Если страницу закроют или удалят, он увидит только карточку.`;

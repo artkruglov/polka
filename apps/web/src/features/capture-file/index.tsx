@@ -18,7 +18,7 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { client, savedWorkHref } from "../../shared/api/client.ts";
 import { useAccountState } from "../../entities/account/model/useAccount.ts";
-import { date, profileView, size } from "../../entities/artifact/format.ts";
+import { DEFAULT_LINK_DAYS, date, profileView, size } from "../../entities/artifact/format.ts";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
 import {
   UPLOAD_ACCEPT,
@@ -242,7 +242,7 @@ export function FileSave({
 
 /**
  * The receipt after a save from /bring: what was saved, how it opens, a
- * preview and the optional 30-day link. Shared by the file and paste paths.
+ * preview and the optional 7-day link (the share dialog's default too). Shared by the file and paste paths.
  */
 export function SavedWork({
   receipt,
@@ -270,7 +270,7 @@ export function SavedWork({
     setSharing(true);
     setError("");
     try {
-      setWork(await client.enable(work, 30));
+      setWork(await client.enable(work, DEFAULT_LINK_DAYS));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -357,7 +357,7 @@ export function SavedWork({
             disabled={busy}
           >
             <Link2 />{" "}
-            {sharing ? "Создаём ссылку…" : "Создать ссылку на 30 дней"}
+            {sharing ? "Создаём ссылку…" : "Создать ссылку на 7 дней"}
           </Button>
         )}
       </div>
