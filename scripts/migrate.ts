@@ -32,6 +32,10 @@ try {
   });
   client.on("error", () => {}); // Query/connect rejects; never print raw provider diagnostics.
   await client.connect();
+  // A migration that waits for a table the running app holds would queue
+  // every request behind its own lock: give up after 5 s instead (SQLSTATE
+  // 55P03, nothing applied) and run it again at a quieter moment.
+  await client.query("SET lock_timeout='5s'");
   await runMigrations(client, SCHEMA_MIGRATIONS, (file) => {
     currentFile = file; // The runner applies each file right after reading it.
     return readFile(migrationFileUrl(file), "utf8");

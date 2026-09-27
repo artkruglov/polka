@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
-import { db } from "../apps/server/db.ts";
+import { db, settled } from "../apps/server/db.ts";
 import { registerFrontend } from "../apps/server/frontend.ts";
 import {
   SCRIPT_CONTEXT_CHARS,
@@ -62,7 +62,7 @@ afterEach(() => {
 
 after(async () => {
   // Letters are sent after the response; let the last ones settle.
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   config.OPERATOR_EMAIL = defaults.OPERATOR_EMAIL;
   await app.close();
   await db.end();
@@ -289,6 +289,31 @@ test("new accounts: 7-day links and a live-link cap, each refused with a reason"
   const operator = await operatorCreated();
   const month = await share(operator, await save(operator, HONEST), 30);
   assert.equal(month.statusCode, 200, month.body);
+});
+
+test("moving a new account's 7-day link counts whole days left by the database's clock", async () => {
+  config.SHARE_MODERATION = "off";
+  const owner = await signedUp(0);
+  const link = await sharedLink(owner, HONEST);
+  // A little over seven days left (an app clock behind the database's):
+  // rounding up made it 8, over the new-account limit, and refused the move.
+  await db.query("UPDATE shares SET expires_at=now()+interval '7 days 1 hour' WHERE id=$1", [link.shareId]);
+  const moved = await call(
+    "POST",
+    `/api/shares/${link.shareId}/publish`,
+    { expectedPublishedRevisionId: link.revisionId, revisionId: link.revisionId },
+    owner.cookie,
+  );
+  assert.equal(moved.statusCode, 200, moved.body);
+  // Expired by the database's clock: closed, whatever the app's clock says.
+  await db.query("UPDATE shares SET expires_at=now()-interval '1 second' WHERE id=$1", [link.shareId]);
+  const late = await call(
+    "POST",
+    `/api/shares/${link.shareId}/publish`,
+    { expectedPublishedRevisionId: link.revisionId, revisionId: link.revisionId },
+    owner.cookie,
+  );
+  assert.equal(late.statusCode, 410, late.body);
 });
 
 test("SHARE_MODERATION decides which new links wait", async () => {

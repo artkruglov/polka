@@ -567,17 +567,17 @@ export async function purgeBlock(
 /**
  * The day before a scheduled deletion the operator is reminded (ids and the
  * category only): time to set a legal hold if the police asked for the data.
+ * A block counts as reminded only once its letter left: a failed send leaves
+ * it for the next sweep (hourly), so the reminder is late, never lost.
  */
-export async function remindDueBlocks(limit = 50) {
+export async function remindDueBlocks(limit = 50, send: typeof sendMail = sendMail) {
   const { rows } = await db.query(
-    `UPDATE moderation_blocks SET reminded_at=now()
-     WHERE id IN (
-       SELECT id FROM moderation_blocks
-       WHERE purged_at IS NULL AND released_at IS NULL AND legal_hold IS NULL
-         AND reminded_at IS NULL AND delete_after IS NOT NULL
-         AND delete_after<=now()+interval '1 day' AND delete_after>now()
-       ORDER BY delete_after LIMIT $1)
-     RETURNING id,category,artifact_id,revision_id,comment_id,delete_after,sha256`,
+    `SELECT id,category,artifact_id,revision_id,comment_id,delete_after,sha256
+     FROM moderation_blocks
+     WHERE purged_at IS NULL AND released_at IS NULL AND legal_hold IS NULL
+       AND reminded_at IS NULL AND delete_after IS NOT NULL
+       AND delete_after<=now()+interval '1 day' AND delete_after>now()
+     ORDER BY delete_after LIMIT $1`,
     [limit],
   );
   if (!rows.length) return 0;
@@ -586,22 +586,33 @@ export async function remindDueBlocks(limit = 50) {
       (row) =>
         `${new Date(row.delete_after).toISOString().slice(0, 16).replace("T", " ")} UTC — ${CATEGORY_LABEL[row.category as Category] ?? row.category}: ${row.revision_id ? `работа ${row.artifact_id}, версия ${row.revision_id}` : `комментарий ${row.comment_id}`}, sha256 ${row.sha256}`,
     );
-    await sendMail({
-      to: config.OPERATOR_EMAIL,
-      subject: `Полка: завтра удаляется заблокированное (${rows.length})`,
-      text: [
-        "Через сутки будет удалено содержимое этих блокировок (все версии объектов в хранилище). Останутся sha256 и метаданные в журнале.",
-        "",
-        ...lines,
-        "",
-        "Если полиция или суд запросили эти данные: npm run moderation:legal-hold -- <id> on --authority \"…\"",
-        "Если данные уже переданы: npm run moderation:handed-over -- <id>",
-      ].join("\n"),
-    }).catch(() =>
-      console.error(JSON.stringify({ event: "moderation.mail_failed", kind: "reminder" })),
-    );
+    try {
+      await send({
+        to: config.OPERATOR_EMAIL,
+        subject: `Полка: завтра удаляется заблокированное (${rows.length})`,
+        text: [
+          "Через сутки будет удалено содержимое этих блокировок (все версии объектов в хранилище). Останутся sha256 и метаданные в журнале.",
+          "",
+          ...lines,
+          "",
+          "Если полиция или суд запросили эти данные: npm run moderation:legal-hold -- <id> on --authority \"…\"",
+          "Если данные уже переданы: npm run moderation:handed-over -- <id>",
+        ].join("\n"),
+      });
+    } catch {
+      console.error(JSON.stringify({ event: "moderation.mail_failed", kind: "reminder" }));
+      return 0;
+    }
   }
-  for (const row of rows)
+  // Only the blocks the letter named, and only once (a concurrent sweep may
+  // have marked some already).
+  const { rows: marked } = await db.query(
+    `UPDATE moderation_blocks SET reminded_at=now()
+     WHERE id=ANY($1::uuid[]) AND reminded_at IS NULL
+     RETURNING id,category,artifact_id,revision_id,comment_id`,
+    [rows.map((row) => row.id)],
+  );
+  for (const row of marked)
     await recordEvent(db, {
       actor: "maintenance",
       action: "deletion.reminded",
@@ -610,7 +621,7 @@ export async function remindDueBlocks(limit = 50) {
       revisionId: row.revision_id,
       commentId: row.comment_id,
     });
-  return rows.length;
+  return marked.length;
 }
 
 /**

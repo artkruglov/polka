@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 44 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 48);
+test("migration catalog is the complete contiguous schema 49 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 49);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -146,4 +146,27 @@ test("exported migration catalog cannot be mutated at runtime", () => {
   assert.ok(Object.isFrozen(SCHEMA_MIGRATIONS));
   assert.ok(SCHEMA_MIGRATIONS.every((migration) => Object.isFrozen(migration)));
   assert.ok(Object.isFrozen(EXPECTED_MIGRATION_VERSIONS));
+});
+
+test("049 indexes the links of a revision and the live works of a folder", async () => {
+  const sql = await readFile(
+    migrationFileUrl("049_share_revision_and_folder_indexes.sql"),
+    "utf8",
+  );
+  assert.match(sql, /CREATE INDEX shares_revision ON shares \(revision_id\);/);
+  assert.match(
+    sql,
+    /CREATE INDEX artifacts_live_folder ON artifacts \(tenant_id, folder_id\)\s+WHERE trashed_at IS NULL;/,
+  );
+  // Every grant recipe was reviewed for the new schema.
+  for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
+    const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
+    assert.match(text, /schema_migrations\)<>49\n/, recipe);
+    assert.match(text, /001 through 049/, recipe);
+  }
+});
+
+test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {
+  const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
+  assert.match(source, /await client\.query\("SET lock_timeout='5s'"\);\n\s+await runMigrations\(/);
 });

@@ -20,7 +20,7 @@ import {
   withFreshServiceActorTransaction,
   withServiceActorTransaction,
 } from "./service-auth.ts";
-import { db } from "./db.ts";
+import { db, errorFacts } from "./db.ts";
 import { config } from "./config.ts";
 import {
   saveLinkSchema,
@@ -290,28 +290,88 @@ const shareToolInput = agentShareSchema
     message: "Send expiresInDays for a new link or moveShareId to move one",
   });
 
-/** A refusal the agent can act on: the structured fields, as a tool error. */
-async function withToolErrors(
-  operation: () => Promise<Record<string, unknown>>,
-) {
-  try {
-    return asToolResult(await operation());
-  } catch (error) {
-    if (error instanceof Problem && error.details) {
-      const detail = {
-        code: error.code,
-        status: error.status,
-        message: error.message,
-        ...error.details,
-      };
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(detail) }],
-        structuredContent: detail,
-        isError: true,
-      };
-    }
-    throw error;
-  }
+async function toolResult(operation: () => Promise<Record<string, unknown>>) {
+  return asToolResult(await operation());
+}
+
+/**
+ * What an agent is told when a tool fails: a refusal (Problem) with its code,
+ * message and structured fields; anything else by kind only, as app.ts
+ * answers a request — never the raw database or provider text.
+ */
+export function toolErrorDetail(error: unknown): Record<string, unknown> & {
+  code: string;
+  status: number;
+  message: string;
+} {
+  if (error instanceof Problem)
+    return {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+      ...error.details,
+    };
+  if (error instanceof z.ZodError)
+    return { code: "invalid", status: 400, message: "Проверьте формат и обязательные поля." };
+  const sqlstate = (error as { code?: unknown } | null)?.code;
+  if (sqlstate === "40P01" || sqlstate === "40001" || sqlstate === "23505")
+    return { code: "conflict", status: 409, message: "Действие пересеклось с другим. Повторите его." };
+  if (sqlstate === "57014" || sqlstate === "55P03")
+    return {
+      code: "busy",
+      status: 503,
+      message: "Полка сейчас занята другим действием с этими работами. Повторите через несколько секунд.",
+    };
+  return {
+    code: "internal",
+    status: 500,
+    message: "Не удалось завершить действие. Сохранённые данные остаются на полке.",
+  };
+}
+
+/** A failed tool call as a tool error the agent reads, logged by kind. */
+function toolFailure(tool: string, error: unknown) {
+  const detail = toolErrorDetail(error);
+  const facts = errorFacts(error);
+  console.error(
+    JSON.stringify({
+      event: "mcp.tool.failed",
+      tool,
+      code: detail.code,
+      // An unexpected failure: its kind (never its text) for the operator.
+      ...(detail.code === "internal" ? { error: facts.name, sqlstate: facts.code } : {}),
+    }),
+  );
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(detail) }],
+    structuredContent: detail,
+    isError: true,
+  };
+}
+
+/**
+ * Every tool of this server answers a failure with toolFailure: the SDK's
+ * own handling would pass an exception's raw message to the agent.
+ */
+function guardTools(server: McpServer) {
+  const register = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    callback: (...args: unknown[]) => unknown,
+  ) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (
+    name,
+    config,
+    callback,
+  ) =>
+    register(name, config, async (...args: unknown[]) => {
+      try {
+        return await callback(...args);
+      } catch (error) {
+        return toolFailure(name, error);
+      }
+    });
+  return server;
 }
 const statusInput = z
   .object({ uploadId: uuid.optional(), key: uuid.optional() })
@@ -337,6 +397,7 @@ export function createMcpServer(actor: ServiceActor) {
         : "Tenant-scoped Polka access. In a chat, save an artifact with polka_publish: one standalone HTML file in, a private save and (with link permission) an unlisted link out. Capture and revise preserve selected source bytes. Preview building is explicit through polka_prepare_preview when that tool is advertised. Sharing is explicit and revision-bound.",
     },
   );
+  guardTools(server);
   if (actor.scopes.includes("context")) {
     server.registerTool(
       "polka_context",
@@ -367,7 +428,7 @@ export function createMcpServer(actor: ServiceActor) {
           },
         },
         async () =>
-          withToolErrors(async () => {
+          toolResult(async () => {
             const current = await recheckServiceActor(actor, "context");
             return issueSignInLink(current);
           }),
@@ -548,7 +609,7 @@ export function createMcpServer(actor: ServiceActor) {
         annotations: folderAnnotations,
       },
       async (input) =>
-        withToolErrors(async () => createFolderFromAgent(actor, input)),
+        toolResult(async () => createFolderFromAgent(actor, input)),
     );
     server.registerTool(
       "polka_rename_folder",
@@ -560,7 +621,7 @@ export function createMcpServer(actor: ServiceActor) {
         annotations: folderAnnotations,
       },
       async (input) =>
-        withToolErrors(async () => renameFolderFromAgent(actor, input)),
+        toolResult(async () => renameFolderFromAgent(actor, input)),
     );
     server.registerTool(
       "polka_delete_folder",
@@ -572,7 +633,7 @@ export function createMcpServer(actor: ServiceActor) {
         annotations: { ...folderAnnotations, destructiveHint: true },
       },
       async (input) =>
-        withToolErrors(async () => deleteFolderFromAgent(actor, input)),
+        toolResult(async () => deleteFolderFromAgent(actor, input)),
     );
     server.registerTool(
       "polka_move",
@@ -583,7 +644,7 @@ export function createMcpServer(actor: ServiceActor) {
         inputSchema: agentMoveInputSchema,
         annotations: folderAnnotations,
       },
-      async (input) => withToolErrors(async () => moveFromAgent(actor, input)),
+      async (input) => toolResult(async () => moveFromAgent(actor, input)),
     );
     server.registerTool(
       "polka_trash",
@@ -754,7 +815,7 @@ export function createMcpServer(actor: ServiceActor) {
         },
       },
       async (input) =>
-        withToolErrors(async () => {
+        toolResult(async () => {
           if (input.edits) {
             const { key, artifactId, baseRevisionId, edits, path } = input;
             return reviseWithEdits(actor, {
@@ -828,7 +889,7 @@ export function createMcpServer(actor: ServiceActor) {
           openWorldHint: false,
         },
       },
-      async () => withToolErrors(() => issueProjectUploadToken(actor)),
+      async () => toolResult(() => issueProjectUploadToken(actor)),
     );
   if (
     config.HTML_LIVE_ENABLED &&
@@ -869,7 +930,7 @@ export function createMcpServer(actor: ServiceActor) {
       // A refusal with details (a provisional shelf's claimUrl) reaches the
       // agent as structured fields.
       async (input) =>
-        withToolErrors(async () =>
+        toolResult(async () =>
           input.moveShareId
             ? await moveShareFromAgent(actor, {
                 key: input.key,
