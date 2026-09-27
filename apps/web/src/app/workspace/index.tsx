@@ -1,6 +1,6 @@
 import { AgentContextPanel } from "../../features/agent-context/index.tsx";
 import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
-import { Button, IconButton, Notice } from "../../shared/ui/controls.tsx";
+import { Button, EmptyState, IconButton, Notice } from "../../shared/ui/controls.tsx";
 import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
 import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
 import {
@@ -20,7 +20,14 @@ import type {
   Folder,
   Revision,
 } from "../../../../../packages/contracts/index.ts";
-import { ApiError, client, currentShelf, withShelf } from "../../shared/api/client.ts";
+import {
+  ApiError,
+  client,
+  currentShelf,
+  withShelf,
+  type ShelfCounts,
+} from "../../shared/api/client.ts";
+import type { Category } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
@@ -46,6 +53,8 @@ import {
 } from "../../features/shelf-members/index.tsx";
 import "./styles.css";
 const params = new URLSearchParams(location.search);
+/** The shelf's order as GET /api/artifacts names it. */
+const SORT_PARAM = { newest: "new", oldest: "old", title: "title" } as const;
 function resume(next: string) {
   const intent = params.get("intent");
   location.replace(
@@ -67,6 +76,12 @@ export function App() {
     [query, setQuery] = useState(() => params.get("q") ?? ""),
     [view, setView] = useState<"grid" | "list">("grid"),
     [sort, setSort] = useState<ShelfSort>("newest"),
+    [kind, setKind] = useState<Category | null>(null),
+    [counts, setCounts] = useState<ShelfCounts | null>(null),
+    [stale, setStale] = useState(false),
+    // «В корзину» from a card's menu: confirmed on the shelf, no navigation.
+    [cardTrash, setCardTrash] = useState<Artifact | null>(null),
+    [workMissing, setWorkMissing] = useState(false),
     [focusSearch] = useState(() => params.has("search")),
     [selected, setSelected] = useState<string | null>(
       location.pathname.startsWith("/works/")
@@ -228,15 +243,23 @@ export function App() {
     const timer = setTimeout(
       () =>
         client
-          .shelf(query, folderId)
+          .shelf(query, folderId, undefined, { sort: SORT_PARAM[sort], kind })
           .then((x) => {
             if (live) {
               setItems(x.items);
               setCursor(x.nextCursor);
+              setCounts(x.counts ?? null);
+              setStale(false);
               setError("");
             }
           })
-          .catch((e) => live && setError(e.message))
+          .catch((e) => {
+            if (!live) return;
+            // Offline: the results on screen belong to another query or moment.
+            setStale(true);
+            setCursor(null);
+            setError(e.message);
+          })
           .finally(() => live && setLoading(false)),
       150,
     );
@@ -244,7 +267,7 @@ export function App() {
       live = false;
       clearTimeout(timer);
     };
-  }, [account, selected, trashView, query, folderId, refresh]);
+  }, [account, selected, trashView, query, folderId, sort, kind, refresh]);
   const loadTrash = async (nextCursor?: string) => {
     const generation = trashGeneration.current;
     setTrashLoading(true);
@@ -303,6 +326,7 @@ export function App() {
     const generation = routeGeneration.current;
     let live = true;
     setLoading(true);
+    setWorkMissing(false);
     Promise.all([client.artifact(selected), client.revisions(selected)])
       .then(([a, r]) => {
         if (
@@ -324,7 +348,13 @@ export function App() {
           setError("");
         }
       })
-      .catch((e) => live && setError(e.message))
+      .catch((e) => {
+        if (!live) return;
+        // Not on this shelf (a mistyped address, a purged work, another
+        // shelf): a page that says so, not a bare error.
+        if (e instanceof ApiError && e.status === 404) setWorkMissing(true);
+        else setError(e.message);
+      })
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
@@ -382,7 +412,10 @@ export function App() {
     const generation = shelfGeneration.current;
     setLoadingMore(true);
     try {
-      const page = await client.shelf(query, folderId, cursor);
+      const page = await client.shelf(query, folderId, cursor, {
+        sort: SORT_PARAM[sort],
+        kind,
+      });
       if (generation !== shelfGeneration.current) return;
       setItems((x) => [
         ...x,
@@ -545,6 +578,20 @@ export function App() {
                 {loading && (
                   <div className="empty" role="status">Открываем работу…</div>
                 )}
+                {!loading && workMissing && (
+                  <EmptyState
+                    title="Работа не найдена"
+                    action={
+                      <Button variant="primary" onClick={() => open(null)}>
+                        На полку
+                      </Button>
+                    }
+                  >
+                    На этой полке такой работы нет. Возможно, адрес неполный,
+                    работу удалили или она лежит на другой полке — тогда
+                    переключитесь на неё в меню слева.
+                  </EmptyState>
+                )}
               </div>
             )
           ) : trashView ? (
@@ -593,6 +640,14 @@ export function App() {
               setPanel={setPanel}
               open={open}
               loadMore={() => void loadMore()}
+              kind={kind}
+              setKind={setKind}
+              counts={counts}
+              stale={stale}
+              onTrash={(artifact) => {
+                setTrashActionError("");
+                setCardTrash(artifact);
+              }}
               team={team}
             />
           )}
@@ -708,6 +763,46 @@ export function App() {
                 trashBusyRef.current = false;
                 setTrashBusy(false);
               }
+            }
+          }}
+        />
+      )}
+      {cardTrash && !selected && (
+        <TrashArtifactPanel
+          title={cardTrash.title}
+          busy={trashBusy}
+          error={trashActionError}
+          onClose={() => {
+            if (!trashBusy) setCardTrash(null);
+          }}
+          onConfirm={async () => {
+            if (trashBusyRef.current) return;
+            const target = cardTrash;
+            const expectedGeneration = shelfGeneration.current;
+            trashBusyRef.current = true;
+            setTrashBusy(true);
+            setTrashActionError("");
+            try {
+              await client.trashArtifact(target.id, {
+                expectedLifecycleVersion: target.lifecycleVersion,
+                expectedRevisionId: target.revision.id,
+              });
+              setCardTrash(null);
+              if (expectedGeneration === shelfGeneration.current) {
+                // Off the shelf at once; the next load brings the counts.
+                setItems((current) => current.filter((a) => a.id !== target.id));
+                setNotice(`«${target.title}» в корзине. Старые ссылки закрыты.`);
+                setRefresh((value) => value + 1);
+              }
+            } catch (e) {
+              setTrashActionError(
+                e instanceof ApiError && e.status === 409
+                  ? "Работа изменилась, пока была открыта полка. Обновите полку и повторите."
+                  : (e as Error).message,
+              );
+            } finally {
+              trashBusyRef.current = false;
+              setTrashBusy(false);
             }
           }}
         />

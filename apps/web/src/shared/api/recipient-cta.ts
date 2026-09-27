@@ -1,6 +1,7 @@
 // The guest prompt on a shared work or a feed material, counted anonymously
 // (apps/server/recipient-cta.ts). The body is two or three enumerated words:
 // never the link's token, a title, a slug or a URL.
+import { send } from "./client.ts";
 
 export type RecipientCtaSurface = "bar" | "card";
 export type RecipientCtaAction = "try" | "remix" | "copy_phrase" | "yandex" | "email";
@@ -24,8 +25,9 @@ export const recipientCtaBody = (input: RecipientCtaEvent): string =>
 
 type Send = (path: string, body: string) => Promise<unknown>;
 
-const send: Send = (path, body) =>
-  fetch(path, {
+// Through the app's one request path (client.ts), like every other request.
+const post: Send = (path, body) =>
+  send(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
@@ -34,7 +36,7 @@ const send: Send = (path, body) =>
   });
 
 /** Fire and forget: a failed count never touches the page. */
-export function trackRecipientCta(input: RecipientCtaEvent, transport: Send = send) {
+export function trackRecipientCta(input: RecipientCtaEvent, transport: Send = post) {
   try {
     void transport(RECIPIENT_CTA_PATH, recipientCtaBody(input)).catch(() => undefined);
   } catch {

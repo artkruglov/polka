@@ -26,6 +26,7 @@ import {
 } from "../apps/web/src/pages/enterprise/form.tsx";
 import { LegalLinks } from "../apps/web/src/widgets/navigation/index.tsx";
 import { routeTitle } from "../apps/web/src/app/routing/titles.ts";
+import { isAppPage } from "../packages/contracts/app-routes.ts";
 import { pageTitle } from "../apps/web/src/shared/lib/document-title.ts";
 
 const app = await createApp();
@@ -361,7 +362,7 @@ test("/enterprise is routed and linked from the footer, /pricing and the landing
     read("apps/web/src/app/routing/index.tsx"),
     /path === "\/enterprise"\) return <Enterprise \/>/,
   );
-  assert.match(read("apps/server/frontend.ts"), /path === "\/enterprise" \|\|/);
+  assert.ok(isAppPage("/enterprise"));
   assert.match(
     render(React.createElement(LegalLinks)),
     /<a href="\/enterprise">Для компаний<\/a>/,
@@ -388,7 +389,10 @@ test("each page names its browser tab; a recipient's tab and /s previews stay ge
   assert.equal(pageTitle(routeTitle("/s")), "Работа по ссылке — Полка");
   // The workspace and /discover name their own tabs (the work, an item).
   assert.equal(routeTitle("/"), undefined);
-  assert.equal(routeTitle("/works/x"), undefined);
+  assert.equal(routeTitle("/works/00000000-0000-4000-8000-000000000000"), undefined);
+  // An address the app has no page for.
+  assert.equal(pageTitle(routeTitle("/works/x")), "Страница не найдена — Полка");
+  assert.equal(pageTitle(routeTitle("/nope")), "Страница не найдена — Полка");
   assert.equal(routeTitle("/discover"), undefined);
   // The page the server sends keeps «Полка»; the recipient page never retitles.
   assert.match(read("apps/web/index.html"), /<title>Полка<\/title>/);

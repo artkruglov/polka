@@ -15,6 +15,7 @@ import {
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { client, currentShelf } from "../../shared/api/client.ts";
 import {
+  DEFAULT_LINK_DAYS,
   dateLong,
   kindOf,
   moderationNote,
@@ -48,7 +49,7 @@ export function SharePanel({
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [choice, setChoice] = useState<Choice>(active ? "link" : "private"),
-    [days, setDays] = useState(7);
+    [days, setDays] = useState(DEFAULT_LINK_DAYS);
   const url = a.share?.url ?? "";
   // «Скопировано» belongs to this address; a new link starts uncopied.
   const clip = useCopy(url);

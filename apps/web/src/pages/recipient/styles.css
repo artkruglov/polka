@@ -81,11 +81,13 @@
   .recipient-stage[data-kind="text"] { padding: 4px var(--gutter-mobile) 48px; }
   .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
   /* The note wraps as text; the link home follows it in the flow. */
-  .recipient-topbar-row--note { display: block; padding-bottom: 8px; }
+  /* A short note and «Сделано на Полке» share a line; a long one takes the line and the link goes under it, from the left edge. */
+  .recipient-topbar-row--note { flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding-bottom: 8px; }
+  .recipient-note { flex: 0 1 auto; }
   .recipient-note-line { display: inline; }
   .recipient-note-line > svg { display: inline-block; vertical-align: -3px; margin-right: 4px; }
   .recipient-note-more { margin: 0 0 0 2px; vertical-align: -2px; }
-  .recipient-made { display: inline-block; margin: 0 0 0 10px; }
+  .recipient-made { display: inline-block; align-self: baseline; margin: 0; }
   .recipient-note-details { padding-left: 0; }
   /* The comments rail becomes a bottom sheet. */
   .recipient-comments { position: fixed; inset: auto 0 0; z-index: 70; flex: none; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }

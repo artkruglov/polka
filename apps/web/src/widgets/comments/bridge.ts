@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  anchorSchema,
+  parseCommentAnchor,
   type CommentAnchor,
-} from "../../../../../packages/contracts/comments.ts";
+} from "../../../../../packages/contracts/comment-constants.ts";
 
 // The shell's side of the comment overlay protocol (apps/server/
 // comment-overlay.ts). Messages are taken only from the one frame this
@@ -129,13 +129,13 @@ export function useOverlayBridge() {
           const rect = rectOf(data.rect);
           const frameRect = frame.current?.getBoundingClientRect();
           if (!rect || !frameRect) return;
-          const parsed =
-            data.tooLong === true ? null : anchorSchema.safeParse(data.anchor);
-          if (parsed && !parsed.success) return;
+          const tooLong = data.tooLong === true;
+          const anchor = tooLong ? null : parseCommentAnchor(data.anchor);
+          if (!tooLong && !anchor) return;
           setState((current) => ({
             ...current,
             selection: {
-              anchor: parsed ? parsed.data : null,
+              anchor,
               rect: {
                 top: rect.top + frameRect.top,
                 bottom: rect.bottom + frameRect.top,

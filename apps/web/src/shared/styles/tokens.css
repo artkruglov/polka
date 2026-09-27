@@ -1,7 +1,7 @@
 /* Design tokens — the single source for colour, type, spacing, radii, elevation and motion.
    White and cool-gray surfaces, ink text, one cobalt accent, 6–8px controls, 10px thumbnails. */
-@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-Regular.ttf") format("truetype"); font-weight:400; font-style:normal; font-display:swap; }
-@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-SemiBold.ttf") format("truetype"); font-weight:500 800; font-style:normal; font-display:swap; }
+@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:"Polka Sans"; src:url("/fonts/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight:500 800; font-style:normal; font-display:swap; }
 
 :root {
   color-scheme: light;
@@ -18,7 +18,7 @@
   --ink: #0f1420;
   --ink-2: #28354a;
   --muted: #647087;
-  --muted-2: #8a95a8;
+  --muted-2: #687286;       /* AA: 4.84:1 on white, 4.51:1 on --soft */
   --muted-3: #aab3c2;
 
   /* Lines */

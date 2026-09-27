@@ -27,6 +27,11 @@ export function SignIn() {
   const [providers, setProviders] = useState<SignInProvider[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
+    // Opened directly, without an agent's hint: the ordinary sign-in.
+    if (!hint.trim()) {
+      location.replace("/signup");
+      return;
+    }
     Promise.all([
       request<Hint>(`/auth/shelf-hint?${new URLSearchParams({ h: hint })}`),
       loadCapabilities(),

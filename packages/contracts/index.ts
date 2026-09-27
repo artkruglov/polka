@@ -14,6 +14,8 @@ export {
   MAX_LINK_NOTE,
   MAX_LINK_URL,
   savedLinkUrl,
+  SEARCH_MATCH_START,
+  SEARCH_MATCH_END,
 } from "./constants.ts";
 export type { UploadMime, ReportReason } from "./constants.ts";
 import {
@@ -272,9 +274,6 @@ export interface Artifact {
    */
   snippet?: string;
 }
-/** Around a found word in Artifact.snippet; never part of a work's text. */
-export const SEARCH_MATCH_START = "\uE000";
-export const SEARCH_MATCH_END = "\uE001";
 export interface Folder {
   id: string;
   name: string;

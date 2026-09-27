@@ -202,6 +202,43 @@ test("Classifying and viewing a hostile page stays linear in its size", () => {
   }
 });
 
+test("the zod-free comment constants and anchor guard match comments.ts", async () => {
+  const comments = await import("../packages/contracts/comments.ts");
+  const light = await import("../packages/contracts/comment-constants.ts");
+  assert.equal(light.COMMENT_MAX_CHARS, comments.COMMENT_MAX_CHARS);
+  assert.equal(light.ANCHOR_EXACT_MAX, comments.ANCHOR_EXACT_MAX);
+  assert.equal(light.ANCHOR_CONTEXT_CHARS, comments.ANCHOR_CONTEXT_CHARS);
+  assert.deepEqual(light.REACTIONS, comments.REACTIONS);
+  const long = "x".repeat(comments.ANCHOR_CONTEXT_CHARS * 2 + 1);
+  for (const sample of [
+    { exact: "цитата" },
+    { exact: "цитата", prefix: "до ", suffix: " после" },
+    { exact: "a\tb\nc" },
+    { exact: "   " },
+    { exact: "" },
+    { exact: "x".repeat(comments.ANCHOR_EXACT_MAX) },
+    { exact: "x".repeat(comments.ANCHOR_EXACT_MAX + 1) },
+    { exact: "x", prefix: long },
+    { exact: "x", suffix: long },
+    { exact: "x‮" },
+    { exact: "x", prefix: "\u0007" },
+    { exact: "x", extra: 1 },
+    { exact: 1 },
+    { exact: "x", prefix: null },
+    { exact: "x", prefix: undefined },
+    null,
+    "x",
+    ["x"],
+  ]) {
+    const parsed = comments.anchorSchema.safeParse(sample);
+    assert.deepEqual(
+      light.parseCommentAnchor(sample),
+      parsed.success ? parsed.data : null,
+      JSON.stringify(sample),
+    );
+  }
+});
+
 test("zod-free contract constants match the contract module", async () => {
   const contracts = await import("../packages/contracts/index.ts");
   const constants = await import("../packages/contracts/constants.ts");

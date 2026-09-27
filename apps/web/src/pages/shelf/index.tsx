@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import "./styles.css";
 import { Button, Chip, IconButton, Segmented } from "../../shared/ui/controls.tsx";
 import {
@@ -18,13 +18,9 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import { ShelfCard, seriesCounts, type CardAction } from "../../widgets/shelf-card/index.ts";
 import { AgentHero } from "../../features/agent-hero/index.tsx";
-import type { Shelf } from "../../shared/api/client.ts";
+import type { Shelf, ShelfCounts } from "../../shared/api/client.ts";
 import { ROLE_LABEL, atLeast } from "../../entities/shelf/model.ts";
-import {
-  categoryLabel,
-  categoryOf,
-  type Category,
-} from "../../entities/artifact/format.ts";
+import { categoryLabel, type Category } from "../../entities/artifact/format.ts";
 
 export type ShelfSort = "newest" | "oldest" | "title";
 export type { CardAction };
@@ -45,6 +41,15 @@ type Props = {
   setPanel: (panel: "upload" | "folder") => void;
   open: (id: string, panel?: CardAction) => void;
   loadMore: () => void;
+  /** The chosen chip; the server filters by it. */
+  kind: Category | null;
+  setKind: (kind: Category | null) => void;
+  /** Works of each kind over the whole shelf (the first page's counts). */
+  counts: ShelfCounts | null;
+  /** The last request failed: what is shown may be out of date. */
+  stale?: boolean;
+  /** «В корзину» from a card's menu: confirm in place, stay on the shelf. */
+  onTrash?: (artifact: Artifact) => void;
   /** A department shelf (docs/specs/TEAM_SHELVES.md); absent on one's own. */
   team?: Shelf | null;
 };
@@ -68,26 +73,22 @@ export function ShelfPage({
   setPanel,
   open,
   loadMore,
+  kind,
+  setKind,
+  counts,
+  stale = false,
+  onTrash,
   team,
 }: Props) {
   const canSave = !team || atLeast(team.role, "author");
-  const [category, setCategory] = useState<Category | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (focusSearch) searchRef.current?.focus();
   }, [focusSearch]);
-  const counts = useMemo(() => {
-    const result: Record<Category, number> = { pages: 0, documents: 0, images: 0, other: 0 };
-    for (const a of items) result[categoryOf(a.revision)]++;
-    return result;
-  }, [items]);
-  const active = category && counts[category] ? category : null;
-  const visible = useMemo(() => {
-    const list = active ? items.filter((a) => categoryOf(a.revision) === active) : [...items];
-    if (sort === "title") list.sort((x, y) => x.title.localeCompare(y.title, "ru"));
-    else if (sort === "oldest") list.sort((x, y) => x.updatedAt.localeCompare(y.updatedAt));
-    return list;
-  }, [items, active, sort]);
+  // The server sorts, filters and counts the whole shelf (GET /api/artifacts).
+  const active = kind;
+  const visible = items;
+  const showChips = counts ? counts.all > 0 : loading && !query;
   // Works that share a title prefix («Y360 Radar · …») get a small series badge.
   const series = useMemo(() => seriesCounts(items), [items]);
   return (
@@ -162,19 +163,25 @@ export function ShelfPage({
             />
           </div>
         </div>
-        {items.length > 0 && (
+        {showChips && (
           <div className="ui-chips shelf-chips" role="group" aria-label="Тип работы">
-            <Chip pressed={active === null} onClick={() => setCategory(null)} count={items.length}>
+            <Chip pressed={active === null} onClick={() => setKind(null)} count={counts?.all}>
               Все
             </Chip>
-            {categories
-              .filter((c) => counts[c] > 0)
-              .map((c) => (
-                <Chip key={c} pressed={active === c} onClick={() => setCategory(c)} count={counts[c]}>
-                  {categoryLabel[c]}
-                </Chip>
-              ))}
+            {counts &&
+              categories
+                .filter((c) => counts[c] > 0 || active === c)
+                .map((c) => (
+                  <Chip key={c} pressed={active === c} onClick={() => setKind(c)} count={counts[c]}>
+                    {categoryLabel[c]}
+                  </Chip>
+                ))}
           </div>
+        )}
+        {stale && (
+          <p className="shelf-stale" role="status">
+            Нет связи с Полкой: {items.length ? "показаны прежние результаты, они могли устареть" : "результаты не загрузились"}.
+          </p>
         )}
 
         {loading ? (
@@ -187,27 +194,29 @@ export function ShelfPage({
           </div>
         ) : visible.length ? (
           <>
-            <div className={view === "grid" ? "shelf-gallery" : "shelf-list"}>
+            <div
+              className={view === "grid" ? "shelf-gallery" : "shelf-list"}
+              data-stale={stale || undefined}
+            >
               {visible.map((a) => (
-                <ShelfCard key={a.id} a={a} view={view} series={series} open={open} />
+                <ShelfCard key={a.id} a={a} view={view} series={series} open={open} onTrash={onTrash} />
               ))}
             </div>
-            {cursor && !active && sort === "newest" && (
+            {cursor && (
               <div className="shelf-more">
                 <Button busy={loadingMore} onClick={loadMore}>
                   Показать ещё
                 </Button>
               </div>
             )}
-            {cursor && (active || sort !== "newest") && (
-              <p className="shelf-more-note">
-                {active ? "Фильтр" : "Порядок"} действует на загруженные работы.{" "}
-                <button type="button" className="text-button" onClick={loadMore} disabled={loadingMore}>
-                  Загрузить ещё
-                </button>
-              </p>
-            )}
           </>
+        ) : stale ? null : active ? (
+          <div className="shelf-empty">
+            <div className="empty-icon"><FolderIcon /></div>
+            <h2>Таких работ нет</h2>
+            <p>Здесь нет работ этого типа{query ? " по вашему запросу" : ""}.</p>
+            <Button onClick={() => setKind(null)}>Показать все</Button>
+          </div>
         ) : team && !query ? (
           <p className="shelf-empty-quiet" role="note">
             {activeFolder ? "В этой папке пока пусто." : "На полке отдела пока пусто."}{" "}

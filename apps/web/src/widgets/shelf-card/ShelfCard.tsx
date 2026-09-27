@@ -13,15 +13,15 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import {
   SEARCH_MATCH_END,
   SEARCH_MATCH_START,
-  type Artifact,
-} from "../../../../../packages/contracts/index.ts";
+} from "../../../../../packages/contracts/constants.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { accessLabel, date, isLinked } from "../../entities/artifact/format.ts";
 import { CardCover, useCover } from "./CardCover.tsx";
-import { cardKind, sameText, seriesBadge } from "./cover-model.ts";
+import { cardKind, sameText, seriesBadge, snippetBesideTitle } from "./cover-model.ts";
 
 export type CardAction = "share" | "metadata" | "trash";
 
@@ -77,12 +77,15 @@ export function ShelfCard({
   view,
   series,
   open,
+  onTrash,
 }: {
   a: Artifact;
   view: "grid" | "list";
   /** Series shared by at least two loaded works (seriesCounts). */
   series: Map<string, number>;
   open: (id: string, panel?: CardAction) => void;
+  /** «В корзину» confirmed on the shelf itself; without it the work opens with the dialog. */
+  onTrash?: (artifact: Artifact) => void;
 }) {
   const [ref, near] = useNearViewport<HTMLElement>();
   const access = shelfAccess(useTeamShelf(), useAccountState().account?.id);
@@ -117,11 +120,12 @@ export function ShelfCard({
     ...(access.changes(a.author)
       ? ([
           { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
-          { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => open(a.id, "trash") },
+          { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => (onTrash ? onTrash(a) : open(a.id, "trash")) },
         ] satisfies MenuAction[])
       : []),
   ];
   const linked = isLinked(a);
+  const snippet = a.snippet ? snippetBesideTitle(a.snippet, a.title) : null;
   return (
     <article ref={ref} className={`shelf-card${echoed ? " shelf-card--echo" : ""}`}>
       <div className="shelf-cover">
@@ -143,7 +147,7 @@ export function ShelfCard({
             {cardKind(a, cover)} · v{r.number} · {date(a.updatedAt)}
           </span>
         </p>
-        {a.snippet && <SearchSnippet text={a.snippet} />}
+        {snippet && <SearchSnippet text={snippet} />}
       </div>
       <div className="shelf-card-actions">
         <ActionMenu label={`Действия: ${a.title}`} icon={<Ellipsis />} items={items} />
