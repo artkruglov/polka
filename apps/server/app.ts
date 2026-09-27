@@ -189,6 +189,24 @@ const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
 const SHELF = { shelf: true } as const;
 
 
+/** The first frame of a stack below its message: where it was thrown. */
+export function firstStackFrame(error: unknown) {
+  const stack = (error as { stack?: unknown } | null)?.stack;
+  if (typeof stack !== "string") return null;
+  const frame = stack.split("\n").find((line) => /^\s+at /.test(line));
+  return frame ? frame.trim().slice(0, 300) : null;
+}
+
+/**
+ * Not signed in (401) or not allowed (403) reads as anonymous; any other
+ * failure — the database down — is the request's failure, not a guest's.
+ */
+export function anonymous(error: unknown): null {
+  if (error instanceof Problem && (error.status === 401 || error.status === 403))
+    return null;
+  throw error;
+}
+
 export async function createApp() {
   const app = Fastify({
     logger: false,
@@ -243,7 +261,7 @@ export async function createApp() {
       done,
     );
   });
-  app.setErrorHandler((error: any, _req, reply) => {
+  app.setErrorHandler((error: any, req, reply) => {
     if (error instanceof Problem) {
       if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
       return reply
@@ -280,11 +298,18 @@ export async function createApp() {
         code: "invalid",
         message: "Запрос не соответствует поддержанному формату или размеру.",
       });
-    // Intentionally omit request URL, body, credentials and provider diagnostics.
+    // The route pattern (never the URL with its ids or tokens), the request
+    // id, the error's kind and where it was thrown; no body, credentials or
+    // provider diagnostics.
     console.error(
       JSON.stringify({
         event: "request.failed",
         code: typeof error.code === "string" ? error.code : "internal",
+        route: req.routeOptions?.url ?? null,
+        method: req.method,
+        requestId: req.id,
+        error: typeof error?.name === "string" ? error.name : typeof error,
+        at: firstStackFrame(error),
       }),
     );
     return reply.code(500).send({
@@ -678,7 +703,7 @@ export async function createApp() {
       .strict()
       .parse(req.body);
     const link = await previewSignInLink(token, req.ip);
-    const current = await identity(req).catch(() => null);
+    const current = await identity(req).catch(anonymous);
     return { ...link, current: current ? { name: current.name } : null };
   });
   // After the click. A browser already signed in keeps its session unless
@@ -688,7 +713,7 @@ export async function createApp() {
       .object({ token: z.string().max(64), replace: z.boolean().optional() })
       .strict()
       .parse(req.body);
-    const current = await identity(req).catch(() => null);
+    const current = await identity(req).catch(anonymous);
     if (current && !replace)
       throw new Problem(
         409,

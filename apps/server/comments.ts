@@ -18,6 +18,8 @@ import {
   ANCHOR_CONTEXT_CHARS,
   COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR,
   COMMENTS_PER_SHARE_PER_DAY,
+  COMMENTS_SHOWN_PER_SHARE,
+  REACTION_GROUPS_SHOWN_PER_SHARE,
   type CommentAnchor,
   type CommentThread,
   type CommentView,
@@ -62,13 +64,18 @@ type ShareContext = {
     revision_id: string;
     revoked: boolean;
     expires_at: Date;
+    /** expires_at is still ahead by the database's clock. */
+    unexpired: boolean;
+    moderation: string;
+    created_by: string | null;
   };
   /** Who answers for the link: the shelf's owner, else its issuer (letters). */
   ownerId: string;
   /**
    * The shelf's side of the discussion: the owner of a personal shelf; on a
-   * department shelf the link's issuer and the shelf's curators and admins
-   * (docs/specs/TEAM_SHELVES.md, stage 5b). They resolve and write notes.
+   * department shelf its active curators and admins, the link's issuer only
+   * while one of them (docs/specs/TEAM_SHELVES.md, stage 5b). They resolve
+   * and write notes.
    */
   ownerIds: string[];
   title: string;
@@ -228,28 +235,39 @@ async function lockShare(
     ])
   ).rowCount;
   if (editorial) throw missing();
+  return shareContext(share, artifact, await shelfSideOf(c, owner.tenant), owner);
+}
+
+/**
+ * The shelf's side of its links' discussions: the owner of a personal
+ * shelf; on a department shelf its active curators and admins. A link's
+ * issuer counts only while they hold one of those roles: one removed from
+ * the shelf (or made an author) no longer resolves or writes notes there.
+ */
+async function shelfSideOf(c: Queryable, tenantId: string) {
   const {
     rows: [shelf],
-  } = await c.query("SELECT kind,owner_id FROM tenants WHERE id=$1", [owner.tenant]);
-  const ownerIds =
-    shelf.kind === "team"
-      ? [
-          ...new Set([
-            ...(share.created_by ? [share.created_by as string] : []),
-            ...(
-              await c.query(
-                `SELECT account_id FROM tenant_members
-                 WHERE tenant_id=$1 AND state='active' AND role IN ('curator','admin')`,
-                [owner.tenant],
-              )
-            ).rows.map((row) => row.account_id as string),
-          ]),
-        ]
-      : [shelf.owner_id as string];
+  } = await c.query("SELECT kind,owner_id FROM tenants WHERE id=$1", [tenantId]);
+  if (shelf.kind !== "team")
+    return { owner: shelf.owner_id as string, ids: [shelf.owner_id as string] };
+  const { rows } = await c.query(
+    `SELECT account_id FROM tenant_members
+     WHERE tenant_id=$1 AND state='active' AND role IN ('curator','admin')`,
+    [tenantId],
+  );
+  return { owner: null, ids: rows.map((row) => row.account_id as string) };
+}
+
+function shareContext(
+  share: ShareContext["share"],
+  artifact: { title: string | null; trashed_at: Date | null },
+  side: { owner: string | null; ids: string[] },
+  actor: { id: string },
+): ShareContext {
   return {
     share,
-    ownerId: shelf.kind === "team" ? (share.created_by ?? owner.id) : shelf.owner_id,
-    ownerIds,
+    ownerId: side.owner ?? share.created_by ?? actor.id,
+    ownerIds: side.ids,
     title: artifact.title ?? "Работа",
     open:
       !share.revoked &&
@@ -278,44 +296,84 @@ async function lockWriter(c: PoolClient, viewer: Viewer) {
 /** Hidden: authors disabled by the operator or deleting their account. */
 const VISIBLE_AUTHOR = "NOT author.disabled AND author.deletion_requested_at IS NULL";
 
-async function discussion(
+/**
+ * The discussions of links of one shelf, in one pass: their comments (the
+ * newest COMMENTS_SHOWN_PER_SHARE of each, shown oldest first) and reaction
+ * groups, loaded for all of them at once and grouped here.
+ */
+async function discussions(
   c: Queryable,
-  context: ShareContext,
+  contexts: ShareContext[],
+  ownerIds: string[],
   viewerId: string | null,
   isOwner: boolean,
-): Promise<ShareDiscussion> {
-  const { share } = context;
+): Promise<ShareDiscussion[]> {
+  if (!contexts.length) return [];
   const mode = commentsMode();
-  const {
-    rows: [current],
-  } = await c.query("SELECT number FROM revisions WHERE id=$1", [
-    share.revision_id,
-  ]);
+  const ids = contexts.map((context) => context.share.id);
+  const tenantId = contexts[0]!.share.tenant_id;
+  const numbers = new Map(
+    (
+      await c.query("SELECT id,number FROM revisions WHERE id=ANY($1::uuid[])", [
+        [...new Set(contexts.map((context) => context.share.revision_id))],
+      ])
+    ).rows.map((row) => [row.id as string, row.number as number]),
+  );
   // owner-notes: what recipients wrote stays in the table, unseen by anyone
-  // (switching back to `on` shows it again).
+  // (switching back to `on` shows it again). One row more than is shown
+  // tells that a link has more.
   const { rows } = await c.query(
-    `SELECT comment.*,revision.number AS revision_number,
-       COALESCE(author.display_name,author.name) AS author_name
-     FROM comments comment
-     JOIN accounts author ON author.id=comment.author_account_id
-     JOIN revisions revision ON revision.id=comment.revision_id
-     WHERE comment.share_id=$1 AND comment.tenant_id=$2
-       AND ${VISIBLE_AUTHOR}
-       AND comment.blocked_at IS NULL
-       AND (comment.held_at IS NULL OR comment.author_account_id=$4::uuid
-            OR ($3::boolean AND NOT comment.shadow))
-       AND ($5::boolean OR comment.author_account_id=ANY($6::uuid[]))
-     ORDER BY comment.created_at,comment.id
-     LIMIT 5000`,
+    `SELECT shown.* FROM unnest($1::uuid[]) AS link(id)
+     CROSS JOIN LATERAL (
+       SELECT comment.*,revision.number AS revision_number,
+         COALESCE(author.display_name,author.name) AS author_name
+       FROM comments comment
+       JOIN accounts author ON author.id=comment.author_account_id
+       JOIN revisions revision ON revision.id=comment.revision_id
+       WHERE comment.share_id=link.id AND comment.tenant_id=$2
+         AND ${VISIBLE_AUTHOR}
+         AND comment.blocked_at IS NULL
+         AND (comment.held_at IS NULL OR comment.author_account_id=$4::uuid
+              OR ($3::boolean AND NOT comment.shadow))
+         AND ($5::boolean OR comment.author_account_id=ANY($6::uuid[]))
+       ORDER BY comment.created_at DESC,comment.id DESC
+       LIMIT $7) shown`,
     [
-      share.id,
-      share.tenant_id,
+      ids,
+      tenantId,
       isOwner,
       viewerId,
       mode === "on",
-      context.ownerIds,
+      ownerIds,
+      COMMENTS_SHOWN_PER_SHARE + 1,
     ],
   );
+  // Reactions exist only in `on`; in other modes they are kept, not shown.
+  const reactions =
+    mode !== "on"
+      ? []
+      : (
+          await c.query(
+            `SELECT link.id AS share_id,shown.* FROM unnest($1::uuid[]) AS link(id)
+             CROSS JOIN LATERAL (
+               SELECT reaction.anchor_sig,reaction.emoji,
+                 (array_agg(reaction.anchor ORDER BY reaction.created_at))[1] AS anchor,
+                 count(*)::int AS count,
+                 bool_or(reaction.author_account_id=$3::uuid) AS mine
+               FROM comment_reactions reaction
+               JOIN accounts author ON author.id=reaction.author_account_id
+               WHERE reaction.share_id=link.id AND reaction.tenant_id=$2
+                 AND ${VISIBLE_AUTHOR}
+               GROUP BY reaction.anchor_sig,reaction.emoji
+               ORDER BY min(reaction.created_at),reaction.anchor_sig,reaction.emoji
+               LIMIT $4) shown`,
+            [ids, tenantId, viewerId, REACTION_GROUPS_SHOWN_PER_SHARE + 1],
+          )
+        ).rows;
+  const commentsOf = new Map<string, any[]>(ids.map((id) => [id, []]));
+  for (const row of rows) commentsOf.get(row.share_id)?.push(row);
+  const reactionsOf = new Map<string, any[]>(ids.map((id) => [id, []]));
+  for (const row of reactions) reactionsOf.get(row.share_id)?.push(row);
   const view = (row: any): CommentView => {
     const deleted = !!row.deleted_at;
     const mine = viewerId !== null && row.author_account_id === viewerId;
@@ -326,7 +384,7 @@ async function discussion(
         ? null
         : {
             name: row.author_name,
-            owner: context.ownerIds.includes(row.author_account_id),
+            owner: ownerIds.includes(row.author_account_id),
             me: mine,
           },
       body: deleted ? "" : row.body,
@@ -345,54 +403,53 @@ async function discussion(
         !deleted && !row.parent_id && (isOwner || (mine && mode === "on")),
     };
   };
-  const roots = new Map<string, CommentThread>();
-  for (const row of rows)
-    if (!row.parent_id) roots.set(row.id, { ...view(row), replies: [] });
-  for (const row of rows) {
-    if (!row.parent_id || row.deleted_at) continue;
-    roots.get(row.parent_id)?.replies.push(view(row));
-  }
-  // A deleted root stays as a placeholder only while it has replies.
-  const threads = [...roots.values()].filter(
-    (thread) => !thread.deleted || thread.replies.length,
-  );
-  // Reactions exist only in `on`; in other modes they are kept, not shown.
-  const reactions =
-    mode !== "on"
-      ? { rows: [] as any[] }
-      : await c.query(
-    `SELECT reaction.anchor_sig,reaction.emoji,
-       (array_agg(reaction.anchor ORDER BY reaction.created_at))[1] AS anchor,
-       count(*)::int AS count,
-       bool_or(reaction.author_account_id=$3::uuid) AS mine
-     FROM comment_reactions reaction
-     JOIN accounts author ON author.id=reaction.author_account_id
-     WHERE reaction.share_id=$1 AND reaction.tenant_id=$2 AND ${VISIBLE_AUTHOR}
-     GROUP BY reaction.anchor_sig,reaction.emoji
-     ORDER BY min(reaction.created_at)`,
-    [share.id, share.tenant_id, viewerId],
-  );
-  return {
-    mode,
-    shareId: share.id,
-    revisionId: share.revision_id,
-    revisionNumber: current?.number ?? 0,
-    state: share.revoked
-      ? "revoked"
-      : new Date(share.expires_at).getTime() <= Date.now()
-        ? "expired"
-        : "active",
-    threads,
-    reactions: reactions.rows.map(
-      (row): ReactionGroup => ({
-        sig: row.anchor_sig,
-        anchor: row.anchor ?? null,
-        emoji: row.emoji,
-        count: row.count,
-        mine: !!row.mine,
-      }),
-    ),
-  };
+  return contexts.map(({ share }): ShareDiscussion => {
+    const newest = commentsOf.get(share.id)!;
+    const groups = reactionsOf.get(share.id)!;
+    const truncated =
+      newest.length > COMMENTS_SHOWN_PER_SHARE ||
+      groups.length > REACTION_GROUPS_SHOWN_PER_SHARE;
+    const shown = newest.slice(0, COMMENTS_SHOWN_PER_SHARE).reverse();
+    const roots = new Map<string, CommentThread>();
+    for (const row of shown)
+      if (!row.parent_id) roots.set(row.id, { ...view(row), replies: [] });
+    for (const row of shown) {
+      if (!row.parent_id || row.deleted_at) continue;
+      roots.get(row.parent_id)?.replies.push(view(row));
+    }
+    // A deleted root stays as a placeholder only while it has replies.
+    const threads = [...roots.values()].filter(
+      (thread) => !thread.deleted || thread.replies.length,
+    );
+    return {
+      mode,
+      shareId: share.id,
+      revisionId: share.revision_id,
+      revisionNumber: numbers.get(share.revision_id) ?? 0,
+      state: share.revoked ? "revoked" : share.unexpired ? "active" : "expired",
+      threads,
+      reactions: groups.slice(0, REACTION_GROUPS_SHOWN_PER_SHARE).map(
+        (row): ReactionGroup => ({
+          sig: row.anchor_sig,
+          anchor: row.anchor ?? null,
+          emoji: row.emoji,
+          count: row.count,
+          mine: !!row.mine,
+        }),
+      ),
+      truncated,
+    };
+  });
+}
+
+/** One link's discussion (a recipient's view). */
+async function discussion(
+  c: Queryable,
+  context: ShareContext,
+  viewerId: string | null,
+  isOwner: boolean,
+) {
+  return (await discussions(c, [context], context.ownerIds, viewerId, isOwner))[0]!;
 }
 
 /** A recipient's view of the link's threads; signed in or not. */
@@ -426,7 +483,7 @@ export async function workCommentsInTransaction(
   artifactId: string,
 ): Promise<WorkComments> {
   // Any member reads a department shelf's discussions (TEAM_SHELVES.md, 5b);
-  // its curators and admins (and a link's issuer) answer them.
+  // its active curators and admins answer them.
   const { role } = await lockShelf(c, owner, "reader", "SHARE");
   const shelfSide = role === "owner" || role === "admin" || role === "curator";
   await assertArtifactInAgentScope(c, owner, artifactId);
@@ -451,23 +508,37 @@ export async function workCommentsInTransaction(
         ...(await viewerSettings(c, owner.id)),
       },
     };
+  // The links, locked together once (the shelf and the work are locked
+  // above); then every discussion in one pass.
   const shares = (
     await c.query(
-      `SELECT share.id FROM shares share
+      `SELECT share.id,share.tenant_id,share.artifact_id,share.revision_id,
+         share.revoked,share.expires_at,share.moderation,share.created_by,
+         share.expires_at>now() AS unexpired
+       FROM shares share
        WHERE share.artifact_id=$1 AND share.tenant_id=$2
          AND NOT EXISTS(SELECT 1 FROM editorial_publications publication
                         WHERE publication.share_id=share.id)
          AND (EXISTS(SELECT 1 FROM comments comment WHERE comment.share_id=share.id)
            OR EXISTS(SELECT 1 FROM comment_reactions reaction WHERE reaction.share_id=share.id)
            OR (NOT share.revoked AND share.expires_at>now()))
-       ORDER BY share.created_at DESC,share.id DESC LIMIT 50`,
+       ORDER BY share.created_at DESC,share.id DESC LIMIT 50
+       FOR SHARE OF share`,
       [artifactId, owner.tenant],
     )
-  ).rows;
-  const result: ShareDiscussion[] = [];
-  for (const { id } of shares) {
-    const context = await lockShare(c, owner, artifactId, id, true);
-    result.push(await discussion(c, context, owner.id, context.ownerIds.includes(owner.id)));
+  ).rows as ShareContext["share"][];
+  let result: ShareDiscussion[] = [];
+  if (shares.length) {
+    // The shelf and the account that answers for its links are active.
+    if (!(await lockAnsweringAccount(c, owner, "SHARE"))) throw missing();
+    const side = await shelfSideOf(c, owner.tenant);
+    result = await discussions(
+      c,
+      shares.map((share) => shareContext(share, artifact, side, owner)),
+      side.ids,
+      owner.id,
+      side.ids.includes(owner.id),
+    );
   }
   const {
     rows: [unread],

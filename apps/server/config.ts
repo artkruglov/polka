@@ -47,6 +47,9 @@ const env = z
     // «tls internal»); unset: the system's public roots.
     RENDERER_CA: unsetIfEmpty(z.string().max(16384)),
     DATABASE_URL: z.string().url(),
+    // Connections of the app's pool (db.ts). An upload holds one for the
+    // whole S3 PUT (see db.ts), so this bounds concurrent uploads too.
+    DATABASE_POOL_MAX: z.coerce.number().int().min(2).max(200).default(20),
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(16),

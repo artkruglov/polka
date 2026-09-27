@@ -163,6 +163,19 @@ export function builderEnv() {
 }
 
 /**
+ * What the build worker said: it asks for the runtime slot
+ * ({type:"runtime"}) or answers ({type:"result", result}). Anything else is
+ * not an answer.
+ */
+export function workerMessageKind(message: unknown): "runtime" | "result" | "invalid" {
+  if (!message || typeof message !== "object") return "invalid";
+  const { type, result } = message as { type?: unknown; result?: unknown };
+  if (type === "runtime") return "runtime";
+  if (type === "result" && result !== null && typeof result === "object") return "result";
+  return "invalid";
+}
+
+/**
  * Runs one build in a fresh worker under the heap limits and the build
  * deadline. The worker asks for the runtime slot itself (it classifies the
  * page); the slot is held until the worker ends.
@@ -200,14 +213,18 @@ async function runBuilder(
       () => void settle(() => reject(new BuildWorkerError("timeout"))),
       DERIVATIVE_BUILD_TIMEOUT_MS,
     );
-    worker.on("message", (message: { type: string; result?: WorkerResult }) => {
+    worker.on("message", (message: unknown) => {
       if (settled) return;
-      if (message?.type === "runtime") {
+      const kind = workerMessageKind(message);
+      if (kind === "runtime") {
         runtimeSlot = acquireRuntimeSlot();
         worker.postMessage(runtimeSlot);
         return;
       }
-      void settle(() => resolve(message.result!));
+      // Anything but a result is a broken worker, never a build to store.
+      if (kind === "invalid")
+        return void settle(() => reject(new BuildWorkerError("crash")));
+      void settle(() => resolve((message as { result: WorkerResult }).result));
     });
     worker.once("error", (error: Error & { code?: string }) => {
       void settle(() =>

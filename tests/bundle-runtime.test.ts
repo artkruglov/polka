@@ -14,7 +14,7 @@ import {
   REACT_RUNTIME_PROFILE,
 } from "../apps/server/bundle-runtime-contract.ts";
 import { componentShell } from "../packages/contracts/runtime.ts";
-import { builderEnv } from "../apps/server/bundle-derivatives.ts";
+import { builderEnv, workerMessageKind } from "../apps/server/bundle-derivatives.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
@@ -1007,4 +1007,12 @@ test("a limited single upload links statically until its interactive version is 
   );
   assert.equal(ownerView.statusCode, 200, ownerView.body);
   assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
+});
+
+test("only a {type:'result'} message from the build worker is taken as its answer", () => {
+  assert.equal(workerMessageKind({ type: "runtime" }), "runtime");
+  assert.equal(workerMessageKind({ type: "result", result: { ok: false } }), "result");
+  // Anything else used to resolve the build with `undefined`.
+  for (const message of [null, "result", {}, { type: "progress" }, { type: "result" }, { result: { ok: true } }])
+    assert.equal(workerMessageKind(message), "invalid", JSON.stringify(message));
 });

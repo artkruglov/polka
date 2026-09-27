@@ -11,12 +11,19 @@ import {
   COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR,
   COMMENT_MAIL_PER_ADDRESS_PER_DAY,
   COMMENTS_PER_SHARE_PER_DAY,
+  COMMENTS_SHOWN_PER_SHARE,
+  REACTION_GROUPS_SHOWN_PER_SHARE,
 } from "../packages/contracts/comments.ts";
+import pg from "pg";
 import { createApp } from "../apps/server/app.ts";
 import { commentSignals } from "../apps/server/comments.ts";
-import { defang, excerpt } from "../apps/server/comment-mail.ts";
+import {
+  defang,
+  excerpt,
+  setCommentMailTransport,
+} from "../apps/server/comment-mail.ts";
 import { config } from "../apps/server/config.ts";
-import { db } from "../apps/server/db.ts";
+import { db, settled } from "../apps/server/db.ts";
 import {
   LOCAL_COMMENT_MAIL_DIRECTORY,
   LOCAL_OPERATOR_MAIL_DIRECTORY,
@@ -38,7 +45,7 @@ const operatorEmail = config.OPERATOR_EMAIL;
 config.OPERATOR_EMAIL = "operator-comments@example.test";
 
 after(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await settled();
   config.OPERATOR_EMAIL = operatorEmail;
   await app.close();
   await db.end();
@@ -943,4 +950,117 @@ test("letters defang addresses and cut long text", () => {
   assert.equal(defang("см. https://a.example/x и www.b.ru"), "см. https[:]//a[.]example/x и www[.]b[.]ru");
   assert.equal(defang("3.14 — это число"), "3.14 — это число");
   assert.equal([...excerpt("я".repeat(400))].length, 300);
+});
+
+test("one refused address does not keep the other letters of a reply from leaving", async () => {
+  const owner = await person("owner");
+  const alice = await person("alice");
+  const bob = await person("bob");
+  const carol = await person("carol");
+  const work = await link(owner);
+  const root = (await write(work.token, alice.cookie, { body: "Корень", anchor })).json().id;
+  assert.equal((await write(work.token, bob.cookie, { body: "Я тоже тут", parentId: root })).statusCode, 200);
+  await settled();
+  const sent: string[] = [];
+  const errors: string[] = [];
+  const logged = console.error;
+  console.error = (line: unknown) => void errors.push(String(line));
+  setCommentMailTransport(async (mail) => {
+    // The owner's address is refused; the thread's people still hear.
+    if (mail.to === owner.email)
+      throw Object.assign(new Error("550 mailbox unavailable"), { code: "EENVELOPE" });
+    sent.push(mail.to);
+    return true;
+  });
+  try {
+    const reply = await write(work.token, carol.cookie, { body: "Ответ Кэрол", parentId: root });
+    assert.equal(reply.statusCode, 200, reply.body);
+    await settled();
+  } finally {
+    setCommentMailTransport(undefined);
+    console.error = logged;
+  }
+  assert.deepEqual(sent.sort(), [alice.email, bob.email].sort());
+  const failure = errors
+    .map((line) => JSON.parse(line))
+    .find((entry) => entry.event === "comment.mail_failed");
+  assert.deepEqual(
+    { sent: failure?.sent, failed: failure?.failed, code: failure?.code },
+    { sent: 2, failed: 1, code: "EENVELOPE" },
+  );
+});
+
+test("the owner's page loads every link's discussion in a fixed number of queries", async () => {
+  const owner = await person("owner");
+  const reader = await person("reader");
+  const work = await link(owner);
+  let shareId = work.shareId;
+  let token = work.token;
+  for (let i = 0; i < 8; i++) {
+    assert.equal((await write(token, reader.cookie, { body: `Комментарий ${i}` })).statusCode, 200);
+    assert.equal((await react(token, reader.cookie, { anchor, emoji: "👍" })).statusCode, 200);
+    // A revoked link keeps its discussion on the owner's page.
+    assert.equal((await call("POST", `/api/shares/${shareId}/revoke`, {}, owner.cookie)).statusCode, 200);
+    const next = await call(
+      "POST",
+      `/api/artifacts/${work.artifactId}/share`,
+      { expectedRevisionId: work.revisionId, expiresInDays: 7 },
+      owner.cookie,
+    );
+    assert.equal(next.statusCode, 200, next.body);
+    shareId = next.json().share.id;
+    token = new URL(next.json().share.url).hash.slice(1);
+  }
+  await settled();
+  const query = pg.Client.prototype.query;
+  let queries = 0;
+  pg.Client.prototype.query = function (this: pg.Client, ...args: unknown[]) {
+    queries++;
+    return (query as (...rest: unknown[]) => unknown).apply(this, args);
+  } as typeof query;
+  let page;
+  try {
+    page = await call("GET", `/api/artifacts/${work.artifactId}/comments`, undefined, owner.cookie);
+  } finally {
+    pg.Client.prototype.query = query;
+  }
+  assert.equal(page.statusCode, 200, page.body);
+  const shares = page.json().shares;
+  assert.equal(shares.length, 9);
+  assert.equal(shares.filter((share: any) => share.threads.length === 1).length, 8);
+  assert.equal(shares.filter((share: any) => share.reactions.length === 1).length, 8);
+  assert.ok(shares.every((share: any) => share.truncated === false));
+  // Nine links used to cost nine rounds of locks and reads (about ten each).
+  assert.ok(queries < 30, `${queries} queries`);
+});
+
+test("a link with more comments than are shown returns the newest and says so", async () => {
+  const owner = await person("owner");
+  const reader = await person("reader");
+  const work = await link(owner);
+  // Written straight into the table: the daily limit keeps real writers far below it.
+  await db.query(
+    `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,body,created_at)
+     SELECT gen_random_uuid(),$1,$2,$3,$4,$5,'Комментарий '||i,
+       now()-interval '1 day'+i*interval '1 second'
+     FROM generate_series(1,$6::int) AS i`,
+    [owner.tenant, work.artifactId, work.shareId, work.revisionId, reader.id, COMMENTS_SHOWN_PER_SHARE + 1],
+  );
+  await db.query(
+    `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,anchor,emoji)
+     SELECT gen_random_uuid(),$1,$2,$3,$4,$5,md5(i::text)||md5(i::text),
+       jsonb_build_object('exact','x'||i),U&'\\+01F44D'
+     FROM generate_series(1,$6::int) AS i`,
+    [owner.tenant, work.artifactId, work.shareId, work.revisionId, reader.id, REACTION_GROUPS_SHOWN_PER_SHARE + 1],
+  );
+  const seen = (await list(work.token, reader.cookie)).json();
+  assert.equal(seen.truncated, true);
+  assert.equal(seen.threads.length, COMMENTS_SHOWN_PER_SHARE);
+  // The oldest one is left out; the rest are in order, oldest first.
+  assert.equal(seen.threads[0].body, "Комментарий 2");
+  assert.equal(seen.threads.at(-1).body, `Комментарий ${COMMENTS_SHOWN_PER_SHARE + 1}`);
+  assert.equal(seen.reactions.length, REACTION_GROUPS_SHOWN_PER_SHARE);
+  const page = (await call("GET", `/api/artifacts/${work.artifactId}/comments`, undefined, owner.cookie)).json();
+  assert.equal(page.shares[0].truncated, true);
+  assert.equal(page.shares[0].threads.length, COMMENTS_SHOWN_PER_SHARE);
 });
