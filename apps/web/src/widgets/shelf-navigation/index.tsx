@@ -46,7 +46,7 @@ export function ShelfNavigation({
           }}
         >
           <FolderIcon />
-          <span>{f.name}</span>
+          <span title={f.name}>{f.name}</span>
         </a>
       ))}
       {!folders.length && (

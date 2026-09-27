@@ -7,6 +7,10 @@ import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
+import {
+  CONNECT_AGENT_LEAD,
+  CONNECT_AGENT_TITLE,
+} from "../../entities/onboarding/agent-setup.ts";
 
 type Capture = "file" | "paste";
 
@@ -31,12 +35,9 @@ export function Bring() {
       <main className="bring-main" id="main">
         <header className="bring-heading">
           <h1 id="bring-title">Сохранить работу</h1>
-          <p>
-            Проще всего — подключить агента один раз: дальше он сохраняет
-            работы сам, а вы просто просите «сохрани на Полку».
-          </p>
+          <p>{CONNECT_AGENT_LEAD}</p>
         </header>
-        <ConnectAgent title="Подключите агента: скопируйте ему эту фразу" className="bring-agent" />
+        <ConnectAgent title={CONNECT_AGENT_TITLE} className="bring-agent" />
         <h2 className="bring-manual">Или сохраните вручную</h2>
         <div className="bring-capture">
           <Tabs

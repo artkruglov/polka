@@ -17,6 +17,7 @@ import {
 } from "../../entities/onboarding/steps.ts";
 import { clientHints, connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
 import {
+  CONNECT_AGENT_TITLE,
   harvestClient,
   readStoredClient,
   storeClient,
@@ -111,7 +112,7 @@ export function FirstRunSteps({
             {model.complete
               ? "Готово: агент, работа, ссылка"
               : fromShare
-                ? "Подключите агента — и он будет сохранять работы сам"
+                ? CONNECT_AGENT_TITLE
                 : "Три шага до первой ссылки"}
           </h2>
         </div>

@@ -8,6 +8,11 @@ import { NotFoundContent as NotFound } from "../apps/web/src/pages/not-found/con
 import { ClaimChoice } from "../apps/web/src/pages/claim/index.tsx";
 import { snippetBesideTitle } from "../apps/web/src/widgets/shelf-card/cover-model.ts";
 import { DeleteShelf } from "../apps/web/src/pages/agents/delete-shelf.tsx";
+import { AgentHeroView } from "../apps/web/src/features/agent-hero/index.tsx";
+import {
+  clientHints,
+  isLoopbackOrigin,
+} from "../apps/web/src/entities/onboarding/connect-phrase.ts";
 import { categoryOf } from "../apps/web/src/entities/artifact/format.ts";
 import { APP_PAGES, isAppPage, isMachinePath } from "../packages/contracts/app-routes.ts";
 import { SEARCH_MATCH_END as E, SEARCH_MATCH_START as S } from "../packages/contracts/constants.ts";
@@ -77,6 +82,31 @@ test("the settings say how to delete the shelf, with the configured address", ()
   assert.match(bare, /Напишите оператору этой установки/);
   assert.doesNotMatch(bare, /mailto:/);
   assert.ok(isAppPage("/settings"));
+});
+
+test("an installation on 127.0.0.1 offers only the paths that reach it", () => {
+  assert.ok(isLoopbackOrigin("http://127.0.0.1:4713"));
+  assert.ok(isLoopbackOrigin("http://localhost:4390"));
+  assert.ok(!isLoopbackOrigin("https://polochka.app"));
+  assert.deepEqual(
+    clientHints("http://127.0.0.1:4713").map((hint) => hint.id),
+    ["codex", "claude-code"],
+  );
+  assert.equal(clientHints("https://polochka.app").length, 4);
+  const props = {
+    connections: { status: "ready" as const, active: [] },
+    hidden: false,
+    client: "claude-ai" as const,
+    onClient: noop,
+    onHide: noop,
+    onShow: noop,
+    onUpload: noop,
+  };
+  const local = render(React.createElement(AgentHeroView, { ...props, origin: "http://127.0.0.1:4713" }));
+  assert.doesNotMatch(local, /Add custom connector|>Claude<\/button>/);
+  assert.match(local, /claude plugin install polka@polka/);
+  const hosted = render(React.createElement(AgentHeroView, { ...props, origin: "https://polochka.app" }));
+  assert.match(hosted, /Add custom connector/);
 });
 
 test("one upload has one kind: every HTML page is a page", () => {

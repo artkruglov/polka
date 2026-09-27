@@ -7,6 +7,10 @@ import {
   type ClientSetup,
   type SetupCopy,
 } from "../../entities/onboarding/agent-setup.ts";
+import {
+  isLoopbackOrigin,
+  reachableFrom,
+} from "../../entities/onboarding/connect-phrase.ts";
 
 /** «Где вы работаете с ИИ?»: the five places, one pressed. */
 export function ClientCards({
@@ -16,9 +20,19 @@ export function ClientCards({
   selected: AgentClientId | null;
   onChoose: (id: AgentClientId) => void;
 }) {
+  const reachable = reachableFrom(location.origin);
   return (
+    <>
+    {isLoopbackOrigin(location.origin) && (
+      <p className="agent-setup-intro" role="note">
+        Эта Полка работает на вашем компьютере ({location.host}): claude.ai и
+        ChatGPT подключаются со своих серверов и до неё не достанут.
+        Подключите Claude Code или Codex на этом компьютере, а для скриптов —
+        токен в разделе «Для разработчиков».
+      </p>
+    )}
     <div className="agent-client-cards" role="group" aria-label="Где вы работаете с ИИ">
-      {agentClients.map((item) => (
+      {agentClients.filter((item) => reachable(item.id)).map((item) => (
         <button
           key={item.id}
           type="button"
@@ -31,6 +45,7 @@ export function ClientCards({
         </button>
       ))}
     </div>
+    </>
   );
 }
 
@@ -99,7 +114,9 @@ export function CopyBlock({ copy }: { copy: SetupCopy }) {
  * you work with AI, get the steps. The same steps as on the agents page.
  */
 export function ConnectGuide({ initial = "claude-ai" }: { initial?: AgentClientId }) {
-  const [selected, setSelected] = useState<AgentClientId>(initial);
+  const [selected, setSelected] = useState<AgentClientId>(() =>
+    reachableFrom(location.origin)(initial) ? initial : "claude-code",
+  );
   return (
     <>
       <ClientCards selected={selected} onChoose={setSelected} />

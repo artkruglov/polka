@@ -317,7 +317,8 @@ test("first-run steps for an account that came from a share: the phrase leads, �
     React.createElement(FirstRunSteps, { ...props, arrival: "share" }),
   );
   assert.match(html, /data-arrival="share"/);
-  assert.match(html, /Подключите агента — и он будет сохранять работы сам/);
+  // The same heading as the shelf's hero and /bring.
+  assert.match(html, /Подключите агента — он сам сохранит работу на полку/);
   const phraseAt = html.indexOf(`Подключи Полку: ${origin}/connect`);
   const uploadAt = html.indexOf("Загрузить файл");
   assert.ok(phraseAt > 0 && uploadAt > phraseAt, `${phraseAt} ${uploadAt}`);

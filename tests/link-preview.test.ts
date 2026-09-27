@@ -164,7 +164,8 @@ test("public pages may be indexed; shared works, shelves and the API stay noinde
     assert.equal(response.headers["x-robots-tag"], undefined, url);
     assert.doesNotMatch(response.body, /<meta name="robots"/, url);
   }
-  for (const url of ["/s", "/signup", "/api/session", `/works/${randomUUID()}`]) {
+  // The bookmarklet and the extension's receiver still work, unlisted.
+  for (const url of ["/s", "/signup", "/api/session", `/works/${randomUUID()}`, "/bookmarklet", "/bring/receive"]) {
     const response = await call("GET", url);
     assert.equal(response.headers["x-robots-tag"], "noindex, nofollow, noarchive", url);
     if (String(response.headers["content-type"]).startsWith("text/html"))

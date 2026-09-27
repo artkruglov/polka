@@ -55,8 +55,8 @@ export function BringReceive() {
     body = (
       <div className="receive-idle">
         <p>
-          Сюда закладка «На Полку» передаёт артефакт со страницы Claude, ChatGPT
-          или другого AI-чата. Откройте артефакт в чате и нажмите закладку на
+          Сюда закладка «На Полку» передаёт работу со страницы Claude, ChatGPT
+          или другого AI-чата. Откройте работу в чате и нажмите закладку на
           панели закладок — эта страница откроется сама и покажет, что пришло.
         </p>
         <div className="bring-actions">
@@ -73,7 +73,7 @@ export function BringReceive() {
       <main className="bring-main receive-main" id="main">
         <header className="bring-heading">
           <h1>На Полку</h1>
-          <p>Артефакт со страницы чата — на вашу полку</p>
+          <p>Работа со страницы чата — на вашу полку</p>
         </header>
         {body}
       </main>

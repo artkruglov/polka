@@ -167,7 +167,7 @@ test("the link card: service badge, title, host, «Открыть» to the origi
   assert.match(card, /href="https:\/\/claude\.ai\/artifact\/F49sUXozTkEFzFawwHGSxo" target="_blank" rel="noopener noreferrer nofollow"/);
   assert.match(card, /Открыть/);
   assert.match(card, /если автор включил доступ по ссылке/);
-  assert.match(recipientAccessNote("claude.ai", "claude"), /Получатель откроет артефакт Claude, если автор включил доступ по ссылке/);
+  assert.match(recipientAccessNote("claude.ai", "claude"), /Получатель откроет страницу из Claude, если автор включил доступ по ссылке/);
   assert.match(recipientAccessNote("example.org", null), /Получатель откроет оригинал на example\.org/);
   const cover = renderToStaticMarkup(React.createElement(LinkCover, { title: "Отчёт", host: "example.org", service: null }));
   assert.match(cover, /Отчёт/);
