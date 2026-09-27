@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import {
   CreateBucketCommand,
   PutBucketVersioningCommand,
@@ -22,6 +23,20 @@ import {
 import { createS3Store } from "../packages/storage/s3.ts";
 import { runMigrations } from "./migration-runner.ts";
 import { SCHEMA_MIGRATIONS, migrationFileUrl } from "../packages/migrations.ts";
+
+// The live viewer listens on TEST_VIEWER_PORT, or on a port that is free now,
+// so a running `npm run dev` (viewer on 4391) or a parallel run does not clash.
+const viewerPort = async () => {
+  if (process.env.TEST_VIEWER_PORT) return process.env.TEST_VIEWER_PORT;
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "localhost", resolve);
+  });
+  const { port } = server.address() as { port: number };
+  await new Promise((resolve) => server.close(resolve));
+  return String(port);
+};
 
 // Configuration locates local infrastructure only; neither configured DB nor bucket
 // is a test target. Children receive random resources created by this process.
@@ -160,11 +175,11 @@ try {
             HTML_LIVE_MODE: batch.liveLibraryViewer ? "local" : "disabled",
             HTML_LIVE_ENABLED: batch.liveLibraryViewer ? "true" : "false",
             ...(batch.liveLibraryViewer
-              ? {
-                  VIEWER_ORIGIN: "http://localhost:4391",
+              ? await viewerPort().then((port) => ({
+                  VIEWER_ORIGIN: `http://localhost:${port}`,
                   VIEWER_HOST: "localhost",
-                  VIEWER_PORT: "4391",
-                }
+                  VIEWER_PORT: port,
+                }))
               : {}),
           },
         },
