@@ -357,7 +357,9 @@ async function main() {
   }
   const token = process.env.POLKA_TOKEN;
   if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
-  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? pulled?.endpoint ?? (DEFAULT_ENDPOINT || undefined);
+  // The token goes only to an address the operator chose; .polka.json is a file
+  // in the folder and can come from anyone, so it is checked, never trusted.
+  const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
   if (pulled?.endpoint && pulled.endpoint !== endpoint.replace(/\/$/, ""))
     throw new CliError(`This folder was pulled from ${pulled.endpoint}, not ${endpoint}. Pass --new to save it there as a new project.`, 2);
