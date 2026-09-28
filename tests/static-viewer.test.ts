@@ -359,6 +359,18 @@ test("recipient static view comes from the viewer and dies with its link", async
   assert.equal((await embedded(pathOf(again.json().url))).statusCode, 404);
 });
 
+test("a static view stops opening when its link is paused or held by moderation", async () => {
+  for (const moderation of ["paused", "held"]) {
+    const saved = await save(PAGE);
+    const link = await share(saved);
+    const issued = await recipientStaticView(link.grant);
+    assert.equal(issued.statusCode, 200, issued.body);
+    assert.equal((await embedded(pathOf(issued.json().url))).statusCode, 200);
+    await db.query("UPDATE shares SET moderation=$2 WHERE id=$1", [link.share.id, moderation]);
+    assert.equal((await embedded(pathOf(issued.json().url))).statusCode, 404, moderation);
+  }
+});
+
 test("a link bound to an interactive version gets no static view", async () => {
   const saved = await save(
     '<!doctype html><h1>Counter</h1><p>A small scripted page with enough readable text to be shown statically before it runs.</p><button id=b>0</button><script>b.onclick=()=>b.textContent="1"</script>',

@@ -783,3 +783,28 @@ test("confirmed deletion atomically closes access while preserving source data f
     if (racingResolve) await racingResolve.catch(() => undefined);
   }
 });
+
+test("self-service deletion waits while moderation holds a blocked page as evidence", async () => {
+  const held = await createAccount(`delete-c-${randomBytes(5).toString("hex")}`, password);
+  const cookie = await login(held);
+  const saved = await saveSingle(cookie, "Held evidence");
+  const blockId = randomUUID();
+  await db.query(
+    `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,isolated)
+     VALUES($1,$2,$3,$4,$5,'other',false)`,
+    [blockId, held.tenant, saved.artifactId, saved.revisionId, sha256(saved.bytes)],
+  );
+  const csrf = (await call("POST", "/api/account/deletion-csrf", {}, cookie)).json().csrfToken as string;
+  const refused = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
+  assert.equal(refused.statusCode, 409, refused.body);
+  assert.match(refused.body, /модерация хранит/);
+  assert.equal(
+    (await db.query("SELECT 1 FROM account_deletions WHERE account_id=$1", [held.id])).rowCount,
+    0,
+  );
+
+  // Released, the same request goes through.
+  await db.query("UPDATE moderation_blocks SET released_at=now() WHERE id=$1", [blockId]);
+  const planned = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
+  assert.equal(planned.statusCode, 200, planned.body);
+});

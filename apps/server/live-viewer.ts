@@ -159,7 +159,7 @@ export async function issueRecipientLiveView(
            AND ${linkShelfOpenSql("tenant")}
          LEFT JOIN revision_derivatives d ON d.id=g.derivative_id AND d.revision_id=g.revision_id
          WHERE g.hash=$2 AND g.expires_at>now()
-           AND NOT s.revoked AND s.expires_at>now() AND r.mime='text/html'
+           AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none' AND r.mime='text/html'
            AND NOT account.disabled AND account.deletion_requested_at IS NULL
            AND (r.storage_kind IN ('single','bundle') AND d.state='ready'
                AND d.source_manifest_sha256=r.manifest_sha256
@@ -231,7 +231,7 @@ async function authorizedRevision(token: string) {
                AND g.share_id=vg.share_id AND g.revision_id=vg.revision_id
                AND g.derivative_id IS NOT DISTINCT FROM vg.derivative_id
                AND g.expires_at>now()
-               AND NOT s.revoked AND s.expires_at>now()
+               AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'
                AND NOT account.disabled AND account.deletion_requested_at IS NULL
            )
          )

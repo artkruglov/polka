@@ -1,4 +1,4 @@
-import { assertArtifactInAgentScope } from "./agent-scope.ts";
+import { agentFolderScope, assertArtifactInAgentScope, inScopeSql } from "./agent-scope.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -236,6 +236,8 @@ export async function listTemplates(
   c: PoolClient,
   actor: Actor,
   input: unknown = {},
+  /** An agent's folders (agent-scope.ts); null: the whole shelf. */
+  folderScope: string[] | null = null,
 ) {
   const q = templateCatalogInput.parse(input);
   const pattern = `%${q.query.replace(/[\\%_]/g, "\\$&")}%`;
@@ -284,11 +286,11 @@ export async function listTemplates(
         row_number() OVER (PARTITION BY t.artifact_id ORDER BY r.number DESC) AS rank
       FROM template_releases t JOIN artifacts a ON a.id=t.artifact_id
       JOIN revisions r ON r.id=t.revision_id
-      WHERE a.tenant_id=$1 AND a.trashed_at IS NULL
+      WHERE a.tenant_id=$1 AND a.trashed_at IS NULL AND ${inScopeSql("a", "$4")}
     ) SELECT "releaseId","artifactId","revisionId",title,summary,"revisionNumber",mime,rank=1 AS "isLatest"
       FROM releases WHERE ($2 OR rank=1) AND (title ILIKE $3 OR summary ILIKE $3)
       ORDER BY created_at DESC,"releaseId" LIMIT 101`,
-      [actor.tenant, q.includePrevious, pattern],
+      [actor.tenant, q.includePrevious, pattern, folderScope],
     )
   ).rows;
   return {
@@ -301,8 +303,18 @@ export const templatesForAgent = (actor: ServiceActor, input: unknown = {}) => {
   const run = q.libraryId
     ? withFreshServiceActorTransaction
     : withServiceActorTransaction;
-  return run(actor, "source:read", (c, a) =>
-    listTemplates(c, { id: a.accountId, tenant: a.tenantId }, q),
+  return run(actor, "source:read", async (c, a) =>
+    listTemplates(
+      c,
+      { id: a.accountId, tenant: a.tenantId },
+      q,
+      // Titles and summaries outside the agent's folders are not for it either.
+      await agentFolderScope(c, {
+        id: a.accountId,
+        tenant: a.tenantId,
+        connectionId: a.connectionId,
+      }),
+    ),
   );
 };
 export async function publishTemplate(

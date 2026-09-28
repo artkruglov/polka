@@ -1372,3 +1372,23 @@ test("manually issued bearer tokens keep working on /mcp", async () => {
   assert.equal(asRefresh.json().error, "invalid_grant");
   assert.equal((await initialize(bearer)).status, 200);
 });
+
+test("a stranger cannot spend a public client's token budget for its other users", async () => {
+  const { client_id } = await publicClient();
+  const from = (remoteAddress: string) =>
+    app.inject({
+      method: "POST",
+      url: "/oauth/token",
+      remoteAddress,
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: form({ grant_type: "refresh_token", refresh_token: randomBytes(32).toString("base64url"), client_id }),
+    });
+  const stranger = address();
+  let last = await from(stranger);
+  for (let i = 0; i < 300 && last.statusCode !== 429; i++) last = await from(stranger);
+  assert.equal(last.statusCode, 429, "the stranger's own address is limited");
+  // Another address of the same client still gets an answer about its token.
+  const user = await from(address());
+  assert.equal(user.statusCode, 400, user.body);
+  assert.equal(user.json().error, "invalid_grant");
+});

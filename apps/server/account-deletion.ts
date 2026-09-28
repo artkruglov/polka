@@ -145,6 +145,26 @@ export async function issueAccountDeletionCsrf(
   return { csrfToken, expiresAt: new Date(row.expires_at).toISOString() };
 }
 
+/**
+ * Moderation keeps a blocked page or comment as evidence until it is released
+ * or purged; deleting the shelf would destroy it (the operator's erasure
+ * refuses for the same reason, account-erase.ts).
+ */
+async function refuseWhileEvidenceIsHeld(c: PoolClient, tenantId: string) {
+  const {
+    rows: [held],
+  } = await c.query(
+    "SELECT 1 AS held FROM moderation_blocks WHERE tenant_id=$1 AND released_at IS NULL AND purged_at IS NULL LIMIT 1",
+    [tenantId],
+  );
+  if (held)
+    throw new Problem(
+      409,
+      "conflict",
+      "На полке есть содержимое, которое модерация хранит для проверки. Удаление станет доступно после неё; если срок затягивается, напишите в поддержку.",
+    );
+}
+
 export async function createAccountDeletionPlan(
   actor: Actor,
   sessionToken: string,
@@ -156,6 +176,7 @@ export async function createAccountDeletionPlan(
     const { tenant, account } = await lockTenantAccount(c, actor);
     if (account.disabled || account.deletion_requested_at) throw missing();
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
+    await refuseWhileEvidenceIsHeld(c, actor.tenant);
     const old = (
       await c.query(
         "SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE",
@@ -248,6 +269,7 @@ export async function confirmAccountDeletion(
     )
       throw new Problem(409, "conflict", "План удаления истёк.");
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
+    await refuseWhileEvidenceIsHeld(c, actor.tenant);
 
     await c.query(
       "SELECT id FROM agent_connections WHERE tenant_id=$1 ORDER BY id FOR UPDATE",

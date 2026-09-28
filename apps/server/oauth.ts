@@ -1063,14 +1063,16 @@ export async function tokenRequest(
   ip: string,
 ) {
   // Platforms exchange codes from shared addresses: only failed client
-  // authentication counts per address; a known client has its own cap.
+  // authentication counts per address alone. A known client is capped per
+  // address too: a public client is known to everyone, so a cap on the client
+  // alone would let a stranger spend it for every user of that client.
   const client = await authenticateClient(params, authorization).catch(
     async (error) => {
       await limitAttempts(`oauth-token:ip:${ip}`, 300);
       throw error;
     },
   );
-  await limitAttempts(`oauth-token:client:${client.client_id}`, 300);
+  await limitAttempts(`oauth-token:client:${client.client_id}:${ip}`, 300);
   if (params.grant_type === "authorization_code")
     return exchangeCode(client, params);
   if (params.grant_type === "refresh_token") return refresh(client, params);

@@ -135,6 +135,23 @@ test("an agent limited to a folder saves there, sees only it and does not manage
   assert.deepEqual(all.value.items.map((item: any) => item.title).sort(), ["Личное", "Отчёт"]);
 });
 
+test("a limited agent lists templates of its folders only", async () => {
+  const inside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "Шаблон отчёта", html: page("Шаблон отчёта"), folderId: reports });
+  const outside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "Личный шаблон", html: page("Личный шаблон"), folderId: other });
+  for (const saved of [inside, outside]) {
+    assert.equal(saved.error, false, JSON.stringify(saved.value));
+    await db.query(
+      "INSERT INTO template_releases(id,artifact_id,revision_id,title,summary,rules,questions) SELECT $1,$2,latest_revision_id,title,'Сводка','[]'::jsonb,'[]'::jsonb FROM artifacts WHERE id=$2",
+      [randomUUID(), saved.value.artifactId],
+    );
+  }
+  const limitedList = await mcp(limited.secret, "polka_list_templates", {});
+  assert.equal(limitedList.error, false, JSON.stringify(limitedList.value));
+  assert.deepEqual(limitedList.value.items.map((item: any) => item.title), ["Шаблон отчёта"]);
+  const wholeList = await mcp(whole.secret, "polka_list_templates", {});
+  assert.deepEqual(wholeList.value.items.map((item: any) => item.title).sort(), ["Личный шаблон", "Шаблон отчёта"]);
+});
+
 test("a limited agent's retried upload with a source address is the same upload, not a conflict", async () => {
   const { beginUpload, sameUploadRequest } = await import("../apps/server/artifacts.ts");
   const bytes = Buffer.from(page("Источник"));
