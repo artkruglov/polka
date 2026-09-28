@@ -23,7 +23,8 @@ import {
 } from "../../packages/contracts/bundle.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
-import { copyVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { bucket, copyVersion, putImmutable, readBlob, s3, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
@@ -500,6 +501,46 @@ function checkedUpload(u: any, actor: Actor) {
     );
   return u;
 }
+/**
+ * The PUT of a staged version lands before the transaction that records it,
+ * so the upload may have been closed meanwhile, and the cleanup that
+ * reconciles a closed upload, like the purge of an erased shelf, may already
+ * have listed its prefix. This looks again once the version is stored: the
+ * cleanup holds the shelf and the upload row while it lists and deletes, so
+ * either it lists after this PUT and deletes the version, or this sees the
+ * upload closed and deletes it here. Nothing is left under a prefix nobody
+ * looks at again.
+ */
+export async function discardStagedIfClosed(
+  actor: Actor,
+  id: string,
+  key: string,
+  version: string | null,
+) {
+  if (!version) return version;
+  const {
+    rows: [state],
+  } = await db.query(
+    `SELECT upload.aborted, upload.reconciled_at IS NOT NULL AS reconciled,
+            (upload.receipt IS NULL AND upload.expires_at<=now()) AS expired,
+            owner.deletion_requested_at IS NOT NULL AS erasing
+     FROM uploads upload
+       JOIN tenants tenant ON tenant.id=upload.tenant_id
+       LEFT JOIN accounts owner ON owner.id=tenant.owner_id
+     WHERE upload.id=$1 AND upload.tenant_id=$2
+     FOR SHARE OF upload`,
+    [id, actor.tenant],
+  );
+  if (state && !state.aborted && !state.reconciled && !state.expired && !state.erasing)
+    return version;
+  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
+  throw new Problem(
+    410,
+    "expired",
+    "Загрузка отменена или истекла. Выберите файл снова.",
+  );
+}
+
 export async function uploadBytes(actor: Actor, id: string, bytes: Buffer) {
   const staged = await stageUploadBytes(actor, id, bytes);
   return transaction((c) => uploadBytesInTransaction(c, actor, id, bytes, staged));
@@ -508,16 +549,18 @@ export async function uploadBytes(actor: Actor, id: string, bytes: Buffer) {
  * The S3 PUT of an upload's bytes, before the transaction that records it,
  * so a slow object store holds neither the shelf lock nor a pooled
  * connection. Null when there is nothing to store (already saved). A version
- * that is then not recorded (the upload was aborted or the record failed)
- * stays under the upload's prefix, which the maintenance reconciliation
- * deletes once the upload expires (scripts/maintenance-cleanup.ts).
+ * that is then not recorded (the record failed) stays under the upload's
+ * prefix, which the maintenance reconciliation deletes once the upload
+ * expires (scripts/maintenance-cleanup.ts); one stored after the upload was
+ * closed is deleted at once (discardStagedIfClosed).
  */
 export async function stageUploadBytes(actor: Actor, id: string, bytes: Buffer) {
   const u = await readUpload(actor, id);
   if (u.kind !== "single") throw missing();
   await validateBytes(bytes, beginUploadSchema.parse(u.request));
   if (u.receipt) return null;
-  return putImmutable(`${actor.tenant}/${id}`, bytes);
+  const key = `${actor.tenant}/${id}`;
+  return discardStagedIfClosed(actor, id, key, await putImmutable(key, bytes));
 }
 /**
  * Records the bytes under the shelf lock. `staged` is the version
@@ -1103,7 +1146,8 @@ export async function stageBundleFile(
     [id, index],
   );
   if (sent.rowCount) return null;
-  return putImmutable(bundleFileKey(actor.tenant, id, input.manifest, index), bytes);
+  const key = bundleFileKey(actor.tenant, id, input.manifest, index);
+  return discardStagedIfClosed(actor, id, key, await putImmutable(key, bytes));
 }
 /**
  * A bundle file copied from a saved version of this shelf inside the store
@@ -1135,10 +1179,12 @@ export async function stageBundleFileCopy(
       "expired",
       "Файл этой версии заблокирован модератором Полки; на её основе новую версию не сохранить.",
     );
-  return copyVersion(
-    from.objectKey,
-    from.objectVersion,
-    bundleFileKey(actor.tenant, id, input.manifest, index),
+  const key = bundleFileKey(actor.tenant, id, input.manifest, index);
+  return discardStagedIfClosed(
+    actor,
+    id,
+    key,
+    await copyVersion(from.objectKey, from.objectVersion, key),
   );
 }
 /**

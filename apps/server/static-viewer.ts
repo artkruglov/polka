@@ -178,7 +178,7 @@ async function authorizedStaticRevision(token: string) {
                AND g.share_id=vg.share_id AND g.revision_id=vg.revision_id
                AND g.derivative_id IS NULL AND s.artifact_id=r.artifact_id
                AND g.expires_at>now()
-               AND NOT s.revoked AND s.expires_at>now()
+               AND NOT s.revoked AND s.expires_at>now() AND s.moderation='none'
                AND NOT account.disabled AND account.deletion_requested_at IS NULL
            )
          )

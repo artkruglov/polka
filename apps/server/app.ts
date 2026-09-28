@@ -1032,9 +1032,12 @@ export async function createApp() {
     beginUpload(await identity(req, SHELF), req.body),
   );
   // «Сохранить как ссылку» (docs/specs/SAVED_LINKS.md).
-  app.post("/api/links", { bodyLimit: 8192 }, async (req) =>
-    saveLink(await identity(req, SHELF), req.body),
-  );
+  app.post("/api/links", { bodyLimit: 8192 }, async (req) => {
+    const actor = await identity(req, SHELF);
+    // Each save may fetch the page's title from the site it names.
+    await limitAttempts(`save-link:${actor.id}`, 60);
+    return saveLink(actor, req.body);
+  });
   // The owner's «Открыть ↗» on a link work: the address is read from its file
   // and the browser is sent there, without a referrer.
   app.get("/api/revisions/:id/open", async (req, reply) => {
