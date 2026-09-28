@@ -26,3 +26,12 @@ GRANT CONNECT ON DATABASE polka TO polka_purge;
 ALTER ROLE polka_purge SET search_path = pg_catalog, public;
 SQL
 fi
+# The restore reconciler (restore-reconcile in compose.yml), when configured.
+if [ -n "${POLKA_RESTORE_PASSWORD:-}" ]; then
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+    --set=restore_password="$POLKA_RESTORE_PASSWORD" <<'SQL'
+CREATE ROLE polka_restore LOGIN PASSWORD :'restore_password';
+GRANT CONNECT ON DATABASE polka TO polka_restore;
+ALTER ROLE polka_restore SET search_path = pg_catalog, public;
+SQL
+fi
