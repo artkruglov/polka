@@ -477,7 +477,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
   Прошлый результат хранится в `~/.polka-uptime-state.json` (другой путь — `UPTIME_STATE_FILE`). В сообщениях только имена проверок, без ответов сервера.
 
-Запускайте с машины **вне** VM, иначе падение VM никто не заметит. Пример для cron раз в 5 минут (переменные — в файле с правами `600`):
+Запускайте с машины **вне** VM, иначе падение VM никто не заметит. В Yandex Cloud вместо машины подойдёт функция с таймером — [deploy/uptime-function](../uptime-function/README.md). Пример для cron раз в 5 минут (переменные — в файле с правами `600`):
 
 ```sh
 # /home/ops/polka-uptime.env:

@@ -1,0 +1,10 @@
+{
+  "name": "polka-uptime-function",
+  "private": true,
+  "type": "module",
+  "description": "scripts/ci/uptime.mjs on a timer in Yandex Cloud Functions, alerts by mail",
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1131.0",
+    "nodemailer": "10.0.10"
+  }
+}
