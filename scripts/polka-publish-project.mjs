@@ -42,6 +42,51 @@ const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".git", ".venv", "venv
 const SKIP_FILE = /^\.|\.pyc$/;
 // A path segment Полка accepts (packages/contracts/bundle.ts).
 const SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
+
+/** The address as an origin, so a trailing slash or letter case is not a difference. */
+function originOf(address) {
+  try {
+    return new URL(address).origin;
+  } catch {
+    return String(address);
+  }
+}
+
+/** The token travels over https, or to this machine while developing. */
+function assertHttps(address) {
+  let url;
+  try {
+    url = new URL(address);
+  } catch {
+    throw new CliError("The endpoint must be a URL such as https://polka.example.com.", 2);
+  }
+  if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+    throw new CliError("The endpoint must use https.", 2);
+}
+
+/** .polka.json is a file in the folder, so anyone may have written it: only its shape is trusted, never its words. */
+function pulledState(text) {
+  if (text === null) return null;
+  let state;
+  try {
+    state = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (
+    !state || typeof state !== "object" ||
+    !UUID.test(state.artifactId) || !UUID.test(state.revisionId) ||
+    typeof state.endpoint !== "string"
+  )
+    return null;
+  return {
+    ...state,
+    title: String(state.title ?? "").replace(CONTROL, " ").slice(0, 120),
+    runtime: typeof state.runtime === "string" ? state.runtime : null,
+  };
+}
 const ENTRY_ORDER = ["README.md", "index.md", "index.html"];
 // React source: a project shows files as they are and does not build it, so
 // a lone component goes to Полка as a component, which it builds.
@@ -227,6 +272,7 @@ async function publishComponent(values, file, skipped) {
   if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
   const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
+  assertHttps(endpoint);
   if (!!values.artifact !== !!values["base-revision"])
     throw new CliError("A new version needs both --artifact and --base-revision.", 2);
   const key = values.key ?? randomUUID();
@@ -284,9 +330,7 @@ async function main() {
   if (!info?.isDirectory()) throw new CliError(`${root} is not a folder`, 2);
   // A folder from polka-pull.mjs: its next version, unless told otherwise.
   const statePath = join(root, ".polka.json");
-  const pulled = values.artifact || values.new
-    ? null
-    : await readFile(statePath, "utf8").then(JSON.parse, () => null);
+  const pulled = values.artifact || values.new ? null : pulledState(await readFile(statePath, "utf8").catch(() => null));
   if (pulled) {
     if (pulled.runtime !== "project-v1")
       throw new CliError(
@@ -301,6 +345,11 @@ async function main() {
     ? files.some((file) => file.path === values.entry)
     : ENTRY_ORDER.some((name) => files.some((file) => file.path === name));
   const wanted = values.entry && components.find((file) => file.path === values.entry);
+  if (pulled && (wanted || (!hasEntry && components.length === 1)))
+    throw new CliError(
+      "This folder was pulled as a project and now has no page to open, only a React component. Add an index.html, or pass --new to save the component as a new work.",
+      2,
+    );
   if (wanted || (!hasEntry && components.length === 1))
     return publishComponent(values, wanted || components[0], skipped);
   if (!hasEntry && components.length > 1)
@@ -361,7 +410,8 @@ async function main() {
   // in the folder and can come from anyone, so it is checked, never trusted.
   const endpoint = values.endpoint ?? process.env.POLKA_ENDPOINT ?? (DEFAULT_ENDPOINT || undefined);
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
-  if (pulled?.endpoint && pulled.endpoint !== endpoint.replace(/\/$/, ""))
+  assertHttps(endpoint);
+  if (pulled?.endpoint && originOf(pulled.endpoint) !== originOf(endpoint))
     throw new CliError(`This folder was pulled from ${pulled.endpoint}, not ${endpoint}. Pass --new to save it there as a new project.`, 2);
   const manifest = {
     version: 1,

@@ -171,7 +171,9 @@ export function useOverlayBridge() {
         next.every(
           (anchor, index) =>
             anchor.id === anchors.current[index]!.id &&
-            anchor.exact === anchors.current[index]!.exact,
+            anchor.exact === anchors.current[index]!.exact &&
+            anchor.prefix === anchors.current[index]!.prefix &&
+            anchor.suffix === anchors.current[index]!.suffix,
         );
       anchors.current = next;
       if (!same) post({ type: "polka:anchors", anchors: next });
