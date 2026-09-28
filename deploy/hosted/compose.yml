@@ -198,6 +198,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?}
       POLKA_SCHEMA_PASSWORD: ${POLKA_SCHEMA_PASSWORD:?}
       POLKA_RUNTIME_PASSWORD: ${POLKA_RUNTIME_PASSWORD:?}
+      POLKA_PURGE_PASSWORD: ${POLKA_PURGE_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
@@ -232,9 +233,19 @@ services:
       PGDATABASE: polka
       PGUSER: polka_schema
       PGPASSWORD: ${POLKA_SCHEMA_PASSWORD:?}
-    volumes: ["../runtime-grants.sql:/grants/runtime-grants.sql:ro"]
-    command: ["psql", "-X", "--set=ON_ERROR_STOP=1", "--set=schema_owner=polka_schema",
-              "--set=runtime_role=polka_runtime", "--file=/grants/runtime-grants.sql"]
+    volumes:
+      - "../runtime-grants.sql:/grants/runtime-grants.sql:ro"
+      - "../purge-worker-grants.sql:/grants/purge-worker-grants.sql:ro"
+    # The purge worker's role (account-erase below) gets its exact functions
+    # when it exists; an installation without it is unchanged.
+    command:
+      - sh
+      - -ec
+      - |
+        psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema --set=runtime_role=polka_runtime --file=/grants/runtime-grants.sql
+        if [ "$$(psql -XAtc "SELECT 1 FROM pg_roles WHERE rolname='polka_purge'")" = 1 ]; then
+          psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema --set=worker_role=polka_purge --file=/grants/purge-worker-grants.sql
+        fi
     networks: [polka]
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -343,6 +354,31 @@ services:
   # through the egress proxy inside the container, which refuses private,
   # link-local (169.254.169.254) and docker addresses; see
   # deploy/renderer/README.md. About 1–1.5 GB RAM while a page renders.
+  # The operator erases an account on request (README.md, «Удаление аккаунта»):
+  #   docker compose --env-file hosted.env run --rm account-erase --account <login> --dry-run
+  # Not started by `up`. Needs the polka_purge role and the erasure ledger.
+  account-erase:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    profiles: ["ops"]
+    network_mode: host
+    environment:
+      <<: *runtime-env
+      S3_REGION: ${S3_REGION:-us-east-1}
+      MAINTENANCE_DATABASE_URL: postgres://polka_purge:${POLKA_PURGE_PASSWORD:-}@127.0.0.1:5432/polka
+      ERASURE_LEDGER_ID: ${ERASURE_LEDGER_ID:-}
+      ERASURE_LEDGER_ENDPOINT: ${ERASURE_LEDGER_ENDPOINT:-}
+      ERASURE_LEDGER_REGION: ${ERASURE_LEDGER_REGION:-us-east-1}
+      ERASURE_LEDGER_BUCKET: ${ERASURE_LEDGER_BUCKET:-}
+      ERASURE_LEDGER_ACCESS_KEY: ${ERASURE_LEDGER_ACCESS_KEY:-}
+      ERASURE_LEDGER_SECRET_KEY: ${ERASURE_LEDGER_SECRET_KEY:-}
+      # What docs/legal/privacy.md promises: 30 days for data, 30 for backups.
+      ACCOUNT_DELETION_POLICY_VERSION: ${ACCOUNT_DELETION_POLICY_VERSION:-}
+      ACCOUNT_PURGE_MAX_HOURS: ${ACCOUNT_PURGE_MAX_HOURS:-720}
+      BACKUP_RETENTION_MAX_DAYS: ${BACKUP_RETENTION_MAX_DAYS:-30}
+    entrypoint: ["node", "--import", "tsx", "scripts/account-erase.ts"]
+    restart: "no"
+
   renderer:
     profiles: ["renderer"]
     build:

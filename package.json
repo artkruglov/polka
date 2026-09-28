@@ -30,6 +30,7 @@
     "company:admin": "tsx --env-file=.env scripts/company-admin.ts",
     "account:email": "tsx --env-file=.env scripts/account-email.ts",
     "account:merge": "tsx --env-file=.env scripts/account-merge.ts",
+    "account:erase": "tsx --env-file=.env scripts/account-erase.ts",
     "moderation:reports": "tsx --env-file=.env scripts/moderation.ts reports",
     "moderation:revoke-share": "tsx --env-file=.env scripts/moderation.ts revoke-share",
     "moderation:disable": "tsx --env-file=.env scripts/moderation.ts disable",
