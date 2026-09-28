@@ -199,6 +199,7 @@ services:
       POLKA_SCHEMA_PASSWORD: ${POLKA_SCHEMA_PASSWORD:?}
       POLKA_RUNTIME_PASSWORD: ${POLKA_RUNTIME_PASSWORD:?}
       POLKA_PURGE_PASSWORD: ${POLKA_PURGE_PASSWORD:-}
+      POLKA_RESTORE_PASSWORD: ${POLKA_RESTORE_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
@@ -415,7 +416,7 @@ services:
       RESTORE_RUN_ID: ${RESTORE_RUN_ID:-}
       RESTORE_BACKUP_SHA256: ${RESTORE_BACKUP_SHA256:-}
       RESTORE_LEDGER_MANIFEST_SHA256: ${RESTORE_LEDGER_MANIFEST_SHA256:-}
-      RESTORE_BACKUP_DESCRIPTOR: /restore-input/backup.json
+      RESTORE_BACKUP_DESCRIPTOR: /restore-input/${RESTORE_DESCRIPTOR:-backup.json}
       RESTORE_RECEIPT_PATH: /restore-receipt/${RESTORE_RUN_ID:-none}.json
       ERASURE_LEDGER_ID: ${ERASURE_LEDGER_ID:-}
       ERASURE_LEDGER_ENDPOINT: ${ERASURE_LEDGER_ENDPOINT:-}

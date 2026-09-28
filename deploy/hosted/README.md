@@ -191,10 +191,25 @@ SQL
 docker compose --env-file hosted.env exec -T postgres \
   pg_restore --no-owner --exit-on-error -U polka_schema -d polka < polka.dump
 
-# 4. Миграции, grants и запуск
+# 4. Миграции и grants, приложение пока не запускать
+docker compose --env-file hosted.env run --rm migrate
+docker compose --env-file hosted.env run --rm grants
+
+# 5. Журнал стираний: аккаунты, удалённые после момента дампа, стираются снова
+sudo install -d -o 1000 -g 1000 /opt/polka/restore/input /opt/polka/restore/receipts
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose --env-file hosted.env run --rm restore-authorities \
+  --descriptor /restore-input/backup-$STAMP.json --source polka-<UTC>.dump
+#   печатает RESTORE_RUN_ID, RESTORE_BACKUP_SHA256, RESTORE_LEDGER_MANIFEST_SHA256
+RESTORE_DESCRIPTOR=backup-$STAMP.json RESTORE_RUN_ID=… RESTORE_BACKUP_SHA256=… RESTORE_LEDGER_MANIFEST_SHA256=… \
+  docker compose --env-file hosted.env run --rm restore-reconcile --confirm-closed-target
+
+# 6. Запуск
 docker compose --env-file hosted.env up -d
 rm polka.dump
 ```
+
+Шаг 5 обязателен, если после момента дампа кого-то удаляли (`account-erase`): иначе удалённые аккаунты вернутся. `restore-reconcile` читает журнал стираний ключом только на чтение, для каждой заявки в нём находит аккаунт в восстановленной базе и снова стирает его строки и объекты полки. Затем пишет квитанцию в `/opt/polka/restore/receipts`. Он откажет, если журнал изменился после `restore-authorities`, если база не закрыта (работают `app`, `maintenance` или `backup`) или миграции не совпадают с релизом. Для него нужны роль `polka_restore` и ключ журнала только на чтение (раздел «Удаление аккаунта»).
 
 Не используйте `pg_restore --clean`: в существующей БД он оставляет таблицы более новой миграции, а в пустой падает на каждом DROP отсутствующего объекта, и настоящие ошибки теряются среди сотен ложных. Поэтому БД пересоздаётся с правами из `init-roles.sh`, а `pg_restore` идёт без `--clean`. Шаг `grants` при `up` заново выдаёт права `polka_runtime`. Так восстановлен настоящий hosted-дамп схемы 028 (все таблицы и 28 миграций). 28.09.2026 процедура отрепетирована на отдельной VM с дампом polochka.app (схема 48, 69 работ): дамп восстановился без ошибок, миграции дошли до 049, все 172 объекта версий нашлись в бакете с совпадающими SHA-256, приложение поднялось на восстановленной базе и отдало файлы работы по API. От пустой VM до работающего приложения — 13 минут, из них сборка образа и скачивание — около 5. Всё, что изменилось после момента дампа (новые работы, ссылки, сессии, токены агентов), теряется; объекты этих работ остаются в `S3_BUCKET` без ссылок на них.
 
@@ -311,9 +326,10 @@ docker compose --env-file hosted.env run --rm account-erase --account <id> --res
   SQL
   docker compose --env-file hosted.env up -d   # шаг grants выдаст ей точные функции
   ```
+- **Для восстановления** — роль `polka_restore` (как `polka_purge`, с паролем `POLKA_RESTORE_PASSWORD`; шаг grants выдаёт ей функции восстановления) и второй ключ журнала только на чтение: `ERASURE_LEDGER_READER_ACCESS_KEY`, `ERASURE_LEDGER_READER_SECRET_KEY` (сервисный аккаунт с ACL чтения и политикой, разрешающей ему только `s3:GetObject`, `s3:GetObjectVersion`, `s3:ListBucket`, `s3:ListBucketVersions`).
 - **`hosted.env`**: `POLKA_PURGE_PASSWORD`, `ERASURE_LEDGER_ID` (любой UUID, один на установку), `ERASURE_LEDGER_ENDPOINT`, `ERASURE_LEDGER_BUCKET`, `ERASURE_LEDGER_ACCESS_KEY`, `ERASURE_LEDGER_SECRET_KEY`, `ACCOUNT_DELETION_POLICY_VERSION` (редакция Политики), `ACCOUNT_PURGE_MAX_HOURS` (720) и `BACKUP_RETENTION_MAX_DAYS` (30) — сроки, которые обещает Политика.
 
-**После восстановления из дампа** аккаунты, удалённые позже момента дампа, вернутся. Пока восстановление не применяет журнал само (`deploy/RESTORE.md`), запустите `account-erase --account <id> --proof <тот же номер>` для каждого из них: список — в журнале модерации (`moderation.ts events`, действие `account.erasure_requested`) и в журнале стираний.
+**После восстановления из дампа** аккаунты, удалённые позже момента дампа, стираются снова по журналу стираний: шаг 5 раздела «Восстановление из дампа».
 
 ## Комментарии
 
