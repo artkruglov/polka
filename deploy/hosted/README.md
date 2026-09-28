@@ -278,6 +278,43 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/accou
 
 Адрес почты источника переезжает, только если у основной полки почты нет; иначе он стирается вместе с источником, и вход по коду на него откроет новую полку. Скрипт об этом пишет. Локально: `npm run account:merge -- --from … --into … --proof … --dry-run`.
 
+## Удаление аккаунта
+
+Кнопки «Удалить аккаунт» пока нет: удаление — по обращению владельца ([Политика](../../docs/legal/privacy.md), § 7), командой оператора `account-erase`. Она пользуется тем же конвейером, что будущая кнопка:
+
+1. **Заявка** закрывает аккаунт сразу: вход, сессии, агенты и их ключи продления, ссылки и гранты просмотра, незавершённые загрузки. Публикации в «Ленте» снимаются. В журнал модерации пишется `account.erasure_requested` с номером обращения.
+2. **Очистка** (`scripts/account-purge.ts`, отдельная роль БД `polka_purge`): запись об отзыве во внешний журнал стираний, удаление всех версий объектов полки из `S3_BUCKET` (оригиналы, файлы пакетов, собранные страницы, недогруженное), проверка, что под префиксом полки ничего не осталось, стирание метаданных одной защищённой функцией (`terminal_erase_account_metadata`: работы, версии, ссылки, обсуждения, агенты, почта, имя, пароль, привязки входа, участие в библиотеках и полках отделов), итоговая запись в журнал. Остаётся обезличенная запись о заявке.
+
+Откажет, если на полке есть заблокированное содержимое (его хранит модерация как доказательство) или аккаунт — единственный администратор полки отдела, где есть другие участники.
+
+```sh
+cd /opt/polka/deploy/hosted
+docker compose --env-file hosted.env run --rm account-erase --account <логин|почта|id> --dry-run
+docker compose --env-file hosted.env run --rm account-erase --account <логин|почта|id> --proof "обращение №1042" --reason "просьба владельца"
+# если прервалось (сеть, таймаут): доступ уже закрыт, очистка продолжится
+docker compose --env-file hosted.env run --rm account-erase --account <id> --resume
+```
+
+Пробный прогон ничего не меняет и печатает, сколько работ, версий, ссылок и агентов уйдёт. Обычно всё занимает меньше минуты; за проход обработчик удаляет до 100 версий объектов и повторяет, пока не закончит (`--minutes`, по умолчанию 15).
+
+**Настройка один раз.**
+
+- **Журнал стираний** — отдельный бакет с версионированием, не тот, куда пишет приложение или бэкап: из него восстановление узнаёт, какие аккаунты удалить снова после возврата к старому дампу. Ключ журнала пишет, читает и перечисляет версии, но не удаляет. В Yandex Object Storage: сервисный аккаунт без ролей в папке, ACL бакета на чтение и запись этому аккаунту и политика бакета, которая разрешает ему только `s3:PutObject`, `s3:GetObject`, `s3:GetObjectVersion`, `s3:ListBucket`, `s3:ListBucketVersions` — удаление тогда запрещено. Хранилище должно поддерживать условную запись (`If-None-Match: *`, 412 на повтор); Yandex Object Storage поддерживает (проверено 28.09.2026).
+- **Роль `polka_purge`**. На новой установке её создаёт `init-roles.sh`, если задан `POLKA_PURGE_PASSWORD`. На существующей — один раз:
+
+  ```sh
+  docker compose --env-file hosted.env exec -T postgres psql -U polka_admin -d postgres -v ON_ERROR_STOP=1 \
+    -v pw="$(grep '^POLKA_PURGE_PASSWORD=' hosted.env | cut -d= -f2-)" <<'SQL'
+  CREATE ROLE polka_purge LOGIN PASSWORD :'pw';
+  GRANT CONNECT ON DATABASE polka TO polka_purge;
+  ALTER ROLE polka_purge SET search_path = pg_catalog, public;
+  SQL
+  docker compose --env-file hosted.env up -d   # шаг grants выдаст ей точные функции
+  ```
+- **`hosted.env`**: `POLKA_PURGE_PASSWORD`, `ERASURE_LEDGER_ID` (любой UUID, один на установку), `ERASURE_LEDGER_ENDPOINT`, `ERASURE_LEDGER_BUCKET`, `ERASURE_LEDGER_ACCESS_KEY`, `ERASURE_LEDGER_SECRET_KEY`, `ACCOUNT_DELETION_POLICY_VERSION` (редакция Политики), `ACCOUNT_PURGE_MAX_HOURS` (720) и `BACKUP_RETENTION_MAX_DAYS` (30) — сроки, которые обещает Политика.
+
+**После восстановления из дампа** аккаунты, удалённые позже момента дампа, вернутся. Пока восстановление не применяет журнал само (`deploy/RESTORE.md`), запустите `account-erase --account <id> --proof <тот же номер>` для каждого из них: список — в журнале модерации (`moderation.ts events`, действие `account.erasure_requested`) и в журнале стираний.
+
 ## Комментарии
 
 `COMMENTS_MODE=owner-notes` (по умолчанию здесь):
@@ -297,7 +334,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/accou
 - `POLKA_EXTENSIONS` — модули расширений открытого ядра, установленные в образ ([EXTENSIONS.md](../../docs/specs/EXTENSIONS.md)). Пусто — только ядро.
 - `S3_SECRET_KEY` — не короче 16 символов, иначе приложение не запустится.
 - `TRUST_PROXY=127.0.0.1` и `COOKIE_SECURE=true` зафиксированы в `compose.yml`: Caddy на той же VM. Если ставите перед Полкой другой прокси, `TRUST_PROXY` должен быть его адресом. Пустой `TRUST_PROXY` за прокси превращает лимиты по IP (вход, регистрации с одного IP, API без токена) в один общий лимит на всех.
-- `ACCOUNT_DELETION_ENABLED` зафиксирован `false`: удаление аккаунта — незавершённый локальный эксперимент. `RESTORE_*` задаёт только оверлей восстановления ([RESTORE.md](../RESTORE.md)).
+- `ACCOUNT_DELETION_ENABLED` зафиксирован `false`: самостоятельного удаления из интерфейса пока нет, удаляет оператор (раздел «Удаление аккаунта»). `RESTORE_*` задаёт только оверлей восстановления ([RESTORE.md](../RESTORE.md)).
 
 ## Модерация
 

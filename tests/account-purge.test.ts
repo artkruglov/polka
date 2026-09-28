@@ -151,7 +151,7 @@ test("one pass deletes at most one 100-version source batch and leaves metadata 
   assert.equal(sql.some((query) => query.text.includes("terminal_erase")), false);
 });
 
-test("purge config requires separate loopback worker and journal identities", () => {
+test("purge config requires a loopback database, separate worker and journal identities", () => {
   const base = {
     ACCOUNT_DELETION_ENABLED: "true",
     DATABASE_URL: "postgresql://runtime:secret@127.0.0.1:5432/polka",
@@ -170,4 +170,16 @@ test("purge config requires separate loopback worker and journal identities", ()
   assert.throws(() => parseAccountPurgeConfig({ ...base, MAINTENANCE_DATABASE_URL: base.DATABASE_URL }));
   assert.throws(() => parseAccountPurgeConfig({ ...base, ERASURE_LEDGER_BUCKET: base.S3_BUCKET }));
   assert.throws(() => parseAccountPurgeConfig({ ...base, DATABASE_URL: `${base.DATABASE_URL}?host=remote.example` }));
+  assert.throws(() => parseAccountPurgeConfig({ ...base, DATABASE_URL: "postgresql://runtime:secret@db.example:5432/polka" }));
+  // A hosted installation: its own database on loopback, a remote store over HTTPS.
+  const hosted = {
+    ...base,
+    S3_ENDPOINT: "https://storage.yandexcloud.net",
+    ERASURE_LEDGER_ENDPOINT: "https://storage.yandexcloud.net",
+    S3_REGION: "ru-central1",
+  };
+  assert.equal(parseAccountPurgeConfig(hosted).S3_REGION, "ru-central1");
+  assert.equal(parseAccountPurgeConfig(hosted).ERASURE_LEDGER_REGION, "us-east-1");
+  assert.throws(() => parseAccountPurgeConfig({ ...hosted, S3_ENDPOINT: "http://storage.yandexcloud.net" }), /HTTPS/);
+  assert.throws(() => parseAccountPurgeConfig({ ...hosted, ERASURE_LEDGER_ENDPOINT: "https://user:pw@storage.yandexcloud.net" }));
 });

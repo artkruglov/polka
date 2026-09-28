@@ -116,6 +116,7 @@
   "tests/sign-in-providers.test.ts",
   "tests/google-sign-in.test.ts",
   "tests/account-merge.test.ts",
+  "tests/account-erase.test.ts",
   "tests/one-shelf.test.ts",
   "tests/email-signup-domains.test.ts",
   "tests/comments-modes.test.ts",
