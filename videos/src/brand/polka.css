@@ -1,0 +1,11 @@
+/* The product's own styles, as the app loads them (apps/web/src/main.tsx). */
+@import "../../../apps/web/src/shared/styles/tokens.css";
+@import "../../../apps/web/src/shared/styles/base.css";
+@import "../../../apps/web/src/shared/ui/controls.css";
+@import "../../../apps/web/src/shared/ui/dialog.css";
+@import "../../../apps/web/src/widgets/shelf-card/styles.css";
+@import "../../../apps/web/src/widgets/artifact-preview/styles.css";
+@import "../../../apps/web/src/features/share-artifact/styles.css";
+
+/* Film only: no reduced-motion or hover states leak into frames. */
+html, body { background: #ffffff; }

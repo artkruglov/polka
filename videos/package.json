@@ -1,0 +1,23 @@
+{
+  "name": "polka-films",
+  "private": true,
+  "type": "module",
+  "description": "Product films of Полка, made with the product-film skill (Remotion). Not part of the app or its image.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "stills": "bun scripts/stills.ts",
+    "render": "bun scripts/render.ts"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.529",
+    "@remotion/cli": "4.0.529",
+    "@remotion/renderer": "4.0.529",
+    "remotion": "4.0.529",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}
