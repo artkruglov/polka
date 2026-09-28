@@ -13,6 +13,8 @@ const schema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(16),
   S3_BUCKET: z.string().min(3),
+  S3_REGION: z.string().min(1).default("us-east-1"),
+  ERASURE_LEDGER_REGION: z.string().min(1).default("us-east-1"),
   ERASURE_LEDGER_ID: z.string().uuid(),
   ERASURE_LEDGER_ENDPOINT: z.string().url(),
   ERASURE_LEDGER_ACCESS_KEY: z.string().min(1),

@@ -295,3 +295,61 @@ test("ledger preload and guard failures never create completion authority", asyn
     assert.equal(writes, 0);
   }
 });
+
+test("restore-authorities writes what restore-target accepts, and a changed ledger is refused", async () => {
+  const { restoreAuthorities } = await import("../scripts/restore-authorities.ts");
+  const { appendErasureRecord, ErasureLedgerTransportError } = await import("../scripts/erasure-ledger-adapter.ts");
+  const objects = new Map<string, { bytes: Uint8Array; versionId: string }>();
+  const ledger = {
+    async putIfAbsent(key: string, bytes: Uint8Array) {
+      if (objects.has(key)) throw new ErasureLedgerTransportError("conditional_conflict");
+      const versionId = `v${objects.size + 1}`;
+      objects.set(key, { bytes, versionId });
+      return { versionId };
+    },
+    async read(key: string) {
+      const value = objects.get(key);
+      if (!value) throw new ErasureLedgerTransportError("unknown_write_outcome");
+      return value;
+    },
+    async list(prefix: string) {
+      return { items: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, ...value })) };
+    },
+  };
+  const revoke = {
+    schemaVersion: 1, event: "revoke", ledgerId,
+    requestId: "00000000-0000-4000-8000-000000000012",
+    accountId: "00000000-0000-4000-8000-000000000013",
+    tenantId: "00000000-0000-4000-8000-000000000014",
+    requestedAt: "2026-01-01T00:00:00.000Z", revokedAt: "2026-01-01T00:01:00.000Z",
+    policyVersion: "r17.v1", workingDataPolicyDeadline: "2026-01-02T00:00:00.000Z",
+    backupRetentionPolicyDeadline: "2026-02-01T00:00:00.000Z",
+  } as const;
+  const signal = new AbortController().signal;
+  await appendErasureRecord(ledger, revoke, ledgerId, signal);
+  const authorities = await restoreAuthorities({ ledger, ledgerId, source: "polka-x.dump", signal, now: new Date(0) });
+  assert.equal(authorities.requests, 1);
+  const descriptor = JSON.parse(authorities.descriptor.toString("utf8"));
+  assert.deepEqual(descriptor.schemaMigrations, [...EXPECTED_MIGRATION_VERSIONS]);
+  assert.equal(descriptor.localMailSpool, "absent");
+  const env = {
+    ...baseEnv,
+    RESTORE_RUN_ID: authorities.restoreRunId,
+    RESTORE_BACKUP_SHA256: authorities.backupSha256,
+    RESTORE_LEDGER_MANIFEST_SHA256: authorities.ledgerManifestSha256,
+  };
+  const run = (overrides: Partial<NodeJS.ProcessEnv> = {}) =>
+    runRestoreTarget({
+      config: parseRestoreTargetConfig({ ...env, ...overrides }),
+      adapters: { ...adapters([]), ledger },
+      signal,
+      readBackup: async () => authorities.descriptor,
+      reconcile: async () => ({ entriesCompleted: 1, metadataTenantsCompleted: 0, absentTenantsCompleted: 1, sourceVersionsDeleted: 0, metadataPurged: 0 }),
+      writeReceipt: async (_path, receipt) => receipt,
+    });
+  const result = await run();
+  assert.equal(result.receipt.ledgerManifestSha256, authorities.ledgerManifestSha256);
+  // A deletion recorded after the authorities were computed: refused.
+  await appendErasureRecord(ledger, { ...revoke, requestId: "00000000-0000-4000-8000-000000000022", accountId: "00000000-0000-4000-8000-000000000023", tenantId: "00000000-0000-4000-8000-000000000024" }, ledgerId, signal);
+  await assert.rejects(run(), /manifest does not match/);
+});

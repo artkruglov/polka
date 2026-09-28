@@ -136,7 +136,7 @@ export function createRestoreTargetAdapters(
 ): RestoreTargetAdapters {
   const ledgerClient = new S3Client({
     endpoint: config.ERASURE_LEDGER_ENDPOINT,
-    region: "us-east-1",
+    region: config.ERASURE_LEDGER_REGION,
     forcePathStyle: true,
     maxAttempts: 1,
     credentials: {
@@ -150,7 +150,7 @@ export function createRestoreTargetAdapters(
   });
   const content = createMaintenanceObjectStore({
     endpoint: config.S3_ENDPOINT,
-    region: "us-east-1",
+    region: config.S3_REGION,
     accessKey: config.S3_ACCESS_KEY,
     secretKey: config.S3_SECRET_KEY,
     bucket: config.S3_BUCKET,
