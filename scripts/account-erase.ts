@@ -73,6 +73,8 @@ async function purge(accountId: string, minutes: number, env: NodeJS.ProcessEnv)
       return { state: (after?.state ?? "none") as string, runs, error: after?.error_code ?? "worker" };
     }
     // A pass takes up to 100 versions of one shelf; the next one continues.
+    // Another worker holding the guard also exits 0: wait rather than spin.
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
   }
   const state = await erasureState(accountId);
   return { state: state?.state ?? "none", runs, error: "time" };
@@ -93,6 +95,10 @@ export async function runAccountErase(argv: string[], env = process.env) {
     strict: true,
   });
   const minutes = Number(values.minutes);
+  if (values.resume && values["dry-run"]) {
+    console.error("--resume finishes a deletion that was requested: it cannot be a dry run.");
+    return 2;
+  }
   if (!values.account || !Number.isFinite(minutes) || minutes <= 0) {
     console.error(USAGE);
     return 2;

@@ -45,8 +45,10 @@ async function previous() {
   try {
     const object = await s3.send(new GetObjectCommand({ Bucket: env.STATE_BUCKET, Key: STATE_KEY }));
     return JSON.parse(await object.Body.transformToString()).failing ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    // No state yet is normal; anything else must not read as "nothing failed".
+    if (error?.name === "NoSuchKey") return [];
+    throw error;
   }
 }
 
