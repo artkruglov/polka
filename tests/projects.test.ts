@@ -450,7 +450,8 @@ test("pull a project into a folder, change it, push: only changed files are sent
     // Pushing from the old version again is refused: it is not the latest.
     await writeFile(join(folder, ".polka.json"), JSON.stringify(state));
     const stale = await node(cliPath, [folder], env);
-    assert.notEqual(stale.code, 0);
+    assert.equal(stale.code, 1, stale.err);
+    assert.match(stale.err, /Работа уже изменилась/);
   } finally {
     await new Promise<void>((resolve) => app.server.close(() => resolve()));
   }

@@ -151,8 +151,21 @@ async function store(
   });
 }
 
-/** Sign-in window on Полка → consent → token. Needs the user at the screen. */
-export async function connect(origin: string): Promise<void> {
+const connecting = new Map<string, Promise<void>>();
+
+/**
+ * Sign-in window on Полка → consent → token. Needs the user at the screen.
+ * One window at a time per Полка: the popup and the page button may both ask.
+ */
+export function connect(origin: string): Promise<void> {
+  const pending = connecting.get(origin);
+  if (pending) return pending;
+  const run = connectOnce(origin).finally(() => connecting.delete(origin));
+  connecting.set(origin, run);
+  return run;
+}
+
+async function connectOnce(origin: string): Promise<void> {
   const meta = await discover(origin);
   let id = await clientId(origin, meta);
   const { verifier, challenge } = await pkcePair();
@@ -175,9 +188,11 @@ export async function connect(origin: string): Promise<void> {
       interactive: true,
     });
   } catch (error) {
-    // Closing the window is the usual cause; an unknown client (the server's
-    // database was reset) also ends here, so the next attempt registers anew.
-    await chrome.storage.local.remove(`client:${origin}`);
+    // Closing the window or refusing is the usual cause: the registered client
+    // stays. Any other failure may be an unknown client (the server's database
+    // was reset), so the next attempt registers anew.
+    if (!/did not approve|closed|cancel/i.test(String((error as Error)?.message ?? error)))
+      await chrome.storage.local.remove(`client:${origin}`);
     throw new AuthError("cancelled", "Подключение не завершено: окно входа закрыто.");
   }
   const returned = new URL(answer ?? "");
