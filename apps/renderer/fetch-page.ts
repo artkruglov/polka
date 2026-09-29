@@ -27,7 +27,12 @@ export function robotsVia(get: ProxiedGet): RobotsSource {
       }
       const location = answer.headers.location;
       if (answer.status >= 300 && answer.status < 400 && typeof location === "string") {
-        url = new URL(location, url).href;
+        // Whatever the site sends as a Location: an unparseable one is no robots.txt.
+        try {
+          url = new URL(location, url).href;
+        } catch {
+          return robotsFromAnswer(null, "");
+        }
         continue;
       }
       return robotsFromAnswer(answer.status, answer.body.toString("utf8"));

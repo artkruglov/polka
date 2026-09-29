@@ -7,8 +7,15 @@
 {$RENDERER_HOST} {
 	@app remote_ip {$APP_VM_IP}
 	handle @app {
-		request_body {
+		# /render and /fetch take a small JSON with an address; /snapshot takes a
+		# whole page (SNAPSHOT_MAX_BODY, packages/renderer-contract.ts).
+		@snapshot path /snapshot
+		@small not path /snapshot
+		request_body @small {
 			max_size 8KB
+		}
+		request_body @snapshot {
+			max_size 13MiB
 		}
 		reverse_proxy renderer:4395 {
 			transport http {

@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { randomBytes, randomUUID, createHmac, scrypt } from "node:crypto";
 import { promisify } from "node:util";
 import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
@@ -1159,7 +1160,7 @@ function runCapture(
       ? await open(options.stdoutFile, "w", 0o600)
       : null;
     const child = spawn(command, args, {
-      cwd: new URL("..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: options.env ?? process.env,
       stdio: [input?.fd ?? "ignore", output?.fd ?? "pipe", "pipe"],
     });

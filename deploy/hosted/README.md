@@ -181,6 +181,10 @@ DROP DATABASE polka WITH (FORCE);
 CREATE DATABASE polka;
 REVOKE ALL ON DATABASE polka FROM PUBLIC;
 GRANT CONNECT ON DATABASE polka TO polka_schema, polka_runtime;
+-- Служебные роли стирания и восстановления (init-roles.sh создаёт их только
+-- при первом запуске) теряют CONNECT вместе со старой базой: вернуть тем, что есть.
+SELECT format('GRANT CONNECT ON DATABASE polka TO %I', rolname)
+  FROM pg_roles WHERE rolname IN ('polka_purge', 'polka_restore') \gexec
 \connect polka
 ALTER SCHEMA public OWNER TO polka_schema;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;

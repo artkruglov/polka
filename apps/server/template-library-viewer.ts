@@ -258,7 +258,7 @@ export async function readLibraryLiveDocument(token: string) {
          AND viewer_grant.artifact_id=$4 AND viewer_grant.revision_id=$5
          AND viewer_grant.member_account_id=$6 AND viewer_grant.membership_joined_at=$7
          AND revision.mime='text/html'
-       FOR SHARE OF viewer_grant,revision`,
+       FOR SHARE OF revision`,
       [
         sha256(token),
         candidate.libraryId,

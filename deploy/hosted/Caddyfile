@@ -10,6 +10,12 @@
 	servers {
 		# The Host header must match the TLS SNI name (421 otherwise).
 		strict_sni_host on
+		# A client that does not finish its request line and headers in time
+		# is dropped: Caddy sets no such limit by default, so slow connections
+		# could hold every socket. Bodies keep no timeout, a large upload may be slow.
+		timeouts {
+			read_header 10s
+		}
 	}
 	# Upstream error entries (http.log.error) embed the full request: URI with
 	# a viewer capability, client IP and headers. Keep only Caddy's own

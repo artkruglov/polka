@@ -4,7 +4,7 @@
 // letters (MAIL_MODE=local), moderation hooks and reports on comments.
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -17,6 +17,7 @@ import {
 import pg from "pg";
 import { createApp } from "../apps/server/app.ts";
 import { commentSignals } from "../apps/server/comments.ts";
+import { useExtensions } from "../apps/server/extensions.ts";
 import {
   defang,
   excerpt,
@@ -479,6 +480,52 @@ test("replies are one level; resolve and delete follow owner and author", async 
   } = await db.query("SELECT body,deleted_at FROM comments WHERE id=$1", [root]);
   assert.equal(stored.body, "");
   assert.ok(stored.deleted_at);
+});
+
+test("the owner cannot delete a comment the moderation keeps as evidence", async () => {
+  const owner = await person("owner");
+  const alice = await person("alice");
+  const work = await link(owner);
+  const root = (await write(work.token, alice.cookie, { body: "Улика", anchor })).json().id;
+  await db.query(
+    `INSERT INTO moderation_blocks(id,tenant_id,comment_id,sha256,category,isolated)
+     SELECT $1,tenant_id,id,$2,'other',false FROM comments WHERE id=$3`,
+    [randomUUID(), createHash("sha256").update("Улика").digest("hex"), root],
+  );
+  const refused = await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie);
+  assert.equal(refused.statusCode, 409, refused.body);
+  const { rows: [kept] } = await db.query("SELECT body,deleted_at FROM comments WHERE id=$1", [root]);
+  assert.equal(kept.body, "Улика");
+  assert.equal(kept.deleted_at, null);
+  // Released, the same delete goes through and erases it.
+  await db.query("UPDATE moderation_blocks SET released_at=now() WHERE comment_id=$1", [root]);
+  assert.equal((await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie)).statusCode, 200);
+  const { rows: [erased] } = await db.query("SELECT body,anchor,deleted_at FROM comments WHERE id=$1", [root]);
+  assert.equal(erased.body, "");
+  assert.equal(erased.anchor, null);
+  assert.ok(erased.deleted_at);
+});
+
+test("an extension's linkOpen policy closes the discussion as it closes the link", async () => {
+  const owner = await person("owner");
+  const alice = await person("alice");
+  const work = await link(owner);
+  useExtensions([
+    {
+      name: "employees-only",
+      policies: { async linkOpen() { return { allow: false, message: "Только для сотрудников." }; } },
+    },
+  ]);
+  try {
+    const read = await list(work.token, alice.cookie);
+    assert.equal(read.statusCode, 403, read.body);
+    assert.equal(read.json().reason, "link_policy");
+    assert.equal((await write(work.token, alice.cookie, { body: "Чужой", anchor })).statusCode, 403);
+  } finally {
+    useExtensions([]);
+  }
+  assert.equal((await list(work.token, alice.cookie)).statusCode, 200);
+  assert.equal((await write(work.token, alice.cookie, { body: "Свой", anchor })).statusCode, 200);
 });
 
 test("reactions toggle per author, fragment and emoji", async () => {
