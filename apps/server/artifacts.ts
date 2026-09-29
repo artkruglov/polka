@@ -23,8 +23,7 @@ import {
 } from "../../packages/contracts/bundle.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { bucket, copyVersion, putImmutable, readBlob, s3, sha256 } from "./storage.ts";
+import { copyVersion, deleteVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
@@ -533,7 +532,7 @@ export async function discardStagedIfClosed(
   );
   if (state && !state.aborted && !state.reconciled && !state.expired && !state.erasing)
     return version;
-  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
+  await deleteVersion(key, version);
   throw new Problem(
     410,
     "expired",

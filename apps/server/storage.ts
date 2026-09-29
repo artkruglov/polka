@@ -1,4 +1,4 @@
-import { CopyObjectCommand } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Store } from "../../packages/storage/s3.ts";
 import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
@@ -11,6 +11,11 @@ const store = createS3Store({
 });
 export const { s3, bucket, prepareBucket, putImmutable, deleteAllVersions } =
   store;
+
+/** One object version, for good (the bucket is versioned: the key alone would only add a delete marker). */
+export async function deleteVersion(key: string, version: string) {
+  await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
+}
 
 /**
  * A copy of one object version under another key, inside the store (no

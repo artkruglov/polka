@@ -22,9 +22,10 @@ export const DATABASE_SESSION = {
  * before the transaction (artifacts.ts: stageUploadBytes, stageBundleFile,
  * prepareUploadFinalize, prepareBundleFinalize), which then only rechecks
  * and records under the shelf lock. A slow object store therefore delays
- * that upload alone, not the shelf or the pool. Two small writes stay
- * inside: the link document of a saved link (saved-links.ts) and a built
- * page (bundle-derivatives.ts, under the work's row lock, not the shelf's).
+ * that upload alone, not the shelf or the pool. A built page is stored the
+ * same way (bundle-derivatives.ts): before its transaction, and deleted again
+ * if the row did not become ready with it. One small write stays inside: the
+ * link document of a saved link (saved-links.ts).
  */
 export const db = new pg.Pool({
   connectionString: config.DATABASE_URL,

@@ -447,6 +447,15 @@ async function moveAnalytics(c: Queryable, from: string, into: string) {
   );
 }
 
+/**
+ * The most objects the web path (/claim) copies. It runs under the app
+ * role's idle-in-transaction limit (db.ts, 60 s), and the copies run between
+ * statements, one after another: past this the merge would be killed halfway
+ * (and undone), so it is refused up front. The operator's command has no such
+ * limit and takes any number.
+ */
+export const WEB_MERGE_MAX_OBJECTS = 100;
+
 const newKey = (key: string, from: string, into: string) => {
   if (!key.startsWith(`${from}/`))
     throw new MergeRefusal(
@@ -476,6 +485,8 @@ export async function mergeAccounts(input: {
    * person picks them one by one on /claim; the rest are revoked.
    */
   keepConnections?: string[] | "all";
+  /** Refuse, before any copy, a source with more stored objects than this. */
+  maxObjects?: number;
 }): Promise<MergeReport> {
   if (input.actor === "operator-script" && !input.dryRun && !input.proof?.trim())
     throw new MergeRefusal(
@@ -557,6 +568,10 @@ export async function mergeAccounts(input: {
 
       // 1. Copies under the target's prefix (the originals stay until commit).
       const objects = await sourceObjects(c, from.tenant);
+      if (input.maxObjects !== undefined && objects.length > input.maxObjects)
+        throw new MergeRefusal(
+          `На полке слишком много файлов (${objects.length}) для автоматического объединения. Напишите в поддержку: оператор объединит полки командой, ничего не потеряется.`,
+        );
       const mapping: Array<{
         oldKey: string;
         oldVersion: string;

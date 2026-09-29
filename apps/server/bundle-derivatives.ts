@@ -12,7 +12,7 @@ import { lockShelf } from "./shelves.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { readRevisionSource, type Actor } from "./artifacts.ts";
-import { putImmutable, sha256 } from "./storage.ts";
+import { deleteVersion, putImmutable, sha256 } from "./storage.ts";
 import {
   BUILD_FAILURE_MESSAGES,
   BUILD_LIMITS,
@@ -544,73 +544,83 @@ async function executeBuild(
       sha256(built.html) !== built.sha256
     )
       throw new Error("Bundle builder result invariant failed");
-    ready = await runTransaction(async (c) => {
-      const { tenant, artifact, row } = await lockDerivative(
-        c,
-        sourceTenantId,
-        derivative.id,
-        derivative.revision_id,
-      );
-      if (
-        !row ||
-        !artifact ||
-        artifact.trashed_at ||
-        Number(artifact.lifecycle_version) !==
-          Number(row.artifact_lifecycle_version) ||
-        row.state !== "pending" ||
-        row.attempt_id !== derivative.attempt_id ||
-        new Date(row.attempt_expires_at).getTime() <= Date.now()
-      )
-        return row;
-      const {
-        rows: [pending],
-      } = await c.query(
-        "SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending' AND id<>$2",
-        [sourceTenantId, derivative.id],
-      );
-      if (
-        Number(tenant.derivative_used_bytes) +
-          Number(pending.count) * DERIVATIVE_RESERVATION_BYTES +
-          built.size >
-        Number(tenant.derivative_quota_bytes)
-      )
-        throw new Problem(
-          413,
-          "quota",
-          "Недостаточно места для собранной страницы.",
-        );
-      const objectVersion = await putImmutable(
-        objectKey,
-        Buffer.from(built.html),
-      );
-      await c.query(
-        "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
-        [sourceTenantId, built.size],
-      );
-      // A ready row's reason lists what the builder left out, if anything.
-      const warnings = built.warnings?.length
-        ? `Пропущено: ${built.warnings.join("; ")}`
-        : null;
-      const {
-        rows: [updated],
-      } = await c.query(
-        `UPDATE revision_derivatives
-         SET state='ready',attempt_expires_at=NULL,runtime_profile=$3,size=$4,sha256=$5,
-             object_key=$6,object_version=$7,reason=$8,error_path=NULL,updated_at=now()
-         WHERE id=$1 AND attempt_id=$2 RETURNING *`,
-        [
+    // The page is stored before the transaction: a slow object store must not
+    // hold the shelf lock (db.ts). The key carries this attempt's id, so the
+    // write is this attempt's alone and repeating it is harmless.
+    const objectVersion = await putImmutable(objectKey, Buffer.from(built.html));
+    try {
+      ready = await runTransaction(async (c) => {
+        const { tenant, artifact, row } = await lockDerivative(
+          c,
+          sourceTenantId,
           derivative.id,
-          derivative.attempt_id,
-          built.runtimeProfile,
-          built.size,
-          built.sha256,
-          objectKey,
-          objectVersion,
-          warnings?.slice(0, 300) ?? null,
-        ],
-      );
-      return updated;
-    });
+          derivative.revision_id,
+        );
+        if (
+          !row ||
+          !artifact ||
+          artifact.trashed_at ||
+          Number(artifact.lifecycle_version) !==
+            Number(row.artifact_lifecycle_version) ||
+          row.state !== "pending" ||
+          row.attempt_id !== derivative.attempt_id ||
+          new Date(row.attempt_expires_at).getTime() <= Date.now()
+        )
+          return row;
+        const {
+          rows: [pending],
+        } = await c.query(
+          "SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending' AND id<>$2",
+          [sourceTenantId, derivative.id],
+        );
+        if (
+          Number(tenant.derivative_used_bytes) +
+            Number(pending.count) * DERIVATIVE_RESERVATION_BYTES +
+            built.size >
+          Number(tenant.derivative_quota_bytes)
+        )
+          throw new Problem(
+            413,
+            "quota",
+            "Недостаточно места для собранной страницы.",
+          );
+        await c.query(
+          "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
+          [sourceTenantId, built.size],
+        );
+        // A ready row's reason lists what the builder left out, if anything.
+        const warnings = built.warnings?.length
+          ? `Пропущено: ${built.warnings.join("; ")}`
+          : null;
+        const {
+          rows: [updated],
+        } = await c.query(
+          `UPDATE revision_derivatives
+           SET state='ready',attempt_expires_at=NULL,runtime_profile=$3,size=$4,sha256=$5,
+               object_key=$6,object_version=$7,reason=$8,error_path=NULL,updated_at=now()
+           WHERE id=$1 AND attempt_id=$2 RETURNING *`,
+          [
+            derivative.id,
+            derivative.attempt_id,
+            built.runtimeProfile,
+            built.size,
+            built.sha256,
+            objectKey,
+            objectVersion,
+            warnings?.slice(0, 300) ?? null,
+          ],
+        );
+        return updated;
+      });
+    } catch (error) {
+      await discardVersion(objectKey, objectVersion);
+      throw error;
+    }
+    // A row that did not become ready with this very version (the attempt
+    // expired, the work was trashed or its shelf erased meanwhile) leaves
+    // the stored page unreferenced: delete it now, nothing reconciles it.
+    if (ready?.state !== "ready" || ready.object_version !== objectVersion)
+      await discardVersion(objectKey, objectVersion);
   } catch (error) {
     // Quota, storage or invariant: the attempt ends as failed (retryable)
     // instead of staying pending until it expires.
@@ -624,6 +634,15 @@ async function executeBuild(
     );
   }
   return statusDTO(ready);
+}
+
+/** Best effort: a version that cannot be deleted now is logged, never fails the build's answer. */
+async function discardVersion(key: string, version: string) {
+  try {
+    await deleteVersion(key, version);
+  } catch {
+    console.error(JSON.stringify({ event: "derivative.discard_failed" }));
+  }
 }
 
 export async function getInlineBuildStatus(actor: Actor, revisionId: string) {
