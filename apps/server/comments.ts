@@ -35,6 +35,7 @@ import { trackNoteAdded, viaFor } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
+import { checkLinkOpen, extensions } from "./extensions.ts";
 import { lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
 import { lockShelf } from "./shelves.ts";
 import { isSuspicious, SignalCollector } from "./phishing-signals.ts";
@@ -167,7 +168,7 @@ export function commentSignals(body: string) {
 // ---------------------------------------------------------------------------
 // Locks
 
-async function lockShareByToken(c: PoolClient, token: string) {
+async function lockShareByToken(c: PoolClient, token: string, viewer: Viewer | null) {
   const tokenHash = sha256(token);
   const candidate = (
     await c.query(
@@ -192,6 +193,20 @@ async function lockShareByToken(c: PoolClient, token: string) {
   // A recipient reaches only an open link: revoke, expiry and review close
   // the discussion for them (the owner keeps it).
   if (!context.open) throw missing();
+  // An extension's policy on who may open the link (docs/specs/EXTENSIONS.md),
+  // as in /api/resolve: the discussion is part of what the link opens.
+  if (extensions().length)
+    await checkLinkOpen(
+      {
+        shareId: candidate.id,
+        shelf: (
+          await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])
+        ).rows[0],
+        artifactId: candidate.artifact_id,
+        viewer: viewer ? { id: viewer.id } : null,
+      },
+      c,
+    );
   const bound = await c.query(
     "SELECT 1 FROM shares WHERE id=$1 AND token_hash=$2",
     [candidate.id, tokenHash],
@@ -459,7 +474,7 @@ export async function sharedComments(
 ): Promise<SharedComments> {
   if (commentsMode() === "off") throw commentsOff();
   return transaction(async (c) => {
-    const context = await lockShareByToken(c, token);
+    const context = await lockShareByToken(c, token, viewer);
     const isOwner = !!viewer && context.ownerIds.includes(viewer.id);
     return {
       ...(await discussion(c, context, viewer?.id ?? null, isOwner)),
@@ -895,6 +910,21 @@ async function deleteInContext(
   const isOwner = context.ownerIds.includes(actorId);
   if (!isOwner && comment.author_account_id !== actorId) throw missing();
   if (comment.deleted_at) return { ok: true };
+  // A comment the moderation blocked is its evidence until it is released or
+  // purged (content-moderation.ts), and a deleted comment is erased
+  // (comments_deleted_empty): the owner's delete waits for the moderation.
+  const {
+    rows: [evidence],
+  } = await c.query(
+    "SELECT 1 FROM moderation_blocks WHERE comment_id=$1 AND released_at IS NULL AND purged_at IS NULL",
+    [id],
+  );
+  if (evidence)
+    throw new Problem(
+      409,
+      "conflict",
+      "Комментарий на проверке у модерации: пока она не закончится, удалить его нельзя.",
+    );
   await c.query(
     `UPDATE comments SET body='',anchor=NULL,signals='{}',held_at=NULL,
        deleted_at=clock_timestamp() WHERE id=$1`,
@@ -949,7 +979,7 @@ export async function createSharedComment(
   await limitAuthor(writer);
   const notices: CommentNotice[] = [];
   const result = await transaction(async (c) =>
-    createInContext(c, await lockShareByToken(c, token), writer, input, notices),
+    createInContext(c, await lockShareByToken(c, token, writer), writer, input, notices),
   );
   void dispatchCommentNotices(notices);
   return result;
@@ -967,7 +997,7 @@ export async function reactShared(
   await assertAuthorisedForPublic(db, writer.id);
   await limitAuthor(writer);
   return transaction(async (c) =>
-    reactInContext(c, await lockShareByToken(c, token), writer, emoji, anchor),
+    reactInContext(c, await lockShareByToken(c, token, writer), writer, emoji, anchor),
   );
 }
 
@@ -978,7 +1008,7 @@ export async function deleteSharedComment(
 ) {
   if (!writer) throw signInToComment();
   return transaction(async (c) => {
-    const context = await lockShareByToken(c, token);
+    const context = await lockShareByToken(c, token, writer);
     await lockWriter(c, writer);
     return deleteInContext(c, context, writer.id, id);
   });
@@ -992,7 +1022,7 @@ export async function resolveSharedComment(
 ) {
   if (!writer) throw signInToComment();
   return transaction(async (c) => {
-    const context = await lockShareByToken(c, token);
+    const context = await lockShareByToken(c, token, writer);
     await lockWriter(c, writer);
     return resolveInContext(c, context, writer.id, id, resolved);
   });

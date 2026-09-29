@@ -41,13 +41,28 @@ export function parseRobots(text: string, token = ROBOTS_TOKEN): RobotsRule[] {
   return (ours.length ? ours : groups.filter((g) => g.agents.includes("*"))).flatMap((g) => g.rules);
 }
 
+/**
+ * A robots.txt pattern against a path: `*` is any run of characters, a final
+ * `$` anchors the end. No regular expression: the pattern is whatever the
+ * site serves, and a rule of many `*a` parts backtracks without end. Each
+ * part is searched once, leftmost, so the work is bounded by the path length
+ * times the pattern length.
+ */
 function matches(pattern: string, path: string) {
   const anchored = pattern.endsWith("$");
-  const body = anchored ? pattern.slice(0, -1) : pattern;
-  const regex = new RegExp(
-    "^" + body.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + (anchored ? "$" : ""),
-  );
-  return regex.test(path);
+  const parts = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  if (parts.length === 1) return anchored ? path === parts[0] : path.startsWith(parts[0]);
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  if (!path.startsWith(first)) return false;
+  let at = first.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = path.indexOf(part, at);
+    if (found === -1) return false;
+    at = found + part.length;
+  }
+  if (anchored) return path.length - last.length >= at && path.endsWith(last);
+  return path.indexOf(last, at) !== -1;
 }
 
 const normalize = (value: string) => {
