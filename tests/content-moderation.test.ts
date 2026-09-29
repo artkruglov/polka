@@ -15,8 +15,10 @@ import { db, settled } from "../apps/server/db.ts";
 import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import { bucket, readBlob, s3, sha256 } from "../apps/server/storage.ts";
 import {
+  blockContentKey,
   purgeBlock,
   purgeDueBlocks,
+  retryUnchecked,
   remindDueBlocks,
   resetRetention,
   reviewsSettled,
@@ -311,6 +313,40 @@ test("the operator blocks from the letter with a legal hold; recipients, owner a
   assert.ok(events.some((event) => event.actor === "operator-mail" && event.action === "revision.blocked"));
 });
 
+test("a legal hold set while the purge of that content runs waits for it and finds it deleted", async () => {
+  const owner = await trusted();
+  const link = await sharedLink(owner, `${DRUGS}<!-- ${randomBytes(6).toString("hex")} -->`);
+  const token = signModerationToken("block", link.shareId);
+  const act = await call("POST", "/api/moderation/act", { token, legalHold: false });
+  assert.equal(act.statusCode, 200, act.body);
+  const block = await row("SELECT * FROM moderation_blocks WHERE revision_id=$1", [link.revisionId]);
+  // A purge under way: it holds the content's lock across its S3 deletion.
+  const purging = await db.connect();
+  try {
+    await purging.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [blockContentKey(block)]);
+    const hold = setLegalHold(link.revisionId, "МВД, запрос №2", true);
+    const early = await Promise.race([hold.then(() => "done"), new Promise((resolve) => setTimeout(() => resolve("waiting"), 400))]);
+    assert.equal(early, "waiting", "the hold waits for the purge");
+    await purging.query("UPDATE moderation_blocks SET purged_at=now() WHERE id=$1", [block.id]);
+    await purging.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [blockContentKey(block)]);
+    assert.match(await hold, /already deleted/);
+  } finally {
+    purging.release();
+  }
+  assert.equal((await row("SELECT legal_hold FROM moderation_blocks WHERE id=$1", [block.id])).legal_hold, null);
+});
+
+test("purgeBlock releases its lock: a hold set after it goes through", async () => {
+  const owner = await trusted();
+  const link = await sharedLink(owner, `${DRUGS}<!-- ${randomBytes(6).toString("hex")} -->`);
+  const act = await call("POST", "/api/moderation/act", { token: signModerationToken("block", link.shareId), legalHold: false });
+  assert.equal(act.statusCode, 200, act.body);
+  const block = await row("SELECT * FROM moderation_blocks WHERE revision_id=$1", [link.revisionId]);
+  assert.equal((await purgeBlock(block.id)).purged, false); // not due: nothing deleted
+  assert.match(await setLegalHold(link.revisionId, "суд, №3", true), /kept as evidence/);
+  assert.equal((await row("SELECT legal_hold FROM moderation_blocks WHERE id=$1", [block.id])).legal_hold, "суд, №3");
+});
+
 test("soft categories close links but the owner keeps the work; unblock reopens it", async () => {
   const owner = await trusted();
   const link = await sharedLink(owner, HONEST.replace("Отчёт", "Отчёт о казино"));
@@ -438,6 +474,33 @@ test("models: reviewed after save; agreement holds, one model only asks, CSAM wa
   await save(owner, page("<p>Невинный текст СИГНАЛ-А про садоводство.</p>"));
   await reviewsSettled();
   assert.equal(calls, 0);
+});
+
+test("a review lost before it wrote a verdict is tried again by the sweep", async () => {
+  const model = fakeModel("primary", () => "none");
+  setContentModels({ primary: model, fallback: model });
+  const owner = await trusted();
+  const link = await sharedLink(owner, page(`<p>Невинный текст про садоводство, лист ${randomBytes(4).toString("hex")}.</p>`));
+  await reviewsSettled();
+  const verdict = () => row("SELECT content_filter->'model'->>'state' AS state FROM revisions WHERE id=$1", [link.revisionId]);
+  assert.equal((await verdict()).state, "checked");
+  // The process died before the verdict was stored: nothing says «unchecked».
+  await db.query(
+    "UPDATE revisions SET content_filter=content_filter-'model',created_at=now()-interval '1 hour' WHERE id=$1",
+    [link.revisionId],
+  );
+  assert.equal((await verdict()).state, null);
+  assert.ok((await retryUnchecked()) >= 1);
+  await reviewsSettled();
+  assert.equal((await verdict()).state, "checked");
+  // A review still under way (younger than ten minutes) is left alone.
+  await db.query(
+    "UPDATE revisions SET content_filter=content_filter-'model',created_at=now()-interval '1 minute' WHERE id=$1",
+    [link.revisionId],
+  );
+  await retryUnchecked();
+  await reviewsSettled();
+  assert.equal((await verdict()).state, null);
 });
 
 test("models: a rate-limited primary (429) goes to the fallback at once and uses up no attempts; a flat rate ignores the budget", async () => {
