@@ -121,6 +121,7 @@
   "tests/staged-upload-close.test.ts",
   "tests/runtime-lock-grants.test.ts",
   "tests/robots.test.ts",
+  "tests/uptime-function.test.ts",
   "tests/one-shelf.test.ts",
   "tests/email-signup-domains.test.ts",
   "tests/comments-modes.test.ts",

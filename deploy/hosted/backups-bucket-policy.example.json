@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "app-lists-for-ops-status-only",
+      "Effect": "Allow",
+      "Principal": {"CanonicalUser": "<ID сервисного аккаунта приложения>"},
+      "Action": ["s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::<BACKUP_BUCKET>"]
+    },
+    {
+      "Sid": "backup-writer-put-only",
+      "Effect": "Allow",
+      "Principal": {"CanonicalUser": "<ID сервисного аккаунта записи>"},
+      "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+      "Resource": ["arn:aws:s3:::<BACKUP_BUCKET>/postgres/*"]
+    },
+    {
+      "Sid": "backup-reader",
+      "Effect": "Allow",
+      "Principal": {"CanonicalUser": "<ID сервисного аккаунта чтения>"},
+      "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket", "s3:ListBucketVersions"],
+      "Resource": ["arn:aws:s3:::<BACKUP_BUCKET>", "arn:aws:s3:::<BACKUP_BUCKET>/*"]
+    }
+  ]
+}

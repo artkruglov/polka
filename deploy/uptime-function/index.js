@@ -44,21 +44,39 @@ async function checks() {
 async function previous() {
   try {
     const object = await s3.send(new GetObjectCommand({ Bucket: env.STATE_BUCKET, Key: STATE_KEY }));
-    return JSON.parse(await object.Body.transformToString()).failing ?? [];
+    const state = JSON.parse(await object.Body.transformToString());
+    return { failing: state.failing ?? [], alertedAt: state.alertedAt ?? state.at ?? null };
   } catch (error) {
     // No state yet is normal; anything else must not read as "nothing failed".
-    if (error?.name === "NoSuchKey") return [];
+    if (error?.name === "NoSuchKey") return { failing: [], alertedAt: null };
     throw error;
   }
+}
+
+// A failure that goes on is mailed again this often: one letter can be missed.
+export const REMIND_AFTER_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * What a run does, given the last result and this one: nothing, the set of
+ * failing checks changed ("changed": a new failure, or all passing again), or
+ * the same failure has gone on for REMIND_AFTER_MS since the last letter
+ * ("reminder").
+ */
+export function decide(before, failing, now = Date.now()) {
+  if (before.failing.join("\n") !== failing.join("\n")) return "changed";
+  const last = before.alertedAt ? Date.parse(before.alertedAt) : NaN;
+  if (failing.length && Number.isFinite(last) && now - last >= REMIND_AFTER_MS) return "reminder";
+  return "none";
 }
 
 export async function handler() {
   const failing = await checks();
   const before = await previous();
-  if (before.join("\n") === failing.join("\n")) return { failing, alerted: false };
+  const action = decide(before, failing);
+  if (action === "none") return { failing, alerted: false };
   const host = new URL(env.APP_ORIGIN).host;
   const subject = failing.length
-    ? `Полка ${host}: не проходит — ${failing.join(", ")}`
+    ? `Полка ${host}: ${action === "reminder" ? "всё ещё не проходит" : "не проходит"} — ${failing.join(", ")}`
     : `Полка ${host}: все проверки снова проходят`;
   await nodemailer
     .createTransport({
@@ -79,7 +97,7 @@ export async function handler() {
     new PutObjectCommand({
       Bucket: env.STATE_BUCKET,
       Key: STATE_KEY,
-      Body: JSON.stringify({ failing, at: new Date().toISOString() }),
+      Body: JSON.stringify({ failing, at: new Date().toISOString(), alertedAt: new Date().toISOString() }),
       ContentType: "application/json",
     }),
   );
