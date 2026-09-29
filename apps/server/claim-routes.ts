@@ -17,7 +17,7 @@ import {
   ClaimCollision,
   completeProviderSignIn,
 } from "./account-identities.ts";
-import { mergeAccounts, MergeRefusal } from "./account-merge.ts";
+import { mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "./account-merge.ts";
 import { trackShelfClaimed } from "./analytics.ts";
 import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { db, transaction } from "./db.ts";
@@ -170,6 +170,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
           actor: "signup",
           reason: "claim",
           keepConnections: connections,
+          maxObjects: WEB_MERGE_MAX_OBJECTS,
         });
       } catch (error) {
         if (error instanceof MergeRefusal)

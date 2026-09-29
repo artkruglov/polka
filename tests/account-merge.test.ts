@@ -14,6 +14,7 @@ import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
 import {
   mergeAccounts,
   MergeRefusal,
+  WEB_MERGE_MAX_OBJECTS,
 } from "../apps/server/account-merge.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
@@ -559,6 +560,25 @@ test("refuses a disabled side, the same account and blocked content", async () =
     console.error = error;
   }
   assert.match(refused.join("\n"), /Отказ/);
+});
+
+test("the web path refuses a shelf with more objects than the cap, before copying anything", async () => {
+  const f = await fixture();
+  const copied: string[] = [];
+  const mover = {
+    async copy(from: string, version: string, to: string) {
+      copied.push(to);
+      return version;
+    },
+    async remove() {},
+  };
+  await assert.rejects(
+    mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script", proof: "t", maxObjects: 1, mover }),
+    /слишком много файлов/,
+  );
+  assert.deepEqual(copied, []);
+  assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
+  assert.ok(WEB_MERGE_MAX_OBJECTS >= 1);
 });
 
 // Hosted installations grant the application role no TEMPORARY privilege

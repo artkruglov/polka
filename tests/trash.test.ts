@@ -18,7 +18,8 @@ import {
   statusForAgent,
 } from "../apps/server/agent-capture.ts";
 import { shareFromAgent } from "../apps/server/shares.ts";
-import { readBlob, s3, sha256 } from "../apps/server/storage.ts";
+import { ListObjectVersionsCommand } from "@aws-sdk/client-s3";
+import { bucket, readBlob, s3, sha256 } from "../apps/server/storage.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
 
 if (!config.HTML_LIVE_ENABLED)
@@ -754,6 +755,14 @@ test("a worker admitted before trash cannot publish after trash and restore", as
   ).rows[0];
   assert.equal(pending.state, "pending");
   assert.ok(new Date(pending.attempt_expires_at).getTime() <= Date.now());
+  // The page was stored before the transaction; the stale attempt deleted it again.
+  const leftover = await s3.send(
+    new ListObjectVersionsCommand({
+      Bucket: bucket,
+      Prefix: `${owner.tenant}/derivatives/${pending.id}/`,
+    }),
+  );
+  assert.equal((leftover.Versions?.length ?? 0) + (leftover.DeleteMarkers?.length ?? 0), 0);
   assert.equal(
     Number(
       (
