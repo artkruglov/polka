@@ -464,6 +464,8 @@ function scanPage(document: Node) {
 const RUNTIME_HINT =
   /type\s*=\s*["']?\s*(?:module|text\/babel|text\/jsx|importmap)|unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn\.tailwindcss\.com|esm\.sh|cdn\.skypack\.dev/i;
 
+const CHARACTER_REFERENCE = /&#|&[a-z][a-z0-9]*;/i;
+
 /**
  * Whether a page is built by the runtime (esbuild) rather than the v4 rules.
  * The build worker asks for the one runtime slot when it is. A page without
@@ -477,7 +479,9 @@ export function needsRuntimeBuild(
   if (!entry || entry.length > MAX_OUTPUT_BYTES) return false;
   try {
     const html = new TextDecoder("utf-8", { fatal: true }).decode(entry);
-    if (!RUNTIME_HINT.test(html)) return false;
+    // An attribute may spell the hint with a character reference
+    // (type="&#109;odule"): a page with one is parsed, which decodes it.
+    if (!RUNTIME_HINT.test(html) && !CHARACTER_REFERENCE.test(html)) return false;
     return scanPage(parse(html) as Node).runtime;
   } catch {
     return false;
@@ -497,6 +501,7 @@ const scriptLine = (node: Node) =>
 export async function buildRuntimeBundle(
   manifest: BundleManifest,
   sourceBytes: Map<string, Buffer>,
+  { allowRuntime = true }: { allowRuntime?: boolean } = {},
 ): Promise<BundleInlineResult | null> {
   let canonical: BundleManifest;
   try {
@@ -531,6 +536,9 @@ export async function buildRuntimeBundle(
 
   const { scripts, cdnLinks, runtime } = scanPage(document);
   if (!runtime) return null;
+  // Decided on the parsed page, whatever the hint above made of its bytes:
+  // the service admits runtime builds one at a time.
+  if (!allowRuntime) return fail("runtime build was not admitted", entryPath);
 
   const files = new Map(canonical.files.map((file) => [file.path, file]));
   const modules: Module[] = [];
@@ -1044,7 +1052,7 @@ export async function buildDerivative(
   if (!allowRuntime && needsRuntimeBuild(manifest, sourceBytes))
     return fail("runtime build was not admitted", manifest.entrypoint);
   return (
-    (await buildRuntimeBundle(manifest, sourceBytes)) ??
+    (await buildRuntimeBundle(manifest, sourceBytes, { allowRuntime })) ??
     buildInlineBundle(manifest, sourceBytes)
   );
 }

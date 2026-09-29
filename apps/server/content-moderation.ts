@@ -474,9 +474,51 @@ export async function blockCommentInTransaction(
  * files and interactive builds; or a comment's text. The rows stay as
  * tombstones. Safe to repeat: a purged block is skipped.
  */
+/**
+ * The advisory lock that orders a purge against the operator's legal hold and
+ * release of the same content. The purge deletes object versions outside any
+ * transaction, so a hold set meanwhile could not stop it; the operator's
+ * change waits here for a purge under way, then finds the content deleted.
+ * Taken before any row of the block (advisory, then rows, in every path).
+ */
+export const blockContentKey = (block: { revision_id?: string | null; comment_id?: string | null }) =>
+  `moderation-content:${block.revision_id ?? block.comment_id}`;
+export const lockBlockContent = (
+  c: { query: (sql: string, values: unknown[]) => Promise<unknown> },
+  block: { revision_id?: string | null; comment_id?: string | null },
+) => c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [blockContentKey(block)]);
+
 export async function purgeBlock(
   blockId: string,
   options: { now?: boolean; actor?: EventActor; reason?: string } = {},
+) {
+  const {
+    rows: [probe],
+  } = await db.query(
+    "SELECT revision_id,comment_id FROM moderation_blocks WHERE id=$1 AND purged_at IS NULL",
+    [blockId],
+  );
+  if (!probe) return { purged: false, versions: 0 };
+  const key = blockContentKey(probe);
+  // A session lock on its own connection: it must outlive the S3 deletion,
+  // which no transaction (and its idle timeout) may span.
+  const holder = await db.connect();
+  let clean = false;
+  try {
+    await holder.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [key]);
+    const result = await purgeBlockLocked(blockId, options);
+    await holder.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [key]);
+    clean = true;
+    return result;
+  } finally {
+    // A connection that could not unlock is closed, which releases the lock.
+    holder.release(clean ? undefined : true);
+  }
+}
+
+async function purgeBlockLocked(
+  blockId: string,
+  options: { now?: boolean; actor?: EventActor; reason?: string },
 ) {
   const {
     rows: [block],
@@ -1132,14 +1174,23 @@ export async function reviewRevision(revisionId: string) {
   return stored;
 }
 
-/** Unchecked revisions of the last week, tried again by the sweep. */
+/**
+ * Unchecked revisions of the last week, tried again by the sweep, and those
+ * of the last day that never got a verdict at all: the queue lives in memory,
+ * so a restart or a failed read of the source loses a review without leaving
+ * «unchecked» behind. Ten minutes are left for a review still under way.
+ */
 export async function retryUnchecked(limit = 20) {
   if (!contentModels() || !(await budgetLeft())) return 0;
   const { rows } = await db.query(
     `SELECT id FROM revisions
-     WHERE created_at>now()-interval '7 days' AND content_purged_at IS NULL
-       AND content_filter->'model'->>'state'='unchecked'
-       AND (content_filter->'model'->>'attempts')::int<$1
+     WHERE content_purged_at IS NULL
+       AND ((created_at>now()-interval '7 days'
+             AND content_filter->'model'->>'state'='unchecked'
+             AND (content_filter->'model'->>'attempts')::int<$1)
+         OR (created_at>now()-interval '1 day'
+             AND created_at<now()-interval '10 minutes'
+             AND (content_filter IS NULL OR content_filter->'model' IS NULL)))
      ORDER BY created_at DESC LIMIT $2`,
     [MAX_ATTEMPTS, limit],
   );

@@ -15,6 +15,7 @@ import {
 import { config } from "./config.ts";
 import {
   blockRevisionInTransaction,
+  lockBlockContent,
   purgeBlock,
   recordEvent,
   retentionText,
@@ -1175,7 +1176,12 @@ export async function setLegalHold(target: string, authority: string, on = true)
   const notes: string[] = [];
   await transaction(async (c) => {
     for (const block of blocks) {
-      if (on && block.purged_at) {
+      // Waits for a purge of this content under way, then sees it deleted.
+      await lockBlockContent(c, block);
+      const {
+        rows: [current],
+      } = await c.query("SELECT purged_at FROM moderation_blocks WHERE id=$1", [block.id]);
+      if (on && current?.purged_at) {
         notes.push(`${block.revision_id ?? block.comment_id}: already deleted, only metadata remain`);
         continue;
       }
@@ -1216,6 +1222,11 @@ export async function unblock(target: string, reason: string) {
   const notes: string[] = [];
   await transaction(async (c) => {
     for (const block of blocks) {
+      await lockBlockContent(c, block);
+      const {
+        rows: [current],
+      } = await c.query("SELECT purged_at FROM moderation_blocks WHERE id=$1", [block.id]);
+      block.purged_at = current?.purged_at ?? null;
       await c.query("UPDATE moderation_blocks SET released_at=now() WHERE id=$1", [block.id]);
       if (block.revision_id && !block.purged_at) {
         const opened = await c.query(

@@ -616,3 +616,18 @@ console.log(JSON.stringify(await buildDerivative(manifest, files)));`;
   assert.equal(result.failed, true);
   assert.equal(result.category, "compiler");
 });
+
+test("a module type spelled with a character reference is still a runtime page, admitted or refused", async () => {
+  const { needsRuntimeBuild } = await import("../apps/server/react-runtime.ts");
+  const page = fixture({
+    "index.html": '<!doctype html><script type="&#109;odule">const a = 1; document.body.append(String(a));</script>',
+  });
+  assert.equal(needsRuntimeBuild(page.manifest, page.bytes), true);
+  // Not admitted (another runtime build holds the slot): refused, never built.
+  const refused = await buildDerivative(page.manifest, page.bytes, { allowRuntime: false });
+  assert.equal(refused.ok, false);
+  assert.match((refused as { reason: string }).reason, /not admitted/);
+  // A plain page with an ampersand is not a runtime page.
+  const classic = fixture({ "index.html": "<!doctype html><p>Tom &amp; Jerry</p>" });
+  assert.equal(needsRuntimeBuild(classic.manifest, classic.bytes), false);
+});

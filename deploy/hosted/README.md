@@ -208,10 +208,26 @@ docker compose --env-file hosted.env run --rm restore-authorities \
 RESTORE_DESCRIPTOR=backup-$STAMP.json RESTORE_RUN_ID=… RESTORE_BACKUP_SHA256=… RESTORE_LEDGER_MANIFEST_SHA256=… \
   docker compose --env-file hosted.env run --rm restore-reconcile --confirm-closed-target
 
+# 5б. Закрыть все доступы, выданные до момента дампа (см. ниже), пока приложение остановлено
+docker compose --env-file hosted.env exec -T postgres psql -U polka_admin -d polka -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+UPDATE shares SET revoked=true WHERE NOT revoked;
+UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,clock_timestamp()) WHERE revoked_at IS NULL;
+DELETE FROM viewer_grants;
+DELETE FROM project_view_grants;
+DELETE FROM grants;
+DELETE FROM agent_connection_csrf;
+DELETE FROM sessions;
+DELETE FROM login_challenges;
+COMMIT;
+SQL
+
 # 6. Запуск
 docker compose --env-file hosted.env up -d
 rm polka.dump
 ```
+
+Шаг 5б обязателен. Дамп хранит доступы такими, какими они были в момент снимка: ссылка, сессия или токен агента, отозванные уже после него, в восстановленной базе снова действуют до своего срока, а журнал стираний (шаг 5) возвращает только удалённые аккаунты, не отзывы. Поэтому восстановленная база закрывается целиком, так же как в `scripts/restore-drill.ts`: все ссылки отозваны, все подключения агентов отозваны, сессии и временные разрешения удалены. Последствия для людей: все входят заново, агенты подключаются заново, владельцам нужно снова выдать ссылки (сами работы и версии не тронуты). Это осознанный выбор: после аварии лучше закрыть лишнее, чем открыть отозванное. Если дамп снят минуту назад и вы уверены, что после него ничего не отзывали, шаг можно пропустить, но запишите это в журнал операций.
 
 Шаг 5 обязателен, если после момента дампа кого-то удаляли (`account-erase`): иначе удалённые аккаунты вернутся. `restore-reconcile` читает журнал стираний ключом только на чтение, для каждой заявки в нём находит аккаунт в восстановленной базе и снова стирает его строки и объекты полки. Затем пишет квитанцию в `/opt/polka/restore/receipts`. Он откажет, если журнал изменился после `restore-authorities`, если база не закрыта (работают `app`, `maintenance` или `backup`) или миграции не совпадают с релизом. Для него нужны роль `polka_restore` и ключ журнала только на чтение (раздел «Удаление аккаунта»). Проверено 28.09.2026 на отдельной VM: дамп polochka.app, снятый до удаления синтетического аккаунта, восстановлен; после шага 5 аккаунт снова стёрт (строки, статус `purged`), остальные аккаунты не тронуты, сверка — 2 секунды.
 
@@ -319,16 +335,11 @@ docker compose --env-file hosted.env run --rm account-erase --account <id> --res
 **Настройка один раз.**
 
 - **Журнал стираний** — отдельный бакет с версионированием, не тот, куда пишет приложение или бэкап: из него восстановление узнаёт, какие аккаунты удалить снова после возврата к старому дампу. Ключ журнала пишет, читает и перечисляет версии, но не удаляет. В Yandex Object Storage: сервисный аккаунт без ролей в папке, ACL бакета на чтение и запись этому аккаунту и политика бакета, которая разрешает ему только `s3:PutObject`, `s3:GetObject`, `s3:GetObjectVersion`, `s3:ListBucket`, `s3:ListBucketVersions` — удаление тогда запрещено. Хранилище должно поддерживать условную запись (`If-None-Match: *`, 412 на повтор); Yandex Object Storage поддерживает (проверено 28.09.2026).
-- **Роль `polka_purge`**. На новой установке её создаёт `init-roles.sh`, если задан `POLKA_PURGE_PASSWORD`. На существующей — один раз:
+- **Роли `polka_purge` и `polka_restore`**. На новой установке их создаёт `init-roles.sh`, если заданы `POLKA_PURGE_PASSWORD` и `POLKA_RESTORE_PASSWORD`. Только при первом запуске PostgreSQL: включённые позже, они не появятся, а шаг `grants` пропускает отсутствующую роль молча. На существующей установке (и повторно, скрипт идемпотентен: создаёт недостающие роли, ставит пароль из окружения, возвращает `CONNECT`):
 
   ```sh
-  docker compose --env-file hosted.env exec -T postgres psql -U polka_admin -d postgres -v ON_ERROR_STOP=1 \
-    -v pw="$(grep '^POLKA_PURGE_PASSWORD=' hosted.env | cut -d= -f2-)" <<'SQL'
-  CREATE ROLE polka_purge LOGIN PASSWORD :'pw';
-  GRANT CONNECT ON DATABASE polka TO polka_purge;
-  ALTER ROLE polka_purge SET search_path = pg_catalog, public;
-  SQL
-  docker compose --env-file hosted.env up -d   # шаг grants выдаст ей точные функции
+  docker compose --env-file hosted.env exec -T postgres sh -s < worker-roles.sh
+  docker compose --env-file hosted.env run --rm grants   # выдаст им точные функции
   ```
 - **Для восстановления** — роль `polka_restore` (как `polka_purge`, с паролем `POLKA_RESTORE_PASSWORD`; шаг grants выдаёт ей функции восстановления) и второй ключ журнала только на чтение: `ERASURE_LEDGER_READER_ACCESS_KEY`, `ERASURE_LEDGER_READER_SECRET_KEY` (сервисный аккаунт с ACL чтения и политикой, разрешающей ему только `s3:GetObject`, `s3:GetObjectVersion`, `s3:ListBucket`, `s3:ListBucketVersions`).
 - **`hosted.env`**: `POLKA_PURGE_PASSWORD`, `ERASURE_LEDGER_ID` (любой UUID, один на установку), `ERASURE_LEDGER_ENDPOINT`, `ERASURE_LEDGER_BUCKET`, `ERASURE_LEDGER_ACCESS_KEY`, `ERASURE_LEDGER_SECRET_KEY`, `ACCOUNT_DELETION_POLICY_VERSION` (редакция Политики), `ACCOUNT_PURGE_MAX_HOURS` (720) и `BACKUP_RETENTION_MAX_DAYS` (30) — сроки, которые обещает Политика.
