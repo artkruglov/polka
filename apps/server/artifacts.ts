@@ -156,7 +156,7 @@ export const revisionDTO = (r: any): Revision => ({
       : null,
   createdAt: new Date(r.created_at).toISOString(),
 });
-export function shareDTO(s: any, latest: string): Share | null {
+export function shareDTO(s: any, latest: string, opens?: any): Share | null {
   if (!s) return null;
   const status = s.revoked
     ? "revoked"
@@ -178,6 +178,11 @@ export function shareDTO(s: any, latest: string): Share | null {
     url: ["active", "behind"].includes(status)
       ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}`
       : null,
+    opens: {
+      total: Number(opens?.total ?? 0),
+      days: Number(opens?.days ?? 0),
+      lastOpenedAt: opens?.last ? new Date(opens.last).toISOString() : null,
+    },
   };
 }
 export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
@@ -193,7 +198,7 @@ export async function getArtifacts(
   await assertActiveOwner(db, actor);
   if (!ids.length) return [];
   const { rows: artifacts } = await db.query(
-    "SELECT * FROM artifacts WHERE id=ANY($1::uuid[]) AND tenant_id=$2",
+    "SELECT * FROM artifacts WHERE id=ANY($1::uuid[]) AND tenant_id=$2 AND purged_at IS NULL",
     [ids, actor.tenant],
   );
   if (!artifacts.length) return [];
@@ -216,6 +221,15 @@ export async function getArtifacts(
       WHERE s.artifact_id=ANY($1::uuid[]) AND s.tenant_id=$2
       ORDER BY s.artifact_id,s.created_at DESC,s.id DESC`,
     [artifacts.map((a) => a.id), actor.tenant],
+  );
+  const opensByShare = new Map(
+    (
+      await db.query(
+        `SELECT share_id,sum(opens)::int AS total,count(*)::int AS days,max(last_opened_at) AS last
+         FROM share_open_days WHERE share_id=ANY($1::uuid[]) GROUP BY share_id`,
+        [shares.map((s) => s.id)],
+      )
+    ).rows.map((row) => [row.share_id, row]),
   );
   // On a department shelf each work says who saved it.
   const authors =
@@ -245,7 +259,7 @@ export async function getArtifacts(
         trashedAt: a.trashed_at ? a.trashed_at.toISOString() : null,
         lifecycleVersion: Number(a.lifecycle_version),
         revision: revisionDTO(r),
-        share: shareDTO(shareByArtifact.get(a.id), r.id),
+        share: shareDTO(shareByArtifact.get(a.id), r.id, opensByShare.get(shareByArtifact.get(a.id)?.id)),
         ...(authors && { author: authors.get(a.created_by) ?? { id: a.created_by, name: "Бывший участник" } }),
       },
     ];

@@ -323,6 +323,11 @@ export const client = {
       `/artifacts/${id}/restore`,
       input,
     ),
+  /** Delete a trashed work for good (docs/specs/WORK_DELETION.md). */
+  purgeArtifact: (
+    id: string,
+    input: { expectedLifecycleVersion: number; expectedRevisionId: string },
+  ) => request<{ id: string; purged: true }>(`/artifacts/${id}/purge`, input),
   trashArtifact: (
     id: string,
     input: { expectedLifecycleVersion: number; expectedRevisionId: string },

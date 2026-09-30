@@ -127,6 +127,7 @@ import {
 } from "./shares.ts";
 import { updateArtifactMetadata } from "./artifact-metadata.ts";
 import { transitionOwnerArtifactLifecycle } from "./artifact-trash.ts";
+import { deleteArtifactForever } from "./artifact-purge.ts";
 import {
   assertEditorialShareAccessible,
   getEditorial,
@@ -991,7 +992,7 @@ export async function createApp() {
               to_char(trashed_at AT TIME ZONE 'UTC',
                       'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_trashed_at
        FROM artifacts
-       WHERE tenant_id=$1 AND trashed_at IS NOT NULL
+       WHERE tenant_id=$1 AND trashed_at IS NOT NULL AND purged_at IS NULL
          AND ($2::timestamptz IS NULL OR (trashed_at,id)<($2,$3::uuid))
        ORDER BY trashed_at DESC,id DESC LIMIT 25`,
       [actor.tenant, cursor?.date ?? null, cursor?.id ?? null],
@@ -1018,6 +1019,10 @@ export async function createApp() {
       req.body,
       "trashed",
     ),
+  );
+  // Delete a trashed work for good (docs/specs/WORK_DELETION.md).
+  app.post("/api/artifacts/:id/purge", { bodyLimit: 1024 }, async (req) =>
+    deleteArtifactForever(await identity(req, SHELF), id(req), req.body),
   );
   app.post("/api/artifacts/:id/restore", async (req) =>
     transitionOwnerArtifactLifecycle(
@@ -1422,8 +1427,17 @@ export async function createApp() {
         )
       ).rowCount;
       const view = await issueShareGrant(c, s, candidate.artifact_id);
-      if (!editorial && viewerAccount !== candidate.account_id)
+      if (!editorial && viewerAccount !== candidate.account_id) {
         trackShareOpened(c, candidate.account_id, s.id);
+        // The author's own count of opens (docs/specs/LINK_OPENS.md): a number per day.
+        await c.query(
+          `INSERT INTO share_open_days(share_id,day,opens,last_opened_at)
+           VALUES($1,(clock_timestamp() AT TIME ZONE 'UTC')::date,1,clock_timestamp())
+           ON CONFLICT (share_id,day) DO UPDATE
+             SET opens=share_open_days.opens+1,last_opened_at=clock_timestamp()`,
+          [s.id],
+        );
+      }
       return {
         title: artifact.title ?? "Работа",
         ...view,

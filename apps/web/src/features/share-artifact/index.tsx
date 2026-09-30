@@ -19,6 +19,7 @@ import {
   dateLong,
   kindOf,
   moderationNote,
+  opensNote,
   size,
 } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
@@ -194,6 +195,9 @@ export function SharePanel({
                 <span>{moderationNote(a)}</span>
               </p>
             )}
+            <p className="fine share-opens" role="status">
+              {opensNote(a.share)}
+            </p>
             <p className="fine">
               Получатель видит версию {a.share!.number}. Действует до {dateLong(a.share!.expiresAt)}. Поисковикам передаётся запрет индексации.
             </p>

@@ -16,18 +16,25 @@ export type TrashPanelProps = {
     expectedLifecycleVersion: number;
     expectedRevisionId: string;
   }) => Promise<void>;
+  onDelete: (input: {
+    artifact: Artifact;
+    expectedLifecycleVersion: number;
+    expectedRevisionId: string;
+  }) => Promise<void>;
   onOpenArtifact: (artifact: Artifact) => void;
 };
 
-function restoreError(error: unknown) {
+function restoreError(error: unknown, fallback = "Работу не удалось восстановить. Попробуйте ещё раз.") {
+  // The server's own words for a refusal (a complaint on the work, a published
+  // one) say why; a plain conflict means the work changed meanwhile.
+  if (error instanceof Error && error.message && (error as { details?: { reason?: unknown } }).details?.reason)
+    return error.message;
   if (error && typeof error === "object" && "status" in error) {
     const status = (error as { status?: unknown }).status;
     if (status === 409)
-      return "Работа изменилась. Обновите список корзины и повторите восстановление.";
+      return "Работа изменилась. Обновите список корзины и повторите.";
   }
-  return error instanceof Error && error.message
-    ? error.message
-    : "Работу не удалось восстановить. Попробуйте ещё раз.";
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export function TrashPanel({
@@ -37,6 +44,7 @@ export function TrashPanel({
   error = "",
   onLoad,
   onRestore,
+  onDelete,
   onOpenArtifact,
 }: TrashPanelProps) {
   // On a department shelf only who may change a work restores it.
@@ -46,6 +54,31 @@ export function TrashPanel({
   const [restoreErrors, setRestoreErrors] = useState<Record<string, string>>(
     {},
   );
+
+  // Deleting for good asks once more, in the card itself.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const remove = async (artifact: Artifact) => {
+    if (restoring.current) return;
+    restoring.current = true;
+    setBusyId(artifact.id);
+    setRestoreErrors((current) => ({ ...current, [artifact.id]: "" }));
+    try {
+      await onDelete({
+        artifact,
+        expectedLifecycleVersion: artifact.lifecycleVersion,
+        expectedRevisionId: artifact.revision.id,
+      });
+      setConfirming(null);
+    } catch (reason) {
+      setRestoreErrors((current) => ({
+        ...current,
+        [artifact.id]: restoreError(reason, "Работу не удалось удалить. Попробуйте ещё раз."),
+      }));
+    } finally {
+      restoring.current = false;
+      setBusyId(null);
+    }
+  };
 
   const restore = async (artifact: Artifact) => {
     if (restoring.current) return;
@@ -76,13 +109,14 @@ export function TrashPanel({
           <p className="trash-panel-kicker eyebrow">Архив хранения</p>
           <h2 id="trash-panel-title">Корзина</h2>
           <p className="trash-panel-muted">
-            Работы лежат в корзине, пока вы их не восстановите: сами они не
-            удаляются и продолжают занимать место. Старые ссылки закрыты и не
-            оживут после восстановления.
+            Работы лежат в корзине, пока вы их не восстановите или не удалите:
+            сами они не удаляются и продолжают занимать место. Старые ссылки
+            закрыты и не оживут после восстановления.
           </p>
           <p className="trash-panel-muted">
-            Удалить работы навсегда можно вместе с полкой:{" "}
-            <a href="/settings#delete-shelf">Настройки → «Удалить полку»</a>.
+            «Удалить навсегда» стирает работу и все её версии, возвращает
+            место и не восстанавливается. Все работы сразу можно удалить вместе
+            с полкой: <a href="/settings#delete-shelf">Настройки → «Удалить полку»</a>.
           </p>
         </div>
         <Button type="button" onClick={() => onLoad()} disabled={loading}>
@@ -133,17 +167,49 @@ export function TrashPanel({
                   >
                     Версии и скачать
                   </Button>
-                  {access.changes(artifact.author) && (
-                  <Button
-                    variant="primary"
-                    type="button"
-                    onClick={() => void restore(artifact)}
-                    disabled={busyId !== null}
-                  >
-                    {busyId === artifact.id
-                      ? "Восстанавливаем…"
-                      : "Восстановить"}
-                  </Button>
+                  {access.changes(artifact.author) && confirming !== artifact.id && (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={() => setConfirming(artifact.id)}
+                        disabled={busyId !== null}
+                      >
+                        Удалить навсегда
+                      </Button>
+                      <Button
+                        variant="primary"
+                        type="button"
+                        onClick={() => void restore(artifact)}
+                        disabled={busyId !== null}
+                      >
+                        {busyId === artifact.id
+                          ? "Восстанавливаем…"
+                          : "Восстановить"}
+                      </Button>
+                    </>
+                  )}
+                  {access.changes(artifact.author) && confirming === artifact.id && (
+                    <div role="alertdialog" aria-label="Удалить работу навсегда">
+                      <p className="trash-panel-muted">
+                        «{artifact.title}» и все её версии будут стёрты. Вернуть
+                        их нельзя.
+                      </p>
+                      <Button
+                        variant="primary"
+                        type="button"
+                        onClick={() => void remove(artifact)}
+                        disabled={busyId !== null}
+                      >
+                        {busyId === artifact.id ? "Удаляем…" : "Да, удалить навсегда"}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => setConfirming(null)}
+                        disabled={busyId !== null}
+                      >
+                        Отмена
+                      </Button>
+                    </div>
                   )}
                 </div>
               </article>

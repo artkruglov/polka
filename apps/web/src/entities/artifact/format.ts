@@ -134,6 +134,18 @@ export const dateTime = (s: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+const times = new Intl.PluralRules("ru");
+/**
+ * What the author is told about a link's opens: how many times recipients
+ * opened it and when last. Not who: nobody is named (docs/specs/LINK_OPENS.md).
+ */
+export const opensNote = (share: Artifact["share"]) => {
+  const opens = share?.opens;
+  if (!opens || opens.total === 0) return "Пока никто не открывал ссылку.";
+  const word =
+    ({ one: "раз", few: "раза" } as Record<string, string>)[times.select(opens.total)] ?? "раз";
+  return `Открывали ${opens.total} ${word}${opens.lastOpenedAt ? `, последний раз ${dateTime(opens.lastOpenedAt)}` : ""}. Себя не считаем.`;
+};
 /** Whether an active link exists (a link that is behind still opens). */
 export const isLinked = (a: Pick<Artifact, "share">) =>
   !!a.share && ["active", "behind"].includes(a.share.status);

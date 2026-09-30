@@ -234,8 +234,8 @@ export async function listArtifactsForAgent(
     input.state === "active" ? "artifact.updated_at" : "artifact.trashed_at";
   const statePredicate =
     input.state === "active"
-      ? "artifact.trashed_at IS NULL"
-      : "artifact.trashed_at IS NOT NULL";
+      ? "artifact.trashed_at IS NULL AND artifact.purged_at IS NULL"
+      : "artifact.trashed_at IS NOT NULL AND artifact.purged_at IS NULL";
   // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
   const { rows } = await db.query(
     `SELECT ${artifactColumns},

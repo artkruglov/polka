@@ -132,5 +132,7 @@
   "tests/extensions.test.ts",
   "tests/agent-scope.test.ts",
   "tests/login-code-mail.test.ts",
-  "tests/signup-code-help.test.ts"
+  "tests/signup-code-help.test.ts",
+  "tests/artifact-purge.test.ts",
+  "tests/link-opens.test.ts"
 ]
