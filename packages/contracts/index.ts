@@ -260,6 +260,11 @@ export interface Share {
   appeal?: string | null;
   url: string | null;
   expiresAt: string;
+  /**
+   * How often recipients opened the link (not counting the owner): a total, the
+   * number of days it was opened on and the last time. Nothing about who.
+   */
+  opens?: { total: number; days: number; lastOpenedAt: string | null };
 }
 export interface Artifact {
   id: string;

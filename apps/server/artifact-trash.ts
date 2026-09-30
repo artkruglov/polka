@@ -57,7 +57,7 @@ export async function transitionArtifactLifecycleInTransaction(
     "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
     [artifactId, actor.tenant],
   );
-  if (!artifact) throw missing();
+  if (!artifact || artifact.purged_at) throw missing();
   await assertArtifactInAgentScope(c, actor, artifactId);
   assertMayChange(role, artifact.created_by, actor.id);
   if (artifact.latest_revision_id !== input.expectedRevisionId)

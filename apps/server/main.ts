@@ -78,6 +78,8 @@ const sweep = async () => {
     const { sweepBlocks, retryUnchecked } = await import("./content-moderation.ts");
     await sweepBlocks();
     await retryUnchecked();
+    // A work deleted for good whose objects a crash left behind (artifact-purge.ts).
+    await (await import("./artifact-purge.ts")).finishPendingArtifactPurges();
   } catch {
     console.error(JSON.stringify({ event: "moderation.sweep_failed" }));
   }

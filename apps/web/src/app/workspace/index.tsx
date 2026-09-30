@@ -620,6 +620,18 @@ export function App() {
                 setNotice("Работа восстановлена. Старые ссылки закрыты.");
                 setRefresh((value) => value + 1);
               }}
+              onDelete={async ({ artifact, expectedLifecycleVersion, expectedRevisionId }) => {
+                const expectedGeneration = routeGeneration.current;
+                const expectedAccount = account;
+                await client.purgeArtifact(artifact.id, { expectedLifecycleVersion, expectedRevisionId });
+                if (
+                  routeGeneration.current !== expectedGeneration ||
+                  accountRef.current !== expectedAccount
+                )
+                  return;
+                setNotice("Работа удалена навсегда, место освобождено.");
+                setRefresh((value) => value + 1);
+              }}
               onOpenArtifact={(artifact) => open(artifact.id)}
             />
           ) : (

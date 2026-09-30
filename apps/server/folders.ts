@@ -111,7 +111,7 @@ export async function deleteFolderInTransaction(
     rows: [counts],
   } = await c.query(
     `SELECT count(*) FILTER (WHERE trashed_at IS NULL) AS active,
-            count(*) FILTER (WHERE trashed_at IS NOT NULL) AS trashed
+            count(*) FILTER (WHERE trashed_at IS NOT NULL AND purged_at IS NULL) AS trashed
      FROM artifacts WHERE tenant_id=$1 AND folder_id=$2`,
     [actor.tenant, folder.id],
   );
