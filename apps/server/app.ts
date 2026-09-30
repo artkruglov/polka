@@ -114,7 +114,12 @@ import {
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
-import { isPublishApiPath, registerPublishApi } from "./publish-api.ts";
+import {
+  MEDIA_UPLOAD_MS,
+  isMediaUploadPath,
+  isPublishApiPath,
+  registerPublishApi,
+} from "./publish-api.ts";
 import {
   enableOwnerShare,
   publishOwnerShare,
@@ -269,7 +274,9 @@ export async function createApp() {
   const app = Fastify({
     logger: false,
     bodyLimit: MAX_BYTES,
-    requestTimeout: 30000,
+    // A video upload (publish-api.ts) is streamed and may take minutes; every
+    // other request has 30 s to arrive (the onRequest hook below).
+    requestTimeout: MEDIA_UPLOAD_MS,
     connectionTimeout: 30000,
     trustProxy: config.TRUST_PROXY.length ? config.TRUST_PROXY : false,
   });
@@ -279,6 +286,12 @@ export async function createApp() {
     { parseAs: "buffer" },
     (_req, body, done) => done(null, body),
   );
+  app.addHook("onRequest", async (req) => {
+    if (req.raw.complete || isMediaUploadPath(req.raw.url ?? "")) return;
+    setTimeout(() => {
+      if (!req.raw.complete) req.raw.destroy();
+    }, 30000).unref();
+  });
   app.addHook("onRequest", async (req, reply) => {
     reply.headers({
       "cache-control": "no-store",

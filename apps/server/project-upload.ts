@@ -4,6 +4,7 @@
 // upload, each step in its own transaction that rechecks the connection and
 // its scope: capture for a new work, revise for a new version.
 import { randomBytes, randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
 import { z } from "zod";
 import type { PoolClient } from "pg";
 import {
@@ -19,6 +20,7 @@ import {
   prepareBundleFinalize,
   stageBundleFile,
   stageBundleFileCopy,
+  stageBundleMedia,
   uploadBundleFileInTransaction,
   type Actor,
 } from "./artifacts.ts";
@@ -140,6 +142,26 @@ export async function putProjectFile(
     const who = owner(verified);
     await lockProjectUpload(c, who, uploadId);
     return uploadBundleFileInTransaction(c, who, uploadId, index, bytes, staged);
+  });
+}
+
+/**
+ * A video file (docs/specs/PROJECT_VIDEO.md): streamed to the store as it
+ * arrives, checked against its manifest entry on the way, then recorded like
+ * any other file.
+ */
+export async function putProjectMedia(
+  actor: ServiceActor,
+  uploadId: string,
+  index: number,
+  body: Readable,
+) {
+  const scope = await scopeOf(actor, uploadId);
+  const staged = await stageBundleMedia(owner(actor), uploadId, index, body, () => body.resume());
+  return withServiceActorTransaction(actor, scope, async (c, verified) => {
+    const who = owner(verified);
+    await lockProjectUpload(c, who, uploadId);
+    return uploadBundleFileInTransaction(c, who, uploadId, index, null, staged);
   });
 }
 

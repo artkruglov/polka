@@ -7,8 +7,10 @@
 //     node polka-publish-project.mjs ./Y360-v2 --title "Яндекс 360 + агенты"
 //   node polka-publish-project.mjs ./Y360-v2 --dry-run
 import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { Readable } from "node:stream";
 import { parseArgs } from "node:util";
 
 // Empty in the repository: the address is required. An installation that
@@ -16,6 +18,10 @@ import { parseArgs } from "node:util";
 const DEFAULT_ENDPOINT = "";
 const MAX_FILE = 5 * 1024 * 1024;
 const MAX_TOTAL = 48 * 1024 * 1024;
+// Video (docs/specs/PROJECT_VIDEO.md): apart from the 48 MB of pages, pictures and text.
+const MAX_VIDEO_FILE = 200 * 1024 * 1024;
+const MAX_VIDEO_TOTAL = 400 * 1024 * 1024;
+const VIDEO_TIMEOUT_MS = 30 * 60_000;
 const MAX_FILES = 400;
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
@@ -36,7 +42,10 @@ const MIME = {
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".woff2": "font/woff2",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
+const isVideo = (mime) => mime.startsWith("video/");
 // Never part of what a reader opens.
 const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".git", ".venv", "venv"]);
 const SKIP_FILE = /^\.|\.pyc$/;
@@ -122,7 +131,7 @@ the next version of that project (no --artifact needed), sends only the files
 that changed (Полка copies the rest) and records the new version there.
 
 Skipped without asking: hidden files, node_modules, __pycache__, .git, *.pyc,
-files over 5 MB, unsupported types and names outside [A-Za-z0-9._-].
+files over 5 MB (video: 200 MB), unsupported types and names outside [A-Za-z0-9._-].
 
 Environment:
   POLKA_TOKEN        Agent token from Полка → Агенты (required; never pass it as an argument)
@@ -164,7 +173,8 @@ async function walk(root, exclude) {
       else if (!mime) skipped.push({ path, reason: "unsupported type" });
       else if (!path.split("/").every((segment) => SEGMENT.test(segment) && !segment.endsWith(".")) || path.split("/").length > 8 || path.length > 200)
         skipped.push({ path, reason: "name outside [A-Za-z0-9._-] or too deep" });
-      else if (size > MAX_FILE) skipped.push({ path, reason: `larger than 5 MB (${(size / 1048576).toFixed(1)} MB)` });
+      else if (size > (isVideo(mime) ? MAX_VIDEO_FILE : MAX_FILE))
+        skipped.push({ path, reason: `larger than ${isVideo(mime) ? 200 : 5} MB (${(size / 1048576).toFixed(1)} MB)` });
       else if (size === 0) skipped.push({ path, reason: "empty" });
       else files.push({ path, full, mime, size });
     }
@@ -210,7 +220,8 @@ const retryAfter = (value, fallback) => {
   return Number.isFinite(at) ? Math.max(0, (at - Date.now()) / 1000) : fallback;
 };
 
-async function call(endpoint, token, method, path, body, contentType) {
+/** `stream`: { path, size } sends that file as a stream (a video), never held whole. */
+async function call(endpoint, token, method, path, body, contentType, stream) {
   let lastError;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     const last = attempt === ATTEMPTS;
@@ -220,10 +231,12 @@ async function call(endpoint, token, method, path, body, contentType) {
         method,
         headers: {
           authorization: `Bearer ${token}`,
-          ...(body !== undefined ? { "content-type": contentType } : {}),
+          ...(body !== undefined || stream ? { "content-type": contentType } : {}),
+          ...(stream ? { "content-length": String(stream.size) } : {}),
         },
-        body,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        body: stream ? Readable.toWeb(createReadStream(stream.path)) : body,
+        ...(stream ? { duplex: "half" } : {}),
+        signal: AbortSignal.timeout(stream ? VIDEO_TIMEOUT_MS : TIMEOUT_MS),
       });
     } catch (error) {
       // The network or a timeout: wait a little, then try again.
@@ -365,7 +378,13 @@ async function main() {
   if (!files.length) throw new CliError("Nothing to publish in this folder.", 2);
   if (files.length > MAX_FILES)
     throw new CliError(`${files.length} files; a project holds at most ${MAX_FILES}. Use --exclude.`, 2);
-  const total = files.reduce((sum, file) => sum + file.size, 0);
+  const videoTotal = files.filter((file) => isVideo(file.mime)).reduce((sum, file) => sum + file.size, 0);
+  if (videoTotal > MAX_VIDEO_TOTAL)
+    throw new CliError(
+      `${(videoTotal / 1048576).toFixed(0)} MB of video; a project holds at most 400 MB of it. Use --exclude or shorten the videos.`,
+      2,
+    );
+  const total = files.reduce((sum, file) => sum + file.size, 0) - videoTotal;
   if (total > MAX_TOTAL) {
     // Name the heaviest folders, so the caller knows what to --exclude.
     const byFolder = new Map();
@@ -388,6 +407,13 @@ async function main() {
   if (!entryFile || !["text/markdown", "text/html"].includes(entryFile.mime))
     throw new CliError("No README.md, index.md or index.html at the top; pass --entry <path>.", 2);
   for (const file of files) {
+    if (isVideo(file.mime)) {
+      // Hashed as a stream; sent as a stream.
+      const hash = createHash("sha256");
+      for await (const chunk of createReadStream(file.full)) hash.update(chunk);
+      file.sha256 = hash.digest("hex");
+      continue;
+    }
     file.bytes = await readFile(file.full);
     file.sha256 = createHash("sha256").update(file.bytes).digest("hex");
   }
@@ -397,7 +423,7 @@ async function main() {
     title: (title.trim() || basename(resolve(root))).slice(0, 160),
     entry,
     files: files.length,
-    megabytes: Number((total / 1048576).toFixed(1)),
+    megabytes: Number(((total + videoTotal) / 1048576).toFixed(1)),
     skipped,
   };
   if (values["dry-run"]) {
@@ -453,7 +479,11 @@ async function main() {
     let sent = 0;
     const total = toSend.length;
     for (const { index, path } of toSend) {
-      await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, byPath.get(path).bytes, "application/octet-stream");
+      const file = byPath.get(path);
+      if (isVideo(file.mime)) {
+        if (process.stderr.isTTY) process.stderr.write(`\r${path} (${(file.size / 1048576).toFixed(0)} MB)…`);
+        await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/media/${index}`, undefined, "application/octet-stream", { path: file.full, size: file.size });
+      } else await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, file.bytes, "application/octet-stream");
       sent++;
       if (process.stderr.isTTY) process.stderr.write(`\r${sent}/${total} files sent`);
       else if (sent % 25 === 0 || sent === total) process.stderr.write(`${sent}/${total} files sent\n`);

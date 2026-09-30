@@ -9,8 +9,11 @@
 // `polka-publish-project.mjs ./Y360-v2` later saves the next version of that
 // work and sends only the files that changed.
 import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
 import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
 
 // Empty in the repository: the address is required. An installation that
@@ -18,6 +21,9 @@ import { parseArgs } from "node:util";
 const DEFAULT_ENDPOINT = "";
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
+// A video is large: written to disk as it arrives, with time for a slow link.
+const VIDEO = /^video\//;
+const VIDEO_TIMEOUT_MS = 30 * 60_000;
 const STATE_FILE = ".polka.json";
 // A path segment Полка accepts (packages/contracts/bundle.ts): no leading dot,
 // so nothing like .git/hooks or .polka.json can arrive from a manifest.
@@ -50,8 +56,8 @@ class CliError extends Error {
   }
 }
 
-/** Writes a file inside root without following a link: every folder on the way, and the file, must be what this run made or a plain one. */
-async function safeWrite(root, target, bytes) {
+/** Checks the way to a file inside root: every folder on it, and the file, must be what this run made or a plain one, never a link. Makes the folders. */
+async function checkedPath(root, target) {
   const parts = target.slice(root.length + 1).split(sep);
   let at = root;
   for (const [index, part] of parts.entries()) {
@@ -63,6 +69,11 @@ async function safeWrite(root, target, bytes) {
       else if (!info.isDirectory()) throw new CliError(`${at} is a file, not a folder.`);
     } else if (info && !info.isFile()) throw new CliError(`${at} is not a plain file.`);
   }
+}
+
+/** Writes a file inside root without following a link. */
+async function safeWrite(root, target, bytes) {
+  await checkedPath(root, target);
   // Renamed over the target: a link that appears meanwhile is replaced, not followed.
   const temp = `${target}.polka-${process.pid}`;
   try {
@@ -74,10 +85,48 @@ async function safeWrite(root, target, bytes) {
   }
 }
 
+/** A large file (a video) from the response's stream, written as it arrives and checked at the end; never held whole. */
+async function safeWriteStream(root, target, response, file) {
+  await checkedPath(root, target);
+  const temp = `${target}.polka-${process.pid}`;
+  const hash = createHash("sha256");
+  let size = 0;
+  try {
+    await pipeline(
+      Readable.fromWeb(response.body),
+      new Transform({
+        transform(chunk, _encoding, done) {
+          hash.update(chunk);
+          size += chunk.length;
+          done(null, chunk);
+        },
+      }),
+      createWriteStream(temp, { flags: "wx" }),
+    );
+    if (size !== file.size || hash.digest("hex") !== file.sha256)
+      throw new CliError(`${file.path} arrived damaged; run the command again.`);
+    await rename(temp, target);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
+/** The SHA-256 of a file on disk, read as a stream; null when there is none. */
+async function hashOf(path) {
+  const hash = createHash("sha256");
+  try {
+    await pipeline(createReadStream(path), hash);
+  } catch {
+    return null;
+  }
+  return hash.digest("hex");
+}
+
 const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, Math.min(seconds, 60) * 1000));
 
 /** One request with retries on the network, 429 and 5xx; the response when ok. */
-async function request(endpoint, token, path) {
+async function request(endpoint, token, path, timeoutMs = TIMEOUT_MS) {
   let lastError;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     const last = attempt === ATTEMPTS;
@@ -85,7 +134,7 @@ async function request(endpoint, token, path) {
     try {
       response = await fetch(new URL(path.replace(/^\//, ""), endpoint.replace(/\/?$/, "/")), {
         headers: { authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       lastError = new CliError(`Network error: ${error?.message ?? error}`);
@@ -166,13 +215,20 @@ async function main() {
       endpoint,
       token,
       `/api/v1/works/${artifactId}/revisions/${version.revisionId}/files/${file.index}`,
+      VIDEO.test(file.mime) ? VIDEO_TIMEOUT_MS : TIMEOUT_MS,
     );
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256)
-      throw new CliError(`${file.path} arrived damaged; run the command again.`);
-    const local = await readFile(file.target).catch(() => null);
-    if (local && !local.equals(bytes)) overwritten.push(file.path);
-    await safeWrite(root, file.target, bytes);
+    if (VIDEO.test(file.mime)) {
+      const local = await hashOf(file.target);
+      if (local && local !== file.sha256) overwritten.push(file.path);
+      await safeWriteStream(root, file.target, response, file);
+    } else {
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256)
+        throw new CliError(`${file.path} arrived damaged; run the command again.`);
+      const local = await readFile(file.target).catch(() => null);
+      if (local && !local.equals(bytes)) overwritten.push(file.path);
+      await safeWrite(root, file.target, bytes);
+    }
     done++;
     if (process.stderr.isTTY) process.stderr.write(`\r${done}/${targets.length} files`);
     else if (done % 25 === 0 || done === targets.length) process.stderr.write(`${done}/${targets.length} files\n`);

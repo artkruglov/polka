@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 49 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 49);
+test("migration catalog is the complete contiguous schema 50 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 50);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -148,7 +148,7 @@ test("exported migration catalog cannot be mutated at runtime", () => {
   assert.ok(Object.isFrozen(EXPECTED_MIGRATION_VERSIONS));
 });
 
-test("049 indexes the links of a revision and the live works of a folder", async () => {
+test("049 indexes the links of a revision and the live works of a folder; 050 opens video", async () => {
   const sql = await readFile(
     migrationFileUrl("049_share_revision_and_folder_indexes.sql"),
     "utf8",
@@ -161,9 +161,12 @@ test("049 indexes the links of a revision and the live works of a folder", async
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>49\n/, recipe);
-    assert.match(text, /001 through 049/, recipe);
+    assert.match(text, /schema_migrations\)<>50\n/, recipe);
+    assert.match(text, /001 through 050/, recipe);
   }
+  const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
+  assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
+  assert.match(video, /mime IN \('video\/mp4','video\/webm'\) AND size <= 209715200/);
 });
 
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {

@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
+import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   HTML_PROFILES,
   MAX_BYTES,
   PROJECT_MAX_FILES,
+  PROJECT_VIDEO_MAX_FILE_BYTES,
   uuid,
 } from "../../packages/contracts/index.ts";
 import {
@@ -12,6 +14,7 @@ import {
   finalizeProjectUpload,
   reuseProjectFiles,
   putProjectFile,
+  putProjectMedia,
 } from "./project-upload.ts";
 import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
 import { reviseWithEdits } from "./agent-edits.ts";
@@ -45,8 +48,13 @@ export const PUBLISH_API_PATHS = new Set([
 export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
   pathname === "/api/v1/projects" ||
-  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|finalize|reuse)$/i.test(pathname) ||
+  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|media\/\d{1,3}|finalize|reuse)$/i.test(pathname) ||
   /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
+
+/** A video file's stream (docs/specs/PROJECT_VIDEO.md): it alone may take minutes to arrive. */
+export const MEDIA_UPLOAD_MS = 20 * 60 * 1000;
+export const isMediaUploadPath = (url: string) =>
+  /^\/api\/v1\/projects\/[0-9a-f-]{36}\/media\/\d{1,3}(?:\?|$)/i.test(url);
 
 export const editsBodySchema = z
   .object({
@@ -391,6 +399,38 @@ export async function registerPublishApi(app: FastifyInstance) {
       return putProjectFile(actor, params.uploadId, params.index, req.body);
     },
   );
+  // A video file (docs/specs/PROJECT_VIDEO.md): its bytes are streamed to the
+  // store as they arrive, never held whole, so this route takes the body raw.
+  await app.register(async (media) => {
+    // Encapsulated: the app's buffering parser stays for every other route.
+    media.removeContentTypeParser("application/octet-stream");
+    media.addContentTypeParser("application/octet-stream", (_req, payload, done) =>
+      done(null, payload),
+    );
+    media.put(
+      "/api/v1/projects/:uploadId/media/:index",
+      { bodyLimit: PROJECT_VIDEO_MAX_FILE_BYTES },
+      async (req, reply) => {
+        try {
+          const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
+          const params = z
+            .object({
+              uploadId: uuid,
+              index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+            })
+            .parse(req.params);
+          if (!req.headers["content-length"])
+            throw new Problem(411, "invalid", "Укажите Content-Length: размер видео известен заранее.");
+          return await putProjectMedia(actor, params.uploadId, params.index, req.body as Readable);
+        } catch (error) {
+          // Refused, maybe before a byte was read: do not sit through the rest of a
+          // 200 MB body (this route alone may take 20 minutes to receive one).
+          reply.header("connection", "close");
+          throw error;
+        }
+      },
+    );
+  });
   // polka push: the files a new version keeps unchanged are copied, not sent.
   app.post("/api/v1/projects/:uploadId/reuse", async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
@@ -422,7 +462,8 @@ export async function registerPublishApi(app: FastifyInstance) {
         .header("cache-control", "no-store")
         .header("x-content-type-options", "nosniff")
         .header("x-polka-sha256", file.sha256)
-        .send(file.bytes);
+        .header("content-length", file.size)
+        .send("stream" in file ? file.stream : file.bytes);
     },
   );
   app.post("/api/v1/projects/:uploadId/finalize", async (req, reply) => {

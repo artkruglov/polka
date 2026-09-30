@@ -5,6 +5,10 @@ import {
   MIME,
   PROJECT_MAX_BYTES,
   PROJECT_MAX_FILES,
+  PROJECT_VIDEO_MAX_BYTES,
+  PROJECT_VIDEO_MAX_FILE_BYTES,
+  VIDEO_MIME,
+  isVideoMime,
   sourceUrlSchema,
   uuid,
 } from "./index.ts";
@@ -19,8 +23,10 @@ const BUNDLE_MIME = [
   // Projects only (docs/specs/PROJECTS.md): documents and screen recordings.
   "text/markdown",
   "image/gif",
+  // Video: projects only, and only on a shelf that has it (docs/specs/PROJECT_VIDEO.md).
+  ...VIDEO_MIME,
 ] as const;
-const PROJECT_ONLY_MIME = new Set<string>(["text/markdown", "image/gif"]);
+const PROJECT_ONLY_MIME = new Set<string>(["text/markdown", "image/gif", ...VIDEO_MIME]);
 /** A project's entry: its README, an index document or an index page. */
 export const PROJECT_ENTRY_MIME = new Set<string>(["text/markdown", "text/html"]);
 export const PROJECT_RUNTIME = "project-v1";
@@ -69,10 +75,14 @@ const fileSchema = z
   .object({
     path: pathSchema,
     mime: z.enum(BUNDLE_MIME),
-    size: z.number().int().min(0).max(MAX_BYTES),
+    size: z.number().int().min(0).max(PROJECT_VIDEO_MAX_FILE_BYTES),
     sha256: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/),
   })
-  .strict();
+  .strict()
+  .refine(
+    (file) => isVideoMime(file.mime) || file.size <= MAX_BYTES,
+    { path: ["size"], message: `a file of this type is at most ${MAX_BYTES} bytes` },
+  );
 
 const provenanceSchema = z
   .object({
@@ -129,8 +139,10 @@ const manifestInputSchema = z
       { path: string; size: number; index: number }
     >();
     let total = 0;
+    let video = 0;
     for (const [index, file] of value.files.entries()) {
-      total += file.size;
+      if (isVideoMime(file.mime)) video += file.size;
+      else total += file.size;
       const key = file.path.toLocaleLowerCase("en-US");
       const previous = paths.get(key);
       if (previous)
@@ -149,6 +161,12 @@ const manifestInputSchema = z
         code: "custom",
         path: ["files"],
         message: `total file size must be between 1 and ${maxTotal} bytes`,
+      });
+    if (video > PROJECT_VIDEO_MAX_BYTES)
+      context.addIssue({
+        code: "custom",
+        path: ["files"],
+        message: `videos together must be at most ${PROJECT_VIDEO_MAX_BYTES} bytes`,
       });
     if (!project && value.files.length > 64)
       context.addIssue({

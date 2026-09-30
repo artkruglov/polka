@@ -7,6 +7,16 @@ export const MAX_BYTES = 5 * 1024 * 1024;
  */
 export const PROJECT_MAX_FILES = 400;
 export const PROJECT_MAX_BYTES = 48 * 1024 * 1024;
+/**
+ * Video in a project (docs/specs/PROJECT_VIDEO.md): a file of these types may
+ * be up to PROJECT_VIDEO_MAX_FILE_BYTES and a project's videos together up to
+ * PROJECT_VIDEO_MAX_BYTES, apart from the 48 MiB of pages, pictures and text.
+ */
+export const VIDEO_MIME = ["video/mp4", "video/webm"] as const;
+export const isVideoMime = (mime: string) =>
+  (VIDEO_MIME as readonly string[]).includes(mime);
+export const PROJECT_VIDEO_MAX_FILE_BYTES = 200 * 1024 * 1024;
+export const PROJECT_VIDEO_MAX_BYTES = 400 * 1024 * 1024;
 /** Longest stored title; every path that names a work uses this one limit. */
 export const MAX_TITLE = 160;
 /** Around a found word in Artifact.snippet; never part of a work's text. */
