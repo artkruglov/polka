@@ -29,6 +29,7 @@ import {
   projectDocumentPage,
   renderProjectMarkdownBounded,
 } from "./project-markdown.ts";
+import { bump } from "./runtime-stats.ts";
 import { readBlob, readStream, sha256 } from "./storage.ts";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -120,13 +121,39 @@ export async function issueRecipientProjectView(sourceGrant: string) {
   return viewResult(token, grant.expires_at);
 }
 
-/** Every read rechecks trash, logout, revoke, the link's expiry and the owner. */
+/**
+ * A page of a project asks for dozens of files, and each one asks whether the
+ * view is still allowed. The answer is kept for VIEWER_AUTH_CACHE_SECONDS (and
+ * never past the view's own end), so a revoke, a trashed work or a logout
+ * closes an open view within that time, not on the very next file. Only a
+ * yes is kept: a no is asked again.
+ */
+const checked = new Map<string, { at: number; until: number; revision: any }>();
 async function authorizedProject(token: string) {
+  const window = config.VIEWER_AUTH_CACHE_SECONDS * 1000;
+  const now = Date.now();
+  const kept = checked.get(token);
+  if (window > 0 && kept && now < kept.at + window && now < kept.until) {
+    bump("viewer.check.cached");
+    return kept.revision;
+  }
+  checked.delete(token);
+  const revision = await authorizedProjectNow(token);
+  if (revision && window > 0) {
+    bump("viewer.check.asked");
+    if (checked.size >= 500) checked.delete(checked.keys().next().value!);
+    checked.set(token, { at: now, until: new Date(revision.expires_at).getTime(), revision });
+  }
+  return revision;
+}
+
+/** Every read rechecks trash, logout, revoke, the link's expiry and the owner. */
+async function authorizedProjectNow(token: string) {
   if (!config.HTML_LIVE_ENABLED || !TOKEN.test(token)) return null;
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT r.id,r.manifest,pv.share_id,pv.owner_session_hash FROM project_view_grants pv
+    `SELECT r.id,r.manifest,pv.share_id,pv.owner_session_hash,pv.expires_at FROM project_view_grants pv
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      JOIN tenants tenant ON tenant.id=r.tenant_id AND tenant.state='active'
@@ -184,7 +211,7 @@ export async function renewProjectView(current: string) {
 
 /** The file a path names: itself, or a folder's index page or README. */
 function fileAt(
-  manifest: { entrypoint: string; files: Array<{ path: string; mime: string; size: number }> },
+  manifest: { entrypoint: string; files: Array<{ path: string; mime: string; size: number; sha256: string }> },
   raw: string,
 ) {
   const byPath = new Map(manifest.files.map((file) => [file.path, file]));
@@ -315,6 +342,46 @@ const wrapperPage = (title: string, body: string, token: string) =>
   projectDocumentPage({ title, body }, base(token) + NAV_SCRIPT);
 
 /**
+ * Where each file of a version is stored. A version never changes, so this is
+ * read once (a project has at most 400 files) and kept.
+ */
+const filesOfRevision = new Map<string, Map<string, { object_key: string; object_version: string }>>();
+async function storedFiles(revisionId: string) {
+  const kept = filesOfRevision.get(revisionId);
+  if (kept) return kept;
+  const rows = (
+    await db.query("SELECT path,object_key,object_version FROM revision_files WHERE revision_id=$1", [revisionId])
+  ).rows;
+  const map = new Map(rows.map((row) => [row.path as string, row]));
+  if (filesOfRevision.size >= 200) filesOfRevision.delete(filesOfRevision.keys().next().value!);
+  filesOfRevision.set(revisionId, map);
+  return map;
+}
+
+/**
+ * A file of a version is what its SHA-256 says, so a browser may keep it for a
+ * minute and ask again with If-None-Match; the answer is then a 304 without
+ * reading the object. Documents (pages, Markdown) are built per view and
+ * stay uncached. Returns true when the 304 was sent.
+ */
+function cacheableFile(
+  req: { headers: Record<string, string | string[] | undefined> },
+  reply: { header: (name: string, value: string) => unknown; status: (code: number) => { send: () => unknown } },
+  sha: string,
+  ranged: boolean,
+) {
+  const tag = `"${sha}"`;
+  reply.header("etag", tag);
+  reply.header("cache-control", "private, max-age=60");
+  if (!ranged && req.headers["if-none-match"] === tag) {
+    bump("viewer.file.304");
+    reply.status(304).send();
+    return true;
+  }
+  return false;
+}
+
+/**
  * Fonts, module scripts, stylesheets (Vite writes <link crossorigin>), fetch()
  * and media with crossorigin are requested in CORS mode, and a sandboxed
  * page's origin is "null". The token in the path is the permission; the
@@ -343,12 +410,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     // A folder's address opens its page at its own path, so relative links work.
     if (navigate && file.path !== path && (rawPath !== "" || file.path.includes("/")))
       return reply.redirect(base(token) + file.path.split("/").map(encodeURIComponent).join("/"), 303);
-    const stored = (
-      await db.query(
-        "SELECT object_key,object_version FROM revision_files WHERE revision_id=$1 AND path=$2",
-        [revision.id, file.path],
-      )
-    ).rows[0];
+    const stored = (await storedFiles(revision.id)).get(file.path);
     if (!stored) throw missing();
     if (isVideoMime(file.mime) && !navigate) {
       // Some engines send no Fetch Metadata for a media request; the token
@@ -360,6 +422,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
       const range = parseRange(req.headers.range, file.size);
       if (range === "unsatisfiable")
         return reply.status(416).header("content-range", `bytes */${file.size}`).send();
+      if (cacheableFile(req, reply, file.sha256, !!req.headers.range)) return reply;
       // Idle for a while when the player has buffered enough and waits.
       if (typeof req.raw.socket?.setTimeout === "function") req.raw.socket.setTimeout(10 * 60 * 1000);
       const body = await readStream(stored.object_key, stored.object_version, range ?? undefined);
@@ -371,15 +434,16 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
         .header("content-length", range.end - range.start + 1)
         .send(body);
     }
-    const bytes = isVideoMime(file.mime)
-      ? Buffer.alloc(0)
-      : await readBlob(stored.object_key, stored.object_version);
     if (!navigate) {
       const allowed = typeof dest === "string" ? RESOURCE_FOR[dest] : undefined;
       if (!allowed?.(file.mime)) throw missing();
       allowSandboxedReader(reply);
-      return reply.type(file.mime).send(bytes);
+      if (cacheableFile(req, reply, file.sha256, false)) return reply;
+      return reply.type(file.mime).send(await readBlob(stored.object_key, stored.object_version));
     }
+    const bytes = isVideoMime(file.mime)
+      ? Buffer.alloc(0)
+      : await readBlob(stored.object_key, stored.object_version);
     const name = posix.basename(file.path);
     if (file.mime === "text/html") {
       const page = withSignedAwayLinks(bytes, base(token) + file.path);

@@ -19,6 +19,10 @@ import { withProjectScripts } from "../apps/server/project-viewer.ts";
 if (!config.HTML_LIVE_ENABLED)
   throw new Error("Run project-viewer.test.ts with HTML_LIVE_ENABLED=true");
 
+// A revoke or a trashed work closes a view at once in these tests; the cache
+// that lets it take up to VIEWER_AUTH_CACHE_SECONDS has its own test below.
+const mutable = config as { VIEWER_AUTH_CACHE_SECONDS: number };
+mutable.VIEWER_AUTH_CACHE_SECONDS = 0;
 const app = await createApp();
 const viewer = await createLiveViewerApp();
 const origin = config.APP_ORIGIN;
@@ -294,4 +298,33 @@ test("a link opens the whole project for a recipient until it is revoked", async
   assert.equal((await view(url)).statusCode, 200);
   await db.query("UPDATE shares SET revoked=true WHERE id=$1", [shared.json().share.id]);
   assert.equal((await view(url)).statusCode, 404);
+});
+
+test("a checked view is kept for a few seconds and a file answers 304 to its ETag", async () => {
+  const url = await issue();
+  mutable.VIEWER_AUTH_CACHE_SECONDS = 10;
+  try {
+    const first = await view(url + "screens/shared/ui.css", "style", "no-cors");
+    assert.equal(first.statusCode, 200);
+    const tag = String(first.headers.etag);
+    assert.match(tag, /^"[a-f0-9]{64}"$/);
+    assert.equal(first.headers["cache-control"], "private, max-age=60");
+    const again = await viewer.inject({
+      method: "GET",
+      url: new URL(url + "screens/shared/ui.css").pathname,
+      headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "style", "sec-fetch-mode": "no-cors", "if-none-match": tag },
+    });
+    assert.equal(again.statusCode, 304);
+    assert.equal(again.body, "");
+    // A page built per view is never cached by the browser.
+    assert.notEqual((await view(url + "screens/index.html")).headers["cache-control"], "private, max-age=60");
+    // The trash closes the view, within the window: the next file may still be served.
+    await db.query("UPDATE artifacts SET trashed_at=now() WHERE id=$1", [saved.artifactId]);
+    assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).statusCode, 200);
+    mutable.VIEWER_AUTH_CACHE_SECONDS = 0;
+    assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).statusCode, 404);
+  } finally {
+    mutable.VIEWER_AUTH_CACHE_SECONDS = 0;
+    await db.query("UPDATE artifacts SET trashed_at=NULL WHERE id=$1", [saved.artifactId]);
+  }
 });

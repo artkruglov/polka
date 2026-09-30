@@ -83,6 +83,10 @@ const env = z
     VIEWER_ORIGIN: z.string().url().default("http://localhost:4391"),
     VIEWER_HOST: z.string().default("localhost"),
     VIEWER_PORT: z.coerce.number().int().min(1).max(65535).default(4391),
+    // How long the project viewer trusts a checked view before it checks
+    // again (a revoke or a trashed work closes a view within this time). Every
+    // file of a page asks, and the check is a six-table query. 0: every time.
+    VIEWER_AUTH_CACHE_SECONDS: z.coerce.number().int().min(0).max(60).default(10),
     MAIL_MODE: z.enum(["disabled", "local", "smtp"]).default("disabled"),
     // Compose passes unset SMTP variables as empty strings: empty means unset.
     SMTP_HOST: unsetIfEmpty(z.string()),

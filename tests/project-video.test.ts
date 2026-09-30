@@ -26,6 +26,7 @@ import { bundleManifestSchema } from "../packages/contracts/bundle.ts";
 if (!config.HTML_LIVE_ENABLED)
   throw new Error("Run project-video.test.ts with HTML_LIVE_ENABLED=true");
 
+(config as { VIEWER_AUTH_CACHE_SECONDS: number }).VIEWER_AUTH_CACHE_SECONDS = 0;
 const app = await createApp();
 const viewer = await createLiveViewerApp();
 const origin = config.APP_ORIGIN;
