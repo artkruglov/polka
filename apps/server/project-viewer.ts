@@ -16,6 +16,7 @@ import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
 import { posix } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
+import { isVideoMime } from "../../packages/contracts/constants.ts";
 import type { Actor } from "./artifacts.ts";
 import { withSignedAwayLinks } from "./away-links.ts";
 import { config } from "./config.ts";
@@ -28,7 +29,7 @@ import {
   projectDocumentPage,
   renderProjectMarkdownBounded,
 } from "./project-markdown.ts";
-import { readBlob, sha256 } from "./storage.ts";
+import { readBlob, readStream, sha256 } from "./storage.ts";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const projectHash = (token: string) => sha256(`project-view:${token}`);
@@ -182,7 +183,10 @@ export async function renewProjectView(current: string) {
 }
 
 /** The file a path names: itself, or a folder's index page or README. */
-function fileAt(manifest: { entrypoint: string; files: Array<{ path: string; mime: string }> }, raw: string) {
+function fileAt(
+  manifest: { entrypoint: string; files: Array<{ path: string; mime: string; size: number }> },
+  raw: string,
+) {
   const byPath = new Map(manifest.files.map((file) => [file.path, file]));
   const path = raw.replace(/\/+$/, "");
   if (!path) return byPath.get(manifest.entrypoint) ?? null;
@@ -199,6 +203,7 @@ const RESOURCE_FOR: Record<string, (mime: string) => boolean> = {
   style: (mime) => mime === "text/css",
   script: (mime) => mime === "text/javascript",
   image: (mime) => mime.startsWith("image/"),
+  video: isVideoMime,
   font: (mime) => mime === "font/woff2",
 };
 
@@ -230,11 +235,37 @@ const documentCsp = (token: string) =>
     `script-src ${base(token)}${NAV_SCRIPT} ${GUARD_HASH}`,
     "style-src 'unsafe-inline'",
     `img-src ${base(token)}`,
+    `media-src ${base(token)}`,
     "connect-src 'none'",
     "form-action 'none'",
     "base-uri 'none'",
     `frame-ancestors ${config.APP_ORIGIN}`,
   ].join("; ");
+
+/**
+ * The byte range a `Range` header asks of a file of `size` bytes: one range
+ * (`a-b`, `a-`, `-n`), as a player's seek sends it. Null when the header is
+ * absent or not one range (the whole file is sent); "unsatisfiable" when it
+ * lies beyond the file.
+ */
+export function parseRange(header: string | undefined, size: number) {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (match[1] === "" && match[2] === "")) return null;
+  let start: number;
+  let end: number;
+  if (match[1] === "") {
+    const tail = Number(match[2]);
+    if (tail === 0) return "unsatisfiable" as const;
+    start = Math.max(0, size - tail);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (!Number.isSafeInteger(start) || start >= size || end < start) return "unsatisfiable" as const;
+  return { start, end };
+}
 
 /**
  * Tells the app which page is open (for its tree), and hands it external
@@ -303,7 +334,29 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
       )
     ).rows[0];
     if (!stored) throw missing();
-    const bytes = await readBlob(stored.object_key, stored.object_version);
+    if (isVideoMime(file.mime) && !navigate) {
+      // Some engines send no Fetch Metadata for a media request; the token
+      // in the path is the permission, and a video runs no script.
+      if (dest !== "video" && dest !== undefined) throw missing();
+      // A player asks for the file in ranges as it plays and seeks: only
+      // those bytes are read from the store, never the whole file.
+      const range = parseRange(req.headers.range, file.size);
+      if (range === "unsatisfiable")
+        return reply.status(416).header("content-range", `bytes */${file.size}`).send();
+      // Idle for a while when the player has buffered enough and waits.
+      if (typeof req.raw.socket?.setTimeout === "function") req.raw.socket.setTimeout(10 * 60 * 1000);
+      const body = await readStream(stored.object_key, stored.object_version, range ?? undefined);
+      reply.type(file.mime).header("accept-ranges", "bytes");
+      if (!range) return reply.header("content-length", file.size).send(body);
+      return reply
+        .status(206)
+        .header("content-range", `bytes ${range.start}-${range.end}/${file.size}`)
+        .header("content-length", range.end - range.start + 1)
+        .send(body);
+    }
+    const bytes = isVideoMime(file.mime)
+      ? Buffer.alloc(0)
+      : await readBlob(stored.object_key, stored.object_version);
     if (!navigate) {
       const allowed = typeof dest === "string" ? RESOURCE_FOR[dest] : undefined;
       if (!allowed?.(file.mime)) throw missing();
@@ -334,6 +387,12 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
             ),
             base(token) + NAV_SCRIPT,
           )
+        : isVideoMime(file.mime)
+          ? wrapperPage(
+              name,
+              `<h1>${escapeHtml(name)}</h1><video controls preload="metadata" style="max-width:100%" src="${escapeHtml(encodeURIComponent(name))}"></video>`,
+              token,
+            )
         : file.mime.startsWith("image/")
           ? wrapperPage(name, `<h1>${escapeHtml(name)}</h1><img src="${escapeHtml(encodeURIComponent(name))}" alt="">`, token)
           : wrapperPage(name, `<h1>${escapeHtml(name)}</h1><pre><code>${escapeHtml(bytes.toString("utf8"))}</code></pre>`, token);

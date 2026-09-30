@@ -7,7 +7,8 @@ import type { PoolClient } from "pg";
 import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { authorizedRevisionFiles } from "./artifacts.ts";
 import { missing } from "./errors.ts";
-import { readBlob, sha256 } from "./storage.ts";
+import { isVideoMime } from "../../packages/contracts/constants.ts";
+import { readBlob, readStream, sha256 } from "./storage.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 
 type StoredFile = {
@@ -115,6 +116,10 @@ export async function workFileForAgent(
     async (c, verified) => (await locate(c, verified, artifactId, revisionId)).files[index],
   );
   if (!file) throw missing();
+  // A video is streamed, never held whole; its size and SHA-256 were checked
+  // against the store's record when it was saved (the CLI checks it again).
+  if (isVideoMime(file.mime))
+    return { ...file, stream: await readStream(file.objectKey, file.objectVersion) };
   const bytes = await readBlob(file.objectKey, file.objectVersion);
   if (bytes.length !== file.size || sha256(bytes) !== file.sha256)
     throw new Error("Revision file checksum mismatch");

@@ -15,7 +15,7 @@
 | Файлов | до 64 | до 400 |
 | Объём | до 5 МиБ всего | до 48 МиБ всего, каждый файл до 5 МиБ |
 | Точка входа | HTML | `README.md`, `index.md` или `index.html` |
-| Типы | HTML, CSS, JS, JSON, SVG, PNG/JPEG/WebP, WOFF2, текст | те же плюс Markdown (`text/markdown`) и GIF |
+| Типы | HTML, CSS, JS, JSON, SVG, PNG/JPEG/WebP, WOFF2, текст | те же плюс Markdown (`text/markdown`), GIF и видео MP4/WebM ([PROJECT_VIDEO](PROJECT_VIDEO.md)) |
 | Просмотр | одна страница | дерево и переходы, просмотрщик проектов |
 
 Точку входа выбирает загрузчик в порядке `README.md` → `index.md` → `index.html` в корне; её можно задать явно.

@@ -3,6 +3,7 @@
   "tests/live-viewer.test.ts",
   "tests/static-viewer.test.ts",
   "tests/project-viewer.test.ts",
+  "tests/project-video.test.ts",
   "tests/bundle-runtime.test.ts",
   "tests/editorial-catalog.test.ts",
   "tests/editorial-seed-live.test.ts",

@@ -457,7 +457,7 @@ export function openApiDocument(origin: string) {
           operationId: "beginProject",
           summary: "Begin saving a folder of linked pages as one project",
           description:
-            "Body: {key, title, manifest, folderId?, artifactId?, baseRevisionId?}. The manifest lists every file (path, mime, size, sha256) with runtime project-v1 and entrypoint README.md, index.md or index.html: up to 400 files, 48 MB in all, each file up to 5 MB; Markdown, HTML, CSS, JavaScript, JSON, SVG, PNG, JPEG, WebP, GIF, WOFF2 and text. Returns uploadId and the index of each path; a repeated key returns the same upload. Scope capture, or revise with artifactId and baseRevisionId for a new version. The ready-made client is GET /api/v1/cli/polka-publish-project.mjs.",
+            "Body: {key, title, manifest, folderId?, artifactId?, baseRevisionId?}. The manifest lists every file (path, mime, size, sha256) with runtime project-v1 and entrypoint README.md, index.md or index.html: up to 400 files, 48 MB in all, each file up to 5 MB; Markdown, HTML, CSS, JavaScript, JSON, SVG, PNG, JPEG, WebP, GIF, WOFF2 and text. Video (video/mp4, video/webm) may be up to 200 MB a file and 400 MB in all, on top of the 48 MB, on a shelf that has video enabled (403 otherwise); send it to …/media/{index}. Returns uploadId and the index of each path; a repeated key returns the same upload. Scope capture, or revise with artifactId and baseRevisionId for a new version. The ready-made client is GET /api/v1/cli/polka-publish-project.mjs.",
           security: [{ bearerAuth: ["capture"] }],
           requestBody: {
             required: true,
@@ -486,6 +486,30 @@ export function openApiDocument(origin: string) {
             content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } },
           },
           responses: { "200": { description: "Stored." }, "404": { description: "No such upload for this token." } },
+        },
+      },
+      "/api/v1/projects/{uploadId}/media/{index}": {
+        put: {
+          operationId: "putProjectMedia",
+          summary: "Send one video file of a project as a stream",
+          description:
+            "The bytes of a video/mp4 or video/webm file at this index, as application/octet-stream with a Content-Length. The store receives them as they arrive, so a file of up to 200 MB is fine; size and SHA-256 must match the manifest, the first bytes must be an MP4 or WebM header, and nothing is stored otherwise (422). Safe to repeat.",
+          security: [{ bearerAuth: ["capture"] }],
+          parameters: [
+            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0, maximum: 399 } },
+          ],
+          requestBody: {
+            required: true,
+            content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } },
+          },
+          responses: {
+            "200": { description: "Stored." },
+            "404": { description: "No such upload for this token." },
+            "411": { description: "No Content-Length." },
+            "415": { description: "The file at this index is not a video: send it to …/files/{index}." },
+            "422": { description: "The bytes are not the file the manifest names, or not a video." },
+          },
         },
       },
       "/api/v1/projects/{uploadId}/reuse": {

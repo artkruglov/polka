@@ -134,6 +134,7 @@ curl -sS https://polochka.app/api/v1/status/$ARTIFACT_ID \
 |---|---|
 | `POST /api/v1/projects` | Начало загрузки: `key`, `title`, манифест (пути, MIME, размеры, SHA-256), `folderId`; для новой версии — `artifactId` и `baseRevisionId`. Возвращает `uploadId` |
 | `PUT /api/v1/projects/:uploadId/files/:index` | Байты одного файла, `Content-Type: application/octet-stream` (иначе `415`), до 5 МиБ. Отдельный лимит частоты: вдвое больше файлов, чем помещается в проект |
+| `PUT /api/v1/projects/:uploadId/media/:index` | Видео (`video/mp4`, `video/webm`) потоком, до 200 МиБ, с `Content-Length`. Полка кладёт байты в хранилище по мере поступления и принимает файл, только если он совпал с манифестом (размер, SHA-256, заголовок MP4/WebM), иначе ничего не остаётся ([PROJECT_VIDEO](specs/PROJECT_VIDEO.md)). Видео в проекте включается для полки оператором; без этого `POST /api/v1/projects` отвечает `403` |
 | `POST /api/v1/projects/:uploadId/reuse` | Только для новой версии: файлы, у которых путь, тип, размер и SHA-256 совпадают с файлом базовой версии, хранилище копирует само. Ответ — `reused` (их индексы); остальные файлы отправляются как обычно |
 | `POST /api/v1/projects/:uploadId/finalize` | Сохранение версии; ответ — квитанция и `shelfUrl` |
 

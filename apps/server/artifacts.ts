@@ -9,6 +9,7 @@ import {
   MAX_BYTES,
   type UploadInput,
   PROJECT_MAX_BYTES,
+  isVideoMime,
   type HtmlProfile,
   type Revision,
   type Share,
@@ -23,7 +24,16 @@ import {
 } from "../../packages/contracts/bundle.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { config } from "./config.ts";
-import { copyVersion, deleteVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
+import {
+  StreamRejected,
+  copyVersion,
+  deleteVersion,
+  putImmutable,
+  putStream,
+  readBlob,
+  sha256,
+  verifyObject,
+} from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
 import {
   inspectHtmlBounded,
@@ -1021,6 +1031,12 @@ export async function beginBundleUploadInTransaction(
     };
   }
   await validateUploadTarget(c, actor, input);
+  if (!tenant.video_enabled && input.manifest.files.some((file) => isVideoMime(file.mime)))
+    throw new Problem(
+      403,
+      "forbidden",
+      `Видео в проектах включено не для всех полок. ${config.OPERATOR_CONTACT ? `Напишите на ${config.OPERATOR_CONTACT}` : "Обратитесь к оператору"}, и его включат.`,
+    );
   const {
     rows: [pending],
   } = await c.query(
@@ -1147,6 +1163,59 @@ export async function stageBundleFile(
   if (sent.rowCount) return null;
   const key = bundleFileKey(actor.tenant, id, input.manifest, index);
   return discardStagedIfClosed(actor, id, key, await putImmutable(key, bytes));
+}
+/** The first bytes of a video file: an MP4 box (…ftyp) or a WebM/Matroska header. */
+const videoHeadValid = (mime: string) => (first: Buffer) =>
+  mime === "video/mp4"
+    ? first.toString("latin1", 4, 8) === "ftyp"
+    : first.subarray(0, 4).equals(Buffer.from("1a45dfa3", "hex"));
+/**
+ * A video file's S3 upload from the request stream, before its transaction
+ * (see stageBundleFile): it is never held whole in memory, and it is stored
+ * only when it is exactly the file the manifest named. Null when there is
+ * nothing to store (saved, or this file already sent).
+ */
+export async function stageBundleMedia(
+  actor: Actor,
+  id: string,
+  index: number,
+  body: AsyncIterable<Buffer>,
+  drain: () => void,
+) {
+  const upload = await readUpload(actor, id);
+  if (upload.kind !== "bundle") throw missing();
+  const input = normalizeBundleRequest(upload.request, true);
+  const expected = input.manifest.files[index];
+  if (!expected) throw missing();
+  if (!isVideoMime(expected.mime))
+    throw new Problem(415, "invalid", "Этот файл передаётся обычным запросом, не потоком.");
+  const sent = upload.receipt
+    ? { rowCount: 1 }
+    : await db.query("SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2", [id, index]);
+  if (sent.rowCount) {
+    drain();
+    return null;
+  }
+  const key = bundleFileKey(actor.tenant, id, input.manifest, index);
+  try {
+    return await discardStagedIfClosed(
+      actor,
+      id,
+      key,
+      await putStream(key, body, {
+        size: expected.size,
+        sha256: expected.sha256,
+        head: videoHeadValid(expected.mime),
+      }),
+    );
+  } catch (error) {
+    if (!(error instanceof StreamRejected)) throw error;
+    throw error.reason === "format"
+      ? new Problem(422, "invalid", "Содержимое файла не похоже на заявленное видео (MP4 или WebM).")
+      : error.reason === "conflict"
+        ? new Problem(409, "conflict", "Этот файл уже загружен другим содержимым.")
+        : new Problem(422, "invalid", "Файл передан не полностью или изменился.");
+  }
 }
 /**
  * A bundle file copied from a saved version of this shelf inside the store
@@ -1453,6 +1522,14 @@ async function inspectBundle(
         bundleFileKey(actor.tenant, id, input.manifest, index)
     )
       throw new Error("Bundle staging invariant failed");
+    if (isVideoMime(file.mime)) {
+      // Too large to read back: the store's record of its size and SHA-256,
+      // written when the file was streamed in (or kept by a copy), is checked.
+      if (!(await verifyObject(stored.object_key, stored.object_version, file.size, file.sha256)))
+        throw new Problem(422, "invalid", "Файл пакета передан не полностью или изменился.");
+      verified.push({ file, ...stored });
+      continue;
+    }
     const bytes = await readBlob(stored.object_key, stored.object_version);
     validateBundleFileBytes(file, bytes);
     if (project) {
@@ -1643,6 +1720,13 @@ export async function readAuthorizedRevisionSource(
   revision: any,
 ) {
   const { manifest, stored } = await authorizedRevisionFiles(c, revision);
+  // A video is not read into one response (docs/specs/PROJECT_VIDEO.md).
+  if (stored.some((file) => isVideoMime(file.mime)))
+    throw new Problem(
+      422,
+      "unsupported",
+      "В версии есть видео: её файлы не отдаются одним ответом. Скачайте папку через polka-pull.mjs.",
+    );
   const files: Array<{
     path: string;
     mime: string;
