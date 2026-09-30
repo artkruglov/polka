@@ -144,6 +144,22 @@ export function Recipient() {
     !("review" in viewer) &&
     !("blocked" in viewer) &&
     viewer.publisher === "user";
+  // A link under review is asked again, quietly, until it opens (or 30 minutes).
+  const reviewing = !!viewer && "review" in viewer;
+  useEffect(() => {
+    if (!reviewing || !token) return;
+    const until = Date.now() + 30 * 60_000;
+    const timer = setInterval(() => {
+      if (Date.now() > until) return clearInterval(timer);
+      client
+        .resolve(token)
+        .then((next) => {
+          if (!("review" in next)) setViewer(next);
+        })
+        .catch(() => undefined);
+    }, 45_000);
+    return () => clearInterval(timer);
+  }, [reviewing, token]);
   const [reportComment, setReportComment] = useState<string | null>(null);
   const comments = useSharedComments({
     token,
@@ -341,8 +357,9 @@ export function RecipientScreen({
             аккаунты, страницы, похожие на поддельные, и ссылки с жалобами.
             Если проверка пройдёт, работа откроется по этой же ссылке.
           </p>
-          <p className="recipient-review-hint">
-            Загляните позже или спросите у того, кто прислал ссылку.
+          <p className="recipient-review-hint" role="status">
+            Это не ошибка. Эта страница проверяет ссылку сама и откроет работу,
+            как только проверка закончится. Можно оставить её открытой.
           </p>
           <a className="recipient-explore" href="/">
             Что такое Полка <ArrowUpRight size={15} />

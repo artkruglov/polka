@@ -28,10 +28,12 @@ export const moderationNote = (a: Artifact) =>
           : " Обжаловать решение можно у оператора этой установки."
       }`
     : a.share?.moderation === "held"
-    ? "Ссылка на проверке у модератора Полки. Получатели увидят работу после одобрения; до этого по ссылке открывается экран «на проверке»."
+    ? `Ссылка на проверке у модератора Полки${since(a.share)}. Получатели увидят работу после одобрения: отправлять ссылку заново не нужно, экран у них обновится сам. Если на аккаунте есть почта, мы напишем о решении.`
     : a.share?.moderation === "paused"
-      ? "Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки. Получатели сейчас видят экран «на проверке»."
+      ? `Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки${since(a.share)}. Получатели сейчас видят экран «на проверке».`
       : null;
+const since = (share: NonNullable<Artifact["share"]>) =>
+  share.reviewSince ? ` с ${dateTime(share.reviewSince)}` : "";
 /** A new link's lifetime, the same in the share dialog and after saving on /bring. */
 export const DEFAULT_LINK_DAYS = 7;
 export const isImage =(r: Revision) => r.mime.startsWith("image/");
