@@ -204,6 +204,10 @@ const RESOURCE_FOR: Record<string, (mime: string) => boolean> = {
   script: (mime) => mime === "text/javascript",
   image: (mime) => mime.startsWith("image/"),
   video: isVideoMime,
+  // An MP4 with only sound plays through <audio> too.
+  audio: isVideoMime,
+  // fetch() and XHR of the page: its own project's files, never a page.
+  empty: (mime) => mime !== "text/html" && !isVideoMime(mime),
   font: (mime) => mime === "font/woff2",
 };
 
@@ -218,7 +222,8 @@ export const pageCsp = (token: string) =>
     `img-src ${base(token)} data: blob:`,
     `font-src ${base(token)} data:`,
     `media-src ${base(token)} data:`,
-    "connect-src 'none'",
+    // The page's own project only (fetch of its texts and data); no network.
+    `connect-src ${base(token)}`,
     "frame-src 'none'",
     "child-src 'none'",
     "worker-src 'none'",
@@ -309,6 +314,17 @@ const GUARD_HASH = `'sha256-${createHash("sha256")
 const wrapperPage = (title: string, body: string, token: string) =>
   projectDocumentPage({ title, body }, base(token) + NAV_SCRIPT);
 
+/**
+ * Fonts, module scripts, stylesheets (Vite writes <link crossorigin>), fetch()
+ * and media with crossorigin are requested in CORS mode, and a sandboxed
+ * page's origin is "null". The token in the path is the permission; the
+ * header adds no reader who could not already load these bytes.
+ */
+const allowSandboxedReader = (reply: { header: (name: string, value: string) => unknown }) => {
+  reply.header("access-control-allow-origin", "*");
+  reply.header("access-control-expose-headers", "content-length, content-range, accept-ranges");
+};
+
 export function registerProjectViewerRoutes(viewer: FastifyInstance) {
   viewer.get("/project/:token/*", async (req, reply) => {
     const { token = "", "*": rawPath = "" } = req.params as { token?: string; "*"?: string };
@@ -337,7 +353,8 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     if (isVideoMime(file.mime) && !navigate) {
       // Some engines send no Fetch Metadata for a media request; the token
       // in the path is the permission, and a video runs no script.
-      if (dest !== "video" && dest !== undefined) throw missing();
+      if (dest !== "video" && dest !== "audio" && dest !== "empty" && dest !== undefined) throw missing();
+      allowSandboxedReader(reply);
       // A player asks for the file in ranges as it plays and seeks: only
       // those bytes are read from the store, never the whole file.
       const range = parseRange(req.headers.range, file.size);
@@ -360,11 +377,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     if (!navigate) {
       const allowed = typeof dest === "string" ? RESOURCE_FOR[dest] : undefined;
       if (!allowed?.(file.mime)) throw missing();
-      // Fonts and module scripts are fetched in CORS mode, and a sandboxed
-      // page's origin is "null". The token in the path is the permission;
-      // the header adds no reader who could not already load these bytes.
-      if (dest === "font" || dest === "script")
-        reply.header("access-control-allow-origin", "*");
+      allowSandboxedReader(reply);
       return reply.type(file.mime).send(bytes);
     }
     const name = posix.basename(file.path);

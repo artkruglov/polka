@@ -178,9 +178,20 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   assert.equal(folder.headers.location, url + "screens/index.html");
   // Resources go only to a page asking for their kind.
   assert.equal((await view(url + "screens/shared/ui.css", "style", "no-cors")).statusCode, 200);
-  // A font is fetched in CORS mode from a sandboxed page (origin "null").
-  assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).headers["access-control-allow-origin"], undefined);
+  // A font is fetched in CORS mode from a sandboxed page (origin "null"); so may a picture (<img crossorigin>).
+  assert.equal((await view(url + "screens/shot.png", "image", "cors")).headers["access-control-allow-origin"], "*");
   assert.equal((await view(url + "screens/shot.png", "image", "no-cors")).headers["content-type"], "image/png");
+  // A Vite build writes <link rel="stylesheet" crossorigin>: a CORS request from
+  // the sandbox (origin "null"), like a module script, a font or a fetch().
+  const css = await view(url + "screens/shared/ui.css", "style", "cors");
+  assert.equal(css.headers["access-control-allow-origin"], "*");
+  const data = await view(url + "02-users/stories.md", "empty", "cors");
+  assert.equal(data.statusCode, 200);
+  assert.equal(data.headers["access-control-allow-origin"], "*");
+  assert.equal(data.headers["content-type"], "text/markdown");
+  // fetch() may read the project's own files, not its pages, and only its own address.
+  assert.equal((await view(url + "screens/index.html", "empty", "cors")).statusCode, 404);
+  assert.match(String(page.headers["content-security-policy"]), new RegExp(`connect-src ${url}(;|$)`));
   assert.equal((await view(url + "screens/shared/ui.css", "script", "no-cors")).statusCode, 404);
   assert.equal((await view(url + "screens/index.html", "script", "no-cors")).statusCode, 404);
   assert.equal((await view(url + "README.md", "document")).statusCode, 404);

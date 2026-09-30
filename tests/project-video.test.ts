@@ -241,6 +241,12 @@ test("a project with a video is saved, counted, played in ranges and taken down 
   const first = await view(url + "intro.mp4", { range: "bytes=0-1" });
   assert.equal(first.statusCode, 206);
   assert.equal(first.headers["content-range"], `bytes 0-1/${CLIP.length}`);
+  // <audio> plays an MP4 with sound only, and a script may fetch it in ranges.
+  const asAudio = await view(url + "intro.mp4", { range: "bytes=10-19" }, "audio");
+  assert.equal(asAudio.statusCode, 206);
+  assert.ok(asAudio.rawPayload.equals(CLIP.subarray(10, 20)));
+  assert.equal(asAudio.headers["access-control-allow-origin"], "*");
+  assert.equal((await view(url + "intro.mp4", { range: "bytes=0-9" }, "empty", "cors")).statusCode, 206);
   assert.ok(first.rawPayload.equals(CLIP.subarray(0, 2)));
   const seek = await view(url + "intro.mp4", { range: `bytes=${9 * 1024 * 1024}-${9 * 1024 * 1024 + 4095}` });
   assert.equal(seek.statusCode, 206);
