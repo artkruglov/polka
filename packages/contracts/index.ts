@@ -265,6 +265,8 @@ export interface Share {
    * number of days it was opened on and the last time. Nothing about who.
    */
   opens?: { total: number; days: number; lastOpenedAt: string | null };
+  /** held or paused: since when the link waits for review. */
+  reviewSince?: string;
 }
 export interface Artifact {
   id: string;

@@ -84,6 +84,15 @@ const sweep = async () => {
     console.error(JSON.stringify({ event: "moderation.sweep_failed" }));
   }
 };
+// Letters to the author about a link under review (review-mail.ts): every few minutes.
+const reviewLetters = async () => {
+  try {
+    await (await import("./review-mail.ts")).sendReviewLetters();
+  } catch {
+    console.error(JSON.stringify({ event: "review_mail.failed" }));
+  }
+};
+setInterval(reviewLetters, 5 * 60 * 1000).unref();
 setTimeout(sweep, 30_000).unref();
 setInterval(sweep, 60 * 60 * 1000).unref();
 if (viewer)

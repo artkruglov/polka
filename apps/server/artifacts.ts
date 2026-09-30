@@ -178,6 +178,9 @@ export function shareDTO(s: any, latest: string, opens?: any): Share | null {
     url: ["active", "behind"].includes(status)
       ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}`
       : null,
+    ...(s.moderation === "held" || s.moderation === "paused"
+      ? { reviewSince: new Date(s.moderated_at ?? s.created_at).toISOString() }
+      : {}),
     opens: {
       total: Number(opens?.total ?? 0),
       days: Number(opens?.days ?? 0),
