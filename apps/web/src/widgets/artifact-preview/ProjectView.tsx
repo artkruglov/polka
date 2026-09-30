@@ -326,7 +326,6 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
             sandbox="allow-scripts allow-forms"
             // The page's own full-screen button (a game, a film) may ask for it.
             allow="fullscreen"
-            allowFullScreen
             referrerPolicy="no-referrer"
           />
         ) : (
