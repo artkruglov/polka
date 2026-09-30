@@ -48,9 +48,13 @@ http://{$VIEWER_HOST_NAME} {
 }
 
 {$VIEWER_HOST_NAME} {
+	# Text is compressed (Caddy's default list: HTML, CSS, JavaScript, JSON,
+	# SVG…); video and pictures are not, and a ranged response never is.
+	encode zstd gzip
+	# Cache-Control is the app's to set: no-store for a page built per view,
+	# private with an ETag for a file of a saved version (project-viewer.ts).
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		Cache-Control "no-store"
 		Referrer-Policy "no-referrer"
 		X-Content-Type-Options "nosniff"
 		-Server

@@ -50,6 +50,11 @@ test("ops status does not exist until a token is configured, and needs that toke
   assert.equal(typeof body.version, "string");
   assert.deepEqual(Object.keys(body.checks).sort(), ["backup", "database", "disk", "maintenance"]);
   assert.equal(body.checks.database.ok, true);
+  // Numbers to watch, not a check: memory, event loop, pool, worker slots.
+  assert.ok(body.runtime.rssMiB > 0 && body.runtime.heapUsedMiB > 0);
+  assert.ok(body.runtime.eventLoopMs.p99 >= 0);
+  assert.deepEqual(Object.keys(body.runtime.pool).sort(), ["idle", "max", "total", "waiting"]);
+  assert.deepEqual(Object.keys(body.runtime.workers).sort(), ["limit", "running", "waiting"]);
   // Not configured is reported, not treated as a failure.
   assert.deepEqual(body.checks.backup, { ok: null, reason: "not configured" });
 });

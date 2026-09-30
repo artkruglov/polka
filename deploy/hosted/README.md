@@ -9,7 +9,7 @@
 | `postgres` | PostgreSQL 16 на VM (volume `pgdata`), внутренняя Docker-сеть и `127.0.0.1:5432` на хосте (никогда не `0.0.0.0`). Роли: `polka_admin` (суперпользователь, только для init), `polka_schema` (владелец схемы, миграции, бэкап), `polka_runtime` (приложение, без DDL) |
 | `migrate` → `grants` → `storage-check` | одноразовые шаги при каждом `up`: все миграции до текущей (точный набор и `CURRENT_SCHEMA_VERSION` — в `packages/migrations.ts`), `deploy/runtime-grants.sql`, проверка versioned S3 |
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
-| `maintenance` | очистка истёкших загрузок, сессий, грантов; `network_mode: host` |
+| `maintenance` | очистка истёкших загрузок, сессий, грантов раз в `MAINTENANCE_INTERVAL_SECONDS` (300 по умолчанию, 30–900); `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
 | `backup` | `pg_dump` раз в `BACKUP_INTERVAL_SECONDS` (по умолчанию сутки) в `$BACKUP_BUCKET/postgres/`; образ собирается локально из закреплённого `postgres:16-alpine` + AWS CLI |
 
@@ -565,6 +565,12 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 ```
 
 Для проверки алерта один раз запустите скрипт с заведомо неверным `APP_ORIGIN` и тем же `UPTIME_STATE_FILE` — придёт сообщение о сбое, при следующем обычном запуске — о восстановлении.
+
+### Что видно в статусе о работе процесса
+
+`/api/ops/status` кроме проверок отдаёт блок `runtime` (не влияет на `ok`): `rssMiB` и `heapUsedMiB` приложения, задержка цикла событий за время с прошлого опроса (`eventLoopMs`: mean, p99, max), очередь пула БД (`pool`: total, idle, waiting), слоты воркеров разбора страниц (`workers`: limit, running, waiting) и счётчики (`counters`, например `viewer.check.cached` и `viewer.file.304`). Значения цикла событий и счётчики обнуляются при каждом чтении. Что тревожно: `pool.waiting` выше нуля дольше нескольких опросов, `eventLoopMs.p99` за сотни миллисекунд, `rssMiB` рядом с лимитом контейнера, `workers.waiting` растёт.
+
+Лимиты памяти: app 1,5 ГиБ (куча V8 ограничена `--max-old-space-size=1024`), maintenance 768 МиБ, postgres 1 ГиБ, tmpfs бэкапа 256 МиБ; renderer, если включён, ещё 1,5 ГиБ (лучше на отдельной VM).
 
 ## Метрики продукта
 

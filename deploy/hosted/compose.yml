@@ -206,6 +206,12 @@ services:
     # Loopback only, for the host-network services; never 0.0.0.0.
     ports: ["127.0.0.1:5432:5432"]
     networks: [polka]
+    # The VM has 4 GiB and the app, maintenance and (opt-in) renderer have
+    # limits of their own; an unbounded Postgres would be the one that decides
+    # who the OOM killer picks.
+    deploy:
+      resources:
+        limits: {memory: 1024M}
     healthcheck:
       # TCP, not the socket: during first-boot init a temporary server
       # accepts socket connections only, and migrate connects over TCP.
@@ -271,7 +277,11 @@ services:
     <<: *hardening
     image: ${POLKA_IMAGE:?}
     user: node
-    environment: *runtime-env
+    environment:
+      <<: *runtime-env
+      # V8 sizes its heap from the machine, not from the container limit:
+      # cap it below the limit so a large page cannot push the app into the OOM killer.
+      NODE_OPTIONS: --max-old-space-size=1024
     command: ["node", "--import", "tsx", "apps/server/main.ts"]
     network_mode: host
     restart: unless-stopped
@@ -291,7 +301,11 @@ services:
     <<: *hardening
     image: ${POLKA_IMAGE:?}
     user: node
-    environment: *runtime-env
+    environment:
+      <<: *runtime-env
+      # Seconds between housekeeping runs (30–900). Each run starts a Node
+      # process, so a shorter period costs CPU on an idle VM.
+      MAINTENANCE_INTERVAL_SECONDS: ${MAINTENANCE_INTERVAL_SECONDS:-300}
     command: ["node", "--import", "tsx", "scripts/maintenance-runner.ts"]
     network_mode: host
     restart: unless-stopped
@@ -330,7 +344,7 @@ services:
     image: polka-backup:local
     restart: unless-stopped
     read_only: true
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=512m"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=256m"]
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     environment:

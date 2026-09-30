@@ -4,6 +4,7 @@ import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { missing } from "./errors.ts";
+import { runtimeStats } from "./runtime-stats.ts";
 import { s3 } from "./storage.ts";
 
 /**
@@ -12,8 +13,9 @@ import { s3 } from "./storage.ts";
  * is the newest backup, is the disk filling up. No user data, no identifiers.
  */
 export const OPS_LIMITS = {
-  // Maintenance runs every minute and deletes expired rows; a row expired
-  // longer than this means the loop has stopped or keeps failing early.
+  // Maintenance runs every few minutes (MAINTENANCE_INTERVAL_SECONDS) and
+  // deletes expired rows; a row expired longer than this means the loop has
+  // stopped or keeps failing early.
   maintenanceOverdueSeconds: 30 * 60,
   // A daily backup plus two hours of slack.
   backupAgeHours: 26,
@@ -111,5 +113,6 @@ export async function opsStatus(version: string) {
   };
   // A check that is not configured (null) does not fail the status.
   const ok = Object.values(checks).every((check) => check.ok !== false);
-  return { ok, version, checks };
+  // Not part of ok: numbers to watch (memory, event loop, pool, queues).
+  return { ok, version, checks, runtime: runtimeStats() };
 }
