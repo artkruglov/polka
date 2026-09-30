@@ -10,7 +10,7 @@ import {
 import { registerAgentContext } from "./agent-context.ts";
 import { createTeamShelfInTransaction, shelvesOf } from "./shelves.ts";
 import { connectGuide } from "./connect-guide.ts";
-import { indexable, robotsTxt } from "./indexing.ts";
+import { indexable, robotsTxt, sitemapXml } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
 import { registerOpsMetrics } from "./metrics.ts";
@@ -417,6 +417,12 @@ export async function createApp() {
       .header("cache-control", "public, max-age=3600")
       .type("text/plain; charset=utf-8")
       .send(robotsTxt(config.APP_ORIGIN)),
+  );
+  app.get("/sitemap.xml", async (_req, reply) =>
+    reply
+      .header("cache-control", "public, max-age=3600")
+      .type("application/xml; charset=utf-8")
+      .send(sitemapXml(config.APP_ORIGIN, (await listEditorial()).items.map((item) => item.slug))),
   );
   app.get("/connect", async (req, reply) => {
     trackPageView(req, "/connect");

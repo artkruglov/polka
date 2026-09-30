@@ -177,6 +177,14 @@ test("public pages may be indexed; shared works, shelves and the API stay noinde
   assert.match(robots.body, /\nAllow: \/connect\n/);
   assert.match(robots.body, /\nDisallow: \/\n/);
   assert.doesNotMatch(robots.body, /Allow: \/s\b/);
+  // The sitemap lists the public pages, never a shared work or a shelf.
+  assert.match(robots.body, new RegExp(`\\nSitemap: ${config.APP_ORIGIN}/sitemap.xml\\n`));
+  const sitemap = await call("GET", "/sitemap.xml");
+  assert.equal(sitemap.statusCode, 200);
+  assert.match(String(sitemap.headers["content-type"]), /^application\/xml/);
+  for (const path of ["/", "/connect", "/discover", "/pricing", "/privacy", "/terms"])
+    assert.ok(sitemap.body.includes(`<loc>${config.APP_ORIGIN}${path}</loc>`), path);
+  assert.doesNotMatch(sitemap.body, /\/s#|\/works\/|\/api\//);
 });
 
 test("an unknown address opens the app's 404 page; the API keeps its JSON", async () => {
