@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, FileCode2, FileText, Film, Folder, Image, ListTree } from "lucide-react";
+import { ChevronRight, FileCode2, FileText, Film, Folder, Image, ListTree, PanelLeftClose } from "lucide-react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
 import { projectView, renewProjectView } from "../../shared/api/client.ts";
 import { StatusPanel } from "../../shared/ui/controls.tsx";
@@ -128,6 +128,10 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   // The view ran out and could not be renewed: the page stays, with a way back.
   const [stale, setStale] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  // A project whose entry is a page (a game, a prototype, a site) opens as that
+  // page, as it looks in a browser; the files are one button away.
+  const app = manifest.entrypoint.endsWith(".html") || manifest.entrypoint.endsWith(".htm");
+  const [treeShown, setTreeShown] = useState(!app);
   // Where the frame is sent: a page, its anchor, and a count so that choosing
   // the page the frame already shows still opens it again.
   const [target, setTarget] = useState({ path: page, hash: "", n: 0 });
@@ -239,8 +243,10 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
       (target.hash ? `#${encodeURIComponent(target.hash)}` : "")
     : "";
   return (
-    <div className={`project-view${navOpen ? " project-view--nav" : ""}${single ? " project-view--single" : ""}`}>
-      {!single && (
+    <div
+      className={`project-view${navOpen || (app && treeShown) ? " project-view--nav" : ""}${single || !treeShown ? " project-view--single" : ""}${app && !treeShown ? " project-view--app" : ""}`}
+    >
+      {!single && treeShown && (
         <nav className="project-tree" id={`project-tree-${revision.id}`} aria-label="Содержание проекта">
           <p className="project-tree-summary">Проект · {filesLabel(files.length)}</p>
           <TreeBranch node={readable} current={page} open={open} toggle={toggle} choose={choose} />
@@ -257,17 +263,42 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
         </nav>
       )}
       <section className="project-page" aria-label="Страница проекта">
-        {!single && (
-          <header className="project-page-bar">
+        {!single && app && !treeShown && (
+          <header className="project-page-bar project-page-bar--slim">
             <button
               type="button"
-              className="project-toc-button"
-              aria-expanded={navOpen}
+              className="project-toc-button project-toc-button--always"
+              aria-expanded={false}
               aria-controls={`project-tree-${revision.id}`}
-              onClick={() => setNavOpen((was) => !was)}
+              onClick={() => setTreeShown(true)}
             >
-              <ListTree aria-hidden="true" /> Содержание
+              <ListTree aria-hidden="true" /> Файлы проекта · {files.length}
             </button>
+          </header>
+        )}
+        {!single && (!app || treeShown) && (
+          <header className="project-page-bar">
+            {app ? (
+              <button
+                type="button"
+                className="project-toc-button project-toc-button--always"
+                aria-expanded
+                aria-controls={`project-tree-${revision.id}`}
+                onClick={() => setTreeShown(false)}
+              >
+                <PanelLeftClose aria-hidden="true" /> Скрыть файлы
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="project-toc-button"
+                aria-expanded={navOpen}
+                aria-controls={`project-tree-${revision.id}`}
+                onClick={() => setNavOpen((was) => !was)}
+              >
+                <ListTree aria-hidden="true" /> Содержание
+              </button>
+            )}
             <ol className="project-crumbs" aria-label="Где вы в проекте">
               {crumbs.map((part, index) => (
                 <li key={index} aria-current={index === crumbs.length - 1 ? "page" : undefined}>
@@ -293,6 +324,9 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
             title={`Проект: ${page}`}
             src={src}
             sandbox="allow-scripts allow-forms"
+            // The page's own full-screen button (a game, a film) may ask for it.
+            allow="fullscreen"
+            allowFullScreen
             referrerPolicy="no-referrer"
           />
         ) : (
