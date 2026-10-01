@@ -34,7 +34,8 @@ const scopesSchema = z
   .array(agentScopeSchema)
   .min(1)
   .max(SERVICE_SCOPES.length)
-  .transform((scopes) => [...new Set(scopes)].sort() as AgentScope[])
+  // «context» is how an agent learns its shelf and limits: always there.
+  .transform((scopes) => [...new Set<AgentScope>([...scopes, "context"])].sort() as AgentScope[])
   .superRefine((scopes, ctx) => {
     if (scopes.some((scope) => !SERVICE_SCOPES.includes(scope)))
       ctx.addIssue({ code: "custom", message: "Сервисному доступу нельзя manage и sign_in." });
@@ -290,6 +291,8 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
     throw new Problem(403, "forbidden", "Токен для задачи выдаёт сервисный доступ.");
   const parentId = actor.connectionId;
   return transaction(async (c) => {
+    // The order every path takes: the service account's row, then its tokens.
+    await c.query("SELECT 1 FROM service_principals WHERE id=$1 FOR SHARE", [actor.servicePrincipalId]);
     const {
       rows: [parent],
     } = await c.query(

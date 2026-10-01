@@ -268,6 +268,8 @@ export async function issueAgentConnection(
         : await lockShelf(c, { id: actor.id, tenant }, "reader");
     if (shelf) assertScopesFitRole(shelf.role, input.scopes);
     // Other shelves to search: department shelves the account belongs to, read only.
+    if (input.allowedShelfIds.includes(tenant))
+      throw new Problem(400, "invalid", "Полка токена уже ищется: уберите её из списка других полок.");
     if (input.allowedShelfIds.length) {
       if (config.TEAM_SHELVES !== "on" || !input.scopes.includes("read"))
         throw new Problem(400, "invalid", "Поиск по другим полкам нужен вместе с правом read и включёнными полками отделов.");
