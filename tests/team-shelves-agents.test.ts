@@ -10,6 +10,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
+import { setShelfCard } from "../apps/server/shelf-card.ts";
 import { s3 } from "../apps/server/storage.ts";
 
 const app = await createApp();
@@ -159,6 +160,20 @@ test("an author's agent saves to the department shelf and knows where it is", as
     { kind: result.shelf.kind, name: result.shelf.name, role: result.shelf.role, canSave: result.shelf.canSave },
     { kind: "team", name: "Отдел продаж", role: "author", canSave: true },
   );
+  assert.equal(result.shelf.card, undefined);
+  // The shelf's card: an author may not write it, the admin may; the agent reads it.
+  await assert.rejects(setShelfCard({ id: author.id, tenant: shelf.id }, { cardMd: "нельзя" }));
+  assert.deepEqual(
+    await setShelfCard({ id: admin.id, tenant: shelf.id }, { cardMd: "  Названия — по шаблону «Клиент — тема».  " }),
+    { cardMd: "Названия — по шаблону «Клиент — тема»." },
+  );
+  await assert.rejects(setShelfCard({ id: admin.id, tenant: shelf.id }, { cardMd: "я".repeat(8001) }));
+  const withCard = JSON.parse(
+    (await mcp(token, "tools/call", { name: "polka_context", arguments: {} })).message.result.content[0].text,
+  );
+  assert.equal(withCard.shelf.card, "Названия — по шаблону «Клиент — тема».");
+  assert.match(withCard.shelf.cardNote, /справка/);
+  assert.deepEqual(await setShelfCard({ id: admin.id, tenant: shelf.id }, { cardMd: " " }), { cardMd: null });
   assert.equal(result.capabilities.share, false);
   const tools = (await mcp(token, "tools/list")).message.result.tools.map((tool: any) => tool.name);
   assert.ok(tools.includes("polka_publish"));
