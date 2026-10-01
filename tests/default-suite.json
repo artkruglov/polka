@@ -56,6 +56,7 @@
   "tests/team-shelves.test.ts",
   "tests/team-shelves-web.test.ts",
   "tests/agent-multi-shelf.test.ts",
+  "tests/rest-mcp-parity.test.ts",
   "tests/service-accounts.test.ts",
   "tests/team-shelves-agents.test.ts",
   "tests/company-admin.test.ts",

@@ -86,7 +86,11 @@ export const artifactIdOf = (ref: string) =>
   WORKS_PATH.exec(ref)?.[1]?.toLowerCase() ?? ref;
 
 export const agentGetArtifactInputSchema = z
-  .object({ artifactId: artifactRef })
+  .object({
+    artifactId: artifactRef,
+    /** Add the list of versions (newest first, up to 100): number, size, whether accepted. */
+    revisions: z.boolean().optional(),
+  })
   .strict();
 
 export const agentFolderListInputSchema = z
@@ -371,7 +375,26 @@ export async function getArtifactForAgent(
     [artifactIdOf(input.artifactId), verified.tenantId, scope],
   );
   if (!row) throw missing();
-  return artifactProjection(row);
+  const work = artifactProjection(row);
+  if (!input.revisions) return work;
+  const { rows } = await db.query(
+    `SELECT id,number,filename,mime,size,total_size,created_at FROM revisions
+     WHERE artifact_id=$1 AND tenant_id=$2 ORDER BY number DESC LIMIT 100`,
+    [work.id, verified.tenantId],
+  );
+  return {
+    ...work,
+    revisions: rows.map((revision) => ({
+      id: revision.id as string,
+      number: Number(revision.number),
+      filename: revision.filename as string,
+      mime: revision.mime as string,
+      size: Number(revision.size),
+      totalSize: Number(revision.total_size),
+      createdAt: new Date(revision.created_at).toISOString(),
+      accepted: revision.id === work.acceptedRevisionId,
+    })),
+  };
 }
 
 /**

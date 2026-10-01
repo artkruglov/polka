@@ -147,7 +147,14 @@ export async function listServicePrincipals(actor: Actor) {
   return transaction(async (c) => {
     await lockShelf(c, actor, "curator", "SHARE");
     const { rows } = await c.query(
-      `SELECT principal.*,COALESCE(person.display_name,person.name) AS responsible_name,
+      `SELECT principal.id,principal.tenant_id,principal.name,principal.responsible_account_id,
+              principal.frozen_at,principal.created_by,principal.created_at,principal.disabled_at,
+              -- A disabled or erased responsible person stops the tokens whatever the row says.
+              CASE WHEN principal.status='active'
+                    AND (person.disabled OR person.deletion_requested_at IS NOT NULL
+                         OR person.name LIKE 'deleted-%')
+                   THEN 'frozen' ELSE principal.status END AS status,
+              COALESCE(person.display_name,person.name) AS responsible_name,
               live.scopes,live.expires_at,live.last_seen_at
        FROM service_principals principal
        JOIN accounts person ON person.id=principal.responsible_account_id

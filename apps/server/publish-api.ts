@@ -25,7 +25,7 @@ import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { createTaskToken } from "./service-principals.ts";
 import { listEventsForAgent } from "./agent-events.ts";
-import { artifactStatusForAgent, listArtifactsForAgent } from "./agent-management.ts";
+import { artifactStatusForAgent, getArtifactForAgent, listArtifactsForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
@@ -472,6 +472,12 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.get("/api/v1/events", async (req, reply) => {
     const actor = await bearerActor(req, reply);
     return withFieldErrors(() => listEventsForAgent(actor, (req.query ?? {}) as never));
+  });
+  // One work of the token's shelf with its versions (read).
+  app.get("/api/v1/works/:artifactId", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    const { artifactId } = req.params as { artifactId: string };
+    return withFieldErrors(() => getArtifactForAgent(actor, { artifactId, revisions: true }));
   });
   // polka pull: a version's files, listed, then one by one (work-files.ts).
   app.get("/api/v1/works/:artifactId/files", async (req, reply) => {

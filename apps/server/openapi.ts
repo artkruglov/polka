@@ -587,6 +587,23 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/works/{artifactId}": {
+        get: {
+          operationId: "getWork",
+          summary: "One work of the shelf with its versions",
+          description:
+            "Metadata as in listWorks (shelfId, acceptedRevisionId, ownerAccountId) plus revisions: [{id, number, filename, mime, size, totalSize, createdAt, accepted}], newest first, up to 100. No bytes and no share links. Scope read.",
+          security: [{ bearerAuth: ["read"] }],
+          parameters: [{ name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": { description: "The work and its versions." },
+            "400": { description: "artifactId is not valid." },
+            "401": common["401"],
+            "404": { description: "No such work on this token's shelf, or no read scope." },
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/works/{artifactId}/files": {
         get: {
           operationId: "listWorkFiles",

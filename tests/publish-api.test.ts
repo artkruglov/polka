@@ -767,6 +767,24 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
   );
   assert.notEqual(next.json().items[0].id, paged.json().items[0].id);
   assert.equal((await list(reader.secret, "?since=yesterday")).statusCode, 400);
+  // One work with its versions; another shelf's work is not found.
+  const detail = await app.inject({
+    method: "GET",
+    url: `/api/v1/works/${second.artifactId}`,
+    remoteAddress: address(),
+    headers: bearer(reader.secret),
+  });
+  assert.equal(detail.statusCode, 200, detail.body);
+  assert.equal(detail.json().id, second.artifactId);
+  assert.equal(detail.json().revisions.length, 1);
+  assert.equal(detail.json().revisions[0].id, second.revisionId);
+  assert.equal(detail.json().revisions[0].accepted, false);
+  assert.ok(!detail.body.includes("https://polochka.app/s#"));
+  const strangerOwner = await token(await newOwner("publish-api-detail-other"), ["context", "read"]);
+  assert.equal(
+    (await app.inject({ method: "GET", url: `/api/v1/works/${second.artifactId}`, remoteAddress: address(), headers: bearer(strangerOwner.secret) })).statusCode,
+    404,
+  );
   const noRead = await token(owner, ["context", "capture"]);
   assert.equal((await list(noRead.secret)).statusCode, 403);
   const outsider = await token(await newOwner("publish-api-works-other"), ["context", "read"]);

@@ -284,3 +284,23 @@ test("rotation is the responsible person's or an admin's; personal shelves have 
   for (let n = 0; n < 20; n++) assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 200);
   assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 413);
 });
+
+test("erasing the responsible account freezes the service account and ends its token", async () => {
+  const person = await account("svc-erased");
+  assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: person.name, role: "curator" } })).statusCode, 200);
+  const made = (await create(person, { name: "Стирание", scopes: ["context", "read"] })).json();
+  assert.equal((await api(made.token, "GET", "/api/v1/works")).statusCode, 200);
+  // The erasure renames the account (030); its trigger acts on the department rows.
+  await db.query("UPDATE accounts SET name='deleted-'||id::text WHERE id=$1", [person.id]);
+  const {
+    rows: [row],
+  } = await db.query("SELECT status FROM service_principals WHERE id=$1", [made.servicePrincipal.id]);
+  assert.equal(row.status, "frozen");
+  assert.equal((await api(made.token, "GET", "/api/v1/works")).statusCode, 401);
+  const listed = (await session(admin, "GET", "/api/service-accounts")).json();
+  assert.equal(listed.items.find((item: any) => item.id === made.servicePrincipal.id).status, "frozen");
+  // An admin names another person and a fresh token comes back.
+  const thawed = await session(admin, "PUT", `/api/service-accounts/${made.servicePrincipal.id}/responsible`, { accountId: admin.id });
+  assert.equal(thawed.statusCode, 200, thawed.body);
+  assert.equal((await api(thawed.json().token, "GET", "/api/v1/works")).statusCode, 200);
+});
