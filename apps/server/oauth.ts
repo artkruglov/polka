@@ -851,6 +851,7 @@ async function exchangeCode(
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
        WHERE tenant_id=$1 AND account_id=$3 AND parent_id IS NULL
+         AND principal_type='human'
          AND revoked_at IS NULL AND expires_at>now()
          AND NOT (id = ANY($2::uuid[]))`,
       [row.tenant_id, previous.map((connection) => connection.id), row.account_id],

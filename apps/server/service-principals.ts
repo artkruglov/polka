@@ -20,6 +20,7 @@ type Actor = { id: string; tenant: string };
 
 export const MAX_SERVICE_PRINCIPALS = 20;
 export const SERVICE_TOKEN_MAX_DAYS = 90;
+export const MAX_LIVE_TASK_TOKENS = 20;
 export const TASK_TOKEN_MIN_MINUTES = 5;
 export const TASK_TOKEN_MAX_MINUTES = 60;
 /** What an unattended agent may hold: no folder management, no sign-in links. */
@@ -51,7 +52,12 @@ const createInput = z
 const rotateInput = z
   .object({ ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30) })
   .strict();
-const responsibleInput = z.object({ accountId: z.string().uuid() }).strict();
+const responsibleInput = z
+  .object({
+    accountId: z.string().uuid(),
+    ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30),
+  })
+  .strict();
 const taskInput = z
   .object({
     scopes: scopesSchema.optional(),
@@ -84,7 +90,10 @@ export async function createServicePrincipal(actor: Actor, body: unknown) {
   enabled();
   const input = createInput.parse(body);
   return transaction(async (c) => {
-    const { role } = await lockShelf(c, actor, "curator");
+    const { role, tenant } = await lockShelf(c, actor, "curator");
+    // A personal shelf can be merged into another account, which would orphan the token.
+    if (tenant.kind !== "team")
+      throw new Problem(422, "invalid", "Сервисные доступы заводятся на полках отделов.");
     assertScopesFitRole(role, input.scopes);
     const {
       rows: [count],
@@ -170,8 +179,11 @@ export async function rotateServiceToken(actor: Actor, id: string, body: unknown
   enabled();
   const input = rotateInput.parse(body ?? {});
   return transaction(async (c) => {
-    await lockShelf(c, actor, "curator");
+    const { role } = await lockShelf(c, actor, "curator");
     const principal = await lockPrincipal(c, actor, id);
+    // The token acts as the responsible person: they or an admin hand out a new one.
+    if (principal.responsible_account_id !== actor.id && !atLeast(role, "admin"))
+      throw new Problem(403, "forbidden", "Новый токен выдаёт ответственный или администратор полки.");
     if (principal.status !== "active")
       throw new Problem(409, "conflict", "Сервисный доступ заморожен: сначала назначьте ответственного.");
     const {
@@ -219,10 +231,11 @@ export async function disableServicePrincipal(actor: Actor, id: string) {
 /** An admin names the person responsible; a frozen account thaws. */
 export async function setServiceResponsible(actor: Actor, id: string, body: unknown) {
   enabled();
-  const { accountId } = responsibleInput.parse(body);
+  const input = responsibleInput.parse(body);
+  const { accountId } = input;
   return transaction(async (c) => {
     await lockShelf(c, actor, "admin");
-    await lockPrincipal(c, actor, id);
+    const principal = await lockPrincipal(c, actor, id);
     const {
       rows: [member],
     } = await c.query(
@@ -233,16 +246,32 @@ export async function setServiceResponsible(actor: Actor, id: string, body: unkn
     );
     if (!member || !atLeast(member.role, "curator"))
       throw new Problem(422, "invalid", "Ответственным может быть куратор или администратор этой полки.");
+    const {
+      rows: [last],
+    } = await c.query(
+      `SELECT scopes FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [id],
+    );
+    // The old tokens may sit with the person who left (or with the previous
+    // responsible one): they end, and the new person gets a fresh one.
+    await c.query(
+      "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE service_principal_id=$1 AND revoked_at IS NULL",
+      [id],
+    );
     await c.query(
       `UPDATE service_principals SET responsible_account_id=$2,status='active',frozen_at=NULL WHERE id=$1`,
       [id, accountId],
     );
-    await c.query(
-      "UPDATE agent_connections SET account_id=$2 WHERE service_principal_id=$1 AND revoked_at IS NULL",
-      [id, accountId],
+    const { id: connectionId, token } = await issueToken(
+      c,
+      principal,
+      accountId,
+      last?.scopes ?? ["capture", "context"],
+      input.ttlDays,
     );
-    await audit(c, actor, "service_account.responsible_changed", id, { responsibleAccountId: accountId });
-    return { ok: true, responsibleAccountId: accountId };
+    await audit(c, actor, "service_account.responsible_changed", id, { responsibleAccountId: accountId, connectionId });
+    return { ok: true, responsibleAccountId: accountId, token, ttlDays: input.ttlDays };
   });
 }
 
@@ -267,6 +296,14 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
     if (!parent) throw new Problem(401, "unauthorized", "Подключение агента недействительно.");
     if (parent.parent_id)
       throw new Problem(403, "forbidden", "Токен для задачи не выдаёт другие токены.");
+    const {
+      rows: [live],
+    } = await c.query(
+      "SELECT count(*)::int AS n FROM agent_connections WHERE parent_id=$1 AND revoked_at IS NULL AND expires_at>now()",
+      [parentId],
+    );
+    if (live.n >= MAX_LIVE_TASK_TOKENS)
+      throw new Problem(413, "quota", "Слишком много действующих токенов для задач: дождитесь окончания прежних.");
     const scopes = (input.scopes ?? parent.scopes) as AgentScope[];
     if (scopes.some((scope) => !parent.scopes.includes(scope)))
       throw new Problem(403, "forbidden", "Токен для задачи не может иметь прав больше, чем у сервисного доступа.");
@@ -297,7 +334,7 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
     });
     return {
       token,
-      expiresAt: new Date(Date.now() + input.minutes * 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + input.minutes * 60_000).toISOString(), // the app's clock, within seconds of the database's
       scopes,
       ...(input.taskId ? { taskId: input.taskId } : {}),
     };

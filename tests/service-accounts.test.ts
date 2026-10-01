@@ -8,7 +8,8 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
+import { MCP_AUDIENCE, authenticateServiceToken } from "../apps/server/service-auth.ts";
+import { moveShareFromAgent } from "../apps/server/shares.ts";
 import { s3 } from "../apps/server/storage.ts";
 
 const app = await createApp();
@@ -136,8 +137,14 @@ test("a service token reads and saves as its responsible person; people's lists 
   const {
     rows: [row],
   } = await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1", [servicePrincipal.id]);
-  const revoke = await session(admin, "POST", `/api/agent-connections/${row.id}/revoke`);
-  assert.ok(revoke.statusCode >= 400);
+  const csrf = (await session(admin, "POST", "/api/agent-connections/csrf", {})).json().csrfToken;
+  const revoke = await app.inject({
+    method: "POST",
+    url: `/api/agent-connections/${row.id}/revoke`,
+    remoteAddress: address(),
+    headers: { origin, cookie: admin.cookie, "x-polka-shelf": shelf.id, "x-polka-csrf": csrf },
+  });
+  assert.equal(revoke.statusCode, 404, "a service token is not on the people's list");
   assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 200);
 });
 
@@ -202,8 +209,11 @@ test("the responsible person leaves: the account freezes; an admin names another
   // Only a curator or admin of the shelf may take it over; a stranger cannot.
   const stranger = await account("svc-stranger");
   assert.equal((await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: stranger.id })).statusCode, 422);
-  assert.equal((await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: admin.id })).statusCode, 200);
-  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 200);
+  const thawed = await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: admin.id });
+  assert.equal(thawed.statusCode, 200, thawed.body);
+  // The departed person's copy of the token stays dead; the new responsible gets a fresh one.
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
+  assert.equal((await api(thawed.json().token, "GET", "/api/v1/works")).statusCode, 200);
   const {
     rows: [after],
   } = await db.query("SELECT status,frozen_at,responsible_account_id FROM service_principals WHERE id=$1", [id]);
@@ -225,6 +235,17 @@ test("a service account moves a link only when it is set to follow new versions"
     rows: [share],
   } = await db.query("SELECT id,revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [first.artifactId]);
   assert.equal(share.revision_id, first.revisionId, "the link stayed on its version");
+  // The explicit move (polka_share moveShareId) is held back the same way.
+  const serviceActor = await authenticateServiceToken(token, MCP_AUDIENCE);
+  await assert.rejects(
+    moveShareFromAgent(serviceActor, {
+      key: randomUUID(),
+      artifactId: first.artifactId,
+      shareId: share.id,
+      expectedRevisionId: pinned.json().revisionId,
+    }),
+    { status: 409 },
+  );
   assert.equal((await session(admin, "PUT", `/api/shares/${share.id}/follow`, { followMode: "follows" })).statusCode, 200);
   const latest = pinned.json().revisionId;
   const followed = await publish(token, "Отчёт со ссылкой", { artifactId: first.artifactId, baseRevisionId: latest });
@@ -234,4 +255,29 @@ test("a service account moves a link only when it is set to follow new versions"
     rows: [moved],
   } = await db.query("SELECT revision_id FROM shares WHERE id=$1", [share.id]);
   assert.equal(moved.revision_id, followed.json().revisionId);
+});
+
+test("rotation is the responsible person's or an admin's; personal shelves have none; task tokens are capped", async () => {
+  const owner = await account("svc-owner");
+  const other = await account("svc-other");
+  for (const who of [owner, other])
+    assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: who.name, role: "curator" } })).statusCode, 200);
+  const made = (await create(owner, { name: "Ротация куратора", scopes: ["context", "read"] })).json();
+  const id = made.servicePrincipal.id as string;
+  // Another curator (not responsible, not admin) cannot rotate.
+  assert.equal((await session(other, "POST", `/api/service-accounts/${id}/rotate`, {})).statusCode, 403);
+  assert.equal((await session(owner, "POST", `/api/service-accounts/${id}/rotate`, {})).statusCode, 200);
+  assert.equal((await session(admin, "POST", `/api/service-accounts/${id}/rotate`, {})).statusCode, 200);
+  // On one's own shelf: refused (a merge would orphan the token).
+  const personal = await app.inject({
+    method: "POST",
+    url: "/api/service-accounts",
+    headers: { origin, cookie: admin.cookie, "content-type": "application/json" },
+    payload: JSON.stringify({ name: "Личный" }),
+  });
+  assert.equal(personal.statusCode, 422, personal.body);
+  // Task tokens: no more than 20 live at once.
+  const { token } = (await create(admin, { name: "Много задач", scopes: ["context", "read"] })).json();
+  for (let n = 0; n < 20; n++) assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 200);
+  assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 413);
 });

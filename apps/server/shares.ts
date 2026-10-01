@@ -1,3 +1,4 @@
+import { agentMayMoveLink } from "./link-follow.ts";
 import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { checkLinkIssue, emitEvent } from "./extensions.ts";
 import { randomUUID } from "node:crypto";
@@ -1297,6 +1298,19 @@ export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
         connectionId: verified.connectionId,
       };
       const artifact = await lockArtifact(c, owner, input.artifactId);
+      // An unattended agent moves only a link set to follow new versions.
+      const {
+        rows: [target],
+      } = await c.query("SELECT follow_mode FROM shares WHERE id=$1 AND tenant_id=$2", [
+        input.shareId,
+        verified.tenantId,
+      ]);
+      if (target && !agentMayMoveLink(verified.principal, target.follow_mode))
+        throw new Problem(
+          409,
+          "conflict",
+          "Ссылка закреплена на своей версии: сервисный доступ её не двигает. Куратор может включить «следует за новыми версиями».",
+        );
       if (artifact.latest_revision_id !== input.expectedRevisionId)
         throw new Problem(
           409,
