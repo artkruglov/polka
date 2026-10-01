@@ -77,7 +77,7 @@ test("live seed replaces the static snapshot with the ready interactive original
     await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]);
   });
   const slug = `live-seed-${suffix}`;
-  const candidate = catalogue.items.find((item) => item.slug === "tile-pattern")!;
+  const candidate = catalogue.items.find((item) => item.slug === "handwriting-research")!;
   const directory = await mkdtemp(join(tmpdir(), "polka-live-seed-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   const candidates = join(directory, "candidates.json");
