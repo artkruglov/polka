@@ -1,0 +1,237 @@
+// Service accounts (docs/specs/DATA_MODELS.md §3, §4): an unattended agent on a
+// department shelf with a person responsible for it, short task tokens, the
+// freeze when the responsible person leaves, and the pinned-link rule.
+import { after, before, test } from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
+import { createApp } from "../apps/server/app.ts";
+import { createAccount } from "../apps/server/auth.ts";
+import { config } from "../apps/server/config.ts";
+import { db } from "../apps/server/db.ts";
+import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
+import { s3 } from "../apps/server/storage.ts";
+
+const app = await createApp();
+const origin = config.APP_ORIGIN;
+const password = randomBytes(24).toString("hex");
+const saved = { team: config.TEAM_SHELVES, service: config.SERVICE_ACCOUNTS };
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+type Account = Awaited<ReturnType<typeof createAccount>> & { cookie: string };
+let admin: Account, curator: Account;
+let shelf: { id: string };
+
+async function account(prefix: string): Promise<Account> {
+  const created = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
+  const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: created.name, password } });
+  assert.equal(login.statusCode, 200, login.body);
+  return { ...created, cookie: `polka_session=${login.cookies[0].value}` };
+}
+const session = (who: Account, method: string, url: string, payload?: unknown) =>
+  app.inject({
+    method: method as "GET",
+    url,
+    remoteAddress: address(),
+    headers: {
+      origin,
+      cookie: who.cookie,
+      "x-polka-shelf": shelf.id,
+      ...(payload === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
+  });
+const api = (token: string, method: string, url: string, payload?: unknown) =>
+  app.inject({
+    method: method as "GET",
+    url,
+    remoteAddress: address(),
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
+  });
+const page = (title: string) =>
+  `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body><h1>${title}</h1><p>Сводка отдела.</p></body></html>`;
+const publish = (token: string, title: string, extra: Record<string, unknown> = {}) =>
+  api(token, "POST", "/api/v1/publish", { key: randomUUID(), title, html: page(title), ...extra });
+async function humanToken(who: Account, scopes: string[]) {
+  const csrf = await app.inject({
+    method: "POST",
+    url: "/api/agent-connections/csrf",
+    remoteAddress: address(),
+    headers: { origin, cookie: who.cookie, "content-type": "application/json" },
+    payload: "{}",
+  });
+  const issued = await app.inject({
+    method: "POST",
+    url: "/api/agent-connections",
+    remoteAddress: address(),
+    headers: { origin, cookie: who.cookie, "content-type": "application/json", "x-polka-csrf": csrf.json().csrfToken },
+    payload: JSON.stringify({ name: "Человек", audience: MCP_AUDIENCE, ttlDays: 1, scopes, shelfId: shelf.id }),
+  });
+  assert.equal(issued.statusCode, 200, issued.body);
+  return issued.json().token as string;
+}
+const create = async (who: Account, body: Record<string, unknown>) => {
+  const response = await session(who, "POST", "/api/service-accounts", body);
+  return response;
+};
+
+before(async () => {
+  config.TEAM_SHELVES = "on";
+  config.SERVICE_ACCOUNTS = "on";
+  admin = await account("svc-admin");
+  curator = await account("svc-curator");
+  await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [admin.id]);
+  shelf = (await app.inject({ method: "POST", url: "/api/shelves", headers: { origin, cookie: admin.cookie }, payload: { name: "Отдел сервисов" } })).json();
+  const added = await app.inject({
+    method: "POST",
+    url: `/api/shelves/${shelf.id}/members`,
+    headers: { origin, cookie: admin.cookie },
+    payload: { who: curator.name, role: "curator" },
+  });
+  assert.equal(added.statusCode, 200, added.body);
+});
+
+after(async () => {
+  config.TEAM_SHELVES = saved.team;
+  config.SERVICE_ACCOUNTS = saved.service;
+  await app.close();
+  await db.end();
+  s3.destroy();
+});
+
+test("off by default; scopes are limited; read and share never together", async () => {
+  config.SERVICE_ACCOUNTS = "off";
+  assert.equal((await create(admin, { name: "Выключено" })).statusCode, 404);
+  config.SERVICE_ACCOUNTS = "on";
+  for (const scopes of [["read", "share"], ["manage"], ["sign_in", "read"]]) {
+    const refused = await create(admin, { name: `Нельзя ${scopes.join("+")}`, scopes });
+    assert.equal(refused.statusCode, 400, refused.body);
+  }
+  assert.equal((await create(admin, { name: "Долго", ttlDays: 91 })).statusCode, 400);
+  const ok = await create(admin, { name: "Ночной дайджест", scopes: ["context", "read", "capture", "revise"] });
+  assert.equal(ok.statusCode, 200, ok.body);
+  assert.equal((await create(admin, { name: "ночной дайджест" })).statusCode, 409);
+  const listed = (await session(admin, "GET", "/api/service-accounts")).json();
+  assert.ok(listed.items.some((item: any) => item.name === "Ночной дайджест" && item.status === "active"));
+});
+
+test("a service token reads and saves as its responsible person; people's lists do not show it", async () => {
+  const { token, servicePrincipal } = (await create(admin, { name: "Рабочий", scopes: ["context", "read", "capture"] })).json();
+  const works = await api(token, "GET", "/api/v1/works");
+  assert.equal(works.statusCode, 200, works.body);
+  const saved = await publish(token, "Сводка сервиса");
+  assert.equal(saved.statusCode, 200, saved.body);
+  const {
+    rows: [work],
+  } = await db.query("SELECT tenant_id,created_by FROM artifacts WHERE id=$1", [saved.json().artifactId]);
+  assert.deepEqual(work, { tenant_id: shelf.id, created_by: admin.id });
+  const {
+    rows: [event],
+  } = await db.query("SELECT actor_type,connection_id FROM audit_outbox WHERE action='revision.saved' AND target_id=$1", [saved.json().revisionId]);
+  assert.equal(event.actor_type, "agent");
+  assert.ok(event.connection_id);
+  const mine = (await session(admin, "GET", "/api/agent-connections")).json();
+  assert.ok(!JSON.stringify(mine).includes(servicePrincipal.id));
+  assert.ok(!mine.some((connection: any) => connection.name === "Рабочий"));
+  // The responsible person cannot revoke it through the people's route either.
+  const {
+    rows: [row],
+  } = await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1", [servicePrincipal.id]);
+  const revoke = await session(admin, "POST", `/api/agent-connections/${row.id}/revoke`);
+  assert.ok(revoke.statusCode >= 400);
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 200);
+});
+
+test("task tokens: a subset of scopes, 5–60 minutes, stop with the parent, mint nothing", async () => {
+  const madeTask = await create(admin, { name: "Задачи", scopes: ["context", "read", "capture"] });
+  assert.equal(madeTask.statusCode, 200, madeTask.body);
+  const { token, servicePrincipal } = madeTask.json();
+  assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 3 })).statusCode, 400);
+  assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 61 })).statusCode, 400);
+  assert.equal((await api(token, "POST", "/api/v1/task-token", { scopes: ["share"] })).statusCode, 403);
+  const issued = await api(token, "POST", "/api/v1/task-token", { scopes: ["read"], minutes: 10, taskId: "nightly-42" });
+  assert.equal(issued.statusCode, 200, issued.body);
+  const task = issued.json();
+  assert.deepEqual(task.scopes, ["read"]);
+  assert.equal(task.taskId, "nightly-42");
+  assert.equal((await api(task.token, "GET", "/api/v1/works")).statusCode, 200);
+  assert.ok([403, 404].includes((await publish(task.token, "Нельзя")).statusCode));
+  assert.equal((await api(task.token, "POST", "/api/v1/task-token", {})).statusCode, 403);
+  const {
+    rows: [audit],
+  } = await db.query("SELECT payload FROM audit_outbox WHERE action='service_account.task_token' ORDER BY id DESC LIMIT 1");
+  assert.equal(audit.payload.taskId, "nightly-42");
+  assert.equal(audit.payload.servicePrincipalId, servicePrincipal.id);
+  // A person's token cannot ask for one.
+  assert.equal((await api(await humanToken(admin, ["context", "read"]), "POST", "/api/v1/task-token", {})).statusCode, 403);
+  // Disabling the account ends the parent and the child.
+  assert.equal((await session(admin, "POST", `/api/service-accounts/${servicePrincipal.id}/disable`)).statusCode, 200);
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
+  assert.equal((await api(task.token, "GET", "/api/v1/works")).statusCode, 401);
+});
+
+test("rotating a token ends the old one", async () => {
+  const { token, servicePrincipal } = (await create(admin, { name: "Ротация", scopes: ["context", "read"] })).json();
+  const rotated = await session(admin, "POST", `/api/service-accounts/${servicePrincipal.id}/rotate`, { ttlDays: 10 });
+  assert.equal(rotated.statusCode, 200, rotated.body);
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
+  assert.equal((await api(rotated.json().token, "GET", "/api/v1/works")).statusCode, 200);
+});
+
+test("the responsible person leaves: the account freezes; an admin names another and it thaws", async () => {
+  const made = (await create(curator, { name: "Под куратором", scopes: ["context", "read"] })).json();
+  const token = made.token as string;
+  const id = made.servicePrincipal.id as string;
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 200);
+  const removed = await app.inject({
+    method: "POST",
+    url: `/api/shelves/${shelf.id}/members/${curator.id}/revoke`,
+    headers: { origin, cookie: admin.cookie },
+  });
+  assert.equal(removed.statusCode, 200, removed.body);
+  const {
+    rows: [frozen],
+  } = await db.query("SELECT status,frozen_at FROM service_principals WHERE id=$1", [id]);
+  assert.equal(frozen.status, "frozen");
+  assert.ok(frozen.frozen_at);
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
+  // Not revoked: the person's own agents are, the service token is kept for the next owner.
+  const {
+    rows: [connection],
+  } = await db.query("SELECT revoked_at FROM agent_connections WHERE service_principal_id=$1", [id]);
+  assert.equal(connection.revoked_at, null);
+  // Only a curator or admin of the shelf may take it over; a stranger cannot.
+  const stranger = await account("svc-stranger");
+  assert.equal((await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: stranger.id })).statusCode, 422);
+  assert.equal((await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: admin.id })).statusCode, 200);
+  assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 200);
+  const {
+    rows: [after],
+  } = await db.query("SELECT status,frozen_at,responsible_account_id FROM service_principals WHERE id=$1", [id]);
+  assert.deepEqual([after.status, after.frozen_at, after.responsible_account_id], ["active", null, admin.id]);
+});
+
+test("a service account moves a link only when it is set to follow new versions", async () => {
+  const humanTok = await humanToken(admin, ["context", "capture", "revise", "share"]);
+  const first = (await publish(humanTok, "Отчёт со ссылкой")).json();
+  assert.equal(first.state, "shared", JSON.stringify(first));
+  const { token } = (await create(admin, { name: "Ночная правка", scopes: ["context", "capture", "revise", "share"] })).json();
+  const next = (extra: object = {}) =>
+    publish(token, "Отчёт со ссылкой", { artifactId: first.artifactId, baseRevisionId: first.revisionId, ...extra });
+  const pinned = await next();
+  assert.equal(pinned.statusCode, 200, pinned.body);
+  assert.equal(pinned.json().state, "saved");
+  assert.match(pinned.json().linkUnavailableReason, /pinned|закреп|link/i);
+  const {
+    rows: [share],
+  } = await db.query("SELECT id,revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [first.artifactId]);
+  assert.equal(share.revision_id, first.revisionId, "the link stayed on its version");
+  assert.equal((await session(admin, "PUT", `/api/shares/${share.id}/follow`, { followMode: "follows" })).statusCode, 200);
+  const latest = pinned.json().revisionId;
+  const followed = await publish(token, "Отчёт со ссылкой", { artifactId: first.artifactId, baseRevisionId: latest });
+  assert.equal(followed.statusCode, 200, followed.body);
+  assert.equal(followed.json().linkMoved, true);
+  const {
+    rows: [moved],
+  } = await db.query("SELECT revision_id FROM shares WHERE id=$1", [share.id]);
+  assert.equal(moved.revision_id, followed.json().revisionId);
+});

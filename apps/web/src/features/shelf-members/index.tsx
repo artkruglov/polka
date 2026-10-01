@@ -69,10 +69,13 @@ export function ShelfMembersPanel({
   shelf,
   accountId,
   onClose,
+  children,
 }: {
   shelf: Shelf;
   accountId: string;
   onClose: () => void;
+  /** More for the shelf's dialog: the department's card (workspace). */
+  children?: React.ReactNode;
 }) {
   const [members, setMembers] = useState<ShelfMember[] | null>(null),
     [role, setRole] = useState(shelf.role),
@@ -136,6 +139,7 @@ export function ShelfMembersPanel({
   return (
     <Dialog title={`Участники · ${shelf.name ?? "полка отдела"}`} busy={busy} onClose={() => !busy && onClose()}>
       <div className="dialog-body shelf-members">
+        {children}
         {admin && (
           <form
             className="shelf-members-rename"

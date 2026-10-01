@@ -48,7 +48,7 @@ import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 import { DeleteShelfSection } from "./delete-shelf.tsx";
 import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
-import { shelfAccess, useShelves } from "../../entities/shelf/model.ts";
+import { useShelves } from "../../entities/shelf/model.ts";
 import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
 import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
 
@@ -912,10 +912,7 @@ export function AgentConnections() {
         </details>
 
         {account && !account.provisional && (
-          <ShelfCardSection
-            key={shelves.current?.id ?? "own"}
-            canEdit={shelfAccess(shelves.current?.kind === "team" ? shelves.current : null, account.id).curate}
-          />
+          <ShelfCardSection canEdit />
         )}
 
         <section

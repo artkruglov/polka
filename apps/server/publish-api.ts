@@ -23,6 +23,7 @@ import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
+import { createTaskToken } from "./service-principals.ts";
 import { listEventsForAgent } from "./agent-events.ts";
 import { artifactStatusForAgent, listArtifactsForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
@@ -44,6 +45,7 @@ import {
 export const PUBLISH_API_PATHS = new Set([
   "/api/v1/publish",
   "/api/v1/sign-in-link",
+  "/api/v1/task-token",
 ]);
 /** The machine routes of this API: bearer only, exempt from the browser Origin rule. */
 export const isPublishApiPath = (pathname: string) =>
@@ -454,6 +456,11 @@ export async function registerPublishApi(app: FastifyInstance) {
       .strict()
       .parse(req.query ?? {});
     return withFieldErrors(() => listArtifactsForAgent(actor, q as never));
+  });
+  // A service account asks for a short token for one job.
+  app.post("/api/v1/task-token", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return withFieldErrors(() => createTaskToken(actor, req.body));
   });
   // What happened to the works of the token's shelf, polled by cursor (read).
   app.get("/api/v1/events", async (req, reply) => {

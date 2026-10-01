@@ -37,6 +37,8 @@ export type ServiceActor = {
   expiresAt: number;
   /** Who holds the token; a connection without it is a person's. */
   principal?: "human" | "service";
+  /** A service account's token: the principal it belongs to. */
+  servicePrincipalId?: string;
   /** Granted to a chat connector by OAuth (not a pasted static token). */
   oauth?: boolean;
   /** The connection's shelf: the account's own, or a department's. */
@@ -50,6 +52,11 @@ export type ServiceActor = {
  * while TEAM_SHELVES is on; docs/specs/TEAM_SHELVES.md). `match` narrows by token or id; `lock` is an optional
  * row-lock clause for the connection row only.
  */
+/** A service account's token works only while its principal is active (not frozen or disabled). */
+const servicePrincipalActiveSql = `(connection.principal_type='human' OR EXISTS (
+        SELECT 1 FROM service_principals principal
+        WHERE principal.id=connection.service_principal_id AND principal.status='active'))`;
+
 const liveConnectionSql = (match: string, lock = "") =>
   `SELECT connection.*,member.role AS shelf_role,tenant.kind AS shelf_kind,
           tenant.name AS shelf_name
@@ -69,6 +76,7 @@ const liveConnectionSql = (match: string, lock = "") =>
           AND (parent.access_expires_at IS NULL OR parent.access_expires_at>now())))
       AND (connection.access_expires_at IS NULL
         OR connection.access_expires_at>now())
+      AND ${servicePrincipalActiveSql}
       AND NOT account.disabled AND account.deletion_requested_at IS NULL
     ${lock}`;
 
@@ -92,6 +100,8 @@ function serviceActorFromRow(row: any): ServiceActor {
     scopes: row.scopes,
     audience: row.audience,
     oauth: !!row.oauth_client_id,
+    principal: row.principal_type === "service" ? ("service" as const) : ("human" as const),
+    ...(row.service_principal_id && { servicePrincipalId: row.service_principal_id as string }),
     ...(row.shelf_role && {
       shelf: {
         kind: row.shelf_kind,
@@ -256,6 +266,7 @@ export async function issueAgentConnection(
     } = await c.query(
       `SELECT count(*) AS count FROM agent_connections
        WHERE tenant_id=$1 AND account_id=$2 AND parent_id IS NULL
+         AND principal_type='human'
          AND revoked_at IS NULL AND expires_at>now()`,
       [tenant, actor.id],
     );
@@ -301,12 +312,12 @@ export async function listAgentConnections(actor: Actor) {
   const { rows } = await db.query(
     `SELECT listed.*,tenant.kind AS shelf_kind,tenant.name AS shelf_name FROM (
        SELECT * FROM agent_connections
-       WHERE account_id=$1 AND parent_id IS NULL
+       WHERE account_id=$1 AND parent_id IS NULL AND principal_type='human'
          AND revoked_at IS NULL AND expires_at>now()
        UNION ALL
        (
          SELECT * FROM agent_connections
-         WHERE account_id=$1 AND parent_id IS NULL
+         WHERE account_id=$1 AND parent_id IS NULL AND principal_type='human'
            AND (revoked_at IS NOT NULL OR expires_at<=now())
          ORDER BY created_at DESC,id DESC LIMIT 100
        )
@@ -331,7 +342,7 @@ export async function revokeAgentConnection(
       rows: [connection],
     } = await c.query(
       `SELECT * FROM agent_connections
-       WHERE id=$1 AND account_id=$2 FOR UPDATE`,
+       WHERE id=$1 AND account_id=$2 AND principal_type='human' FOR UPDATE`,
       [connectionId, actor.id],
     );
     if (!connection) throw missing();
@@ -421,6 +432,7 @@ export async function authenticateServiceToken(
        AND connection.revoked_at IS NULL AND connection.expires_at>now()
        AND (connection.access_expires_at IS NULL
          OR connection.access_expires_at>now())
+       AND ${servicePrincipalActiveSql}
        AND account.id=connection.account_id AND NOT account.disabled
        AND account.deletion_requested_at IS NULL
        AND tenant.id=connection.tenant_id AND tenant.state='active'
