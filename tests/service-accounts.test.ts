@@ -110,6 +110,9 @@ test("off by default; scopes are limited; read and share never together", async 
   assert.equal((await create(admin, { name: "Долго", ttlDays: 91 })).statusCode, 400);
   const ok = await create(admin, { name: "Ночной дайджест", scopes: ["context", "read", "capture", "revise"] });
   assert.equal(ok.statusCode, 200, ok.body);
+  // «context» is added even when the form leaves it out.
+  const bare = await create(admin, { name: "Без context", scopes: ["read"] });
+  assert.deepEqual(bare.json().scopes, ["context", "read"]);
   assert.equal((await create(admin, { name: "ночной дайджест" })).statusCode, 409);
   const listed = (await session(admin, "GET", "/api/service-accounts")).json();
   assert.ok(listed.items.some((item: any) => item.name === "Ночной дайджест" && item.status === "active"));
@@ -158,7 +161,7 @@ test("task tokens: a subset of scopes, 5–60 minutes, stop with the parent, min
   const issued = await api(token, "POST", "/api/v1/task-token", { scopes: ["read"], minutes: 10, taskId: "nightly-42" });
   assert.equal(issued.statusCode, 200, issued.body);
   const task = issued.json();
-  assert.deepEqual(task.scopes, ["read"]);
+  assert.deepEqual(task.scopes, ["context", "read"]);
   assert.equal(task.taskId, "nightly-42");
   assert.equal((await api(task.token, "GET", "/api/v1/works")).statusCode, 200);
   assert.ok([403, 404].includes((await publish(task.token, "Нельзя")).statusCode));

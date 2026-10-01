@@ -4,7 +4,12 @@ import { Button, Notice, TextField } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 
 type Item = Awaited<ReturnType<typeof client.serviceAccounts.list>>["items"][number];
-const SCOPE_LABEL = { read: "читать и искать", capture: "сохранять новые работы", revise: "сохранять новые версии" } as const;
+const SCOPE_LABEL = {
+  read: "читать и искать",
+  "source:read": "читать исходники",
+  capture: "сохранять новые работы",
+  revise: "сохранять новые версии",
+} as const;
 type ServiceScope = keyof typeof SCOPE_LABEL;
 const STATUS = { active: "работает", frozen: "заморожен: ответственный ушёл с полки", disabled: "отключён" } as const;
 
@@ -19,14 +24,18 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
   const [scopes, setScopes] = useState<ServiceScope[]>(["read", "capture"]);
   const [secret, setSecret] = useState<{ name: string; token: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
     try {
       setItems((await client.serviceAccounts.list()).items);
+      setLoaded(true);
     } catch (cause) {
       // Off on this installation (404), or not a curator here: nothing to show.
-      if (cause instanceof ApiError && [403, 404].includes(cause.status)) setItems(null);
+      // Off here (404), or no right: nothing to show, unless it was shown already.
+      if (cause instanceof ApiError && [403, 404].includes(cause.status) && !loaded) setItems(null);
       else setError("Не удалось загрузить сервисные доступы.");
     }
   }, []);
@@ -34,7 +43,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
     void reload();
   }, [reload]);
 
-  if (items === null && !error) return null;
+  if (items === null && !error && !loaded) return null;
 
   const run = async (action: () => Promise<{ token?: string } | { ok: true } | void>, label: string) => {
     setBusy(true);
@@ -79,9 +88,28 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
                 Отвечать самому и разморозить
               </Button>
             )}
-            <Button type="button" disabled={busy} onClick={() => void run(() => client.serviceAccounts.disable(item.id), item.name)}>
-              Отключить
-            </Button>
+            {confirming === item.id ? (
+              <>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirming(null);
+                    setSecret(null);
+                    void run(() => client.serviceAccounts.disable(item.id), item.name);
+                  }}
+                >
+                  Точно отключить: токены перестанут работать
+                </Button>
+                <Button type="button" onClick={() => setConfirming(null)}>
+                  Отмена
+                </Button>
+              </>
+            ) : (
+              <Button type="button" disabled={busy} onClick={() => setConfirming(item.id)}>
+                Отключить
+              </Button>
+            )}
           </div>
         </div>
       ))}

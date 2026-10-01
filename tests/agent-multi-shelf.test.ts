@@ -106,8 +106,12 @@ test("a token searches its own shelf and the allowed ones; the rest is refused",
   // A shelf not allowed, by id: refused, and its work never shows.
   const refused = await api(token, `/api/v1/works?query=${word}&shelfIds=${shelfC}`);
   assert.equal(refused.statusCode, 403);
-  assert.ok(!refused.body.includes(shelfC) || refused.statusCode === 403);
-  assert.ok(!(await api(token, `/api/v1/works?query=${word}&shelfIds=${person.tenant},${shelfC}`)).body.includes("Секрет"));
+  // A mixed request is refused as a whole: nothing of the forbidden shelf comes back.
+  const mixed = await api(token, `/api/v1/works?query=${word}&shelfIds=${person.tenant},${shelfC}`);
+  assert.equal(mixed.statusCode, 403);
+  assert.ok(!mixed.body.includes("Секрет"));
+  // The token's own shelf is not an "other shelf".
+  assert.equal((await issue(person, { scopes: ["context", "read"], shelfId: shelfA, allowedShelfIds: [shelfA] })).statusCode, 400);
   // The token that was not given shelves cannot name them.
   const narrow = (await issue(person, { scopes: ["context", "read"] })).json().token as string;
   assert.equal((await api(narrow, `/api/v1/works?shelfIds=${shelfA}`)).statusCode, 403);
@@ -153,12 +157,13 @@ test("a token searches its own shelf and the allowed ones; the rest is refused",
     [person.tenant, shelfA, shelfB].sort(),
   );
   // A personal shelf id is not a department shelf at issue.
-  assert.equal((await issue(person, { scopes: ["context", "read"], allowedShelfIds: [person.tenant] })).statusCode, 422);
+  assert.equal((await issue(person, { scopes: ["context", "read"], allowedShelfIds: [person.tenant] })).statusCode, 400);
   // With department shelves off the extra shelves drop out at the call.
   config.TEAM_SHELVES = "off";
   try {
     const off = await api(token, `/api/v1/works?query=${word}&shelfIds=${ids}`);
     assert.deepEqual(off.json().items.map((item: any) => item.shelfId), [person.tenant]);
+    assert.equal((await call("polka_context")).searchableShelves, undefined);
   } finally {
     config.TEAM_SHELVES = "on";
   }
@@ -172,4 +177,8 @@ test("a token searches its own shelf and the allowed ones; the rest is refused",
   const after = await api(token, `/api/v1/works?query=${word}&shelfIds=${ids}`);
   assert.equal(after.statusCode, 200, after.body);
   assert.deepEqual(after.json().items.map((item: any) => item.shelfId).sort(), [person.tenant, shelfA].sort());
+  assert.deepEqual(
+    (await call("polka_context")).searchableShelves.map((entry: any) => entry.id).sort(),
+    [person.tenant, shelfA].sort(),
+  );
 });

@@ -1,3 +1,4 @@
+import { agentFolderScope } from "./agent-scope.ts";
 import { issueProjectUploadToken } from "./project-upload.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { sourceForAgent, templatesForAgent } from "./agent-context.ts";
@@ -177,7 +178,9 @@ async function context(actor: ServiceActor) {
   if (!tenant) throw new Error("Service actor tenant disappeared");
   // The shelves a list may search with shelfIds: this one, and the department
   // shelves the owner allowed this token, while still a member of them.
-  const searchable = verified.allowedShelfIds?.length
+  const folderLimited =
+    (await agentFolderScope(db, { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId })) !== null;
+  const searchable = verified.allowedShelfIds?.length && !folderLimited
     ? (
         await db.query(
           `SELECT t.id,t.name FROM tenants t JOIN tenant_members m ON m.tenant_id=t.id
