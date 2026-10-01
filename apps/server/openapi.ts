@@ -530,10 +530,10 @@ export function openApiDocument(origin: string) {
           operationId: "listEvents",
           summary: "What happened to the works of the token's shelf",
           description:
-            "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, revision.accepted, owner.changed, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears about five seconds after it happens. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
+            "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, revision.accepted, owner.changed, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears once its transaction and every older one have committed, so a cursor never skips one. Event ids and cursors are opaque strings. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
           security: [{ bearerAuth: ["read"] }],
           parameters: [
-            { name: "after", in: "query", required: false, schema: { type: "string", pattern: "^[0-9]{1,18}$" } },
+            { name: "after", in: "query", required: false, schema: { type: "string", pattern: "^(0|[0-9]{1,20}:[0-9]{1,18})$" } },
             { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
           ],
           responses: {
