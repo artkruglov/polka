@@ -21,6 +21,7 @@ import {
   publishResponseSchema,
   statusResponseSchema,
 } from "../apps/server/publish-api.ts";
+import { setShareFollowMode } from "../apps/server/share-follow.ts";
 import { agentMayMoveLink } from "../apps/server/agent-publish.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -803,6 +804,21 @@ test("a link is pinned by default; the rule holds back a service account (not wi
     db.query("UPDATE shares SET follow_mode='other' WHERE id=$1", [share.id]),
   );
   // A person's publish and MCP are unchanged by the mode.
+  // A curator switches it; a stranger's shelf cannot.
+  const me = { id: owner.id, tenant: owner.tenant };
+  assert.deepEqual(await setShareFollowMode(me, share.id, { followMode: "follows" }), {
+    shareId: share.id,
+    followMode: "follows",
+  });
+  const {
+    rows: [switched],
+  } = await db.query("SELECT follow_mode FROM shares WHERE id=$1", [share.id]);
+  assert.equal(switched.follow_mode, "follows");
+  const stranger = await newOwner("publish-api-follow-other");
+  await assert.rejects(
+    setShareFollowMode({ id: stranger.id, tenant: stranger.tenant }, share.id, { followMode: "pinned" }),
+  );
+  await assert.rejects(setShareFollowMode(me, share.id, { followMode: "other" }));
   assert.equal(agentMayMoveLink(undefined, "pinned"), true);
   assert.equal(agentMayMoveLink("human", "pinned"), true);
   assert.equal(agentMayMoveLink("service", "pinned"), false);
