@@ -203,6 +203,8 @@ function artifactProjection(row: any) {
     updatedAt: new Date(row.updated_at).toISOString(),
     trashedAt,
     lifecycleVersion: Number(row.lifecycle_version),
+    ownerAccountId: row.owner_account_id ?? null,
+    acceptedRevisionId: row.accepted_revision_id ?? null,
     revision: {
       id: row.revision_id,
       number: row.number,
@@ -226,6 +228,7 @@ function artifactProjection(row: any) {
 
 const artifactColumns = `artifact.id,artifact.title,artifact.folder_id,
   artifact.updated_at,artifact.trashed_at,artifact.lifecycle_version,
+  artifact.owner_account_id,artifact.accepted_revision_id,
   r.id AS revision_id,r.number,r.filename,r.mime,r.size,r.total_size,
   r.storage_kind,r.html_profile,r.created_at,${inlineBuildSelect},
   (SELECT name FROM folders folder

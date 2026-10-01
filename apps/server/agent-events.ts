@@ -9,6 +9,8 @@ import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
  */
 export const EVENT_ACTIONS = [
   "revision.saved",
+  "revision.accepted",
+  "owner.changed",
   "artifact.metadata_updated",
   "artifact.moved",
   "artifact.trashed",
@@ -59,7 +61,8 @@ export async function listEventsForAgent(
   const { rows } = await db.query(
     `SELECT e.id::text AS id,e.action,e.actor_type,e.created_at,e.payload,
             artifact.id AS artifact_id,
-            CASE WHEN e.action='revision.saved' THEN e.target_id END AS revision_id
+            CASE WHEN e.action='revision.saved' THEN e.target_id
+                 WHEN e.action='revision.accepted' THEN (e.payload->>'revisionId')::uuid END AS revision_id
      FROM audit_outbox e
      LEFT JOIN revisions r ON e.action='revision.saved' AND r.id=e.target_id
      JOIN artifacts artifact

@@ -94,7 +94,7 @@ export const audit = (
   action: string,
   target: string,
   /** Ids only: never the content of a work or a link secret. */
-  payload?: Record<string, string | number>,
+  payload?: Record<string, string | number | null>,
 ) =>
   c.query(
     "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,connection_id,payload) VALUES($1,$2,$3,$4,$5,$6,$7)",

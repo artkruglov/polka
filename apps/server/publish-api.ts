@@ -117,6 +117,8 @@ export const statusResponseSchema = z
     updatedAt: z.iso.datetime(),
     trashedAt: z.iso.datetime().nullable(),
     lifecycleVersion: z.number().int(),
+    ownerAccountId: uuid.nullable(),
+    acceptedRevisionId: uuid.nullable(),
     revision: z
       .object({
         id: uuid,
