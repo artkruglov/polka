@@ -50,6 +50,126 @@
       "sourcePath": "content/editorial/handwriting-research/index.html",
       "sourceSha256": "8864e026dabd046bf86d024912b5f371b1e5640b533f4c3c2a5473661f31b88f",
       "evidencePath": "content/editorial/handwriting-research/README.md"
+    },
+    {
+      "slug": "design-in-the-ai-era",
+      "title": "Лучшее время в истории для дизайнера? Разговор с руководителем дизайна OpenAI",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Ian Silber (OpenAI): дизайн, роли и работа с ИИ",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/design-in-the-ai-era/index.html",
+      "sourceSha256": "882daee5b7e2e5a0e5c3c825cb8ebb2b18d013e1ddde9b40c3c4f4d66e9acab4",
+      "evidencePath": "content/editorial/design-in-the-ai-era/README.md"
+    },
+    {
+      "slug": "anthropic-research-product",
+      "title": "Как Anthropic делает продукт вместе с исследователями: разговор с Dianne Penn",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Dianne Penn (Anthropic): оценки вместо требований, культура экспериментов",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/anthropic-research-product/index.html",
+      "sourceSha256": "2aaa3b8dd5b7a545fa2bbc32422b184ff96dfa0bfbc1ab22494bf923eef1aee8",
+      "evidencePath": "content/editorial/anthropic-research-product/README.md"
+    },
+    {
+      "slug": "after-coding-is-solved",
+      "title": "Что остаётся инженеру, когда код больше не узкое место: разговор с Fiona Fung",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Fiona Fung (Claude Code и Cowork): управление, качество, одиночество рядом с агентами",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/after-coding-is-solved/index.html",
+      "sourceSha256": "a7b7f4e0b576bf577d067bdf39d2c431f5f5b31bcfc5aecfbf1991f0b3cbc4a8",
+      "evidencePath": "content/editorial/after-coding-is-solved/README.md"
+    },
+    {
+      "slug": "codex-product-team",
+      "title": "Реализация больше не дорогая часть: как устроена работа над Codex",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Andrew Ambrosino (Codex): вкус, прототипы, планирование",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/codex-product-team/index.html",
+      "sourceSha256": "359b91e5bdf930b8f2109697e02d01293d3f32ef08b6e9dd5a81535ac34190a1",
+      "evidencePath": "content/editorial/codex-product-team/README.md"
+    },
+    {
+      "slug": "ai-paradox-dan-shipper",
+      "title": "Парадокс ИИ: больше автоматизации, больше людей, больше работы. Прогнозы Dan Shipper",
+      "topic": "Разборы",
+      "task": "Разобрать прогнозы Dan Shipper (Every) о работе с агентами",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/ai-paradox-dan-shipper/index.html",
+      "sourceSha256": "094432a0e2ebb1fc3f60d35fcd42f6251374ec09c929fc78d2f36001c4c356de",
+      "evidencePath": "content/editorial/ai-paradox-dan-shipper/README.md"
+    },
+    {
+      "slug": "agency-and-malleable-software",
+      "title": "Агентность важнее навыков: разговор с Max Schoening из Notion",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Max Schoening (Notion): агентность, податливое ПО, ядро продукта",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/agency-and-malleable-software/index.html",
+      "sourceSha256": "f83524e483540084afb442844207cacff905f6e24a97cde23fd7c302ab887973",
+      "evidencePath": "content/editorial/agency-and-malleable-software/README.md"
+    },
+    {
+      "slug": "where-ai-is-going-benedict-evans",
+      "title": "ИИ — это 1997 год: спокойный разговор с Benedict Evans о том, куда всё идёт",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Benedict Evans: ИИ, работа и цепочка ценности",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/where-ai-is-going-benedict-evans/index.html",
+      "sourceSha256": "e936afd8c8e7f5c142d4d1fdc1a346f47beaf11071b5a8be66197ee271524d49",
+      "evidencePath": "content/editorial/where-ai-is-going-benedict-evans/README.md"
+    },
+    {
+      "slug": "build-tony-fadell",
+      "title": "Из чего делают продукты, которые любят: разговор с Tony Fadell",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Tony Fadell: решения по мнению, три поколения, маркетинг до продукта",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/build-tony-fadell/index.html",
+      "sourceSha256": "b74deda82a2c7dd08de2d8e22d2bb3f200016c09939e664485222094fa0e6f03",
+      "evidencePath": "content/editorial/build-tony-fadell/README.md"
+    },
+    {
+      "slug": "companies-as-loops-anish-acharya",
+      "title": "Компании как набор «петель»: разговор с Anish Acharya о будущем с ИИ",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Anish Acharya: петли, потребительские ИИ-продукты, амбиции",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/companies-as-loops-anish-acharya/index.html",
+      "sourceSha256": "0990e97e1a46e7cc58edc620fd380df590081b79e33b743fdfba3248c6bc98b4",
+      "evidencePath": "content/editorial/companies-as-loops-anish-acharya/README.md"
+    },
+    {
+      "slug": "netflix-systems-thinkers",
+      "title": "Почему Netflix ставит на системное мышление: разговор с Elizabeth Stone",
+      "topic": "Разборы",
+      "task": "Разобрать интервью с Elizabeth Stone (Netflix): системные мыслители и культура",
+      "action": "Прочитать разбор по разделам, перейти на нужный момент в YouTube и выбрать приём на эту неделю",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/netflix-systems-thinkers/index.html",
+      "sourceSha256": "0fa3648b1fad73c700dde52a6315ae5f08b70a334726d03620f53bf30c04f6af",
+      "evidencePath": "content/editorial/netflix-systems-thinkers/README.md"
     }
   ]
 }
