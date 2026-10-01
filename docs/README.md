@@ -43,6 +43,7 @@
 | [specs/MCP_ONBOARDING_SPEC.md](specs/MCP_ONBOARDING_SPEC.md) | реализовано | Выдача токена на странице «Агенты» |
 | [specs/TRASH_SPEC.md](specs/TRASH_SPEC.md) | реализовано | Корзина и восстановление |
 | [specs/AGENT_CONTEXT_TEMPLATES.md](specs/AGENT_CONTEXT_TEMPLATES.md) | реализовано | Контекст для агента и закреплённые шаблоны |
+| [specs/AGENT_ACCESS_AND_MEMORY.md](specs/AGENT_ACCESS_AND_MEMORY.md) | в коде (частично) | Полка хранит принятое, Drive — рабочее; чтение агентом, лента событий, карточка полки, принятая версия, service accounts, поиск по полкам. Схемы — [DATA_MODELS](specs/DATA_MODELS.md), роли — [AGENT_ROLES](specs/AGENT_ROLES.md), порядок работ — [dev/AGENT_ACCESS_IMPLEMENTATION](dev/AGENT_ACCESS_IMPLEMENTATION.md) |
 | [specs/COMPANY_TEMPLATE_LIBRARY.md](specs/COMPANY_TEMPLATE_LIBRARY.md) | реализовано | Библиотеки шаблонов: роли, приглашения, журнал |
 | [specs/SELF_HOST_BASE_SPEC.md](specs/SELF_HOST_BASE_SPEC.md) | реализовано | Health, readiness, maintenance |
 | [specs/RESTORE_DRILL_SPEC.md](specs/RESTORE_DRILL_SPEC.md) | реализовано | Совместное восстановление БД и объектов |
