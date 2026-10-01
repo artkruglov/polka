@@ -120,8 +120,10 @@ const prepare: Record<string, string> = {
   })()`,
 };
 
-// Freezes form state into attributes, then strips everything executable.
-const finalize = `(() => {
+// Freezes form state into attributes, then strips everything executable. The
+// «static version» note is only for snapshots of interactive originals: an
+// original that is already static (no scripts) is published as it is.
+const finalize = (withNote: boolean) => `(() => {
   for (const el of document.querySelectorAll('input')) {
     if (el.type === 'checkbox' || el.type === 'radio') el.toggleAttribute('checked', el.checked);
     else el.setAttribute('value', el.value);
@@ -133,11 +135,13 @@ const finalize = `(() => {
   for (const el of document.querySelectorAll('*'))
     for (const attr of [...el.attributes])
       if (/^on/i.test(attr.name) || /^\\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
-  const note = document.createElement('p');
-  note.className = 'polka-static-note';
-  note.setAttribute('style', 'margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b');
-  note.textContent = ${JSON.stringify(STATIC_SNAPSHOT_NOTE)};
-  (document.querySelector('main') ?? document.body).append(note);
+  if (${withNote}) {
+    const note = document.createElement('p');
+    note.className = 'polka-static-note';
+    note.setAttribute('style', 'margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b');
+    note.textContent = ${JSON.stringify(STATIC_SNAPSHOT_NOTE)};
+    (document.querySelector('main') ?? document.body).append(note);
+  }
   return '<!DOCTYPE html>\\n' + document.documentElement.outerHTML + '\\n';
 })()`;
 
@@ -255,7 +259,9 @@ try {
     await browser.viewport(1100, 900);
     await browser.navigate(pathToFileURL(join(root, candidate.sourcePath)).href);
     if (prepare[candidate.slug]) await browser.evaluate(prepare[candidate.slug]!);
-    const html: string = await browser.evaluate(finalize);
+    const html: string = await browser.evaluate(
+      finalize(classifyHtml(original.toString("utf8")) !== "static"),
+    );
     const profile = classifyHtml(html);
     if (!looksLikeHtml(html) || profile !== "static")
       throw new Error(`${candidate.slug}: snapshot classifies as ${profile}`);

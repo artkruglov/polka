@@ -55,7 +55,11 @@ test("every editorial original has a committed static snapshot", async () => {
     assert.equal(sha256(html), item.sourceSha256, item.slug);
     assert.equal(classifyHtml(html), "static", item.slug);
     assert.doesNotMatch(html, /<script\b|\son[a-z]+\s*=|javascript:/i);
-    assert.ok(html.includes(STATIC_SNAPSHOT_NOTE), item.slug);
+    // Only snapshots of interactive originals carry the note; an original
+    // that is already static is published as it is.
+    const originalIsStatic =
+      classifyHtml(await readFile(original.sourcePath, "utf8")) === "static";
+    assert.equal(html.includes(STATIC_SNAPSHOT_NOTE), !originalIsStatic, item.slug);
   }
 });
 

@@ -422,7 +422,15 @@ if (!args.includes("--confirm-publication")) {
       for (const candidate of [...catalogue.items].reverse()) {
         if (only && !only.includes(candidate.slug)) continue;
         let status: Status;
-        let version = preferred;
+        // An original with no scripts is static whatever the viewer: a static
+        // page bound to a derivative has no static view for the recipient.
+        let version: Version =
+          preferred === "interactive" &&
+          classifyHtml(
+            await readFile(resolve(candidate.interactiveSourcePath), "utf8"),
+          ) === "static"
+            ? "static"
+            : preferred;
         try {
           try {
             status = await seed(owner, candidate, renewWithinDays, version);
