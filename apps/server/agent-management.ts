@@ -36,6 +36,8 @@ const datedCursorSchema = z
     state: stateSchema,
     date: z.string().datetime({ offset: true }),
     id: uuid,
+    /** Only in a ranked search: 2 title, +1 text. */
+    rank: z.number().int().min(0).max(3).optional(),
   })
   .strict();
 const legacyCursorSchema = z
@@ -125,22 +127,38 @@ function parseJsonCursor(value: string): unknown {
 function decodeArtifactCursor(
   value: string | undefined,
   state: "active" | "trashed",
+  ranked: boolean,
 ) {
   if (!value) return null;
   const decoded = parseJsonCursor(value);
   const current = datedCursorSchema.safeParse(decoded);
   if (current.success) {
     if (current.data.state !== state) return invalidCursor();
-    return { date: current.data.date, id: current.data.id };
+    // A cursor of a ranked search is only good for the same kind of search.
+    if (ranked !== (current.data.rank !== undefined)) return invalidCursor();
+    return {
+      date: current.data.date,
+      id: current.data.id,
+      rank: current.data.rank ?? null,
+    };
   }
   const legacy = legacyCursorSchema.safeParse(decoded);
-  if (!legacy.success || state !== "active") return invalidCursor();
-  return legacy.data;
+  if (!legacy.success || state !== "active" || ranked) return invalidCursor();
+  return { ...legacy.data, rank: null };
 }
 
-function encodeArtifactCursor(row: any, state: "active" | "trashed") {
+function encodeArtifactCursor(
+  row: any,
+  state: "active" | "trashed",
+  ranked: boolean,
+) {
   return Buffer.from(
-    JSON.stringify({ state, date: row.cursor_date, id: row.id }),
+    JSON.stringify({
+      state,
+      date: row.cursor_date,
+      id: row.id,
+      ...(ranked ? { rank: Number(row.search_rank) } : {}),
+    }),
   ).toString("base64url");
 }
 
@@ -228,7 +246,10 @@ export async function listArtifactsForAgent(
     connectionId: verified.connectionId,
   });
 
-  const cursor = decodeArtifactCursor(input.cursor, input.state);
+  // A search of the shelf ranks a title hit above a text-only hit, then newest
+  // first. The rank is a whole number, so the cursor stays exact (keyset).
+  const ranked = Boolean(input.query) && input.state === "active";
+  const cursor = decodeArtifactCursor(input.cursor, input.state, ranked);
   const query = input.query
     ? `%${input.query.replace(/[\\%_]/g, "\\$&")}%`
     : null;
@@ -238,11 +259,16 @@ export async function listArtifactsForAgent(
     input.state === "active"
       ? "artifact.trashed_at IS NULL AND artifact.purged_at IS NULL"
       : "artifact.trashed_at IS NOT NULL AND artifact.purged_at IS NULL";
+  const rank = ranked
+    ? `(CASE WHEN artifact.title ILIKE $4 ESCAPE '\\' THEN 2 ELSE 0 END
+        + CASE WHEN s.document @@ to_tsquery('russian',$8::text) THEN 1 ELSE 0 END)`
+    : "0";
   // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
   const { rows } = await db.query(
     `SELECT ${artifactColumns},
             to_char(${timestamp} AT TIME ZONE 'UTC',
                     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_date,
+            ${rank} AS search_rank,
             ${searchSnippet("$8", "$9")}
      FROM artifacts artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
@@ -250,10 +276,11 @@ export async function listArtifactsForAgent(
      WHERE artifact.tenant_id=$1 AND ${statePredicate}
        AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
        AND ${searchMatch("artifact", "$4", "$8")}
-       AND ($5::timestamptz IS NULL OR (${timestamp},artifact.id)<($5,$6::uuid))
+       AND ($5::timestamptz IS NULL
+            OR (${rank},${timestamp},artifact.id)<($12::int,$5,$6::uuid))
        AND ${inScopeSql("artifact", "$10")}
        AND ($11::timestamptz IS NULL OR ${timestamp}>$11)
-     ORDER BY ${timestamp} DESC,artifact.id DESC
+     ORDER BY ${ranked ? `${rank} DESC,` : ""}${timestamp} DESC,artifact.id DESC
      LIMIT $7`,
     [
       verified.tenantId,
@@ -268,6 +295,7 @@ export async function listArtifactsForAgent(
       HEADLINE_OPTIONS,
       scope,
       input.since ?? null,
+      cursor?.rank ?? 0,
     ],
   );
   const more = rows.length > input.limit;
@@ -281,7 +309,7 @@ export async function listArtifactsForAgent(
     }),
     nextCursor:
       more && page.length
-        ? encodeArtifactCursor(page.at(-1), input.state)
+        ? encodeArtifactCursor(page.at(-1), input.state, ranked)
         : null,
   };
 }
