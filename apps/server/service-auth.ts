@@ -37,6 +37,8 @@ export type ServiceActor = {
   expiresAt: number;
   /** Who holds the token; a connection without it is a person's. */
   principal?: "human" | "service";
+  /** The connection a child token (project upload, task) hangs from, else its own id. */
+  rootConnectionId?: string;
   /** A service account's token: the principal it belongs to. */
   servicePrincipalId?: string;
   /** Other department shelves the person allowed this connection to search. */
@@ -102,6 +104,7 @@ function serviceActorFromRow(row: any): ServiceActor {
     scopes: row.scopes,
     audience: row.audience,
     oauth: !!row.oauth_client_id,
+    rootConnectionId: (row.parent_id ?? row.id) as string,
     principal: row.principal_type === "service" ? ("service" as const) : ("human" as const),
     ...(row.service_principal_id && { servicePrincipalId: row.service_principal_id as string }),
     ...(row.allowed_shelf_ids?.length && { allowedShelfIds: row.allowed_shelf_ids as string[] }),

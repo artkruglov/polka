@@ -22,7 +22,7 @@ import {
   statusResponseSchema,
 } from "../apps/server/publish-api.ts";
 import { setShareFollowMode } from "../apps/server/share-follow.ts";
-import { agentMayMoveLink } from "../apps/server/agent-publish.ts";
+import { agentMayMoveLink } from "../apps/server/link-follow.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 

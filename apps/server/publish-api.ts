@@ -287,7 +287,7 @@ async function bearerActor(
   }
   await limitAttempts(
     bucket === "calls"
-      ? `api-v1:connection:${actor.connectionId}`
+      ? `api-v1:connection:${actor.rootConnectionId ?? actor.connectionId}`
       : `api-v1:project-files:${actor.connectionId}`,
     bucket === "calls"
       ? PUBLISH_API_LIMITS.perConnection

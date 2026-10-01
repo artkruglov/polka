@@ -95,6 +95,7 @@ export async function findEmployee(actor: Actor, query: unknown) {
     `SELECT count(*)::int AS count FROM agent_connections connection
      JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.kind='team'
      WHERE connection.account_id=$1 AND connection.parent_id IS NULL
+       AND connection.principal_type='human'
        AND connection.revoked_at IS NULL AND connection.expires_at>now()`,
     [person.id],
   );

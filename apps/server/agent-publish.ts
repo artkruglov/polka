@@ -23,6 +23,7 @@ import {
   withServiceActorTransaction,
   type ServiceActor,
 } from "./service-auth.ts";
+import { agentMayMoveLink } from "./link-follow.ts";
 import { moveShareFromAgent, shareFromAgent } from "./shares.ts";
 import { NEW_ACCOUNT_MAX_DAYS, authorStanding } from "./share-moderation.ts";
 
@@ -101,17 +102,6 @@ type InteractiveOutcome = { ready: boolean; reason: string | null };
  * link is bound to it. Build refusals are reported, never thrown: the save
  * and a static link stand on their own.
  */
-/**
- * A person's publish moves the work's open link as always; an unattended
- * agent (a service account) moves only a link set to follow new versions.
- */
-export function agentMayMoveLink(
-  principal: "human" | "service" | undefined,
-  followMode: "pinned" | "follows",
-) {
-  return principal !== "service" || followMode === "follows";
-}
-
 export async function prepareInteractive(
   actor: ServiceActor,
   key: string,

@@ -267,10 +267,12 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
         rows: [inserted],
       } = await c.query(
         `INSERT INTO agent_connections(
-           id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,parent_id
+           id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,parent_id,
+           principal_type,service_principal_id
          ) SELECT $1,$2,$3,$4,left('Загрузка проекта · '||parent.name,80),$5,$6,
-                  now()+make_interval(mins=>$7),parent.id
-           FROM agent_connections parent WHERE parent.id=$8
+                  now()+make_interval(mins=>$7),parent.id,
+                  parent.principal_type,parent.service_principal_id
+           FROM agent_connections parent WHERE parent.id=$8 AND parent.parent_id IS NULL
          RETURNING expires_at`,
         [
           randomUUID(),
@@ -283,6 +285,8 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
           verified.connectionId,
         ],
       );
+      // A task token (a child itself) cannot ask for another child.
+      if (!inserted) throw new Problem(403, "forbidden", "Этот токен сам выдан для задачи: загрузку проекта запрашивает исходное подключение.");
       return { ...inserted, canPull: scopes.includes("source:read") };
     },
   );
