@@ -307,3 +307,29 @@ test("an address, an e-mail and a version are found as written", async () => {
   for (const query of ["github.com", "anna@example.ru", "3.14", "githu"])
     assert.ok((await search(query)).some((entry) => entry.id === saved.artifactId), query);
 });
+
+test("a search ranks a title hit above a newer text-only hit and pages exactly", async () => {
+  const titled = await saveSingle("<!doctype html><p>Пустая страница.</p>", {
+    title: "Ранжирование зонтик",
+  });
+  const textOnly = await saveSingle("<!doctype html><p>Про зонтик в тексте.</p>");
+  const another = await saveSingle("<!doctype html><p>Ещё зонтик в тексте.</p>");
+  const actor = await agent(owner);
+  const ids = [titled, textOnly, another].map((saved) => saved.artifactId);
+  const seen: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listArtifactsForAgent(actor, { query: "зонтик", limit: 1, cursor });
+    seen.push(...page.items.map((entry) => entry.id));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  assert.deepEqual(
+    seen.filter((id) => ids.includes(id)),
+    [titled.artifactId, another.artifactId, textOnly.artifactId],
+  );
+  assert.equal(new Set(seen).size, seen.length, "no work twice across pages");
+  const plain = await listArtifactsForAgent(actor, { limit: 1 });
+  await assert.rejects(
+    listArtifactsForAgent(actor, { query: "зонтик", cursor: plain.nextCursor ?? "x" }),
+  );
+});
