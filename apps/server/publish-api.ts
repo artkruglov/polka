@@ -23,6 +23,7 @@ import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
+import { listEventsForAgent } from "./agent-events.ts";
 import { artifactStatusForAgent, listArtifactsForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
@@ -451,6 +452,11 @@ export async function registerPublishApi(app: FastifyInstance) {
       .strict()
       .parse(req.query ?? {});
     return withFieldErrors(() => listArtifactsForAgent(actor, q as never));
+  });
+  // What happened to the works of the token's shelf, polled by cursor (read).
+  app.get("/api/v1/events", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return withFieldErrors(() => listEventsForAgent(actor, (req.query ?? {}) as never));
   });
   // polka pull: a version's files, listed, then one by one (work-files.ts).
   app.get("/api/v1/works/:artifactId/files", async (req, reply) => {

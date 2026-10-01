@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createAccount } from "../apps/server/auth.ts";
 import { db } from "../apps/server/db.ts";
+import { listEventsForAgent } from "../apps/server/agent-events.ts";
 import {
   getArtifactForAgent,
   listArtifactsForAgent,
@@ -498,4 +499,43 @@ test("manage-only lifecycle is exact-retry safe, ABA-safe, and preserves source 
       .rows[0].revoked,
     true,
   );
+});
+
+test("the events feed shows works' events by cursor, only its own shelf, without noise", async () => {
+  const actor = await connection(owner, ["context", "read"]);
+  const mine = await artifact(owner, "Events work");
+  const theirs = await artifact(other, "Foreign events work");
+  const emit = (account: typeof owner, action: string, target: string, payload: object | null = null) =>
+    db.query(
+      "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,payload) VALUES($1,$2,$3,$4,$5)",
+      [account.tenant, account.id, action, target, payload],
+    );
+  // Tailing: nothing back, the cursor is the current end.
+  const tail = await listEventsForAgent(actor, {}, 0);
+  assert.deepEqual(tail.events, []);
+  await emit(owner, "revision.saved", mine.revisionId, { artifactId: mine.artifactId });
+  await emit(owner, "account.merged", owner.id);
+  await emit(owner, "artifact.trashed", mine.artifactId);
+  await emit(other, "artifact.trashed", theirs.artifactId);
+  await emit(owner, "artifact.trashed", randomUUID());
+  const first = await listEventsForAgent(actor, { after: tail.nextCursor, limit: 1 }, 0);
+  assert.equal(first.events.length, 1);
+  assert.equal(first.events[0].action, "revision.saved");
+  assert.equal(first.events[0].artifactId, mine.artifactId);
+  assert.equal(first.events[0].revisionId, mine.revisionId);
+  assert.equal(first.more, true);
+  const second = await listEventsForAgent(actor, { after: first.nextCursor, limit: 10 }, 0);
+  assert.deepEqual(
+    second.events.map((event) => [event.action, event.artifactId]),
+    [["artifact.trashed", mine.artifactId]],
+  );
+  assert.equal(second.more, false);
+  // Nothing new: the cursor stays.
+  const idle = await listEventsForAgent(actor, { after: second.nextCursor }, 0);
+  assert.deepEqual([idle.events.length, idle.nextCursor], [0, second.nextCursor]);
+  // Not yet settled: invisible for now.
+  assert.equal((await listEventsForAgent(actor, { after: tail.nextCursor })).events.length, 0);
+  // Needs the read scope.
+  await assert.rejects(listEventsForAgent(await connection(owner, ["context"]), {}, 0));
+  await assert.rejects(listEventsForAgent(actor, { after: "abc" } as never, 0));
 });
