@@ -57,6 +57,11 @@ export const agentArtifactListInputSchema = z
     folderId: uuid.nullable().optional(),
     limit: z.number().int().min(1).max(100).default(25),
     state: stateSchema.default("active"),
+    /**
+     * Search these department shelves too (docs/specs/DATA_MODELS.md §7): only
+     * ones the person allowed this connection at issue, active works, no folder.
+     */
+    shelfIds: z.array(uuid).min(1).max(11).optional(),
     /** Only works changed after this moment (ISO 8601 with a zone). */
     since: z.string().datetime({ offset: true }).optional(),
   })
@@ -194,6 +199,7 @@ function artifactProjection(row: any) {
   const kind = workKind(row.mime);
   return {
     id: row.id,
+    shelfId: row.shelf_id,
     title: row.title,
     kind,
     ...(kind === "link" ? { linkHost: linkOfRevision(row.filename).host } : {}),
@@ -226,7 +232,7 @@ function artifactProjection(row: any) {
   };
 }
 
-const artifactColumns = `artifact.id,artifact.title,artifact.folder_id,
+const artifactColumns = `artifact.id,artifact.tenant_id AS shelf_id,artifact.title,artifact.folder_id,
   artifact.updated_at,artifact.trashed_at,artifact.lifecycle_version,
   artifact.accepted_revision_id,
   (SELECT member.account_id FROM tenant_members member
@@ -255,6 +261,27 @@ export async function listArtifactsForAgent(
     connectionId: verified.connectionId,
   });
 
+  // Several shelves: only the ones this connection was allowed, each checked
+  // for a live membership now; nothing from a shelf the person has left.
+  let tenants = [verified.tenantId];
+  if (input.shelfIds) {
+    if (input.folderId !== undefined || input.state !== "active")
+      throw new Problem(400, "invalid", "Поиск по нескольким полкам не сочетается с папкой и корзиной.");
+    const allowed = new Set([verified.tenantId, ...(verified.allowedShelfIds ?? [])]);
+    if (input.shelfIds.some((id) => !allowed.has(id)))
+      throw new Problem(403, "forbidden", "Эта полка не разрешена для подключения: владелец выбирает полки при создании токена.");
+    // A folder limit of an extension is known for the connection's own shelf only.
+    if (scope && input.shelfIds.some((id) => id !== verified.tenantId))
+      throw new Problem(403, "forbidden", "Подключение ограничено папками: поиск по другим полкам недоступен.");
+    const { rows } = await db.query(
+      `SELECT t.id FROM tenants t JOIN tenant_members m ON m.tenant_id=t.id
+       WHERE t.id=ANY($1::uuid[]) AND t.state='active' AND m.account_id=$2 AND m.state='active'
+         AND (t.id=$3 OR (t.kind='team' AND $4::boolean))`,
+      [input.shelfIds, verified.accountId, verified.tenantId, config.TEAM_SHELVES === "on"],
+    );
+    tenants = rows.map((row) => row.id as string);
+    if (!tenants.length) return { items: [], nextCursor: null };
+  }
   // A search of the shelf ranks a title hit above a text-only hit, then newest
   // first. The rank is a whole number, so the cursor stays exact (keyset).
   const ranked = Boolean(input.query) && input.state === "active";
@@ -282,7 +309,7 @@ export async function listArtifactsForAgent(
      FROM artifacts artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
      ${searchJoin("artifact")}
-     WHERE artifact.tenant_id=$1 AND ${statePredicate}
+     WHERE artifact.tenant_id=ANY($1::uuid[]) AND ${statePredicate}
        AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
        AND ${searchMatch("artifact", "$4", "$8")}
        AND ($5::timestamptz IS NULL
@@ -292,7 +319,7 @@ export async function listArtifactsForAgent(
      ORDER BY ${ranked ? `${rank} DESC,` : ""}${timestamp} DESC,artifact.id DESC
      LIMIT $7`,
     [
-      verified.tenantId,
+      tenants,
       input.folderId === undefined,
       input.folderId ?? null,
       query,

@@ -153,6 +153,8 @@ export function AgentConnections() {
   const [ttlDays, setTtlDays] = useState(7);
   // Which shelf a new token works on (docs/specs/TEAM_SHELVES.md): "" is one's own.
   const [tokenShelf, setTokenShelf] = useState("");
+  // Other department shelves a reading token may search too.
+  const [searchShelves, setSearchShelves] = useState<string[]>([]);
   const shelves = useShelves(!!account && !account.provisional);
   // Extensions' parts of this page (docs/specs/EXTENSIONS.md).
   const connectionSections = useSlot("agent-connection");
@@ -163,6 +165,9 @@ export function AgentConnections() {
   const teamShelves = shelves.items.filter((shelf) => shelf.kind === "team");
   const tokenRole = teamShelves.find((shelf) => shelf.id === tokenShelf)?.role;
   const [scopes, setScopes] = useState<AgentScope[]>(["capture", "context"]);
+  const searchedShelves = scopes.includes("read")
+    ? searchShelves.filter((id) => id !== tokenShelf && teamShelves.some((shelf) => shelf.id === id))
+    : [];
   const [action, setAction] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [issueNotice, setIssueNotice] = useState<string | null>(null);
@@ -334,6 +339,7 @@ export function AgentConnections() {
             audience,
             ttlDays,
             ...(tokenShelf ? { shelfId: tokenShelf } : {}),
+            ...(searchedShelves.length ? { allowedShelfIds: searchedShelves } : {}),
           },
           csrf.csrfToken,
           controller.signal,
@@ -737,6 +743,33 @@ export function AgentConnections() {
                   ))}
                 </div>
               </fieldset>
+              {scopes.includes("read") && teamShelves.filter((shelf) => shelf.id !== tokenShelf).length > 0 && (
+                <fieldset>
+                  <legend>Искать также на полках отделов</legend>
+                  <p className="ui-field-hint">
+                    Агент сможет читать и искать работы на отмеченных полках, пока вы там
+                    участник. Ничего не отмечено: только выбранная полка.
+                  </p>
+                  {teamShelves
+                    .filter((shelf) => shelf.id !== tokenShelf)
+                    .map((shelf) => (
+                      <label key={shelf.id}>
+                        <input
+                          type="checkbox"
+                          checked={searchShelves.includes(shelf.id)}
+                          onChange={(event) =>
+                            setSearchShelves((current) =>
+                              event.target.checked
+                                ? [...current, shelf.id].slice(0, 10)
+                                : current.filter((id) => id !== shelf.id),
+                            )
+                          }
+                        />{" "}
+                        {shelf.name}
+                      </label>
+                    ))}
+                </fieldset>
+              )}
               {formError && <Notice tone="error">{formError}</Notice>}
               {issueNotice && <Notice>{issueNotice}</Notice>}
               <Button

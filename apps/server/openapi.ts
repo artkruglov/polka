@@ -576,6 +576,7 @@ export function openApiDocument(origin: string) {
             { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
             { name: "folderId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
             { name: "state", in: "query", required: false, schema: { type: "string", enum: ["active", "trashed"] } },
+            { name: "shelfIds", in: "query", required: false, schema: { type: "string" }, description: "Search these shelves too, comma-separated: your own and department shelves the owner allowed this token at issue (allowedShelfIds). Active works only; every item says its shelfId." },
           ],
           responses: {
             "200": { description: "A page of works and nextCursor." },
