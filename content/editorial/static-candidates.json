@@ -15,7 +15,7 @@
       "notices": "Оригинальный учебный материал Редакции Полки. Статичная версия: примеры и данные демонстрационные, интерактивные элементы в ней не работают.",
       "htmlProfile": "static",
       "sourcePath": "content/editorial/steering-not-rowing/static/index.html",
-      "sourceSha256": "d1e8a9e64fc0b39c605123d997235fbefc20b7837aa1d2cfa9511d2671a31c7a",
+      "sourceSha256": "b4c4eeb1af3bf21806fc3fb51bd579b642fef5e45713bc806b99f79bad078187",
       "interactiveSourcePath": "content/editorial/steering-not-rowing/index.html",
       "interactiveSourceSha256": "3a245f4ce75bc4825ef9f2748c4b2900bf7718dcef9c54f8409cf4fed6fc7508",
       "evidencePath": "docs/reviews/2026-09-22-editorial-static/README.md"
@@ -31,7 +31,7 @@
       "notices": "Оригинальный учебный материал Редакции Полки. Статичная версия: примеры и данные демонстрационные, интерактивные элементы в ней не работают.",
       "htmlProfile": "static",
       "sourcePath": "content/editorial/claude-code-product-speed/static/index.html",
-      "sourceSha256": "e5942a8d11880b37bd76db849b8ef6113fa8f28f17716174db24182abd620ed5",
+      "sourceSha256": "48dcf53d481c9feed0537d404ba89910ea8d7365863ca704f9317520b67705d6",
       "interactiveSourcePath": "content/editorial/claude-code-product-speed/index.html",
       "interactiveSourceSha256": "0a10ab707a4bb4fefe052b190786fff8469852d93fb690af670483978a4e741b",
       "evidencePath": "docs/reviews/2026-09-22-editorial-static/README.md"
@@ -47,7 +47,7 @@
       "notices": "Оригинальный учебный материал Редакции Полки. Статичная версия: примеры и данные демонстрационные, интерактивные элементы в ней не работают.",
       "htmlProfile": "static",
       "sourcePath": "content/editorial/hraniteli-vremeni/static/index.html",
-      "sourceSha256": "ea8a65839825feb1695e7c0ccc0466366ab8910f3155fab62d85c183260fcb06",
+      "sourceSha256": "1b6893a18526c5defde4da77e48074fce5e79da6b019b65c356ad147fd7e1556",
       "interactiveSourcePath": "content/editorial/hraniteli-vremeni/index.html",
       "interactiveSourceSha256": "90f8e2a02b02061a5d4c5327279fbb7913cdd2a18910e80c0fbed35c3d0e2105",
       "evidencePath": "docs/reviews/2026-09-22-editorial-static/README.md"
