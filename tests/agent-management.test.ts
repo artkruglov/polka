@@ -502,6 +502,15 @@ test("manage-only lifecycle is exact-retry safe, ABA-safe, and preserves source 
   );
 });
 
+async function untilEvents(actor: ServiceActor, after: string, count: number) {
+  // Other tests' open transactions can hold the feed back for a moment.
+  for (let tries = 0; ; tries++) {
+    const page = await listEventsForAgent(actor, { after });
+    if (page.events.length >= count || tries > 60) return page;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 test("the events feed shows works' events by cursor, only its own shelf, without noise", async () => {
   const actor = await connection(owner, ["context", "read"]);
   const mine = await artifact(owner, "Events work");
@@ -512,33 +521,53 @@ test("the events feed shows works' events by cursor, only its own shelf, without
       [account.tenant, account.id, action, target, payload],
     );
   // Tailing: nothing back, the cursor is the current end.
-  const tail = await listEventsForAgent(actor, {}, 0);
+  const tail = await listEventsForAgent(actor, {});
   assert.deepEqual(tail.events, []);
   await emit(owner, "revision.saved", mine.revisionId, { artifactId: mine.artifactId });
   await emit(owner, "account.merged", owner.id);
   await emit(owner, "artifact.trashed", mine.artifactId);
   await emit(other, "artifact.trashed", theirs.artifactId);
   await emit(owner, "artifact.trashed", randomUUID());
-  const first = await listEventsForAgent(actor, { after: tail.nextCursor, limit: 1 }, 0);
+  await untilEvents(actor, tail.nextCursor, 2);
+  const first = await listEventsForAgent(actor, { after: tail.nextCursor, limit: 1 });
   assert.equal(first.events.length, 1);
   assert.equal(first.events[0].action, "revision.saved");
   assert.equal(first.events[0].artifactId, mine.artifactId);
   assert.equal(first.events[0].revisionId, mine.revisionId);
   assert.equal(first.more, true);
-  const second = await listEventsForAgent(actor, { after: first.nextCursor, limit: 10 }, 0);
+  const second = await listEventsForAgent(actor, { after: first.nextCursor, limit: 10 });
   assert.deepEqual(
     second.events.map((event) => [event.action, event.artifactId]),
     [["artifact.trashed", mine.artifactId]],
   );
   assert.equal(second.more, false);
   // Nothing new: the cursor stays.
-  const idle = await listEventsForAgent(actor, { after: second.nextCursor }, 0);
+  const idle = await listEventsForAgent(actor, { after: second.nextCursor });
   assert.deepEqual([idle.events.length, idle.nextCursor], [0, second.nextCursor]);
-  // Not yet settled: invisible for now.
-  assert.equal((await listEventsForAgent(actor, { after: tail.nextCursor })).events.length, 0);
+  // A row of a transaction still open hides every later one until it commits,
+  // so a cursor never passes a row that commits after its neighbours.
+  const slow = await db.connect();
+  try {
+    await slow.query("BEGIN");
+    await slow.query(
+      "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'artifact.restored',$3)",
+      [owner.tenant, owner.id, mine.artifactId],
+    );
+    await emit(owner, "artifact.moved", mine.artifactId);
+    const hidden = await listEventsForAgent(actor, { after: second.nextCursor });
+    assert.deepEqual(hidden.events, []);
+    await slow.query("COMMIT");
+  } finally {
+    slow.release();
+  }
+  const late = await untilEvents(actor, second.nextCursor, 2);
+  assert.deepEqual(
+    late.events.map((event) => event.action).sort(),
+    ["artifact.moved", "artifact.restored"],
+  );
   // Needs the read scope.
-  await assert.rejects(listEventsForAgent(await connection(owner, ["context"]), {}, 0));
-  await assert.rejects(listEventsForAgent(actor, { after: "abc" } as never, 0));
+  await assert.rejects(listEventsForAgent(await connection(owner, ["context"]), {}));
+  await assert.rejects(listEventsForAgent(actor, { after: "abc" } as never));
 });
 
 test("a curator marks the accepted version and the owner; agents read both and see the events", async () => {
@@ -549,7 +578,7 @@ test("a curator marks the accepted version and the owner; agents read both and s
   const before = await getArtifactForAgent(actor, { artifactId: work.artifactId });
   assert.equal(before.acceptedRevisionId, null);
   assert.equal(before.ownerAccountId, null);
-  const tail = await listEventsForAgent(actor, {}, 0);
+  const tail = await listEventsForAgent(actor, {});
 
   assert.deepEqual(await acceptRevision(me, work.artifactId, { revisionId: work.revisionId }), {
     artifactId: work.artifactId,
@@ -567,7 +596,7 @@ test("a curator marks the accepted version and the owner; agents read both and s
   assert.equal(read.ownerAccountId, owner.id);
   const listed = await listArtifactsForAgent(actor, { query: "Accepted work" });
   assert.equal((listed.items[0] as any).acceptedRevisionId, work.revisionId);
-  const feed = await listEventsForAgent(actor, { after: tail.nextCursor }, 0);
+  const feed = await untilEvents(actor, tail.nextCursor, 2);
   assert.deepEqual(
     feed.events.map((event) => [event.action, event.artifactId, event.revisionId]),
     [
@@ -575,6 +604,9 @@ test("a curator marks the accepted version and the owner; agents read both and s
       ["owner.changed", work.artifactId, undefined],
     ],
   );
+  // An owner who is no longer a member of the shelf (left, or erased) is not shown.
+  await db.query("UPDATE artifacts SET owner_account_id=$2 WHERE id=$1", [work.artifactId, other.id]);
+  assert.equal((await getArtifactForAgent(actor, { artifactId: work.artifactId })).ownerAccountId, null);
   // Cleared with null; the shelf's link would stay where it is.
   await acceptRevision(me, work.artifactId, { revisionId: null });
   assert.equal((await getArtifactForAgent(actor, { artifactId: work.artifactId })).acceptedRevisionId, null);

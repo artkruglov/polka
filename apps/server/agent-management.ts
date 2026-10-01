@@ -228,7 +228,13 @@ function artifactProjection(row: any) {
 
 const artifactColumns = `artifact.id,artifact.title,artifact.folder_id,
   artifact.updated_at,artifact.trashed_at,artifact.lifecycle_version,
-  artifact.owner_account_id,artifact.accepted_revision_id,
+  artifact.accepted_revision_id,
+  (SELECT member.account_id FROM tenant_members member
+   JOIN accounts person ON person.id=member.account_id
+   WHERE member.tenant_id=artifact.tenant_id
+     AND member.account_id=artifact.owner_account_id
+     AND member.state='active' AND NOT person.disabled
+     AND person.deletion_requested_at IS NULL) AS owner_account_id,
   r.id AS revision_id,r.number,r.filename,r.mime,r.size,r.total_size,
   r.storage_kind,r.html_profile,r.created_at,${inlineBuildSelect},
   (SELECT name FROM folders folder

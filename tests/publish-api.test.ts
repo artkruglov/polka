@@ -767,14 +767,14 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
   assert.notEqual(next.json().items[0].id, paged.json().items[0].id);
   assert.equal((await list(reader.secret, "?since=yesterday")).statusCode, 400);
   const noRead = await token(owner, ["context", "capture"]);
-  assert.ok((await list(noRead.secret)).statusCode >= 403);
+  assert.equal((await list(noRead.secret)).statusCode, 403);
   const outsider = await token(await newOwner("publish-api-works-other"), ["context", "read"]);
   const foreign = await list(outsider.secret, "?query=Works%20list");
   assert.equal(foreign.json().items.length, 0);
   assert.equal((await list(null)).statusCode, 401);
 });
 
-test("a link is pinned by default; only a service account is held back by it", async () => {
+test("a link is pinned by default; the rule holds back a service account (not wired until service accounts exist)", async () => {
   const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
   const first = (
     await publish(

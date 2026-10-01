@@ -17,20 +17,14 @@ export const EVENT_ACTIONS = [
   "artifact.restored",
 ] as const;
 
-/**
- * An event becomes visible to pollers after this long, so one committed
- * later with a lower id than its neighbours is not skipped by a cursor.
- */
-export const EVENT_SETTLE_MS = 5000;
-
 export const agentEventsInputSchema = z
   .object({
     /**
-     * The id of the last event seen. Omitted: nothing is returned, and
+     * The cursor of the last event seen. Omitted: nothing is returned, and
      * nextCursor is the current end of the feed, to poll from. "0": from the
      * start of the shelf's history.
      */
-    after: z.string().regex(/^\d{1,18}$/).optional(),
+    after: z.string().regex(/^(0|\d{1,20}:\d{1,18})$/).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
@@ -38,7 +32,6 @@ export const agentEventsInputSchema = z
 export async function listEventsForAgent(
   actor: ServiceActor,
   raw: z.input<typeof agentEventsInputSchema>,
-  settleMs = EVENT_SETTLE_MS,
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentEventsInputSchema.parse(raw);
@@ -47,19 +40,23 @@ export async function listEventsForAgent(
     tenant: verified.tenantId,
     connectionId: verified.connectionId,
   });
+  // Only rows no running transaction can still precede (see migration 055).
+  const settled = "COALESCE(e.tx_id,'0'::xid8)<pg_snapshot_xmin(pg_current_snapshot())";
   if (input.after === undefined) {
     const {
       rows: [end],
     } = await db.query(
-      `SELECT COALESCE(max(id),0)::text AS id FROM audit_outbox
-       WHERE tenant_id=$1 AND created_at<=now()-make_interval(secs=>$2)`,
-      [verified.tenantId, settleMs / 1000],
+      `SELECT e.tx_id::text AS tx,e.id::text AS id FROM audit_outbox e
+       WHERE e.tenant_id=$1 AND ${settled}
+       ORDER BY COALESCE(e.tx_id,'0'::xid8) DESC,e.id DESC LIMIT 1`,
+      [verified.tenantId],
     );
-    return { events: [], nextCursor: end.id as string };
+    return { events: [], nextCursor: end ? `${end.tx ?? "0"}:${end.id}` : "0" };
   }
+  const [afterTx, afterId] = input.after === "0" ? ["0", "0"] : input.after.split(":");
   // The work an event is about: the target itself, or the version's work.
   const { rows } = await db.query(
-    `SELECT e.id::text AS id,e.action,e.actor_type,e.created_at,e.payload,
+    `SELECT e.id::text AS id,COALESCE(e.tx_id,'0'::xid8)::text AS tx,e.action,e.actor_type,e.created_at,e.payload,
             artifact.id AS artifact_id,
             CASE WHEN e.action='revision.saved' THEN e.target_id
                  WHEN e.action='revision.accepted' THEN (e.payload->>'revisionId')::uuid END AS revision_id
@@ -69,16 +66,16 @@ export async function listEventsForAgent(
        ON artifact.id=CASE WHEN e.action='revision.saved' THEN r.artifact_id
                            ELSE e.target_id END
       AND artifact.tenant_id=e.tenant_id
-     WHERE e.tenant_id=$1 AND e.action=ANY($2::text[]) AND e.id>$3::bigint
-       AND e.created_at<=now()-make_interval(secs=>$4)
+     WHERE e.tenant_id=$1 AND e.action=ANY($2::text[]) AND (COALESCE(e.tx_id,'0'::xid8),e.id)>($3::xid8,$4::bigint)
+       AND ${settled}
        AND ${inScopeSql("artifact", "$5")}
-     ORDER BY e.id
+     ORDER BY COALESCE(e.tx_id,'0'::xid8),e.id
      LIMIT $6`,
     [
       verified.tenantId,
       EVENT_ACTIONS,
-      input.after,
-      settleMs / 1000,
+      afterTx,
+      afterId,
       scope,
       input.limit + 1,
     ],
@@ -88,7 +85,7 @@ export async function listEventsForAgent(
   const last = page.at(-1);
   return {
     events: page.map((row) => ({
-      id: row.id as string,
+      id: `${row.tx}:${row.id}`,
       action: row.action as string,
       artifactId: row.artifact_id as string,
       ...(row.revision_id ? { revisionId: row.revision_id as string } : {}),
@@ -96,7 +93,7 @@ export async function listEventsForAgent(
       at: new Date(row.created_at).toISOString(),
     })),
     // On an empty page the cursor stays where it was: nothing is skipped.
-    nextCursor: last ? (last.id as string) : input.after,
+    nextCursor: last ? `${last.tx}:${last.id}` : input.after,
     more,
   };
 }
