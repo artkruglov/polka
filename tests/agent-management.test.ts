@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createAccount } from "../apps/server/auth.ts";
 import { db } from "../apps/server/db.ts";
+import { acceptRevision, setWorkOwner } from "../apps/server/artifact-acceptance.ts";
 import { listEventsForAgent } from "../apps/server/agent-events.ts";
 import {
   getArtifactForAgent,
@@ -538,4 +539,43 @@ test("the events feed shows works' events by cursor, only its own shelf, without
   // Needs the read scope.
   await assert.rejects(listEventsForAgent(await connection(owner, ["context"]), {}, 0));
   await assert.rejects(listEventsForAgent(actor, { after: "abc" } as never, 0));
+});
+
+test("a curator marks the accepted version and the owner; agents read both and see the events", async () => {
+  const actor = await connection(owner, ["context", "read"]);
+  const me = { id: owner.id, tenant: owner.tenant };
+  const work = await artifact(owner, "Accepted work");
+  const foreign = await artifact(other, "Foreign accepted work");
+  const before = await getArtifactForAgent(actor, { artifactId: work.artifactId });
+  assert.equal(before.acceptedRevisionId, null);
+  assert.equal(before.ownerAccountId, null);
+  const tail = await listEventsForAgent(actor, {}, 0);
+
+  assert.deepEqual(await acceptRevision(me, work.artifactId, { revisionId: work.revisionId }), {
+    artifactId: work.artifactId,
+    acceptedRevisionId: work.revisionId,
+  });
+  // Only a version of this very work; nothing in another shelf.
+  await assert.rejects(acceptRevision(me, work.artifactId, { revisionId: foreign.revisionId }));
+  await assert.rejects(acceptRevision(me, foreign.artifactId, { revisionId: foreign.revisionId }));
+  // The owner is a member of the shelf.
+  await assert.rejects(setWorkOwner(me, work.artifactId, { ownerAccountId: other.id }), { status: 422 });
+  await setWorkOwner(me, work.artifactId, { ownerAccountId: owner.id });
+
+  const read = await getArtifactForAgent(actor, { artifactId: work.artifactId });
+  assert.equal(read.acceptedRevisionId, work.revisionId);
+  assert.equal(read.ownerAccountId, owner.id);
+  const listed = await listArtifactsForAgent(actor, { query: "Accepted work" });
+  assert.equal((listed.items[0] as any).acceptedRevisionId, work.revisionId);
+  const feed = await listEventsForAgent(actor, { after: tail.nextCursor }, 0);
+  assert.deepEqual(
+    feed.events.map((event) => [event.action, event.artifactId, event.revisionId]),
+    [
+      ["revision.accepted", work.artifactId, work.revisionId],
+      ["owner.changed", work.artifactId, undefined],
+    ],
+  );
+  // Cleared with null; the shelf's link would stay where it is.
+  await acceptRevision(me, work.artifactId, { revisionId: null });
+  assert.equal((await getArtifactForAgent(actor, { artifactId: work.artifactId })).acceptedRevisionId, null);
 });

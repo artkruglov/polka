@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { acceptRevision, setWorkOwner } from "./artifact-acceptance.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
 import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
 import {
@@ -1046,6 +1047,17 @@ export async function createApp() {
       "active",
     ),
   );
+  // A curator marks the accepted version and names who answers for the work.
+  app.put("/api/artifacts/:id/accepted", { bodyLimit: 1024 }, async (req) => {
+    const actor = await identity(req, SHELF);
+    assertStrongSession(actor);
+    return acceptRevision(actor, id(req), req.body);
+  });
+  app.put("/api/artifacts/:id/owner", { bodyLimit: 1024 }, async (req) => {
+    const actor = await identity(req, SHELF);
+    assertStrongSession(actor);
+    return setWorkOwner(actor, id(req), req.body);
+  });
   app.patch("/api/artifacts/:id", async (req) =>
     updateArtifactMetadata(await identity(req, SHELF), id(req), req.body),
   );

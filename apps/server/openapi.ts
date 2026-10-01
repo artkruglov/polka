@@ -320,7 +320,7 @@ export function openApiDocument(origin: string) {
           operationId: "status",
           summary: "Metadata of one saved work",
           description:
-            "Title, folder, latest revision, HTML profile, interactive build state and trash state, with shelfUrl. No bytes and no share links. A token without the read scope sees only works saved through its own connection.",
+            "Title, folder, ownerAccountId, acceptedRevisionId (the version a curator accepted, or null), latest revision, HTML profile, interactive build state and trash state, with shelfUrl. No bytes and no share links. A token without the read scope sees only works saved through its own connection.",
           security: [{ bearerAuth: ["context"] }],
           parameters: [
             {
@@ -530,7 +530,7 @@ export function openApiDocument(origin: string) {
           operationId: "listEvents",
           summary: "What happened to the works of the token's shelf",
           description:
-            "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears about five seconds after it happens. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
+            "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, revision.accepted, owner.changed, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears about five seconds after it happens. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
           security: [{ bearerAuth: ["read"] }],
           parameters: [
             { name: "after", in: "query", required: false, schema: { type: "string", pattern: "^[0-9]{1,18}$" } },
