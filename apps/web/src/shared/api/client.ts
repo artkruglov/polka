@@ -289,6 +289,9 @@ export const client = {
       expectedFolderId: string | null;
     },
   ) => request<Artifact>(`/artifacts/${id}`, input, "PATCH"),
+  shelfCard: () => request<{ cardMd: string | null }>("/shelf/card"),
+  setShelfCard: (cardMd: string | null) =>
+    request<{ cardMd: string | null }>("/shelf/card", { cardMd }, "PUT"),
   acceptRevision: (id: string, revisionId: string | null) =>
     request<{ artifactId: string; acceptedRevisionId: string | null }>(
       `/artifacts/${id}/accepted`,
