@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { setShareFollowMode } from "./share-follow.ts";
 import { acceptRevision, setWorkOwner } from "./artifact-acceptance.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
 import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
@@ -1349,6 +1350,10 @@ export async function createApp() {
   });
   app.post("/api/shares/:id/revoke", async (req) => {
     return revokeOwnerShare(await strongIdentity(req, SHELF), id(req));
+  });
+  // Whether an unattended agent may move this link to new versions.
+  app.put("/api/shares/:id/follow", { bodyLimit: 1024 }, async (req) => {
+    return setShareFollowMode(await strongIdentity(req, SHELF), id(req), req.body);
   });
   app.post("/api/shares/:id/publish", async (req) => {
     return publishOwnerShare(await strongIdentity(req, SHELF), id(req), req.body);
