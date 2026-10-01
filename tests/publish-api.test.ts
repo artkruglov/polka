@@ -719,3 +719,56 @@ test("patch edits: a new revision, the link moved, structured refusals", async (
     404,
   );
 });
+
+test("GET /works lists the shelf of a read token, finds by query and by since", async () => {
+  const publisher = await token(owner);
+  const first = (
+    await publish(
+      { key: randomUUID(), title: "Works list alpha", html: page("alpha") },
+      bearer(publisher.secret),
+    )
+  ).json();
+  const mark = new Date(Date.now() + 1).toISOString();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = (
+    await publish(
+      { key: randomUUID(), title: "Works list beta", html: page("beta") },
+      bearer(publisher.secret),
+    )
+  ).json();
+  const list = (secret: string | null, qs = "") =>
+    app.inject({
+      method: "GET",
+      url: `/api/v1/works${qs}`,
+      remoteAddress: address(),
+      headers: secret ? bearer(secret) : {},
+    });
+  const reader = await token(owner, ["context", "read"]);
+  const all = await list(reader.secret, "?query=Works%20list");
+  assert.equal(all.statusCode, 200, all.body);
+  const ids = all.json().items.map((item: { id: string }) => item.id);
+  assert.ok(ids.includes(first.artifactId) && ids.includes(second.artifactId));
+  assert.ok(!JSON.stringify(all.json()).includes("https://polochka.app/s#"));
+  const since = await list(
+    reader.secret,
+    `?query=Works%20list&since=${encodeURIComponent(mark)}`,
+  );
+  assert.deepEqual(
+    since.json().items.map((item: { id: string }) => item.id),
+    [second.artifactId],
+  );
+  const paged = await list(reader.secret, "?query=Works%20list&limit=1");
+  assert.equal(paged.json().items.length, 1);
+  const next = await list(
+    reader.secret,
+    `?query=Works%20list&limit=1&cursor=${encodeURIComponent(paged.json().nextCursor)}`,
+  );
+  assert.notEqual(next.json().items[0].id, paged.json().items[0].id);
+  assert.equal((await list(reader.secret, "?since=yesterday")).statusCode, 400);
+  const noRead = await token(owner, ["context", "capture"]);
+  assert.ok((await list(noRead.secret)).statusCode >= 403);
+  const outsider = await token(await newOwner("publish-api-works-other"), ["context", "read"]);
+  const foreign = await list(outsider.secret, "?query=Works%20list");
+  assert.equal(foreign.json().items.length, 0);
+  assert.equal((await list(null)).statusCode, 401);
+});
