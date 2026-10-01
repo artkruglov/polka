@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { readShelfCard, setShelfCard } from "./shelf-card.ts";
 import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
@@ -883,6 +884,13 @@ export async function createApp() {
     const actor = await identity(req);
     assertStrongSession(actor);
     return renameShelf(actor, shelfId(req), req.body);
+  });
+  // "How we do things here": the shelf's card, given to agents in polka_context.
+  app.get("/api/shelf/card", async (req) => readShelfCard(await identity(req, SHELF)));
+  app.put("/api/shelf/card", { bodyLimit: 16384 }, async (req) => {
+    const actor = await identity(req, SHELF);
+    assertStrongSession(actor);
+    return setShelfCard(actor, req.body);
   });
   app.get("/api/shelves/:shelfId/events", async (req) =>
     listShelfEvents(await identity(req), shelfId(req)),
