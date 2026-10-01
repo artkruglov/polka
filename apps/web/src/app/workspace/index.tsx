@@ -32,6 +32,7 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
+import { ServiceAccountsSection } from "../../features/service-accounts/index.tsx";
 import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
 import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
@@ -684,6 +685,9 @@ export function App() {
         <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)}>
           {/* This tab's shelf is the department (X-Polka-Shelf), so the card is its. */}
           <ShelfCardSection canEdit={shelfAccess(team, account.id).curate} />
+          {shelfAccess(team, account.id).curate && (
+            <ServiceAccountsSection accountId={account.id} admin={team.role === "admin"} />
+          )}
         </ShelfMembersPanel>
       )}
       {(panel === "upload" || panel === "version") && (
