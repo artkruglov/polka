@@ -47,7 +47,8 @@ test('the reader is one bar: version, tabs, details, share and «…»; the work
 });
 test('«…» holds every other action; a trashed work only downloads',()=>{
  const labels=(artifact:Artifact,shown=latest)=>workMenu({work:artifact,shown,setPanel:()=>{},onDownload:()=>{},onCopyForAgent:()=>{}}).map((item)=>item.label);
- assert.deepEqual(labels(work),['Скопировать для агента','Подробный контекст для агента','Новая версия','Переработать с агентом','Скачать оригинал','Название и папка','В корзину']);
+ assert.deepEqual(labels(work),['Скопировать для агента','Подробный контекст для агента','Новая версия','Переработать с агентом','Скачать оригинал','Название и папка','Принятая версия','В корзину']);
+ assert.ok(!workMenu({work,shown:latest,setPanel:()=>{},onDownload:()=>{},onCopyForAgent:()=>{},access:{own:true,change:true,curate:false}}).some((item)=>item.label==='Принятая версия'));
  assert.deepEqual(labels({...work,trashedAt:first.createdAt}),['Скачать оригинал']);
  assert.deepEqual(labels({...work,trashedAt:first.createdAt},{...latest,storageKind:'bundle'}),['Скачать весь пакет']);
 });

@@ -32,6 +32,7 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
+import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
 import { Login } from "../../pages/login/index.tsx";
 import {
@@ -100,6 +101,7 @@ export function App() {
       | "agent-context"
       | "rework"
       | "metadata"
+      | "accept"
       | "trash"
       | null
     >(() => {
@@ -716,6 +718,17 @@ export function App() {
           onSaved={async () => {
             setPanel(null);
             setRefresh((x) => x + 1);
+            await refreshWork();
+          }}
+        />
+      )}
+      {panel === "accept" && work && (
+        <AcceptRevisionPanel
+          artifact={work}
+          accountId={account?.id}
+          onClose={() => setPanel(null)}
+          onSaved={async () => {
+            setPanel(null);
             await refreshWork();
           }}
         />

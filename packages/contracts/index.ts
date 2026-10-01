@@ -267,6 +267,8 @@ export interface Share {
   opens?: { total: number; days: number; lastOpenedAt: string | null };
   /** held or paused: since when the link waits for review. */
   reviewSince?: string;
+  /** Whether an unattended agent may move the link to new versions. */
+  followMode?: "pinned" | "follows";
 }
 export interface Artifact {
   id: string;
@@ -277,6 +279,10 @@ export interface Artifact {
   lifecycleVersion: number;
   revision: Revision;
   share: Share | null;
+  /** The version a curator accepted; null or absent: no mark. */
+  acceptedRevisionId?: string | null;
+  /** Who answers for the work, while still a member of the shelf. */
+  ownerAccountId?: string | null;
   /** Who saved it, on a department shelf (docs/specs/TEAM_SHELVES.md). */
   author?: { id: string; name: string };
   /**
