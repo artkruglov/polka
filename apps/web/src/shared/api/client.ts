@@ -289,6 +289,24 @@ export const client = {
       expectedFolderId: string | null;
     },
   ) => request<Artifact>(`/artifacts/${id}`, input, "PATCH"),
+  acceptRevision: (id: string, revisionId: string | null) =>
+    request<{ artifactId: string; acceptedRevisionId: string | null }>(
+      `/artifacts/${id}/accepted`,
+      { revisionId },
+      "PUT",
+    ),
+  setWorkOwner: (id: string, ownerAccountId: string | null) =>
+    request<{ artifactId: string; ownerAccountId: string | null }>(
+      `/artifacts/${id}/owner`,
+      { ownerAccountId },
+      "PUT",
+    ),
+  setShareFollow: (shareId: string, followMode: "pinned" | "follows") =>
+    request<{ shareId: string; followMode: string }>(
+      `/shares/${shareId}/follow`,
+      { followMode },
+      "PUT",
+    ),
   /** A page of the shelf; the first page also counts every kind over the whole shelf. */
   shelf: (
     q: string,

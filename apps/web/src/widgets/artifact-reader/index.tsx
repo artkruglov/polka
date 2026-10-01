@@ -41,7 +41,7 @@ import {
 } from "../../entities/artifact/format.ts";
 
 export type ReaderAction =
-  "share" | "version" | "metadata" | "trash" | "rework" | "agent-context";
+  "share" | "version" | "metadata" | "accept" | "trash" | "rework" | "agent-context";
 /** The reader's views; «versions» is kept in the address as ?tab=versions. */
 export type ReaderTab = "work" | "versions";
 export const readerTabFromSearch = (search: string): ReaderTab =>
@@ -95,14 +95,14 @@ export function workMenu({
   setPanel,
   onDownload,
   onCopyForAgent,
-  access = { own: true, change: true },
+  access = { own: true, change: true, curate: true },
 }: Pick<Props, "work" | "shown" | "setPanel" | "onDownload"> & {
   onCopyForAgent: () => void;
   /**
    * own: one's own shelf (agent phrases resolve there); change: the role
    * lets the account change this work (docs/specs/TEAM_SHELVES.md).
    */
-  access?: { own: boolean; change: boolean };
+  access?: { own: boolean; change: boolean; curate: boolean };
 }): MenuAction[] {
   const download: MenuAction = {
     id: "download",
@@ -114,7 +114,7 @@ export function workMenu({
     onSelect: onDownload,
   };
   if (work.trashedAt) return [download];
-  const items: (MenuAction & { needs?: "own" | "change" })[] = [
+  const items: (MenuAction & { needs?: "own" | "change" | "curate" })[] = [
     {
       needs: "own",
       id: "copy-for-agent",
@@ -150,6 +150,13 @@ export function workMenu({
       label: "Название и папка",
       icon: <FolderIcon />,
       onSelect: () => setPanel("metadata"),
+    },
+    {
+      needs: "curate",
+      id: "accept",
+      label: "Принятая версия",
+      icon: <Check />,
+      onSelect: () => setPanel("accept"),
     },
     {
       needs: "change",
@@ -380,7 +387,7 @@ export function ArtifactReader({
               setPanel,
               onDownload,
               onCopyForAgent: () => void copyForAgent(),
-              access: { own: access.own, change: access.changes(work.author) },
+              access: { own: access.own, change: access.changes(work.author), curate: access.curate },
             })}
           />
         </div>

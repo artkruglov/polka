@@ -174,6 +174,7 @@ export function shareDTO(s: any, latest: string, opens?: any): Share | null {
     number: s.number,
     status,
     moderation: s.moderation ?? "none",
+    followMode: s.follow_mode === "follows" ? ("follows" as const) : ("pinned" as const),
     ...(s.moderation === "blocked"
       ? { appeal: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null }
       : {}),
@@ -249,6 +250,17 @@ export async function getArtifacts(
           ).rows.map((row) => [row.id, { id: row.id, name: row.name }]),
         )
       : null;
+  // The owner counts only while still an active member of the shelf.
+  const ownerIds = new Set(
+    (
+      await db.query(
+        `SELECT m.account_id FROM tenant_members m JOIN accounts p ON p.id=m.account_id
+         WHERE m.tenant_id=$1 AND m.account_id=ANY($2::uuid[]) AND m.state='active'
+           AND NOT p.disabled AND p.deletion_requested_at IS NULL`,
+        [actor.tenant, artifacts.map((a) => a.owner_account_id).filter(Boolean)],
+      )
+    ).rows.map((row) => row.account_id as string),
+  );
   const byId = new Map(artifacts.map((a) => [a.id, a]));
   const revisionById = new Map(revisions.map((r) => [r.id, r]));
   const shareByArtifact = new Map(shares.map((s) => [s.artifact_id, s]));
@@ -264,6 +276,8 @@ export async function getArtifacts(
         updatedAt: a.updated_at.toISOString(),
         trashedAt: a.trashed_at ? a.trashed_at.toISOString() : null,
         lifecycleVersion: Number(a.lifecycle_version),
+        acceptedRevisionId: a.accepted_revision_id ?? null,
+        ownerAccountId: ownerIds.has(a.owner_account_id) ? a.owner_account_id : null,
         revision: revisionDTO(r),
         share: shareDTO(shareByArtifact.get(a.id), r.id, opensByShare.get(shareByArtifact.get(a.id)?.id)),
         ...(authors && { author: authors.get(a.created_by) ?? { id: a.created_by, name: "Бывший участник" } }),
