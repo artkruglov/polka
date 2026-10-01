@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { Artifact, Revision } from "../../../../../packages/contracts/index.ts";
-import { client } from "../../shared/api/client.ts";
+import { client, currentShelf } from "../../shared/api/client.ts";
 import { Button, SelectField } from "../../shared/ui/controls.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 
@@ -22,9 +22,13 @@ export function AcceptRevisionPanel({
 }) {
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
   const [accepted, setAccepted] = useState(artifact.acceptedRevisionId ?? "");
+  // Own shelf: «я отвечаю». A department shelf: pick among its members.
+  const team = currentShelf();
   const [mine, setMine] = useState(
     !!accountId && artifact.ownerAccountId === accountId,
   );
+  const [owner, setOwner] = useState(artifact.ownerAccountId ?? "");
+  const [members, setMembers] = useState<{ accountId: string; name: string }[]>([]);
   const link = artifact.share && ["active", "behind"].includes(artifact.share.status)
     ? artifact.share
     : null;
@@ -43,6 +47,18 @@ export function AcceptRevisionPanel({
     };
   }, [artifact.id]);
 
+  useEffect(() => {
+    if (!team) return;
+    let live = true;
+    client
+      .shelfMembers(team)
+      .then((page) => live && setMembers(page.items))
+      .catch(() => live && setError("Не удалось загрузить участников полки."));
+    return () => {
+      live = false;
+    };
+  }, [team]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -50,9 +66,9 @@ export function AcceptRevisionPanel({
     try {
       if ((artifact.acceptedRevisionId ?? "") !== accepted)
         await client.acceptRevision(artifact.id, accepted || null);
-      const wasMine = !!accountId && artifact.ownerAccountId === accountId;
-      if (accountId && mine !== wasMine)
-        await client.setWorkOwner(artifact.id, mine ? accountId : null);
+      const nextOwner = team ? owner || null : mine ? (accountId ?? null) : null;
+      if (nextOwner !== (artifact.ownerAccountId ?? null))
+        await client.setWorkOwner(artifact.id, nextOwner);
       if (link && follows !== (link.followMode === "follows"))
         await client.setShareFollow(link.id, follows ? "follows" : "pinned");
       await onSaved();
@@ -92,7 +108,21 @@ export function AcceptRevisionPanel({
             Отметка видна коллегам и агентам. Ссылки она не меняет: ссылка
             остаётся на своей версии.
           </p>
-          {accountId && (
+          {team && (
+            <SelectField
+              label="Ответственный"
+              value={owner}
+              onChange={(event) => setOwner(event.target.value)}
+            >
+              <option value="">Не назначен</option>
+              {members.map((member) => (
+                <option value={member.accountId} key={member.accountId}>
+                  {member.name}
+                </option>
+              ))}
+            </SelectField>
+          )}
+          {!team && accountId && (
             <label>
               <input
                 type="checkbox"
