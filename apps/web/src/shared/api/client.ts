@@ -483,6 +483,8 @@ export const client = {
         ttlDays: number;
         /** A department shelf the account belongs to; absent: its own. */
         shelfId?: string;
+        /** Other department shelves the token may search (needs read). */
+        allowedShelfIds?: string[];
       },
       csrfToken: string,
       signal?: AbortSignal,

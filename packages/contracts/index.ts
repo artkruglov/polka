@@ -73,10 +73,13 @@ export const issueAgentConnectionSchema = z
     ttlDays: z.number().int().min(1).max(30).default(7),
     /** A department shelf the account is a member of; absent: its own. */
     shelfId: z.string().uuid().optional(),
+    /** Other department shelves this token may search (read); at most 10. */
+    allowedShelfIds: z.array(z.string().uuid()).max(10).optional(),
   })
   .strict()
   .transform((value) => ({
     ...value,
+    allowedShelfIds: [...new Set(value.allowedShelfIds ?? [])],
     scopes: [...new Set(value.scopes)].sort() as AgentScope[],
   }));
 export type AgentConnection = {

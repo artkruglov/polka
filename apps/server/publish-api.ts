@@ -119,6 +119,7 @@ export const statusResponseSchema = z
     updatedAt: z.iso.datetime(),
     trashedAt: z.iso.datetime().nullable(),
     lifecycleVersion: z.number().int(),
+    shelfId: uuid,
     ownerAccountId: uuid.nullable(),
     acceptedRevisionId: uuid.nullable(),
     revision: z
@@ -452,10 +453,15 @@ export async function registerPublishApi(app: FastifyInstance) {
         folderId: z.string().optional(),
         state: z.string().optional(),
         limit: z.coerce.number().optional(),
+        // Several shelves: ids separated by commas.
+        shelfIds: z.string().optional(),
       })
       .strict()
       .parse(req.query ?? {});
-    return withFieldErrors(() => listArtifactsForAgent(actor, q as never));
+    const { shelfIds, ...rest } = q;
+    return withFieldErrors(() =>
+      listArtifactsForAgent(actor, { ...rest, ...(shelfIds ? { shelfIds: shelfIds.split(",") } : {}) } as never),
+    );
   });
   // A service account asks for a short token for one job.
   app.post("/api/v1/task-token", async (req, reply) => {

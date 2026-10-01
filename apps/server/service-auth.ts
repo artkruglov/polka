@@ -39,6 +39,8 @@ export type ServiceActor = {
   principal?: "human" | "service";
   /** A service account's token: the principal it belongs to. */
   servicePrincipalId?: string;
+  /** Other department shelves the person allowed this connection to search. */
+  allowedShelfIds?: string[];
   /** Granted to a chat connector by OAuth (not a pasted static token). */
   oauth?: boolean;
   /** The connection's shelf: the account's own, or a department's. */
@@ -102,6 +104,7 @@ function serviceActorFromRow(row: any): ServiceActor {
     oauth: !!row.oauth_client_id,
     principal: row.principal_type === "service" ? ("service" as const) : ("human" as const),
     ...(row.service_principal_id && { servicePrincipalId: row.service_principal_id as string }),
+    ...(row.allowed_shelf_ids?.length && { allowedShelfIds: row.allowed_shelf_ids as string[] }),
     ...(row.shelf_role && {
       shelf: {
         kind: row.shelf_kind,
@@ -261,6 +264,19 @@ export async function issueAgentConnection(
         ? null
         : await lockShelf(c, { id: actor.id, tenant }, "reader");
     if (shelf) assertScopesFitRole(shelf.role, input.scopes);
+    // Other shelves to search: department shelves the account belongs to, read only.
+    if (input.allowedShelfIds.length) {
+      if (config.TEAM_SHELVES !== "on" || !input.scopes.includes("read"))
+        throw new Problem(400, "invalid", "Поиск по другим полкам нужен вместе с правом read и включёнными полками отделов.");
+      const { rows: member } = await c.query(
+        `SELECT t.id FROM tenants t JOIN tenant_members m ON m.tenant_id=t.id
+         WHERE t.id=ANY($1::uuid[]) AND t.kind='team' AND t.state='active'
+           AND m.account_id=$2 AND m.state='active'`,
+        [input.allowedShelfIds, actor.id],
+      );
+      if (member.length !== input.allowedShelfIds.length)
+        throw new Problem(422, "invalid", "Искать можно только на полках отделов, где вы участник.");
+    }
     const {
       rows: [active],
     } = await c.query(
@@ -281,8 +297,9 @@ export async function issueAgentConnection(
       rows: [row],
     } = await c.query(
       `INSERT INTO agent_connections(
-         id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
-       ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 day')
+         id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,
+         allowed_shelf_ids
+       ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 day',$11)
        RETURNING *,$9::text AS shelf_kind,$10::text AS shelf_name`,
       [
         id,
@@ -295,6 +312,7 @@ export async function issueAgentConnection(
         input.ttlDays,
         shelf ? "team" : "personal",
         shelf?.tenant.name ?? null,
+        input.allowedShelfIds,
       ],
     );
     await c.query(
