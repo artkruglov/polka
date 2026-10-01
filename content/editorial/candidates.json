@@ -4,6 +4,42 @@
   "publication": "requires-explicit-registration",
   "items": [
     {
+      "slug": "steering-not-rowing",
+      "title": "От гребли к рулю: что говорит продакт OpenAI о работе с ИИ-агентами",
+      "topic": "Разборы",
+      "task": "Понять, как меняется работа, когда ИИ берёт на себя исполнение",
+      "action": "Прочитать шесть идей и проверить каждую на своей задаче",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/steering-not-rowing/index.html",
+      "sourceSha256": "3a245f4ce75bc4825ef9f2748c4b2900bf7718dcef9c54f8409cf4fed6fc7508",
+      "evidencePath": "content/editorial/steering-not-rowing/README.md"
+    },
+    {
+      "slug": "claude-code-product-speed",
+      "title": "Как команда Claude Code выпускает за недели, а не за кварталы",
+      "topic": "Разборы",
+      "task": "Узнать, какие приёмы помогают команде Claude Code выпускать функции за дни",
+      "action": "Выбрать из девяти практик одну и применить к своей работе",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/claude-code-product-speed/index.html",
+      "sourceSha256": "0a10ab707a4bb4fefe052b190786fff8469852d93fb690af670483978a4e741b",
+      "evidencePath": "content/editorial/claude-code-product-speed/README.md"
+    },
+    {
+      "slug": "hraniteli-vremeni",
+      "title": "Золотое кольцо: Хранители времени",
+      "topic": "Обучение",
+      "task": "Познакомиться с учебным проектом про десять городов Золотого кольца",
+      "action": "Посмотреть фильм «Три письма из прошлого» и выбрать город на карте",
+      "author": "Редакция Полки",
+      "license": "Apache-2.0",
+      "sourcePath": "content/editorial/hraniteli-vremeni/index.html",
+      "sourceSha256": "90f8e2a02b02061a5d4c5327279fbb7913cdd2a18910e80c0fbed35c3d0e2105",
+      "evidencePath": "content/editorial/hraniteli-vremeni/README.md"
+    },
+    {
       "slug": "handwriting-research",
       "title": "Почерк и грамотность младшеклассника: что работает по исследованиям",
       "topic": "Исследования",
@@ -28,18 +64,6 @@
       "evidencePath": "content/editorial/how-presentation-editors-work/README.md"
     },
     {
-      "slug": "fractions",
-      "title": "Доли без зубрёжки",
-      "topic": "Обучение",
-      "task": "Понять дроби на простых примерах",
-      "action": "Ответить на пять вопросов и проверить результат",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/fractions/index.html",
-      "sourceSha256": "bdcf96707d4167a630f0afe7d342d7893c04b64eea6c622d4be680056d795867",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
       "slug": "city-observation",
       "title": "Город глазами наблюдателя",
       "topic": "Исследования",
@@ -49,18 +73,6 @@
       "license": "Apache-2.0",
       "sourcePath": "content/editorial/city-observation/index.html",
       "sourceSha256": "d24709d460ac05005dc0ebf386a548b2df553441b78d1de1c8601780e20439a9",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
-      "slug": "week-allocation",
-      "title": "Куда уходит неделя",
-      "topic": "Планирование",
-      "task": "Разложить 168 часов недели по занятиям",
-      "action": "Изменить часы и увидеть остаток или превышение",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/week-allocation/index.html",
-      "sourceSha256": "2e43065b2ccc4e2f2d91b69d23f31fd7e5b82452694172f46d277240dd62531d",
       "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
     },
     {
@@ -76,18 +88,6 @@
       "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
     },
     {
-      "slug": "packing-checklist",
-      "title": "Рюкзак на день",
-      "topic": "Повседневное",
-      "task": "Подготовить список вещей для прогулки",
-      "action": "Отмечать пункты и проверять прогресс",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/packing-checklist/index.html",
-      "sourceSha256": "3496aa53a946eb72e0d31d4e4aa95918f7f857c704ae246c6599a862a8f5abbf",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
       "slug": "contrast-explorer",
       "title": "Контраст в руках",
       "topic": "Дизайн",
@@ -100,42 +100,6 @@
       "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
     },
     {
-      "slug": "meal-plan",
-      "title": "Неделя на столе",
-      "topic": "Планирование",
-      "task": "Собрать идеи блюд по дням",
-      "action": "Редактировать поля недели и очистить черновик",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/meal-plan/index.html",
-      "sourceSha256": "903ea4f1e6fccc9ff502f41f1f340af60a97bdbd6d9f2392c017d8eab49d28d0",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
-      "slug": "sorting-explainer",
-      "title": "Как числа находят порядок",
-      "topic": "Обучение",
-      "task": "Разобраться в соседних сравнениях сортировки",
-      "action": "Пройти шаги вручную или запустить анимацию",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/sorting-explainer/index.html",
-      "sourceSha256": "df89214cb06f0371e3e55fcff95c732421c6f0ff2ea5797202965993ccaf0c1e",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
-      "slug": "reading-session",
-      "title": "Читательская сессия",
-      "topic": "Обучение",
-      "task": "Прочитать фрагмент с ясным вопросом",
-      "action": "Пройти четыре шага и сформулировать итог",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/reading-session/index.html",
-      "sourceSha256": "6d5e0857e0944847a99622202ec73f4c8b555ccb18a83c8a281d99b21034c12c",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
       "slug": "tile-pattern",
       "title": "Мастерская узоров",
       "topic": "Дизайн",
@@ -145,30 +109,6 @@
       "license": "Apache-2.0",
       "sourcePath": "content/editorial/tile-pattern/index.html",
       "sourceSha256": "f607e3613d3440026e4425da28228ccf46b9ed3380baa1caa645b77dd614b22c",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
-      "slug": "probability-lab",
-      "title": "Лаборатория вероятностей",
-      "topic": "Обучение",
-      "task": "Сравнить наблюдаемую частоту с ожидаемой долей",
-      "action": "Запустить монету или кубик и изменить длину серии",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/probability-lab/index.html",
-      "sourceSha256": "1f643c2461bf783c9bf68d7756e90bd546bed337e7e60d61d8a908de85c64085",
-      "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
-    },
-    {
-      "slug": "decision-matrix",
-      "title": "Матрица решений",
-      "topic": "Планирование",
-      "task": "Сравнить варианты выходного дня по своим критериям",
-      "action": "Изменить веса и оценки, увидеть расчёт",
-      "author": "Редакция Полки",
-      "license": "Apache-2.0",
-      "sourcePath": "content/editorial/decision-matrix/index.html",
-      "sourceSha256": "6e3c97657b745c69fa73be67ff934526420e7476de6911e49edb97861eec13a3",
       "evidencePath": "docs/reviews/2026-09-21-editorial-runtime/README.md"
     }
   ]
