@@ -10,6 +10,7 @@ import { useExtensions } from "../apps/server/extensions.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
+import { listEventsForAgent } from "../apps/server/agent-events.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
@@ -210,4 +211,31 @@ test("every MCP tool answers a failure as a structured error, never with the raw
   assert.equal(refused.error, true);
   assert.equal(refused.value.code, "forbidden");
   assert.match(refused.value.message, /Агент, подключённый к папке/);
+});
+
+test("a limited agent's events feed holds the events of its folders only", async () => {
+  const actorOf = (id: string) => ({
+    accountId: owner.id,
+    tenantId: owner.tenant,
+    connectionId: id,
+    scopes: ["context", "read"] as never,
+    audience: MCP_AUDIENCE,
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  });
+  const tail = await listEventsForAgent(actorOf(limited.id), {});
+  const inside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "События внутри", html: page("в"), folderId: reports });
+  const outside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "События снаружи", html: page("с"), folderId: other });
+  assert.equal(inside.error || outside.error, false);
+  let seen: string[] = [];
+  for (let tries = 0; tries < 60 && !seen.length; tries++) {
+    seen = (await listEventsForAgent(actorOf(limited.id), { after: tail.nextCursor })).events.map((event) => event.artifactId);
+    if (!seen.length) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.deepEqual(seen, [inside.value.artifactId]);
+  // The unlimited connection sees both.
+  const all = await listEventsForAgent(actorOf(whole.id), { after: tail.nextCursor });
+  assert.deepEqual(
+    all.events.map((event) => event.artifactId).sort(),
+    [inside.value.artifactId, outside.value.artifactId].sort(),
+  );
 });
