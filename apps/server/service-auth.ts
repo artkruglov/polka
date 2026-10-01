@@ -35,6 +35,8 @@ export type ServiceActor = {
   scopes: AgentScope[];
   audience: string;
   expiresAt: number;
+  /** Who holds the token; a connection without it is a person's. */
+  principal?: "human" | "service";
   /** Granted to a chat connector by OAuth (not a pasted static token). */
   oauth?: boolean;
   /** The connection's shelf: the account's own, or a department's. */
