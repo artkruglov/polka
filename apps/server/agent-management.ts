@@ -55,6 +55,8 @@ export const agentArtifactListInputSchema = z
     folderId: uuid.nullable().optional(),
     limit: z.number().int().min(1).max(100).default(25),
     state: stateSchema.default("active"),
+    /** Only works changed after this moment (ISO 8601 with a zone). */
+    since: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 
@@ -250,6 +252,7 @@ export async function listArtifactsForAgent(
        AND ${searchMatch("artifact", "$4", "$8")}
        AND ($5::timestamptz IS NULL OR (${timestamp},artifact.id)<($5,$6::uuid))
        AND ${inScopeSql("artifact", "$10")}
+       AND ($11::timestamptz IS NULL OR ${timestamp}>$11)
      ORDER BY ${timestamp} DESC,artifact.id DESC
      LIMIT $7`,
     [
@@ -264,6 +267,7 @@ export async function listArtifactsForAgent(
       input.query && input.state === "active" ? prefixQuery(input.query) : null,
       HEADLINE_OPTIONS,
       scope,
+      input.since ?? null,
     ],
   );
   const more = rows.length > input.limit;

@@ -23,7 +23,7 @@ import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
-import { artifactStatusForAgent } from "./agent-management.ts";
+import { artifactStatusForAgent, listArtifactsForAgent } from "./agent-management.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
@@ -435,6 +435,22 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.post("/api/v1/projects/:uploadId/reuse", async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     return reuseProjectFiles(actor, uuid.parse((req.params as { uploadId: string }).uploadId));
+  });
+  // The shelf of the token: list, search, and "what changed since" (read scope).
+  app.get("/api/v1/works", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    const q = z
+      .object({
+        query: z.string().optional(),
+        since: z.string().optional(),
+        cursor: z.string().optional(),
+        folderId: z.string().optional(),
+        state: z.string().optional(),
+        limit: z.coerce.number().optional(),
+      })
+      .strict()
+      .parse(req.query ?? {});
+    return withFieldErrors(() => listArtifactsForAgent(actor, q as never));
   });
   // polka pull: a version's files, listed, then one by one (work-files.ts).
   app.get("/api/v1/works/:artifactId/files", async (req, reply) => {

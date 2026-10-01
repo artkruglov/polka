@@ -525,6 +525,30 @@ export function openApiDocument(origin: string) {
           responses: { "200": { description: "reused: the indexes now stored." }, "404": { description: "No such upload for this token." } },
         },
       },
+      "/api/v1/works": {
+        get: {
+          operationId: "listWorks",
+          summary: "List and search the works on the token's shelf",
+          description:
+            "Newest first. query searches titles and the text of the latest version; since (ISO 8601 with a zone) returns only works changed after that moment; limit is 1–100 (default 25); state is active or trashed. Returns items [{id, title, kind, folderId, revision, snippet?}] and nextCursor to pass back as cursor. No bytes and no share links. Scope read.",
+          security: [{ bearerAuth: ["read"] }],
+          parameters: [
+            { name: "query", in: "query", required: false, schema: { type: "string", maxLength: 160 } },
+            { name: "since", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+            { name: "cursor", in: "query", required: false, schema: { type: "string", maxLength: 512 } },
+            { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
+            { name: "folderId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+            { name: "state", in: "query", required: false, schema: { type: "string", enum: ["active", "trashed"] } },
+          ],
+          responses: {
+            "200": { description: "A page of works and nextCursor." },
+            "400": { description: "A parameter is invalid." },
+            "401": common["401"],
+            "404": { description: "The token has no read scope." },
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/works/{artifactId}/files": {
         get: {
           operationId: "listWorkFiles",
