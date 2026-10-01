@@ -509,7 +509,7 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "Get saved work",
         description:
-          "Get one saved work by its id or by the address of its page on the owner's shelf (<origin>/works/<id>, what the owner pastes in «Открой на Полке работу «…» (url)»): metadata including trash state, without bytes or share secrets. The result's revision.id is the latest revision: the baseRevisionId for polka_revise. To read the page itself use polka_read_source (scope source:read).",
+          "Get one saved work (with revisions: true also its versions: id, number, size, accepted) by its id or by the address of its page on the owner's shelf (<origin>/works/<id>, what the owner pastes in «Открой на Полке работу «…» (url)»): metadata including trash state, without bytes or share secrets. The result's revision.id is the latest revision: the baseRevisionId for polka_revise. To read the page itself use polka_read_source (scope source:read).",
         inputSchema: agentGetArtifactInputSchema,
         annotations: { readOnlyHint: true, openWorldHint: false },
       },
