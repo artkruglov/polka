@@ -93,9 +93,11 @@ export const audit = (
   actor: Actor,
   action: string,
   target: string,
+  /** Ids only: never the content of a work or a link secret. */
+  payload?: Record<string, string | number>,
 ) =>
   c.query(
-    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,connection_id) VALUES($1,$2,$3,$4,$5,$6)",
+    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,connection_id,payload) VALUES($1,$2,$3,$4,$5,$6,$7)",
     [
       actor.tenant,
       actor.id,
@@ -103,6 +105,7 @@ export const audit = (
       target,
       actor.connectionId ? "agent" : "human",
       actor.connectionId ?? null,
+      payload ?? null,
     ],
   );
 /** Analytics: a work was saved (a new one or a version); `first` for the shelf. */
@@ -893,7 +896,7 @@ export async function finalizeUploadInTransaction(
       : {}),
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
-  await audit(c, actor, "revision.saved", revisionId);
+  await audit(c, actor, "revision.saved", revisionId, { artifactId, revisionId, number });
   await trackSaved(c, actor, revisionId, number);
   return receipt;
 }
@@ -1490,7 +1493,7 @@ export async function finalizeBundleUploadInTransaction(
     totalSize: input.size,
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
-  await audit(c, actor, "revision.saved", revisionId);
+  await audit(c, actor, "revision.saved", revisionId, { artifactId, revisionId, number });
   await trackSaved(c, actor, revisionId, number);
   return receipt;
 }

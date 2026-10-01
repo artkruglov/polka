@@ -525,6 +525,26 @@ export function openApiDocument(origin: string) {
           responses: { "200": { description: "reused: the indexes now stored." }, "404": { description: "No such upload for this token." } },
         },
       },
+      "/api/v1/events": {
+        get: {
+          operationId: "listEvents",
+          summary: "What happened to the works of the token's shelf",
+          description:
+            "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears about five seconds after it happens. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
+          security: [{ bearerAuth: ["read"] }],
+          parameters: [
+            { name: "after", in: "query", required: false, schema: { type: "string", pattern: "^[0-9]{1,18}$" } },
+            { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
+          ],
+          responses: {
+            "200": { description: "events, nextCursor and more (another page waits)." },
+            "400": { description: "A parameter is invalid." },
+            "401": common["401"],
+            "404": { description: "The token has no read scope." },
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/works": {
         get: {
           operationId: "listWorks",

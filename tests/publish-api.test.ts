@@ -788,6 +788,17 @@ test("a link is pinned by default; only a service account is held back by it", a
     first.artifactId,
   ]);
   assert.equal(share.follow_mode, "pinned");
+  const {
+    rows: [event],
+  } = await db.query(
+    "SELECT payload FROM audit_outbox WHERE action='revision.saved' AND target_id=$1",
+    [first.revisionId],
+  );
+  assert.deepEqual(event.payload, {
+    artifactId: first.artifactId,
+    revisionId: first.revisionId,
+    number: 1,
+  });
   await assert.rejects(
     db.query("UPDATE shares SET follow_mode='other' WHERE id=$1", [share.id]),
   );

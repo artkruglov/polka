@@ -9,7 +9,7 @@
 | 1 | **Сделано 01.10.2026.** `GET /api/v1/works` (`query`, `since`, `cursor`), `since` в `polka_list`; scope `read`, без байтов | S | — | `apps/server/publish-api.ts`, `apps/server/agent-management.ts` (поиск, строка ~248–253), `apps/server/mcp-server.ts` |
 | 2 | Ранжирование поиска: заголовок выше текста, целая оценка 2+1 в курсоре (`ts_rank_cd` не взят: дробный вес ломает курсор). **Сделано 01.10.2026** | S | нет | `apps/server/search-text.ts`, `agent-management.ts` |
 | 3 | Правило «автоправка не двигает `pinned` ссылку». Сделано 01.10.2026: колонка и проверка `agentMayMoveLink`; ветка service account заработает с пунктом 7, переключателя `follows` для человека в интерфейсе ещё нет | S | 054 `shares.follow_mode` | `apps/server/agent-publish.ts:285–310` |
-| 4 | `GET /api/v1/events?after=` над `audit_outbox`, `payload` | S | 055 | `deploy/migrations/001`, `011`, новый маршрут |
+| 4 | **Сделано 01.10.2026.** `GET /api/v1/events?after=` над `audit_outbox`, `payload` | S | 055 | `apps/server/agent-events.ts`, `publish-api.ts`, `openapi.ts` |
 | 5 | Карточка полки `tenants.card_md` в `polka_context` | S | 056 | `apps/server/mcp-server.ts`, настройки полки |
 | 6 | `owner_account_id`, `accepted_revision_id`, право `curate`, событие `revision.accepted` | S | 057 | `artifacts`, `agent-management.ts`, UI карточки работы |
 | 7 | Service account + task-токены | M | 058 | `apps/server/service-auth.ts`, `agent_connections`, `agent-scope.ts` |
