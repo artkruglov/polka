@@ -106,7 +106,8 @@ test("a token searches its own shelf and the allowed ones; the rest is refused",
   // A shelf not allowed, by id: refused, and its work never shows.
   const refused = await api(token, `/api/v1/works?query=${word}&shelfIds=${shelfC}`);
   assert.equal(refused.statusCode, 403);
-  assert.ok(!refused.body.includes("Секрет"));
+  assert.ok(!refused.body.includes(shelfC) || refused.statusCode === 403);
+  assert.ok(!(await api(token, `/api/v1/works?query=${word}&shelfIds=${person.tenant},${shelfC}`)).body.includes("Секрет"));
   // The token that was not given shelves cannot name them.
   const narrow = (await issue(person, { scopes: ["context", "read"] })).json().token as string;
   assert.equal((await api(narrow, `/api/v1/works?shelfIds=${shelfA}`)).statusCode, 403);
@@ -124,6 +125,43 @@ test("a token searches its own shelf and the allowed ones; the rest is refused",
   assert.equal(seen.length, 3);
   assert.equal(new Set(seen).size, 3);
 
+  // The agent can learn which shelves it may name: polka_context lists them.
+  const mcpHost = new URL(MCP_AUDIENCE).host;
+  const call = async (name: string) => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      remoteAddress: address(),
+      headers: {
+        host: mcpHost,
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        "mcp-protocol-version": "2025-06-18",
+      },
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } },
+    });
+    const text = String(response.headers["content-type"]).startsWith("text/event-stream")
+      ? response.body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("")
+      : response.body;
+    return JSON.parse(JSON.parse(text).result.content[0].text);
+  };
+  const context = await call("polka_context");
+  assert.equal(context.shelf.id, person.tenant);
+  assert.deepEqual(
+    context.searchableShelves.map((entry: any) => entry.id).sort(),
+    [person.tenant, shelfA, shelfB].sort(),
+  );
+  // A personal shelf id is not a department shelf at issue.
+  assert.equal((await issue(person, { scopes: ["context", "read"], allowedShelfIds: [person.tenant] })).statusCode, 422);
+  // With department shelves off the extra shelves drop out at the call.
+  config.TEAM_SHELVES = "off";
+  try {
+    const off = await api(token, `/api/v1/works?query=${word}&shelfIds=${ids}`);
+    assert.deepEqual(off.json().items.map((item: any) => item.shelfId), [person.tenant]);
+  } finally {
+    config.TEAM_SHELVES = "on";
+  }
   // Leaving a shelf closes it for the agent at once.
   const removed = await app.inject({
     method: "POST",

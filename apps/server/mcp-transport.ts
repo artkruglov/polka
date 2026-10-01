@@ -86,7 +86,7 @@ export async function registerMcpTransport(app: FastifyInstance) {
           .send({ code: "unauthorized" });
       }
       await limitAttempts(
-        `mcp:connection:${actor.connectionId}`,
+        `mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`,
         MCP_LIMITS.perConnection,
       );
       const auth: AuthInfo = {

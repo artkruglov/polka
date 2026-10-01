@@ -358,6 +358,11 @@ export function AgentConnections() {
         goToLogin();
         return;
       }
+      if (error instanceof ApiError && [400, 403, 413, 422].includes(error.status)) {
+        // Refused before anything was made: say why.
+        setIssueNotice(error.message);
+        return;
+      }
       setIssueNotice(
         "Подключение могло быть создано, но токен не получен. Проверьте список; ненужную запись можно отозвать.",
       );
@@ -747,8 +752,8 @@ export function AgentConnections() {
                 <fieldset>
                   <legend>Искать также на полках отделов</legend>
                   <p className="ui-field-hint">
-                    Агент сможет читать и искать работы на отмеченных полках, пока вы там
-                    участник. Ничего не отмечено: только выбранная полка.
+                    Агент сможет искать работы на отмеченных полках и видеть найденное (названия и
+                    фрагменты), пока вы там участник. Открыть работу с другой полки можно только токеном этой полки. Ничего не отмечено: только выбранная полка.
                   </p>
                   {teamShelves
                     .filter((shelf) => shelf.id !== tokenShelf)
@@ -760,7 +765,7 @@ export function AgentConnections() {
                           onChange={(event) =>
                             setSearchShelves((current) =>
                               event.target.checked
-                                ? [...current, shelf.id].slice(0, 10)
+                                ? [...current.filter((id) => teamShelves.some((team) => team.id === id)), shelf.id].slice(0, 10)
                                 : current.filter((id) => id !== shelf.id),
                             )
                           }

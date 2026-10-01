@@ -175,6 +175,19 @@ async function context(actor: ServiceActor) {
     [verified.tenantId, verified.accountId],
   );
   if (!tenant) throw new Error("Service actor tenant disappeared");
+  // The shelves a list may search with shelfIds: this one, and the department
+  // shelves the owner allowed this token, while still a member of them.
+  const searchable = verified.allowedShelfIds?.length
+    ? (
+        await db.query(
+          `SELECT t.id,t.name FROM tenants t JOIN tenant_members m ON m.tenant_id=t.id
+           WHERE t.id=ANY($1::uuid[]) AND t.kind='team' AND t.state='active'
+             AND m.account_id=$2 AND m.state='active' AND $3::boolean
+           ORDER BY lower(t.name)`,
+          [verified.allowedShelfIds, verified.accountId, config.TEAM_SHELVES === "on"],
+        )
+      ).rows
+    : [];
   // What the role on the shelf allows narrows what the connection was granted:
   // a reader only reads; links out of a department shelf come later.
   const has = (scope: AgentScope) =>
@@ -191,6 +204,7 @@ async function context(actor: ServiceActor) {
     // Which shelf this agent works on and the account's role there
     // (docs/specs/TEAM_SHELVES.md): a department's is shared with colleagues.
     shelf: {
+      id: verified.tenantId,
       kind: tenant.kind,
       name: tenant.label,
       role: tenant.role,
@@ -205,6 +219,11 @@ async function context(actor: ServiceActor) {
         note: "Полка отдела: работы видят все её участники. Ссылки наружу выпускают кураторы и администраторы полки; за ссылку отвечает тот, кто её выпустил.",
       }),
     },
+    ...(searchable.length && {
+      // Pass these ids as shelfIds to polka_list to search them too (listing and
+      // fragments only: opening a work from another shelf is done on that shelf).
+      searchableShelves: [{ id: verified.tenantId, name: tenant.label }, ...searchable],
+    }),
     scopes: verified.scopes,
     limits: {
       sourceBytes: {
@@ -476,7 +495,7 @@ export function createMcpServer(actor: ServiceActor) {
       {
         title: "List saved work",
         description:
-          "List tenant-scoped artifact metadata, newest change first: id, title, kind (page, link, image, text, file; linkHost for a link), folderId and folderName (null: «без папки»), createdAt, updatedAt and the latest revision (filename, size). Up to 100 per call (limit), then pass nextCursor; folderId filters one folder (null: works without a folder). query matches titles and the text of each work's latest version (every word, as a prefix: «скид» finds «скидки»); an item found by its text has snippet, a fragment with the found words in «». To continue a found work, read it with polka_read_source (artifactId: id, revisionId: revision.id) and save the new version with polka_revise. Returns no bytes, manifests, grants, or share URLs. since (ISO 8601 with a zone) returns only works changed after that moment. shelfIds searches those department shelves too, only ones the owner allowed this token (each item carries shelfId); it cannot be combined with folderId or the trash.",
+          "List tenant-scoped artifact metadata, newest change first: id, title, kind (page, link, image, text, file; linkHost for a link), folderId and folderName (null: «без папки»), createdAt, updatedAt and the latest revision (filename, size). Up to 100 per call (limit), then pass nextCursor; folderId filters one folder (null: works without a folder). query matches titles and the text of each work's latest version (every word, as a prefix: «скид» finds «скидки»); an item found by its text has snippet, a fragment with the found words in «». To continue a found work, read it with polka_read_source (artifactId: id, revisionId: revision.id) and save the new version with polka_revise. Returns no bytes, manifests, grants, or share URLs. since (ISO 8601 with a zone) returns only works changed after that moment. shelfIds searches those department shelves too, only ones the owner allowed this token (each item carries shelfId); it cannot be combined with folderId or the trash. Other shelves give the list and fragments only; opening a work needs a token for that shelf.",
         inputSchema: agentArtifactListInputSchema,
         annotations: { readOnlyHint: true, openWorldHint: false },
       },

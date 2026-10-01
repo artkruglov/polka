@@ -236,6 +236,9 @@ export async function setServiceResponsible(actor: Actor, id: string, body: unkn
   return transaction(async (c) => {
     await lockShelf(c, actor, "admin");
     const principal = await lockPrincipal(c, actor, id);
+    // The same person on a working account: nothing changes, nothing is revoked.
+    if (principal.responsible_account_id === accountId && principal.status === "active")
+      return { ok: true, responsibleAccountId: accountId };
     const {
       rows: [member],
     } = await c.query(
@@ -290,7 +293,7 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
     const {
       rows: [parent],
     } = await c.query(
-      `SELECT * FROM agent_connections WHERE id=$1 AND revoked_at IS NULL AND expires_at>now() FOR SHARE`,
+      `SELECT * FROM agent_connections WHERE id=$1 AND revoked_at IS NULL AND expires_at>now() FOR UPDATE`,
       [parentId],
     );
     if (!parent) throw new Problem(401, "unauthorized", "Подключение агента недействительно.");

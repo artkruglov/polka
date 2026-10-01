@@ -289,6 +289,25 @@ export const client = {
       expectedFolderId: string | null;
     },
   ) => request<Artifact>(`/artifacts/${id}`, input, "PATCH"),
+  serviceAccounts: {
+    list: () =>
+      request<{
+        items: {
+          id: string;
+          name: string;
+          status: "active" | "frozen" | "disabled";
+          responsibleAccountId: string;
+          responsibleName?: string;
+          token: { scopes: AgentScope[]; expiresAt: string; lastSeenAt: string | null } | null;
+        }[];
+      }>("/service-accounts"),
+    create: (name: string, scopes: AgentScope[]) =>
+      request<{ token: string }>("/service-accounts", { name, scopes }),
+    rotate: (id: string) => request<{ token: string }>(`/service-accounts/${id}/rotate`, {}),
+    disable: (id: string) => request<{ ok: true }>(`/service-accounts/${id}/disable`, {}),
+    setResponsible: (id: string, accountId: string) =>
+      request<{ token: string }>(`/service-accounts/${id}/responsible`, { accountId }, "PUT"),
+  },
   shelfCard: () => request<{ cardMd: string | null }>("/shelf/card"),
   setShelfCard: (cardMd: string | null) =>
     request<{ cardMd: string | null }>("/shelf/card", { cardMd }, "PUT"),
