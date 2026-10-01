@@ -21,6 +21,7 @@ import {
   publishResponseSchema,
   statusResponseSchema,
 } from "../apps/server/publish-api.ts";
+import { agentMayMoveLink } from "../apps/server/agent-publish.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
@@ -771,4 +772,28 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
   const foreign = await list(outsider.secret, "?query=Works%20list");
   assert.equal(foreign.json().items.length, 0);
   assert.equal((await list(null)).statusCode, 401);
+});
+
+test("a link is pinned by default; only a service account is held back by it", async () => {
+  const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
+  const first = (
+    await publish(
+      { key: randomUUID(), title: "Pinned", html: page("1") },
+      bearer(secret),
+    )
+  ).json();
+  const {
+    rows: [share],
+  } = await db.query("SELECT id,follow_mode FROM shares WHERE artifact_id=$1", [
+    first.artifactId,
+  ]);
+  assert.equal(share.follow_mode, "pinned");
+  await assert.rejects(
+    db.query("UPDATE shares SET follow_mode='other' WHERE id=$1", [share.id]),
+  );
+  // A person's publish and MCP are unchanged by the mode.
+  assert.equal(agentMayMoveLink(undefined, "pinned"), true);
+  assert.equal(agentMayMoveLink("human", "pinned"), true);
+  assert.equal(agentMayMoveLink("service", "pinned"), false);
+  assert.equal(agentMayMoveLink("service", "follows"), true);
 });

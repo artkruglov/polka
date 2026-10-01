@@ -6,9 +6,9 @@
 
 | # | Работа | Размер | Миграция | Основные файлы |
 |---|---|---|---|---|
-| 1 | `GET /api/v1/works` (`query`, `since`, `cursor`), `since` в `polka_list`; scope `read`, без байтов | S | — | `apps/server/publish-api.ts`, `apps/server/agent-management.ts` (поиск, строка ~248–253), `apps/server/mcp-server.ts` |
-| 2 | Ранжирование поиска `ts_rank_cd` с весом заголовка, в рамках одной полки | S | возможно индекс | `apps/server/search-text.ts`, `agent-management.ts` |
-| 3 | Правило «автоправка не двигает `pinned` ссылку» | S | 054 `shares.follow_mode` | `apps/server/agent-publish.ts:285–310` |
+| 1 | **Сделано 01.10.2026.** `GET /api/v1/works` (`query`, `since`, `cursor`), `since` в `polka_list`; scope `read`, без байтов | S | — | `apps/server/publish-api.ts`, `apps/server/agent-management.ts` (поиск, строка ~248–253), `apps/server/mcp-server.ts` |
+| 2 | Ранжирование поиска: заголовок выше текста, целая оценка 2+1 в курсоре (`ts_rank_cd` не взят: дробный вес ломает курсор). **Сделано 01.10.2026** | S | нет | `apps/server/search-text.ts`, `agent-management.ts` |
+| 3 | Правило «автоправка не двигает `pinned` ссылку». Сделано 01.10.2026: колонка и проверка `agentMayMoveLink`; ветка service account заработает с пунктом 7, переключателя `follows` для человека в интерфейсе ещё нет | S | 054 `shares.follow_mode` | `apps/server/agent-publish.ts:285–310` |
 | 4 | `GET /api/v1/events?after=` над `audit_outbox`, `payload` | S | 055 | `deploy/migrations/001`, `011`, новый маршрут |
 | 5 | Карточка полки `tenants.card_md` в `polka_context` | S | 056 | `apps/server/mcp-server.ts`, настройки полки |
 | 6 | `owner_account_id`, `accepted_revision_id`, право `curate`, событие `revision.accepted` | S | 057 | `artifacts`, `agent-management.ts`, UI карточки работы |
@@ -26,6 +26,8 @@
 - Новые таблицы и колонки с персональными данными добавляем в стирание аккаунта (`terminal_erase_account_metadata`, `apps/server/account-erase.ts`).
 - `audit_outbox.actor_id NOT NULL` (001): для service account нужна миграция до пункта 7.
 - Payload событий и ответы API не содержат содержимого работ и секретов ссылок.
+
+- Новая миграция: добавить в `packages/migrations.ts`, поднять версию в `tests/migrations.test.ts` и в рецептах `deploy/*-grants.sql` (проверка «001 through NNN»), в `runtime-grants.sql` дописать строку про новые колонки.
 
 ## Тесты
 

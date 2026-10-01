@@ -101,6 +101,17 @@ type InteractiveOutcome = { ready: boolean; reason: string | null };
  * link is bound to it. Build refusals are reported, never thrown: the save
  * and a static link stand on their own.
  */
+/**
+ * A person's publish moves the work's open link as always; an unattended
+ * agent (a service account) moves only a link set to follow new versions.
+ */
+export function agentMayMoveLink(
+  principal: "human" | "service" | undefined,
+  followMode: "pinned" | "follows",
+) {
+  return principal !== "service" || followMode === "follows";
+}
+
 export async function prepareInteractive(
   actor: ServiceActor,
   key: string,
@@ -288,13 +299,21 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
     const open = input.artifactId
       ? (
           await db.query(
-            `SELECT id FROM shares WHERE artifact_id=$1 AND tenant_id=$2
+            `SELECT id,follow_mode FROM shares WHERE artifact_id=$1 AND tenant_id=$2
                AND NOT revoked AND expires_at>now()
              ORDER BY created_at DESC LIMIT 1`,
             [receipt.artifactId, current.tenantId],
           )
         ).rows[0]
       : undefined;
+    if (open && !agentMayMoveLink(current.principal, open.follow_mode))
+      return {
+        ...saved,
+        state: "saved" as const,
+        url: null,
+        linkUnavailableReason:
+          "Saved as a new version. The work's link is pinned to its version, and only a person moves it (or switches it to follow new versions).",
+      };
     const expiry = open
       ? { days: input.expiresInDays }
       : await publishExpiry(current, input.key, input.expiresInDays);
