@@ -103,7 +103,7 @@ test("off by default; scopes are limited; read and share never together", async 
   config.SERVICE_ACCOUNTS = "off";
   assert.equal((await create(admin, { name: "Выключено" })).statusCode, 404);
   config.SERVICE_ACCOUNTS = "on";
-  for (const scopes of [["read", "share"], ["manage"], ["sign_in", "read"]]) {
+  for (const scopes of [["read", "share"], ["source:read", "share"], ["manage"], ["sign_in", "read"]]) {
     const refused = await create(admin, { name: `Нельзя ${scopes.join("+")}`, scopes });
     assert.equal(refused.statusCode, 400, refused.body);
   }
@@ -113,6 +113,9 @@ test("off by default; scopes are limited; read and share never together", async 
   // «context» is added even when the form leaves it out.
   const bare = await create(admin, { name: "Без context", scopes: ["read"] });
   assert.deepEqual(bare.json().scopes, ["context", "read"]);
+  // Left out altogether: what a nightly reader needs, read and capture.
+  const defaults = await create(admin, { name: "По умолчанию" });
+  assert.deepEqual(defaults.json().scopes, ["capture", "context", "read"]);
   assert.equal((await create(admin, { name: "ночной дайджест" })).statusCode, 409);
   const listed = (await session(admin, "GET", "/api/service-accounts")).json();
   assert.ok(listed.items.some((item: any) => item.name === "Ночной дайджест" && item.status === "active"));
@@ -303,4 +306,40 @@ test("erasing the responsible account freezes the service account and ends its t
   const thawed = await session(admin, "PUT", `/api/service-accounts/${made.servicePrincipal.id}/responsible`, { accountId: admin.id });
   assert.equal(thawed.statusCode, 200, thawed.body);
   assert.equal((await api(thawed.json().token, "GET", "/api/v1/works")).statusCode, 200);
+});
+
+test("erasing an account clears its shelf card and its mark as a work's owner (migration 060)", async () => {
+  const person = await account("svc-erase-marks");
+  assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: person.name, role: "curator" } })).statusCode, 200);
+  const token = (await create(admin, { name: "Для стирания меток", scopes: ["context", "capture"] })).json().token as string;
+  const saved = (await publish(token, "Работа с ответственным")).json();
+  await db.query("UPDATE artifacts SET owner_account_id=$2 WHERE id=$1", [saved.artifactId, person.id]);
+  await db.query("UPDATE tenants SET card_md='Мои правила' WHERE id=$1", [person.tenant]);
+  await db.query("UPDATE accounts SET name='deleted-'||id::text WHERE id=$1", [person.id]);
+  const {
+    rows: [work],
+  } = await db.query("SELECT owner_account_id FROM artifacts WHERE id=$1", [saved.artifactId]);
+  const {
+    rows: [tenant],
+  } = await db.query("SELECT card_md FROM tenants WHERE id=$1", [person.tenant]);
+  assert.equal(work.owner_account_id, null);
+  assert.equal(tenant.card_md, null);
+});
+
+test("the events feed and the works list carry metadata only: no bytes, no payload", async () => {
+  const token = (await create(admin, { name: "Только метаданные", scopes: ["context", "read", "capture"] })).json().token as string;
+  const tail = (await api(token, "GET", "/api/v1/events")).json();
+  const saved = (await publish(token, "Метаданные")).json();
+  let events: any[] = [];
+  for (let tries = 0; tries < 60 && !events.length; tries++) {
+    events = (await api(token, "GET", `/api/v1/events?after=${encodeURIComponent(tail.nextCursor)}`)).json().events;
+    if (!events.length) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(events.length);
+  const allowed = new Set(["id", "action", "artifactId", "revisionId", "actorType", "at"]);
+  for (const event of events) for (const key of Object.keys(event)) assert.ok(allowed.has(key), `unexpected event field ${key}`);
+  const body = (await api(token, "GET", `/api/v1/works?query=Метаданные`)).body;
+  for (const forbidden of ["bytes", "html", "data", "payload", "objectKey", "object_key", "/s#"])
+    assert.ok(!body.includes(`"${forbidden}"`) && !body.includes(forbidden === "/s#" ? forbidden : `"${forbidden}":`), `works list shows ${forbidden}`);
+  assert.ok(saved.artifactId);
 });
