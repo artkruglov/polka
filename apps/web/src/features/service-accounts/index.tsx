@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Button, Notice, TextField } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
+import "./styles.css";
 
 type Item = Awaited<ReturnType<typeof client.serviceAccounts.list>>["items"][number];
 const SCOPE_LABEL = {
@@ -68,7 +69,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
         «читать» и «ссылки» вместе.
       </p>
       {(items ?? []).map((item) => (
-        <div key={item.id} className="agent-existing">
+        <div key={item.id} className="agent-existing service-accounts-row">
           <strong>{item.name}</strong> — {STATUS[item.status]}
           {item.responsibleName && <>; отвечает: {item.responsibleName}</>}
           {item.token && (
@@ -77,7 +78,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
               {new Date(item.token.expiresAt).toLocaleDateString("ru-RU")}
             </>
           )}
-          <div>
+          <div className="service-accounts-actions">
             {item.status === "active" && (item.responsibleAccountId === accountId || admin) && (
               <Button type="button" disabled={busy} onClick={() => void run(() => client.serviceAccounts.rotate(item.id), item.name)}>
                 Новый токен
@@ -130,7 +131,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
         }}
       >
         <TextField label="Название" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required />
-        <fieldset>
+        <fieldset className="service-accounts-scopes">
           <legend>Права</legend>
           {(Object.keys(SCOPE_LABEL) as ServiceScope[]).map((scope) => (
             <label key={scope}>

@@ -1,0 +1,21 @@
+.service-accounts-scopes {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+}
+.service-accounts-scopes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.service-accounts-row {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.service-accounts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
