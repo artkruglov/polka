@@ -1,4 +1,5 @@
--- Erasing an account and the service accounts it answered for (058).
+-- Erasing an account: the service accounts it answered for (058), the card of
+-- its own shelf (056) and its mark as a work's owner (057).
 --
 -- erase_account_department_rows (047) already revokes the account's agent
 -- connections on department shelves, service ones included. What it left is a
@@ -33,5 +34,9 @@ BEGIN
   UPDATE public.service_principals
      SET status='frozen', frozen_at=clock_timestamp()
    WHERE responsible_account_id=NEW.id AND status='active';
+  -- 056, 057: the shelf card of this person's own shelf (the tenants row stays
+  -- after erasure) and their name as the owner of works on department shelves.
+  UPDATE public.tenants SET card_md=NULL WHERE owner_id=NEW.id AND card_md IS NOT NULL;
+  UPDATE public.artifacts SET owner_account_id=NULL WHERE owner_account_id=NEW.id;
   RETURN NEW;
 END $$;

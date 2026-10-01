@@ -39,14 +39,15 @@ const scopesSchema = z
   .superRefine((scopes, ctx) => {
     if (scopes.some((scope) => !SERVICE_SCOPES.includes(scope)))
       ctx.addIssue({ code: "custom", message: "Сервисному доступу нельзя manage и sign_in." });
-    if (scopes.includes("read") && scopes.includes("share"))
-      ctx.addIssue({ code: "custom", message: "Права read и share вместе сервисному доступу не выдаются." });
+    // source:read reads any work of the shelf by id, as read does: it counts the same.
+    if ((scopes.includes("read") || scopes.includes("source:read")) && scopes.includes("share"))
+      ctx.addIssue({ code: "custom", message: "Права read или source:read вместе с share сервисному доступу не выдаются." });
   });
 
 const createInput = z
   .object({
     name: z.string().trim().min(1).max(80),
-    scopes: scopesSchema.default(["capture", "context"]),
+    scopes: scopesSchema.default(["capture", "context", "read"]),
     ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30),
   })
   .strict();
@@ -209,7 +210,7 @@ export async function rotateServiceToken(actor: Actor, id: string, body: unknown
       c,
       principal,
       principal.responsible_account_id,
-      last?.scopes ?? ["capture", "context"],
+      last?.scopes ?? ["capture", "context", "read"],
       input.ttlDays,
     );
     await audit(c, actor, "service_account.rotated", id, { connectionId });
@@ -278,7 +279,7 @@ export async function setServiceResponsible(actor: Actor, id: string, body: unkn
       c,
       principal,
       accountId,
-      last?.scopes ?? ["capture", "context"],
+      last?.scopes ?? ["capture", "context", "read"],
       input.ttlDays,
     );
     await audit(c, actor, "service_account.responsible_changed", id, { responsibleAccountId: accountId, connectionId });
