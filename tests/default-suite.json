@@ -55,6 +55,7 @@
   "tests/content-search.test.ts",
   "tests/team-shelves.test.ts",
   "tests/team-shelves-web.test.ts",
+  "tests/service-accounts.test.ts",
   "tests/team-shelves-agents.test.ts",
   "tests/company-admin.test.ts",
   "tests/team-shelves-review.test.ts",

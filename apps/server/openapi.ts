@@ -525,6 +525,23 @@ export function openApiDocument(origin: string) {
           responses: { "200": { description: "reused: the indexes now stored." }, "404": { description: "No such upload for this token." } },
         },
       },
+      "/api/v1/task-token": {
+        post: {
+          operationId: "createTaskToken",
+          summary: "A short token for one job (service accounts)",
+          description:
+            "Only a service account's own token may ask (SERVICE_ACCOUNTS=on). Body: {scopes? a subset of its own, minutes 5–60 (default 15), taskId?}. Returns {token, expiresAt, scopes, taskId?}: a child of the service token that stops when the parent does, and cannot ask for another. Each issue is audited with the service account and taskId.",
+          security: [{ bearerAuth: ["context"] }],
+          responses: {
+            "200": { description: "The task token, shown once." },
+            "400": { description: "A field is invalid." },
+            "401": common["401"],
+            "403": { description: "Not a service account, or more scopes than its own." },
+            "404": { description: "Service accounts are off on this installation." },
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/events": {
         get: {
           operationId: "listEvents",

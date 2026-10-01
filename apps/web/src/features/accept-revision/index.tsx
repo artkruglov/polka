@@ -14,11 +14,14 @@ export function AcceptRevisionPanel({
   accountId,
   onClose,
   onSaved,
+  onChanged,
 }: {
   artifact: Artifact;
   accountId: string | undefined;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
+  /** After a partly failed save: reload the work behind the dialog. */
+  onChanged: () => Promise<unknown> | void;
 }) {
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
   const [accepted, setAccepted] = useState(artifact.acceptedRevisionId ?? "");
@@ -66,13 +69,19 @@ export function AcceptRevisionPanel({
     try {
       if ((artifact.acceptedRevisionId ?? "") !== accepted)
         await client.acceptRevision(artifact.id, accepted || null);
+      // Own shelf: only a change of the box is sent; a department's: the picked member.
+      const wasMine = !!accountId && artifact.ownerAccountId === accountId;
       const nextOwner = team ? owner || null : mine ? (accountId ?? null) : null;
-      if (nextOwner !== (artifact.ownerAccountId ?? null))
-        await client.setWorkOwner(artifact.id, nextOwner);
+      const ownerChanged = team
+        ? nextOwner !== (artifact.ownerAccountId ?? null)
+        : !!accountId && mine !== wasMine;
+      if (ownerChanged) await client.setWorkOwner(artifact.id, nextOwner);
       if (link && follows !== (link.followMode === "follows"))
         await client.setShareFollow(link.id, follows ? "follows" : "pinned");
       await onSaved();
     } catch (cause) {
+      // One of the three may already have been saved: show the work as it is.
+      void Promise.resolve(onChanged()).catch(() => {});
       setError(
         cause instanceof Error ? cause.message : "Не удалось сохранить отметки.",
       );

@@ -32,6 +32,7 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
 import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
+import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
 import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
 import { Login } from "../../pages/login/index.tsx";
@@ -680,7 +681,10 @@ export function App() {
       )}
       {shelfDialog === "create" && <CreateShelfPanel onClose={() => setShelfDialog(null)} />}
       {shelfDialog === "members" && team && account && (
-        <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)} />
+        <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)}>
+          {/* This tab's shelf is the department (X-Polka-Shelf), so the card is its. */}
+          <ShelfCardSection canEdit={shelfAccess(team, account.id).curate} />
+        </ShelfMembersPanel>
       )}
       {(panel === "upload" || panel === "version") && (
         <UploadPanel
@@ -727,6 +731,7 @@ export function App() {
           artifact={work}
           accountId={account?.id}
           onClose={() => setPanel(null)}
+          onChanged={refreshWork}
           onSaved={async () => {
             setPanel(null);
             await refreshWork();

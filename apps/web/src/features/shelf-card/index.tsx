@@ -33,7 +33,12 @@ export function ShelfCardSection({ canEdit }: { canEdit: boolean }) {
   }, []);
 
   if (state === "loading") return null;
-  if (state === "error") return null;
+  if (state === "error")
+    return (
+      <p className="ui-field-error" role="alert">
+        Не удалось загрузить карточку полки.
+      </p>
+    );
   // Someone who cannot write it sees it only when there is one.
   if (!canEdit && !saved) return null;
 

@@ -1,4 +1,11 @@
 import { readFile } from "node:fs/promises";
+import {
+  createServicePrincipal,
+  disableServicePrincipal,
+  listServicePrincipals,
+  rotateServiceToken,
+  setServiceResponsible,
+} from "./service-principals.ts";
 import { setShareFollowMode } from "./share-follow.ts";
 import { acceptRevision, setWorkOwner } from "./artifact-acceptance.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
@@ -889,7 +896,7 @@ export async function createApp() {
   });
   // "How we do things here": the shelf's card, given to agents in polka_context.
   app.get("/api/shelf/card", async (req) => readShelfCard(await identity(req, SHELF)));
-  app.put("/api/shelf/card", { bodyLimit: 16384 }, async (req) => {
+  app.put("/api/shelf/card", { bodyLimit: 32768 }, async (req) => {
     const actor = await identity(req, SHELF);
     assertStrongSession(actor);
     return setShelfCard(actor, req.body);
@@ -1351,6 +1358,20 @@ export async function createApp() {
   app.post("/api/shares/:id/revoke", async (req) => {
     return revokeOwnerShare(await strongIdentity(req, SHELF), id(req));
   });
+  // Service accounts of the open shelf: cron and CI agents with a person responsible.
+  app.get("/api/service-accounts", async (req) => listServicePrincipals(await strongIdentity(req, SHELF)));
+  app.post("/api/service-accounts", { bodyLimit: 4096 }, async (req) =>
+    createServicePrincipal(await strongIdentity(req, SHELF), req.body),
+  );
+  app.post("/api/service-accounts/:id/rotate", { bodyLimit: 1024 }, async (req) =>
+    rotateServiceToken(await strongIdentity(req, SHELF), id(req), req.body),
+  );
+  app.post("/api/service-accounts/:id/disable", async (req) =>
+    disableServicePrincipal(await strongIdentity(req, SHELF), id(req)),
+  );
+  app.put("/api/service-accounts/:id/responsible", { bodyLimit: 1024 }, async (req) =>
+    setServiceResponsible(await strongIdentity(req, SHELF), id(req), req.body),
+  );
   // Whether an unattended agent may move this link to new versions.
   app.put("/api/shares/:id/follow", { bodyLimit: 1024 }, async (req) => {
     return setShareFollowMode(await strongIdentity(req, SHELF), id(req), req.body);

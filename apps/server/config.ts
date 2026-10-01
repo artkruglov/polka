@@ -171,6 +171,8 @@ const env = z
     COMMENTS_MODE: z.enum(["on", "owner-notes", "off"]).default("on"),
     // Department shelves (docs/specs/TEAM_SHELVES.md): off until a pilot.
     TEAM_SHELVES: z.enum(["off", "on"]).default("off"),
+    // Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off until a pilot asks.
+    SERVICE_ACCOUNTS: z.enum(["off", "on"]).default("off"),
     // Extensions of the open core (docs/specs/EXTENSIONS.md): package names
     // or paths, comma-separated. Empty: the core alone.
     POLKA_EXTENSIONS: z.string().default(""),
