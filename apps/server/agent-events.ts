@@ -36,7 +36,6 @@ export async function listEventsForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentEventsInputSchema.parse(raw);
-  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
@@ -85,6 +84,8 @@ export async function listEventsForAgent(
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
   const last = page.at(-1);
+  // A poll that found nothing, and the call that only starts the cursor, are not reads.
+  if (page.length) await countAgentRead(verified.tenantId, verified.principal);
   return {
     events: page.map((row) => ({
       id: `${row.tx}:${row.id}`,

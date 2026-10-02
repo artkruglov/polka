@@ -315,6 +315,7 @@ test("erasing an account clears its shelf card and its mark as a work's owner (m
   const saved = (await publish(token, "Работа с ответственным")).json();
   await db.query("UPDATE artifacts SET owner_account_id=$2 WHERE id=$1", [saved.artifactId, person.id]);
   await db.query("UPDATE tenants SET card_md='Мои правила' WHERE id=$1", [person.tenant]);
+  await db.query("INSERT INTO agent_read_days(tenant_id,day,principal_type,reads) VALUES($1,current_date,'human',3)", [person.tenant]);
   await db.query("UPDATE accounts SET name='deleted-'||id::text WHERE id=$1", [person.id]);
   const {
     rows: [work],
@@ -324,6 +325,8 @@ test("erasing an account clears its shelf card and its mark as a work's owner (m
   } = await db.query("SELECT card_md FROM tenants WHERE id=$1", [person.tenant]);
   assert.equal(work.owner_account_id, null);
   assert.equal(tenant.card_md, null);
+  const counts = await db.query("SELECT 1 FROM agent_read_days WHERE tenant_id=$1", [person.tenant]);
+  assert.equal(counts.rowCount, 0, "read counts of an erased person's shelf are gone");
 });
 
 test("the events feed and the works list carry metadata only: no bytes, no payload", async () => {
