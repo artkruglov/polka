@@ -65,6 +65,7 @@ const catalog = [
   { version: 59, file: "059_agent_allowed_shelves.sql" },
   { version: 60, file: "060_erase_freezes_service_accounts.sql" },
   { version: 61, file: "061_agent_read_days.sql" },
+  { version: 62, file: "062_erase_clears_read_counts.sql" },
 ] as const satisfies readonly SchemaMigration[];
 
 export const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = Object.freeze(

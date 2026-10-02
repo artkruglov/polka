@@ -6,6 +6,8 @@ import { db } from "./db.ts";
  * token; never which work or who. Best effort: a failure here must not fail
  * the read.
  */
+let warned = false;
+
 export async function countAgentRead(tenantId: string, principal: "human" | "service" | undefined) {
   try {
     await db.query(
@@ -14,7 +16,12 @@ export async function countAgentRead(tenantId: string, principal: "human" | "ser
        ON CONFLICT (tenant_id,day,principal_type) DO UPDATE SET reads=agent_read_days.reads+1`,
       [tenantId, principal ?? "human"],
     );
-  } catch {
-    // counting is not worth a failed read
+  } catch (error: any) {
+    // Counting is not worth a failed read, but a missing table or grant (an
+    // operator who migrated without re-running the grants) must not stay silent.
+    if (!warned && (error?.code === "42501" || error?.code === "42P01")) {
+      warned = true;
+      console.warn(JSON.stringify({ event: "agent_read_counter_unavailable", code: error.code }));
+    }
   }
 }

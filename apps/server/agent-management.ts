@@ -260,7 +260,6 @@ export async function listArtifactsForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentArtifactListInputSchema.parse(raw);
-  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
@@ -342,6 +341,8 @@ export async function listArtifactsForAgent(
   );
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
+  // Counted when the answer is given, not for a refused or malformed call.
+  await countAgentRead(verified.tenantId, verified.principal);
   return {
     items: page.map((row) => {
       const snippet = plainSnippet(row.search_snippet);
@@ -362,7 +363,6 @@ export async function getArtifactForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentGetArtifactInputSchema.parse(raw);
-  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
@@ -378,6 +378,7 @@ export async function getArtifactForAgent(
     [artifactIdOf(input.artifactId), verified.tenantId, scope],
   );
   if (!row) throw missing();
+  await countAgentRead(verified.tenantId, verified.principal);
   const work = artifactProjection(row);
   if (!input.revisions) return work;
   const { rows } = await db.query(

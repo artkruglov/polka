@@ -627,12 +627,28 @@ test("agent reads are counted per shelf and day, nothing else", async () => {
   const before = await count();
   await listArtifactsForAgent(actor, {});
   await getArtifactForAgent(actor, { artifactId: work.artifactId });
-  await listEventsForAgent(actor, {});
-  assert.equal((await count()) - before, 3);
+  // The cursor bootstrap and an empty poll are not reads; a poll that returns events is.
+  const start = await listEventsForAgent(actor, {});
+  assert.equal((await count()) - before, 2);
+  await db.query(
+    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'artifact.trashed',$3)",
+    [owner.tenant, owner.id, work.artifactId],
+  );
+  let polled = 0;
+  for (let tries = 0; tries < 60 && !polled; tries++) {
+    polled = (await listEventsForAgent(actor, { after: start.nextCursor })).events.length;
+    if (!polled) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(polled);
+  assert.ok((await count()) - before >= 3);
+  const afterPolls = await count();
+  await assert.rejects(listArtifactsForAgent(actor, { cursor: "not-a-cursor" }));
+  await assert.rejects(getArtifactForAgent(actor, { artifactId: randomUUID() }));
+  assert.equal(await count(), afterPolls, "refused and missing reads are not counted");
   // A refused read (no read scope) is not counted.
   const noRead = await connection(owner, ["context"]);
   await assert.rejects(listArtifactsForAgent(noRead, {}));
-  assert.equal((await count()) - before, 3);
+  assert.equal(await count(), afterPolls);
   const {
     rows: [row],
   } = await db.query("SELECT * FROM agent_read_days WHERE tenant_id=$1 LIMIT 1", [owner.tenant]);
