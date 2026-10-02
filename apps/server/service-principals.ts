@@ -74,8 +74,29 @@ async function issueToken(
   responsibleId: string,
   scopes: AgentScope[],
   ttlDays: number,
+  /**
+   * Rotation and a new responsible person give the account a new secret on the
+   * SAME connection row: whatever an extension keeps per connection (an agent
+   * limited to a folder, polka_enterprise.agent_scopes) must not be lost, and a
+   * lost limit would widen access. The caller has revoked every token already.
+   */
+  reuseRoot = false,
 ) {
   const token = randomBytes(32).toString("base64url");
+  if (reuseRoot) {
+    const {
+      rows: [root],
+    } = await c.query(
+      `UPDATE agent_connections SET token_hash=$2,account_id=$3,scopes=$4,name=$5,
+              created_at=now(),expires_at=now()+$6*interval '1 day',revoked_at=NULL,last_seen_at=NULL
+       WHERE id=(SELECT id FROM agent_connections
+                 WHERE service_principal_id=$1 AND parent_id IS NULL
+                 ORDER BY created_at LIMIT 1)
+       RETURNING id`,
+      [principal.id, sha256(token), responsibleId, scopes, principal.name, ttlDays],
+    );
+    if (root) return { id: root.id as string, token };
+  }
   const id = randomUUID();
   await c.query(
     `INSERT INTO agent_connections(
@@ -212,6 +233,7 @@ export async function rotateServiceToken(actor: Actor, id: string, body: unknown
       principal.responsible_account_id,
       last?.scopes ?? ["capture", "context", "read"],
       input.ttlDays,
+      true,
     );
     await audit(c, actor, "service_account.rotated", id, { connectionId });
     return { servicePrincipalId: id, token, ttlDays: input.ttlDays };
@@ -281,6 +303,7 @@ export async function setServiceResponsible(actor: Actor, id: string, body: unkn
       accountId,
       last?.scopes ?? ["capture", "context", "read"],
       input.ttlDays,
+      true,
     );
     await audit(c, actor, "service_account.responsible_changed", id, { responsibleAccountId: accountId, connectionId });
     return { ok: true, responsibleAccountId: accountId, token, ttlDays: input.ttlDays };

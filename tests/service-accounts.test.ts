@@ -188,6 +188,16 @@ test("rotating a token ends the old one", async () => {
   assert.equal(rotated.statusCode, 200, rotated.body);
   assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
   assert.equal((await api(rotated.json().token, "GET", "/api/v1/works")).statusCode, 200);
+  // The connection row stays the same: what an extension keeps per connection (a folder limit) is not lost.
+  const rows = (await db.query("SELECT id,revoked_at FROM agent_connections WHERE service_principal_id=$1", [servicePrincipal.id])).rows;
+  assert.equal(rows.length, 1, "rotation reuses the connection, it does not add one");
+  assert.equal(rows[0].revoked_at, null);
+  const rootId = rows[0].id;
+  // A task token of the old secret dies with the rotation.
+  const again = await session(admin, "POST", `/api/service-accounts/${servicePrincipal.id}/rotate`, { ttlDays: 5 });
+  assert.equal(again.statusCode, 200, again.body);
+  const after = (await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [servicePrincipal.id])).rows;
+  assert.deepEqual(after.map((row) => row.id), [rootId]);
 });
 
 test("the responsible person leaves: the account freezes; an admin names another and it thaws", async () => {
@@ -224,6 +234,8 @@ test("the responsible person leaves: the account freezes; an admin names another
     rows: [after],
   } = await db.query("SELECT status,frozen_at,responsible_account_id FROM service_principals WHERE id=$1", [id]);
   assert.deepEqual([after.status, after.frozen_at, after.responsible_account_id], ["active", null, admin.id]);
+  const reused = (await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [id])).rows;
+  assert.equal(reused.length, 1, "a new responsible person reuses the connection row");
 });
 
 test("a service account moves a link only when it is set to follow new versions", async () => {
