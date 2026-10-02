@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-02
+
+### Added
+
+- **Снимок полки на дату** ([SHELF_SNAPSHOT](docs/specs/SHELF_SNAPSHOT.md), `GET /api/v1/snapshot?at=`, миграция 063). Работы, которые были на полке и не в корзине на тот момент, с версией, бывшей последней тогда, и версией, принятой тогда; корзина и принятие читаются из журнала действий (возврат из корзины учтён). Название и папка текущие; момент в последней минуте может ещё измениться. Для агентов и отчётов «как было»; экрана нет.
+
 ## [0.5.3] — 2026-10-02
 
 ### Added
@@ -431,7 +437,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/artkruglov/polka/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/artkruglov/polka/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/artkruglov/polka/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/artkruglov/polka/compare/v0.5.0...v0.5.1

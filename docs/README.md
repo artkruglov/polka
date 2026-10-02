@@ -43,6 +43,7 @@
 | [specs/MCP_ONBOARDING_SPEC.md](specs/MCP_ONBOARDING_SPEC.md) | реализовано | Выдача токена на странице «Агенты» |
 | [specs/TRASH_SPEC.md](specs/TRASH_SPEC.md) | реализовано | Корзина и восстановление |
 | [specs/AGENT_CONTEXT_TEMPLATES.md](specs/AGENT_CONTEXT_TEMPLATES.md) | реализовано | Контекст для агента и закреплённые шаблоны |
+| [specs/SHELF_SNAPSHOT.md](specs/SHELF_SNAPSHOT.md) | в коде | Снимок полки на дату: `GET /api/v1/snapshot` |
 | [specs/POSITIONING.md](specs/POSITIONING.md) | с 02.10.2026 | Позиционирование «Полка хранит принятое»: тезисы, аудитории, что говорить и что нет; материалы — [marketing](marketing/README.md) |
 | [specs/AGENT_ACCESS_AND_MEMORY.md](specs/AGENT_ACCESS_AND_MEMORY.md) | в коде (частично) | Полка хранит принятое, Drive — рабочее; чтение агентом, лента событий, карточка полки, принятая версия, service accounts, поиск по полкам. Схемы — [DATA_MODELS](specs/DATA_MODELS.md), роли — [AGENT_ROLES](specs/AGENT_ROLES.md), порядок работ — [dev/AGENT_ACCESS_IMPLEMENTATION](dev/AGENT_ACCESS_IMPLEMENTATION.md) |
 | [specs/COMPANY_TEMPLATE_LIBRARY.md](specs/COMPANY_TEMPLATE_LIBRARY.md) | реализовано | Библиотеки шаблонов: роли, приглашения, журнал |

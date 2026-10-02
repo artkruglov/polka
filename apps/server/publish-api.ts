@@ -23,6 +23,7 @@ import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
+import { shelfSnapshotForAgent } from "./shelf-snapshot.ts";
 import { createTaskToken } from "./service-principals.ts";
 import { listEventsForAgent } from "./agent-events.ts";
 import { artifactStatusForAgent, getArtifactForAgent, listArtifactsForAgent } from "./agent-management.ts";
@@ -472,6 +473,11 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.get("/api/v1/events", async (req, reply) => {
     const actor = await bearerActor(req, reply);
     return withFieldErrors(() => listEventsForAgent(actor, (req.query ?? {}) as never));
+  });
+  // The shelf as it stood at a moment (read); docs/specs/SHELF_SNAPSHOT.md.
+  app.get("/api/v1/snapshot", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return withFieldErrors(() => shelfSnapshotForAgent(actor, (req.query ?? {}) as never));
   });
   // One work of the token's shelf with its versions (read).
   app.get("/api/v1/works/:artifactId", async (req, reply) => {
