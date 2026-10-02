@@ -82,7 +82,7 @@
 /* What Полка does: four cards after the steps. */
 .landing-features { padding: 56px 0 64px; border-bottom: 1px solid var(--line); }
 .landing-features > h2 { margin: 0 0 28px; font-size: var(--text-2xl); letter-spacing: -.03em; }
-.landing-features-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 32px; }
+.landing-features-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 32px; }
 .landing-features article { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .landing-features h3 { margin: 0 0 8px; font-size: var(--text-lg); letter-spacing: -.02em; }
 .landing-features p { margin: 0 0 12px; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }

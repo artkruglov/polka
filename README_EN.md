@@ -11,7 +11,8 @@
 
 <p align="center">
   Полка ("the shelf") keeps the reports, pages and prototypes you made with Claude, ChatGPT, Claude&nbsp;Code or Codex,<br>
-  and opens them by link. Recipients don't need a Claude or ChatGPT account.
+  and opens them by link. Recipients don't need a Claude or ChatGPT account.<br>
+  You accept a version; other chats and agents then find the accepted work by text and see what changed.
 </p>
 
 <p align="center">
@@ -156,6 +157,15 @@ The agent hands over the work's code itself; Полка doesn't pull anything ou
 Saving and the link were checked by hand with Claude.ai, not yet with ChatGPT ([status](docs/status.md)). There is no saving by a link to a Claude or ChatGPT artifact: Полка's server can't fetch it (the sites require a login and sit behind Cloudflare), so the agent hands over the work instead.
 
 **For agent developers:** the Claude Code and Codex plugin (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`) lives here and installs from its light copy [artkruglov/polka-plugin](https://github.com/artkruglov/polka-plugin), built by `scripts/plugin-repo.mjs`; the skill alone installs with `npx skills add artkruglov/polka-plugin`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
+
+## What's new: Polka keeps what you accepted
+
+Working files stay with the agent; Polka keeps what the agent delivered and you accepted. People read it by link (no account), agents read it through the API and MCP. See [POSITIONING](docs/specs/POSITIONING.md) (Russian) and [PUBLISH_API](docs/PUBLISH_API.md).
+
+- **Accepted version and an owner** per work (the work menu, «Принятая версия»). Marking a version does not move any link, and a new version does not clear the mark.
+- **Agents read the shelf:** `GET /api/v1/works` (text search with ranking, `since` for what changed), `GET /api/v1/events` (a change feed to poll), `polka_list` with the same parameters; the shelf's «how we do things here» note arrives in `polka_context`.
+- **Link mode:** an unattended agent (a service account) does not move a pinned link until a curator switches it to follow new versions; an agent with your own token works as before.
+- **On your own installation** (`TEAM_SHELVES=on`, `SERVICE_ACCOUNTS=on`): search across department shelves, service accounts with a responsible person, and short task tokens for cron and CI.
 
 ## Quick start
 
