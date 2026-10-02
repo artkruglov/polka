@@ -225,3 +225,25 @@ test("a cursor of another order, or a bad kind or order, is refused", async () =
     assert.equal(response.statusCode, 400, url);
   }
 });
+
+test("the shelf card: read by a member, written by a curator through the session, trimmed, limited, cleared", async () => {
+  const headers = { origin, cookie };
+  const read = async () => (await app.inject({ method: "GET", url: "/api/shelf/card", headers })).json().cardMd;
+  assert.equal(await read(), null);
+  const put = (payload: unknown) => app.inject({ method: "PUT", url: "/api/shelf/card", headers: { ...headers, "content-type": "application/json" }, payload: JSON.stringify(payload) });
+  const saved = await put({ cardMd: "  Названия — «Клиент — тема».  " });
+  assert.equal(saved.statusCode, 200, saved.body);
+  assert.equal(await read(), "Названия — «Клиент — тема».");
+  // Too long, wrong shape, and no session are refused.
+  assert.equal((await put({ cardMd: "я".repeat(8001) })).statusCode, 400);
+  assert.equal((await put({ text: "x" })).statusCode, 400);
+  assert.equal(
+    (await app.inject({ method: "PUT", url: "/api/shelf/card", headers: { origin, "content-type": "application/json" }, payload: JSON.stringify({ cardMd: "x" }) })).statusCode,
+    401,
+  );
+  assert.equal((await app.inject({ method: "GET", url: "/api/shelf/card", headers: { origin } })).statusCode, 401);
+  // A card of 8000 three-byte characters fits the body limit.
+  assert.equal((await put({ cardMd: "—".repeat(8000) })).statusCode, 200);
+  assert.equal((await put({ cardMd: null })).statusCode, 200);
+  assert.equal(await read(), null);
+});

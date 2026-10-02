@@ -849,3 +849,29 @@ test("a link is pinned by default; the rule holds back a service account (not wi
   assert.equal(agentMayMoveLink("service", "pinned"), false);
   assert.equal(agentMayMoveLink("service", "follows"), true);
 });
+
+test("GET /api/v1/snapshot over HTTP: needs read, a valid moment, answers by cursor", async () => {
+  const publisher = await token(owner);
+  const saved = (await publish({ key: randomUUID(), title: "Snapshot over HTTP", html: page("snap") }, bearer(publisher.secret))).json();
+  const reader = await token(owner, ["context", "read"]);
+  const snap = (secret: string | null, qs: string) =>
+    app.inject({ method: "GET", url: `/api/v1/snapshot${qs}`, remoteAddress: address(), headers: secret ? bearer(secret) : {} });
+  const now = new Date(Date.now() + 500).toISOString();
+  const answer = await snap(reader.secret, `?at=${encodeURIComponent(now)}&limit=100`);
+  assert.equal(answer.statusCode, 200, answer.body);
+  const item = answer.json().items.find((entry: any) => entry.id === saved.artifactId);
+  assert.ok(item, "the work is in the snapshot");
+  assert.equal(item.revision.id, saved.revisionId);
+  assert.ok(!answer.body.includes("https://polochka.app/s#"));
+  // Before the work existed it is not there.
+  const before = await snap(reader.secret, `?at=${encodeURIComponent("2020-01-01T00:00:00Z")}`);
+  assert.equal(before.statusCode, 200);
+  assert.ok(!before.json().items.some((entry: any) => entry.id === saved.artifactId));
+  // Refusals: no moment, a bad moment, the future, no token, no read scope.
+  assert.equal((await snap(reader.secret, "")).statusCode, 400);
+  assert.equal((await snap(reader.secret, "?at=yesterday")).statusCode, 400);
+  assert.equal((await snap(reader.secret, `?at=${encodeURIComponent(new Date(Date.now() + 3_600_000).toISOString())}`)).statusCode, 400);
+  assert.equal((await snap(null, `?at=${encodeURIComponent(now)}`)).statusCode, 401);
+  const noRead = await token(owner, ["context", "capture"]);
+  assert.equal((await snap(noRead.secret, `?at=${encodeURIComponent(now)}`)).statusCode, 403);
+});
