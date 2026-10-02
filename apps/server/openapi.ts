@@ -562,6 +562,27 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/snapshot": {
+        get: {
+          operationId: "shelfSnapshot",
+          summary: "The shelf as it stood at a moment",
+          description:
+            "at (ISO 8601 with a zone, not in the future), limit 1–100 (default 50), cursor (nextCursor of the previous page). Returns the works that existed and were not in the trash then, each with the version that was latest then (revision) and the version accepted then (acceptedRevisionId); null means none had been accepted by then. Moves to and from the trash come from the journal. Title and folder are the current ones; encode a «+» offset as %2B or use Z; a moment in the last minute may still change. No bytes, no share links. Scope read.",
+          security: [{ bearerAuth: ["read"] }],
+          parameters: [
+            { name: "at", in: "query", required: true, schema: { type: "string", format: "date-time" } },
+            { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
+            { name: "cursor", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: {
+            "200": { description: "items and nextCursor." },
+            "400": { description: "A parameter is invalid, or at is in the future." },
+            "401": common["401"],
+            "404": { description: "The token has no read scope." },
+            "429": common["429"],
+          },
+        },
+      },
       "/api/v1/works": {
         get: {
           operationId: "listWorks",

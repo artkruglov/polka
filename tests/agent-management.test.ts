@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createAccount } from "../apps/server/auth.ts";
 import { db } from "../apps/server/db.ts";
 import { acceptRevision, setWorkOwner } from "../apps/server/artifact-acceptance.ts";
+import { shelfSnapshotForAgent } from "../apps/server/shelf-snapshot.ts";
 import { listEventsForAgent } from "../apps/server/agent-events.ts";
 import {
   getArtifactForAgent,
@@ -653,4 +654,99 @@ test("agent reads are counted per shelf and day, nothing else", async () => {
     rows: [row],
   } = await db.query("SELECT * FROM agent_read_days WHERE tenant_id=$1 LIMIT 1", [owner.tenant]);
   assert.deepEqual(Object.keys(row).sort(), ["day", "principal_type", "reads", "tenant_id"]);
+});
+
+test("the shelf snapshot shows works, versions, trash and accepted marks as they were at a moment", async () => {
+  const actor = await connection(owner, ["context", "read"]);
+  const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+  const at = async (iso: string) => {
+    const found = new Map<string, any>();
+    let cursor: string | undefined;
+    do {
+      const page = await shelfSnapshotForAgent(actor, { at: iso, limit: 1, cursor });
+      for (const item of page.items) found.set(item.id, item);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return found;
+  };
+  const old = async (title: string, createdDaysAgo: number) => {
+    const made = await artifact(owner, title);
+    await db.query("UPDATE revisions SET created_at=$2 WHERE id=$1", [made.revisionId, day(createdDaysAgo)]);
+    return made;
+  };
+  const journal = (action: string, artifactId: string, daysAgo: number, payload: object | null = null) =>
+    db.query(
+      "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,payload,created_at) VALUES($1,$2,$3,$4,$5,$6)",
+      [owner.tenant, owner.id, action, artifactId, payload, day(daysAgo)],
+    );
+  const w1 = await old("Снимок: две версии", 10);
+  const rev2 = randomUUID();
+  await db.query(
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,storage_kind,total_size,created_at)
+     VALUES($1,$2,$3,2,$4,'note.txt','text/plain',4,$5,$6,'version','single',4,$7)`,
+    [rev2, owner.tenant, w1.artifactId, owner.id, sha256("note2"), `${owner.tenant}/snapshot/${rev2}`, day(5)],
+  );
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [w1.artifactId, rev2]);
+  const w2 = await old("Снимок: позже", 3);
+  // In the trash from day 6 to the end (journaled), and in the trash day 6–4 then restored.
+  const w3 = await old("Снимок: в корзине до", 10);
+  await journal("artifact.trashed", w3.artifactId, 6);
+  await db.query("UPDATE artifacts SET trashed_at=$2 WHERE id=$1", [w3.artifactId, day(6)]);
+  const w4 = await old("Снимок: в корзине после", 10);
+  await journal("artifact.trashed", w4.artifactId, 1);
+  await db.query("UPDATE artifacts SET trashed_at=$2 WHERE id=$1", [w4.artifactId, day(1)]);
+  const w5 = await old("Снимок: корзина и возврат", 10);
+  await journal("artifact.trashed", w5.artifactId, 6);
+  await journal("artifact.restored", w5.artifactId, 4);
+  await journal("revision.accepted", w1.artifactId, 8, { artifactId: w1.artifactId, revisionId: w1.revisionId });
+  await journal("revision.accepted", w1.artifactId, 2, { artifactId: w1.artifactId, revisionId: rev2 });
+  await journal("revision.accepted", w1.artifactId, 1, { artifactId: w1.artifactId, revisionId: null });
+
+  const early = await at(day(7));
+  assert.equal(early.get(w1.artifactId).revision.number, 1);
+  assert.equal(early.get(w1.artifactId).acceptedRevisionId, w1.revisionId);
+  assert.ok(early.has(w3.artifactId), "trashed later: it was on the shelf then");
+  assert.ok(early.has(w4.artifactId));
+  assert.ok(early.has(w5.artifactId));
+  assert.ok(!early.has(w2.artifactId), "not saved yet");
+
+  const trashed = await at(day(5));
+  assert.ok(!trashed.has(w5.artifactId), "in the trash then, though restored since");
+  assert.ok(!trashed.has(w3.artifactId));
+
+  const middle = await at(day(3));
+  assert.equal(middle.get(w1.artifactId).revision.number, 2);
+  assert.equal(middle.get(w1.artifactId).acceptedRevisionId, w1.revisionId, "the later acceptance is not yet");
+  assert.ok(middle.has(w5.artifactId), "restored by then");
+  assert.ok(!middle.has(w3.artifactId));
+  assert.ok(middle.has(w4.artifactId));
+
+  const recent = await at(day(1.5));
+  assert.equal(recent.get(w1.artifactId).acceptedRevisionId, rev2);
+  const now = await at(day(0));
+  assert.equal(now.get(w1.artifactId).acceptedRevisionId, null, "the mark was cleared");
+  assert.ok(now.has(w2.artifactId));
+  assert.ok(!now.has(w4.artifactId), "in the trash now");
+
+  // The boundary is inclusive: a version stamped exactly at the moment is in.
+  const [{ created_at: exact }] = (await db.query("SELECT created_at FROM revisions WHERE id=$1", [rev2])).rows;
+  const sharp = await at(new Date(exact).toISOString());
+  assert.equal(sharp.get(w1.artifactId).revision.number, 2);
+
+  // Not the future; the «+» offset arriving as a space is understood; a bad cursor and a missing read scope are refused.
+  await assert.rejects(shelfSnapshotForAgent(actor, { at: new Date(Date.now() + 3_600_000).toISOString() }), { status: 400 });
+  const plus = await shelfSnapshotForAgent(actor, { at: day(0).replace("Z", "+00:00").replace("+", " "), limit: 1 });
+  assert.ok(plus.items.length <= 1);
+  await assert.rejects(shelfSnapshotForAgent(actor, { at: day(0), cursor: "nope" as never }));
+  await assert.rejects(shelfSnapshotForAgent(await connection(owner, ["context"]), { at: day(0) }), { status: 403 });
+  // Another shelf's token sees none of these works and does see its own.
+  const theirs = await artifact(other, "Снимок: чужая полка");
+  const stranger = await connection(other, ["context", "read"]);
+  const foreign = await shelfSnapshotForAgent(stranger, { at: day(0), limit: 100 });
+  const mine: string[] = [w1, w2, w3, w4, w5].map((work) => work.artifactId);
+  assert.ok(!foreign.items.some((item) => mine.includes(item.id)));
+  assert.ok(foreign.items.some((item) => item.id === theirs.artifactId));
+  // A snapshot is a read: it is counted.
+  const counted = Number((await db.query("SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1", [owner.tenant])).rows[0].n);
+  assert.ok(counted > 0);
 });
