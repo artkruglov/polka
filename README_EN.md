@@ -12,7 +12,7 @@
 <p align="center">
   Полка ("the shelf") keeps the reports, pages and prototypes you made with Claude, ChatGPT, Claude&nbsp;Code or Codex,<br>
   and opens them by link. Recipients don't need a Claude or ChatGPT account.<br>
-  You accept a version; other chats and agents then find the accepted work by text and see what changed.
+  Your agent keeps working in a folder on the shelf between chats: it lists files, edits them and saves a version; other chats and agents find it by text.
 </p>
 
 <p align="center">
@@ -158,9 +158,11 @@ Saving and the link were checked by hand with Claude.ai, not yet with ChatGPT ([
 
 **For agent developers:** the Claude Code and Codex plugin (`.claude-plugin/`, `.codex-plugin/`, `.mcp.json`, `skills/`) lives here and installs from its light copy [artkruglov/polka-plugin](https://github.com/artkruglov/polka-plugin), built by `scripts/plugin-repo.mjs`; the skill alone installs with `npx skills add artkruglov/polka-plugin`; agent reference at [/llms.txt](https://polochka.app/llms.txt), HTTP API at [/openapi.json](https://polochka.app/openapi.json).
 
-## What's new: Polka keeps what you accepted
+## A workspace for agents
 
-Working files stay with the agent; Polka keeps what the agent delivered and you accepted. People read it by link (no account), agents read it through the API and MCP. See [POSITIONING](docs/specs/POSITIONING.md) (Russian) and [PUBLISH_API](docs/PUBLISH_API.md).
+A project work is a folder with versions: an agent takes it, edits it and saves the next version, and people open it by link without an account. See [POSITIONING](docs/specs/POSITIONING.md) (Russian), [AGENT_WORKSPACE](docs/specs/AGENT_WORKSPACE.md) and [PUBLISH_API](docs/PUBLISH_API.md).
+
+- **The folder over MCP, no network needed:** `polka_list_files`, `polka_read_file`, `polka_change_files` (add, replace, remove files; the server copies the rest); over HTTP `GET /api/v1/works/:id/file`, `POST /api/v1/works/:id/changes`; from a terminal `polka pull/push`.
 
 - **Accepted version and an owner** per work (the work menu, «Принятая версия»). Marking a version does not move any link, and a new version does not clear the mark.
 - **Agents read the shelf:** `GET /api/v1/works` (text search with ranking, `since` for what changed), `GET /api/v1/events` (a change feed to poll), `polka_list` with the same parameters; the shelf's «how we do things here» note arrives in `polka_context`.
@@ -233,7 +235,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 ## Status
 
 > [!NOTE]
-> **Current release — `v0.7.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
+> **Current release — `v0.7.1`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
 
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 

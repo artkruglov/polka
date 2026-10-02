@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-10-02
+
+### Changed
+
+- **Позиционирование «рабочее место агента»** на главной (подпись, подзаголовок, карточки, вопрос «Чем это отличается от обычного диска?»), в README, описании плагина и материалах ([POSITIONING](docs/specs/POSITIONING.md), [docs/marketing](docs/marketing/README.md)). «Принятое» остаётся отметкой в интерфейсе.
+
+### Added
+
+- Тест: чат-агент сам создаёт работу-папку через `polka_capture` с манифестом `project-v1` и дальше работает с ней.
+
 ## [0.7.0] — 2026-10-02
 
 ### Added
@@ -451,7 +461,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/artkruglov/polka/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/artkruglov/polka/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/artkruglov/polka/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/artkruglov/polka/compare/v0.5.2...v0.5.3
