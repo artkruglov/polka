@@ -14,6 +14,8 @@
 .ui-button--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .ui-button--primary:not(:disabled):hover { background: var(--accent-strong); border-color: var(--accent-strong); }
 .ui-button--secondary:not(:disabled):hover { background: var(--soft); border-color: #c9d2e0; }
+.ui-button--danger { background: #fff; border-color: var(--danger-line); color: var(--danger); font-weight: 600; }
+.ui-button--danger:not(:disabled):hover { background: var(--danger-soft); border-color: var(--danger); }
 .ui-button--quiet { background: transparent; border-color: transparent; color: var(--accent); }
 .ui-button--quiet:not(:disabled):hover { background: var(--accent-soft); }
 .ui-button:disabled { opacity: .5; cursor: not-allowed; }

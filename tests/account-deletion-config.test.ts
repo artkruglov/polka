@@ -120,3 +120,29 @@ test("rejects enabled deletion when policy is missing or invalid", () => {
   });
   assert.notEqual(invalid.status, 0);
 });
+
+test("a hosted origin may enable deletion only with the purge worker declared", () => {
+  const hosted = {
+    ACCOUNT_DELETION_ENABLED: "true",
+    APP_ORIGIN: "https://app.example.invalid",
+    HOST: "0.0.0.0",
+    ACCOUNT_PURGE_MAX_HOURS: "720",
+    BACKUP_RETENTION_MAX_DAYS: "30",
+    ACCOUNT_DELETION_POLICY_VERSION: "r17-v1",
+  };
+  const without = loadConfig(hosted);
+  assert.notEqual(without.status, 0);
+  assert.match(`${without.stdout}\n${without.stderr}`, /requires HTTP loopback/);
+  const withWorker = loadConfig({ ...hosted, ACCOUNT_DELETION_PURGE_WORKER: "true" });
+  assert.equal(withWorker.status, 0, withWorker.stderr);
+  assert.match(withWorker.stdout, /"enabled":true/);
+  // The policy terms stay required even with the worker.
+  const noTerms = loadConfig({ ...hosted, ACCOUNT_DELETION_PURGE_WORKER: "true", ACCOUNT_PURGE_MAX_HOURS: undefined });
+  assert.notEqual(noTerms.status, 0);
+  assert.match(`${noTerms.stdout}\n${noTerms.stderr}`, /policy settings are required/);
+});
+
+test("an empty policy version is unset, not invalid (the hosted compose file always passes it)", () => {
+  const result = loadConfig({ ACCOUNT_DELETION_ENABLED: "false", ACCOUNT_DELETION_POLICY_VERSION: "" });
+  assert.equal(result.status, 0, result.stderr);
+});

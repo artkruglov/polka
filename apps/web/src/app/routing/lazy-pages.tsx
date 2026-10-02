@@ -63,6 +63,9 @@ const Moderation = page(() =>
 const Away = page(() =>
   import("../../pages/away/index.tsx").then((m) => m.Away),
 );
+const AccountDeleted = page(() =>
+  import("../../pages/account-deleted/index.tsx").then((m) => m.AccountDeleted),
+);
 const MailOff = page(() =>
   import("../../pages/mail-off/index.tsx").then((m) => m.MailOff),
 );
@@ -156,6 +159,7 @@ export {
   OAuthConsent,
   Away,
   MailOff,
+  AccountDeleted,
   PrivacyPage,
   TermsPage,
   BotPage,

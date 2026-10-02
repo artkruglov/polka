@@ -1,0 +1,5 @@
+/* The receipt of a deletion request: one heading, one paragraph. */
+.deleted-page { display: grid; gap: 16px; justify-items: start; max-width: 600px; margin: 0 auto; padding: 96px var(--gutter) 64px; }
+.deleted-page h1 { font-size: clamp(28px, 3.2vw, 38px); }
+.deleted-page p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+@media (max-width: 760px) { .deleted-page { padding: 48px var(--gutter-mobile); } }

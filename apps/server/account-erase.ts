@@ -85,8 +85,10 @@ export async function requestAccountErasure(input: {
                  WHERE member.account_id=$2 AND member.tenant_id<>$1 AND member.state='active'
                    AND member.role='admin'
                    AND NOT EXISTS(SELECT 1 FROM tenant_members other
+                                   JOIN accounts oa ON oa.id=other.account_id
                                    WHERE other.tenant_id=member.tenant_id AND other.account_id<>$2
-                                     AND other.state='active' AND other.role='admin')
+                                     AND other.state='active' AND other.role='admin'
+                                     AND NOT oa.disabled AND oa.deletion_requested_at IS NULL)
                    AND EXISTS(SELECT 1 FROM tenant_members other
                                WHERE other.tenant_id=member.tenant_id AND other.account_id<>$2
                                  AND other.state='active')) AS last_admin`,

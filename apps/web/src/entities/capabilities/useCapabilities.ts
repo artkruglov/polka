@@ -21,6 +21,8 @@ export type InstallationCapabilities = {
   commentsMode: "on" | "owner-notes" | "off";
   /** The operator's address for data requests (deleting the shelf), if set. */
   privacyContact: string | null;
+  /** Self-service «Удалить аккаунт»; null when this installation keeps it off. */
+  accountDeletion: { purge: boolean } | null;
 };
 
 export type SignInProvider = {
@@ -93,6 +95,10 @@ export function loadCapabilities() {
           typeof raw.privacyContact === "string" &&
           /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}$/.test(raw.privacyContact)
             ? raw.privacyContact
+            : null,
+        accountDeletion:
+          raw.accountDeletion && typeof raw.accountDeletion === "object"
+            ? { purge: (raw.accountDeletion as { purge?: unknown }).purge === true }
             : null,
       } satisfies InstallationCapabilities;
     })

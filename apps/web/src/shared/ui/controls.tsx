@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 
-type ButtonVariant = "primary" | "secondary" | "quiet";
+type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 
 /** Navigation keeps native link behavior, including opening in a new tab. */
 export function LinkButton({
