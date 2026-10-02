@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-10-02
+
+### Fixed
+
+- **Ротация токена и смена ответственного у сервисного доступа** выдают новый секрет на той же строке подключения, а не на новой: расширение, хранящее ограничение по подключению (агент только к папке в коммерческой редакции), больше не теряет его, и доступ не расширяется молча. Совместимость с коммерческой редакцией проверена ([реализация](docs/dev/AGENT_ACCESS_IMPLEMENTATION.md#совместимость-с-коммерческой-редакцией-проверено-02102026)).
+
 ## [0.7.1] — 2026-10-02
 
 ### Changed
@@ -461,7 +467,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/artkruglov/polka/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/artkruglov/polka/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/artkruglov/polka/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/artkruglov/polka/compare/v0.5.3...v0.6.0
