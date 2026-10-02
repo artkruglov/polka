@@ -168,8 +168,8 @@ export function ShelfPage({
             />
           </div>
         </div>
-        {showChips && (
-          <div className="ui-chips shelf-chips" role="group" aria-label="Тип работы">
+        {(showChips || acceptedOnly) && (
+          <div className="ui-chips shelf-chips" role="group" aria-label="Фильтры полки">
             <Chip pressed={active === null} onClick={() => setKind(null)} count={counts?.all}>
               Все
             </Chip>
@@ -218,11 +218,15 @@ export function ShelfPage({
               </div>
             )}
           </>
-        ) : stale ? null : active ? (
+        ) : stale ? null : active || acceptedOnly ? (
           <div className="shelf-empty">
             <div className="empty-icon"><FolderIcon /></div>
             <h2>Таких работ нет</h2>
-            <p>Здесь нет работ этого типа{query ? " по вашему запросу" : ""}.</p>
+            <p>
+              {acceptedOnly
+                ? `Здесь нет работ с принятой версией${active ? " этого типа" : ""}${query ? " по вашему запросу" : ""}. Принять версию можно в меню работы.`
+                : `Здесь нет работ этого типа${query ? " по вашему запросу" : ""}.`}
+            </p>
             <Button onClick={() => { setKind(null); setAcceptedOnly(false); }}>Показать все</Button>
           </div>
         ) : team && !query ? (

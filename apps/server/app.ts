@@ -970,8 +970,9 @@ export async function createApp() {
           WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
             AND ($2::uuid IS NULL OR artifact.folder_id=$2)
             AND ${searchMatch("artifact", "$3", "$4")}
+            AND ($5::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)
           GROUP BY 1`,
-        [actor.tenant, q.folderId ?? null, title, prefixQuery(text)],
+        [actor.tenant, q.folderId ?? null, title, prefixQuery(text), q.accepted === "1"],
       );
       for (const { kind, count } of kinds as { kind: ShelfKind; count: number }[]) {
         counts[kind] += count;

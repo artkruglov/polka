@@ -4,9 +4,11 @@
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-02
+
 ### Added
 
-- **Принятая версия видна на полке:** отметка «принята» в выборе версии, списке версий, сведениях о работе и на карточке работы; фильтр «Принятые» на полке (`GET /api/artifacts?accepted=1`).
+- **Принятая версия видна на полке:** отметка «принята» в выборе версии, списке версий, сведениях о работе и на карточке работы; фильтр «Принятые» на полке (`GET /api/artifacts?accepted=1`; числа на фишках следуют фильтру; пустой результат объясняет, что принятых работ нет, и предлагает «Показать все»; карточка пишет «принята другая версия», если принята не последняя).
 
 ### Fixed
 
@@ -429,7 +431,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/artkruglov/polka/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/artkruglov/polka/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/artkruglov/polka/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/artkruglov/polka/compare/v0.4.0...v0.5.0
