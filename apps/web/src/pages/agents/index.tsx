@@ -749,7 +749,7 @@ export function AgentConnections() {
                 </div>
               </fieldset>
               {scopes.includes("read") && teamShelves.filter((shelf) => shelf.id !== tokenShelf).length > 0 && (
-                <fieldset>
+                <fieldset className="agent-search-shelves">
                   <legend>Искать также на полках отделов</legend>
                   <p className="ui-field-hint">
                     Агент сможет искать работы на отмеченных полках и видеть найденное (названия и
