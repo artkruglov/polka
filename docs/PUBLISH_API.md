@@ -105,6 +105,8 @@ curl -sS "https://polochka.app/api/v1/works?since=2026-10-01T00:00:00Z" \
   -H "Authorization: Bearer $POLKA_TOKEN"
 ```
 
+- `GET /api/v1/works/:id/file?path=&revisionId=` — один файл версии по пути, JSON: текст как UTF-8, остальное base64, до 256 КиБ (право `source:read`; больше — по номеру файла через `…/files/:index` или `polka pull`).
+- `POST /api/v1/works/:id/changes` — следующая версия с изменённым набором файлов: `{key, baseRevisionId, put: [{path, encoding, data}], remove: [path]}`; тип файла по расширению, остальные файлы копирует сервер, точку входа удалить нельзя, ссылка не двигается; чужая база — `409` с `currentRevisionId`, повтор с тем же ключом и телом даёт ту же версию (право `revise`). Только для работы-папки (проект, `project-v1`): страницу и пакет сохраняйте через `edits` или публикацию. То же по MCP: `polka_list_files`, `polka_read_file`, `polka_change_files` ([AGENT_WORKSPACE](specs/AGENT_WORKSPACE.md)).
 - `GET /api/v1/snapshot?at=<ISO 8601>` — полка на тот момент: работы, версия, бывшая последней, и версия, принятая тогда ([SHELF_SNAPSHOT](specs/SHELF_SNAPSHOT.md)).
 
 ## Сервисные доступы и токены задач

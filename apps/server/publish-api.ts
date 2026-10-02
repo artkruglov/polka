@@ -17,8 +17,8 @@ import {
   putProjectMedia,
 } from "./project-upload.ts";
 import { prepareInteractive, publishFromAgent } from "./agent-publish.ts";
-import { reviseWithEdits } from "./agent-edits.ts";
-import { workFileForAgent, workFilesForAgent } from "./work-files.ts";
+import { changeFiles, reviseWithEdits } from "./agent-edits.ts";
+import { readWorkFileByPath, workFileForAgent, workFilesForAgent } from "./work-files.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
 import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
@@ -53,7 +53,7 @@ export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
   pathname === "/api/v1/projects" ||
   /^\/api\/v1\/projects\/[0-9a-f-]{36}\/(?:files\/\d{1,3}|media\/\d{1,3}|finalize|reuse)$/i.test(pathname) ||
-  /^\/api\/v1\/works\/[0-9a-f-]{36}\/edits$/i.test(pathname);
+  /^\/api\/v1\/works\/[0-9a-f-]{36}\/(?:edits|changes)$/i.test(pathname);
 
 /** A video file's stream (docs/specs/PROJECT_VIDEO.md): it alone may take minutes to arrive. */
 export const MEDIA_UPLOAD_MS = 20 * 60 * 1000;
@@ -484,6 +484,31 @@ export async function registerPublishApi(app: FastifyInstance) {
     const actor = await bearerActor(req, reply);
     const { artifactId } = req.params as { artifactId: string };
     return withFieldErrors(() => getArtifactForAgent(actor, { artifactId, revisions: true }));
+  });
+  // One file of a version by its path as JSON (the chat tools' twin of the per-index download).
+  app.get("/api/v1/works/:artifactId/file", async (req, reply) => {
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
+    const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
+    const { path, revisionId } = z
+      .object({ path: z.string().min(1).max(200), revisionId: uuid.optional() })
+      .strict()
+      .parse(req.query ?? {});
+    return withFieldErrors(() => readWorkFileByPath(actor, artifactId, path, revisionId));
+  });
+  // Files added, replaced or removed in a new version; the others are copied by the server.
+  app.post("/api/v1/works/:artifactId/changes", { bodyLimit: PUBLISH_BODY_LIMIT }, async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
+    const receipt = await withFieldErrors(() =>
+      changeFiles(actor, { ...((req.body ?? {}) as object), artifactId }),
+    );
+    return {
+      artifactId,
+      revisionId: receipt.revisionId,
+      number: receipt.number,
+      htmlProfile: receipt.htmlProfile ?? null,
+      shelfUrl: `${config.APP_ORIGIN}/works/${artifactId}`,
+    };
   });
   // polka pull: a version's files, listed, then one by one (work-files.ts).
   app.get("/api/v1/works/:artifactId/files", async (req, reply) => {
