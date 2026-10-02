@@ -181,6 +181,29 @@ test("a kind filter covers the whole shelf and the counts are the shelf's", asyn
   assert.deepEqual((await walk("kind=other")).seen, []);
 });
 
+test("«Принятые» shows only works with an accepted version, across pages and with a kind", async () => {
+  const marked = [artifactIds[2], artifactIds[11], artifactIds[20]];
+  for (const id of marked)
+    await db.query(
+      "UPDATE artifacts SET accepted_revision_id=latest_revision_id WHERE id=$1",
+      [id],
+    );
+  const accepted = await walk("sort=old&accepted=1");
+  assert.deepEqual(accepted.seen.map((item) => item.id), marked);
+  // The counts stay the shelf's; a kind narrows it further; a bad value is refused.
+  assert.equal(accepted.counts?.all, 26);
+  const pages = await walk("sort=old&accepted=1&kind=pages");
+  assert.deepEqual(
+    pages.seen.map((item) => item.id),
+    marked.filter((id) => kindOf(artifactIds.indexOf(id) + 1) === "pages"),
+  );
+  assert.equal(
+    (await app.inject({ method: "GET", url: "/api/artifacts?q=&accepted=yes", headers: { origin, cookie } })).statusCode,
+    400,
+  );
+  await db.query("UPDATE artifacts SET accepted_revision_id=NULL WHERE id=ANY($1::uuid[])", [marked]);
+});
+
 test("a cursor of another order, or a bad kind or order, is refused", async () => {
   const first = await app.inject({
     method: "GET",
