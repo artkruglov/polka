@@ -1,4 +1,5 @@
 import { authReturnTo, safeNext } from "../../shared/lib/safe-next.ts";
+import { SiteHeader } from "../../widgets/site-header/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 import { PasswordLoginForm } from "../../features/password-login/index.tsx";
@@ -32,7 +33,8 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
     new URLSearchParams(location.search).get("next"),
   )?.startsWith("/bring#file");
   return (
-    <AppShell current="shelf" account={null}>
+    <AppShell current="shelf" account={null} className="mkt-page" bare>
+      <SiteHeader signedIn={false} />
       <main className="login-page">
         <section className="login-intro">
           <span className="eyebrow">Работы из Claude, ChatGPT и других агентов</span>

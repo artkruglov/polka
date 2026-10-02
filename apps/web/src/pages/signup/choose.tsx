@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link2, UserRoundPlus } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
+import { SiteHeader } from "../../widgets/site-header/index.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { knownShelf, methodLabel } from "../../shared/lib/known-shelf.ts";
@@ -55,7 +56,8 @@ export function SignupChoose() {
     }
   };
   return (
-    <AppShell current="shelf" account={account}>
+    <AppShell current="shelf" account={account} className="mkt-page" bare>
+      <SiteHeader signedIn={!!account} />
       <main className="onboard">
         <div className="onboard-icon">
           <Link2 />
@@ -125,7 +127,8 @@ export function SignupLinked() {
     return () => clearTimeout(timer);
   }, [state]);
   return (
-    <AppShell current="shelf" account={account}>
+    <AppShell current="shelf" account={account} className="mkt-page" bare>
+      <SiteHeader signedIn={!!account} />
       <main className="onboard">
         <div className="onboard-icon">
           <Link2 />
