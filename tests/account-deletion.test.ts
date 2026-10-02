@@ -808,3 +808,37 @@ test("self-service deletion waits while moderation holds a blocked page as evide
   const planned = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
   assert.equal(planned.statusCode, 200, planned.body);
 });
+
+test("self-service deletion refuses the only administrator of a department shelf with other members", async () => {
+  const admin = await createAccount(`delete-d-${randomBytes(5).toString("hex")}`, password);
+  const colleague = await createAccount(`delete-e-${randomBytes(5).toString("hex")}`, password);
+  const cookie = await login(admin);
+  const team = randomUUID();
+  await db.query("INSERT INTO tenants(id,kind,name) VALUES($1,'team',$2)", [team, `Отдел ${team.slice(0, 6)}`]);
+  await db.query(
+    "INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'admin'),($1,$3,'author')",
+    [team, admin.id, colleague.id],
+  );
+  const csrf = (await call("POST", "/api/account/deletion-csrf", {}, cookie)).json().csrfToken as string;
+  const refused = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
+  assert.equal(refused.statusCode, 409, refused.body);
+  assert.match(refused.body, /единственный администратор/);
+  assert.equal(
+    (await db.query("SELECT 1 FROM account_deletions WHERE account_id=$1", [admin.id])).rowCount,
+    0,
+  );
+
+  // A second administrator, and the same request goes through.
+  await db.query("UPDATE tenant_members SET role='admin' WHERE tenant_id=$1 AND account_id=$2", [team, colleague.id]);
+  // The other administrator is already deleting their own account (that revokes
+  // their membership): with a plain member left, the shelf would have no administrator.
+  const member = await createAccount(`delete-f-${randomBytes(5).toString("hex")}`, password);
+  await db.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'author')", [team, member.id]);
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [colleague.id]);
+  const stillRefused = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
+  assert.equal(stillRefused.statusCode, 409, stillRefused.body);
+  // A live second administrator, and the same request goes through.
+  await db.query("UPDATE tenant_members SET role='admin' WHERE tenant_id=$1 AND account_id=$2", [team, member.id]);
+  const planned = await call("POST", "/api/account/deletion-plan", {}, cookie, csrf);
+  assert.equal(planned.statusCode, 200, planned.body);
+});

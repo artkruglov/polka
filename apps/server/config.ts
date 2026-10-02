@@ -317,6 +317,14 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // The operator runs the purge loop (scripts/account-purge-loop.ts, compose
+    // service account-purge): only then may self-service deletion be on outside
+    // loopback, because a confirmed request is just a closed account until the
+    // worker erases the data.
+    ACCOUNT_DELETION_PURGE_WORKER: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     ACCOUNT_PURGE_MAX_HOURS: z.coerce
       .number()
       .int()
@@ -329,10 +337,10 @@ const env = z
       .min(0)
       .max(3650)
       .optional(),
-    ACCOUNT_DELETION_POLICY_VERSION: z
-      .string()
-      .regex(/^[A-Za-z0-9._-]{1,80}$/)
-      .optional(),
+    // Empty counts as unset: the hosted compose file always passes it on.
+    ACCOUNT_DELETION_POLICY_VERSION: unsetIfEmpty(
+      z.string().regex(/^[A-Za-z0-9._-]{1,80}$/),
+    ),
     // Chrome extension IDs of the official «На Полку» build (comma-separated,
     // 32 letters a–p each). Its OAuth consent screen is labelled «Расширение
     // браузера «На Полку»»; any other extension is shown with its ID and a
@@ -568,9 +576,10 @@ const signInConfig = {
 if (env.ACCOUNT_DELETION_ENABLED) {
   const appUrl = new URL(env.APP_ORIGIN);
   if (
-    appUrl.protocol !== "http:" ||
-    !["127.0.0.1", "localhost"].includes(appUrl.hostname) ||
-    env.HOST !== appUrl.hostname
+    !env.ACCOUNT_DELETION_PURGE_WORKER &&
+    (appUrl.protocol !== "http:" ||
+      !["127.0.0.1", "localhost"].includes(appUrl.hostname) ||
+      env.HOST !== appUrl.hostname)
   )
     throw new Error("Experimental account deletion requires HTTP loopback");
   if (

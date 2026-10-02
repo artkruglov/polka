@@ -490,6 +490,10 @@ export async function createApp() {
     // Where an owner asks to delete the shelf and its data (settings,
     // «Удалить полку»); null: the page says «оператору этой установки».
     privacyContact: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null,
+    // «Удалить аккаунт» in the settings (ACCOUNT_DELETION_ENABLED); `purge`: a worker erases the data.
+    accountDeletion: config.ACCOUNT_DELETION_ENABLED
+      ? { purge: config.ACCOUNT_DELETION_PURGE_WORKER }
+      : null,
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));

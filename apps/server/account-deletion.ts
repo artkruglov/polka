@@ -21,7 +21,8 @@ export type AccountDeletionReceipt = {
   workingDataPolicyDeadline: string | null;
   backupRetentionPolicyDeadline: string | null;
   policyVersion: string;
-  purgeAvailable: false;
+  /** True when the operator runs the purge worker (ACCOUNT_DELETION_PURGE_WORKER). */
+  purgeAvailable: boolean;
 };
 
 export const confirmAccountDeletionSchema = z
@@ -94,7 +95,7 @@ const receipt = (row: any): AccountDeletionReceipt => ({
     ? new Date(row.backup_retention_policy_deadline).toISOString()
     : null,
   policyVersion: row.policy_version,
-  purgeAvailable: false as const,
+  purgeAvailable: config.ACCOUNT_DELETION_PURGE_WORKER,
 });
 
 const plan = (row: any, statusCapability: string | null) => ({
@@ -114,7 +115,7 @@ const plan = (row: any, statusCapability: string | null) => ({
     policyVersion: row.policy_version,
   },
   statusCapability,
-  purgeAvailable: false as const,
+  purgeAvailable: config.ACCOUNT_DELETION_PURGE_WORKER,
 });
 
 export async function issueAccountDeletionCsrf(
@@ -165,6 +166,49 @@ async function refuseWhileEvidenceIsHeld(c: PoolClient, tenantId: string) {
     );
 }
 
+/**
+ * The shelf's owner may be the only administrator of a department shelf with
+ * other members: deleting the account would leave it without one (the
+ * operator's erasure refuses for the same reason, account-erase.ts).
+ */
+async function refuseLastDepartmentAdmin(c: PoolClient, actor: Actor) {
+  // Department shelves where this account administers: lock them (after the
+  // actor's tenant and account, the purge worker's order) so two
+  // administrators confirming at once cannot both pass.
+  const mine = (
+    await c.query(
+      `SELECT tenant_id FROM tenant_members
+        WHERE account_id=$2 AND tenant_id<>$1 AND state='active' AND role='admin'
+        ORDER BY tenant_id`,
+      [actor.tenant, actor.id],
+    )
+  ).rows.map((row) => row.tenant_id as string);
+  if (!mine.length) return;
+  await c.query("SELECT id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [mine]);
+  // An administrator whose own deletion is under way no longer counts.
+  const {
+    rows: [last],
+  } = await c.query(
+    `SELECT 1 AS last FROM unnest($2::uuid[]) AS shelf(id)
+      WHERE NOT EXISTS(SELECT 1 FROM tenant_members other
+                         JOIN accounts a ON a.id=other.account_id
+                        WHERE other.tenant_id=shelf.id AND other.account_id<>$1
+                          AND other.state='active' AND other.role='admin'
+                          AND NOT a.disabled AND a.deletion_requested_at IS NULL)
+        AND EXISTS(SELECT 1 FROM tenant_members other
+                    WHERE other.tenant_id=shelf.id AND other.account_id<>$1
+                      AND other.state='active')
+      LIMIT 1`,
+    [actor.id, mine],
+  );
+  if (last)
+    throw new Problem(
+      409,
+      "conflict",
+      "Вы единственный администратор полки отдела, где есть другие участники. Назначьте другого администратора, затем удаляйте аккаунт.",
+    );
+}
+
 export async function createAccountDeletionPlan(
   actor: Actor,
   sessionToken: string,
@@ -177,6 +221,7 @@ export async function createAccountDeletionPlan(
     if (account.disabled || account.deletion_requested_at) throw missing();
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
     await refuseWhileEvidenceIsHeld(c, actor.tenant);
+    await refuseLastDepartmentAdmin(c, actor);
     const old = (
       await c.query(
         "SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE",
@@ -270,6 +315,7 @@ export async function confirmAccountDeletion(
       throw new Problem(409, "conflict", "План удаления истёк.");
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
     await refuseWhileEvidenceIsHeld(c, actor.tenant);
+    await refuseLastDepartmentAdmin(c, actor);
 
     await c.query(
       "SELECT id FROM agent_connections WHERE tenant_id=$1 ORDER BY id FOR UPDATE",

@@ -27,6 +27,7 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/s") return "Работа по ссылке";
   if (path === "/away") return "Переход по ссылке";
   if (path === "/mail-off") return "Письма о комментариях";
+  if (path === "/account-deleted") return "Удаление аккаунта";
   if (path === "/landing") return null;
   if (path === "/bring/receive") return "На Полку";
   if (path === "/bookmarklet") return "Закладка «На Полку»";

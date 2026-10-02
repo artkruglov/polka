@@ -17,6 +17,7 @@ import {
   Landing,
   Lazy,
   MailOff,
+  AccountDeleted,
   LibraryInvite,
   Moderation,
   OAuthConsent,
@@ -71,6 +72,7 @@ function Route({ path }: { path: string }) {
   if (path === "/s") return <Recipient />;
   if (path === "/away") return <Away />;
   if (path === "/mail-off") return <MailOff />;
+  if (path === "/account-deleted") return <AccountDeleted />;
   // The guest landing, also for people who are signed in.
   if (path === "/landing") return <Landing />;
   if (path.startsWith("/discover")) return <EditorialPage />;

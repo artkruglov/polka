@@ -236,6 +236,26 @@ export function request<T>(
 }
 
 /** A shelf chip: what the latest version's bytes are (entities/artifact/format.ts). */
+export type AccountDeletionPlan = {
+  planId: string;
+  expectedAccountId: string;
+  expectedTenantId: string;
+  expiresAt: string;
+  counts: { artifacts: number; revisions: number; sourceBytes: number; derivativeBytes: number };
+  provisionalPolicy: { purgeMaxHours: number; backupRetentionMaxDays: number; policyVersion: string };
+  statusCapability: string | null;
+  purgeAvailable: boolean;
+};
+export type AccountDeletionReceipt = {
+  requestId: string;
+  state: "planned" | "access_revoked_pending_purge" | "failed" | "purged";
+  requestedAt: string | null;
+  revokedAt: string | null;
+  workingDataPolicyDeadline: string | null;
+  backupRetentionPolicyDeadline: string | null;
+  policyVersion: string;
+  purgeAvailable: boolean;
+};
 export type ShelfKind = "pages" | "documents" | "images" | "other";
 export type ShelfCounts = Record<ShelfKind | "all", number>;
 export type ShelfRole = "owner" | "admin" | "curator" | "author" | "reader";
@@ -479,6 +499,27 @@ export const client = {
       request<unknown>("/account/comment-settings", input),
     mailOff: (token: string) =>
       request<{ ok: true }>("/comment-mail/off", { token }),
+  },
+  /** «Удалить аккаунт»: csrf → plan → confirm, then the receipt by its capability. */
+  accountDeletion: {
+    csrf: () => request<{ csrfToken: string; expiresAt: string }>("/account/deletion-csrf", {}),
+    plan: (csrfToken: string) =>
+      request<AccountDeletionPlan>("/account/deletion-plan", {}, "POST", undefined, csrfToken),
+    confirm: (plan: AccountDeletionPlan, csrfToken: string) =>
+      request<AccountDeletionReceipt>(
+        "/account/deletion",
+        {
+          planId: plan.planId,
+          expectedAccountId: plan.expectedAccountId,
+          expectedTenantId: plan.expectedTenantId,
+          confirmation: "DELETE",
+        },
+        "POST",
+        undefined,
+        csrfToken,
+      ),
+    status: (capability: string) =>
+      request<AccountDeletionReceipt>("/account/deletion-status", { capability }),
   },
   agentConnections: {
     list: (signal?: AbortSignal) =>

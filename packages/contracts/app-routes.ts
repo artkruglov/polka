@@ -20,6 +20,7 @@ export const APP_PAGES = [
   "/start",
   "/away",
   "/mail-off",
+  "/account-deleted",
   "/settings",
   "/settings/agents",
   "/settings/company",

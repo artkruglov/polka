@@ -45,7 +45,13 @@ x-runtime-env: &runtime-env
   COOKIE_SECURE: "true"
   # disabled | production. production needs VIEWER_HOST_NAME DNS/TLS in place.
   HTML_LIVE_MODE: ${HTML_LIVE_MODE:-disabled}
-  ACCOUNT_DELETION_ENABLED: "false"
+  # «Удалить аккаунт» in the settings: off unless the purge service runs
+  # (README.md, «Удаление аккаунта»); both flags and the three terms go together.
+  ACCOUNT_DELETION_ENABLED: ${ACCOUNT_DELETION_ENABLED:-false}
+  ACCOUNT_DELETION_PURGE_WORKER: ${ACCOUNT_DELETION_PURGE_WORKER:-false}
+  ACCOUNT_DELETION_POLICY_VERSION: ${ACCOUNT_DELETION_POLICY_VERSION:-}
+  ACCOUNT_PURGE_MAX_HOURS: ${ACCOUNT_PURGE_MAX_HOURS:-720}
+  BACKUP_RETENTION_MAX_DAYS: ${BACKUP_RETENTION_MAX_DAYS:-30}
   # Import by link (docs/specs/URL_IMPORT_SUPPORT.md). GITHUB_TOKEN is optional:
   # gists without it are limited to 60 GitHub API requests an hour.
   URL_IMPORT_ENABLED: ${URL_IMPORT_ENABLED:-false}
@@ -400,6 +406,29 @@ services:
       BACKUP_RETENTION_MAX_DAYS: ${BACKUP_RETENTION_MAX_DAYS:-30}
     entrypoint: ["node", "--import", "tsx", "scripts/account-erase.ts"]
     restart: "no"
+
+  # Erases the data of confirmed «Удалить аккаунт» requests (README.md,
+  # «Удаление аккаунта»). Opt-in: docker compose --profile purge up -d account-purge,
+  # and only together with ACCOUNT_DELETION_ENABLED / ACCOUNT_DELETION_PURGE_WORKER
+  # on the app. Needs the polka_purge role and the erasure ledger.
+  account-purge:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    profiles: ["purge"]
+    network_mode: host
+    environment:
+      <<: *runtime-env
+      S3_REGION: ${S3_REGION:-us-east-1}
+      MAINTENANCE_DATABASE_URL: postgres://polka_purge:${POLKA_PURGE_PASSWORD:-}@127.0.0.1:5432/polka
+      ERASURE_LEDGER_ID: ${ERASURE_LEDGER_ID:-}
+      ERASURE_LEDGER_ENDPOINT: ${ERASURE_LEDGER_ENDPOINT:-}
+      ERASURE_LEDGER_REGION: ${ERASURE_LEDGER_REGION:-us-east-1}
+      ERASURE_LEDGER_BUCKET: ${ERASURE_LEDGER_BUCKET:-}
+      ERASURE_LEDGER_ACCESS_KEY: ${ERASURE_LEDGER_ACCESS_KEY:-}
+      ERASURE_LEDGER_SECRET_KEY: ${ERASURE_LEDGER_SECRET_KEY:-}
+    entrypoint: ["node", "--import", "tsx", "scripts/account-purge-loop.ts"]
+    restart: unless-stopped
+    logging: *logging
 
   # Restore from a dump that is older than some deletions (README.md,
   # «Восстановление из дампа»): the erasure ledger decides, not the dump.

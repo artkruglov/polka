@@ -1,17 +1,35 @@
 import React from "react";
 import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
+import { DeleteAccount } from "../../features/account-deletion/index.tsx";
 
 /**
  * «Удалить полку» in the settings: there is no self-service deletion yet, so
  * the owner writes to the operator's address (PRIVACY_CONTACT in
  * /api/capabilities: OPERATOR_CONTACT, else OPERATOR_EMAIL).
  */
-export function DeleteShelf({ contact }: { contact: string | null }) {
+export function DeleteShelf({
+  contact,
+  selfService = null,
+}: {
+  contact: string | null;
+  /** Self-service deletion is on here: `purge` — a worker erases the data. */
+  selfService?: { purge: boolean } | null;
+}) {
   const subject = encodeURIComponent("Удалить полку");
   return (
     <section className="agent-delete-shelf" id="delete-shelf" aria-labelledby="delete-shelf-title">
       <h2 id="delete-shelf-title">Удалить полку</h2>
-      {contact ? (
+      {selfService ? (
+        <>
+          <p>
+            Удалим полку и все данные: работы со всеми версиями, ссылки, подключения агентов и способы
+            входа. Сначала покажем, что именно уйдёт и когда; ничего не удаляется, пока вы не подтвердите.
+          </p>
+          <div>
+            <DeleteAccount purge={selfService.purge} />
+          </div>
+        </>
+      ) : contact ? (
         <p>
           Напишите на{" "}
           <a href={`mailto:${contact}?subject=${subject}`}>{contact}</a> —
@@ -35,5 +53,10 @@ export function DeleteShelf({ contact }: { contact: string | null }) {
 
 export function DeleteShelfSection() {
   const state = useCapabilities();
-  return <DeleteShelf contact={state.capabilities?.privacyContact ?? null} />;
+  return (
+    <DeleteShelf
+      contact={state.capabilities?.privacyContact ?? null}
+      selfService={state.capabilities?.accountDeletion ?? null}
+    />
+  );
 }
