@@ -23,19 +23,17 @@ import {
   useCapabilities,
   useSourceUrl,
 } from "../../entities/capabilities/useCapabilities.ts";
-import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
-import { LandingHeader } from "./LandingHeader.tsx";
+import { SiteHeader } from "../../widgets/site-header/index.tsx";
 import { LandingStage } from "./LandingStage.tsx";
 import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
 import { ConnectGuide } from "../../widgets/agent-setup/index.tsx";
 import {
   SOURCE_LICENSE,
-  formatStars,
   onGitHub,
   selfHostGuideUrl,
 } from "../../shared/lib/project-links.ts";
@@ -57,7 +55,6 @@ export function Landing() {
   const livePreview = imports.status === "ready" && imports.capabilities.livePreview;
   const sourceUrl = useSourceUrl();
   const github = onGitHub(sourceUrl);
-  const stars = formatStars(useSourceStars());
   const guideUrl = selfHostGuideUrl(sourceUrl);
   const command = selfHostCommand(sourceUrl);
   useEffect(() => {
@@ -65,7 +62,7 @@ export function Landing() {
   }, []);
   return (
     <AppShell current="landing" account={account} className="landing" bare>
-      <LandingHeader signedIn={!!account} sourceUrl={sourceUrl} onGitHub={github} stars={stars} />
+      <SiteHeader signedIn={!!account} home />
       <main className="lp-main">
         <section className="lp-hero">
           <div className="lp-hero-glow" aria-hidden="true" />
