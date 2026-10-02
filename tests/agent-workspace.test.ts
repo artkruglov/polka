@@ -305,3 +305,25 @@ test("the same three operations over MCP", async () => {
   const byUrl = await mcp(secret, "polka_list_files", { artifactId: `https://polochka.app/works/${made.artifactId}` });
   assert.equal(byUrl.error, false, JSON.stringify(byUrl.value));
 });
+
+test("a chat agent makes the folder itself: polka_capture with a project-v1 manifest, then works in it", async () => {
+  const secret = await token(owner, ALL);
+  const f = files().slice(0, 4);
+  const created = await mcp(secret, "polka_capture", {
+    key: randomUUID(),
+    title: "Папка из чата",
+    manifest: manifestOf(f, "README.md"),
+    files: f.map((entry) => ({ path: entry.path, encoding: "base64", data: entry.bytes.toString("base64") })),
+  });
+  assert.equal(created.error, false, JSON.stringify(created.value));
+  const listed = await mcp(secret, "polka_list_files", { artifactId: created.value.artifactId });
+  assert.equal(listed.value.files.length, 4);
+  const changed = await mcp(secret, "polka_change_files", {
+    key: randomUUID(),
+    artifactId: created.value.artifactId,
+    baseRevisionId: created.value.revisionId,
+    put: [{ path: "docs/new.md", encoding: "utf8", data: "# новый раздел\n" }],
+  });
+  assert.equal(changed.error, false, JSON.stringify(changed.value));
+  assert.equal(changed.value.number, 2);
+});
