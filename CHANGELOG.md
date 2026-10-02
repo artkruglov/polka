@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-02
+
+### Added
+
+- **Работа как папка для агента** ([AGENT_WORKSPACE](docs/specs/AGENT_WORKSPACE.md)). Для работы-проекта (`project-v1`) без выхода в сеть: `polka_list_files` (файлы версии без байтов), `polka_read_file` (один файл по пути, текст UTF-8 или base64, до 256 КиБ), `polka_change_files` (следующая версия с добавленными, заменёнными и удалёнными файлами, остальные копирует сервер; ссылка не двигается). По HTTP: `GET /api/v1/works/:id/file?path=` и `POST /api/v1/works/:id/changes`. Тест паритета MCP и REST обновлён.
+
+### Changed
+
+- Позиционирование: «рабочее место агента — папка с версиями, ссылкой для людей и чтением для других агентов» ([DECISIONS](docs/specs/DECISIONS.md#02102026-полка--рабочее-место-агента-с-версиями)).
+
+### Fixed
+
+- Тесты: HTTP-маршрут снимка полки и API карточки полки; `status.md`, `DECISIONS.md`, `PRODUCT.md` и `roadmap.md` говорят, что работает в облаке.
+
 ## [0.6.0] — 2026-10-02
 
 ### Added
@@ -437,7 +451,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/artkruglov/polka/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/artkruglov/polka/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/artkruglov/polka/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/artkruglov/polka/compare/v0.5.1...v0.5.2

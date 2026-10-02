@@ -625,6 +625,42 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/works/{artifactId}/file": {
+        get: {
+          operationId: "readWorkFile",
+          summary: "One file of a version by its path",
+          description:
+            "path (required) and revisionId (the latest by default). Text as UTF-8, anything else as base64, with mime, size and sha256; at most 256 KiB (larger files and videos: the per-index download or polka pull). Scope source:read.",
+          security: [{ bearerAuth: ["source:read"] }],
+          parameters: [
+            { name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "path", in: "query", required: true, schema: { type: "string", maxLength: 200 } },
+            { name: "revisionId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: {
+            "200": { description: "The file." },
+            "404": { description: "No such work, version or path for this token." },
+            "413": { description: "The file is larger than 256 KiB." },
+          },
+        },
+      },
+      "/api/v1/works/{artifactId}/changes": {
+        post: {
+          operationId: "changeWorkFiles",
+          summary: "Save the next version with files added, replaced or removed",
+          description:
+            "Body {key, baseRevisionId, put: [{path, encoding: utf8|base64, data}], remove: [path]}. The type of a put file comes from its extension; every other file of the base version is copied by the server; the entrypoint cannot be removed; only for a project work (runtime project-v1): a page or a bundle is refused (use the edits or publish routes). A different latest version returns 409 with currentRevisionId; the same key and body return the same version. A link does not move. Scope revise.",
+          security: [{ bearerAuth: ["revise"] }],
+          parameters: [{ name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": { description: "artifactId, revisionId, number, htmlProfile, shelfUrl." },
+            "400": { description: "A field is invalid, a path is doubled or collides." },
+            "404": { description: "No such work, version or path for this token." },
+            "409": { description: "The base is not the latest version." },
+            "422": { description: "The entrypoint removal, a work that is not a project, or an unknown file type." },
+          },
+        },
+      },
       "/api/v1/works/{artifactId}/files": {
         get: {
           operationId: "listWorkFiles",

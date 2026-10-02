@@ -169,8 +169,10 @@ test("library catalog and exact source pins match API and MCP then close on revo
   try {
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "polka_list_files",
       "polka_list_template_libraries",
       "polka_list_templates",
+      "polka_read_file",
       "polka_read_source",
     ]);
     const resources = await client.listResources();

@@ -6,7 +6,7 @@
 import type { PoolClient } from "pg";
 import { assertArtifactInAgentScope } from "./agent-scope.ts";
 import { authorizedRevisionFiles } from "./artifacts.ts";
-import { missing } from "./errors.ts";
+import { Problem, missing } from "./errors.ts";
 import { isVideoMime } from "../../packages/contracts/constants.ts";
 import { readBlob, readStream, sha256 } from "./storage.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
@@ -124,4 +124,70 @@ export async function workFileForAgent(
   if (bytes.length !== file.size || sha256(bytes) !== file.sha256)
     throw new Error("Revision file checksum mismatch");
   return { ...file, bytes };
+}
+
+/** The largest file read through a chat tool in one call; bigger ones go through the CLI or HTTP. */
+export const READ_FILE_MAX_BYTES = 256 * 1024;
+
+const TEXT_FILE_MIMES = new Set([
+  "text/html",
+  "text/markdown",
+  "text/plain",
+  "text/css",
+  "text/javascript",
+  "application/json",
+  "image/svg+xml",
+]);
+
+/**
+ * One file of a version by its path (the latest version by default): text as
+ * UTF-8, anything else as base64, at most READ_FILE_MAX_BYTES (the MCP reply
+ * must stay small). The file is checked against the version's record of it.
+ */
+export async function readWorkFileByPath(
+  actor: ServiceActor,
+  artifactId: string,
+  path: string,
+  revisionId?: string,
+) {
+  const listing = await workFilesForAgent(actor, artifactId, revisionId);
+  const entry = listing.files.find((file) => file.path === path);
+  if (!entry)
+    throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
+  if (isVideoMime(entry.mime))
+    throw new Problem(
+      422,
+      "unsupported",
+      "Видео не читается через чат: скачайте его через polka pull или HTTP API.",
+    );
+  if (entry.size > READ_FILE_MAX_BYTES)
+    throw new Problem(
+      413,
+      "quota",
+      `Файл ${entry.size} байт, через чат читается не больше ${READ_FILE_MAX_BYTES}. Скачайте его через polka pull или GET /api/v1/works/:id/revisions/:rev/files/:index.`,
+    );
+  const file = await workFileForAgent(actor, artifactId, listing.revisionId, entry.index);
+  if (!("bytes" in file))
+    throw new Problem(422, "unsupported", "Файл нельзя прочитать целиком через чат.");
+  let encoding: "utf8" | "base64" = "base64";
+  let data = file.bytes.toString("base64");
+  if (TEXT_FILE_MIMES.has(file.mime)) {
+    try {
+      data = new TextDecoder("utf-8", { fatal: true }).decode(file.bytes);
+      encoding = "utf8";
+    } catch {
+      // not UTF-8: sent as base64
+    }
+  }
+  return {
+    artifactId,
+    revisionId: listing.revisionId,
+    number: listing.number,
+    path: file.path,
+    mime: file.mime,
+    size: file.size,
+    sha256: file.sha256,
+    encoding,
+    data,
+  };
 }

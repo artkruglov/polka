@@ -15,6 +15,9 @@ const REST: Record<string, string> = {
   polka_open_shelf: "post /api/v1/sign-in-link",
   polka_project_upload: "post /api/v1/projects",
   polka_read_source: "get /api/v1/works/{artifactId}/files",
+  polka_list_files: "get /api/v1/works/{artifactId}/files",
+  polka_read_file: "get /api/v1/works/{artifactId}/file",
+  polka_change_files: "post /api/v1/works/{artifactId}/changes",
 };
 /** Tools that exist for a chat session and have no HTTP twin yet (each with its reason). */
 const MCP_ONLY: Record<string, string> = {
