@@ -12,19 +12,6 @@
 }
 .landing p { color: var(--ink-2); }
 
-/* ---- Header ---------------------------------------------------------- */
-.lp-header { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid rgb(15 20 32 / .06); background: rgb(251 252 255 / .72); backdrop-filter: saturate(180%) blur(18px); -webkit-backdrop-filter: saturate(180%) blur(18px); }
-.lp-header-inner { display: flex; align-items: center; gap: 28px; max-width: 1240px; height: 68px; margin: 0 auto; padding: 0 var(--gutter); }
-.lp-header .brand { font-size: 30px; }
-.lp-nav { display: flex; gap: 4px; margin-left: 12px; }
-.lp-nav a { padding: 8px 12px; border-radius: 999px; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; transition: background var(--dur) var(--ease), color var(--dur) var(--ease); }
-.lp-nav a:hover { background: rgb(15 20 32 / .05); color: var(--ink); }
-.lp-header-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-.lp-source { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; }
-.lp-source:hover { background: rgb(15 20 32 / .05); }
-.lp-login { padding: 8px 14px; color: var(--ink-2); font-size: var(--text-base); font-weight: 500; }
-.lp-login:hover { color: var(--accent); }
-
 /* ---- Buttons --------------------------------------------------------- */
 .lp-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 18px; border: 1px solid transparent; border-radius: 999px; font-size: var(--text-base); font-weight: 600; letter-spacing: -.01em; white-space: nowrap; cursor: pointer; transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease); }
 .lp-button svg { width: 18px; height: 18px; }
@@ -35,6 +22,7 @@
 .lp-button--lg { min-height: 52px; padding: 12px 24px; font-size: var(--text-lg); }
 .lp-textlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink-2); font-weight: 500; }
 .lp-textlink:hover { color: var(--accent); }
+
 
 /* ---- Layout ---------------------------------------------------------- */
 .lp-main { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter) 40px; overflow-x: clip; }
@@ -203,13 +191,10 @@
   .lp-faq { grid-template-columns: 1fr; gap: 28px; }
 }
 @media (max-width: 900px) {
-  .lp-nav { display: none; }
   .lp-steps { grid-template-columns: 1fr; }
   .lp-selfhost { grid-template-columns: 1fr; padding: 44px 32px; gap: 28px; }
 }
 @media (max-width: 760px) {
-  .lp-header-inner { gap: 12px; height: 60px; padding: 0 var(--gutter-mobile); }
-  .lp-login, .lp-source span { display: none; }
   .lp-main { padding: 0 var(--gutter-mobile) 24px; }
   .lp-section { padding-top: 72px; }
   .lp-hero { padding: 36px 0 32px; gap: 28px; }
