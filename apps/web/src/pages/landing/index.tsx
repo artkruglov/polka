@@ -6,12 +6,16 @@ import {
   BadgeCheck,
   Bot,
   Building2,
+  Database,
   FileUp,
   FolderTree,
   History,
+  Link2,
   LockKeyhole,
+  Plus,
   Search,
   Server,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
@@ -25,7 +29,8 @@ import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { LinkButton } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
-import { Wave } from "../../shared/ui/Wave.tsx";
+import { LandingHeader } from "./LandingHeader.tsx";
+import { LandingStage } from "./LandingStage.tsx";
 import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
 import { ConnectGuide } from "../../widgets/agent-setup/index.tsx";
 import {
@@ -46,204 +51,181 @@ const selfHostCommand = (sourceUrl: string) =>
 
 export function Landing() {
   const account = useAccount();
-  // The same phrase the first-run steps show; GET /connect explains the rest to the agent.
   const [retry, setRetry] = useState(0);
   const catalog = useEditorialList(retry);
   const imports = useCapabilities();
-  const livePreview =
-    imports.status === "ready" && imports.capabilities.livePreview;
+  const livePreview = imports.status === "ready" && imports.capabilities.livePreview;
   const sourceUrl = useSourceUrl();
   const github = onGitHub(sourceUrl);
   const stars = formatStars(useSourceStars());
   const guideUrl = selfHostGuideUrl(sourceUrl);
   const command = selfHostCommand(sourceUrl);
-  // polochka.app/#connect is the link to give a friend: the page renders
-  // after the browser looked for the anchor, so scroll to it here.
   useEffect(() => {
     if (location.hash === "#connect") document.getElementById("connect")?.scrollIntoView();
   }, []);
   return (
-    <AppShell current="landing" account={account} className="landing">
-      <main className="landing-main">
-        <section className="landing-hero">
-          <span className="eyebrow">Рабочее место для ваших агентов</span>
-          <h1>
-            Сделали с агентом.
-            <br />
-            <span>Покажите другим.</span>
-          </h1>
-          <p>
-            Агент кладёт сюда страницы, отчёты и целые папки проектов, в следующем
-            чате берёт их, правит отдельные файлы и сохраняет версию. Другой чат
-            или другой агент продолжает с того же места. Вам — ссылка без аккаунта
-            в Claude или ChatGPT.
-          </p>
-
-          <ConnectAgent className="landing-agent" />
-
-          <div className="landing-paths">
-            <LinkButton variant="primary" href="#connect">
-              <Bot /> Подключить агента
-            </LinkButton>
-            <LinkButton href={guideUrl} target="_blank" rel="noopener noreferrer">
-              <Server /> Развернуть у себя
-            </LinkButton>
-          </div>
-          <a
-            className="landing-oss"
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {github && <GitHubMark size={16} />}
-            {github && !stars
-              ? `Открытый код на GitHub · ${SOURCE_LICENSE}`
-              : `Открытый код · ${SOURCE_LICENSE}`}
-            {stars && <span className="landing-oss-stars">· ★ {stars} на GitHub</span>}
-          </a>
-
-          <nav className="landing-more" aria-label="Другие пути">
-            <a href="/bring#file">
-              <FileUp aria-hidden="true" /> Загрузить файл
-            </a>
-            <a href="/enterprise">
-              <Building2 aria-hidden="true" /> Для компаний
-            </a>
-          </nav>
-
-          <small className="landing-fine">
-            Агент сохраняет работы на вашу полку через MCP, а папку страниц —
-            одним проектом до 400 файлов. Файлом можно сохранить HTML, текст
-            или изображение до 5 МБ.
-            {livePreview &&
-              " Поддерживаемые интерактивные страницы открываются в изолированном просмотре."}
-          </small>
-        </section>
-
-        <div className="landing-wave" aria-hidden="true">
-          <Wave />
-        </div>
-
-        <section className="landing-steps" aria-label="Как это работает">
-          {[
-            {
-              icon: <FileUp />,
-              n: "01",
-              title: "Сохраните",
-              text: "Агент передаёт работу через MCP, или вы загружаете файл. Копия остаётся на вашей полке, а не в истории чата.",
-              href: "/bring#file",
-              cta: "Загрузить файл",
-            },
-            {
-              icon: <LockKeyhole />,
-              n: "02",
-              title: "Поделитесь",
-              text: "Доступ по ссылке включается и отзывается за секунду. Получатель видит зафиксированную версию — без аккаунта.",
-              href: account ? "/" : `/?login=1&next=${encodeURIComponent("/")}`,
-              cta: "Открыть мою полку",
-            },
-            {
-              icon: <History />,
-              n: "03",
-              title: "Продолжайте",
-              text: "Любой ваш агент найдёт работу на полке — по названию или по словам из текста, прочитает исходник и сохранит новую версию. Отправленная ссылка при этом не меняется.",
-              href: "/discover",
-              cta: "Посмотреть примеры",
-            },
-          ].map((step) => (
-            <article key={step.n}>
-              <span className="landing-step-icon">{step.icon}</span>
-              <small>{step.n}</small>
-              <h2>{step.title}</h2>
-              <p>{step.text}</p>
-              <a href={step.href}>
-                {step.cta} <ArrowRight size={16} />
+    <AppShell current="landing" account={account} className="landing" bare>
+      <LandingHeader signedIn={!!account} sourceUrl={sourceUrl} onGitHub={github} stars={stars} />
+      <main className="lp-main">
+        <section className="lp-hero">
+          <div className="lp-hero-glow" aria-hidden="true" />
+          <div className="lp-hero-copy">
+            <span className="lp-pill">
+              <i aria-hidden="true" /> Рабочее место для ваших агентов
+            </span>
+            <h1>
+              Сделали с агентом.
+              <br />
+              <span>Покажите другим.</span>
+            </h1>
+            <p>
+              Агент кладёт сюда страницы, отчёты и целые папки проектов, в следующем чате берёт их,
+              правит отдельные файлы и сохраняет версию. Другой чат или другой агент продолжает с
+              того же места. Вам — ссылка без аккаунта в Claude или ChatGPT.
+            </p>
+            <ConnectAgent className="lp-connect-card" />
+            <div className="lp-cta">
+              <a className="lp-button lp-button--primary lp-button--lg" href="#connect">
+                <Bot aria-hidden="true" /> Подключить агента
               </a>
-            </article>
-          ))}
+              <a className="lp-button lp-button--ghost lp-button--lg" href={guideUrl} target="_blank" rel="noopener noreferrer">
+                <Server aria-hidden="true" /> Развернуть у себя
+              </a>
+              <a className="lp-textlink" href="/bring#file">
+                <FileUp aria-hidden="true" size={18} /> или загрузить файл
+              </a>
+            </div>
+            <small className="lp-fine">
+              Папка страниц — одним проектом до 400 файлов; файлом можно сохранить HTML, текст или
+              изображение до 5 МБ.
+              {livePreview && " Поддерживаемые интерактивные страницы открываются в изолированном просмотре."}
+            </small>
+          </div>
+          <LandingStage />
         </section>
 
-        <section id="connect" className="landing-connect" aria-labelledby="landing-connect-title">
-          <h2 id="landing-connect-title">Как подключить агента</h2>
-          <p>
-            Минута и один раз. Выберите, где вы работаете с ИИ, — дальше агент
-            сохраняет работы сам, а вы просите «Сохрани это на Полку».
-          </p>
-          <ConnectGuide />
-        </section>
+        <ul className="lp-trust" aria-label="Почему Полке можно доверить работы">
+          <li>
+            <ShieldCheck aria-hidden="true" /> <span><b>Песочница</b> страницы открываются на отдельном домене без сети</span>
+          </li>
+          <li>
+            <Database aria-hidden="true" /> <span><b>Данные в России</b> Yandex Cloud, без обучения моделей</span>
+          </li>
+          <li>
+            <GitHubMark size={20} /> <span><b>Открытый код</b> {SOURCE_LICENSE}, можно поставить у себя</span>
+          </li>
+          <li>
+            <BadgeCheck aria-hidden="true" /> <span><b>Бесплатно</b> на время пилота, без карты</span>
+          </li>
+        </ul>
 
-        <section className="landing-features" aria-labelledby="landing-features-title">
-          <h2 id="landing-features-title">Что умеет Полка</h2>
-          <div className="landing-features-grid">
+        <section id="how" className="lp-section" aria-labelledby="lp-how-title">
+          <header className="lp-section-head">
+            <span className="lp-kicker">Как это работает</span>
+            <h2 id="lp-how-title">Три шага, и работа живёт дальше чата</h2>
+          </header>
+          <ol className="lp-steps">
             {[
               {
-                icon: <FolderTree />,
-                title: "Папка, которую правит агент",
-                text: "Исследование, документация, набор экранов — одна работа-папка. Агент перечисляет файлы, читает нужный, добавляет и удаляет файлы по MCP, без выхода в сеть. Получатель видит дерево страниц.",
+                icon: <FileUp />,
+                title: "Сохраните",
+                text: "Агент передаёт работу через MCP, или вы загружаете файл. Копия остаётся на вашей полке, а не в истории чата.",
+                href: "/bring#file",
+                cta: "Загрузить файл",
               },
               {
-                icon: <Search />,
-                title: "Поиск по тексту",
-                text: "Работу находят по словам внутри, а не только по названию: вы на полке, ваш агент — когда продолжает её в другом чате.",
+                icon: <LockKeyhole />,
+                title: "Поделитесь",
+                text: "Доступ по ссылке включается и отзывается за секунду. Получатель видит зафиксированную версию — без аккаунта.",
+                href: account ? "/" : `/?login=1&next=${encodeURIComponent("/")}`,
+                cta: "Открыть мою полку",
               },
               {
                 icon: <History />,
-                title: "Версии и честные ссылки",
-                text: "Каждая версия неизменна и остаётся в истории. Ссылку можно закрыть в один клик.",
+                title: "Продолжайте",
+                text: "Любой ваш агент найдёт работу — по названию или по словам из текста, прочитает файлы и сохранит новую версию. Отправленная ссылка при этом не меняется.",
+                href: "/discover",
+                cta: "Посмотреть примеры",
               },
-              {
-                icon: <BadgeCheck />,
-                title: "Принятая версия",
-                text: "Отметьте версию, которая настоящая, и кто за неё отвечает. Вы и ваши агенты видят отметку, в командах — и коллеги; новая версия её не снимает.",
-              },
-              {
-                icon: <Bot />,
-                title: "Один диск для любого агента",
-                text: "Начатое в одном чате продолжает другой чат или другой агент: находит работу по тексту, спрашивает, что изменилось с прошлого раза, читает заметку полки «как у нас принято».",
-              },
-              {
-                icon: <Users />,
-                title: "Полки отделов",
-                text: "На своей установке компании: общая полка отдела с ролями, агенты сотрудников сохраняют туда, работы остаются у отдела.",
-                href: "/enterprise",
-              },
-            ].map((item) => (
-              <article key={item.title}>
-                <span className="landing-step-icon">{item.icon}</span>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-                {item.href && (
-                  <a href={item.href}>
-                    Для компаний <ArrowRight size={16} />
-                  </a>
-                )}
-              </article>
+            ].map((step, index) => (
+              <li key={step.title}>
+                <span className="lp-step-n">{String(index + 1).padStart(2, "0")}</span>
+                <span className="lp-icon">{step.icon}</span>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+                <a href={step.href}>
+                  {step.cta} <ArrowRight size={16} aria-hidden="true" />
+                </a>
+              </li>
             ))}
+          </ol>
+        </section>
+
+        <section id="can" className="lp-section" aria-labelledby="lp-can-title">
+          <header className="lp-section-head">
+            <span className="lp-kicker">Что умеет Полка</span>
+            <h2 id="lp-can-title">Папка с версиями, а не ещё один диск</h2>
+          </header>
+          <div className="lp-bento">
+            <article className="lp-card lp-card--wide">
+              <span className="lp-icon"><FolderTree /></span>
+              <h3>Папка, которую правит агент</h3>
+              <p>
+                Исследование, документация, набор экранов — одна работа-папка. Агент перечисляет
+                файлы, читает нужный, добавляет и удаляет файлы по MCP, без выхода в сеть.
+                Получатель видит дерево страниц.
+              </p>
+              <pre className="lp-code" aria-hidden="true">{`polka_list_files        → 5 файлов
+polka_read_file         docs/report.md
+polka_change_files      put docs/risks.md
+                        remove draft.md   → v3`}</pre>
+            </article>
+            <article className="lp-card">
+              <span className="lp-icon"><Search /></span>
+              <h3>Поиск по тексту</h3>
+              <p>Работу находят по словам внутри, а не только по названию: вы на полке, ваш агент — в другом чате.</p>
+              <div className="lp-snippet" aria-hidden="true">
+                <span>…рынок <mark>агентных</mark> инструментов растёт…</span>
+              </div>
+            </article>
+            <article className="lp-card">
+              <span className="lp-icon"><History /></span>
+              <h3>Версии и честные ссылки</h3>
+              <p>Каждая версия неизменна и остаётся в истории. Ссылку можно закрыть в один клик.</p>
+            </article>
+            <article className="lp-card">
+              <span className="lp-icon"><Bot /></span>
+              <h3>Один диск для любого агента</h3>
+              <p>Начатое в одном чате продолжает другой чат или другой агент: ищет работу, спрашивает, что изменилось, читает заметку полки.</p>
+            </article>
+            <article className="lp-card">
+              <span className="lp-icon"><BadgeCheck /></span>
+              <h3>Принятая версия</h3>
+              <p>Отметьте версию, которая настоящая, и кто за неё отвечает. Новая версия отметку не снимает.</p>
+            </article>
+            <article className="lp-card lp-card--accent">
+              <span className="lp-icon"><Users /></span>
+              <h3>Полки отделов</h3>
+              <p>На своей установке компании: общая полка отдела с ролями, работы остаются у отдела.</p>
+              <a href="/enterprise">
+                Для компаний <ArrowRight size={16} aria-hidden="true" />
+              </a>
+            </article>
           </div>
         </section>
 
-        <section className="landing-trust" aria-label="Почему Полке можно доверить работы">
-          <ul>
-            <li>
-              <strong>Бесплатно</strong>
-              <span>на время пилота, без карты</span>
-            </li>
-            <li>
-              <strong>Данные в России</strong>
-              <span>Yandex Cloud; работы не идут на обучение моделей</span>
-            </li>
-            <li>
-              <strong>Открытый код</strong>
-              <span>{SOURCE_LICENSE}, можно поставить у себя</span>
-            </li>
-            <li>
-              <strong>Песочница</strong>
-              <span>страницы открываются на отдельном домене без сети</span>
-            </li>
-          </ul>
+        <section id="connect" className="lp-section lp-connect" aria-labelledby="landing-connect-title">
+          <header className="lp-section-head">
+            <span className="lp-kicker">Подключение</span>
+            <h2 id="landing-connect-title">Минута и один раз</h2>
+            <p>Выберите, где вы работаете с ИИ, — дальше агент сохраняет работы сам, а вы просите «Сохрани это на Полку».</p>
+          </header>
+          <div className="lp-card lp-card--flat">
+            <ConnectGuide />
+          </div>
         </section>
 
-        <section className="landing-catalog">
+        <section className="lp-section lp-catalog" aria-label="Лента">
           <EditorialCatalog
             items={catalog.items.slice(0, 6)}
             loading={catalog.state === "loading"}
@@ -257,8 +239,12 @@ export function Landing() {
           )}
         </section>
 
-        <section className="landing-faq" aria-labelledby="landing-faq-title">
-          <h2 id="landing-faq-title">Коротко о главном</h2>
+        <section className="lp-section lp-faq" aria-labelledby="landing-faq-title">
+          <header className="lp-section-head">
+            <span className="lp-kicker">Вопросы</span>
+            <h2 id="landing-faq-title">Коротко о главном</h2>
+          </header>
+          <div className="lp-faq-list">
           {[
             {
               q: "Что увидит получатель ссылки?",
@@ -290,16 +276,19 @@ export function Landing() {
             },
           ].map((item) => (
             <details key={item.q}>
-              <summary>{item.q}</summary>
+              <summary>
+                {item.q} <Plus aria-hidden="true" size={20} />
+              </summary>
               <p>{item.a}</p>
             </details>
           ))}
+          </div>
         </section>
 
-        <section className="landing-selfhost" aria-labelledby="landing-selfhost-title">
-          <div className="landing-selfhost-intro">
+        <section className="lp-selfhost" aria-labelledby="lp-selfhost-title">
+          <div className="lp-selfhost-intro">
             <span className="eyebrow">Открытый код · {SOURCE_LICENSE}</span>
-            <h2 id="landing-selfhost-title">Полка для вашей компании</h2>
+            <h2 id="lp-selfhost-title">Полка для вашей компании</h2>
             <p>
               Сотрудники работают в разных агентах, а результаты сохраняются
               на Полке на ваших серверах: один Docker-образ, PostgreSQL и ваше
@@ -309,7 +298,7 @@ export function Landing() {
               папке, журнал действий агентов для службы безопасности.
             </p>
           </div>
-          <ol className="landing-selfhost-steps">
+          <ol className="lp-selfhost-steps">
             <li>
               <strong>Docker, PostgreSQL, S3</strong>
               <span>
@@ -333,13 +322,13 @@ export function Landing() {
               </span>
             </li>
           </ol>
-          <div className="landing-selfhost-command">
+          <div className="lp-selfhost-command">
             <pre>
               <code>{command}</code>
             </pre>
             <CopyButton value={command} label="Скопировать" successText="Скопировано" />
           </div>
-          <div className="landing-selfhost-actions">
+          <div className="lp-selfhost-actions">
             <LinkButton
               variant="primary"
               href={guideUrl}
@@ -355,6 +344,17 @@ export function Landing() {
           </div>
         </section>
       </main>
+      <footer className="lp-footer">
+        <a className="brand" href="/" aria-label="Полка — главная">полка</a>
+        <nav aria-label="Документы">
+          <a href="/privacy">Политика</a>
+          <a href="/terms">Соглашение</a>
+          <a href="/enterprise">Для компаний</a>
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+            {github ? "Открытый код на GitHub" : "Открытый код"}
+          </a>
+        </nav>
+      </footer>
     </AppShell>
   );
 }
