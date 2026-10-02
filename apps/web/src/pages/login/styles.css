@@ -33,3 +33,6 @@
   .login-points { display: none; }
   .login-form { padding: 24px 20px; box-shadow: none; }
 }
+
+.mkt-page .login-intro em { background: linear-gradient(100deg, #1f4fff, #9a62ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mkt-page .login-form { border-radius: 24px; box-shadow: 0 1px 2px rgb(15 20 32 / .04), 0 24px 48px -24px rgb(31 79 255 / .25); }

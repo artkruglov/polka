@@ -7,6 +7,7 @@ import {
 } from "../../shared/lib/known-shelf.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
+import { SiteHeader } from "../../widgets/site-header/index.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { visitSource } from "../../shared/lib/visit-source.ts";
@@ -181,7 +182,8 @@ export function Signup() {
   // Sent here by an agent's connection request (Codex, Claude Code, Claude.ai…).
   const forAgent = next.startsWith("/oauth/consent");
   return (
-    <AppShell current="shelf" account={account}>
+    <AppShell current="shelf" account={account} className="mkt-page" bare>
+      <SiteHeader signedIn={!!account} />
       <main className="onboard">
         <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
         <span className="eyebrow">
