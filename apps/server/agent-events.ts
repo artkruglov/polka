@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { agentFolderScope, inScopeSql } from "./agent-scope.ts";
+import { countAgentRead } from "./agent-read-counter.ts";
 import { db } from "./db.ts";
 import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
 
@@ -35,6 +36,7 @@ export async function listEventsForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentEventsInputSchema.parse(raw);
+  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
