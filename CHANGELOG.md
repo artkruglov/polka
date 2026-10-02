@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-02
+
 ### Added
 
 - **Полка хранит принятое** ([POSITIONING](docs/specs/POSITIONING.md), [AGENT_ACCESS_AND_MEMORY](docs/specs/AGENT_ACCESS_AND_MEMORY.md), миграции 054–060). Принятая версия и ответственный у работы (меню работы «Принятая версия», события `revision.accepted` и `owner.changed`); режим ссылки `pinned`/`follows` (сервисный доступ не двигает закреплённую ссылку, пока куратор не включил «следует»; агент с токеном человека работает как раньше); карточка полки «как у нас принято» в `polka_context` (`GET`/`PUT /api/shelf/card`, поле на странице «Агенты» и в диалоге «Участники полки»).
@@ -406,7 +408,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/artkruglov/polka/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/artkruglov/polka/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/artkruglov/polka/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/artkruglov/polka/compare/v0.2.0...v0.3.0
