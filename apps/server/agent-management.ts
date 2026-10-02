@@ -1,4 +1,5 @@
 import { agentFolderScope, inScopeSql } from "./agent-scope.ts";
+import { countAgentRead } from "./agent-read-counter.ts";
 import {
   HEADLINE_OPTIONS,
   plainSnippet,
@@ -259,6 +260,7 @@ export async function listArtifactsForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentArtifactListInputSchema.parse(raw);
+  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
@@ -360,6 +362,7 @@ export async function getArtifactForAgent(
 ) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentGetArtifactInputSchema.parse(raw);
+  await countAgentRead(verified.tenantId, verified.principal);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,

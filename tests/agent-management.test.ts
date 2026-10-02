@@ -611,3 +611,30 @@ test("a curator marks the accepted version and the owner; agents read both and s
   await acceptRevision(me, work.artifactId, { revisionId: null });
   assert.equal((await getArtifactForAgent(actor, { artifactId: work.artifactId })).acceptedRevisionId, null);
 });
+
+test("agent reads are counted per shelf and day, nothing else", async () => {
+  const actor = await connection(owner, ["context", "read"]);
+  const work = await artifact(owner, "Counted work");
+  const count = async () =>
+    Number(
+      (
+        await db.query(
+          "SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1 AND day=(now() AT TIME ZONE 'UTC')::date",
+          [owner.tenant],
+        )
+      ).rows[0].n,
+    );
+  const before = await count();
+  await listArtifactsForAgent(actor, {});
+  await getArtifactForAgent(actor, { artifactId: work.artifactId });
+  await listEventsForAgent(actor, {});
+  assert.equal((await count()) - before, 3);
+  // A refused read (no read scope) is not counted.
+  const noRead = await connection(owner, ["context"]);
+  await assert.rejects(listArtifactsForAgent(noRead, {}));
+  assert.equal((await count()) - before, 3);
+  const {
+    rows: [row],
+  } = await db.query("SELECT * FROM agent_read_days WHERE tenant_id=$1 LIMIT 1", [owner.tenant]);
+  assert.deepEqual(Object.keys(row).sort(), ["day", "principal_type", "reads", "tenant_id"]);
+});
