@@ -334,7 +334,7 @@ export const client = {
     q: string,
     folderId: string | null,
     cursor?: string,
-    order: { sort?: "new" | "old" | "title"; kind?: ShelfKind | null } = {},
+    order: { sort?: "new" | "old" | "title"; kind?: ShelfKind | null; accepted?: boolean } = {},
   ) =>
     request<{ items: Artifact[]; nextCursor: string | null; counts?: ShelfCounts }>(
       `/artifacts?${new URLSearchParams({
@@ -343,6 +343,7 @@ export const client = {
         ...(cursor ? { cursor } : {}),
         ...(order.sort && order.sort !== "new" ? { sort: order.sort } : {}),
         ...(order.kind ? { kind: order.kind } : {}),
+        ...(order.accepted ? { accepted: "1" } : {}),
       })}`,
     ),
   trash: (cursor?: string) =>

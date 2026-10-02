@@ -922,6 +922,8 @@ export async function createApp() {
         // The whole shelf in this order and of this kind, not the loaded page.
         sort: z.enum(["new", "old", "title"]).default("new"),
         kind: z.enum(SHELF_KINDS).optional(),
+        // Only works with a version a curator accepted.
+        accepted: z.literal("1").optional(),
       })
       .parse(req.query);
     const order = SHELF_ORDER[q.sort];
@@ -939,6 +941,7 @@ export async function createApp() {
          AND ($2::uuid IS NULL OR artifact.folder_id=$2)
          AND ${searchMatch("artifact", "$3", "$6")}
          AND ($8::text IS NULL OR ${shelfKindSql("latest")}=$8)
+         AND ($9::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)
          AND ($4::text IS NULL OR ${order.after("$4", "$5::uuid")})
        ORDER BY ${order.by} LIMIT 25`,
       [
@@ -950,6 +953,7 @@ export async function createApp() {
         prefixQuery(text),
         HEADLINE_OPTIONS,
         q.kind ?? null,
+        q.accepted === "1",
       ],
     );
     const more = rows.length > 24,

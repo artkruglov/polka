@@ -80,6 +80,7 @@ export function App() {
     [view, setView] = useState<"grid" | "list">("grid"),
     [sort, setSort] = useState<ShelfSort>("newest"),
     [kind, setKind] = useState<Category | null>(null),
+    [acceptedOnly, setAcceptedOnly] = useState(false),
     [counts, setCounts] = useState<ShelfCounts | null>(null),
     [stale, setStale] = useState(false),
     // «В корзину» from a card's menu: confirmed on the shelf, no navigation.
@@ -247,7 +248,7 @@ export function App() {
     const timer = setTimeout(
       () =>
         client
-          .shelf(query, folderId, undefined, { sort: SORT_PARAM[sort], kind })
+          .shelf(query, folderId, undefined, { sort: SORT_PARAM[sort], kind, accepted: acceptedOnly })
           .then((x) => {
             if (live) {
               setItems(x.items);
@@ -271,7 +272,7 @@ export function App() {
       live = false;
       clearTimeout(timer);
     };
-  }, [account, selected, trashView, query, folderId, sort, kind, refresh]);
+  }, [account, selected, trashView, query, folderId, sort, kind, acceptedOnly, refresh]);
   const loadTrash = async (nextCursor?: string) => {
     const generation = trashGeneration.current;
     setTrashLoading(true);
@@ -419,6 +420,7 @@ export function App() {
       const page = await client.shelf(query, folderId, cursor, {
         sort: SORT_PARAM[sort],
         kind,
+        accepted: acceptedOnly,
       });
       if (generation !== shelfGeneration.current) return;
       setItems((x) => [
@@ -658,6 +660,8 @@ export function App() {
               loadMore={() => void loadMore()}
               kind={kind}
               setKind={setKind}
+              acceptedOnly={acceptedOnly}
+              setAcceptedOnly={setAcceptedOnly}
               counts={counts}
               stale={stale}
               onTrash={(artifact) => {

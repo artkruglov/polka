@@ -44,6 +44,9 @@ type Props = {
   /** The chosen chip; the server filters by it. */
   kind: Category | null;
   setKind: (kind: Category | null) => void;
+  /** Only works with an accepted version. */
+  acceptedOnly: boolean;
+  setAcceptedOnly: (value: boolean) => void;
   /** Works of each kind over the whole shelf (the first page's counts). */
   counts: ShelfCounts | null;
   /** The last request failed: what is shown may be out of date. */
@@ -75,6 +78,8 @@ export function ShelfPage({
   loadMore,
   kind,
   setKind,
+  acceptedOnly,
+  setAcceptedOnly,
   counts,
   stale = false,
   onTrash,
@@ -176,6 +181,9 @@ export function ShelfPage({
                     {categoryLabel[c]}
                   </Chip>
                 ))}
+            <Chip pressed={acceptedOnly} onClick={() => setAcceptedOnly(!acceptedOnly)}>
+              Принятые
+            </Chip>
           </div>
         )}
         {stale && (
@@ -215,7 +223,7 @@ export function ShelfPage({
             <div className="empty-icon"><FolderIcon /></div>
             <h2>Таких работ нет</h2>
             <p>Здесь нет работ этого типа{query ? " по вашему запросу" : ""}.</p>
-            <Button onClick={() => setKind(null)}>Показать все</Button>
+            <Button onClick={() => { setKind(null); setAcceptedOnly(false); }}>Показать все</Button>
           </div>
         ) : team && !query ? (
           <p className="shelf-empty-quiet" role="note">
