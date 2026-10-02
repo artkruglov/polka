@@ -33,7 +33,27 @@
 .shelf-empty-links a:hover { color: var(--accent); }
 .shelf-empty-links svg { width: 16px; height: 16px; color: var(--muted); }
 
+/* First-run: three ways to put the first work on the shelf. */
+.shelf-start { display: grid; gap: 28px; padding: 36px; border: 1px solid var(--line); border-radius: 24px; background: radial-gradient(900px 300px at 10% -20%, #e8eeff 0%, transparent 70%), var(--soft-3); }
+.shelf-start header { max-width: 60ch; }
+.shelf-start h2 { font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -.035em; }
+.shelf-start header p { margin-top: 10px; color: var(--muted); font-size: var(--text-lg); line-height: var(--leading-loose); }
+.shelf-start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.shelf-start-card { display: grid; align-content: start; gap: 8px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: #fff; color: var(--muted); font: inherit; text-align: left; text-decoration: none; cursor: pointer; box-shadow: 0 1px 2px rgba(15, 20, 32, .04); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.shelf-start-card:hover { transform: translateY(-2px); border-color: var(--accent-ring); box-shadow: 0 12px 28px -14px rgba(31, 79, 255, .35); }
+.shelf-start-card strong { color: var(--ink); font-size: var(--text-xl); letter-spacing: -.02em; }
+.shelf-start-card > span:last-child { font-size: var(--text-base); line-height: 1.5; }
+.shelf-start-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 6px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.shelf-start-icon svg { width: 20px; height: 20px; }
+.shelf-start-card--main { background: #0b1020; border-color: #0b1020; color: #aeb8d0; }
+.shelf-start-card--main strong { color: #fff; }
+.shelf-start-card--main .shelf-start-icon { background: rgba(255, 255, 255, .12); color: #fff; }
+.shelf-start-card--main:hover { border-color: #0b1020; box-shadow: 0 14px 30px -14px rgba(11, 16, 32, .6); }
+@media (prefers-reduced-motion: reduce) { .shelf-start-card { transition: none; } .shelf-start-card:hover { transform: none; } }
+
 @media (max-width: 760px) {
+  .shelf-start { padding: 22px 18px; border-radius: 20px; }
+  .shelf-start-grid { grid-template-columns: 1fr; }
   .shelf-library-head { margin-bottom: 12px; }
   .shelf-library-head h2 { font-size: 26px; }
   .shelf-tools { width: 100%; flex-wrap: wrap; margin-left: 0; }

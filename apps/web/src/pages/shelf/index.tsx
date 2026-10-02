@@ -237,15 +237,32 @@ export function ShelfPage({
               : "Здесь появятся работы, которые сохранят участники."}
           </p>
         ) : !activeFolder && !query ? (
-          <p className="shelf-empty-quiet" role="note">
-            Здесь появятся ваши работы: страницы, отчёты, прототипы и изображения. Каждая хранится
-            версиями, а кто может её открыть, решаете вы. Попросите агента: «Сохрани это на Полку» —
-            или{" "}
-            <button type="button" className="text-button" onClick={() => setPanel("upload")}>
-              загрузите файл
-            </button>
-            .
-          </p>
+          <div className="shelf-start" role="note">
+            <header>
+              <h2>Здесь появятся ваши работы</h2>
+              <p>
+                Страницы, отчёты, прототипы и целые папки проектов. Каждая хранится версиями, а кто может её
+                открыть, решаете вы. Попросите агента: «Сохрани это на Полку».
+              </p>
+            </header>
+            <div className="shelf-start-grid">
+              <a className="shelf-start-card shelf-start-card--main" href="/settings/agents">
+                <span className="shelf-start-icon"><Bot /></span>
+                <strong>Подключить агента</strong>
+                <span>Claude, ChatGPT или Codex сохраняют работы сами и продолжают их в новых чатах.</span>
+              </a>
+              <button type="button" className="shelf-start-card" onClick={() => setPanel("upload")}>
+                <span className="shelf-start-icon"><FileUp /></span>
+                <strong>Загрузить файл</strong>
+                <span>HTML, текст, изображение или папку проекта — прямо с компьютера.</span>
+              </button>
+              <a className="shelf-start-card" href="/discover">
+                <span className="shelf-start-icon"><Compass /></span>
+                <strong>Посмотреть примеры</strong>
+                <span>Что уже делают с агентами: исследования, разборы и инструменты.</span>
+              </a>
+            </div>
+          </div>
         ) : (
           <div className="shelf-empty">
             <div className="empty-icon">{query ? <Search /> : <FolderIcon />}</div>
