@@ -144,7 +144,7 @@ export function ShelfCard({
           </span>
           <span>
             {a.author ? `${a.author.name} · ` : ""}
-            {cardKind(a, cover)} · v{r.number}{a.acceptedRevisionId === r.id ? " принята" : ""} · {date(a.updatedAt)}
+            {cardKind(a, cover)} · v{r.number}{a.acceptedRevisionId === r.id ? " принята" : a.acceptedRevisionId ? " · принята другая версия" : ""} · {date(a.updatedAt)}
           </span>
         </p>
         {snippet && <SearchSnippet text={snippet} />}

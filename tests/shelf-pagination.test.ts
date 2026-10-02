@@ -182,26 +182,30 @@ test("a kind filter covers the whole shelf and the counts are the shelf's", asyn
 });
 
 test("«Принятые» shows only works with an accepted version, across pages and with a kind", async () => {
-  const marked = [artifactIds[2], artifactIds[11], artifactIds[20]];
-  for (const id of marked)
-    await db.query(
-      "UPDATE artifacts SET accepted_revision_id=latest_revision_id WHERE id=$1",
-      [id],
+  // Marks on a page of each kind (works 1, 2, 3 are of three kinds), and a spread
+  // across pages: 24 fit one page, so mark more than that to need a cursor.
+  const marked = artifactIds.slice(0, 25);
+  try {
+    for (const id of marked)
+      await db.query("UPDATE artifacts SET accepted_revision_id=latest_revision_id WHERE id=$1", [id]);
+    const accepted = await walk("sort=old&accepted=1");
+    assert.deepEqual(accepted.seen.map((item) => item.id), marked);
+    assert.ok(accepted.pages > 1, "the filtered walk crossed a page");
+    // The counts follow the filter, so a chip never promises what the filter hides.
+    assert.equal(accepted.counts?.all, 25);
+    const pagesOnly = await walk("sort=old&accepted=1&kind=pages");
+    assert.deepEqual(
+      pagesOnly.seen.map((item) => item.id),
+      marked.filter((id) => kindOf(artifactIds.indexOf(id) + 1) === "pages"),
     );
-  const accepted = await walk("sort=old&accepted=1");
-  assert.deepEqual(accepted.seen.map((item) => item.id), marked);
-  // The counts stay the shelf's; a kind narrows it further; a bad value is refused.
-  assert.equal(accepted.counts?.all, 26);
-  const pages = await walk("sort=old&accepted=1&kind=pages");
-  assert.deepEqual(
-    pages.seen.map((item) => item.id),
-    marked.filter((id) => kindOf(artifactIds.indexOf(id) + 1) === "pages"),
-  );
+    assert.ok(pagesOnly.seen.length > 0, "a non-empty accepted-and-kind result");
+  } finally {
+    await db.query("UPDATE artifacts SET accepted_revision_id=NULL WHERE id=ANY($1::uuid[])", [marked]);
+  }
   assert.equal(
     (await app.inject({ method: "GET", url: "/api/artifacts?q=&accepted=yes", headers: { origin, cookie } })).statusCode,
     400,
   );
-  await db.query("UPDATE artifacts SET accepted_revision_id=NULL WHERE id=ANY($1::uuid[])", [marked]);
 });
 
 test("a cursor of another order, or a bad kind or order, is refused", async () => {
