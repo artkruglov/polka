@@ -253,7 +253,7 @@ export function ArtifactReader({
                   ["active", "behind"].includes(work.share.status)
                     ? " · по ссылке"
                     : ""
-                }`,
+                }${work.acceptedRevisionId === r.id ? " · принята" : ""}`,
                 icon:
                   shown.id === r.id ? (
                     <Check />
@@ -333,6 +333,17 @@ export function ArtifactReader({
                 <dt>Доступ</dt>
                 <dd>{status(work)}</dd>
               </div>
+              {work.acceptedRevisionId && (
+                <div>
+                  <dt>Принята</dt>
+                  <dd>
+                    {revisions.find((r) => r.id === work.acceptedRevisionId)
+                      ? `v${revisions.find((r) => r.id === work.acceptedRevisionId)!.number}`
+                      : "версия отмечена"}
+                    {work.acceptedRevisionId === shown.id ? " · эта" : ""}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>Версия</dt>
                 <dd>
@@ -422,6 +433,9 @@ export function ArtifactReader({
                       ["active", "behind"].includes(work.share.status) && (
                         <small>по ссылке</small>
                       )}
+                    {work.acceptedRevisionId === r.id && (
+                      <small className="reader-version-accepted">принята</small>
+                    )}
                   </span>
                   <small>{date(r.createdAt)}</small>
                   {shown.id === r.id && <Check />}

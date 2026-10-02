@@ -98,3 +98,9 @@
   .work-versions { padding: 8px var(--gutter-mobile) 24px; }
   .history-note { padding: 4px var(--gutter-mobile); }
 }
+
+.reader-version-accepted {
+  margin-left: 6px;
+  color: var(--success, #1a7f4b);
+  font-weight: 600;
+}
