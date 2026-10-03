@@ -235,7 +235,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 ## Status
 
 > [!NOTE]
-> **Current release — `v0.8.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
+> **Current release — `v0.9.0`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
 
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 

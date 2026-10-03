@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-03
+
 ### Added
 
 - **Перенос полки в свою установку** ([SHELF_TRANSFER](docs/specs/SHELF_TRANSFER.md)). `GET /api/v1/export` отдаёт опись всей личной полки (все версии с датами и файлами, папки, карточка, корзина), `GET /api/v1/export/revisions/:id/files/:index` — файлы, со своим лимитом. `polka-export.mjs` (без зависимостей, `GET /api/v1/cli/polka-export.mjs`) пишет их в папку, каждый файл один раз, и продолжает с места. На другой установке `npm run shelf:import -- --dir … --account …` сохраняет их на личную полку обычным путём сохранения и возвращает номера и даты версий, принятую версию, ответственного, карточку и корзину; `--dry-run` проверяет каждый файл, `--raise-quota` поднимает лимит. Ссылки и комментарии не переносятся. Права — существующие `read` и `source:read`, миграций нет.
@@ -491,7 +493,11 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/artkruglov/polka/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/artkruglov/polka/compare/v0.7.4...v0.8.0
+[0.7.4]: https://github.com/artkruglov/polka/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/artkruglov/polka/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/artkruglov/polka/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/artkruglov/polka/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/artkruglov/polka/compare/v0.6.0...v0.7.0
