@@ -56,6 +56,11 @@
 .agent-choice[data-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
 .agent-help { margin-bottom: 6px; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; }
 /* «Удалить полку»: the last section of the settings. */
+.agent-move-shelf { display: grid; gap: 10px; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); }
+.agent-move-shelf p, .agent-move-shelf ol { max-width: 64ch; color: var(--ink-2); line-height: var(--leading); }
+.agent-move-shelf ol { padding-left: 20px; display: grid; gap: 4px; }
+.agent-move-shelf .agent-help { color: var(--muted); }
+.agent-move-shelf .agent-help code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--soft-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .agent-delete-shelf { display: grid; gap: 10px; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); }
 .agent-delete-shelf p { max-width: 64ch; color: var(--ink-2); line-height: var(--leading); }
 .agent-delete-shelf a { color: var(--accent); overflow-wrap: anywhere; }

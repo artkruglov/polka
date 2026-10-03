@@ -46,6 +46,15 @@ async function locate(
     [revisionId ?? artifact.latest_revision_id, artifactId, actor.tenantId],
   );
   if (!revision) throw missing();
+  return { artifact, revision, ...(await storedRevisionFiles(c, revision)) };
+}
+
+/**
+ * Where a saved version's files are, without reading them: a manifest's
+ * files, or the one file of a version without a manifest (an image, a text,
+ * a document). Also used by the shelf export (shelf-export.ts).
+ */
+export async function storedRevisionFiles(c: Pick<PoolClient, "query">, revision: any) {
   let files: StoredFile[];
   let entrypoint: string;
   let runtime: string | null;
@@ -55,7 +64,6 @@ async function locate(
     entrypoint = manifest.entrypoint;
     runtime = manifest.runtime;
   } else {
-    // A single file without a manifest: an image, a text, a document.
     files = [
       {
         path: revision.filename,
@@ -69,7 +77,7 @@ async function locate(
     entrypoint = revision.filename;
     runtime = null;
   }
-  return { artifact, revision, files, entrypoint, runtime };
+  return { files, entrypoint, runtime };
 }
 
 export function workFilesForAgent(
@@ -116,6 +124,11 @@ export async function workFileForAgent(
     async (c, verified) => (await locate(c, verified, artifactId, revisionId)).files[index],
   );
   if (!file) throw missing();
+  return readStoredFile(file);
+}
+
+/** A stored file's bytes, checked against the version's record of it. */
+export async function readStoredFile(file: StoredFile) {
   // A video is streamed, never held whole; its size and SHA-256 were checked
   // against the store's record when it was saved (the CLI checks it again).
   if (isVideoMime(file.mime))

@@ -24,6 +24,7 @@ import { db } from "./db.ts";
 import { moveShareFromAgent } from "./shares.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
 import { shelfSnapshotForAgent } from "./shelf-snapshot.ts";
+import { exportFileForAgent, shelfExportForAgent } from "./shelf-export.ts";
 import { createTaskToken } from "./service-principals.ts";
 import { listEventsForAgent } from "./agent-events.ts";
 import { artifactStatusForAgent, getArtifactForAgent, listArtifactsForAgent } from "./agent-management.ts";
@@ -74,6 +75,8 @@ export const PUBLISH_API_LIMITS = {
   perIp: 300,
   perConnection: 120,
   projectFilesPerConnection: 2 * PROJECT_MAX_FILES,
+  /** The files of a shelf export (polka-export.mjs), apart from the calls. */
+  exportFilesPerConnection: 3000,
 };
 export const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
 
@@ -215,6 +218,7 @@ export const baseMismatchSchema = z
 const CLI_SOURCE = new URL("../../scripts/polka-publish.mjs", import.meta.url);
 const PROJECT_CLI_SOURCE = new URL("../../scripts/polka-publish-project.mjs", import.meta.url);
 const PULL_CLI_SOURCE = new URL("../../scripts/polka-pull.mjs", import.meta.url);
+const EXPORT_CLI_SOURCE = new URL("../../scripts/polka-export.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
   reply.header(
@@ -246,7 +250,7 @@ export const EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
 async function bearerActor(
   req: FastifyRequest,
   reply: FastifyReply,
-  bucket: "calls" | "project-files" = "calls",
+  bucket: "calls" | "project-files" | "export-files" = "calls",
   // The project routes also take a one-time project upload token.
   audiences: readonly string[] = [MCP_AUDIENCE],
 ) {
@@ -289,10 +293,12 @@ async function bearerActor(
   await limitAttempts(
     bucket === "calls"
       ? `api-v1:connection:${actor.rootConnectionId ?? actor.connectionId}`
-      : `api-v1:project-files:${actor.connectionId}`,
+      : `api-v1:${bucket}:${actor.connectionId}`,
     bucket === "calls"
       ? PUBLISH_API_LIMITS.perConnection
-      : PUBLISH_API_LIMITS.projectFilesPerConnection,
+      : bucket === "export-files"
+        ? PUBLISH_API_LIMITS.exportFilesPerConnection
+        : PUBLISH_API_LIMITS.projectFilesPerConnection,
   );
   return actor;
 }
@@ -478,6 +484,29 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.get("/api/v1/snapshot", async (req, reply) => {
     const actor = await bearerActor(req, reply);
     return withFieldErrors(() => shelfSnapshotForAgent(actor, (req.query ?? {}) as never));
+  });
+  // The whole personal shelf for another installation (read and source:read);
+  // docs/specs/SHELF_TRANSFER.md. The inventory by pages, then each file.
+  app.get("/api/v1/export", async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return withFieldErrors(() => shelfExportForAgent(actor, (req.query ?? {}) as never));
+  });
+  app.get("/api/v1/export/revisions/:revisionId/files/:index", async (req, reply) => {
+    const actor = await bearerActor(req, reply, "export-files");
+    const params = z
+      .object({
+        revisionId: uuid,
+        index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+      })
+      .parse(req.params);
+    const file = await exportFileForAgent(actor, params.revisionId, params.index);
+    return reply
+      .type("application/octet-stream")
+      .header("cache-control", "no-store")
+      .header("x-content-type-options", "nosniff")
+      .header("x-polka-sha256", file.sha256)
+      .header("content-length", file.size)
+      .send("stream" in file ? file.stream : file.bytes);
   });
   // One work of the token's shelf with its versions (read).
   app.get("/api/v1/works/:artifactId", async (req, reply) => {
@@ -674,5 +703,16 @@ export async function registerPublishApi(app: FastifyInstance) {
       .type("text/javascript; charset=utf-8")
       .header("content-disposition", 'attachment; filename="polka-pull.mjs"')
       .send(pullCli),
+  );
+  // The whole shelf into a folder, for another installation (polka export).
+  const exportCli = (await readFile(EXPORT_CLI_SOURCE, "utf8")).replace(
+    /^const DEFAULT_ENDPOINT = ".*";$/m,
+    `const DEFAULT_ENDPOINT = ${JSON.stringify(config.APP_ORIGIN)};`,
+  );
+  app.get("/api/v1/cli/polka-export.mjs", async (_req, reply) =>
+    reply
+      .type("text/javascript; charset=utf-8")
+      .header("content-disposition", 'attachment; filename="polka-export.mjs"')
+      .send(exportCli),
   );
 }
