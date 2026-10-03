@@ -530,6 +530,7 @@ test("official client captures, prepares, shares, revises, isolates connections,
     (await client.listTools()).tools.map((tool) => tool.name).sort(),
     [
       "polka_capture",
+      "polka_change_files",
       "polka_context",
       "polka_note",
       "polka_prepare_preview",
