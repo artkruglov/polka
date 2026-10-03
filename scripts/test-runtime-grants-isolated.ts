@@ -855,6 +855,7 @@ let ledgerReaderResidueRemoved = false;
 let appFlowPassed = false;
 let moderationPassed = false;
 let accountMergePassed = false;
+let shelfImportPassed = false;
 let residueRemoved = false;
 let failed = false;
 let failureStage = "setup";
@@ -1133,6 +1134,22 @@ try {
   );
   accountMergePassed = mergeCode === 0;
   if (!accountMergePassed) throw new Error("Runtime account merge failed");
+  // The shelf import (scripts/shelf-import.ts) runs as the runtime role on the
+  // hosted VM: it backdates versions and journals the acceptance.
+  failureStage = "runtime-shelf-import";
+  const importCode = await spawnTestWithEnv(
+    "../tests/shelf-transfer.test.ts",
+    {
+      ...common,
+      S3_BUCKET: targetBucket,
+      LINK_KEY: randomBytes(64).toString("base64url"),
+      MAIL_MODE: "disabled",
+      RUNTIME_GRANTS_EXPECT_ROLE: runtimeRole,
+    },
+    120_000,
+  );
+  shelfImportPassed = importCode === 0;
+  if (!shelfImportPassed) throw new Error("Runtime shelf import failed");
 } catch {
   failed = true;
 } finally {
@@ -1220,6 +1237,7 @@ const evidence = {
   appFlowPassed,
   moderationPassed,
   accountMergePassed,
+  shelfImportPassed,
   triggerAndCascadePassed: roleAssertionsPassed && appFlowPassed,
   syntheticResidueRemoved: residueRemoved,
   workingResourcesUsed: false,

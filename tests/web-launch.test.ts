@@ -8,6 +8,7 @@ import { NotFoundContent as NotFound } from "../apps/web/src/pages/not-found/con
 import { ClaimChoice } from "../apps/web/src/pages/claim/index.tsx";
 import { snippetBesideTitle } from "../apps/web/src/widgets/shelf-card/cover-model.ts";
 import { DeleteShelf } from "../apps/web/src/pages/agents/delete-shelf.tsx";
+import { MoveShelf } from "../apps/web/src/pages/agents/move-shelf.tsx";
 import { AgentHeroView } from "../apps/web/src/features/agent-hero/index.tsx";
 import {
   clientHints,
@@ -82,6 +83,14 @@ test("the settings say how to delete the shelf, with the configured address", ()
   assert.match(bare, /Напишите оператору этой установки/);
   assert.doesNotMatch(bare, /mailto:/);
   assert.ok(isAppPage("/settings"));
+});
+
+test("the settings say how to move the shelf to another installation", () => {
+  const html = render(React.createElement(MoveShelf, { origin: "https://polochka.app" }));
+  assert.match(html, /<h2 id="move-shelf-title">Перенести полку<\/h2>/);
+  assert.match(html, /curl -fsSLo polka-export\.mjs &#x27;https:\/\/polochka\.app\/api\/v1\/cli\/polka-export\.mjs&#x27;/);
+  assert.match(html, /npm run shelf:import/);
+  assert.match(render(React.createElement(DeleteShelf, { contact: null })), /href="#move-shelf"/);
 });
 
 test("an installation on 127.0.0.1 offers only the paths that reach it", () => {

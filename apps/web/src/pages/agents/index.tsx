@@ -46,6 +46,7 @@ import { ClientCards, SetupPanel } from "../../widgets/agent-setup/index.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { SignInMethods } from "../../features/provider-sign-in/index.tsx";
 import { DeleteShelfSection } from "./delete-shelf.tsx";
+import { MoveShelf } from "./move-shelf.tsx";
 import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
@@ -1083,6 +1084,7 @@ export function AgentConnections() {
           </p>
         </section>
         {account && <SignInMethods />}
+        {account && !account.provisional && <MoveShelf origin={location.origin} />}
         {account && !account.provisional && <DeleteShelfSection />}
       </main>
       {confirmRevoke && (

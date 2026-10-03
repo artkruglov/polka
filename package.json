@@ -31,6 +31,7 @@
     "metrics:agent-access": "tsx --env-file=.env scripts/agent-access-metrics.ts",
     "account:email": "tsx --env-file=.env scripts/account-email.ts",
     "account:merge": "tsx --env-file=.env scripts/account-merge.ts",
+    "shelf:import": "tsx --env-file=.env scripts/shelf-import.ts",
     "account:erase": "tsx --env-file=.env scripts/account-erase.ts",
     "moderation:reports": "tsx --env-file=.env scripts/moderation.ts reports",
     "moderation:revoke-share": "tsx --env-file=.env scripts/moderation.ts revoke-share",

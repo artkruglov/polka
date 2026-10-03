@@ -181,6 +181,21 @@ POLKA_TOKEN=… node polka-publish-project.mjs ./report
 - Токен из `polka_project_upload` скачивает, если у подключения, которое его попросило, есть `source:read`; тогда в ответе инструмента есть `pullCommand`.
 - Синхронизации нет: версия меняется, только когда вы её сохраняете.
 
+## Перенос полки: `GET /api/v1/export` и `polka-export.mjs`
+
+Вся личная полка — для своей установки Полки или просто чтобы забрать данные ([SHELF_TRANSFER](specs/SHELF_TRANSFER.md)). Токен с правами `read` и `source:read`, на всю полку (не ограниченный папками).
+
+```sh
+curl -fsSLO https://polochka.app/api/v1/cli/polka-export.mjs
+read -r -s POLKA_TOKEN && export POLKA_TOKEN
+node polka-export.mjs ./polka-export
+# на своей установке: npm run shelf:import -- --dir ./polka-export --account <почта>
+```
+
+- `GET /api/v1/export?cursor=&limit=` — опись: каждая работа (с корзиной) со всеми версиями, их датами, манифестами и списками файлов, папки и карточка полки; формат `polka-shelf-export/1`, `nextCursor` до последней страницы.
+- `GET /api/v1/export/revisions/:revisionId/files/:index` — байты одного файла любой версии полки (`X-Polka-Sha256`); заблокированная модератором — `410`. Лимит — 3000 файлов за 10 минут на подключение, отдельно от 120 запросов.
+- CLI пишет `polka-export.json` и `blobs/<sha256>`, каждый файл один раз; повторный запуск продолжает с места. Ссылки и комментарии не выгружаются.
+
 ## Ошибки
 
 Всегда JSON `{"code": "…", "message": "…"}`; `message` — по-русски, для человека.

@@ -1,4 +1,4 @@
-// polka-pull.mjs and polka-publish-project.mjs against a stub server that may
+// polka-pull.mjs, polka-publish-project.mjs and polka-export.mjs against a stub server that may
 // be hostile: what a manifest may write, links on disk, a .polka.json that
 // anyone could have put in the folder, and where the token is allowed to go.
 import assert from "node:assert/strict";
@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const pull = fileURLToPath(new URL("../scripts/polka-pull.mjs", import.meta.url));
 const publish = fileURLToPath(new URL("../scripts/polka-publish-project.mjs", import.meta.url));
+const exporter = fileURLToPath(new URL("../scripts/polka-export.mjs", import.meta.url));
 const ARTIFACT = "11111111-1111-4111-8111-111111111111";
 const REVISION = "22222222-2222-4222-8222-222222222222";
 const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -24,12 +25,58 @@ let origin: string;
 let requests: string[] = [];
 let listing: Array<{ path: string; bytes: Buffer }> = [];
 let damaged = false;
+// The export's inventory: listing as one work's one version, or a hostile hash.
+let exportHash: ((bytes: Buffer) => string) | null = null;
+let redirectExport = false;
 
 before(async () => {
   scratch = await mkdtemp(join(tmpdir(), "polka-cli-"));
   server = createServer((req, res) => {
     requests.push(`${req.method} ${req.url}`);
     const url = new URL(req.url!, "http://x");
+    if (url.pathname === "/api/v1/export") {
+      if (redirectExport) {
+        res.writeHead(302, { location: "http://127.0.0.2:9/api/v1/export" });
+        res.end();
+        return;
+      }
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          format: "polka-shelf-export/1",
+          exportedAt: "2026-10-03T00:00:00.000Z",
+          source: { origin, shelfId: ARTIFACT, accountEmail: null, polkaVersion: "0.9.0" },
+          shelf: { cardMd: null, folders: [] },
+          items: [
+            {
+              id: ARTIFACT,
+              title: "Проект",
+              folderId: null,
+              updatedAt: "2026-10-03T00:00:00.000Z",
+              trashedAt: null,
+              ownerIsSelf: false,
+              acceptedRevisionId: null,
+              acceptedAt: null,
+              revisions: [
+                {
+                  id: REVISION,
+                  number: 1,
+                  files: listing.map((file, index) => ({
+                    index,
+                    path: file.path,
+                    mime: "text/plain",
+                    size: file.bytes.length,
+                    sha256: (exportHash ?? sha)(file.bytes),
+                  })),
+                },
+              ],
+            },
+          ],
+          nextCursor: null,
+        }),
+      );
+      return;
+    }
     if (url.pathname === `/api/v1/works/${ARTIFACT}/files`) {
       res.setHeader("content-type", "application/json");
       res.end(
@@ -86,6 +133,8 @@ const reset = (files: Array<{ path: string; bytes: Buffer }>) => {
   listing = files;
   requests = [];
   damaged = false;
+  exportHash = null;
+  redirectExport = false;
 };
 const text = (path: string, body = path) => ({ path, bytes: Buffer.from(body) });
 const exists = (path: string) => lstat(path).then(() => true, () => false);
@@ -209,4 +258,40 @@ test("publish: a plain-http endpoint is refused", async () => {
   const result = await node(publish, [folder], { POLKA_ENDPOINT: "http://polka.example.com" });
   assert.equal(result.code, 2);
   assert.match(result.err, /must use https/);
+});
+
+test("export writes files only under blobs/<sha256>, and refuses a hash that is not one", async () => {
+  reset([text("../../escape.txt", "x"), text("b.txt")]);
+  const ok = await node(exporter, [join(scratch, "export-ok")], { POLKA_ENDPOINT: origin });
+  assert.equal(ok.code, 0, ok.err);
+  assert.ok(await exists(join(scratch, "export-ok", "blobs", sha(Buffer.from("x")))));
+  assert.ok(!(await exists(join(scratch, "escape.txt"))));
+
+  reset([text("a.txt")]);
+  exportHash = () => "../../../etc/passwd";
+  const hostile = await node(exporter, [join(scratch, "export-hostile")], { POLKA_ENDPOINT: origin });
+  assert.notEqual(hostile.code, 0);
+  assert.match(hostile.err, /invalid hash/);
+});
+
+test("export keeps no damaged file, and never follows a redirect with the token", async () => {
+  reset([text("a.txt")]);
+  damaged = true;
+  const broken = await node(exporter, [join(scratch, "export-damaged")], { POLKA_ENDPOINT: origin });
+  assert.equal(broken.code, 1);
+  assert.deepEqual(JSON.parse(await readFile(join(scratch, "export-damaged", "polka-export.json"), "utf8")).items.length, 1);
+  assert.ok(!(await exists(join(scratch, "export-damaged", "blobs", sha(Buffer.from("a.txt"))))));
+
+  reset([text("a.txt")]);
+  redirectExport = true;
+  const moved = await node(exporter, [join(scratch, "export-redirect")], { POLKA_ENDPOINT: origin });
+  assert.notEqual(moved.code, 0);
+  assert.match(moved.err, /redirected/);
+  assert.deepEqual(requests, ["GET /api/v1/export"]);
+
+  reset([text("a.txt")]);
+  const remote = await node(exporter, [join(scratch, "export-http")], { POLKA_ENDPOINT: "http://polka.example.com" });
+  assert.equal(remote.code, 2);
+  assert.match(remote.err, /must use https/);
+  assert.deepEqual(requests, []);
 });

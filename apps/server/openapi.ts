@@ -704,6 +704,60 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/export": {
+        get: {
+          operationId: "exportShelf",
+          summary: "The whole personal shelf, for another installation",
+          description:
+            "Pages of the inventory (docs/specs/SHELF_TRANSFER.md): format polka-shelf-export/1, source {origin, shelfId, accountEmail, polkaVersion}, shelf {cardMd, folders}, items [{id, title, folderId, updatedAt, trashedAt, ownerIsSelf, acceptedRevisionId, acceptedAt, revisions [{id, number, createdAt, filename, mime, size, sha256, totalSize, storageKind, manifest, manifestSha256, unavailable, files [{index, path, mime, size, sha256}]}]}] and nextCursor. Every version of every work, the trash included; limit 1–50 works (default 50), fewer when a page reaches 1000 versions. No share links, no comments. Scopes read and source:read, the whole personal shelf (a token limited to folders is refused). The ready-made client is GET /api/v1/cli/polka-export.mjs.",
+          security: [{ bearerAuth: ["read", "source:read"] }],
+          parameters: [
+            { name: "cursor", in: "query", required: false, schema: { type: "string", format: "uuid" } },
+            { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 50 } },
+          ],
+          responses: {
+            "200": { description: "A page of the inventory and nextCursor (null on the last page)." },
+            "400": { description: "A parameter is invalid." },
+            "401": common["401"],
+            "403": { description: "A scope is missing, the token is limited to folders, or the shelf is not a personal one." },
+            "429": common["429"],
+          },
+        },
+      },
+      "/api/v1/export/revisions/{revisionId}/files/{index}": {
+        get: {
+          operationId: "exportShelfFile",
+          summary: "Download one file of any version of the shelf",
+          description:
+            "The file's bytes as application/octet-stream; X-Polka-Sha256 is its SHA-256. Works in the trash too. Counted apart from the other calls. Scopes read and source:read.",
+          security: [{ bearerAuth: ["read", "source:read"] }],
+          parameters: [
+            { name: "revisionId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+            { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0, maximum: 399 } },
+          ],
+          responses: {
+            "200": { description: "The bytes." },
+            "403": { description: "As for exportShelf." },
+            "404": { description: "No such version or file on this shelf." },
+            "410": { description: "Blocked or deleted by moderation." },
+          },
+        },
+      },
+      "/api/v1/cli/polka-export.mjs": {
+        get: {
+          operationId: "downloadExportCli",
+          summary: "Download the dependency-free shelf export CLI",
+          description:
+            "A single-file Node 22+ script that writes the whole personal shelf into a folder (polka-export.json and blobs/<sha256>), resumable; scripts/shelf-import.ts on another installation reads it. It reads the token only from POLKA_TOKEN.",
+          security: [],
+          responses: {
+            "200": {
+              description: "The script, pointed at this installation.",
+              content: { "text/javascript": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
       "/api/v1/projects/{uploadId}/finalize": {
         post: {
           operationId: "finalizeProject",
