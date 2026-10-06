@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 063.
+-- Operator-reviewed recipe for the Polka schema through migration 064.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>63
+     OR (SELECT count(*) FROM public.schema_migrations)<>64
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>63 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 063';
+     OR (SELECT max(version) FROM public.schema_migrations)<>64 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 064';
   END IF;
 END $$;
 
@@ -206,10 +206,11 @@ GRANT SELECT, INSERT, UPDATE ON TABLE public.share_open_days TO :"runtime_role";
 -- Shelf card (056): a column of tenants, already granted.
 -- Owner and accepted version (057): two columns of artifacts, already granted.
 -- Snapshot indexes (063): two partial indexes on audit_outbox, no grants.
+-- Feed index (064): an expression index on audit_outbox for extensions' journal, no grants.
 -- Agent read counts (061): agent_read_days is granted above; counts only. The tenants row stays after erasure, so the leaving-account trigger deletes them (062).
 -- Erase freezes service accounts (060): replaces a SECURITY DEFINER function, no grants.
 -- Allowed shelves of a connection (059): a column of agent_connections, already granted.
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;
 
-\echo Runtime grants installed for the reviewed schema through migration 063
+\echo Runtime grants installed for the reviewed schema through migration 064

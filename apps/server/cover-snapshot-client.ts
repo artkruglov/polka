@@ -23,50 +23,67 @@ export type SnapshotCall = (
 const ERRORS = new Set(["timeout", "navigation_failed", "too_large", "busy", "bad_request", "unauthorized"]);
 const MAX_ANSWER = Math.ceil(SNAPSHOT_MAX_IMAGE * 1.4) + 1024;
 
-export function snapshotClient({
-  base = config.RENDERER_URL,
-  secret = config.RENDERER_SECRET,
-  ca = config.RENDERER_CA,
-  timeoutMs = 30_000,
-}: { base?: string; secret?: string; ca?: string; timeoutMs?: number } = {}): SnapshotCall {
+export type RendererTarget = { base?: string; secret?: string; ca?: string; timeoutMs?: number };
+
+/**
+ * One signed POST to the renderer (packages/renderer-contract.ts): the status
+ * and the answer's text, at most maxAnswer bytes of it. Shared by covers
+ * (/snapshot) and PDF prints (/pdf, renderer-pdf.ts).
+ */
+export async function rendererPost(
+  path: "/snapshot" | "/pdf",
+  body: string,
+  maxAnswer: number,
+  signal: AbortSignal | undefined,
+  {
+    base = config.RENDERER_URL,
+    secret = config.RENDERER_SECRET,
+    ca = config.RENDERER_CA,
+    timeoutMs = 30_000,
+  }: RendererTarget = {},
+) {
+  if (!base || !secret || !rendererUrlAllowed(base)) throw new Error("renderer is not configured");
+  const target = new URL(path, base);
+  const abort = AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]);
+  return new Promise<{ status: number; text: string }>((resolve, reject) => {
+    const send = target.protocol === "https:" ? httpsRequest : httpRequest;
+    const req = send(
+      target,
+      {
+        method: "POST",
+        signal: abort,
+        agent: false,
+        ...(target.protocol === "https:" && ca ? { ca: ca.replace(/\\n/g, "\n") } : {}),
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          ...signRenderRequest(secret, "POST", path, body),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        res.on("data", (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > maxAnswer) {
+            res.destroy();
+            reject(new Error("renderer answer too large"));
+          } else chunks.push(chunk);
+        });
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") }));
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+export function snapshotClient(target: RendererTarget = {}): SnapshotCall {
   return async (page, signal) => {
-    if (!base || !secret || !rendererUrlAllowed(base)) throw new Error("renderer is not configured");
     const body = JSON.stringify(page);
     if (Buffer.byteLength(body) > SNAPSHOT_MAX_BODY) return { error: "too_large" };
-    const target = new URL("/snapshot", base);
-    const abort = AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]);
-    const answer = await new Promise<{ status: number; text: string }>((resolve, reject) => {
-      const send = target.protocol === "https:" ? httpsRequest : httpRequest;
-      const req = send(
-        target,
-        {
-          method: "POST",
-          signal: abort,
-          agent: false,
-          ...(target.protocol === "https:" && ca ? { ca: ca.replace(/\\n/g, "\n") } : {}),
-          headers: {
-            "content-type": "application/json",
-            "content-length": Buffer.byteLength(body),
-            ...signRenderRequest(secret, "POST", "/snapshot", body),
-          },
-        },
-        (res) => {
-          const chunks: Buffer[] = [];
-          let size = 0;
-          res.on("data", (chunk: Buffer) => {
-            size += chunk.length;
-            if (size > MAX_ANSWER) {
-              res.destroy();
-              reject(new Error("renderer answer too large"));
-            } else chunks.push(chunk);
-          });
-          res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") }));
-          res.on("error", reject);
-        },
-      );
-      req.on("error", reject);
-      req.end(body);
-    });
+    const answer = await rendererPost("/snapshot", body, MAX_ANSWER, signal, target);
     return parseSnapshotAnswer(answer.status, answer.text);
   };
 }

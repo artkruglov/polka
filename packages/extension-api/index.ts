@@ -6,6 +6,7 @@
 // This file is part of the open core (AGPL-3.0). An extension keeps its own
 // tables in its own PostgreSQL schema, with its own migrations and role
 // grants: the core's migration set and grant recipes never change for it.
+import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
 
@@ -59,6 +60,61 @@ export type PolkaEvent =
   | { type: "share.revoked"; tenantId: string; shareId: string; accountId: string | null; at: string }
   | { type: "member.revoked"; tenantId: string; accountId: string; at: string };
 
+/** A file of a saved version, as the version records it. */
+export type ExtensionRevisionFile = { index: number; path: string; mime: string; size: number; sha256: string };
+
+/** A saved version with its work and shelf (context.content.revision). */
+export type ExtensionRevision = {
+  shelf: ShelfInfo;
+  artifact: {
+    id: string;
+    title: string;
+    folder: { id: string; name: string } | null;
+    trashed: boolean;
+    acceptedRevisionId: string | null;
+  };
+  revision: {
+    id: string;
+    number: number;
+    createdAt: string;
+    manifestSha256: string | null;
+    entrypoint: string;
+    runtime: string | null;
+  };
+  files: ExtensionRevisionFile[];
+  /** null: the bytes may be read; otherwise moderation isolated ("blocked") or deleted ("removed") them. */
+  unavailable: null | "blocked" | "removed";
+};
+
+/** A row of the installation's action journal (context.auditFeed). */
+export type AuditFeedItem = {
+  id: string;
+  tx: string;
+  tenantId: string;
+  actorId: string;
+  actorType: string;
+  action: string;
+  targetId: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+};
+/** A place in the journal; keep it in your own table and pass it back. */
+export type AuditCursor = { tx: string; id: string };
+
+export type PdfOutcome =
+  | { pdf: Buffer }
+  | {
+      skipped:
+        | "not_visual"
+        | "no_source"
+        | "too_large"
+        | "timeout"
+        | "busy"
+        | "failed"
+        | "renderer_outdated"
+        | "unavailable";
+    };
+
 /** What the core hands an extension when it registers. */
 export type ExtensionContext = {
   /** The signed-in account; with { shelf: true } it follows X-Polka-Shelf. */
@@ -77,6 +133,31 @@ export type ExtensionContext = {
   /** The core's installation settings an extension may read. */
   settings: { appOrigin: string; teamShelves: boolean };
   log: (event: Record<string, unknown>) => void;
+  /**
+   * Saved versions of any shelf of the installation (an extension is trusted
+   * code in the core's process). Moderation and checksums stay the core's:
+   * an isolated version is reported, never read; every stream is checked
+   * against the version's record and fails at its end on a mismatch.
+   */
+  content: {
+    revision(tenantId: string, revisionId: string): Promise<ExtensionRevision | null>;
+    openFile(tenantId: string, revisionId: string, index: number): Promise<Readable>;
+    /** The page a recipient would see, printed on A4; null where the renderer is not configured. */
+    pdf: ((tenantId: string, revisionId: string, signal?: AbortSignal) => Promise<PdfOutcome>) | null;
+  };
+  /**
+   * The action journal of the whole installation in commit order (audit_outbox).
+   * Durable where onEvent is not: keep the cursor and nothing is lost on a
+   * restart; a transaction that commits late is never skipped.
+   */
+  auditFeed: {
+    read(
+      after: AuditCursor | null,
+      options: { actions: string[]; limit: number },
+    ): Promise<{ items: AuditFeedItem[]; next: AuditCursor | null }>;
+    /** The end of the journal now: start here to see only what comes next. */
+    head(): Promise<AuditCursor>;
+  };
 };
 
 export interface PolkaExtension {
@@ -97,7 +178,11 @@ export interface PolkaExtension {
      */
     agentScope?(connection: AgentConnectionInfo, c: Pick<PoolClient, "query">): Promise<{ folderIds: string[] } | null>;
   };
-  /** After the fact, outside the transaction: integrations and journals. Errors are logged, never thrown. */
+  /**
+   * After the fact, outside the transaction: best effort, at most once (lost
+   * on a restart). Errors are logged, never thrown. For work that must not be
+   * lost, read context.auditFeed by a cursor instead.
+   */
   onEvent?(event: PolkaEvent): Promise<void> | void;
   /**
    * The extension's part of the web app: an absolute path to one ES module

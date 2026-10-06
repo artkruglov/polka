@@ -24,6 +24,7 @@
 Отдельный сервис [apps/renderer](../../apps/renderer) на официальном образе Playwright (закреплён по digest). Развёртывание описано в [deploy/renderer/README.md](../../deploy/renderer/README.md): тот же compose (`--profile renderer`), Yandex Cloud или Fly.io.
 
 - API: `POST /render {url}` → `{finalUrl,title,html,frames}` и `POST /fetch {url}` → `{finalUrl,status,html}` или `{error}`. Коды ошибок: `source_blocked`, `robots_disallowed`, `robots_unavailable`, `timeout`, `not_allowed`, `navigation_failed`, `too_large`, `busy`.
+- `POST /snapshot {html, script}` → JPEG первого экрана (обложка полки, [SHELF_COVERS](SHELF_COVERS.md)) и `POST /pdf {html, script}` → вся страница как PDF на A4 (с 0.10.0; печать принятой версии для расширений, [EXTENSIONS](EXTENSIONS.md)). Обе операции открывают присланную страницу с зарезервированного адреса без сети вообще: ни один запрос страницы не уходит наружу, поэтому внешние шрифты и картинки в снимок и печать не попадают. PDF — до 20 МиБ и 30 с.
 - Каждый запрос подписан HMAC-SHA256 от `RENDERER_SECRET` по времени, методу, пути и SHA-256 тела. Допустимое расхождение часов — 60 с. `RENDERER_URL` — только https, кроме loopback и адресов Docker (172.16.0.0/12 или имя сервиса).
 - robots.txt для `PolkaRenderer` (иначе `*`) рендерер читает сам, с той машины, которая делает запрос (RFC 9309, кэш на хост 1 час, недоступный robots.txt = запрет). UA: `PolkaRenderer/1.0 (+https://polochka.app/bot)`. Описание для владельцев сайтов — страница [/bot](../legal/bot.md).
 - Egress: Chromium и `/fetch` ходят только через прокси в том же контейнере. Прокси пропускает только `CONNECT` на порт 443, резолвит DNS один раз и закрепляет адрес, отказывает, если хотя бы один адрес непубличный: loopback, RFC 1918, Docker, `169.254.169.254`, IPv6 ULA и link-local ([packages/public-address.ts](../../packages/public-address.ts) — то же правило, что у `fetchPublic`).
@@ -32,7 +33,7 @@
 
 **Снимок → работа.** DOM без `<script>`, `<noscript>`, обработчиков `on*` и `javascript:` проходит обычную локализацию `captureHtmlDocument`: CSS, картинки и шрифты скачиваются через `fetchPublic`. Получается пакет с provenance `renderer: 'headless-snapshot-v1'` и предупреждением «Снимок страницы на момент сохранения: интерактив может не работать». Задание проходит состояние `rendering` (миграция 037). Сохранение идёт тем же путём, что и любой импорт, поэтому содержимое читает фильтр ([CONTENT_FILTER](CONTENT_FILTER.md)); это покрыто тестом.
 
-Проверки: `tests/renderer.test.ts` (детектор, подпись, решения egress, `/fetch`), `tests/url-import-rendered.test.ts`, `tests/url-import-chatgpt.test.ts`, `tests/url-import-gist.test.ts`, `tests/link-providers.test.ts`, `npm run test:renderer-runtime` (локальная SPA-фикстура через настоящий Chromium и прокси; egress внутри Docker-образа).
+Проверки: `tests/renderer.test.ts` (детектор, подпись, решения egress, `/fetch`), `tests/url-import-rendered.test.ts`, `tests/url-import-chatgpt.test.ts`, `tests/url-import-gist.test.ts`, `tests/link-providers.test.ts`, `npm run test:renderer-runtime` (локальная SPA-фикстура через настоящий Chromium и прокси; `/snapshot` и `/pdf` без сети; egress и печать в PDF внутри Docker-образа).
 
 ## Проверка на настоящих ссылках (24.09.2026)
 

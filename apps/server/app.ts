@@ -8,6 +8,9 @@ import {
 } from "./service-principals.ts";
 import { setShareFollowMode } from "./share-follow.ts";
 import { acceptRevision, setWorkOwner } from "./artifact-acceptance.ts";
+import { openFileForExtension, revisionForExtension } from "./extension-content.ts";
+import { auditFeedHead, readAuditFeed } from "./extension-feed.ts";
+import { pdfConfigured, pdfForExtension } from "./renderer-pdf.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
 import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
 import {
@@ -1608,6 +1611,12 @@ export async function createApp() {
       fail: (status, code, message) => new Problem(status, code, message),
       settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
       log: (event) => console.log(JSON.stringify({ extension: extension.name, ...event })),
+      content: {
+        revision: revisionForExtension,
+        openFile: openFileForExtension,
+        pdf: pdfConfigured() ? pdfForExtension : null,
+      },
+      auditFeed: { read: readAuditFeed, head: auditFeedHead },
     });
   return app;
 }

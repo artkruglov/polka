@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext } from "playwright-core";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 import {
   SNAPSHOT_MAX_IMAGE,
   SNAPSHOT_SCALE,
@@ -37,18 +37,30 @@ const PAINTED = `(() => {
   return /gradient|url\\(/.test(bg) || /rgb\\((?!255, 255, 255)/.test(bg);
 })()`;
 
-export async function snapshotPage(
+/**
+ * Opens `html` in a fresh sandboxed context (no network, no workers, no
+ * downloads), waits for it to load and settle within `timeoutMs`, and runs
+ * `work` on the page. The context is always closed; a page that hangs gives
+ * "timeout", one that breaks gives "navigation_failed".
+ */
+export async function withSandboxedPage<T>(
   browser: Browser,
   html: string,
-  { script = true, timeoutMs = SNAPSHOT_TIMEOUT_MS }: { script?: boolean; timeoutMs?: number } = {},
-): Promise<SnapshotResult> {
+  {
+    script = true,
+    timeoutMs = SNAPSHOT_TIMEOUT_MS,
+    viewport = SNAPSHOT_VIEWPORT,
+    scale = SNAPSHOT_SCALE,
+  }: { script?: boolean; timeoutMs?: number; viewport?: { width: number; height: number }; scale?: number },
+  work: (page: Page, left: () => number) => Promise<T>,
+): Promise<T | { error: "timeout" | "navigation_failed" }> {
   const deadline = Date.now() + timeoutMs;
   const left = () => Math.max(0, deadline - Date.now());
   let context: BrowserContext | null = null;
-  const work = (async (): Promise<SnapshotResult> => {
+  const run = (async (): Promise<T> => {
     context = await browser.newContext({
-      viewport: SNAPSHOT_VIEWPORT,
-      deviceScaleFactor: SNAPSHOT_SCALE,
+      viewport,
+      deviceScaleFactor: scale,
       javaScriptEnabled: script,
       acceptDownloads: false,
       serviceWorkers: "block",
@@ -74,6 +86,28 @@ export async function snapshotPage(
     }
     // Charts animate in and fonts settle; a short, bounded pause.
     await page.waitForTimeout(Math.min(1_200, Math.max(0, left() - 2_000)));
+    return work(page, left);
+  })();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<{ error: "timeout" }>((resolve) => {
+    timer = setTimeout(() => resolve({ error: "timeout" }), timeoutMs + 1_000);
+  });
+  try {
+    return await Promise.race([run.catch(() => ({ error: "navigation_failed" as const })), expired]);
+  } finally {
+    clearTimeout(timer);
+    const close = () => (context as BrowserContext | null)?.close().catch(() => {});
+    await close();
+    void run.finally(close).catch(() => {});
+  }
+}
+
+export async function snapshotPage(
+  browser: Browser,
+  html: string,
+  { script = true, timeoutMs = SNAPSHOT_TIMEOUT_MS }: { script?: boolean; timeoutMs?: number } = {},
+): Promise<SnapshotResult> {
+  return withSandboxedPage<SnapshotResult>(browser, html, { script, timeoutMs }, async (page, left) => {
     const painted = await page.evaluate(PAINTED).catch(() => false);
     if (!painted) return { blank: true };
     let image: Buffer | null = null;
@@ -89,17 +123,5 @@ export async function snapshotPage(
     }
     if (!image || image.length > SNAPSHOT_MAX_IMAGE) return { error: "too_large" };
     return { image: image.toString("base64"), blank: false };
-  })();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<SnapshotResult>((resolve) => {
-    timer = setTimeout(() => resolve({ error: "timeout" }), timeoutMs + 1_000);
   });
-  try {
-    return await Promise.race([work.catch((): SnapshotResult => ({ error: "navigation_failed" })), expired]);
-  } finally {
-    clearTimeout(timer);
-    const close = () => (context as BrowserContext | null)?.close().catch(() => {});
-    await close();
-    void work.finally(close).catch(() => {});
-  }
 }

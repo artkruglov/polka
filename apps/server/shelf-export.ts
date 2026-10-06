@@ -13,6 +13,7 @@ import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
+import { unavailableSql } from "./revision-availability.ts";
 import { readStoredFile, storedRevisionFiles } from "./work-files.ts";
 
 const POLKA_VERSION: string = JSON.parse(
@@ -30,12 +31,6 @@ export const shelfExportInputSchema = z
 /** A page stops adding works past this many versions (a work always comes whole). */
 export const EXPORT_PAGE_REVISIONS = 1000;
 
-/** A version whose bytes moderation isolated or deleted: listed, never given out. */
-const unavailableSql = (r: string) => `CASE
-  WHEN ${r}.content_purged_at IS NOT NULL THEN 'removed'
-  WHEN EXISTS(SELECT 1 FROM moderation_blocks block
-              WHERE block.revision_id=${r}.id AND block.isolated AND block.released_at IS NULL)
-    THEN 'blocked' END`;
 
 /**
  * The token may export: read and source:read, the whole personal shelf (not

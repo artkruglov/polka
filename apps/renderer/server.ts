@@ -2,9 +2,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { chromium, type Browser } from "playwright-core";
 import { renderable } from "../../packages/contracts/link-providers.ts";
 import {
+  PDF_MAX_BODY,
   SNAPSHOT_MAX_BODY,
   verifyRenderRequest,
   type FetchResult,
+  type PdfResult,
   type RenderResult,
   type SnapshotResult,
 } from "../../packages/renderer-contract.ts";
@@ -12,6 +14,7 @@ import { createEgressProxy } from "./egress-proxy.ts";
 import { fetchPage, robotsVerdict, robotsVia, type RobotsSource } from "./fetch-page.ts";
 import { proxiedGet, type ProxiedGet } from "./proxied-fetch.ts";
 import { renderPage, type RenderOptions } from "./render.ts";
+import { printPage } from "./pdf.ts";
 import { snapshotPage } from "./snapshot.ts";
 
 /*
@@ -20,7 +23,8 @@ import { snapshotPage } from "./snapshot.ts";
  * POST /fetch {url} → the HTML of a server-fetch page (ChatGPT share) from one
  * plain GET, no browser; POST /snapshot {html, script} → a JPEG of the first
  * screen of a page the app sends (a shelf cover, docs/specs/SHELF_COVERS.md),
- * drawn with no network at all. /render and /fetch check robots.txt for PolkaRenderer from here,
+ * drawn with no network at all; POST /pdf {html, script} → the same page,
+ * whole, as an A4 PDF in the same sandbox. /render and /fetch check robots.txt for PolkaRenderer from here,
  * go out only through the egress proxy and answer an error code rather than
  * retry. Every request is signed by the app
  * (packages/renderer-contract.ts). Pages are rendered one at a time; a short
@@ -53,7 +57,7 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
   if (secret.length < 32) throw new Error("RENDERER_SECRET must be at least 32 characters");
   let chain: Promise<unknown> = Promise.resolve();
   let waiting = 0;
-  const enqueue = <T extends RenderResult | FetchResult | SnapshotResult>(task: () => Promise<T>): Promise<T> => {
+  const enqueue = <T extends RenderResult | FetchResult | SnapshotResult | PdfResult>(task: () => Promise<T>): Promise<T> => {
     if (waiting > MAX_QUEUE) return Promise.resolve({ error: "busy" } as T);
     waiting++;
     const next = chain.then(task).finally(() => waiting--);
@@ -67,16 +71,27 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
     };
     if (req.method === "GET" && req.url === "/healthz") return send(200, { ok: true });
     const operation =
-      req.url === "/render" ? "render" : req.url === "/fetch" ? "fetch" : req.url === "/snapshot" ? "snapshot" : null;
+      req.url === "/render"
+        ? "render"
+        : req.url === "/fetch"
+          ? "fetch"
+          : req.url === "/snapshot"
+            ? "snapshot"
+            : req.url === "/pdf"
+              ? "pdf"
+              : null;
     if (req.method !== "POST" || !operation) return send(404, { error: "bad_request" });
     let body = "";
     try {
-      body = await readBody(req, operation === "snapshot" ? SNAPSHOT_MAX_BODY : MAX_BODY);
+      body = await readBody(
+        req,
+        operation === "snapshot" ? SNAPSHOT_MAX_BODY : operation === "pdf" ? PDF_MAX_BODY : MAX_BODY,
+      );
     } catch {
       return send(413, { error: "bad_request" });
     }
     if (!verifyRenderRequest(secret, req.headers, "POST", `/${operation}`, body)) return send(401, { error: "unauthorized" });
-    if (operation === "snapshot") {
+    if (operation === "snapshot" || operation === "pdf") {
       let page: { html: string; script: boolean };
       try {
         const parsed = JSON.parse(body) as { html?: unknown; script?: unknown };
@@ -85,9 +100,13 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
       } catch {
         return send(400, { error: "bad_request" });
       }
-      const result = await enqueue(async () => snapshotPage(await browser(), page.html, { script: page.script }));
+      const result: SnapshotResult | PdfResult =
+        operation === "pdf"
+          ? await enqueue(async () => printPage(await browser(), page.html, { script: page.script }))
+          : await enqueue(async () => snapshotPage(await browser(), page.html, { script: page.script }));
       // Outcomes only: the page is the owner's and stays out of logs.
-      console.log(JSON.stringify({ event: operation, outcome: "error" in result ? result.error : result.blank ? "blank" : "ok", ms: Date.now() - started }));
+      const outcome = "error" in result ? result.error : "blank" in result && result.blank ? "blank" : "ok";
+      console.log(JSON.stringify({ event: operation, outcome, ms: Date.now() - started }));
       return send("error" in result ? (result.error === "busy" ? 503 : 422) : 200, result);
     }
     let url: string;

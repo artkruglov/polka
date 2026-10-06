@@ -64,6 +64,20 @@ export const SNAPSHOT_VIEWPORT = { width: 1280, height: 800 } as const;
 /** 1280×800 at 0.75: 960×600, twice the widest card on a 1440 screen. */
 export const SNAPSHOT_SCALE = 0.75;
 
+/**
+ * POST /pdf {html, script}: a PDF of the whole page (an accepted version's
+ * snapshot for a company archive, docs/specs/EXTENSIONS.md). The same
+ * sandbox as /snapshot: the page is served from a reserved address and
+ * nothing else loads, so external fonts and pictures are missing. A4, the
+ * screen look with its backgrounds.
+ */
+export type PdfRequest = SnapshotRequest;
+export type PdfResult = { pdf: string } | { error: RenderError; detail?: string };
+export const PDF_MAX_BODY = SNAPSHOT_MAX_BODY;
+/** The largest PDF the renderer answers (base64 of it is a third larger). */
+export const PDF_MAX_FILE = 20 * 1024 * 1024;
+export const PDF_TIMEOUT_MS = 30_000;
+
 const payload = (timestamp: string, method: string, path: string, body: string) =>
   `${timestamp}\n${method.toUpperCase()}\n${path}\n${createHash("sha256").update(body).digest("hex")}`;
 

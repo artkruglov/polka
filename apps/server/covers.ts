@@ -292,15 +292,20 @@ async function pump() {
 const MAX_ATTEMPTS = 3;
 const IMAGE_PAGE_MAX = 6 * 1024 * 1024;
 
-/** The page the renderer draws for this version, or why there is none. */
-async function snapshotPage(r: any): Promise<
-  { html: string; script: boolean; source: "source" | "derivative" } | { reason: string }
-> {
+/**
+ * The page the renderer draws for this version (a cover, or a PDF for an
+ * extension, extension-content.ts), or why there is none. A picture fills the
+ * frame for a cover and is shown whole for a print.
+ */
+export async function renderablePage(
+  r: any,
+  { imageFit = "cover" }: { imageFit?: "cover" | "contain" } = {},
+): Promise<{ html: string; script: boolean; source: "source" | "derivative" } | { reason: string }> {
   if (isImageMime(r.mime)) {
     const bytes = await readBlob(r.object_key, r.object_version);
     if (bytes.length > IMAGE_PAGE_MAX) return { reason: "too_large" };
     return {
-      html: `<!doctype html><html><body style="margin:0;background:#f5f5f7"><img alt="" src="data:${r.mime};base64,${bytes.toString("base64")}" style="display:block;width:100vw;height:100vh;object-fit:cover"></body></html>`,
+      html: `<!doctype html><html><body style="margin:0;background:#f5f5f7"><img alt="" src="data:${r.mime};base64,${bytes.toString("base64")}" style="display:block;width:100vw;height:100vh;object-fit:${imageFit}"></body></html>`,
       script: false,
       source: "source",
     };
@@ -367,9 +372,9 @@ export async function drawCover(
     await settle("failed", { reason: "hidden" });
     return "failed";
   }
-  let page: Awaited<ReturnType<typeof snapshotPage>>;
+  let page: Awaited<ReturnType<typeof renderablePage>>;
   try {
-    page = await snapshotPage(r);
+    page = await renderablePage(r);
   } catch {
     await settle("failed", { reason: "unreadable" });
     return "failed";

@@ -193,6 +193,28 @@ try {
   const unsigned = await fetch(`${base}/snapshot`, { method: "POST", body: JSON.stringify({ html: "<p>x</p>", script: false }) });
   assert.equal(unsigned.status, 401);
   pass("/snapshot: a shell that needed the network → blank; unsigned → 401");
+
+  // POST /pdf (an accepted version for a company archive): the whole page, same sandbox.
+  const pdfCall = async (html: string, script = true) => {
+    const body = JSON.stringify({ html, script });
+    const response = await fetch(`${base}/pdf`, {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json", ...signRenderRequest(SECRET, "POST", "/pdf", body) },
+    });
+    return { status: response.status, body: (await response.json()) as any };
+  };
+  const pdfHitsBefore = canaryHits;
+  const printed = await pdfCall(`<!doctype html><h1>Отчёт за квартал</h1>${"<p>Строка отчёта.</p>".repeat(200)}
+    <img src="https://127.0.0.1:${canaryPort}/pixel.png"><script>fetch('https://127.0.0.1:${canaryPort}/beacon').catch(()=>{})</script>`);
+  assert.equal(printed.status, 200, JSON.stringify(printed.body));
+  const pdf = Buffer.from(printed.body.pdf, "base64");
+  assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-", "a PDF");
+  assert.ok((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length > 1, "a long page prints on several pages");
+  assert.equal(canaryHits, pdfHitsBefore, "the printed page reached no server");
+  const pdfUnsigned = await fetch(`${base}/pdf`, { method: "POST", body: JSON.stringify({ html: "<p>x</p>", script: false }) });
+  assert.equal(pdfUnsigned.status, 401);
+  pass("/pdf: the whole page as a multi-page A4 PDF; the page's requests go nowhere; unsigned → 401");
 } finally {
   service.close();
   await browser.close();
@@ -239,6 +261,16 @@ if (docker.status !== 0) {
     assert.equal((await render(dockerBase, "https://example.com/", SECRET, "/fetch")).body.error, "not_allowed");
     assert.equal((await render(dockerBase, "https://chatgpt.com/share/x-x-x-x", "", "/fetch")).status, 401);
     pass("docker /render and /fetch: unsigned → 401, non-allowlisted → not_allowed");
+    const pdfBody = JSON.stringify({ html: "<!doctype html><h1>Принятая версия</h1>", script: false });
+    const dockerPdf = await fetch(`${dockerBase}/pdf`, {
+      method: "POST",
+      body: pdfBody,
+      headers: { "content-type": "application/json", ...signRenderRequest(SECRET, "POST", "/pdf", pdfBody) },
+    });
+    const dockerPdfBody = (await dockerPdf.json()) as any;
+    assert.equal(dockerPdf.status, 200, JSON.stringify(dockerPdfBody));
+    assert.equal(Buffer.from(dockerPdfBody.pdf, "base64").subarray(0, 5).toString("latin1"), "%PDF-");
+    pass("docker /pdf: headless Chromium in the image prints a PDF");
     const user = run(["exec", name, "id", "-un"]);
     assert.equal(user, "pwuser");
     pass("docker: runs as pwuser with a read-only root and no capabilities");

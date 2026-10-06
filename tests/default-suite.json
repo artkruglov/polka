@@ -64,6 +64,7 @@
   "tests/team-shelves-review.test.ts",
   "tests/projects.test.ts",
   "tests/shelf-transfer.test.ts",
+  "tests/extension-content.test.ts",
   "tests/project-upload-token.test.ts",
   "tests/restore-drill.test.ts",
   "tests/agent-management.test.ts",

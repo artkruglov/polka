@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-07
+
+### Added
+
+- **Чтение версий для расширений** (`context.content`, [EXTENSIONS](docs/specs/EXTENSIONS.md)): версия любой полки установки с работой, полкой и файлами, каждый файл потоком с проверкой размера и SHA-256 (видео тоже). Версию, которую модератор изолировал или стёр, ядро называет, но не отдаёт. Нужно коммерческой редакции для выгрузки принятых версий.
+- **Журнал действий для расширений** (`context.auditFeed`): чтение `audit_outbox` всей установки по своему курсору в порядке фиксации, без пропусков за поздно зафиксированной транзакцией.
+- Миграция 064: индекс `audit_outbox` для чтения журнала по всей установке.
+- **Печать в PDF** у рендерера (`POST /pdf`): вся страница на A4 в той же песочнице без сети, что и обложки; для расширений — `context.content.pdf`, где рендерер настроен.
+
+### Fixed
+
+- `docs/specs/EXTENSIONS.md` обещал доставку `onEvent` «как минимум один раз»; на деле событие не хранится и теряется при перезапуске. Описание исправлено, для надёжной работы — `context.auditFeed`.
+
 ## [0.9.1] — 2026-10-06
 
 ### Fixed
@@ -500,7 +513,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/artkruglov/polka/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/artkruglov/polka/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/artkruglov/polka/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/artkruglov/polka/compare/v0.7.4...v0.8.0
