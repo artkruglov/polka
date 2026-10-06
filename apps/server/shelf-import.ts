@@ -62,7 +62,15 @@ export type ImportReport = {
   quota: { used: number; total: number; raisedTo?: number };
   foldersCreated: string[];
   card: "set" | "kept" | "none";
-  imported: Array<{ sourceId: string; title: string; artifactId: string; saved: number; already: number }>;
+  imported: Array<{
+    sourceId: string;
+    title: string;
+    artifactId: string;
+    saved: number;
+    already: number;
+    /** Versions saved here but isolated by this installation's moderation (the content filter at save). */
+    blocked: number[];
+  }>;
   skipped: Array<{ sourceId: string; title: string; reason: string }>;
   /** Stopped early (maxRevisions): run again to continue. */
   incomplete: boolean;
@@ -289,13 +297,28 @@ export async function importShelf(options: {
         progress({ event: "version", title: item.title, number: revision.number });
       }
       if (report.incomplete) {
-        if (previous) report.imported.push({ sourceId: item.id, title: item.title, artifactId: previous.artifactId, saved, already });
+        if (previous)
+          report.imported.push({
+            sourceId: item.id,
+            title: item.title,
+            artifactId: previous.artifactId,
+            saved,
+            already,
+            blocked: await blockedVersions(actor, previous.artifactId),
+          });
         break;
       }
       // Finished by an earlier run: what the owner changed since stays as it is.
       if (!(await finished(actor, exported.exportId, previous!.artifactId)))
         await finishWork(actor, exported.exportId, item, previous!, folderFor);
-      report.imported.push({ sourceId: item.id, title: item.title, artifactId: previous!.artifactId, saved, already });
+      report.imported.push({
+        sourceId: item.id,
+        title: item.title,
+        artifactId: previous!.artifactId,
+        saved,
+        already,
+        blocked: await blockedVersions(actor, previous!.artifactId),
+      });
       progress({ event: "work", title: item.title, versions: item.revisions.length });
     } catch (error) {
       // The account was disabled meanwhile (the content filter): nothing more is saved.
@@ -455,6 +478,17 @@ async function restoreVersion(c: PoolClient, receipt: Receipt, revision: ShelfEx
 }
 
 /** After the last version: title, folder, accepted version, the person responsible, dates and the trash. */
+/** The numbers of the work's versions that moderation here holds isolated. */
+async function blockedVersions(actor: Actor, artifactId: string) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT r.number FROM moderation_blocks block JOIN revisions r ON r.id=block.revision_id
+      WHERE block.tenant_id=$1 AND block.artifact_id=$2 AND block.isolated AND block.released_at IS NULL
+      ORDER BY r.number`,
+    [actor.tenant, artifactId],
+  );
+  return rows.map((row) => row.number as number);
+}
+
 /** The work was finished by a run of this export (the journal marks it). */
 async function finished(actor: Actor, exportId: string, artifactId: string) {
   const { rowCount } = await db.query(

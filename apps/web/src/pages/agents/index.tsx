@@ -1111,8 +1111,7 @@ export function AgentConnections() {
               Отмена
             </Button>
             <Button
-              variant="primary"
-              className="danger"
+              variant="danger"
               busy={action === `revoke:${confirmRevoke.id}`}
               onClick={async () => {
                 if (await revoke(confirmRevoke)) setConfirmRevoke(null);

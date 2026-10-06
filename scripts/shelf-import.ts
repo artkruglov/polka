@@ -31,7 +31,18 @@ export function formatImportReport(report: ImportReport) {
   if (report.card === "kept") lines.push("Карточка полки не заменена: на этой полке своя (--replace-card).");
   if (report.card === "set") lines.push("Карточка полки перенесена.");
   for (const work of report.imported)
-    lines.push(`  + «${work.title}»: сохранено версий ${work.saved}${work.already ? `, уже было ${work.already}` : ""}`);
+    lines.push(
+      `  + «${work.title}»: сохранено версий ${work.saved}${work.already ? `, уже было ${work.already}` : ""}${
+        work.blocked.length
+          ? `; заблокировано модерацией этой установки: ${work.blocked.map((n) => `v${n}`).join(", ")}`
+          : ""
+      }`,
+    );
+  const blocked = report.imported.filter((work) => work.blocked.length);
+  if (blocked.length)
+    lines.push(
+      `Модерация этой установки изолировала версии в ${blocked.length} работах: они сохранены, но не открываются. Решение — в разделе модерации (moderation.ts).`,
+    );
   for (const work of report.skipped) lines.push(`  − «${work.title}»: ${work.reason}`);
   if (report.incomplete) lines.push("Перенос остановлен на полпути: запустите команду ещё раз.");
   return lines.join("\n");

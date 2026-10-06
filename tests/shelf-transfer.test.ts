@@ -368,3 +368,25 @@ test("a version this installation does not accept skips its work, in the dry run
   const report = await importShelf({ dir: odd, account: target.name });
   assert.equal(report.imported.length, 5);
 });
+
+test("the report names versions this installation's moderation isolated", async () => {
+  const target = await createAccount(`import-held-${randomBytes(5).toString("hex")}`, password);
+  await importShelf({ dir: exportDir, account: target.name });
+  const {
+    rows: [held],
+  } = await db.query(
+    `SELECT r.id,r.artifact_id,r.sha256 FROM revisions r JOIN artifacts a ON a.id=r.artifact_id
+      WHERE r.tenant_id=$1 AND a.title='Квартальный отчёт' AND r.number=2`,
+    [target.tenant],
+  );
+  await db.query(
+    `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,isolated)
+     VALUES($1,$2,$3,$4,$5,'malicious_code',true)`,
+    [randomUUID(), target.tenant, held.artifact_id, held.id, held.sha256],
+  );
+  const report = await importShelf({ dir: exportDir, account: target.name });
+  assert.deepEqual(report.imported.find((work) => work.title === "Квартальный отчёт")!.blocked, [2]);
+  assert.ok(report.imported.filter((work) => work.title !== "Квартальный отчёт").every((work) => !work.blocked.length));
+  const { formatImportReport } = await import("../scripts/shelf-import.ts");
+  assert.match(formatImportReport(report), /«Квартальный отчёт»: .*заблокировано модерацией этой установки: v2/);
+});
