@@ -11,6 +11,8 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
+import { sessionsForExtension } from "../apps/server/agent-sessions.ts";
+import { useExtensions } from "../apps/server/extensions.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { MCP_AUDIENCE, authenticateServiceToken } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -286,6 +288,72 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     await rm(home, { recursive: true, force: true });
     await server.close();
   }
+});
+
+test("a company reads every person's sessions: one fingerprint per secret, a notice, a policy on deletion", async () => {
+  const fingerprints = async (secret: string) => {
+    const { saved } = await upload(secret, await sessionFile());
+    assert.equal(saved.statusCode, 200, saved.body);
+    const { rows } = await db.query(`SELECT fingerprint FROM agent_session_secrets WHERE session_id=$1 ORDER BY 1`, [saved.json().id]);
+    return { id: saved.json().id as string, prints: rows.map((r) => r.fingerprint as string) };
+  };
+  // By default a shelf has its own key: the same secret differs between people.
+  const [a, b] = [await owner("company-a"), await owner("company-b")];
+  assert.notDeepEqual((await fingerprints(await token(a))).prints, (await fingerprints(await token(b))).prints);
+
+  const was = { scope: config.AGENT_SESSION_FINGERPRINTS, notice: config.AGENT_SESSION_NOTICE };
+  config.AGENT_SESSION_FINGERPRINTS = "installation";
+  config.AGENT_SESSION_NOTICE = "Сессии читает служба ИБ компании.";
+  try {
+    const [c, d] = [await owner("company-c"), await owner("company-d")];
+    const key = await app.inject({ method: "GET", url: "/api/v1/sessions/key", remoteAddress: address(), headers: bearer(await token(c)) });
+    assert.equal(key.json().scope, "installation");
+    assert.equal(key.json().notice, "Сессии читает служба ИБ компании.");
+    assert.ok(!key.body.includes(config.LINK_KEY));
+    const [fromC, fromD] = [await fingerprints(await token(c)), await fingerprints(await token(d))];
+    assert.deepEqual(fromC.prints, fromD.prints);
+    assert.equal((await web("GET", "/api/sessions", await cookie(c))).json().notice, "Сессии читает служба ИБ компании.");
+
+    // context.sessions: across people, or some of them.
+    const both = { accounts: [c.id, d.id] };
+    const list = await sessionsForExtension.list(both);
+    assert.deepEqual(new Set(list.sessions.map((s) => s.accountId)), new Set([c.id, d.id]));
+    assert.deepEqual((await sessionsForExtension.list({ accounts: [d.id] })).sessions.map((s) => s.id), [fromD.id]);
+    const stats = (await sessionsForExtension.stats(both, { days: 30 })) as { people: Array<{ accountId: string }>; fingerprints: Array<{ people: number }> };
+    assert.equal(stats.people.length, 2);
+    assert.ok(stats.fingerprints.some((f) => f.people === 2));
+    const detail = await sessionsForExtension.get(fromC.id);
+    assert.equal(detail.session.accountId, c.id);
+    assert.ok(detail.secrets.some((s) => s.sessions === 2));
+    await assert.rejects(sessionsForExtension.get(fromC.id, { accounts: [d.id] }), /не найдена/);
+    await assert.rejects(sessionsForExtension.get("not-a-session"));
+    assert.equal((await sessionsForExtension.transcript(fromC.id)).total, 0);
+    await assert.rejects(sessionsForExtension.transcriptFile(fromC.id), /ещё не загружена/);
+
+    // The company keeps sessions: the person's delete is refused with its word.
+    useExtensions([
+      { name: "keeper", policies: { sessionDelete: async (input) => (input.actor.id === c.id ? { allow: false, message: "Компания хранит сессии 90 дней." } : { allow: true }) } },
+    ]);
+    const refused = await web("DELETE", `/api/sessions/${fromC.id}`, await cookie(c));
+    assert.equal(refused.statusCode, 403, refused.body);
+    assert.equal(refused.json().message, "Компания хранит сессии 90 дней.");
+    assert.equal((await db.query(`SELECT 1 FROM agent_sessions WHERE id=$1`, [fromC.id])).rowCount, 1);
+    assert.equal((await web("DELETE", `/api/sessions/${fromD.id}`, await cookie(d))).statusCode, 200);
+  } finally {
+    useExtensions([]);
+    config.AGENT_SESSION_FINGERPRINTS = was.scope;
+    config.AGENT_SESSION_NOTICE = was.notice;
+  }
+});
+
+test("managed settings send every session through the hook", async () => {
+  const { managedSettings } = await import("../scripts/polka-sessions.mjs");
+  const settings = managedSettings({ script: "/Library/Application Support/Polka/polka-sessions.mjs", origin: "https://polka.example.com" });
+  assert.deepEqual(settings.env, { POLKA_SESSIONS: "on", POLKA_ENDPOINT: "https://polka.example.com" });
+  assert.equal(settings.hooks.SessionEnd[0].hooks[0].command, '"node" "/Library/Application Support/Polka/polka-sessions.mjs" hook');
+  const out: string[] = [];
+  assert.equal(await main(["managed-settings", "--script", "/opt/polka/polka-sessions.mjs", "--endpoint", "https://polka.example.com/x"], { env: {}, stdout: { write: (t: string) => out.push(t) }, stderr: { write: () => true } }), 0);
+  assert.equal(JSON.parse(out.join("")).env.POLKA_ENDPOINT, "https://polka.example.com");
 });
 
 test("a cost of 0 from Claude Code with tokens spent is no figure, not a free session", async () => {

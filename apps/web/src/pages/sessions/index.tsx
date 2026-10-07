@@ -86,10 +86,18 @@ function SessionsList() {
   if (!page) return <p className="sessions-muted" role="status">Загружаем…</p>;
   if (!page.enabled) return <SessionsOff />;
   const filtered = Object.values(filters).some(Boolean);
-  if (!page.sessions.length && !filtered) return <SessionsStart origin={location.origin} />;
+  const notice = page.notice && <p className="sessions-notice">{page.notice}</p>;
+  if (!page.sessions.length && !filtered)
+    return (
+      <>
+        {notice}
+        <SessionsStart origin={location.origin} />
+      </>
+    );
   const set = (patch: Partial<SessionFilters>) => setFilters((was) => ({ ...was, ...patch }));
   return (
     <>
+      {notice}
       <QuotaBar used={page.usedBytes} quota={page.quotaBytes} />
       <div className="sessions-filters">
         <SelectField label="Агент" value={filters.source ?? ""} onChange={(e) => set({ source: e.target.value as SessionFilters["source"] })}>

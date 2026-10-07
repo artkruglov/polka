@@ -11,6 +11,8 @@ import type {
   LinkOpenDecision,
   PolkaEvent,
   PolkaExtension,
+  SessionDelete,
+  SessionDeleteDecision,
 } from "../../packages/extension-api/index.ts";
 import { Problem } from "./errors.ts";
 
@@ -74,6 +76,15 @@ export async function checkLinkOpen(open: LinkOpen, c: PoolClient) {
         });
       throw new Problem(403, "forbidden", decision.message, { reason: "link_policy", extension: extension.name });
     }
+  }
+}
+
+/** The first refusal wins: any extension may keep a session from deletion. */
+export async function checkSessionDelete(input: SessionDelete, c: PoolClient) {
+  for (const extension of loaded) {
+    const decision: SessionDeleteDecision | undefined = await extension.policies?.sessionDelete?.(input, c);
+    if (decision && !decision.allow)
+      throw new Problem(403, "forbidden", decision.message, { reason: "session_policy", extension: extension.name });
   }
 }
 

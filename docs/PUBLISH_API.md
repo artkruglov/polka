@@ -200,7 +200,7 @@ node polka-export.mjs ./polka-export
 
 Для `polka-sessions.mjs` ([AGENT_SESSIONS](specs/AGENT_SESSIONS.md)); токен с правом `sessions`, только личная полка, на которой оператор включил сессии.
 
-- `GET /api/v1/sessions/key` → `{ key }`: ключ HMAC для отпечатков секретов (64 hex), один на полку.
+- `GET /api/v1/sessions/key` → `{ key, scope, notice }`: ключ HMAC для отпечатков секретов (64 hex); `scope` — `shelf` (свой у полки) или `installation` (один на установку, `AGENT_SESSION_FINGERPRINTS`); `notice` — текст установки для человека перед отправкой или `null`.
 - `POST /api/v1/sessions`, тело `application/octet-stream` — gzip JSON индекса `polka-session-index/1` с отчётом о секретах и `transcript: {sha256, bytes}` → `{ id, created, transcriptNeeded, secretsStatus, alerts, url }`. Та же сессия (источник и её id) заменяет прежнюю.
 - `PUT /api/v1/sessions/:id/transcript`, тело — gzip расшифровки `polka-session-transcript/1`, если `transcriptNeeded`.
 - Ответы: 403 `sessions_disabled` (сессии на полке не включены), 413 `quota` (место для сессий кончилось), 400 — неверный индекс.

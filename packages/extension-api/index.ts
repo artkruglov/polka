@@ -54,6 +54,18 @@ export type LinkOpenDecision =
   | { allow: false; signIn: true; message: string }
   | { allow: false; signIn?: false; message: string };
 
+/** A person about to delete one of their agent sessions (docs/specs/AGENT_SESSIONS.md). */
+export type SessionDelete = {
+  actor: { id: string; tenant: string };
+  sessionId: string;
+  source: "claude-code" | "codex";
+  startedAt: string | null;
+};
+
+export type SessionDeleteDecision =
+  | { allow: true }
+  | { allow: false; message: string };
+
 export type PolkaEvent =
   | { type: "revision.saved"; tenantId: string; artifactId: string; revisionId: string; accountId: string; at: string }
   | { type: "share.created"; tenantId: string; artifactId: string; shareId: string; revisionId: string; accountId: string; at: string }
@@ -115,6 +127,55 @@ export type PdfOutcome =
         | "unavailable";
     };
 
+/** Agent sessions of the installation (docs/specs/AGENT_SESSIONS.md); accounts limits them to these people. */
+export type SessionSelection = { accounts?: string[] };
+
+export type SessionListQuery = {
+  source?: "claude-code" | "codex";
+  project?: string;
+  secrets?: "clean" | "seen" | "used" | "sent_out" | "any";
+  alerts?: "any";
+  /** An ISO time: sessions that started before it (the previous page's next). */
+  before?: string;
+  limit?: number;
+};
+
+export type SessionAlertRule = "secret_sent_out" | "destructive_command" | "pipe_to_shell" | "no_approvals";
+
+export type ExtensionSession = {
+  id: string;
+  accountId: string;
+  source: "claude-code" | "codex";
+  externalId: string;
+  projectLabel: string | null;
+  projectRemote: string | null;
+  gitBranch: string | null;
+  cliVersion: string | null;
+  permissionMode: string | null;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  turns: number;
+  prompts: number;
+  toolCallCount: number;
+  tokens: Record<string, number>;
+  models: Record<string, Record<string, number>>;
+  costUSD: number | null;
+  costEstimated: boolean;
+  secretsStatus: "clean" | "seen" | "used" | "sent_out";
+  alerts: Array<{ rule: SessionAlertRule; count: number; firstSeq: number | null }>;
+  transcriptBytes: number;
+  uploadedAt: Date;
+  updatedAt: Date;
+};
+
+/** What the person's own session page shows: tool calls, secrets (no values) and links. */
+export type ExtensionSessionDetail = {
+  session: ExtensionSession;
+  toolCalls: Array<Record<string, unknown>>;
+  secrets: Array<Record<string, unknown>>;
+  links: Array<{ kind: "work" | "pr"; target: string; artifactId: string | null; title: string | null }>;
+};
+
 /** What the core hands an extension when it registers. */
 export type ExtensionContext = {
   /** The signed-in account; with { shelf: true } it follows X-Polka-Shelf. */
@@ -150,6 +211,23 @@ export type ExtensionContext = {
    * Durable where onEvent is not: keep the cursor and nothing is lost on a
    * restart; a transaction that commits late is never skipped.
    */
+  /**
+   * Agent sessions of every person of the installation: the reads behind the
+   * person's own pages, across people. Secrets are already replaced on the
+   * machines; no values exist here. Reading a transcript is the extension's
+   * to record (the core does not log reads). A missing session throws the
+   * core's 404.
+   */
+  sessions: {
+    list(selection: SessionSelection, query?: SessionListQuery): Promise<{ sessions: ExtensionSession[]; projects: Array<{ label: string; sessions: number }>; next: string | null }>;
+    get(sessionId: string, selection?: SessionSelection): Promise<ExtensionSessionDetail>;
+    /** «Секреты» and «Расход» across people, plus people: totals by person. */
+    stats(selection: SessionSelection, query?: { days?: number }): Promise<Record<string, unknown>>;
+    /** A page of the transcript's events. */
+    transcript(sessionId: string, query?: { offset?: number; limit?: number }): Promise<{ events: unknown[]; total: number; offset: number; tooLarge: boolean }>;
+    /** The whole transcript, gzipped JSON lines. */
+    transcriptFile(sessionId: string): Promise<{ bytes: Buffer; name: string }>;
+  };
   auditFeed: {
     read(
       after: AuditCursor | null,
@@ -177,6 +255,12 @@ export interface PolkaExtension {
      * folders, and the agent does not manage folders.
      */
     agentScope?(connection: AgentConnectionInfo, c: Pick<PoolClient, "query">): Promise<{ folderIds: string[] } | null>;
+    /**
+     * Before a person deletes one of their agent sessions: refuse with a
+     * message they read (e.g. the company keeps sessions for a term). Erasing
+     * the whole account is never asked.
+     */
+    sessionDelete?(input: SessionDelete, c: PoolClient): Promise<SessionDeleteDecision>;
   };
   /**
    * After the fact, outside the transaction: best effort, at most once (lost

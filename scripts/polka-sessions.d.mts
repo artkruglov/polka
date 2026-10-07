@@ -20,6 +20,10 @@ export function prepareSession(
   key: Buffer,
   options?: { thinking?: boolean },
 ): Promise<{ body: any; transcriptGz: Buffer; index: any; report: { status: string; items: any[] } }>;
+export function managedSettings(options: { script: string; node?: string; origin?: string }): {
+  env: Record<string, string>;
+  hooks: { SessionEnd: Array<{ hooks: Array<{ type: "command"; command: string }> }> };
+};
 export function main(
   argv?: string[],
   io?: {

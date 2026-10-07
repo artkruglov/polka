@@ -120,6 +120,14 @@ x-runtime-env: &runtime-env
   TEAM_SHELVES: ${TEAM_SHELVES:-off}
   # Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off | on.
   SERVICE_ACCOUNTS: ${SERVICE_ACCOUNTS:-off}
+  # Agent sessions (docs/specs/AGENT_SESSIONS.md): bytes every personal shelf
+  # may hold (0: only shelves the operator enabled), model prices for the cost
+  # estimate, fingerprints per shelf or for the installation, the notice people
+  # read before sending.
+  AGENT_SESSION_QUOTA_BYTES: ${AGENT_SESSION_QUOTA_BYTES:-0}
+  AGENT_MODEL_PRICES: ${AGENT_MODEL_PRICES:-}
+  AGENT_SESSION_FINGERPRINTS: ${AGENT_SESSION_FINGERPRINTS:-shelf}
+  AGENT_SESSION_NOTICE: ${AGENT_SESSION_NOTICE:-}
   # Official «На Полку» extension IDs (extensions/chrome/README.md); empty:
   # every extension is shown on the consent page with its ID.
   BROWSER_EXTENSION_IDS: ${BROWSER_EXTENSION_IDS:-}

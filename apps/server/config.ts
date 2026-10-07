@@ -177,6 +177,14 @@ const env = z
     // personal shelf in bytes; 0 keeps them off except on shelves the
     // operator enabled (tenants.session_quota_bytes).
     AGENT_SESSION_QUOTA_BYTES: z.coerce.number().int().min(0).max(1024 ** 4).default(0),
+    // Secret fingerprints: shelf (a key per personal shelf) or installation
+    // (one key derived from LINK_KEY, so one secret matches across people —
+    // for a company that reads every session). Switching changes the
+    // fingerprints of sessions sent from then on, not of the stored ones.
+    AGENT_SESSION_FINGERPRINTS: z.enum(["shelf", "installation"]).default("shelf"),
+    // What a person is told before their sessions are sent (login and the
+    // «Сессии» page), e.g. who in the company reads them. Empty: nothing.
+    AGENT_SESSION_NOTICE: z.string().max(2000).default(""),
     // Prices for the cost estimate of sessions whose agent reports none:
     // JSON {"model-prefix": [input, output, cacheRead, cacheWrite] in USD per
     // million tokens}. Empty: tokens only.

@@ -21,7 +21,7 @@ import {
   searchSnippet,
 } from "./search-text.ts";
 import { registerAgentContext } from "./agent-context.ts";
-import { registerAgentSessions } from "./agent-sessions.ts";
+import { registerAgentSessions, sessionsForExtension } from "./agent-sessions.ts";
 import { createTeamShelfInTransaction, shelvesOf } from "./shelves.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { indexable, robotsTxt, sitemapXml } from "./indexing.ts";
@@ -1620,6 +1620,7 @@ export async function createApp() {
         pdf: pdfConfigured() ? pdfForExtension : null,
       },
       auditFeed: { read: readAuditFeed, head: auditFeedHead },
+      sessions: sessionsForExtension,
     });
   return app;
 }

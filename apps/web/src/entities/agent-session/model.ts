@@ -84,6 +84,8 @@ export type SessionList = {
   enabled: boolean;
   quotaBytes: number;
   usedBytes: number;
+  /** The installation's word on who reads the sessions, if it set one. */
+  notice: string | null;
   sessions: AgentSession[];
   projects: { label: string; sessions: number }[];
   next: string | null;

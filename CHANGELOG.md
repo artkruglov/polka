@@ -4,7 +4,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Сессии агентов в компании** ([AGENT_SESSIONS](docs/specs/AGENT_SESSIONS.md#в-компании)) — основа центра управления агентами коммерческой редакции:
+  - `AGENT_SESSION_FINGERPRINTS=installation` — один ключ отпечатков на установку, один секрет совпадает у разных людей;
+  - `AGENT_SESSION_NOTICE` — что человек читает при `login` и на странице «Сессии» до отправки;
+  - точки расширения `context.sessions` (сессии всех людей установки) и `policies.sessionDelete` ([EXTENSIONS](docs/specs/EXTENSIONS.md));
+  - `polka-sessions.mjs managed-settings` печатает хук для управляемых настроек Claude Code: компания раскладывает его через MDM, и человек его не отключит.
+
 ### Fixed
+
+- `deploy/hosted/compose.yml` и `deploy/compose.base.yml` не передавали приложению `AGENT_SESSION_QUOTA_BYTES` и `AGENT_MODEL_PRICES`: квота и цены из файла настроек установки не действовали.
 
 - «Расход» в сессиях агентов: строки короткой карточки (MCP-серверы) больше не растягиваются на высоту соседней.
 

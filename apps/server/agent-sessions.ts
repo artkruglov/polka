@@ -1,14 +1,16 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 import { uuid } from "../../packages/contracts/index.ts";
+import type { ExtensionContext, SessionSelection } from "../../packages/extension-api/index.ts";
 import { audit } from "./artifacts.ts";
 import { assertStrongSession, identity } from "./auth.ts";
 import { config } from "./config.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
+import { checkSessionDelete } from "./extensions.ts";
 import { bearerActor } from "./publish-api.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { lockShelf } from "./shelves.ts";
@@ -209,23 +211,33 @@ export async function sessionAllowance(tenantId: string) {
     rows: [tenant],
   } = await db.query(`SELECT kind, session_quota_bytes, session_used_bytes FROM tenants WHERE id=$1`, [tenantId]);
   const quota = tenant?.kind === "personal" ? Math.max(Number(tenant.session_quota_bytes), config.AGENT_SESSION_QUOTA_BYTES) : 0;
-  return { enabled: quota > 0, quotaBytes: quota, usedBytes: Number(tenant?.session_used_bytes ?? 0) };
+  return { enabled: quota > 0, quotaBytes: quota, usedBytes: Number(tenant?.session_used_bytes ?? 0), notice: sessionNotice() };
 }
 
 const agentActor = (actor: ServiceActor) => ({ id: actor.accountId, tenant: actor.tenantId, connectionId: actor.connectionId });
 
-/** The HMAC key for secret fingerprints: one per shelf, made on first use. */
+/** The installation's notice for people sending sessions, or null. */
+const sessionNotice = () => config.AGENT_SESSION_NOTICE.trim() || null;
+
+/**
+ * The HMAC key for secret fingerprints: one per shelf, made on first use; or,
+ * with AGENT_SESSION_FINGERPRINTS=installation, one for everybody, derived
+ * from LINK_KEY one way (the machines get the key, never LINK_KEY).
+ */
 export async function fingerprintKey(actor: ServiceActor) {
   return withServiceActorTransaction(actor, "sessions", async (c, verified) => {
     const shelf = await sessionShelf(c, verified.tenantId, verified.accountId);
     if (!shelf.quota) throw disabled();
+    const notice = sessionNotice();
+    if (config.AGENT_SESSION_FINGERPRINTS === "installation")
+      return { key: createHmac("sha256", config.LINK_KEY).update("polka/session-fingerprints/v1").digest("hex"), scope: "installation", notice };
     const {
       rows: [row],
     } = await c.query(
       `UPDATE tenants SET session_fingerprint_key=COALESCE(session_fingerprint_key,$2) WHERE id=$1 RETURNING session_fingerprint_key`,
       [verified.tenantId, randomBytes(32)],
     );
-    return { key: Buffer.from(row.session_fingerprint_key).toString("hex") };
+    return { key: Buffer.from(row.session_fingerprint_key).toString("hex"), scope: "shelf", notice };
   });
 }
 
@@ -399,7 +411,17 @@ export async function saveTranscript(actor: ServiceActor, sessionId: string, gz:
 
 type Person = { id: string; tenant: string };
 
-const SESSION_COLUMNS = `s.id, s.source, s.external_id AS "externalId", s.project_label AS "projectLabel", s.project_remote AS "projectRemote",
+/**
+ * Whose sessions a read covers: a person's own (their shelf, themselves), or
+ * for an extension the whole installation, optionally some people only.
+ */
+export type SessionScope = { tenant: string; accounts: string[] } | { tenant: null; accounts: string[] | null };
+const own = (person: Person): SessionScope => ({ tenant: person.tenant, accounts: [person.id] });
+/** Takes $1 and $2 of every query below. */
+const IN_SCOPE = `($1::uuid IS NULL OR s.tenant_id=$1) AND ($2::uuid[] IS NULL OR s.account_id=ANY($2::uuid[]))`;
+const scopeParams = (scope: SessionScope) => [scope.tenant, scope.accounts];
+
+const SESSION_COLUMNS = `s.id, s.account_id AS "accountId", s.source, s.external_id AS "externalId", s.project_label AS "projectLabel", s.project_remote AS "projectRemote",
   s.git_branch AS "gitBranch", s.cli_version AS "cliVersion", s.permission_mode AS "permissionMode", s.started_at AS "startedAt",
   s.ended_at AS "endedAt", s.turns, s.prompts, s.tool_call_count AS "toolCallCount", s.tokens, s.models,
   s.cost_usd::float8 AS "costUSD", s.cost_estimated AS "costEstimated", s.secrets_status AS "secretsStatus", s.alerts,
@@ -415,47 +437,50 @@ const listQuery = z.object({
 });
 
 export async function listSessions(person: Person, query: unknown) {
+  return { ...(await sessionAllowance(person.tenant)), ...(await listSessionsIn(own(person), query)) };
+}
+
+export async function listSessionsIn(scope: SessionScope, query: unknown) {
   const q = listQuery.parse(query ?? {});
-  const allowance = await sessionAllowance(person.tenant);
   const { rows } = await db.query(
     `SELECT ${SESSION_COLUMNS} FROM agent_sessions s
-      WHERE s.tenant_id=$1 AND s.account_id=$2
+      WHERE ${IN_SCOPE}
         AND ($3::text IS NULL OR s.source=$3) AND ($4::text IS NULL OR s.project_label=$4)
         AND ($5::text IS NULL OR ($5='any' AND s.secrets_status<>'clean') OR s.secrets_status=$5)
         AND ($6::text IS NULL OR jsonb_array_length(s.alerts) > 0)
         AND ($7::timestamptz IS NULL OR COALESCE(s.started_at, s.uploaded_at) < $7)
       ORDER BY COALESCE(s.started_at, s.uploaded_at) DESC, s.id LIMIT $8`,
-    [person.tenant, person.id, q.source ?? null, q.project ?? null, q.secrets ?? null, q.alerts ?? null, q.before ?? null, q.limit + 1],
+    [...scopeParams(scope), q.source ?? null, q.project ?? null, q.secrets ?? null, q.alerts ?? null, q.before ?? null, q.limit + 1],
   );
   const page = rows.slice(0, q.limit);
   const last = page.at(-1);
   const { rows: projects } = await db.query(
-    `SELECT project_label AS label, count(*)::int AS sessions FROM agent_sessions WHERE tenant_id=$1 AND account_id=$2 AND project_label IS NOT NULL
+    `SELECT s.project_label AS label, count(*)::int AS sessions FROM agent_sessions s WHERE ${IN_SCOPE} AND s.project_label IS NOT NULL
       GROUP BY 1 ORDER BY 2 DESC LIMIT 50`,
-    [person.tenant, person.id],
+    scopeParams(scope),
   );
   return {
-    ...allowance,
     sessions: page,
     projects,
     next: rows.length > q.limit && last ? new Date(last.startedAt ?? last.uploadedAt).toISOString() : null,
   };
 }
 
-async function ownSession(person: Person, sessionId: string) {
+async function sessionIn(scope: SessionScope, sessionId: string) {
   const {
     rows: [session],
-  } = await db.query(`SELECT ${SESSION_COLUMNS}, s.transcript_key, s.transcript_version FROM agent_sessions s WHERE s.id=$1 AND s.tenant_id=$2 AND s.account_id=$3`, [
+  } = await db.query(`SELECT ${SESSION_COLUMNS}, s.tenant_id, s.transcript_key, s.transcript_version FROM agent_sessions s WHERE ${IN_SCOPE} AND s.id=$3`, [
+    ...scopeParams(scope),
     sessionId,
-    person.tenant,
-    person.id,
   ]);
   if (!session) throw new Problem(404, "not_found", "Сессия не найдена.");
   return session;
 }
 
-export async function getSession(person: Person, sessionId: string) {
-  const { transcript_key: _key, transcript_version: _version, ...session } = await ownSession(person, sessionId);
+export const getSession = (person: Person, sessionId: string) => getSessionIn(own(person), sessionId);
+
+export async function getSessionIn(scope: SessionScope, sessionId: string) {
+  const { tenant_id: tenantId, transcript_key: _key, transcript_version: _version, ...session } = await sessionIn(scope, sessionId);
   const [calls, secrets, links] = await Promise.all([
     db.query(
       `SELECT seq, at, tool, kind, mcp_server AS "mcpServer", status, duration_ms::float8 AS "durationMs", exit_code AS "exitCode",
@@ -467,14 +492,14 @@ export async function getSession(person: Person, sessionId: string) {
       `SELECT fingerprint, type, confidence, prefix, length, occurrences, seen_by_model AS "seenByModel", model_emitted AS "modelEmitted",
          to_command AS "toCommand", to_network AS "toNetwork", written_to_file AS "writtenToFile",
          (SELECT count(DISTINCT other.session_id)::int FROM agent_session_secrets other JOIN agent_sessions o ON o.id=other.session_id
-           WHERE other.fingerprint=s.fingerprint AND o.tenant_id=$2) AS "sessions"
+           WHERE other.fingerprint=s.fingerprint AND ($2::uuid IS NULL OR o.tenant_id=$2)) AS "sessions"
          FROM agent_session_secrets s WHERE session_id=$1 ORDER BY to_network DESC, to_command DESC, type`,
-      [sessionId, person.tenant],
+      [sessionId, scope.tenant],
     ),
     db.query(
       `SELECT l.kind, l.target, l.artifact_id AS "artifactId", a.title FROM agent_session_links l
          LEFT JOIN artifacts a ON a.id=l.artifact_id AND a.tenant_id=$2 AND a.trashed_at IS NULL WHERE l.session_id=$1 ORDER BY l.kind, l.target`,
-      [sessionId, person.tenant],
+      [sessionId, tenantId],
     ),
   ]);
   return { session, toolCalls: calls.rows, secrets: secrets.rows, links: links.rows };
@@ -486,9 +511,11 @@ const transcriptQuery = z.object({
 });
 
 /** A page of the transcript's events (the first line is its header). */
-export async function readTranscript(person: Person, sessionId: string, query: unknown) {
+export const readTranscript = (person: Person, sessionId: string, query: unknown) => readTranscriptIn(own(person), sessionId, query);
+
+export async function readTranscriptIn(scope: SessionScope, sessionId: string, query: unknown) {
   const q = transcriptQuery.parse(query ?? {});
-  const session = await ownSession(person, sessionId);
+  const session = await sessionIn(scope, sessionId);
   if (!session.transcript_key) return { events: [], total: 0, offset: q.offset, tooLarge: false };
   const gz = await readBlob(session.transcript_key, session.transcript_version);
   let lines: string[];
@@ -507,8 +534,10 @@ export async function readTranscript(person: Person, sessionId: string, query: u
   return { events, total: lines.length - 1, offset: q.offset, tooLarge: false };
 }
 
-export async function transcriptFile(person: Person, sessionId: string) {
-  const session = await ownSession(person, sessionId);
+export const transcriptFile = (person: Person, sessionId: string) => transcriptFileIn(own(person), sessionId);
+
+export async function transcriptFileIn(scope: SessionScope, sessionId: string) {
+  const session = await sessionIn(scope, sessionId);
   if (!session.transcript_key) throw new Problem(404, "not_found", "Расшифровка ещё не загружена.");
   return { bytes: await readBlob(session.transcript_key, session.transcript_version), name: `${session.source}-${session.externalId}.jsonl.gz` };
 }
@@ -517,13 +546,23 @@ export async function deleteSession(person: Person, sessionId: string) {
   return transaction(async (c) => {
     await lockShelf(c, person, "owner");
     const {
+      rows: [found],
+    } = await c.query(`SELECT source, started_at FROM agent_sessions WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`, [
+      sessionId,
+      person.tenant,
+      person.id,
+    ]);
+    if (!found) throw new Problem(404, "not_found", "Сессия не найдена.");
+    await checkSessionDelete(
+      { actor: { id: person.id, tenant: person.tenant }, sessionId, source: found.source, startedAt: found.started_at?.toISOString() ?? null },
+      c,
+    );
+    const {
       rows: [session],
     } = await c.query(
-      `DELETE FROM agent_sessions WHERE id=$1 AND tenant_id=$2 AND account_id=$3
-        RETURNING transcript_key, transcript_version, transcript_bytes + index_bytes AS bytes`,
-      [sessionId, person.tenant, person.id],
+      `DELETE FROM agent_sessions WHERE id=$1 RETURNING transcript_key, transcript_version, transcript_bytes + index_bytes AS bytes`,
+      [sessionId],
     );
-    if (!session) throw new Problem(404, "not_found", "Сессия не найдена.");
     await c.query(`UPDATE tenants SET session_used_bytes=GREATEST(0, session_used_bytes-$2) WHERE id=$1`, [person.tenant, session.bytes]);
     await audit(c, person, "session.deleted", sessionId);
     if (session.transcript_key && session.transcript_version)
@@ -535,11 +574,13 @@ export async function deleteSession(person: Person, sessionId: string) {
 const statsQuery = z.object({ days: z.coerce.number().int().min(1).max(366).default(30) });
 
 /** «Секреты» and «Расход»: the person's sessions over the last days. */
-export async function sessionStats(person: Person, query: unknown) {
+export const sessionStats = (person: Person, query: unknown) => sessionStatsIn(own(person), query);
+
+export async function sessionStatsIn(where: SessionScope, query: unknown) {
   const { days } = statsQuery.parse(query ?? {});
-  const params = [person.tenant, person.id, days];
-  const scope = `s.tenant_id=$1 AND s.account_id=$2 AND COALESCE(s.started_at, s.uploaded_at) > now() - make_interval(days => $3)`;
-  const [byDay, byModel, secrets, fingerprints, hosts, mcp, alerts, totals] = await Promise.all([
+  const params = [...scopeParams(where), days];
+  const scope = `${IN_SCOPE} AND COALESCE(s.started_at, s.uploaded_at) > now() - make_interval(days => $3)`;
+  const [byDay, byModel, secrets, fingerprints, hosts, mcp, alerts, totals, people] = await Promise.all([
     db.query(
       `SELECT to_char(date_trunc('day', COALESCE(s.started_at, s.uploaded_at)), 'YYYY-MM-DD') AS day, count(*)::int AS sessions,
          sum(s.tool_call_count)::float8 AS "toolCalls", sum((s.tokens->>'input')::float8) AS input, sum((s.tokens->>'output')::float8) AS output,
@@ -556,7 +597,7 @@ export async function sessionStats(person: Person, query: unknown) {
     db.query(`SELECT s.secrets_status AS status, count(*)::int AS sessions FROM agent_sessions s WHERE ${scope} GROUP BY 1`, params),
     db.query(
       `SELECT x.fingerprint, min(x.type) AS type, min(x.prefix) AS prefix, count(DISTINCT x.session_id)::int AS sessions,
-         sum(x.occurrences)::int AS occurrences, bool_or(x.to_network) AS "toNetwork", bool_or(x.to_command) AS "toCommand",
+         sum(x.occurrences)::int AS occurrences, count(DISTINCT s.account_id)::int AS people, bool_or(x.to_network) AS "toNetwork", bool_or(x.to_command) AS "toCommand",
          bool_or(x.written_to_file) AS "writtenToFile", bool_or(x.seen_by_model) AS "seenByModel",
          max(COALESCE(s.started_at, s.uploaded_at)) AS "lastSeen", (array_agg(s.id ORDER BY COALESCE(s.started_at, s.uploaded_at) DESC))[1] AS "lastSessionId"
          FROM agent_session_secrets x JOIN agent_sessions s ON s.id=x.session_id WHERE ${scope}
@@ -564,13 +605,14 @@ export async function sessionStats(person: Person, query: unknown) {
       params,
     ),
     db.query(
-      `SELECT h AS host, count(*)::int AS calls, count(DISTINCT c.session_id)::int AS sessions
+      `SELECT h AS host, count(*)::int AS calls, count(DISTINCT c.session_id)::int AS sessions, count(DISTINCT s.account_id)::int AS people
          FROM agent_session_tool_calls c JOIN agent_sessions s ON s.id=c.session_id, unnest(c.hosts) h
         WHERE ${scope} GROUP BY 1 ORDER BY 2 DESC LIMIT 30`,
       params,
     ),
     db.query(
-      `SELECT c.mcp_server AS server, count(*)::int AS calls, count(*) FILTER (WHERE c.status='error')::int AS errors
+      `SELECT c.mcp_server AS server, count(*)::int AS calls, count(*) FILTER (WHERE c.status='error')::int AS errors,
+         count(DISTINCT s.account_id)::int AS people
          FROM agent_session_tool_calls c JOIN agent_sessions s ON s.id=c.session_id
         WHERE ${scope} AND c.mcp_server IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 30`,
       params,
@@ -587,6 +629,17 @@ export async function sessionStats(person: Person, query: unknown) {
          FROM agent_sessions s WHERE ${scope}`,
       params,
     ),
+    // By person: only for a read across people.
+    where.tenant
+      ? Promise.resolve({ rows: [] })
+      : db.query(
+          `SELECT s.account_id AS "accountId", count(*)::int AS sessions, COALESCE(sum(s.tool_call_count), 0)::float8 AS "toolCalls",
+             COALESCE(sum(s.cost_usd), 0)::float8 AS cost, count(*) FILTER (WHERE s.secrets_status='sent_out')::int AS "secretsSentOut",
+             count(*) FILTER (WHERE jsonb_array_length(s.alerts) > 0)::int AS "withAlerts",
+             max(COALESCE(s.started_at, s.uploaded_at)) AS "lastSession"
+             FROM agent_sessions s WHERE ${scope} GROUP BY 1 ORDER BY 2 DESC`,
+          params,
+        ),
   ]);
   return {
     days,
@@ -598,6 +651,7 @@ export async function sessionStats(person: Person, query: unknown) {
     hosts: hosts.rows,
     mcp: mcp.rows,
     alerts: alerts.rows,
+    ...(where.tenant ? {} : { people: people.rows }),
   };
 }
 
@@ -685,3 +739,19 @@ export function registerAgentSessions(app: FastifyInstance) {
   });
   app.get("/api/artifacts/:id/sessions", async (req) => sessionsOfWork(await identity(req), sessionId(req)));
 }
+
+const across = (selection: SessionSelection = {}): SessionScope => ({ tenant: null, accounts: selection.accounts ?? null });
+const knownId = (value: string) => {
+  const parsed = uuid.safeParse(value);
+  if (!parsed.success) throw new Problem(404, "not_found", "Сессия не найдена.");
+  return parsed.data;
+};
+
+/** context.sessions of extensions (packages/extension-api): the reads above, across people. */
+export const sessionsForExtension: ExtensionContext["sessions"] = {
+  list: async (selection, query) => (await listSessionsIn(across(selection), query)) as Awaited<ReturnType<ExtensionContext["sessions"]["list"]>>,
+  get: async (sessionId, selection) => (await getSessionIn(across(selection), knownId(sessionId))) as Awaited<ReturnType<ExtensionContext["sessions"]["get"]>>,
+  stats: async (selection, query) => sessionStatsIn(across(selection), query),
+  transcript: async (sessionId, query) => readTranscriptIn(across(), knownId(sessionId), query),
+  transcriptFile: async (sessionId) => transcriptFileIn(across(), knownId(sessionId)),
+};
