@@ -20,7 +20,8 @@
 .sessions-row-facts { display: flex; gap: 12px; color: var(--muted); font-size: .9em; justify-content: flex-end; flex-wrap: wrap; }
 .sessions-row-flags { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
 .sessions-steps { margin: 0; padding-left: 20px; display: grid; gap: 12px; }
-.sessions-steps li { display: grid; gap: 6px; }
+/* Text with links and code flows as one paragraph; the copy box goes below it. */
+.sessions-steps li > :not(a, code, strong, em) { margin-top: 6px; }
 .sessions-head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .sessions-back { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .sessions-back svg { width: 16px; height: 16px; }
