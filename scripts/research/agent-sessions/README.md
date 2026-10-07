@@ -11,3 +11,4 @@ Scripts behind [docs/research/agent-telemetry-storage.md](../../../docs/research
 | `scale.mjs` | Company-sized stream from real sessions (deterministic) for Postgres or ClickHouse |
 | `schema-postgres.sql`, `schema-clickhouse.sql` | Benchmark schemas |
 | `bench.mjs` | The leaders' ten questions, timed in both |
+| `otlp-capture.mjs` | Local OTLP/HTTP JSON receiver; `--summary` lists event names and attribute keys, never values |
