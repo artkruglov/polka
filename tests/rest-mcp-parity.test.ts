@@ -41,6 +41,8 @@ const MCP_ONLY: Record<string, string> = {
   polka_restore: "management: MCP",
   polka_list_template_libraries: "templates: MCP",
   polka_list_templates: "templates: MCP",
+  polka_sessions: "agent sessions: the owner reads them on the web page; the CLI only uploads",
+  polka_session_stats: "agent sessions: the owner reads them on the web page; the CLI only uploads",
 };
 
 test("every MCP tool has a REST twin in the OpenAPI document or an explicit reason not to", () => {

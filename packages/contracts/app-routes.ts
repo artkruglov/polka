@@ -34,18 +34,23 @@ export const APP_PAGES = [
   "/library-invite",
   "/oauth/consent",
   "/moderation",
+  "/sessions",
+  "/sessions/secrets",
+  "/sessions/usage",
 ] as const;
 
 const PAGES: ReadonlySet<string> = new Set(APP_PAGES);
 
 /** A saved work's page; any other /works/… is not a page. */
 export const WORK_PATH = /^\/works\/[a-f0-9-]{36}$/;
+/** One agent session's page (docs/specs/AGENT_SESSIONS.md). */
+export const SESSION_PAGE_PATH = /^\/sessions\/[a-f0-9-]{36}$/;
 /** The editorial feed and its collections. */
 export const DISCOVER_PATH = /^\/discover(?:\/[a-z0-9-]+)?$/;
 
 /** Whether the app has a page at this path (no query, no fragment). */
 export function isAppPage(path: string) {
-  return PAGES.has(path) || WORK_PATH.test(path) || DISCOVER_PATH.test(path);
+  return PAGES.has(path) || WORK_PATH.test(path) || DISCOVER_PATH.test(path) || SESSION_PAGE_PATH.test(path);
 }
 
 /** Prefixes that answer machines, never with the app shell. */

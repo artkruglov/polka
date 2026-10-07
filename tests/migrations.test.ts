@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 64 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 64);
+test("migration catalog is the complete contiguous schema 65 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 65);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -161,8 +161,8 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>64\n/, recipe);
-    assert.match(text, /001 through 064/, recipe);
+    assert.match(text, /schema_migrations\)<>65\n/, recipe);
+    assert.match(text, /001 through 065/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);

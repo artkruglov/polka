@@ -8,6 +8,7 @@ import React, { useEffect, useId, useState } from "react";
 import { Button, IconButton } from "../../shared/ui/controls.tsx";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
 import { improvePhrase } from "../../entities/artifact/agent-phrases.ts";
+import { WorkSessions } from "../../entities/agent-session/WorkSessions.tsx";
 import {
   ArrowLeft,
   Bot,
@@ -443,6 +444,8 @@ export function ArtifactReader({
               ))}
             </div>
             {compare}
+            {/* Own shelf only: sessions are personal (docs/specs/AGENT_SESSIONS.md). */}
+            {!currentShelf() && <WorkSessions artifactId={work.id} />}
           </div>
         )}
         {viewed && viewed.id !== work.revision.id && (

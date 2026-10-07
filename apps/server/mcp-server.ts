@@ -15,6 +15,7 @@ import {
 } from "./url-import/jobs.ts";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { sessionsForAgent, sessionStatsForAgent } from "./agent-sessions.ts";
 import type { ServiceActor } from "./service-auth.ts";
 import {
   recheckServiceActor,
@@ -252,6 +253,8 @@ async function context(actor: ServiceActor) {
       status: true,
       share: has("share"),
       manage: has("manage"),
+      // polka_sessions and polka_session_stats (docs/specs/AGENT_SESSIONS.md).
+      sessions: has("sessions") && tenant.kind !== "team",
       urlImport: config.URL_IMPORT_ENABLED && has("capture"),
       htmlLiveExperimental: config.HTML_LIVE_ENABLED,
       htmlLiveMode: config.HTML_LIVE_MODE,
@@ -494,6 +497,38 @@ export function createMcpServer(actor: ServiceActor) {
           };
         },
       );
+  }
+  // A person's agent sessions (docs/specs/AGENT_SESSIONS.md): own shelf only.
+  if (actor.scopes.includes("sessions") && ownShelf) {
+    server.registerTool(
+      "polka_sessions",
+      {
+        title: "List my agent sessions",
+        description:
+          "The owner's Claude Code and Codex sessions uploaded by polka-sessions, newest first: project, branch, times, prompts, tool calls, tokens, cost (costEstimated: from the installation's prices), secrets (clean | seen | used | sent_out: a secret reached a network tool) and alerts (secret_sent_out, destructive_command, pipe_to_shell, no_approvals), with the url of each session's page. Facts only: no transcript text. days (default 7), project (exact label), secrets (a status or any).",
+        inputSchema: z
+          .object({
+            days: z.number().int().min(1).max(366).optional(),
+            project: z.string().max(200).optional(),
+            secrets: z.enum(["clean", "seen", "used", "sent_out", "any"]).optional(),
+            limit: z.number().int().min(1).max(100).optional(),
+          })
+          .strict(),
+        annotations: { readOnlyHint: true, openWorldHint: false },
+      },
+      async (input) => asToolResult({ sessions: await sessionsForAgent(actor, input) }),
+    );
+    server.registerTool(
+      "polka_session_stats",
+      {
+        title: "Agent session totals",
+        description:
+          "Totals of the owner's agent sessions over the last days (default 30): by day (sessions, tool calls, tokens, cost), by model (tokens), sessions by secrets status, secret fingerprints (type, prefix, in how many sessions, whether sent out or used; never values), top network hosts, MCP servers with errors, and alerts.",
+        inputSchema: z.object({ days: z.number().int().min(1).max(366).optional() }).strict(),
+        annotations: { readOnlyHint: true, openWorldHint: false },
+      },
+      async (input) => asToolResult(await sessionStatsForAgent(actor, input.days ?? 30)),
+    );
   }
   if (actor.scopes.includes("read")) {
     server.registerTool(

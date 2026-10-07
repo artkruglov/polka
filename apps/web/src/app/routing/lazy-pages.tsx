@@ -90,6 +90,9 @@ const CompanyAdmin = page(() =>
 const OAuthConsent = page(() =>
   import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
 );
+const AgentSessions = page(() =>
+  import("../../pages/sessions/index.tsx").then((m) => m.AgentSessions),
+);
 const NotFound = page(() =>
   import("../../pages/not-found/index.tsx").then((m) => m.NotFound),
 );
@@ -143,6 +146,7 @@ export const LazyLanding = () => (
 );
 
 export {
+  AgentSessions,
   CompanyAdmin,
   Templates,
   Signup,

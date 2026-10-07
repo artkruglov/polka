@@ -24,6 +24,10 @@ export function routeTitle(path: string): string | null | undefined {
   if (path === "/settings") return "Настройки";
   if (path === "/settings/agents" || path === "/connections") return "Агенты";
   if (path === "/settings/company") return "Полки компании";
+  if (path === "/sessions") return "Сессии агентов";
+  if (path === "/sessions/secrets") return "Секреты в сессиях";
+  if (path === "/sessions/usage") return "Расход агентов";
+  if (path.startsWith("/sessions/")) return "Сессия агента";
   if (path === "/s") return "Работа по ссылке";
   if (path === "/away") return "Переход по ссылке";
   if (path === "/mail-off") return "Письма о комментариях";

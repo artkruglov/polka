@@ -21,7 +21,7 @@ const copy = (path) => {
   mkdirSync(dirname(join(out, path)), { recursive: true });
   cpSync(join(root, path), join(out, path), { recursive: true });
 };
-rmSync(join(out, "skills"), { recursive: true, force: true });
+for (const path of ["skills", "hooks", "scripts"]) rmSync(join(out, path), { recursive: true, force: true });
 for (const path of [
   ".claude-plugin/plugin.json",
   ".claude-plugin/marketplace.json",
@@ -29,6 +29,9 @@ for (const path of [
   ".agents/plugins/marketplace.json",
   ".mcp.json",
   "skills",
+  // Agent sessions: the SessionEnd hook and the CLI it runs (off unless POLKA_SESSIONS=on).
+  "hooks",
+  "scripts/polka-sessions.mjs",
   "LICENSE",
 ])
   copy(path);
@@ -54,6 +57,8 @@ codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@p
 \`\`\`
 
 Затем \`codex mcp login polka\`.
+
+**Сессии агентов** (по желанию): плагин ставит хук \`SessionEnd\`, который отправляет закончившуюся сессию Claude Code на вашу полку, скрыв секреты ещё на компьютере. Он ничего не делает, пока вы не включите: \`node scripts/polka-sessions.mjs login\` (токен с правом «Сессии агентов») и \`POLKA_SESSIONS=on\` в окружении. Подробнее — [AGENT_SESSIONS](https://github.com/artkruglov/polka/blob/main/docs/specs/AGENT_SESSIONS.md).
 
 **Без плагина** — только MCP-сервер: \`claude mcp add --transport http --scope user polka https://polochka.app/mcp\` или \`codex mcp add polka --url https://polochka.app/mcp\`. Скилл отдельно: \`npx skills add artkruglov/polka-plugin\`.
 

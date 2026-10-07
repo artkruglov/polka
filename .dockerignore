@@ -16,6 +16,7 @@
 !scripts/polka-publish-project.mjs
 !scripts/polka-pull.mjs
 !scripts/polka-export.mjs
+!scripts/polka-sessions.mjs
 !deploy/migrations/*.sql
 !content/editorial/**
 # The web bundle embeds the privacy policy and terms from here.

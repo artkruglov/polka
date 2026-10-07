@@ -743,6 +743,21 @@ export function openApiDocument(origin: string) {
           },
         },
       },
+      "/api/v1/cli/polka-sessions.mjs": {
+        get: {
+          operationId: "downloadSessionsCli",
+          summary: "Download the dependency-free agent sessions CLI",
+          description:
+            "A single-file Node 22+ script that sends the person's Claude Code and Codex sessions to their personal shelf (docs/specs/AGENT_SESSIONS.md): secrets are replaced on the machine, the server gets a session index, a secrets report (type, keyed fingerprint, where) and a shortened transcript. It reads the token only from POLKA_TOKEN or the file its login command writes (mode 600); the token needs the sessions scope.",
+          security: [],
+          responses: {
+            "200": {
+              description: "The script, pointed at this installation.",
+              content: { "text/javascript": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
       "/api/v1/cli/polka-export.mjs": {
         get: {
           operationId: "downloadExportCli",

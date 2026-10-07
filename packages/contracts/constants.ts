@@ -83,6 +83,8 @@ export const AGENT_SCOPES = [
   "share",
   "manage",
   "sign_in",
+  /** Agent sessions (docs/specs/AGENT_SESSIONS.md): upload and read one's own. */
+  "sessions",
 ] as const;
 /** «Для компаний» (/enterprise): the request form's choices and limits. */
 export const ENTERPRISE_TEAM_SIZES = [

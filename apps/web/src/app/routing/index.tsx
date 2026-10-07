@@ -6,6 +6,7 @@ import { isAppPage } from "../../../../../packages/contracts/app-routes.ts";
 import {
   NotFound,
   AgentConnections,
+  AgentSessions,
   Away,
   Bring,
   BringReceive,
@@ -69,6 +70,8 @@ function Route({ path }: { path: string }) {
   if (path === "/settings" || path === "/settings/agents" || path === "/connections")
     return <AgentConnections />;
   if (path === "/settings/company") return <CompanyAdmin />;
+  // Agent sessions: the list, «Секреты», «Расход» and one session.
+  if (path === "/sessions" || path.startsWith("/sessions/")) return <AgentSessions />;
   if (path === "/s") return <Recipient />;
   if (path === "/away") return <Away />;
   if (path === "/mail-off") return <MailOff />;

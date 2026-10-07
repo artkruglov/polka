@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-07
+
+### Added
+
+- **Сессии агентов** ([AGENT_SESSIONS](docs/specs/AGENT_SESSIONS.md)): ваши сессии Claude Code и Codex на Полке — что делал агент, какие команды запускал и куда обращался, где видел секреты и куда их передал, сколько ушло токенов и денег, какие работы и пулл-реквесты из этого вышли. Страницы «Сессии» (список, сессия с расшифровкой), «Секреты» (отпечатки по всем сессиям), «Расход»; на странице работы — «Сделано в сессии».
+- **`polka-sessions.mjs`** (без зависимостей, `GET /api/v1/cli/polka-sessions.mjs`): `login`, `list`, `preview`, `upload`, `sync`, `hook`. Секреты заменяются метками с отпечатком ещё на компьютере; рассуждения модели не отправляются без `--thinking`. Хук `SessionEnd` в плагине Полки — только при `POLKA_SESSIONS=on`.
+- Право токена **«Сессии агентов»** (`sessions`), только для личной полки; MCP-инструменты `polka_sessions` и `polka_session_stats`.
+- Правила v1 на сервере: секрет ушёл наружу, разрушительная команда, скрипт из сети в оболочку, режим без подтверждений.
+- Своя квота сессий: `AGENT_SESSION_QUOTA_BYTES` для всей установки или по полке; 0 — выключено. Оценка расхода по ценам `AGENT_MODEL_PRICES`, если агент не записал стоимость сам.
+- Миграция 065: таблицы `agent_sessions*`, квота и ключ отпечатков у полки, право `sessions` в проверках подключений, стирание сессий вместе с аккаунтом.
+- Исследование этапа 0 ([agent-telemetry-storage](docs/research/agent-telemetry-storage.md)): что лежит в сессиях, Postgres против ClickHouse на 24,7 млн вызовов, форма OTLP-телеметрии Claude Code и Codex, стирание и сроки хранения в ClickHouse.
+
 ## [0.10.0] — 2026-10-07
 
 ### Added
@@ -513,7 +525,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/artkruglov/polka/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/artkruglov/polka/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/artkruglov/polka/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/artkruglov/polka/compare/v0.8.0...v0.9.0

@@ -63,4 +63,11 @@ export const scopeOptions: Array<{
     defaultOn: false,
     oauthOnly: true,
   },
+  {
+    id: "sessions",
+    label: "Сессии агентов",
+    description:
+      "Загружать на Полку ваши сессии Claude Code и Codex (секреты скрыты ещё на компьютере) и показывать агенту их список и расход. Только для вашей личной полки.",
+    defaultOn: false,
+  },
 ];

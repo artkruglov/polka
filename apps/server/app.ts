@@ -21,6 +21,7 @@ import {
   searchSnippet,
 } from "./search-text.ts";
 import { registerAgentContext } from "./agent-context.ts";
+import { registerAgentSessions } from "./agent-sessions.ts";
 import { createTeamShelfInTransaction, shelvesOf } from "./shelves.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { indexable, robotsTxt, sitemapXml } from "./indexing.ts";
@@ -1588,6 +1589,8 @@ export async function createApp() {
   await registerOAuthRoutes(app);
   await registerMcpTransport(app);
   await registerPublishApi(app);
+  // A person's agent sessions (docs/specs/AGENT_SESSIONS.md).
+  registerAgentSessions(app);
   // Extensions register after the core (docs/specs/EXTENSIONS.md).
   if (!extensionsConfigured()) await loadExtensions(config.POLKA_EXTENSIONS);
   // Their web modules, read once: /ext/<name>.js from this origin (script-src 'self').

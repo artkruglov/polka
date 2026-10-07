@@ -104,3 +104,9 @@
   color: var(--success, #1a7f4b);
   font-weight: 600;
 }
+
+.work-sessions { margin-top: 16px; display: grid; gap: 6px; }
+.work-sessions h2 { margin: 0; font-size: var(--text-base); display: flex; align-items: center; gap: 6px; }
+.work-sessions h2 svg { width: 16px; height: 16px; }
+.work-sessions ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.work-sessions small { color: var(--muted); }

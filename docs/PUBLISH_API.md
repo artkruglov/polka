@@ -196,6 +196,17 @@ node polka-export.mjs ./polka-export
 - `GET /api/v1/export/revisions/:revisionId/files/:index` — байты одного файла любой версии полки (`X-Polka-Sha256`); заблокированная модератором — `410`. Лимит — 3000 файлов за 10 минут на подключение, отдельно от 120 запросов.
 - CLI пишет `polka-export.json` и `blobs/<sha256>`, каждый файл один раз; повторный запуск продолжает с места. Ссылки и комментарии не выгружаются.
 
+## Сессии агентов
+
+Для `polka-sessions.mjs` ([AGENT_SESSIONS](specs/AGENT_SESSIONS.md)); токен с правом `sessions`, только личная полка, на которой оператор включил сессии.
+
+- `GET /api/v1/sessions/key` → `{ key }`: ключ HMAC для отпечатков секретов (64 hex), один на полку.
+- `POST /api/v1/sessions`, тело `application/octet-stream` — gzip JSON индекса `polka-session-index/1` с отчётом о секретах и `transcript: {sha256, bytes}` → `{ id, created, transcriptNeeded, secretsStatus, alerts, url }`. Та же сессия (источник и её id) заменяет прежнюю.
+- `PUT /api/v1/sessions/:id/transcript`, тело — gzip расшифровки `polka-session-transcript/1`, если `transcriptNeeded`.
+- Ответы: 403 `sessions_disabled` (сессии на полке не включены), 413 `quota` (место для сессий кончилось), 400 — неверный индекс.
+
+CLI: `GET /api/v1/cli/polka-sessions.mjs`, команды `login`, `list`, `preview`, `upload`, `sync`, `hook`.
+
 ## Ошибки
 
 Всегда JSON `{"code": "…", "message": "…"}`; `message` — по-русски, для человека.

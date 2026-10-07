@@ -13,6 +13,7 @@ import {
   PanelLeftOpen,
   Plus,
   Settings,
+  SquareTerminal,
 } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
 import { client, rememberedShelf } from "../../shared/api/client.ts";
@@ -77,7 +78,8 @@ export type Section =
   | "shelf"
   | "bring"
   | "templates"
-  | "connections";
+  | "connections"
+  | "sessions";
 
 function SiteBrand() {
   return (
@@ -146,6 +148,8 @@ function AccountMenu({
           // Next to «Моя полка»: one's own trash.
           { id: "trash", label: "Корзина", onSelect: () => location.assign(rememberedShelf() ? "/trash?shelf=" : "/trash") },
           // Agents, sign-in methods and deleting the shelf.
+          // Claude Code and Codex sessions of this person (docs/specs/AGENT_SESSIONS.md).
+          { id: "sessions", label: "Сессии агентов", icon: <SquareTerminal />, onSelect: () => location.assign("/sessions") },
           { id: "settings", label: "Настройки", icon: <Settings />, onSelect: () => location.assign("/settings") },
           { id: "logout", label: "Выйти", icon: <LogOut />, tone: "danger", onSelect: () => setConfirm(true) },
         ]}

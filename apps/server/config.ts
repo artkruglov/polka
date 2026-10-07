@@ -173,6 +173,14 @@ const env = z
     TEAM_SHELVES: z.enum(["off", "on"]).default("off"),
     // Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off until a pilot asks.
     SERVICE_ACCOUNTS: z.enum(["off", "on"]).default("off"),
+    // Agent sessions (docs/specs/AGENT_SESSIONS.md): the allowance of every
+    // personal shelf in bytes; 0 keeps them off except on shelves the
+    // operator enabled (tenants.session_quota_bytes).
+    AGENT_SESSION_QUOTA_BYTES: z.coerce.number().int().min(0).max(1024 ** 4).default(0),
+    // Prices for the cost estimate of sessions whose agent reports none:
+    // JSON {"model-prefix": [input, output, cacheRead, cacheWrite] in USD per
+    // million tokens}. Empty: tokens only.
+    AGENT_MODEL_PRICES: z.string().max(20_000).default(""),
     // Extensions of the open core (docs/specs/EXTENSIONS.md): package names
     // or paths, comma-separated. Empty: the core alone.
     POLKA_EXTENSIONS: z.string().default(""),

@@ -141,5 +141,8 @@
   "tests/signup-code-help.test.ts",
   "tests/artifact-purge.test.ts",
   "tests/link-opens.test.ts",
-  "tests/review-mail.test.ts"
+  "tests/review-mail.test.ts",
+  "tests/agent-sessions-cli.test.ts",
+  "tests/agent-sessions.test.ts",
+  "tests/agent-sessions-web.test.ts"
 ]

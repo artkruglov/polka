@@ -947,6 +947,18 @@ export function AgentConnections() {
                 страницу, 120 запросов за 10 минут на подключение.
               </p>
             </section>
+
+            <section className="agent-http" aria-labelledby="agent-sessions-title">
+              <h3 id="agent-sessions-title">Сессии агентов</h3>
+              <p className="agent-help">
+                История работы Claude Code и Codex на вашей личной полке: команды,
+                обращения в сеть, секреты и расход. Программа{" "}
+                <code>polka-sessions</code> скрывает секреты ещё на компьютере и
+                отправляет сессии с токеном, у которого есть право «
+                {scopeOptions.find((scope) => scope.id === "sessions")?.label}».
+                Как начать — на странице <a href="/sessions">«Сессии агентов»</a>.
+              </p>
+            </section>
           </div>
         </details>
 
