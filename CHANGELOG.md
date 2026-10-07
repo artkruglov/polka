@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-08
+
 ### Added
 
 - **Сессии агентов в компании** ([AGENT_SESSIONS](docs/specs/AGENT_SESSIONS.md#в-компании)) — основа центра управления агентами коммерческой редакции:
@@ -15,7 +17,6 @@
 ### Fixed
 
 - `deploy/hosted/compose.yml` и `deploy/compose.base.yml` не передавали приложению `AGENT_SESSION_QUOTA_BYTES` и `AGENT_MODEL_PRICES`: квота и цены из файла настроек установки не действовали.
-
 - «Расход» в сессиях агентов: строки короткой карточки (MCP-серверы) больше не растягиваются на высоту соседней.
 
 ## [0.11.1] — 2026-10-07
@@ -546,7 +547,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/artkruglov/polka/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/artkruglov/polka/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/artkruglov/polka/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/artkruglov/polka/compare/v0.9.1...v0.10.0
