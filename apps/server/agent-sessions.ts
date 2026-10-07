@@ -169,7 +169,10 @@ function modelPrices() {
 }
 /** The agent's own figure, else an estimate when every model is priced, else null. */
 export function sessionCost(body: SessionBody): { cost: number | null; estimated: boolean } {
-  if (typeof body.costUSD === "number") return { cost: body.costUSD, estimated: false };
+  // Claude Code writes 0 when it does not know the price (a subscription):
+  // that is no figure, not a free session.
+  const worked = body.tokens.input + body.tokens.output > 0;
+  if (typeof body.costUSD === "number" && (body.costUSD > 0 || !worked)) return { cost: body.costUSD, estimated: false };
   const used = Object.entries(body.models).filter(([, u]) => u.input + u.output + u.cacheRead + u.cacheWrite > 0);
   if (!used.length) return { cost: null, estimated: false };
   let total = 0;

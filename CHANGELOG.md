@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-10-07
+
+### Fixed
+
+- **Сессии агентов, по приёмке на реальных сессиях:** шаблон команды берётся из первого настоящего шага цепочки — `cd "<папка>"; npm test` теперь `npm test`, а не `cd <arg>` (служебные `cd`, `export`, `source` пропускаются, слова в кавычках не дробятся). Нулевая стоимость, которую Claude Code пишет при подписке, показывается как «нет данных», а не «$0.00».
+- Инструкция «Отправьте первые сессии» читается предложениями: ссылки и код больше не разрывают строку.
+
 ## [0.11.0] — 2026-10-07
 
 ### Added
@@ -525,7 +532,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/artkruglov/polka/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/artkruglov/polka/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/artkruglov/polka/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/artkruglov/polka/compare/v0.9.0...v0.9.1

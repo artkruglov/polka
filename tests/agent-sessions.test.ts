@@ -287,3 +287,11 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     await server.close();
   }
 });
+
+test("a cost of 0 from Claude Code with tokens spent is no figure, not a free session", async () => {
+  const { sessionCost } = await import("../apps/server/agent-sessions.ts");
+  const base = { models: { "claude-x": { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 } }, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 0 } };
+  assert.deepEqual(sessionCost({ ...base, costUSD: 0 } as never), { cost: null, estimated: false });
+  assert.deepEqual(sessionCost({ ...base, costUSD: 1.5 } as never), { cost: 1.5, estimated: false });
+  assert.deepEqual(sessionCost({ ...base, models: {}, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, costUSD: 0 } as never), { cost: 0, estimated: false });
+});

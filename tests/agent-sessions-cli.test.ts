@@ -88,4 +88,8 @@ test("the redactor replaces the captured value, not an equal user name", () => {
   for (const text of ["password: string", "token: null", "API_KEY=${API_KEY}", "const secret = loadSecret()", "commit " + "0123456789abcdef".repeat(2) + "01234567"])
     assert.equal(redactor.redact(text, "x"), text);
   assert.deepEqual(commandShape("FOO=1 rm -rf /tmp/x && echo ok"), { argv0: "rm", template: "rm -rf <arg>" });
+  // The setup steps of a chain are not the command.
+  assert.deepEqual(commandShape('cd "/a b/c"; npm run -s check 2>&1 | tail'), { argv0: "npm", template: "npm run -s check" });
+  assert.deepEqual(commandShape("export A=1 && source .env && psql -c 'select 1'"), { argv0: "psql", template: "psql -c <arg>" });
+  assert.deepEqual(commandShape("cd /tmp"), { argv0: "cd", template: "cd <arg>" });
 });
