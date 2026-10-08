@@ -181,7 +181,16 @@
 .lp-footer nav a:hover { color: var(--accent); }
 
 /* ---- Responsive ------------------------------------------------------ */
+/* ---- For companies: the control centre ----------------------------- */
+.lp-control-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 0 0 24px; padding: 0; list-style: none; }
+.lp-control-grid .lp-card { grid-column: auto; }
+.lp-control-grid .lp-card p { margin-bottom: 0; }
+.lp-control-note { display: flex; align-items: flex-start; gap: 10px; max-width: 720px; margin-bottom: 24px; color: var(--muted); font-size: var(--text-md); line-height: 1.6; }
+.lp-control-note svg { flex: none; margin-top: 3px; color: var(--accent); }
+#companies { scroll-margin-top: 96px; }
+
 @media (max-width: 1100px) {
+  .lp-control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-hero { grid-template-columns: 1fr; padding-top: 56px; }
   .lp-stage { max-width: 640px; margin-top: 0; padding-bottom: 72px; }
   .lp-window { transform: none; }
@@ -211,6 +220,7 @@
   .lp-card--accent { grid-template-columns: 48px minmax(0, 1fr); }
   .lp-card--accent a { grid-column: 1 / -1; grid-row: auto; justify-self: start; margin-top: 12px; }
   .lp-steps li { padding: 24px; }
+  .lp-control-grid { grid-template-columns: 1fr; }
   .lp-selfhost { margin-top: 72px; padding: 32px 22px; border-radius: 24px; }
   .lp-selfhost-command pre { flex-basis: 100%; padding: 14px; font-size: 12px; }
   .lp-selfhost-command .ui-button, .lp-selfhost-actions, .lp-selfhost-actions .ui-button { width: 100%; }

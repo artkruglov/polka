@@ -8,15 +8,20 @@ import {
   Building2,
   Database,
   FileUp,
+  Eye,
   FolderTree,
+  Globe,
   History,
+  KeyRound,
   Link2,
   LockKeyhole,
   Plus,
   Search,
   Server,
   ShieldCheck,
+  TriangleAlert,
   Users,
+  Wallet,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import {
@@ -58,7 +63,8 @@ export function Landing() {
   const guideUrl = selfHostGuideUrl(sourceUrl);
   const command = selfHostCommand(sourceUrl);
   useEffect(() => {
-    if (location.hash === "#connect") document.getElementById("connect")?.scrollIntoView();
+    if (location.hash === "#connect" || location.hash === "#companies")
+      document.getElementById(location.hash.slice(1))?.scrollIntoView();
   }, []);
   return (
     <AppShell current="landing" account={account} className="landing" bare>
@@ -236,6 +242,43 @@ polka_change_files      put docs/risks.md
           )}
         </section>
 
+        <section id="companies" className="lp-section lp-control" aria-labelledby="lp-control-title">
+          <header className="lp-section-head">
+            <span className="lp-kicker">Для компаний</span>
+            <h2 id="lp-control-title">Видно, что ИИ‑агенты делают в компании</h2>
+            <p>
+              Центр управления для службы ИБ и руководителей: что делали Claude Code и Codex
+              сотрудников. Секреты скрываются ещё на машине сотрудника, всё остаётся на вашем сервере.
+            </p>
+          </header>
+          <ul className="lp-control-grid">
+            {[
+              { icon: <KeyRound />, title: "Секреты", text: "Какие ключи видели агенты, у кого и куда их отправили." },
+              { icon: <Globe />, title: "Адреса и MCP", text: "Куда ходят агенты и какие MCP-серверы вызывают." },
+              { icon: <TriangleAlert />, title: "Опасные действия", text: "rm -rf, kubectl delete, curl | sh — со ссылкой на место в сессии." },
+              { icon: <Wallet />, title: "Расход и люди", text: "Сессии и расход по сотрудникам и моделям." },
+            ].map((item) => (
+              <li key={item.title} className="lp-card">
+                <span className="lp-icon">{item.icon}</span>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="lp-control-note">
+            <Eye aria-hidden="true" size={18} /> Сотрудник заранее видит, кто читает его сессии, а
+            каждое чтение расшифровки записывается в журнал.
+          </p>
+          <div className="lp-cta">
+            <a className="lp-button lp-button--primary" href="/enterprise#control">
+              Центр управления <ArrowRight aria-hidden="true" size={18} />
+            </a>
+            <a className="lp-button lp-button--ghost" href="/enterprise?interest=commercial-license#request">
+              Попросить пилот
+            </a>
+          </div>
+        </section>
+
         <section className="lp-section lp-faq" aria-labelledby="landing-faq-title">
           <header className="lp-section-head">
             <span className="lp-kicker">Вопросы</span>
@@ -291,8 +334,9 @@ polka_change_files      put docs/risks.md
               на Полке на ваших серверах: один Docker-образ, PostgreSQL и ваше
               S3-хранилище с версионированием. Данные не покидают вашу сеть.
               Открытое ядро бесплатно. Для организаций есть коммерческая
-              редакция: ссылки только для сотрудников, агент только к нужной
-              папке, журнал действий агентов для службы безопасности.
+              редакция: центр управления агентами, ссылки только для
+              сотрудников, агент только к нужной папке, журнал действий агентов
+              для службы безопасности.
             </p>
           </div>
           <ol className="lp-selfhost-steps">

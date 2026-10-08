@@ -203,6 +203,27 @@
   font-size: var(--text-xs);
 }
 
+/* The control centre: what a company sees, then what it does not. */
+#control {
+  scroll-margin-top: 96px;
+}
+.enterprise-grid article > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.enterprise-honest {
+  display: grid;
+  gap: 6px;
+  max-width: 760px;
+  margin: 24px 0 0;
+  padding: 0 0 0 18px;
+  color: var(--muted-2);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
 /* How it works in a company: three numbered steps. */
 .enterprise-how {
   margin-bottom: 88px;

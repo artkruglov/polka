@@ -5,6 +5,8 @@ import {
   Bot,
   Cloud,
   CodeXml,
+  Eye,
+  Globe,
   Handshake,
   KeyRound,
   LibraryBig,
@@ -12,7 +14,9 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  TriangleAlert,
   Users,
+  Wallet,
 } from "lucide-react";
 import type { EnterpriseInterest } from "../../../../../packages/contracts/constants.ts";
 import { Badge, LinkButton } from "../../shared/ui/controls.tsx";
@@ -21,6 +25,51 @@ import { CONTACT, EnterpriseForm, initialInterest } from "./form.tsx";
 
 /** Something that is not on main yet: said plainly, never promised. */
 const InProgress = () => <Badge tone="warning">в разработке</Badge>;
+
+/**
+ * The control centre of the commercial edition (polka-enterprise
+ * docs/CONTROL_CENTER.md): what a company sees of its employees' Claude Code
+ * and Codex sessions. Only what works; the limits are in CONTROL_HONEST.
+ */
+const CONTROL: Array<{ icon: React.ReactNode; title: string; text: string }> = [
+  {
+    icon: <KeyRound />,
+    title: "Секреты",
+    text: "Какие ключи и пароли видели агенты, у кого и куда их отправили: в команду, в файл, в сеть или в MCP-сервер. Один секрет — один отпечаток по всей компании, значения на сервер не попадают.",
+  },
+  {
+    icon: <Globe />,
+    title: "Адреса и MCP-серверы",
+    text: "Куда ходят агенты и какие MCP-серверы вызывают: сколько людей, сессий и ошибок. Теневые интеграции видно до инцидента.",
+  },
+  {
+    icon: <TriangleAlert />,
+    title: "Опасные действия",
+    text: "rm -rf, git push --force, kubectl delete, terraform destroy, curl | sh и режим без подтверждений — со ссылкой на место в сессии.",
+  },
+  {
+    icon: <Wallet />,
+    title: "Расход и люди",
+    text: "Сессии, вызовы и расход по сотрудникам и моделям; кто не прислал ни одной сессии.",
+  },
+  {
+    icon: <Eye />,
+    title: "Расшифровка — под журналом",
+    text: "При разборе инцидента видно всю сессию: вызовы, команды, ответы. Каждое чтение и скачивание записывается: кто, чью сессию, когда.",
+  },
+  {
+    icon: <Server />,
+    title: "Сбор без участия людей",
+    text: "Хук Claude Code раздаётся управляемыми настройками через MDM, без MDM — установщиком на машину. Сотрудник заранее видит, кто читает его сессии.",
+  },
+];
+
+/** What the control centre does not see, said on the page. */
+const CONTROL_HONEST = [
+  "Видно то, что прислали машины со сбором: агенты на личных компьютерах и в облаке (Claude.ai, Codex cloud) сюда не попадают.",
+  "Codex собирается досылкой по расписанию: обязательных хуков у него нет.",
+  "Секреты находятся по известным видам и говорящим именам; пароль без подсказки в тексте может пройти незамеченным.",
+];
 
 const VALUES: Array<{
   icon: React.ReactNode;
@@ -127,6 +176,16 @@ const NEXT: Array<{
   points: string[];
 }> = [
   {
+    icon: <Eye />,
+    title: "Центр управления агентами",
+    ready: true,
+    points: [
+      "Сессии Claude Code и Codex сотрудников: секреты, адреса и MCP, опасные действия, расход.",
+      "Журнал чтения расшифровок и срок хранения, раньше которого сотрудник сессию не удалит.",
+      "Демо-данные вымышленной компании — показать центр до сбора своих.",
+    ],
+  },
+  {
     icon: <ShieldCheck />,
     title: "Контроль ссылок",
     ready: true,
@@ -149,11 +208,11 @@ const NEXT: Array<{
   {
     icon: <Plug />,
     title: "Встраивание в ваши системы",
-    ready: false,
+    ready: true,
     points: [
-      "События о новых версиях и ссылках — для Битрикс24, Jira, 1С и рабочих чатов.",
-      "Выгрузка утверждённых версий в сетевые папки и диски: HTML, PDF-снимок и манифест с SHA-256.",
-      "Встраивание интерактивных работ в вики и корпоративный портал.",
+      "Комментарии в задачах Jira и Битрикс24, когда работу с ключом задачи приняли, обновили или выдали по ней ссылку.",
+      "Выгрузка принятых версий в S3 или WebDAV компании: файлы, PDF-снимок и манифест с SHA-256.",
+      "1С, рабочие чаты и встраивание в вики — по заявке.",
     ],
   },
   {
@@ -172,18 +231,18 @@ const NEXT: Array<{
 const HOW: Array<{ icon: React.ReactNode; title: string; text: string }> = [
   {
     icon: <Server />,
-    title: "Установите и подключите вход",
-    text: "Docker-образ, PostgreSQL и ваше S3-хранилище. Сотрудники входят через IdP компании по OpenID Connect или через Яндекс ID.",
+    title: "Установите у себя",
+    text: "Одна виртуальная машина: Docker, PostgreSQL и ваше S3-хранилище, коммерческая редакция с ключом лицензии. Сотрудники входят через IdP компании по OpenID Connect или через Яндекс ID.",
   },
   {
-    icon: <Bot />,
-    title: "Сотрудники подключают агентов",
-    text: "Каждый говорит своему агенту одну фразу — ChatGPT, Claude, Codex или Claude Code. Права выбирает сам; все подключения видны и отзываются.",
+    icon: <ShieldCheck />,
+    title: "Раздайте сбор",
+    text: "Хук Claude Code — в управляемых настройках через MDM или установщиком на машину; Codex — досылкой по расписанию. Сотрудник один раз входит и видит, кто читает его сессии.",
   },
   {
-    icon: <LibraryBig />,
-    title: "Работы — на полках, шаблоны — в библиотеке",
-    text: "Агент сохраняет результат на полку сотрудника или на общую полку отдела: с версиями и поиском по тексту. Утверждённые шаблоны лежат в общей библиотеке команды, наружу работа уходит по отзываемой ссылке.",
+    icon: <Eye />,
+    title: "Смотрите и разбирайте",
+    text: "Секреты, адреса, опасные действия и расход по всей компании; тревоги — в журнал и выгрузку для SIEM. А работы, которые агенты делают для людей, лежат на полках отделов.",
   },
 ];
 
@@ -243,6 +302,10 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     a: "Сейчас — через ваше S3-хранилище, вход по OpenID Connect, MCP для агентов и HTTP API для скриптов и внутренних ботов. События для ваших систем и выгрузка в сетевые папки и диски — в разработке: напишите в заявке, какие системы у вас, и мы начнём с них.",
   },
   {
+    q: "Сотрудники знают, что их сессии читают?",
+    a: "Да. Текст о том, кто и что видит, установка показывает при подключении и на странице «Сессии» до первой отправки; каждое чтение расшифровки записывается в журнал. Уведомить сотрудников письменно по закону нужно и заранее — этот текст напоминает, но не заменяет уведомление.",
+  },
+  {
     q: "Видят ли коллеги работы друг друга?",
     a: "На общей полке отдела — да: работы видят все её участники, а что может каждый, решает роль. Личная полка сотрудника видна только ему, пока он не поделится ссылкой или не опубликует работу в библиотеке шаблонов команды. Полки отделов включает администратор установки.",
   },
@@ -270,43 +333,48 @@ export function EnterpriseContent({
     <>
       <section className="enterprise-hero">
         <div>
-          <span className="eyebrow">Полка для компаний</span>
-          <h1>Всё, что сотрудники делают с&nbsp;ИИ, — в&nbsp;одном месте</h1>
+          <span className="eyebrow">Центр управления агентами</span>
+          <h1>Видно, что ИИ‑агенты делают в&nbsp;компании</h1>
           <p>
-            Продажи работают в ChatGPT, аналитики — в Claude, разработчики — в
-            Codex и Claude Code. Агент каждого сам сохраняет отчёты, расчёты и
-            прототипы на Полку вашей компании: с версиями, поиском по тексту и
-            ссылками, которые можно отозвать. Утверждённые шаблоны — в общей
-            библиотеке команды.
+            Claude Code и Codex у разработчиков видят ключи, ходят в сеть и
+            запускают команды. Полка показывает службе ИБ и руководителям, какие
+            секреты агенты видели и куда отправили, к каким адресам и
+            MCP-серверам обращались, что опасного запускали и сколько это
+            стоило. Секреты скрываются ещё на машине сотрудника, всё остаётся на
+            вашем сервере.
           </p>
           <div className="enterprise-hero-actions">
-            <LinkButton variant="primary" href="#request">
-              Оставить заявку <ArrowDown size={18} />
+            <LinkButton
+              variant="primary"
+              href="#request"
+              onClick={choose("commercial-license")}
+            >
+              Попросить пилот <ArrowDown size={18} />
             </LinkButton>
-            <LinkButton href="#deploy">Варианты установки</LinkButton>
+            <LinkButton href="#control">Что видно</LinkButton>
           </div>
           <ul className="enterprise-facts" aria-label="Коротко">
-            <li>Открытый код, {SOURCE_LICENSE}</li>
-            <li>Данные в России на polochka.app</li>
-            <li>Можно поставить у себя</li>
+            <li>Значения секретов не покидают машину</li>
+            <li>Своя установка, одна VM</li>
+            <li>Открытое ядро, {SOURCE_LICENSE}</li>
           </ul>
         </div>
         <figure className="enterprise-shelf" aria-hidden="true">
           {[
             {
-              title: "Квартальный отчёт",
-              meta: "Версия 4 · SHA-256 3f9a…c21e",
-              tag: "Claude",
+              title: "Ключ платёжного API",
+              meta: "2 человека · ушёл в сеть",
+              tag: "Секрет",
             },
             {
-              title: "Прототип онбординга",
-              meta: "Ссылка до 1 октября · отозвать",
-              tag: "Codex",
+              title: "kubectl delete namespace",
+              meta: "Сессия Claude Code · 14:02",
+              tag: "Опасно",
             },
             {
-              title: "Дашборд обращений",
-              meta: "Шаблон «Отчёт команды», версия 2",
-              tag: "ChatGPT",
+              title: "mcp: browser",
+              meta: "5 человек · 31 сессия",
+              tag: "MCP",
             },
           ].map((item) => (
             <div key={item.title} className="enterprise-shelf-item">
@@ -318,8 +386,30 @@ export function EnterpriseContent({
               <em>{item.tag}</em>
             </div>
           ))}
-          <figcaption>Полка сотрудника: работы из трёх агентов</figcaption>
+          <figcaption>Центр управления, демо-данные</figcaption>
         </figure>
+      </section>
+
+      <section
+        id="control"
+        className="enterprise-values"
+        aria-labelledby="enterprise-control-title"
+      >
+        <h2 id="enterprise-control-title">Что видит компания</h2>
+        <div className="enterprise-grid">
+          {CONTROL.map((item) => (
+            <article key={item.title}>
+              <span className="enterprise-icon">{item.icon}</span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
+        </div>
+        <ul className="enterprise-honest" aria-label="Чего центр не видит">
+          {CONTROL_HONEST.map((text) => (
+            <li key={text}>{text}</li>
+          ))}
+        </ul>
       </section>
 
       <section className="enterprise-how" aria-labelledby="enterprise-how-title">
@@ -340,7 +430,7 @@ export function EnterpriseContent({
         className="enterprise-values"
         aria-labelledby="enterprise-values-title"
       >
-        <h2 id="enterprise-values-title">Что уже работает</h2>
+        <h2 id="enterprise-values-title">Работы агентов — на полках компании</h2>
         <div className="enterprise-grid">
           {VALUES.map((value) => (
             <article key={value.title}>
@@ -446,8 +536,9 @@ export function EnterpriseContent({
             <h3>Коммерческая редакция</h3>
             <strong className="enterprise-price">По договору</strong>
             <p>
-              Открытое ядро и расширение для организаций: контроль ссылок и
-              агентов, журнал для SIEM. С поддержкой и SLA. Коммерческая
+              Открытое ядро и расширение для организаций: центр управления
+              агентами, контроль ссылок и агентов, журнал для SIEM. С
+              поддержкой и SLA. Коммерческая
               лицензия на ядро — если нужно не публиковать изменения или
               встроить Полку в закрытый продукт.
             </p>

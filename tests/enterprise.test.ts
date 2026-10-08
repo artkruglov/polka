@@ -279,8 +279,9 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   // The commercial edition: what is ready says so, the rest is in progress.
   assert.ok(next.includes("Коммерческая редакция"));
   assert.ok(next.includes("облако polochka.app работает на открытом ядре") || next.includes("Облако polochka.app работает на открытом ядре"));
-  assert.equal((next.match(/в разработке/g) ?? []).length, 2);
-  assert.equal((next.match(/>есть</g) ?? []).length, 2);
+  assert.equal((next.match(/в разработке/g) ?? []).length, 1);
+  assert.equal((next.match(/>есть</g) ?? []).length, 4);
+  assert.ok(next.indexOf("Центр управления агентами") < next.indexOf("Контроль ссылок"));
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
   // Department shelves work (TEAM_SHELVES stages 1–4): the page lists them
   // among what works, links out of them as still in progress, and what comes
@@ -296,7 +297,12 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.doesNotMatch(html, /Лицензионного ключа нет/);
   assert.doesNotMatch(html, /Одна полка для всего/);
   const questions = (html.match(/<details>/g) ?? []).length;
-  assert.ok(questions >= 5 && questions <= 7, String(questions));
+  assert.ok(questions >= 5 && questions <= 8, String(questions));
+  // The control centre leads: what a company sees, then what it does not.
+  const control = html.slice(html.indexOf('id="control"'), html.indexOf("enterprise-how-title"));
+  for (const text of ["Секреты", "Адреса и MCP-серверы", "Опасные действия", "Расход и люди", "Расшифровка — под журналом", "Codex cloud"])
+    assert.ok(control.includes(text), text);
+  assert.ok(html.indexOf('id="control"') < html.indexOf("enterprise-values-title"));
   // No invented price.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   // The form: every field, the honeypot out of reach, the policy and a contact.
