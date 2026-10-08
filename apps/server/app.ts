@@ -12,7 +12,7 @@ import { openFileForExtension, revisionForExtension } from "./extension-content.
 import { auditFeedHead, readAuditFeed } from "./extension-feed.ts";
 import { pdfConfigured, pdfForExtension } from "./renderer-pdf.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
-import { checkLinkOpen, extensions, extensionsConfigured, loadExtensions } from "./extensions.ts";
+import { checkLinkOpen, extensions, extensionsConfigured, isExtensionMachinePath, loadExtensions, redactForExtension } from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
   prefixQuery,
@@ -125,11 +125,13 @@ import {
   listAgentConnections,
   revokeAgentConnection,
   setConnectionSignInLinks,
+  withServiceActorTransaction,
 } from "./service-auth.ts";
 import { registerMcpTransport } from "./mcp-transport.ts";
 import { OAUTH_MACHINE_PATHS, registerOAuthRoutes } from "./oauth.ts";
 import {
   MEDIA_UPLOAD_MS,
+  bearerActor,
   isMediaUploadPath,
   isPublishApiPath,
   registerPublishApi,
@@ -329,6 +331,7 @@ export async function createApp() {
       pathname !== "/mcp" &&
       !OAUTH_MACHINE_PATHS.has(pathname) &&
       !isPublishApiPath(pathname) &&
+      !isExtensionMachinePath(pathname) &&
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== config.APP_ORIGIN
     )
@@ -1609,7 +1612,20 @@ export async function createApp() {
   });
   for (const extension of extensions())
     await extension.register?.(app, {
-      identity: (req, options) => identity(req, options ?? {}),
+      identity: (req, options) => {
+        // A machine route has no Origin check: a cookie there would be forgeable.
+        if (isExtensionMachinePath(new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname))
+          throw new Problem(403, "forbidden", "Этот адрес принимает только токен агента.");
+        return identity(req, options ?? {});
+      },
+      agent: async (req, reply, scope) => {
+        const actor = await bearerActor(req, reply, scope === "sessions" ? "sessions" : "calls");
+        return withServiceActorTransaction(actor, scope, async (_c, verified) => ({
+          connectionId: verified.connectionId,
+          accountId: verified.accountId,
+          tenantId: verified.tenantId,
+        }));
+      },
       transaction,
       fail: (status, code, message) => new Problem(status, code, message),
       settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
@@ -1621,6 +1637,7 @@ export async function createApp() {
       },
       auditFeed: { read: readAuditFeed, head: auditFeedHead },
       sessions: sessionsForExtension,
+      redact: redactForExtension,
     });
   return app;
 }

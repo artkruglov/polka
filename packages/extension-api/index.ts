@@ -7,8 +7,11 @@
 // tables in its own PostgreSQL schema, with its own migrations and role
 // grants: the core's migration set and grant recipes never change for it.
 import type { Readable } from "node:stream";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
+import type { AgentScope } from "../contracts/index.ts";
+
+export type { AgentScope };
 
 export type ShelfRole = "owner" | "admin" | "curator" | "author" | "reader";
 
@@ -176,10 +179,27 @@ export type ExtensionSessionDetail = {
   links: Array<{ kind: "work" | "pr"; target: string; artifactId: string | null; title: string | null }>;
 };
 
+/**
+ * Text with secrets replaced by [REDACTED:<type>:<fingerprint>], as the
+ * sessions CLI replaces them on the machines, and each secret found (never
+ * its value).
+ */
+export type RedactResult = { text: string; secrets: Array<{ type: string; fingerprint: string }> };
+
 /** What the core hands an extension when it registers. */
 export type ExtensionContext = {
-  /** The signed-in account; with { shelf: true } it follows X-Polka-Shelf. */
+  /**
+   * The signed-in account; with { shelf: true } it follows X-Polka-Shelf.
+   * Refuses (403) on the extension's machinePaths: no Origin check there.
+   */
   identity: (req: FastifyRequest, options?: { shelf?: boolean }) => Promise<ExtensionActor>;
+  /**
+   * An agent token (Authorization: Bearer, no cookies) with this permission,
+   * checked as the core's /api/v1 routes check it: 401 without a valid token,
+   * 403 without the permission, 429 over the connection's rate. For an
+   * extension's machinePaths.
+   */
+  agent: (req: FastifyRequest, reply: FastifyReply, scope: AgentScope) => Promise<AgentConnectionInfo>;
   /** A transaction on the application's database role. */
   transaction: <T>(work: (c: PoolClient) => Promise<T>) => Promise<T>;
   /**
@@ -228,6 +248,14 @@ export type ExtensionContext = {
     /** The whole transcript, gzipped JSON lines. */
     transcriptFile(sessionId: string): Promise<{ bytes: Buffer; name: string }>;
   };
+  /**
+   * Secrets out of text that reaches the server unredacted, e.g. agent
+   * telemetry (OTLP): the rules and markers of scripts/polka-sessions.mjs. The
+   * fingerprint is keyed with the installation key, so it equals an uploaded
+   * session's under AGENT_SESSION_FINGERPRINTS=installation; with per-shelf
+   * keys (the default) the two never match. Synchronous, no I/O.
+   */
+  redact(text: string): RedactResult;
   auditFeed: {
     read(
       after: AuditCursor | null,
@@ -243,6 +271,13 @@ export interface PolkaExtension {
   name: string;
   /** Registers routes and background work. Called once, after the core's routes. */
   register?(app: FastifyInstance, context: ExtensionContext): Promise<void> | void;
+  /**
+   * Exact paths of the extension's machine routes, under /api/ext/<name>/:
+   * called by agents and collectors (e.g. OTLP exporters) with an agent
+   * token, without a browser Origin. The core exempts them from its Origin
+   * rule; their handlers authenticate with context.agent only.
+   */
+  machinePaths?: string[];
   policies?: {
     /** Before a link is issued or moved: refuse with a message the person reads. */
     linkIssue?(issue: LinkIssue, c: PoolClient): Promise<LinkIssueDecision>;
