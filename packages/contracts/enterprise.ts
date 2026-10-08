@@ -15,21 +15,41 @@ const line = (max: number) =>
     .max(max)
     .refine((value) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value));
 
-/** POST /api/enterprise-requests: a company asks about Полка (/enterprise). */
+/** A Telegram username: 5–32 letters, digits or underscores. */
+const TELEGRAM = /^[a-z][a-z0-9_]{4,31}$/i;
+
+/**
+ * How to reach the person: a work e-mail (lower-cased) or a Telegram
+ * username — «@name», «name» or «t.me/name» all become «@name».
+ */
+export const enterpriseContact = z
+  .string()
+  .trim()
+  .max(ENTERPRISE_LIMITS.email)
+  .transform((value, ctx) => {
+    if (z.string().email().safeParse(value).success) return value.toLowerCase();
+    const handle = value.replace(/^(?:https?:\/\/)?(?:t\.me|telegram\.me)\//i, "").replace(/^@/, "");
+    if (TELEGRAM.test(handle)) return `@${handle}`;
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Почта или имя в Telegram" });
+    return z.NEVER;
+  });
+
+/** Is this contact an e-mail (a letter can be answered), not a Telegram name? */
+export const isEmailContact = (contact: string) => !contact.startsWith("@");
+
+/**
+ * POST /api/enterprise-requests: a company asks about Полка (/enterprise).
+ * One field is enough — how to reach the person; the rest is optional.
+ */
 export const enterpriseRequestSchema = z
   .object({
     /** Idempotency: a repeated submit of the same form is one request. */
     key: z.string().uuid(),
-    name: line(ENTERPRISE_LIMITS.name),
-    company: line(ENTERPRISE_LIMITS.company),
-    email: z
-      .string()
-      .trim()
-      .email()
-      .max(ENTERPRISE_LIMITS.email)
-      .transform((value) => value.toLowerCase()),
-    teamSize: z.enum(ENTERPRISE_TEAM_SIZES),
-    interest: z.enum(ENTERPRISE_INTERESTS),
+    contact: enterpriseContact,
+    name: line(ENTERPRISE_LIMITS.name).optional(),
+    company: line(ENTERPRISE_LIMITS.company).optional(),
+    teamSize: z.enum(ENTERPRISE_TEAM_SIZES).optional(),
+    interest: z.enum(ENTERPRISE_INTERESTS).default("other"),
     // Line breaks stay; other control characters do not.
     comment: z
       .string()

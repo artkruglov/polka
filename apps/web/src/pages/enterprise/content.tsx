@@ -665,10 +665,10 @@ export function EnterpriseContent({
         aria-labelledby="enterprise-request-title"
       >
         <div className="enterprise-request-lead">
-          <h2 id="enterprise-request-title">Оставить заявку</h2>
+          <h2 id="enterprise-request-title">Попросить пилот</h2>
           <p>
-            Расскажите, как хотите использовать Полку. Ответим на рабочую почту:
-            обсудим установку, лицензию, поддержку и сроки.
+            Оставьте почту или Telegram — напишем, покажем Полку на демо-данных
+            и договоримся о пилоте у вас.
           </p>
           <p className="enterprise-contact">
             Или напишите напрямую: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>

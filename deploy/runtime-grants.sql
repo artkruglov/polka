@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>65
+     OR (SELECT count(*) FROM public.schema_migrations)<>66
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>65 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 065';
+     OR (SELECT max(version) FROM public.schema_migrations)<>66 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 066';
   END IF;
 END $$;
 

@@ -552,7 +552,7 @@ test("a company request is counted once, without who sent it", async () => {
     key,
     name: "Анна",
     company,
-    email: `anna-${run}@example.test`,
+    contact: `anna-${run}@example.test`,
     teamSize: "11-50",
     interest: "self-hosted",
     policyRead: true,

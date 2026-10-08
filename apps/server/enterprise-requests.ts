@@ -8,7 +8,10 @@ import type {
   EnterpriseInterest,
   EnterpriseTeamSize,
 } from "../../packages/contracts/constants.ts";
-import { enterpriseRequestSchema } from "../../packages/contracts/enterprise.ts";
+import {
+  enterpriseRequestSchema,
+  isEmailContact,
+} from "../../packages/contracts/enterprise.ts";
 import { limitAttempts } from "./auth.ts";
 import { trackEnterpriseRequest } from "./analytics.ts";
 import { config } from "./config.ts";
@@ -37,10 +40,11 @@ export const INTEREST_LABEL: Record<EnterpriseInterest, string> = {
 
 type StoredRequest = {
   id: string;
-  name: string;
-  company: string;
-  email: string;
-  team_size: EnterpriseTeamSize;
+  name: string | null;
+  company: string | null;
+  /** A work e-mail or a Telegram username («@name»). */
+  contact: string;
+  team_size: EnterpriseTeamSize | null;
   interest: EnterpriseInterest;
   comment: string | null;
   created_at: Date;
@@ -52,14 +56,17 @@ export function enterpriseLetter(request: StoredRequest) {
     timeZone: "Europe/Moscow",
   });
   return {
-    subject: `Заявка «Для компаний»: ${request.company}`.slice(0, 200),
+    subject:
+      `Заявка «Для компаний»: ${request.company ?? request.contact}`.slice(0, 200),
     text: [
       "Новая заявка со страницы «Для компаний» (/enterprise).",
       "",
-      `Имя: ${request.name}`,
-      `Компания: ${request.company}`,
-      `Рабочая почта: ${request.email}`,
-      `Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`,
+      `Контакт: ${request.contact}${isEmailContact(request.contact) ? "" : ` (Telegram: https://t.me/${request.contact.slice(1)})`}`,
+      ...(request.name ? [`Имя: ${request.name}`] : []),
+      ...(request.company ? [`Компания: ${request.company}`] : []),
+      ...(request.team_size
+        ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`]
+        : []),
       `Что интересует: ${INTEREST_LABEL[request.interest]}`,
       "",
       "Комментарий:",
@@ -68,9 +75,11 @@ export function enterpriseLetter(request: StoredRequest) {
       "—",
       `Заявка ${request.id}, ${when} (МСК).`,
       "Человек подтвердил, что прочитал Политику обработки персональных данных.",
-      "Ответьте на рабочую почту из заявки. Запись удаляется автоматически через год.",
+      isEmailContact(request.contact)
+        ? "Ответьте на почту из заявки. Запись удаляется автоматически через год."
+        : "Напишите человеку в Telegram. Запись удаляется автоматически через год.",
     ].join("\n"),
-    replyTo: request.email,
+    ...(isEmailContact(request.contact) ? { replyTo: request.contact } : {}),
   };
 }
 
@@ -93,17 +102,17 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
     rows: [created],
   } = await db.query<StoredRequest>(
     `INSERT INTO enterprise_requests(
-       id,idempotency_key,name,company,email,team_size,interest,comment
+       id,idempotency_key,name,company,contact,team_size,interest,comment
      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT(idempotency_key) DO NOTHING
-     RETURNING id,name,company,email,team_size,interest,comment,created_at`,
+     RETURNING id,name,company,contact,team_size,interest,comment,created_at`,
     [
       randomUUID(),
       input.key,
-      input.name,
-      input.company,
-      input.email,
-      input.teamSize,
+      input.name ?? null,
+      input.company ?? null,
+      input.contact,
+      input.teamSize ?? null,
       input.interest,
       comment,
     ],
@@ -112,16 +121,16 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
     const {
       rows: [old],
     } = await db.query(
-      `SELECT name,company,email,team_size,interest,comment
+      `SELECT name,company,contact,team_size,interest,comment
        FROM enterprise_requests WHERE idempotency_key=$1`,
       [input.key],
     );
     if (
       !old ||
-      old.name !== input.name ||
-      old.company !== input.company ||
-      old.email !== input.email ||
-      old.team_size !== input.teamSize ||
+      old.name !== (input.name ?? null) ||
+      old.company !== (input.company ?? null) ||
+      old.contact !== input.contact ||
+      old.team_size !== (input.teamSize ?? null) ||
       old.interest !== input.interest ||
       old.comment !== comment
     )
@@ -130,12 +139,13 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
         "conflict",
         "Этот повтор относится к другой заявке. Отправьте форму заново.",
       );
-    return { ok: true as const };
+    return { ok: true as const, contact: input.contact };
   }
   // Analytics: that a request came, and what about; nothing about who.
-  trackEnterpriseRequest(created.interest, created.team_size);
+  trackEnterpriseRequest(created.interest, created.team_size ?? "unknown");
   await notifyOperator(created);
-  return { ok: true as const };
+  // The contact as stored («@name» for any Telegram spelling), for the thanks.
+  return { ok: true as const, contact: created.contact };
 }
 
 /** Never fails the request: it is stored, and the operator can read the table. */

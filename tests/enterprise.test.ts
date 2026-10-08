@@ -52,7 +52,7 @@ const valid = (overrides: Record<string, unknown> = {}) => ({
   key: randomUUID(),
   name: "Анна Смирнова",
   company: `ООО «Пример» ${randomBytes(4).toString("hex")}`,
-  email: "Anna@Example.test",
+  contact: "Anna@Example.test",
   teamSize: "51-200",
   interest: "self-hosted",
   comment: "Нужна своя установка.",
@@ -102,11 +102,11 @@ test("a request is stored and the operator gets a plain-text letter", async () =
   });
   const res = await post(body);
   assert.equal(res.statusCode, 200, res.body);
-  assert.deepEqual(res.json(), { ok: true });
+  assert.deepEqual(res.json(), { ok: true, contact: "anna@example.test" });
 
   const [row] = await stored(body.company);
   assert.ok(row);
-  assert.equal(row.email, "anna@example.test");
+  assert.equal(row.contact, "anna@example.test");
   assert.equal(row.team_size, "51-200");
   assert.equal(row.interest, "self-hosted");
   // CRLF becomes LF; other control characters go.
@@ -125,11 +125,32 @@ test("a request is stored and the operator gets a plain-text letter", async () =
   // The fields go in as text, exactly; nothing is interpreted as markup.
   assert.ok(letter.text.includes("Имя: <b>Анна</b>\n"));
   assert.ok(letter.text.includes(`Компания: ${body.company}\n`));
-  assert.ok(letter.text.includes("Рабочая почта: anna@example.test\n"));
+  assert.ok(letter.text.includes("Контакт: anna@example.test\n"));
   assert.ok(letter.text.includes("Размер команды: 51–200 человек\n"));
   assert.ok(letter.text.includes("Что интересует: своя установка\n"));
   assert.ok(letter.text.includes("<script>alert(1)</script>"));
   assert.ok(letter.text.includes(row.id));
+});
+
+test("one field is enough: a Telegram name, nothing else", async () => {
+  const marker = randomBytes(6).toString("hex");
+  for (const [i, spelling] of ["@anna_" + marker, "https://t.me/anna_" + marker, "anna_" + marker].entries()) {
+    const res = await post({ key: randomUUID(), contact: spelling, policyRead: true, comment: `${marker}-${i}` });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.deepEqual(res.json(), { ok: true, contact: `@anna_${marker}` });
+  }
+  const { rows } = await db.query("SELECT * FROM enterprise_requests WHERE contact=$1", [`@anna_${marker}`]);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].name, null);
+  assert.equal(rows[0].company, null);
+  assert.equal(rows[0].team_size, null);
+  assert.equal(rows[0].interest, "other");
+  const letter = await letterFor(`${marker}-0`);
+  assert.ok(letter);
+  assert.equal(letter.replyTo, undefined, "a Telegram name is not a reply address");
+  assert.ok(letter.text.includes(`Контакт: @anna_${marker} (Telegram: https://t.me/anna_${marker})`));
+  assert.ok(!letter.text.includes("Имя:"));
+  assert.equal(letter.subject, `Заявка «Для компаний»: @anna_${marker}`);
 });
 
 test("a repeated submit with the same key is one request; another body under it is refused", async () => {
@@ -147,7 +168,8 @@ test("fields are validated", async () => {
     ["no name", { name: "  " }],
     ["long name", { name: "а".repeat(101) }],
     ["line break in the company", { company: "ООО\nBcc: x@example.test" }],
-    ["bad email", { email: "not-an-email" }],
+    ["bad contact", { contact: "not-an-email" }],
+    ["no contact", { contact: "  " }],
     ["unknown team size", { teamSize: "5000" }],
     ["unknown interest", { interest: "free" }],
     ["long comment", { comment: "а".repeat(2001) }],
@@ -235,7 +257,7 @@ test("the letter never carries an HTML part", () => {
     id: randomUUID(),
     name: "Имя",
     company: "Компания",
-    email: "a@example.test",
+    contact: "a@example.test",
     team_size: "1000+",
     interest: "commercial-license",
     comment: null,
@@ -310,18 +332,12 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   // No invented price.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   // The form: every field, the honeypot out of reach, the policy and a contact.
-  for (const name of [
-    "name",
-    "company",
-    "email",
-    "teamSize",
-    "interest",
-    "comment",
-    "policyRead",
-    "website",
-  ])
+  // The request is one field and a button; the comment is optional.
+  for (const name of ["contact", "interest", "comment", "policyRead", "website"])
     assert.ok(html.includes(`name="${name}"`), name);
-  assert.match(html, /type="email"/);
+  for (const name of ["name", "company", "teamSize"])
+    assert.ok(!html.includes(`name="${name}"`), name);
+  assert.match(html, /Попросить пилот/);
   assert.match(html, /maxLength="2000"/i);
   assert.match(html, /class="enterprise-trap" aria-hidden="true"/);
   assert.match(
@@ -350,7 +366,7 @@ test("/enterprise?interest= preselects a known choice only", () => {
   const html = render(
     React.createElement(EnterpriseContent, { search: "?interest=self-hosted" }),
   );
-  assert.match(html, /<option value="self-hosted" selected="">/);
+  assert.match(html, /<input type="hidden" name="interest" value="self-hosted"\/>/);
 });
 
 test("after sending, the form shows where the answer goes", () => {
@@ -358,7 +374,7 @@ test("after sending, the form shows where the answer goes", () => {
     React.createElement(EnterpriseForm, {
       interest: "",
       onInterest: () => {},
-      initialSent: { name: "Анна", email: "anna@example.test" },
+      initialSent: { contact: "anna@example.test" },
     }),
   );
   assert.match(html, /role="status"/);

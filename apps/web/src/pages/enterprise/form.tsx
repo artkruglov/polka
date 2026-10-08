@@ -3,34 +3,13 @@ import { CircleCheck, Send } from "lucide-react";
 import {
   ENTERPRISE_INTERESTS,
   ENTERPRISE_LIMITS,
-  ENTERPRISE_TEAM_SIZES,
   type EnterpriseInterest,
-  type EnterpriseTeamSize,
 } from "../../../../../packages/contracts/constants.ts";
 import { ApiError, request } from "../../shared/api/client.ts";
-import {
-  Button,
-  SelectField,
-  TextAreaField,
-  TextField,
-} from "../../shared/ui/controls.tsx";
+import { Button, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 
 export const CONTACT = "hello@polochka.app";
-
-export const TEAM_SIZES: Record<EnterpriseTeamSize, string> = {
-  "1-10": "До 10 человек",
-  "11-50": "11–50",
-  "51-200": "51–200",
-  "201-1000": "201–1000",
-  "1000+": "Больше 1000",
-};
-export const INTERESTS: Record<EnterpriseInterest, string> = {
-  cloud: "Облако polochka.app",
-  "self-hosted": "Своя установка",
-  "commercial-license": "Коммерческая лицензия",
-  other: "Другое",
-};
 
 /** /enterprise?interest=commercial-license preselects what the person wants. */
 export function initialInterest(search: string): EnterpriseInterest | "" {
@@ -46,24 +25,18 @@ const newKey = () =>
     : "00000000-0000-4000-8000-000000000000";
 
 type Fields = {
-  name: string;
-  company: string;
-  email: string;
-  teamSize: EnterpriseTeamSize | "";
+  contact: string;
   comment: string;
   policyRead: boolean;
   website: string;
 };
-const EMPTY: Fields = {
-  name: "",
-  company: "",
-  email: "",
-  teamSize: "",
-  comment: "",
-  policyRead: false,
-  website: "",
-};
+const EMPTY: Fields = { contact: "", comment: "", policyRead: false, website: "" };
 
+/**
+ * The request is one field — a work e-mail or a Telegram name — and a button.
+ * What the person wants comes from the button they pressed on the page; a
+ * comment is optional.
+ */
 export function EnterpriseForm({
   interest,
   onInterest,
@@ -72,7 +45,7 @@ export function EnterpriseForm({
   interest: EnterpriseInterest | "";
   onInterest: (value: EnterpriseInterest | "") => void;
   /** Tests render the success state directly. */
-  initialSent?: { name: string; email: string } | null;
+  initialSent?: { contact: string } | null;
 }) {
   const [fields, setFields] = useState<Fields>(EMPTY);
   // One key per filled form: a retry after a network error is the same request.
@@ -82,11 +55,7 @@ export function EnterpriseForm({
   const [sent, setSent] = useState(initialSent);
   const set =
     <K extends keyof Fields>(name: K) =>
-    (
-      event: React.ChangeEvent<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >,
-    ) => {
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const target = event.target as HTMLInputElement;
       setFields((current) => ({
         ...current,
@@ -94,14 +63,15 @@ export function EnterpriseForm({
       }));
     };
 
-  if (sent)
+  if (sent) {
+    const telegram = sent.contact.startsWith("@");
     return (
       <div className="enterprise-sent" role="status">
         <CircleCheck aria-hidden="true" />
         <h3>Заявка отправлена</h3>
         <p>
-          Спасибо, {sent.name}. Ответим на <strong>{sent.email}</strong>. Если
-          письма долго нет, напишите на{" "}
+          Спасибо! {telegram ? "Напишем в Telegram" : "Ответим на"}{" "}
+          <strong>{sent.contact}</strong>. Если долго нет ответа, напишите на{" "}
           <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
         </p>
         <Button
@@ -116,6 +86,7 @@ export function EnterpriseForm({
         </Button>
       </div>
     );
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -123,22 +94,22 @@ export function EnterpriseForm({
     setBusy(true);
     setError("");
     try {
-      await request("/enterprise-requests", {
-        key,
-        name: fields.name,
-        company: fields.company,
-        email: fields.email,
-        teamSize: fields.teamSize,
-        interest,
-        ...(fields.comment.trim() ? { comment: fields.comment } : {}),
-        policyRead: fields.policyRead,
-        ...(fields.website ? { website: fields.website } : {}),
-      });
-      setSent({ name: fields.name.trim(), email: fields.email.trim() });
+      const answer = await request<{ ok: true; contact?: string }>(
+        "/enterprise-requests",
+        {
+          key,
+          contact: fields.contact,
+          ...(interest ? { interest } : {}),
+          ...(fields.comment.trim() ? { comment: fields.comment } : {}),
+          policyRead: fields.policyRead,
+          ...(fields.website ? { website: fields.website } : {}),
+        },
+      );
+      setSent({ contact: answer.contact ?? fields.contact.trim() });
     } catch (e) {
       setError(
         e instanceof ApiError && e.code === "invalid"
-          ? "Проверьте поля: имя, компания, почта, размер команды и что вас интересует обязательны."
+          ? "Укажите рабочую почту или имя в Telegram, например anna@company.ru или @anna."
           : e instanceof Error
             ? e.message
             : "Не удалось отправить заявку.",
@@ -150,82 +121,34 @@ export function EnterpriseForm({
 
   return (
     <form className="enterprise-form" onSubmit={submit}>
-      <div className="enterprise-form-row">
+      <div className="enterprise-quick">
         <TextField
-          label="Имя"
-          name="name"
-          autoComplete="name"
+          label="Почта или Telegram"
+          name="contact"
+          autoComplete="email"
           required
-          maxLength={ENTERPRISE_LIMITS.name}
-          value={fields.name}
-          onChange={set("name")}
+          maxLength={ENTERPRISE_LIMITS.email}
+          placeholder="anna@company.ru или @anna"
+          value={fields.contact}
+          onChange={set("contact")}
         />
-        <TextField
-          label="Компания"
-          name="company"
-          autoComplete="organization"
-          required
-          maxLength={ENTERPRISE_LIMITS.company}
-          value={fields.company}
-          onChange={set("company")}
+        <Button type="submit" variant="primary" busy={busy}>
+          Попросить пилот <Send size={17} />
+        </Button>
+      </div>
+      <input type="hidden" name="interest" value={interest} />
+      <details className="enterprise-more">
+        <summary>Добавить пару слов</summary>
+        <TextAreaField
+          label="Комментарий"
+          name="comment"
+          rows={3}
+          maxLength={ENTERPRISE_LIMITS.comment}
+          hint="Необязательно: задача, сколько человек, сроки."
+          value={fields.comment}
+          onChange={set("comment")}
         />
-      </div>
-      <TextField
-        label="Рабочая почта"
-        name="email"
-        type="email"
-        autoComplete="email"
-        required
-        maxLength={ENTERPRISE_LIMITS.email}
-        hint="На неё придёт ответ."
-        value={fields.email}
-        onChange={set("email")}
-      />
-      <div className="enterprise-form-row">
-        <SelectField
-          label="Размер команды"
-          name="teamSize"
-          required
-          value={fields.teamSize}
-          onChange={set("teamSize")}
-        >
-          <option value="" disabled>
-            Выберите
-          </option>
-          {ENTERPRISE_TEAM_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {TEAM_SIZES[size]}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Что хотите"
-          name="interest"
-          required
-          value={interest}
-          onChange={(event) =>
-            onInterest(event.target.value as EnterpriseInterest)
-          }
-        >
-          <option value="" disabled>
-            Выберите
-          </option>
-          {ENTERPRISE_INTERESTS.map((value) => (
-            <option key={value} value={value}>
-              {INTERESTS[value]}
-            </option>
-          ))}
-        </SelectField>
-      </div>
-      <TextAreaField
-        label="Комментарий"
-        name="comment"
-        rows={4}
-        maxLength={ENTERPRISE_LIMITS.comment}
-        hint={`Необязательно. Задача, сроки, требования к данным — до ${ENTERPRISE_LIMITS.comment} символов.`}
-        value={fields.comment}
-        onChange={set("comment")}
-      />
+      </details>
       {/* Honeypot: people never see or reach it; bots fill every field. */}
       <div className="enterprise-trap" aria-hidden="true">
         <label>
@@ -253,13 +176,10 @@ export function EnterpriseForm({
           <a href="/privacy" target="_blank" rel="noopener">
             Политику обработки персональных данных
           </a>
-          . Данные из заявки нужны, чтобы ответить на неё, и хранятся год.
+          . Контакт нужен, чтобы ответить, и хранится год.
         </span>
       </label>
       <ErrorNotice error={error} />
-      <Button type="submit" variant="primary" busy={busy}>
-        Отправить заявку <Send size={17} />
-      </Button>
     </form>
   );
 }

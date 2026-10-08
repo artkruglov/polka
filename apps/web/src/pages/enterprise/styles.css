@@ -566,3 +566,24 @@
     padding: 20px 16px;
   }
 }
+
+/* The request: one field and the button side by side. */
+.enterprise-quick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+.enterprise-more summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+}
+.enterprise-more[open] summary {
+  margin-bottom: 12px;
+}
+@media (max-width: 560px) {
+  .enterprise-quick {
+    grid-template-columns: 1fr;
+  }
+}
