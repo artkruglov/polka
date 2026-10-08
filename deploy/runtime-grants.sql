@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>66
+     OR (SELECT count(*) FROM public.schema_migrations)<>67
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>66 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 066';
+     OR (SELECT max(version) FROM public.schema_migrations)<>67 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 067';
   END IF;
 END $$;
 
@@ -215,6 +215,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
 TO :"runtime_role";
 -- Agent read counts (061): agent_read_days is granted above; counts only. The tenants row stays after erasure, so the leaving-account trigger deletes them (062).
 -- Erase freezes service accounts (060): replaces a SECURITY DEFINER function, no grants.
+-- Invitation links to a department shelf (067): the application issues,
+-- revokes (state='revoked', never DELETE) and counts uses of a link; rows go
+-- with their shelf (ON DELETE CASCADE). tenant_member_events gains a column,
+-- already granted.
+GRANT SELECT, INSERT, UPDATE ON TABLE public.tenant_invitations TO :"runtime_role";
 -- Allowed shelves of a connection (059): a column of agent_connections, already granted.
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;

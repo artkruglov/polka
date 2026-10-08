@@ -55,6 +55,7 @@
   "tests/content-search.test.ts",
   "tests/team-shelves.test.ts",
   "tests/team-shelves-web.test.ts",
+  "tests/team-shelves-invitations.test.ts",
   "tests/agent-multi-shelf.test.ts",
   "tests/agent-workspace.test.ts",
   "tests/rest-mcp-parity.test.ts",

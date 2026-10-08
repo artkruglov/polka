@@ -26,7 +26,7 @@ const addInput = z
   })
   .strict();
 
-async function lockTeamShelf(c: PoolClient, shelfId: string) {
+export async function lockTeamShelf(c: PoolClient, shelfId: string) {
   if (config.TEAM_SHELVES !== "on") throw missing();
   const {
     rows: [shelf],
@@ -39,7 +39,7 @@ async function lockTeamShelf(c: PoolClient, shelfId: string) {
 }
 
 /** Locks the accounts by id and returns the active ones. */
-async function lockAccounts(c: PoolClient, ids: string[]) {
+export async function lockAccounts(c: PoolClient, ids: string[]) {
   const { rows } = await c.query(
     `SELECT id FROM accounts WHERE id=ANY($1::uuid[])
        AND NOT disabled AND deletion_requested_at IS NULL
@@ -49,7 +49,7 @@ async function lockAccounts(c: PoolClient, ids: string[]) {
   return new Set(rows.map((row) => row.id as string));
 }
 
-async function lockMemberships(c: PoolClient, shelfId: string, ids: string[]) {
+export async function lockMemberships(c: PoolClient, shelfId: string, ids: string[]) {
   const { rows } = await c.query(
     `SELECT account_id,role,state FROM tenant_members
      WHERE tenant_id=$1 AND account_id=ANY($2::uuid[])
@@ -60,7 +60,7 @@ async function lockMemberships(c: PoolClient, shelfId: string, ids: string[]) {
 }
 
 /** The actor's active role, or «not found» for anyone who is not a member. */
-function roleOf(
+export function roleOf(
   memberships: Map<string, { role: ShelfRole; state: string }>,
   active: Set<string>,
   actorId: string,
