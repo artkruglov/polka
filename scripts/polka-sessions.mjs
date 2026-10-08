@@ -54,7 +54,8 @@ export const RULES = [
   { type: "google-api-key", confidence: "high", re: /\bAIza[\w-]{35}\b/g },
   { type: "slack-token", confidence: "high", re: /\bxox[baprs]-[\w-]{10,}/g },
   { type: "stripe-key", confidence: "high", re: /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{24,}\b/g },
-  { type: "telegram-bot-token", confidence: "high", re: /\b\d{8,10}:AA[\w-]{33}\b/g },
+  // Also inside a Bot API address: https://api.telegram.org/bot<token>/sendMessage.
+  { type: "telegram-bot-token", confidence: "high", re: /(?:(?<=\bbot)|\b)\d{8,10}:AA[\w-]{33}\b/g },
   { type: "npm-token", confidence: "high", re: /\bnpm_[A-Za-z0-9]{36}\b/g },
   { type: "huggingface-token", confidence: "high", re: /\bhf_[A-Za-z]{34}\b/g },
   { type: "jwt", confidence: "high", re: /\beyJ[\w-]{10,}\.eyJ[\w-]{10,}\.[\w-]{10,}/g },

@@ -84,6 +84,10 @@ test("the redactor replaces the captured value, not an equal user name", () => {
   assert.match(same, /^postgres:\/\/world:\[REDACTED:url-password:[0-9a-f]{12}\]@localhost\/db$/);
   assert.match(redactor.redact(`token=${FAKE.bare}`, "x"), /^token=\[REDACTED:assignment:/);
   assert.match(redactor.redact(`OD_SECRET=${FAKE.hexSecret}`, "x"), /^OD_SECRET=\[REDACTED:assignment:/);
+  // A bot token in a Bot API address, where no word boundary precedes it.
+  const bot = "7301" + "123456" + ":AA" + "x".repeat(33);
+  assert.match(redactor.redact(`https://api.telegram.org/bot${bot}/sendMessage`, "x"), /^https:\/\/api\.telegram\.org\/bot\[REDACTED:telegram-bot-token:[0-9a-f]{12}\]\/sendMessage$/);
+  assert.match(redactor.redact(`TG ${bot}`, "x"), /^TG \[REDACTED:telegram-bot-token:/);
   // Code and placeholders stay.
   for (const text of ["password: string", "token: null", "API_KEY=${API_KEY}", "const secret = loadSecret()", "commit " + "0123456789abcdef".repeat(2) + "01234567"])
     assert.equal(redactor.redact(text, "x"), text);
