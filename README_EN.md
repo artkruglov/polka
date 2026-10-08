@@ -17,6 +17,7 @@
 <p align="center">
   <a href="https://polochka.app"><b>polochka.app</b></a> ·
   <a href="https://polochka.app/discover">Catalogue</a> ·
+  <a href="docs/en/README.md">Developer docs</a> ·
   <a href="docs/README.md">Docs (Russian)</a> ·
   <a href="https://polochka.app/enterprise">For companies</a> ·
   <a href="README.md">Русский</a>
@@ -144,7 +145,7 @@ flowchart LR
   R -. "iframe, sandbox without network" .-> V["Viewer · polochka.page"]
 ```
 
-The agent hands over the work's code itself; Полка doesn't pull anything out of the chat. Every save becomes an immutable version, and a link is bound to a version. Foreign HTML is treated as hostile: an interactive page opens on a separate domain, with no access to cookies, Полка's API or the network. More: [architecture](docs/architecture.md) (Russian), [threat model](SECURITY.md#модель-угроз-вкратце).
+The agent hands over the work's code itself; Полка doesn't pull anything out of the chat. Every save becomes an immutable version, and a link is bound to a version. Foreign HTML is treated as hostile: an interactive page opens on a separate domain, with no access to cookies, Полка's API or the network. More: [architecture](docs/en/architecture.md), [threat model](SECURITY.md#модель-угроз-вкратце).
 
 ## Five ways to save a work
 
@@ -190,9 +191,9 @@ npm run dev                      # http://127.0.0.1:4390
 `local:setup` prints the same sequence at the end. If the default ports are taken (or this is a second clone), choose your own when `.env` is created: `POLKA_LOCAL_PROJECT=polka-two POLKA_LOCAL_PG_PORT=55432 POLKA_LOCAL_S3_PORT=9138 PORT=4490 VIEWER_PORT=4491 npm run local:setup`.
 
 > [!WARNING]
-> If `db:migrate` fails with an authentication error, volumes from an earlier install with an old password are still there. Reset, deleting the local data: `docker compose --env-file=.env -f deploy/compose.local.yml down -v`, then start again from `npm run infra:up` ([details](docs/local-development.md), Russian).
+> If `db:migrate` fails with an authentication error, volumes from an earlier install with an old password are still there. Reset, deleting the local data: `docker compose --env-file=.env -f deploy/compose.local.yml down -v`, then start again from `npm run infra:up` ([details](docs/en/local-development.md)).
 
-The interactive viewer, e-mail code sign-in and the separate test suites are covered in [docs/local-development.md](docs/local-development.md).
+The interactive viewer, e-mail code sign-in and the separate test suites are covered in [docs/en/local-development.md](docs/en/local-development.md).
 
 <details>
 <summary><b>Checks</b></summary>
@@ -209,7 +210,7 @@ npm run verify         # everything before a push; GitHub Actions runs the same 
 
 ## Self-hosting
 
-A deployment is one Docker image plus external PostgreSQL and versioned S3 storage. You build the image from source (`docker build`); no published image exists yet. The interactive viewer must run on a separate registrable domain. The recommended path is [deploy/hosted/README.md](deploy/hosted/README.md): a single VM behind Caddy, which is how polochka.app runs. [deploy/BASE.md](deploy/BASE.md), [deploy/RESTORE.md](deploy/RESTORE.md) and [deploy/VIEWER_STAGING.md](deploy/VIEWER_STAGING.md) are drafts for experienced operators. For how the parts fit together, see [docs/architecture.md](docs/architecture.md).
+A deployment is one Docker image plus external PostgreSQL and versioned S3 storage. You build the image from source (`docker build`); no published image exists yet. The interactive viewer must run on a separate registrable domain. The recommended path is [deploy/hosted/README.md](deploy/hosted/README.md): a single VM behind Caddy, which is how polochka.app runs. [deploy/BASE.md](deploy/BASE.md), [deploy/RESTORE.md](deploy/RESTORE.md) and [deploy/VIEWER_STAGING.md](deploy/VIEWER_STAGING.md) are drafts for experienced operators. For how the parts fit together, see [docs/en/architecture.md](docs/en/architecture.md).
 
 ## For companies
 
@@ -242,6 +243,8 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
 
 ## Documentation
+
+In English, for developers: [Developer docs](docs/en/README.md) · [Architecture](docs/en/architecture.md) · [Local development](docs/en/local-development.md) · [Contributing](CONTRIBUTING.md)
 
 In Russian: [Document map](docs/README.md) · [Architecture](docs/architecture.md) · [Connecting agents](docs/connect-agents.md) · [Connector](docs/MCP_CONNECTOR.md) · [HTTP API](docs/PUBLISH_API.md) · [FAQ](docs/faq.md) · [Status](docs/status.md) · [Roadmap](docs/roadmap.md) · [Changes](CHANGELOG.md)
 
