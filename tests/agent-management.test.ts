@@ -723,7 +723,10 @@ test("the shelf snapshot shows works, versions, trash and accepted marks as they
 
   const recent = await at(day(1.5));
   assert.equal(recent.get(w1.artifactId).acceptedRevisionId, rev2);
-  const now = await at(day(0));
+  // "Now" by the database's clock: rows were written with its now(), and the
+  // Docker VM's clock may run ahead of this process's.
+  const { rows: [{ t: dbNow }] } = await db.query<{ t: Date }>("SELECT now() AS t");
+  const now = await at(dbNow.toISOString());
   assert.equal(now.get(w1.artifactId).acceptedRevisionId, null, "the mark was cleared");
   assert.ok(now.has(w2.artifactId));
   assert.ok(!now.has(w4.artifactId), "in the trash now");
