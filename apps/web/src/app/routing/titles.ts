@@ -7,6 +7,7 @@ export function routeTitle(path: string): string | null | undefined {
   if (!isAppPage(path) && path !== "/dev/components") return "Страница не найдена";
   if (path === "/templates") return "Шаблоны";
   if (path === "/library-invite") return "Приглашение в библиотеку";
+  if (path === "/shelf-invite") return "Приглашение на полку отдела";
   if (path === "/oauth/consent") return "Подключение агента";
   if (path === "/moderation") return "Модерация";
   if (path === "/signup") return "Вход";

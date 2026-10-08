@@ -9,6 +9,7 @@ import {
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Avatar, Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
 import { ROLE_HINT, ROLE_LABEL, loadShelves, switchShelf } from "../../entities/shelf/model.ts";
+import { ShelfInviteLinks } from "./InviteLinks.tsx";
 import "./styles.css";
 
 type TeamRole = ShelfMember["role"];
@@ -63,7 +64,7 @@ export function CreateShelfPanel({ onClose }: { onClose: () => void }) {
 /**
  * Who is on a department shelf and with which role. Everyone sees the list;
  * its admin adds colleagues, changes roles, removes members and renames the
- * shelf; anyone may leave.
+ * shelf; the admin and curators invite by link; anyone may leave.
  */
 export function ShelfMembersPanel({
   shelf,
@@ -179,7 +180,7 @@ export function ShelfMembersPanel({
           >
             <TextField
               label="Почта или логин коллеги"
-              hint="Коллега должен хотя бы раз войти в Полку."
+              hint="Коллега должен хотя бы раз войти в Полку. Кто ещё не входил — пригласите ссылкой."
               value={who}
               onChange={(event) => setWho(event.target.value)}
               disabled={busy}
@@ -201,6 +202,9 @@ export function ShelfMembersPanel({
               <UserPlus /> Добавить
             </Button>
           </form>
+        )}
+        {(role === "admin" || role === "curator") && (
+          <ShelfInviteLinks shelfId={shelf.id} inviter={role} accountId={accountId} />
         )}
         {notice && <p className="shelf-members-notice" role="status">{notice}</p>}
         <ErrorNotice error={error} />
