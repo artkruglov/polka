@@ -42,7 +42,7 @@ Wire names с underscore; короткие стабильные schemas и struc
 |---|---|---|
 | `polka_context`, `polka_status` | context | всегда при `context` |
 | `polka_open_shelf` | context | только OAuth-подключение и только своя полка (не полка отдела); одноразовая ссылка во временную полку — ещё при `sign_in` |
-| `polka_list`, `polka_get_artifact`, `polka_comments`, `polka_list_folders` | read | при `read` |
+| `polka_list`, `polka_get_artifact`, `polka_comments`, `polka_list_folders`, `polka_snapshot` | read | при `read` |
 | `polka_list_template_libraries`, `polka_list_templates`, `polka_read_source` | source:read | при `source:read` |
 | `polka_update_artifact`, `polka_trash`, `polka_restore`, `polka_create_folder`, `polka_rename_folder`, `polka_delete_folder`, `polka_move` | manage | при `manage` |
 | `polka_import_url`, `polka_import_status`, `polka_cancel_import` | capture | только при `URL_IMPORT_ENABLED=true` (экспериментально, по умолчанию выключено) |
@@ -138,6 +138,7 @@ web wrappers не вызывать из внешней transaction. Подтве
 | `polka_list` | read | Существующие query/folderId/limit/cursor (limit 1–100, default 25) + `state: active\|trashed` default active. Каждый item содержит title, kind (`page\|link\|image\|text\|file`, у link ещё linkHost), folderId, folderName, createdAt (первая версия), latest revision metadata, trashedAt, lifecycleVersion; без share/token/bytes |
 | `polka_get_artifact` | read | `{artifactId}` (UUID или адрес страницы работы `<APP_ORIGIN>/works/<id>`, из которого берётся UUID) → та же безопасная metadata projection, включая корзину; neutral404 для чужого/несуществующего ID |
 | `polka_list_folders` | read | `{cursor?,limit?}` limit 1–100 default 25 → `{items:[{id,name,works}],nextCursor}` для выбора существующей папки; works — работы на полке (не в корзине) |
+| `polka_snapshot` | read | `{at,limit?,cursor?}`: `at` — ISO 8601 с поясом, не в будущем; limit 1–100 default 50 → `{at,items:[{id,title,folderId,revision:{id,number,filename,mime,size,totalSize,createdAt},acceptedRevisionId}],nextCursor}`; ровно ответ `GET /api/v1/snapshot` ([SHELF_SNAPSHOT](SHELF_SNAPSHOT.md)), ограничение папками действует |
 | `polka_update_artifact` | manage | `{key,artifactId,title?,folderId?,expectedTitle,expectedFolderId}`; title/folderId и CAS берутся из текущего metadata schema; хотя бы одно изменение обязательно |
 | `polka_trash` | manage | `{artifactId,expectedLifecycleVersion,expectedRevisionId}` → существующий ArtifactLifecycleSnapshot |
 | `polka_restore` | manage | Тот же lifecycle input/output; новые версии/ссылки автоматически не создаются |

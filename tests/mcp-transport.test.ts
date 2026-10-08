@@ -214,6 +214,7 @@ test("official client negotiates HTTP and reads honest context, resources, and t
     "polka_get_artifact",
     "polka_list",
     "polka_list_folders",
+    "polka_snapshot",
     "polka_status",
   ]);
   const context = await client.callTool({
@@ -369,6 +370,7 @@ test("official client discovers and performs scoped management without web mutat
       "polka_move",
       "polka_rename_folder",
       "polka_restore",
+      "polka_snapshot",
       "polka_status",
       "polka_trash",
       "polka_update_artifact",

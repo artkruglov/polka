@@ -35,14 +35,69 @@ export async function shelfSnapshotForAgent(
   raw: z.input<typeof shelfSnapshotInputSchema>,
 ) {
   const verified = await recheckServiceActor(actor, "read");
-  const input = shelfSnapshotInputSchema.parse(raw);
-  if (new Date(input.at).getTime() > Date.now() + 1000)
-    throw new Problem(400, "invalid", "Момент для снимка не может быть в будущем.");
+  const input = parseSnapshotInput(raw);
   const scope = await agentFolderScope(db, {
     id: verified.accountId,
     tenant: verified.tenantId,
     connectionId: verified.connectionId,
   });
+  const page = await shelfSnapshot(verified.tenantId, scope, input);
+  await countAgentRead(verified.tenantId, verified.principal);
+  return page;
+}
+
+/**
+ * «Полка на дату» on the web: the same answer for a member of the shelf the
+ * page shows (identity has checked the membership), plus what is true of each
+ * work now, so the screen can say what changed since.
+ */
+export async function shelfSnapshotForMember(
+  actor: { tenant: string },
+  raw: z.input<typeof shelfSnapshotInputSchema>,
+) {
+  const input = parseSnapshotInput(raw);
+  const page = await shelfSnapshot(actor.tenant, null, input);
+  const ids = page.items.map((item) => item.id);
+  const accepted = page.items.flatMap((item) => (item.acceptedRevisionId ? [item.acceptedRevisionId] : []));
+  const { rows: now } = await db.query(
+    `SELECT artifact.id,artifact.trashed_at,latest.number
+     FROM artifacts artifact
+     LEFT JOIN revisions latest ON latest.id=artifact.latest_revision_id
+     WHERE artifact.tenant_id=$1 AND artifact.id=ANY($2::uuid[])`,
+    [actor.tenant, ids],
+  );
+  const { rows: numbers } = await db.query(
+    "SELECT id,number FROM revisions WHERE tenant_id=$1 AND id=ANY($2::uuid[])",
+    [actor.tenant, accepted],
+  );
+  const current = new Map(now.map((row) => [row.id as string, row]));
+  const acceptedNumber = new Map(numbers.map((row) => [row.id as string, Number(row.number)]));
+  return {
+    ...page,
+    items: page.items.map((item) => ({
+      ...item,
+      acceptedRevisionNumber: item.acceptedRevisionId ? (acceptedNumber.get(item.acceptedRevisionId) ?? null) : null,
+      now: {
+        latestRevisionNumber: current.get(item.id)?.number == null ? null : Number(current.get(item.id)!.number),
+        trashed: !!current.get(item.id)?.trashed_at,
+      },
+    })),
+  };
+}
+
+function parseSnapshotInput(raw: z.input<typeof shelfSnapshotInputSchema>) {
+  const input = shelfSnapshotInputSchema.parse(raw);
+  if (new Date(input.at).getTime() > Date.now() + 1000)
+    throw new Problem(400, "invalid", "Момент для снимка не может быть в будущем.");
+  return input;
+}
+
+/** The snapshot of one shelf, limited to the folders in scope (null: all). */
+async function shelfSnapshot(
+  tenantId: string,
+  scope: string[] | null,
+  input: z.output<typeof shelfSnapshotInputSchema>,
+) {
   // The original text goes to the database: it keeps the microseconds.
   const { rows } = await db.query(
     `SELECT artifact.id,artifact.title,artifact.folder_id,
@@ -79,9 +134,8 @@ export async function shelfSnapshotForAgent(
        AND ${inScopeSql("artifact", "$3")}
        AND ($4::uuid IS NULL OR artifact.id>$4)
      ORDER BY artifact.id LIMIT $5`,
-    [verified.tenantId, input.at, scope, input.cursor ?? null, input.limit + 1],
+    [tenantId, input.at, scope, input.cursor ?? null, input.limit + 1],
   );
-  await countAgentRead(verified.tenantId, verified.principal);
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
   return {

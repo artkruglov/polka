@@ -11,6 +11,7 @@ const REST: Record<string, string> = {
   polka_publish: "post /api/v1/publish",
   polka_list: "get /api/v1/works",
   polka_get_artifact: "get /api/v1/works/{artifactId}",
+  polka_snapshot: "get /api/v1/snapshot",
   polka_status: "get /api/v1/status/{artifactId}",
   polka_open_shelf: "post /api/v1/sign-in-link",
   polka_project_upload: "post /api/v1/projects",
