@@ -7,12 +7,11 @@
   </a>
 </p>
 
-<h3 align="center">Made it with an agent? Show it to others.</h3>
+<h3 align="center">Put your AI work on the shelf.</h3>
 
 <p align="center">
-  Полка ("the shelf") keeps the reports, pages and prototypes you made with Claude, ChatGPT, Claude&nbsp;Code or Codex,<br>
-  and opens them by link. Recipients don't need a Claude or ChatGPT account.<br>
-  Your agent keeps working in a folder on the shelf between chats: it lists files, edits them and saves a version; other chats and agents find it by text.
+  One place for everything people make with AI agents — Claude, ChatGPT, Claude&nbsp;Code, Codex.<br>
+  An agent puts the work on Полка ("the shelf"): it opens by link, the team discusses it, another agent picks it up.
 </p>
 
 <p align="center">
@@ -26,18 +25,20 @@
 <p align="center">
   <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="CI checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="License: AGPL-3.0"></a>
-  <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/commercial_license-available-1f4fff" alt="Commercial license available"></a>
-  <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=version&color=0f1420" alt="Latest version"></a>
+  <a href="https://github.com/artkruglov/polka/releases/latest"><img src="https://img.shields.io/github/v/release/artkruglov/polka?label=version&color=0f1420" alt="Latest version"></a>
   <a href="docs/status.md"><img src="https://img.shields.io/badge/status-prerelease-f59e0b" alt="Status: prerelease"></a>
   <a href="docs/connect-agents.md"><img src="https://img.shields.io/badge/MCP-Streamable_HTTP-0f1420" alt="MCP"></a>
-  <a href="https://polochka.app/llms.txt"><img src="https://img.shields.io/badge/llms.txt-available-0f1420" alt="llms.txt"></a>
 </p>
 
 <p align="center">
-  <a href="https://polochka.app"><img src="docs/screenshots/landing.png" alt="Полка home page: “Made it with an agent. Show it to others.” and the phrase for your agent" width="880"></a>
+  <a href="https://polochka.app"><img src="docs/screenshots/landing.png" alt="Полка home page and the phrase for your agent" width="880"></a>
 </p>
 
-The interface and most documentation are in Russian. Identifiers, commands and API fields are in English.
+- **A shelf for your agents' work.** A page, a prototype, a dashboard or a whole project folder — the agent saves it in one sentence. It opens by link without an account and runs in a sandbox; every edit is a new immutable version; another chat or agent finds the work by its text and continues.
+- **Memory of agent sessions.** On your own installation, Claude Code and Codex sessions go to the shelf: what the agent did, which commands it ran, which pull request it led to. Secrets are redacted on the machine ([AGENT_SESSIONS](docs/specs/AGENT_SESSIONS.md), Russian).
+- **For companies.** Self-hosted on one VM, department shelves with roles, sign-in through your IdP. The commercial edition adds an agent control centre for security teams: secrets, addresses and MCP servers, dangerous commands, spend ([COMMERCIAL.md](COMMERCIAL.md)).
+
+The interface and most documentation are in Russian. Code, identifiers, commands, API fields and contributor docs are in English.
 
 ## Get started
 
@@ -216,7 +217,7 @@ A deployment is one Docker image plus external PostgreSQL and versioned S3 stora
 |---|---|---|---|
 | Price | Free during the pilot | Free under the AGPL-3.0 | By agreement |
 | Where the data lives | Yandex Cloud, Russia | Your servers | Your servers |
-| What's included | The open core; department shelves are off until a pilot (`TEAM_SHELVES=off`) | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM; next — integrations, SAML and SCIM, offline installation |
+| What's included | The open core; department shelves are off until a pilot (`TEAM_SHELVES=off`) | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: an agent control centre (employees' sessions, secrets, addresses and MCP, dangerous commands, spend), employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM, Jira and Bitrix24 comments, export of accepted versions; next — SAML and SCIM, offline installation |
 | Your code changes | — | If people use your modified Полка, publish them under the AGPL-3.0 | May stay private |
 | Support and SLA | — | — | By contract |
 
