@@ -443,6 +443,11 @@ export function registerAgentDiscovery(app: FastifyInstance) {
         .type("application/json; charset=utf-8")
         .send(index),
     );
+  const challenge = config.OPENAI_APPS_CHALLENGE;
+  if (challenge)
+    app.get("/.well-known/openai-apps-challenge", async (_req, reply) =>
+      reply.headers(TEXT_HEADERS).type("text/plain").send(challenge),
+    );
   for (const skill of skills)
     app.get(
       `/.well-known/agent-skills/${skill.name}/SKILL.md`,

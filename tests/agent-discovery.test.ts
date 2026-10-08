@@ -15,6 +15,7 @@ import {
   llmsText,
   mcpToolCatalog,
   organizeSkillMarkdown,
+  registerAgentDiscovery,
   skillMarkdown,
 } from "../apps/server/agent-discovery.ts";
 import { agentPublishInputSchema } from "../apps/server/agent-publish.ts";
@@ -64,6 +65,26 @@ function onlyOrigin(text: string, expected: string, source?: string) {
     if (!url.startsWith("https://schemas.agentskills.io/") && url !== source)
       assert.ok(url.startsWith(expected), `${url} is not on ${expected}`);
 }
+
+test("GET /.well-known/openai-apps-challenge: the token when set, 404 otherwise", async () => {
+  assert.equal((await get("/.well-known/openai-apps-challenge")).statusCode, 404);
+  const saved = config.OPENAI_APPS_CHALLENGE;
+  config.OPENAI_APPS_CHALLENGE = "token-123";
+  const own = Fastify();
+  try {
+    registerAgentDiscovery(own);
+    const response = await own.inject({
+      method: "GET",
+      url: "/.well-known/openai-apps-challenge",
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body, "token-123");
+    assert.match(String(response.headers["content-type"]), /^text\/plain/);
+  } finally {
+    config.OPENAI_APPS_CHALLENGE = saved;
+    await own.close();
+  }
+});
 
 test("GET /llms.txt: plain text with every section, on APP_ORIGIN", async () => {
   const response = await get("/llms.txt");
@@ -338,20 +359,17 @@ test("every MCP tool carries a title and a read-only or destructive hint", async
     for (const tool of tools) {
       assert.ok(tool.title?.trim(), `${tool.name} has no title`);
       const hints = tool.annotations ?? {};
-      assert.ok(
-        typeof hints.readOnlyHint === "boolean" ||
-          typeof hints.destructiveHint === "boolean",
-        `${tool.name} has neither readOnlyHint nor destructiveHint`,
-      );
-      if (hints.readOnlyHint === false)
-        assert.equal(
-          typeof hints.destructiveHint,
-          "boolean",
-          `${tool.name} writes but does not say whether it destroys`,
-        );
+      // ChatGPT's plugin review rejects a tool without all three hints.
+      for (const hint of [
+        "readOnlyHint",
+        "destructiveHint",
+        "openWorldHint",
+      ] as const)
+        assert.equal(typeof hints[hint], "boolean", `${tool.name} has no ${hint}`);
     }
     const byName = new Map(tools.map((tool) => [tool.name, tool.annotations]));
     assert.equal(byName.get("polka_delete_folder")?.destructiveHint, true);
+    assert.equal(byName.get("polka_share")?.openWorldHint, true);
     for (const name of [
       "polka_create_folder",
       "polka_rename_folder",

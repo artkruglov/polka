@@ -185,6 +185,12 @@ const env = z
     // What a person is told before their sessions are sent (login and the
     // «Сессии» page), e.g. who in the company reads them. Empty: nothing.
     AGENT_SESSION_NOTICE: z.string().max(2000).default(""),
+    // The token ChatGPT's plugin submission asks the MCP host to serve at
+    // /.well-known/openai-apps-challenge to prove the domain. Empty: 404.
+    OPENAI_APPS_CHALLENGE: z
+      .string()
+      .regex(/^[\w.-]{0,200}$/)
+      .default(""),
     // Prices for the cost estimate of sessions whose agent reports none:
     // JSON {"model-prefix": [input, output, cacheRead, cacheWrite] in USD per
     // million tokens}. Empty: tokens only.

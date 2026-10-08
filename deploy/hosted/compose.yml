@@ -128,6 +128,7 @@ x-runtime-env: &runtime-env
   AGENT_MODEL_PRICES: ${AGENT_MODEL_PRICES:-}
   AGENT_SESSION_FINGERPRINTS: ${AGENT_SESSION_FINGERPRINTS:-shelf}
   AGENT_SESSION_NOTICE: ${AGENT_SESSION_NOTICE:-}
+  OPENAI_APPS_CHALLENGE: ${OPENAI_APPS_CHALLENGE:-}
   # Official «На Полку» extension IDs (extensions/chrome/README.md); empty:
   # every extension is shown on the consent page with its ID.
   BROWSER_EXTENSION_IDS: ${BROWSER_EXTENSION_IDS:-}

@@ -21,7 +21,7 @@ const copy = (path) => {
   mkdirSync(dirname(join(out, path)), { recursive: true });
   cpSync(join(root, path), join(out, path), { recursive: true });
 };
-for (const path of ["skills", "hooks", "scripts"]) rmSync(join(out, path), { recursive: true, force: true });
+for (const path of ["skills", "hooks", "scripts", "assets"]) rmSync(join(out, path), { recursive: true, force: true });
 for (const path of [
   ".claude-plugin/plugin.json",
   ".claude-plugin/marketplace.json",
@@ -29,6 +29,8 @@ for (const path of [
   ".agents/plugins/marketplace.json",
   ".mcp.json",
   "skills",
+  // The Codex listing's logo and composer icon.
+  "assets",
   // Agent sessions: the SessionEnd hook and the CLI it runs (off unless POLKA_SESSIONS=on).
   "hooks",
   "scripts/polka-sessions.mjs",
