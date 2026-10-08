@@ -30,6 +30,7 @@ export const APP_PAGES = [
   "/landing",
   "/connections",
   "/trash",
+  "/snapshot",
   "/templates",
   "/library-invite",
   "/shelf-invite",

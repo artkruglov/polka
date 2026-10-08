@@ -21,6 +21,7 @@ import {
   AccountDeleted,
   LibraryInvite,
   ShelfInvite,
+  ShelfSnapshotPage,
   Moderation,
   OAuthConsent,
   Pricing,
@@ -54,6 +55,7 @@ function Route({ path }: { path: string }) {
   if (path === "/templates") return <Templates />;
   if (path === "/library-invite") return <LibraryInvite />;
   if (path === "/shelf-invite") return <ShelfInvite />;
+  if (path === "/snapshot") return <ShelfSnapshotPage />;
   if (path === "/oauth/consent") return <OAuthConsent />;
   if (path === "/moderation") return <Moderation />;
   if (path === "/signup") return <Signup />;

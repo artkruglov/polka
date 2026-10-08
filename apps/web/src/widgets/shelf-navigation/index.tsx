@@ -1,9 +1,9 @@
 import React from "react";
-import { Folder as FolderIcon, Plus, Trash2 } from "lucide-react";
+import { Folder as FolderIcon, History, Plus, Trash2 } from "lucide-react";
 import type { Folder } from "../../../../../packages/contracts/index.ts";
 import { IconButton } from "../../shared/ui/controls.tsx";
 import { withShelf } from "../../shared/api/client.ts";
-/** Folders and the trash: the page-owned part of the rail. */
+/** Folders, the trash and «Полка на дату»: the page-owned part of the rail. */
 export function ShelfNavigation({
   folders,
   folderId,
@@ -64,6 +64,11 @@ export function ShelfNavigation({
         >
           <Trash2 />
           Корзина
+        </a>
+        {/* The shelf as it stood at a moment: its own read-only page. */}
+        <a className="nav-link" href={withShelf("/snapshot")}>
+          <History />
+          Полка на дату
         </a>
       </div>
     </>

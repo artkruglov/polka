@@ -54,6 +54,9 @@ const Landing = page(() =>
 const EditorialPage = page(() =>
   import("../../pages/discover/index.tsx").then((m) => m.EditorialPage),
 );
+const ShelfSnapshotPage = page(() =>
+  import("../../pages/snapshot/index.tsx").then((m) => m.ShelfSnapshotPage),
+);
 const LibraryInvite = page(() =>
   import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite),
 );
@@ -163,6 +166,7 @@ export {
   EditorialPage,
   LibraryInvite,
   ShelfInvite,
+  ShelfSnapshotPage,
   Moderation,
   OAuthConsent,
   Away,
