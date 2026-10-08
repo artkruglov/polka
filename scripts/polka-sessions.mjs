@@ -17,8 +17,8 @@
 // See docs/specs/AGENT_SESSIONS.md.
 import { createHmac, createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { createReadStream, realpathSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, writeFile, chmod } from "node:fs/promises";
+import { closeSync, createReadStream, openSync, realpathSync } from "node:fs";
+import { appendFile, mkdir, readdir, readFile, stat, truncate, writeFile, chmod } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -590,8 +590,9 @@ export function secretsReport(findings) {
 // ---------------------------------------------------------------------------
 // Local sessions
 
-const CLAUDE_DIR = () => join(homedir(), ".claude", "projects");
-const CODEX_DIR = () => join(homedir(), ".codex", "sessions");
+// Where Claude Code and Codex keep sessions: their own settings move them.
+const CLAUDE_DIR = () => join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects");
+const CODEX_DIR = () => join(process.env.CODEX_HOME || join(homedir(), ".codex"), "sessions");
 const STATE_DIR = () => join(homedir(), ".polka");
 
 async function walk(dir, match, depth, out) {
@@ -955,8 +956,18 @@ export async function main(argv = process.argv.slice(2), { env = process.env, fe
         }
         const path = typeof input.transcript_path === "string" ? resolve(input.transcript_path) : "";
         if (!path.startsWith(CLAUDE_DIR()) || !path.endsWith(".jsonl")) return 0;
-        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "upload", path], { detached: true, stdio: "ignore", env });
+        // What the upload says goes to ~/.polka/sessions-hook.log, kept under 1 MB.
+        let out = "ignore";
+        try {
+          await mkdir(STATE_DIR(), { recursive: true, mode: 0o700 });
+          const log = join(STATE_DIR(), "sessions-hook.log");
+          if ((await stat(log).catch(() => null))?.size > 1_048_576) await truncate(log, 0);
+          await appendFile(log, `${new Date().toISOString()} ${input.reason ?? "end"} ${basename(path)}\n`, { mode: 0o600 });
+          out = openSync(log, "a");
+        } catch {}
+        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "upload", path], { detached: true, stdio: ["ignore", out, out], env });
         child.unref();
+        if (typeof out === "number") closeSync(out);
         return 0;
       }
       default:

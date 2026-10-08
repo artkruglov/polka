@@ -1,9 +1,9 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { gzipSync } from "node:zlib";
 import type { AgentScope } from "../packages/contracts/index.ts";
@@ -280,11 +280,34 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     assert.equal(await main(["sync", "--token", secret], { env: {}, stderr: { write: () => true }, stdout: { write: () => true } }), 2);
     // The hook does nothing unless the person turned it on.
     assert.equal(await main(["hook"], { env: {}, stdin: async () => "{}", stdout: { write: () => true }, stderr: { write: () => true } }), 0);
+    // Turned on, it hands the session to a detached upload and notes what it said;
+    // Claude Code's own settings directory counts.
+    const claudeConfig = join(home, "claude-config");
+    const ended = join(claudeConfig, "projects", "-work-billing", basename(file.path));
+    await mkdir(dirname(ended), { recursive: true });
+    await copyFile(file.path, ended);
+    process.env.CLAUDE_CONFIG_DIR = claudeConfig;
+    const hookEnv = { HOME: home, POLKA_SESSIONS: "on", POLKA_TOKEN: secret, POLKA_ENDPOINT: `http://127.0.0.1:${port}` };
+    const quiet = { stdout: { write: () => true }, stderr: { write: () => true } };
+    const hookInput = (path: string) => async () => JSON.stringify({ hook_event_name: "SessionEnd", reason: "exit", transcript_path: path });
+    assert.equal(await main(["hook"], { env: hookEnv, stdin: hookInput(ended), ...quiet }), 0);
+    const log = join(home, ".polka", "sessions-hook.log");
+    let said = "";
+    for (let i = 0; i < 100 && !said.includes("Sent 1"); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      said = await readFile(log, "utf8").catch(() => "");
+    }
+    assert.match(said, /exit .*\.jsonl\n/);
+    assert.match(said, /Sent 1, unchanged 0/);
+    // A file outside the sessions directory is never sent.
+    assert.equal(await main(["hook"], { env: hookEnv, stdin: hookInput(file.path), ...quiet }), 0);
+    assert.equal((await readFile(log, "utf8")).match(/\.jsonl\n/g)?.length, 1);
     const cli = await server.inject({ method: "GET", url: "/api/v1/cli/polka-sessions.mjs" });
     assert.equal(cli.statusCode, 200);
     assert.match(cli.body, new RegExp(`const DEFAULT_ENDPOINT = ${JSON.stringify(origin).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")};`));
   } finally {
     process.env.HOME = previousHome;
+    delete process.env.CLAUDE_CONFIG_DIR;
     await rm(home, { recursive: true, force: true });
     await server.close();
   }
