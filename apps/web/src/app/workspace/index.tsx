@@ -35,6 +35,7 @@ import { SharePanel } from "../../features/share-artifact/index.tsx";
 import { ServiceAccountsSection } from "../../features/service-accounts/index.tsx";
 import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
 import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
+import { ProposeToFeedPanel } from "../../features/propose-to-feed/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
 import { Login } from "../../pages/login/index.tsx";
 import {
@@ -105,6 +106,7 @@ export function App() {
       | "rework"
       | "metadata"
       | "accept"
+      | "feed"
       | "trash"
       | null
     >(() => {
@@ -745,6 +747,9 @@ export function App() {
             await refreshWork();
           }}
         />
+      )}
+      {panel === "feed" && work && currentShelf() && (
+        <ProposeToFeedPanel artifact={work} onClose={() => setPanel(null)} />
       )}
       {panel === "trash" && work && !work.trashedAt && (
         <TrashArtifactPanel

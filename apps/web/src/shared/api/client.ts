@@ -13,6 +13,7 @@ import type {
 } from "../../../../../packages/contracts/index.ts";
 import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
 import type { RevisionCover } from "../../../../../packages/contracts/cover.ts";
+import type { FeedProposal } from "../../../../../packages/contracts/feed-proposal.ts";
 import type {
   CommentAnchor,
   Reaction,
@@ -364,6 +365,14 @@ export const client = {
       { revisionId },
       "PUT",
     ),
+  feedProposal: (id: string) =>
+    request<{ proposal: FeedProposal | null }>(`/artifacts/${id}/feed-proposal`),
+  proposeToFeed: (
+    id: string,
+    input: { revisionId: string; title: string; summary: string; rights: true; noPersonalData: true },
+  ) => request<{ proposal: FeedProposal }>(`/artifacts/${id}/feed-proposal`, input),
+  withdrawFeedProposal: (id: string) =>
+    request<{ proposal: FeedProposal }>(`/artifacts/${id}/feed-proposal/withdraw`, {}),
   setWorkOwner: (id: string, ownerAccountId: string | null) =>
     request<{ artifactId: string; ownerAccountId: string | null }>(
       `/artifacts/${id}/owner`,
