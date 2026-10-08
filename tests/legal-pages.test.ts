@@ -73,7 +73,7 @@ test("markdown renderer never emits raw HTML or unsafe links", () => {
 });
 
 // The promises the operator has to keep, and the terms the legal review
-// (23.09.2026, docs/reviews/2026-09-23-legal in git history before 844e459)
+// (23.09.2026, docs/reviews/2026-09-23-legal kept in the operator's private archive)
 // fixed on purpose. Changing one of them is a
 // decision, not an edit: update the review note too.
 test("the texts keep the reviewed legal terms", () => {

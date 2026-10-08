@@ -44,8 +44,7 @@
 
 ## 4. Этап 1 — наполнить Редакцией
 
-- Добавить 4 черновика из `content/editorial/*` этой ветки (см. `content/editorial/owner-research-candidates.json`) после решения владельца и ручной проверки по [EDITORIAL_CHECKLIST](../EDITORIAL_CHECKLIST.md).
-- Шорт-лист следующих материалов — `Polka-private/discover-owner-research.md`.
+- Добавить 4 черновика из `content/editorial/*` этой ветки после решения владельца и ручной проверки по [EDITORIAL_CHECKLIST](../EDITORIAL_CHECKLIST.md).
 - Правило для новых редакционных материалов: у каждого — раздел «Источники», дата сверки, пометка «Подготовлено с Claude», вымышленные примеры вместо личных данных.
 
 ## 5. Этап 2 — работы пользователей по желанию автора

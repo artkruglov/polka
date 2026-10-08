@@ -29,7 +29,7 @@ import { CONTACT, EnterpriseForm, initialInterest } from "./form.tsx";
 const InProgress = () => <Badge tone="warning">в разработке</Badge>;
 
 /**
- * The three things Полка is for a company (polka-enterprise docs/POSITIONING.md):
+ * The three things Полка is for a company (the commercial edition's positioning notes):
  * one drive for every agent, every session kept, and control over what agents do.
  */
 const PILLARS: Array<{
@@ -79,7 +79,7 @@ const PILLARS: Array<{
 ];
 
 /**
- * The control centre of the commercial edition (polka-enterprise
+ * The control centre of the commercial edition (the commercial edition's
  * docs/CONTROL_CENTER.md): what a company sees of its employees' Claude Code
  * and Codex sessions. Only what works; the limits are in CONTROL_HONEST.
  */

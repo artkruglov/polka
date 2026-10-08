@@ -2,7 +2,7 @@
 // (docs/specs/CONTENT_FILTER.md, «Модель»). Models are configuration
 // (CONTENT_MODEL_PRIMARY, CONTENT_MODEL_FALLBACK, CONTENT_CODE_MODEL); the
 // prompts are code, reviewed like code. When the benchmark
-// (Polka-private/model-bench) settles on a new prompt, replace it here and
+// (the operator's private model benchmark) settles on a new prompt, replace it here and
 // bump PROMPTS_VERSION: stored verdicts name the version they were made with.
 
 export const PROMPTS_VERSION = "2026-09-24.3";

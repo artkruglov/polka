@@ -1,10 +1,10 @@
 // Stage 0: the leaders' questions over the scaled tool-call stream, timed in
 // Postgres (EXPLAIN ANALYZE execution time) and ClickHouse (server elapsed),
 // three runs each, the median reported. Benchmark containers only.
-//   DOCKER_CONFIG=… node bench.mjs
+//   DOCKER_CONFIG=… BENCH_HOST=<the host Q4 counts calls to> node bench.mjs
 import { execFileSync } from "node:child_process";
 
-const HOST = "localhost";
+const HOST = process.env.BENCH_HOST ?? "localhost";
 const pgTenant = "(select tenant_id from tool_calls limit 1)";
 const QUERIES = [
   {

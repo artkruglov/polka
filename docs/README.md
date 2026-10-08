@@ -44,7 +44,7 @@
 | [specs/TRASH_SPEC.md](specs/TRASH_SPEC.md) | реализовано | Корзина и восстановление |
 | [specs/AGENT_CONTEXT_TEMPLATES.md](specs/AGENT_CONTEXT_TEMPLATES.md) | реализовано | Контекст для агента и закреплённые шаблоны |
 | [specs/SHELF_SNAPSHOT.md](specs/SHELF_SNAPSHOT.md) | в коде | Снимок полки на дату: `GET /api/v1/snapshot` |
-| [specs/POSITIONING.md](specs/POSITIONING.md) | с 02.10.2026 | Позиционирование «Полка хранит принятое»: тезисы, аудитории, что говорить и что нет; материалы — [marketing](marketing/README.md) |
+| [specs/POSITIONING.md](specs/POSITIONING.md) | с 02.10.2026 | Позиционирование «Полка хранит принятое»: тезисы, аудитории, что говорить и что нет |
 | [specs/AGENT_ACCESS_AND_MEMORY.md](specs/AGENT_ACCESS_AND_MEMORY.md) | в коде (частично) | Полка хранит принятое, Drive — рабочее; чтение агентом, лента событий, карточка полки, принятая версия, service accounts, поиск по полкам. Схемы — [DATA_MODELS](specs/DATA_MODELS.md), роли — [AGENT_ROLES](specs/AGENT_ROLES.md), порядок работ — [dev/AGENT_ACCESS_IMPLEMENTATION](dev/AGENT_ACCESS_IMPLEMENTATION.md) |
 | [specs/COMPANY_TEMPLATE_LIBRARY.md](specs/COMPANY_TEMPLATE_LIBRARY.md) | реализовано | Библиотеки шаблонов: роли, приглашения, журнал |
 | [specs/SELF_HOST_BASE_SPEC.md](specs/SELF_HOST_BASE_SPEC.md) | реализовано | Health, readiness, maintenance |
@@ -74,7 +74,7 @@
 ## Прочее
 
 - [screenshots/](screenshots/) — снимки polochka.app для README, [assets/](assets/) — логотип и картинка для соцсетей, [assets/og/](assets/og/) — исходники карточек превью ссылок (`node scripts/render-og-images.mjs`). Перерисовка снимков: `node scripts/render-readme-assets.mjs`.
-- `reviews/2026-09-2*-editorial-*` — протоколы приёмки материалов «Ленты». На них ссылаются манифесты каталога (`evidencePath`), поэтому они остаются в репозитории. Остальные протоколы ревью и снимки дизайна (`docs/reviews/**`, `docs/design/**`) удалены 27.09.2026 и есть в истории git до коммита 844e459.
+- `reviews/2026-09-2*-editorial-*` — протоколы приёмки материалов «Ленты». На них ссылаются манифесты каталога (`evidencePath`), поэтому они остаются в репозитории. Остальные протоколы ревью и снимки дизайна (`docs/reviews/**`, `docs/design/**`) удалены 27.09.2026 и хранятся в приватном архиве оператора.
 
 ## Правила
 

@@ -12,6 +12,4 @@
 
 ## Источники
 
-- `~/Projects/lanka-studio/docs/EDITABLE_EXPORT_REVIEW.md` (проверка 06.09.2026, вне репозитория): версии, сценарий, таблица наблюдений, ссылки на строки `src/export/pptx.ts#L83`, `src/domain/elements.ts#L176`, `src/editor/state.ts#L363` в CreatPPT `8b7804b`. Название продукта владельца не упоминается.
 - Документация Slidev (Exporting → PPTX).
-- Проекты и организации (seekskyworld/CreatPPT, presenton/presenton, Slidev, LibreOffice, Ecma International) проверены 24.09.2026 по реестрам Минюста (иноагенты, нежелательные, экстремистские) и списку ФСБ — совпадений нет.

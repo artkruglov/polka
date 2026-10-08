@@ -1,6 +1,6 @@
 # Получатель → своя полка
 
-> **Статус:** реализовано 24.09.2026. Страница получателя (`/s#<токен>`) и страница материала Ленты (`/discover/<slug>`) предлагают гостю завести свою полку, не мешая читать работу. Код: `apps/web/src/features/recipient-convert`, `entities/recipient-convert`, `pages/recipient`, `pages/discover`, `apps/server/recipient-cta.ts`, миграция 035. Снимки: `docs/design/2026-09-24-recipient-convert/` (в истории git до коммита 844e459).
+> **Статус:** реализовано 24.09.2026. Страница получателя (`/s#<токен>`) и страница материала Ленты (`/discover/<slug>`) предлагают гостю завести свою полку, не мешая читать работу. Код: `apps/web/src/features/recipient-convert`, `entities/recipient-convert`, `pages/recipient`, `pages/discover`, `apps/server/recipient-cta.ts`, миграция 035. Снимки: `docs/design/2026-09-24-recipient-convert/` (в приватном архиве оператора).
 
 ## Что видит гость
 
