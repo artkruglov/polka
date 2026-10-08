@@ -305,7 +305,7 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(html.indexOf('id="control"') < html.indexOf("enterprise-values-title"));
   // Three pillars first: one drive for agents, every session kept, control.
   const pillars = html.slice(html.indexOf('id="pillars"'), html.indexOf('id="control"'));
-  for (const text of ["Общий диск для агентов", "Память всех сессий", "Центр управления"])
+  for (const text of ["Общая полка для работ агентов", "Память всех сессий", "Центр управления"])
     assert.ok(pillars.includes(text), text);
   // No invented price.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
