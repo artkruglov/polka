@@ -213,6 +213,12 @@ const env = z
     TRUST_MIN_CLEAN_SAVES: z.coerce.number().int().min(0).max(1000).default(3),
     // Where moderation mail goes. Unset or empty: no mail, scripts only.
     OPERATOR_EMAIL: unsetIfEmpty(z.string().email()),
+    // A Telegram bot that also tells the operator about requests from
+    // /enterprise (BotFather token and the chat it writes to). Both or neither.
+    OPERATOR_TELEGRAM_BOT_TOKEN: unsetIfEmpty(
+      z.string().regex(/^\d{6,12}:[\w-]{30,}$/),
+    ),
+    OPERATOR_TELEGRAM_CHAT_ID: unsetIfEmpty(z.string().regex(/^(-?\d{1,20}|@\w{5,32})$/)),
     // Distinct reporters of one link within 7 days that pause it. 0: never.
     MODERATION_AUTOPAUSE_REPORTS: z.coerce.number().int().min(0).max(1000).default(3),
     // An account younger than this (and not approved) is new: it may hold at
@@ -416,6 +422,8 @@ if (
   throw new Error("Local mail is restricted to loopback installations");
 if (env.MAIL_MODE === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM))
   throw new Error("SMTP_HOST and MAIL_FROM are required");
+if (!env.OPERATOR_TELEGRAM_BOT_TOKEN !== !env.OPERATOR_TELEGRAM_CHAT_ID)
+  throw new Error("OPERATOR_TELEGRAM_BOT_TOKEN and OPERATOR_TELEGRAM_CHAT_ID go together");
 if (env.RENDERED_IMPORT_ENABLED) {
   if (!env.RENDERER_URL || !env.RENDERER_SECRET)
     throw new Error("RENDERED_IMPORT_ENABLED needs RENDERER_URL and RENDERER_SECRET");

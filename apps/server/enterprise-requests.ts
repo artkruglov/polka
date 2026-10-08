@@ -149,7 +149,62 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
 }
 
 /** Never fails the request: it is stored, and the operator can read the table. */
+/** The Telegram message: the letter's facts, plain text, no markup. */
+export function enterpriseTelegramText(request: StoredRequest) {
+  const contact = isEmailContact(request.contact)
+    ? request.contact
+    : `${request.contact} — https://t.me/${request.contact.slice(1)}`;
+  return [
+    "Заявка «Для компаний»",
+    `Контакт: ${contact}`,
+    ...(request.name ? [`Имя: ${request.name}`] : []),
+    ...(request.company ? [`Компания: ${request.company}`] : []),
+    ...(request.team_size
+      ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`]
+      : []),
+    `Что интересует: ${INTEREST_LABEL[request.interest]}`,
+    ...(request.comment ? ["", request.comment] : []),
+  ]
+    .join("\n")
+    .slice(0, 4000);
+}
+
+/** Best effort: a request is stored whether or not Telegram answers. */
+async function notifyTelegram(request: StoredRequest) {
+  const token = config.OPERATOR_TELEGRAM_BOT_TOKEN;
+  const chat = config.OPERATOR_TELEGRAM_CHAT_ID;
+  if (!token || !chat) return;
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chat,
+          text: enterpriseTelegramText(request),
+          disable_web_page_preview: true,
+        }),
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!response.ok) throw new Error(String(response.status));
+  } catch (error) {
+    // Never the token: it is part of the URL.
+    console.error(
+      JSON.stringify({
+        event: "enterprise_request.telegram_failed",
+        reason: error instanceof Error && /^\d+$/.test(error.message) ? error.message : "network",
+      }),
+    );
+  }
+}
+
 async function notifyOperator(request: StoredRequest) {
+  await Promise.all([notifyByMail(request), notifyTelegram(request)]);
+}
+
+async function notifyByMail(request: StoredRequest) {
   if (!config.OPERATOR_EMAIL || config.MAIL_MODE === "disabled") return;
   try {
     await sendMail({ to: config.OPERATOR_EMAIL, ...enterpriseLetter(request) });
