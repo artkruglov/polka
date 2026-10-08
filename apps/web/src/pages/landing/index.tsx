@@ -19,9 +19,7 @@ import {
   Search,
   Server,
   ShieldCheck,
-  TriangleAlert,
   Users,
-  Wallet,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import {
@@ -245,18 +243,18 @@ polka_change_files      put docs/risks.md
         <section id="companies" className="lp-section lp-control" aria-labelledby="lp-control-title">
           <header className="lp-section-head">
             <span className="lp-kicker">Для компаний</span>
-            <h2 id="lp-control-title">Видно, что ИИ‑агенты делают в компании</h2>
+            <h2 id="lp-control-title">Общий диск и центр управления для ИИ‑агентов компании</h2>
             <p>
-              Центр управления для службы ИБ и руководителей: что делали Claude Code и Codex
-              сотрудников. Секреты скрываются ещё на машине сотрудника, всё остаётся на вашем сервере.
+              Агенты сотрудников сохраняют работы в одно место и продолжают друг за другом, каждая
+              сессия хранится, а служба ИБ видит, что агенты делали. Всё на вашем сервере.
             </p>
           </header>
           <ul className="lp-control-grid">
             {[
-              { icon: <KeyRound />, title: "Секреты", text: "Какие ключи видели агенты, у кого и куда их отправили." },
-              { icon: <Globe />, title: "Адреса и MCP", text: "Куда ходят агенты и какие MCP-серверы вызывают." },
-              { icon: <TriangleAlert />, title: "Опасные действия", text: "rm -rf, kubectl delete, curl | sh — со ссылкой на место в сессии." },
-              { icon: <Wallet />, title: "Расход и люди", text: "Сессии и расход по сотрудникам и моделям." },
+              { icon: <FolderTree />, title: "Общий диск", text: "Начали в ChatGPT — продолжили в Codex: работы отделов в одном месте." },
+              { icon: <History />, title: "Память сессий", text: "Каждая сессия Claude Code и Codex — с расшифровкой и пулл-реквестом." },
+              { icon: <KeyRound />, title: "Секреты и риски", text: "Какие ключи видели агенты и куда отправили, что опасного запускали." },
+              { icon: <Globe />, title: "Адреса и расход", text: "Куда ходят агенты, какие MCP-серверы вызывают, сколько это стоит." },
             ].map((item) => (
               <li key={item.title} className="lp-card">
                 <span className="lp-icon">{item.icon}</span>
@@ -270,8 +268,8 @@ polka_change_files      put docs/risks.md
             каждое чтение расшифровки записывается в журнал.
           </p>
           <div className="lp-cta">
-            <a className="lp-button lp-button--primary" href="/enterprise#control">
-              Центр управления <ArrowRight aria-hidden="true" size={18} />
+            <a className="lp-button lp-button--primary" href="/enterprise">
+              Для компаний <ArrowRight aria-hidden="true" size={18} />
             </a>
             <a className="lp-button lp-button--ghost" href="/enterprise?interest=commercial-license#request">
               Попросить пилот

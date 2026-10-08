@@ -300,9 +300,13 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.ok(questions >= 5 && questions <= 8, String(questions));
   // The control centre leads: what a company sees, then what it does not.
   const control = html.slice(html.indexOf('id="control"'), html.indexOf("enterprise-how-title"));
-  for (const text of ["Секреты", "Адреса и MCP-серверы", "Опасные действия", "Расход и люди", "Расшифровка — под журналом", "Codex cloud"])
+  for (const text of ["Секреты", "Адреса и MCP-серверы", "Опасные действия", "Расход и люди", "Сессии и расшифровки", "Codex cloud"])
     assert.ok(control.includes(text), text);
   assert.ok(html.indexOf('id="control"') < html.indexOf("enterprise-values-title"));
+  // Three pillars first: one drive for agents, every session kept, control.
+  const pillars = html.slice(html.indexOf('id="pillars"'), html.indexOf('id="control"'));
+  for (const text of ["Общий диск для агентов", "Память всех сессий", "Центр управления"])
+    assert.ok(pillars.includes(text), text);
   // No invented price.
   assert.doesNotMatch(html, /₽|\$|руб\.|€/);
   // The form: every field, the honeypot out of reach, the policy and a contact.

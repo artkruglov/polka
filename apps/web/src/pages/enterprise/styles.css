@@ -203,6 +203,26 @@
   font-size: var(--text-xs);
 }
 
+/* Three pillars: a lead line, points, a link to the details. */
+#pillars,
+#disk {
+  scroll-margin-top: 96px;
+}
+.enterprise-grid .enterprise-pillar-lead {
+  margin-bottom: 12px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.enterprise-grid article > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 16px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* The control centre: what a company sees, then what it does not. */
 #control {
   scroll-margin-top: 96px;

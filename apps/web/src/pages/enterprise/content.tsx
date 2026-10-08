@@ -3,9 +3,11 @@ import {
   ArrowDown,
   ArrowUpRight,
   Bot,
+  BookOpen,
   Cloud,
   CodeXml,
   Eye,
+  FolderTree,
   Globe,
   Handshake,
   KeyRound,
@@ -25,6 +27,56 @@ import { CONTACT, EnterpriseForm, initialInterest } from "./form.tsx";
 
 /** Something that is not on main yet: said plainly, never promised. */
 const InProgress = () => <Badge tone="warning">в разработке</Badge>;
+
+/**
+ * The three things Полка is for a company (polka-enterprise docs/POSITIONING.md):
+ * one drive for every agent, every session kept, and control over what agents do.
+ */
+const PILLARS: Array<{
+  id: string;
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  lead: string;
+  points: string[];
+}> = [
+  {
+    id: "disk",
+    href: "#disk",
+    icon: <FolderTree />,
+    title: "Общий диск для агентов",
+    lead: "Работа не теряется в истории чата.",
+    points: [
+      "Агент в ChatGPT, Claude, Codex или Claude Code сохраняет страницу, отчёт или целую папку проекта на Полку.",
+      "Другой чат, другой агент или коллега находит её по словам из текста и продолжает с той же версии.",
+      "Полки отделов с ролями, библиотека шаблонов, ссылки наружу, которые можно отозвать.",
+    ],
+  },
+  {
+    id: "sessions",
+    href: "#control",
+    icon: <BookOpen />,
+    title: "Память всех сессий",
+    lead: "Опыт не уходит вместе с закрытым терминалом.",
+    points: [
+      "Каждая сессия Claude Code и Codex каждого сотрудника сохраняется: вызовы, команды, расшифровка.",
+      "Сессия связана с пулл-реквестом и работой на полке: видно, как сделано то, что вышло.",
+      "Компания хранит сессии свой срок; сотрудник видит свои и знает, кто читает.",
+    ],
+  },
+  {
+    id: "control",
+    href: "#control",
+    icon: <Eye />,
+    title: "Центр управления",
+    lead: "ИБ видит, что агенты делают, до инцидента.",
+    points: [
+      "Какие секреты видели агенты и куда их отправили — значения ключей на сервер не попадают.",
+      "Куда ходят агенты, какие MCP-серверы вызывают, что опасного запускают.",
+      "Расход по людям и моделям, журнал чтения расшифровок, выгрузка для SIEM.",
+    ],
+  },
+];
 
 /**
  * The control centre of the commercial edition (polka-enterprise
@@ -54,8 +106,8 @@ const CONTROL: Array<{ icon: React.ReactNode; title: string; text: string }> = [
   },
   {
     icon: <Eye />,
-    title: "Расшифровка — под журналом",
-    text: "При разборе инцидента видно всю сессию: вызовы, команды, ответы. Каждое чтение и скачивание записывается: кто, чью сессию, когда.",
+    title: "Сессии и расшифровки",
+    text: "Каждая сессия сотрудника: вызовы, команды, ответы, пулл-реквест и работа на полке. Каждое чтение и скачивание расшифровки записывается: кто, чью сессию, когда.",
   },
   {
     icon: <Server />,
@@ -236,13 +288,13 @@ const HOW: Array<{ icon: React.ReactNode; title: string; text: string }> = [
   },
   {
     icon: <ShieldCheck />,
-    title: "Раздайте сбор",
-    text: "Хук Claude Code — в управляемых настройках через MDM или установщиком на машину; Codex — досылкой по расписанию. Сотрудник один раз входит и видит, кто читает его сессии.",
+    title: "Подключите агентов и сбор",
+    text: "Каждый говорит своему агенту одну фразу — и агент сохраняет работы на Полку. Сбор сессий Claude Code раздаётся управляемыми настройками через MDM или установщиком; Codex — досылкой по расписанию.",
   },
   {
     icon: <Eye />,
-    title: "Смотрите и разбирайте",
-    text: "Секреты, адреса, опасные действия и расход по всей компании; тревоги — в журнал и выгрузку для SIEM. А работы, которые агенты делают для людей, лежат на полках отделов.",
+    title: "Работайте и смотрите",
+    text: "Работы лежат на полках сотрудников и отделов, сессии — с расшифровкой и пулл-реквестом, а ИБ видит секреты, адреса, опасные действия и расход по всей компании.",
   },
 ];
 
@@ -333,15 +385,14 @@ export function EnterpriseContent({
     <>
       <section className="enterprise-hero">
         <div>
-          <span className="eyebrow">Центр управления агентами</span>
-          <h1>Видно, что ИИ‑агенты делают в&nbsp;компании</h1>
+          <span className="eyebrow">Полка для компаний</span>
+          <h1>Общий диск и центр управления для ИИ‑агентов компании</h1>
           <p>
-            Claude Code и Codex у разработчиков видят ключи, ходят в сеть и
-            запускают команды. Полка показывает службе ИБ и руководителям, какие
-            секреты агенты видели и куда отправили, к каким адресам и
-            MCP-серверам обращались, что опасного запускали и сколько это
-            стоило. Секреты скрываются ещё на машине сотрудника, всё остаётся на
-            вашем сервере.
+            Сотрудники работают в ChatGPT, Claude, Codex и Claude Code. Их
+            агенты сохраняют работы на общую Полку и продолжают друг за другом,
+            каждая сессия агента хранится, а служба ИБ видит, какие секреты
+            агенты видели, куда ходили и что запускали. Всё на вашем сервере,
+            код открыт.
           </p>
           <div className="enterprise-hero-actions">
             <LinkButton
@@ -351,10 +402,10 @@ export function EnterpriseContent({
             >
               Попросить пилот <ArrowDown size={18} />
             </LinkButton>
-            <LinkButton href="#control">Что видно</LinkButton>
+            <LinkButton href="#pillars">Как это устроено</LinkButton>
           </div>
           <ul className="enterprise-facts" aria-label="Коротко">
-            <li>Значения секретов не покидают машину</li>
+            <li>Любые агенты: ChatGPT, Claude, Codex</li>
             <li>Своя установка, одна VM</li>
             <li>Открытое ядро, {SOURCE_LICENSE}</li>
           </ul>
@@ -362,19 +413,19 @@ export function EnterpriseContent({
         <figure className="enterprise-shelf" aria-hidden="true">
           {[
             {
+              title: "Анализ рынка, версия 4",
+              meta: "Начат в ChatGPT · продолжен в Codex",
+              tag: "Диск",
+            },
+            {
+              title: "Сессия Claude Code",
+              meta: "2 ч 14 мин · пулл-реквест #812",
+              tag: "Сессия",
+            },
+            {
               title: "Ключ платёжного API",
               meta: "2 человека · ушёл в сеть",
               tag: "Секрет",
-            },
-            {
-              title: "kubectl delete namespace",
-              meta: "Сессия Claude Code · 14:02",
-              tag: "Опасно",
-            },
-            {
-              title: "mcp: browser",
-              meta: "5 человек · 31 сессия",
-              tag: "MCP",
             },
           ].map((item) => (
             <div key={item.title} className="enterprise-shelf-item">
@@ -386,8 +437,33 @@ export function EnterpriseContent({
               <em>{item.tag}</em>
             </div>
           ))}
-          <figcaption>Центр управления, демо-данные</figcaption>
+          <figcaption>Одна Полка: работы, сессии, контроль · демо-данные</figcaption>
         </figure>
+      </section>
+
+      <section
+        id="pillars"
+        className="enterprise-values"
+        aria-labelledby="enterprise-pillars-title"
+      >
+        <h2 id="enterprise-pillars-title">Три вещи в одном месте</h2>
+        <div className="enterprise-grid">
+          {PILLARS.map((pillar) => (
+            <article key={pillar.id}>
+              <span className="enterprise-icon">{pillar.icon}</span>
+              <h3>{pillar.title}</h3>
+              <p className="enterprise-pillar-lead">{pillar.lead}</p>
+              <ul>
+                {pillar.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+              <a href={pillar.href}>
+                Подробнее <ArrowDown size={16} />
+              </a>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section
@@ -395,7 +471,7 @@ export function EnterpriseContent({
         className="enterprise-values"
         aria-labelledby="enterprise-control-title"
       >
-        <h2 id="enterprise-control-title">Что видит компания</h2>
+        <h2 id="enterprise-control-title">Сессии и контроль: что видит компания</h2>
         <div className="enterprise-grid">
           {CONTROL.map((item) => (
             <article key={item.title}>
@@ -427,6 +503,7 @@ export function EnterpriseContent({
       </section>
 
       <section
+        id="disk"
         className="enterprise-values"
         aria-labelledby="enterprise-values-title"
       >
