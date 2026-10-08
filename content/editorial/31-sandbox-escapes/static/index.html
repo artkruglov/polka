@@ -70,7 +70,7 @@ td.no{color:var(--ok)}td.open{color:var(--warm);font-weight:700}
 <pre class="term">import(`./${n}.env`, { with: { type: "text" } })     → подставной SECRET попал в сборку
 import(`../../../../../etc/${n}hosts`, { with: { type: "text" } })   → /etc/hosts в сборке
 require(`./${n}.json`)                                → все .json под корнем, рекурсивно</pre>
-<p>Автор кода воспроизвёл утечку перед исправлением: <code>require(`./${n}.json`)</code> заставил esbuild обойти диск от корня репозитория, а сообщение об ошибке выдало путь внутри <code>node_modules</code>. Исправление — коммит <code>8001de3</code> в тот же день, следом <code>be65650</code> закрыл обходы через <code>require</code> и sloppy-mode. Уже тогда проверка была двойной: с временно выключенным первым слоем второй всё равно отказывал.</p>
+<p>Автор кода воспроизвёл утечку перед исправлением: <code>require(`./${n}.json`)</code> заставил esbuild обойти диск от корня репозитория, а сообщение об ошибке выдало путь внутри <code>node_modules</code>. Исправление — коммит <code>2a75ef9</code> в тот же день, следом <code>f66fd99</code> закрыл обходы через <code>require</code> и sloppy-mode. Уже тогда проверка была двойной: с временно выключенным первым слоем второй всё равно отказывал.</p>
 </section>
 
 <section class="card" aria-labelledby="layers">
@@ -137,16 +137,16 @@ require(`./${n}.json`)                                → все .json под к
 <h2 id="webrtc">На следующий день: дыра в другом месте</h2>
 <p>Сборка — не единственная граница. Собранная страница выполняется у получателя на отдельном домене <code>polochka.page</code> в <code>iframe</code> с песочницей и строгой CSP: <code>connect-src 'none'</code>, <code>form-action 'none'</code>, картинки и шрифты только <code>data:</code>. 23 сентября 2026 приёмочная проба на реальном polochka.app открыла как гость страницу, которая пробует все выходы наружу, и наблюдала за ней из headless Chrome 153 через DevTools.</p>
 <table>
-<thead><tr><th>Канал</th><th>До исправления</th><th>После (коммит 040be10)</th></tr></thead>
+<thead><tr><th>Канал</th><th>До исправления</th><th>После (коммит 53da1ab)</th></tr></thead>
 <tbody>
-<tr><td data-th="Канал"><code>fetch</code>, XHR (свой домен и внешний)</td><td data-th="До исправления" class="no">заблокирован</td><td data-th="После (коммит 040be10)" class="no">заблокирован</td></tr>
-<tr><td data-th="Канал">Картинка, <code>prefetch</code></td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 040be10)" class="no">заблокированы CSP</td></tr>
-<tr><td data-th="Канал"><code>sendBeacon</code>, WebSocket</td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
-<tr><td data-th="Канал">Отправка формы</td><td data-th="До исправления" class="no">заблокирована</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
-<tr><td data-th="Канал">Всплывающее окно, переход верхнего окна</td><td data-th="До исправления" class="no">заблокированы песочницей</td><td data-th="После (коммит 040be10)" class="no">так же</td></tr>
-<tr><td data-th="Канал">Cookies</td><td data-th="До исправления" class="no">пусто</td><td data-th="После (коммит 040be10)" class="no">пусто</td></tr>
-<tr><td data-th="Канал"><strong>WebRTC (STUN)</strong></td><td data-th="До исправления" class="open">открыт: получен кандидат srflx от публичного STUN-сервера</td><td data-th="После (коммит 040be10)" class="no">нет <code>RTCPeerConnection</code></td></tr>
-<tr><td data-th="Канал">DNS prefetch</td><td data-th="До исправления">не проверялся</td><td data-th="После (коммит 040be10)" class="no">заголовок <code>X-DNS-Prefetch-Control: off</code></td></tr>
+<tr><td data-th="Канал"><code>fetch</code>, XHR (свой домен и внешний)</td><td data-th="До исправления" class="no">заблокирован</td><td data-th="После (коммит 53da1ab)" class="no">заблокирован</td></tr>
+<tr><td data-th="Канал">Картинка, <code>prefetch</code></td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 53da1ab)" class="no">заблокированы CSP</td></tr>
+<tr><td data-th="Канал"><code>sendBeacon</code>, WebSocket</td><td data-th="До исправления" class="no">заблокированы CSP</td><td data-th="После (коммит 53da1ab)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Отправка формы</td><td data-th="До исправления" class="no">заблокирована</td><td data-th="После (коммит 53da1ab)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Всплывающее окно, переход верхнего окна</td><td data-th="До исправления" class="no">заблокированы песочницей</td><td data-th="После (коммит 53da1ab)" class="no">так же</td></tr>
+<tr><td data-th="Канал">Cookies</td><td data-th="До исправления" class="no">пусто</td><td data-th="После (коммит 53da1ab)" class="no">пусто</td></tr>
+<tr><td data-th="Канал"><strong>WebRTC (STUN)</strong></td><td data-th="До исправления" class="open">открыт: получен кандидат srflx от публичного STUN-сервера</td><td data-th="После (коммит 53da1ab)" class="no">нет <code>RTCPeerConnection</code></td></tr>
+<tr><td data-th="Канал">DNS prefetch</td><td data-th="До исправления">не проверялся</td><td data-th="После (коммит 53da1ab)" class="no">заголовок <code>X-DNS-Prefetch-Control: off</code></td></tr>
 </tbody>
 </table>
 <p>CSP не управляет WebRTC, а директиву <code>webrtc 'block'</code> Chrome 153 игнорирует (проверено: кандидаты приходят с ней и без неё). Страница могла отправить наружу IP читателя и всё, что он в неё ввёл, — ровно то, что <code>connect-src 'none'</code> должен был исключить.</p>
@@ -157,7 +157,7 @@ require(`./${n}.json`)                                → все .json под к
 <p class="note">Две истории — один метод: агент, который написал защиту, не тот, кто её ломает; а «ничего не утекло» — это не мнение, а список попыток с исходом каждой. Что не проверено, записано рядом с тем, что проверено.</p>
 </section>
 
-<p class="foot">Автор: Редакция Полки · Источники: коммиты <code>8001de3</code>, <code>be65650</code>, <code>040be10</code>; <code>apps/server/runtime-guards.ts</code>, <code>apps/server/react-runtime.ts</code>, <code>tests/react-runtime.test.ts</code>; <code>docs/reviews/2026-09-23-viewer-egress/README.md</code>; отчёты ревью рантайма и сервера 22.09.2026 — github.com/artkruglov/polka.</p>
+<p class="foot">Автор: Редакция Полки · Источники: коммиты <code>2a75ef9</code>, <code>f66fd99</code>, <code>53da1ab</code>; <code>apps/server/runtime-guards.ts</code>, <code>apps/server/react-runtime.ts</code>, <code>tests/react-runtime.test.ts</code>; <code>docs/reviews/2026-09-23-viewer-egress/README.md</code>; отчёты ревью рантайма и сервера 22.09.2026 — github.com/artkruglov/polka.</p>
 <p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
 
 </body></html>

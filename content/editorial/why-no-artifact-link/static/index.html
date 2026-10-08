@@ -113,7 +113,7 @@ GET /robots.txt
 <p>Сервер Полки не может сам забрать артефакт по ссылке Claude. В одном запросе он получает 200 с пустой оболочкой, в другом — 403, и ни в одном — содержимое работы. Со ссылками ChatGPT (share и canvas) ситуация похожая.</p>
 <pre class="term">Ссылка Claude/ChatGPT вставлена на странице «Сохранить»
 → Полка узнаёт её <i>до любого запроса</i>, объясняет причину
-   и показывает поле для файла прямо в карточке   (коммит 1256784)</pre>
+   и показывает поле для файла прямо в карточке   (коммит 021585b)</pre>
 <p class="verdict">Обход защиты — не вариант: это нарушение условий Anthropic, притворство перед антибот-проверкой и хрупкость: IP сервера рано или поздно заблокируют, и Полка встанет для всех. Вместо этого — путь 2.</p></li>
 </ol>
 
@@ -178,7 +178,7 @@ GET /robots.txt
 <p class="note">Страница описывает собственный эксперимент Полки на 20–21.09.2026 и не является заявлением о текущем состоянии сервисов Anthropic или OpenAI. Никаких запросов эта страница не делает: весь текст и логика — внутри файла.</p>
 </section>
 
-<p class="foot">Автор: Редакция Полки · Источники: <code>docs/specs/CLAUDE_IMPORT_EXPERIMENT.md</code>, <code>docs/faq.md</code>, <code>docs/connect-agents.md</code>, коммит <code>1256784</code> в github.com/artkruglov/polka.</p>
+<p class="foot">Автор: Редакция Полки · Источники: <code>docs/specs/CLAUDE_IMPORT_EXPERIMENT.md</code>, <code>docs/faq.md</code>, <code>docs/connect-agents.md</code>, коммит <code>021585b</code> в github.com/artkruglov/polka.</p>
 <p class="polka-static-note" style="margin:28px 0 8px;padding-top:12px;border-top:1px solid rgba(0,0,0,.12);font:13px/1.5 system-ui,-apple-system,sans-serif;color:#6b6b6b">Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.</p></main>
 
 </body></html>
