@@ -81,6 +81,14 @@ export async function deleteArtifactForever(actor: Actor, artifactId: string, bo
       "UPDATE artifacts SET purged_at=clock_timestamp(),lifecycle_version=lifecycle_version+1 WHERE id=$1",
       [artifactId],
     );
+    // Proposals to «Лента» keep their state but not the words about the work.
+    await c.query(
+      `UPDATE feed_proposals SET title='Удалено',summary='Удалено',
+         state=CASE WHEN state='pending' THEN 'withdrawn' ELSE state END,
+         decided_at=COALESCE(decided_at,clock_timestamp())
+       WHERE artifact_id=$1`,
+      [artifactId],
+    );
     await audit(c, actor, "artifact.purge_started", artifactId);
   });
   await finishArtifactPurge(artifactId);

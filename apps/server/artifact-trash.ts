@@ -9,6 +9,7 @@ import { audit, type Actor } from "./artifacts.ts";
 import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { assertMayChange, lockShelf } from "./shelves.ts";
+import { withdrawFeedProposalsOfWork } from "./feed-proposals.ts";
 
 type DesiredLifecycle = "active" | "trashed";
 
@@ -126,6 +127,8 @@ export async function transitionArtifactLifecycleInTransaction(
     "UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2",
     [artifactId, actor.tenant],
   );
+  // A proposal to «Лента» waiting for the operator goes with the work.
+  await withdrawFeedProposalsOfWork(c, artifactId);
   await c.query(
     `UPDATE uploads SET aborted=true
      WHERE tenant_id=$1 AND receipt IS NULL
