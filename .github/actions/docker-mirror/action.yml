@@ -1,0 +1,17 @@
+# Docker Hub limits anonymous pulls per IP, and GitHub's runners share their
+# IPs: whole runs failed with "toomanyrequests" (October 2026). The daemon
+# asks Google's public cache of Docker Hub first and falls back to Docker Hub
+# for an image the cache lacks. Images stay pinned by digest, so the bytes
+# are the same either way.
+name: Docker Hub through mirror.gcr.io
+description: Point the runner's Docker daemon at mirror.gcr.io before any pull.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        config=/etc/docker/daemon.json
+        current=$(sudo cat "$config" 2>/dev/null || echo '{}')
+        echo "$current" | jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' | sudo tee "$config" >/dev/null
+        sudo systemctl restart docker
+        docker info --format '{{json .RegistryConfig.Mirrors}}'
