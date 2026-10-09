@@ -213,7 +213,7 @@ test("runtime has exact current grants and denied administrative paths", async (
     // Requests from /enterprise (033): the form, the letter mark, maintenance.
     const requestId = randomUUID();
     await client.query(
-      `INSERT INTO enterprise_requests(id,idempotency_key,name,company,email,team_size,interest,comment)
+      `INSERT INTO enterprise_requests(id,idempotency_key,name,company,contact,team_size,interest,comment)
        VALUES($1,$2,'Имя','Компания','a@example.test','11-50','cloud',NULL)`,
       [requestId, randomUUID()],
     );
