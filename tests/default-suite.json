@@ -145,5 +145,6 @@
   "tests/agent-sessions-cli.test.ts",
   "tests/agent-sessions.test.ts",
   "tests/agent-sessions-web.test.ts",
-  "tests/hosted-setup.test.ts"
+  "tests/hosted-setup.test.ts",
+  "tests/test-suites.test.ts"
 ]

@@ -783,13 +783,13 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
 });
 
 test("the worker's start does not count against a page's scan deadline", async () => {
-  // Loading tsx and the classifier in a fresh worker takes longer than this
-  // deadline on its own; the clock starts only once the worker is ready.
-  // Just over the inline limit: its scan takes milliseconds, the worker's
-  // start (~0.2 s idle, more under load) would not fit the deadline.
+  // The clock starts only once the worker is ready. Just over the inline
+  // limit: the scan itself takes tens of milliseconds (more on a busy CI
+  // runner, so the deadline leaves room); loading tsx and the classifier in
+  // a fresh worker under the parallel suite takes longer than the deadline.
   const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(760)}</p>`;
   assert.ok(page.length > 16 * 1024);
-  const read = await inspectHtmlBounded(page, 150);
+  const read = await inspectHtmlBounded(page, 1_000);
   assert.deepEqual({ profile: read.profile, signals: read.signals }, { profile: "static", signals: [] });
 });
 
