@@ -42,6 +42,8 @@ const datedCursorSchema = z
     id: uuid,
     /** Only in a ranked search: searchRank. */
     rank: z.number().int().min(0).max(3 * SEARCH_RANK_TIER).optional(),
+    /** The rank scale: 2 since phrase search (#21); a ranked cursor without it is from before. */
+    v: z.literal(2).optional(),
   })
   .strict();
 const legacyCursorSchema = z
@@ -149,6 +151,7 @@ function decodeArtifactCursor(
     if (current.data.state !== state) return invalidCursor();
     // A cursor of a ranked search is only good for the same kind of search.
     if (ranked !== (current.data.rank !== undefined)) return invalidCursor();
+    if (ranked && current.data.v !== 2) return invalidCursor();
     return {
       date: current.data.date,
       id: current.data.id,
@@ -170,7 +173,7 @@ function encodeArtifactCursor(
       state,
       date: row.cursor_date,
       id: row.id,
-      ...(ranked ? { rank: Number(row.search_rank) } : {}),
+      ...(ranked ? { rank: Number(row.search_rank), v: 2 } : {}),
     }),
   ).toString("base64url");
 }

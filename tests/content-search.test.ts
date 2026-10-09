@@ -334,6 +334,11 @@ test("a search ranks a title hit above a newer text-only hit and pages exactly",
   await assert.rejects(
     listArtifactsForAgent(actor, { query: "зонтик", cursor: plain.nextCursor ?? "x" }),
   );
+  // A ranked cursor from before the new rank scale would skip works: refused.
+  const old = Buffer.from(
+    JSON.stringify({ state: "active", date: new Date().toISOString(), id: titled.artifactId, rank: 2 }),
+  ).toString("base64url");
+  await assert.rejects(listArtifactsForAgent(actor, { query: "зонтик", cursor: old }));
 });
 
 test("quoted phrases: whole words in this order; the title pattern drops the quotes", () => {
