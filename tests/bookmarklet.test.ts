@@ -236,7 +236,9 @@ async function attach(targetId: string) {
 async function openTab(url: string) {
   const { targetId } = await send("Target.createTarget", { url });
   const sessionId = await attach(targetId);
-  await until(() => evaluate(sessionId, "document.readyState === 'complete' && location.href"), url);
+  // about:blank is already complete before the navigation: wait for this origin.
+  const origin = JSON.stringify(new URL(url).origin);
+  await until(() => evaluate(sessionId, `document.readyState === 'complete' && location.origin === ${origin} && location.href`), url);
   return { targetId, sessionId };
 }
 
@@ -418,7 +420,8 @@ after(async () => {
   await app?.close();
   await db?.end();
   s3?.destroy();
-  if (scratch) rmSync(scratch, { recursive: true, force: true });
+  // Chrome's helpers may still write to the profile for a moment after the kill.
+  if (scratch) rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 const REMEMBER_ORIGINALS = `window.__originals = [
