@@ -28,8 +28,12 @@ updates:
       - /apps/renderer
     schedule: { interval: weekly }
     # Node follows .nvmrc and moves to a new major on purpose, not by a bot.
+    # The backup image's pg_dump matches the server's major (16): a dump made
+    # by a newer major does not restore into it.
     ignore:
       - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: postgres
         update-types: ["version-update:semver-major"]
     groups:
       docker-minor-patch:
