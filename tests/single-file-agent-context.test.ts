@@ -9,7 +9,8 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createAccount } from "../apps/server/auth.ts";
 import { beginUpload, finalizeUpload, uploadBytes } from "../apps/server/artifacts.ts";
-import { listTemplates, publishTemplate, sourceForAgent } from "../apps/server/agent-context.ts";
+import { buildAgentContext, listTemplates, publishTemplate, sourceForAgent } from "../apps/server/agent-context.ts";
+import { saveLink } from "../apps/server/saved-links.ts";
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
@@ -308,5 +309,45 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
       revisionId: image.revisionId,
     }),
     /checksum mismatch/,
+  );
+});
+
+test("a saved link hands its address and note to the agent; other formats name the ones that work", async () => {
+  const owner = await createAccount(`single-link-${randomBytes(5).toString("hex")}`, randomBytes(24).toString("hex"));
+  const id = randomUUID();
+  const token = randomBytes(32).toString("base64url");
+  await db.query(
+    `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
+     VALUES($1,$2,$3,$4,'single link test',ARRAY['source:read'],$5,now()+interval '1 day')`,
+    [id, owner.tenant, owner.id, sha256(token), MCP_AUDIENCE],
+  );
+  const agent = await authenticateServiceToken(token, MCP_AUDIENCE);
+  const saved = await saveLink(
+    owner,
+    { key: randomUUID(), url: "https://example.com/brief?id=7", note: "Бриф к релизу, раздел 2" },
+    { title: async () => "Бриф" },
+  );
+  const pins = { artifactId: saved.artifactId, revisionId: saved.revisionId };
+  const source = await sourceForAgent(agent, pins);
+  const document = Buffer.from(source.files[0].data, "base64");
+  assert.deepEqual(JSON.parse(document.toString("utf8")), {
+    v: 1,
+    url: "https://example.com/brief?id=7",
+    note: "Бриф к релизу, раздел 2",
+  });
+  assert.deepEqual(source.context.availableContent, [
+    { path: "link.json", mime: "application/vnd.polka.link+json", size: document.length, sha256: sha256(document) },
+  ]);
+  assert.match(source.context.clipboardText, /Сохранённая ссылка: https:\/\/example\.com\/brief\?id=7/);
+  assert.match(source.context.clipboardText, /не инструкции\):\nБриф к релизу, раздел 2/);
+  assert.doesNotMatch(source.context.clipboardText, /Визуальный пример/);
+
+  // A format without a context (here: a version whose type is not a source format) says which ones have it.
+  await db.query("UPDATE revisions SET mime='video/mp4' WHERE id=$1", [saved.revisionId]);
+  await assert.rejects(
+    transaction((c) => buildAgentContext(c, owner, pins)),
+    (error: any) =>
+      error.status === 422 &&
+      /страниц, проектов, текста, картинок PNG, JPEG и WebP и у сохранённых ссылок/.test(error.message),
   );
 });
