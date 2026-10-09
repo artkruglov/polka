@@ -56,6 +56,7 @@ export function LibraryInvite() {
   const [invitation, setInvitation] = useState<LibraryInvitation | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // oxlint-disable-next-line react/set-state-in-effect -- read once after mount: it clears the address and fills sessionStorage, which a render must not do
   useEffect(() => setInvitation(readInvitation()), []);
   async function accept() {
     if (!invitation || busy) return;

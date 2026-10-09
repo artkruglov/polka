@@ -60,6 +60,7 @@ export function useFirstRun({
   }, [selfLoads]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the first load (and one per account) marks itself loading
     loadConnections();
     loadWorks();
     const onVisible = () => {
@@ -70,6 +71,7 @@ export function useFirstRun({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- a counter, not a DOM ref: bumping the latest value drops late answers
       generation.current++;
       document.removeEventListener("visibilitychange", onVisible);
     };

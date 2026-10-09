@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useEffectEvent, useRef, useState } from "react";
 import { savedWorkHref } from "../../shared/api/client.ts";
 import { ArrowUpRight, Bot, Check, Link2, Upload } from "lucide-react";
 import type { Account, Artifact, Receipt } from "../../../../../packages/contracts/index.ts";
@@ -312,8 +312,8 @@ export function FirstRunChecklist({
   const [announcement, setAnnouncement] = useState("");
   const settled = data.connections.status !== "loading" && data.works.status !== "loading";
   const previous = useRef<Record<FirstRunStepId, boolean> | null>(null);
-  useEffect(() => {
-    if (!settled) return;
+  // Reads the latest model; runs only when the count or completion changes (below).
+  const announceSteps = useEffectEvent(() => {
     const current = Object.fromEntries(model.steps.map((s) => [s.id, s.done])) as Record<FirstRunStepId, boolean>;
     if (previous.current) {
       const finished = model.steps.filter((s) => s.done && !previous.current![s.id]);
@@ -325,16 +325,23 @@ export function FirstRunChecklist({
         );
     }
     previous.current = current;
+  });
+  useEffect(() => {
+    if (settled) announceSteps();
   }, [settled, model.done, model.complete]);
 
   const reported = useRef<string | null>(null);
+  // The latest onSaved and reload, called once per new saved upload (below).
+  const reportSaved = useEffectEvent((receipt: Receipt) => {
+    setAnnouncement(`Пример сохранён: «${SAMPLE_TITLE}». Пока его видите только вы.`);
+    onSaved?.(receipt);
+    data.reloadWorks();
+  });
   useEffect(() => {
     const saved = upload.saved;
     if (!saved || reported.current === saved.receipt.uploadId) return;
     reported.current = saved.receipt.uploadId;
-    setAnnouncement(`Пример сохранён: «${SAMPLE_TITLE}». Пока его видите только вы.`);
-    onSaved?.(saved.receipt);
-    data.reloadWorks();
+    reportSaved(saved.receipt);
   }, [upload.saved]);
 
   const saveSample = () =>

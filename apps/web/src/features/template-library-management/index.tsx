@@ -110,6 +110,7 @@ function HistoryDialog({
     const controller = new AbortController();
     loadMoreController.current?.abort();
     loadMoreController.current = null;
+    // oxlint-disable-next-line react/set-state-in-effect -- another library or a retry clears the history before its request; six pieces of state would need one keyed state
     setLoadingMore(false);
     setItems([]);
     setNextBefore(null);
@@ -322,6 +323,7 @@ export function TemplateLibraryManagement({
   const selected = useMemo(() => personalReleases[0], [personalReleases]);
   useEffect(() => {
     const id = ++epoch.current;
+    // oxlint-disable-next-line react/set-state-in-effect -- another library or a reload clears the lists before its requests; five pieces of state would need one keyed state
     setLoading(true);
     setLoadError("");
     setMembers([]);
@@ -342,6 +344,7 @@ export function TemplateLibraryManagement({
       .catch((e) => id === epoch.current && setLoadError(message(e)))
       .finally(() => id === epoch.current && setLoading(false));
     return () => {
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- a counter, not a DOM ref: bumping the latest value drops late answers and stale mutations
       epoch.current++;
     };
   }, [library.id, library.role, reload, canAdmin]);

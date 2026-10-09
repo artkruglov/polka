@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Check, Eye, ShieldAlert } from "lucide-react";
 import type { Viewer } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client, type ModerationInspection } from "../../shared/api/client.ts";
@@ -36,7 +36,7 @@ const failure = (error: unknown) =>
  */
 export function Moderation() {
   const account = useAccount();
-  const token = useRef(location.hash.slice(1)).current;
+  const [token] = useState(() => location.hash.slice(1));
   const [state, setState] = useState<State>(() =>
     token
       ? { kind: "loading" }
@@ -62,6 +62,7 @@ export function Moderation() {
 
   useEffect(() => {
     if (state.kind === "loading") void load();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- inspects once on opening; the action reloads by calling load itself
   }, []);
 
   const showPreview = async () => {

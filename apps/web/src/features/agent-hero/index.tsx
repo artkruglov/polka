@@ -27,8 +27,10 @@ const isActive = (c: AgentConnection) => c.status === "issued" || c.status === "
 export type Connections = { status: "loading" } | { status: "ready"; active: AgentConnection[] } | { status: "error" };
 
 /** The owner's agent connections; re-read when the tab comes back (after «Разрешить» in another tab). */
-function useAgentConnections(accountId: string, poll: boolean) {
+function useAgentConnections(accountId: string, hidden: boolean) {
   const [state, setState] = useState<Connections>({ status: "loading" });
+  // Polls while the steps are shown and no agent is connected yet.
+  const poll = !hidden && !(state.status === "ready" && state.active.length > 0);
   const generation = useRef(0);
   const load = useCallback(() => {
     const current = ++generation.current;
@@ -49,6 +51,7 @@ function useAgentConnections(accountId: string, poll: boolean) {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- a counter, not a DOM ref: bumping the latest value drops late answers
       generation.current++;
       document.removeEventListener("visibilitychange", onVisible);
     };
@@ -223,11 +226,9 @@ export function AgentHeroView({
 export function AgentHero({ account, onUpload }: { account: Account; onUpload: () => void }) {
   const [hidden, setHidden] = useState(() => readDismissed(account.id));
   const [selected, setSelected] = useState<HeroClientId>(() => heroClient(readStoredClient()));
-  const [polling, setPolling] = useState(!hidden);
-  const connections = useAgentConnections(account.id, polling);
+  const connections = useAgentConnections(account.id, hidden);
   const connected = connections.status === "ready" && connections.active.length > 0;
   const [expectConnected] = useState(() => readAgentSeen(account.id));
-  useEffect(() => setPolling(!hidden && !connected), [hidden, connected]);
   useEffect(() => {
     if (connections.status === "ready") writeAgentSeen(account.id, connected);
   }, [account.id, connections.status, connected]);

@@ -36,8 +36,11 @@ export function UploadPanel({
     [manual, setManual] = useState(!artifact);
   const operation = useRef<PendingUpload | null>(null),
     busy = !!stage;
+  // Mirrors operation for the button label: a failed save is retried with the same key.
+  const [pending, setPending] = useState(false);
   const reset = () => {
     operation.current = null;
+    setPending(false);
     setError("");
   };
   const save = async () => {
@@ -53,6 +56,7 @@ export function UploadPanel({
       return;
     }
     operation.current ??= { file: current, key: crypto.randomUUID() };
+    setPending(true);
     try {
       onSaved(
         await saveUpload(
@@ -194,7 +198,7 @@ export function UploadPanel({
         </Button>
         {manual && (
           <Button variant="primary" onClick={save} disabled={busy}>
-            {stage || (error && operation.current ? "Повторить сохранение" : "Сохранить на полку")}
+            {stage || (error && pending ? "Повторить сохранение" : "Сохранить на полку")}
             <ArrowUpRight />
           </Button>
         )}

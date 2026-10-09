@@ -35,8 +35,9 @@ export function PasteCode({
   const [code, setCode] = useState(""),
     [title, setTitle] = useState("");
   const upload = useSaveUpload();
-  const suggested = useRef(""),
-    card = useRef<HTMLElement>(null),
+  // The title proposed from the last paste: the title follows it until the author types one.
+  const [suggested, setSuggested] = useState("");
+  const card = useRef<HTMLElement>(null),
     busy = upload.busy;
   const pasted = describePaste(code);
 
@@ -47,9 +48,9 @@ export function PasteCode({
   const edit = (next: string) => {
     setCode(next);
     upload.invalidate();
-    const previous = suggested.current,
+    const previous = suggested,
       proposal = describePaste(next)?.title ?? "";
-    suggested.current = proposal;
+    setSuggested(proposal);
     // Follow the page's own title until the author types one.
     setTitle((current) => (current === previous ? proposal : current));
   };
@@ -66,7 +67,7 @@ export function PasteCode({
 
   const restart = () => {
     upload.reset();
-    suggested.current = "";
+    setSuggested("");
     setCode("");
     setTitle("");
   };

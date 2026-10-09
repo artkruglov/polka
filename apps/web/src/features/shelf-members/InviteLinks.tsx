@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link2 } from "lucide-react";
 import { client, type ShelfInvitation } from "../../shared/api/client.ts";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
@@ -175,17 +175,17 @@ export function ShelfInviteLinks({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const live = useRef(true);
-  const reload = async () => {
+  const reload = useCallback(async () => {
     const page = await client.shelfInvitations(shelfId);
     if (live.current) setItems(page.items);
-  };
+  }, [shelfId]);
   useEffect(() => {
     live.current = true;
     reload().catch((e) => live.current && setError((e as Error).message));
     return () => {
       live.current = false;
     };
-  }, [shelfId]);
+  }, [shelfId, reload]);
   const act = async (work: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "./controls.tsx";
 
@@ -16,7 +16,9 @@ export function useCopy(value: string, writeText: (text: string) => Promise<void
   } | null>(null);
   const state: CopyState = result?.value === value ? result.state : "idle";
   const currentValue = useRef(value);
-  currentValue.current = value;
+  useLayoutEffect(() => {
+    currentValue.current = value;
+  }, [value]);
   const attempt = useRef(0);
   useEffect(
     () => () => {

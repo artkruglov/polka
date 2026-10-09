@@ -22,7 +22,8 @@ type Hint = {
  */
 export function SignIn() {
   const account = useAccount();
-  const hint = new URLSearchParams(location.search).get("shelf") ?? "";
+  // Read once, on arrival: the hint is looked up a single time.
+  const [hint] = useState(() => new URLSearchParams(location.search).get("shelf") ?? "");
   const [shelf, setShelf] = useState<Hint | null>(null);
   const [providers, setProviders] = useState<SignInProvider[]>([]);
   const [error, setError] = useState("");
@@ -44,7 +45,7 @@ export function SignIn() {
             : (e as Error).message,
         ),
       );
-  }, []);
+  }, [hint]);
   return (
     <AppShell current="shelf" account={account}>
       <main className="onboard">

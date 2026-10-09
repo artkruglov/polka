@@ -41,6 +41,7 @@ export function ReceivedCard({ source, onDismiss }: { source: BookmarkletSource;
 
   // A guest signs in first: keep the data in this tab for the way back.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- savePending writes sessionStorage; whether it kept the data is known only after the write
     if (account === null) setKept(savePending(source));
   }, [account, source]);
 

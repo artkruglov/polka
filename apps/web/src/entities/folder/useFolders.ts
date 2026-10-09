@@ -5,6 +5,7 @@ import { client } from "../../shared/api/client.ts";
 export function useFolders(accountId?: string) {
   const [result, setResult] = useState<{
     accountId?: string;
+    attempt?: number;
     items: Folder[];
     error: string;
     loading: boolean;
@@ -13,16 +14,16 @@ export function useFolders(accountId?: string) {
   useEffect(() => {
     if (!accountId) return;
     let current = true;
-    setResult({ accountId, items: [], error: "", loading: true });
     client
       .folders()
       .then((items) => {
-        if (current) setResult({ accountId, items, error: "", loading: false });
+        if (current) setResult({ accountId, attempt, items, error: "", loading: false });
       })
       .catch(() => {
         if (current)
           setResult({
             accountId,
+            attempt,
             items: [],
             error: "Не удалось загрузить папки. Можно сохранить без папки или повторить загрузку.",
             loading: false,
@@ -32,6 +33,10 @@ export function useFolders(accountId?: string) {
       current = false;
     };
   }, [accountId, attempt]);
-  const state = result.accountId === accountId ? result : { items: [], error: "", loading: !!accountId };
+  // Another account or a retry reads as loading until its own answer arrives.
+  const state =
+    result.accountId === accountId && result.attempt === attempt
+      ? result
+      : { items: [], error: "", loading: !!accountId };
   return { ...state, retry: () => setAttempt((value) => value + 1) };
 }

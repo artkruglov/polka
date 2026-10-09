@@ -466,6 +466,7 @@ function RecipientFrame({
   // The card floats above the footer: its height goes into a CSS variable.
   const frame = useRef<HTMLDivElement>(null);
   const footerBox = useRef<HTMLDivElement>(null);
+  const withFooter = footer !== undefined;
   useEffect(() => {
     const node = footerBox.current;
     const host = frame.current;
@@ -479,7 +480,7 @@ function RecipientFrame({
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [footer !== undefined]);
+  }, [withFooter]);
   return (
     <AppShell
       current="shelf"

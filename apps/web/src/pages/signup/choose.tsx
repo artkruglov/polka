@@ -107,6 +107,7 @@ export function SignupLinked() {
           message: e instanceof ApiError && e.status === 410 ? GONE : (e as Error).message,
         }),
       );
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- links the waiting provider exactly once on arrival; next comes from the URL, which does not change here
   }, []);
   useEffect(() => {
     if (state.kind !== "done") return;

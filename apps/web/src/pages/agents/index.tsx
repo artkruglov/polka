@@ -210,6 +210,7 @@ export function AgentConnections() {
 
   useEffect(() => {
     mounted.current = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- the first load marks the list loading itself, as a retry does
     void refresh();
     return () => {
       mounted.current = false;
