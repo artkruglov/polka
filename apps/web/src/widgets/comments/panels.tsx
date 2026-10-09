@@ -38,9 +38,7 @@ function useOpenState(wide: boolean, count: number | null) {
   const [open, setOpen] = useState<boolean | null>(null);
   // Decided once, when the discussion first arrives: open on a wide screen
   // when there is something to read; the phone's sheet starts closed.
-  useEffect(() => {
-    if (open === null && count !== null) setOpen(wide && count > 0);
-  }, [open, count, wide]);
+  if (open === null && count !== null) setOpen(wide && count > 0);
   return [open ?? false, setOpen] as const;
 }
 
@@ -156,6 +154,7 @@ export function useWorkComments({
   const [fresh, setFresh] = useState(0);
   useEffect(() => {
     if (open && data?.unread) {
+      // oxlint-disable-next-line react/set-state-in-effect -- the count is kept at the moment the panel marks it read, with the request
       setFresh(data.unread);
       markSeen();
     }

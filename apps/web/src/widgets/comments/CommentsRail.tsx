@@ -124,11 +124,15 @@ export function CommentsRail({
   });
   // A click on a highlight in the document selects its card.
   const cardRefs = useRef(new Map<string, HTMLElement>());
+  const focus = state?.focus ?? null;
+  const [focused, setFocused] = useState<typeof focus>(null);
+  if (focused !== focus) {
+    setFocused(focus);
+    if (focus) setActive(focus.id);
+  }
   useEffect(() => {
-    if (!state?.focus) return;
-    setActive(state.focus.id);
-    cardRefs.current.get(state.focus.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [state?.focus]);
+    if (focus) cardRefs.current.get(focus.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focus]);
 
   const positionOf = (id: string) => (state?.ready && !state.missing.has(id) ? state.positions[id] : undefined);
   const items: Item[] = [
@@ -165,6 +169,8 @@ export function CommentsRail({
     tops: {},
     height: 0,
   });
+  // Measures the rendered cards after every render; it sets state only when a top moved, so it settles.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- the card heights are read from the DOM, which no dependency list can follow
   useLayoutEffect(() => {
     if (!aligned || !region.current || !bridge) return;
     const box = region.current.getBoundingClientRect();
@@ -184,6 +190,7 @@ export function CommentsRail({
       Math.abs(cursor - layout2.height) > 0.5 ||
       Object.keys(tops).length !== Object.keys(layout2.tops).length ||
       Object.entries(tops).some(([key, top]) => Math.abs((layout2.tops[key] ?? -1e9) - top) > 0.5);
+    // oxlint-disable-next-line react/set-state-in-effect -- the positions come from measuring the DOM, which only an effect can do
     if (changed) setLayout2({ tops, height: cursor });
   });
 

@@ -53,11 +53,18 @@ export function useSharedDiscussion(token: string, enabled = true) {
         else setError(e instanceof Error ? e.message : String(e));
       });
   }, [token]);
+  // A new link, or the discussion switched back on, starts from nothing.
+  const source = enabled ? token : null;
+  const [shown, setShown] = useState(source);
+  if (shown !== source) {
+    setShown(source);
+    if (source !== null) {
+      setData(null);
+      setUnavailable(false);
+    }
+  }
   useEffect(() => {
-    if (!enabled) return;
-    setData(null);
-    setUnavailable(false);
-    reload();
+    if (enabled) reload();
   }, [reload, enabled]);
   usePolling(reload, enabled && !unavailable);
   const after = useCallback(
@@ -95,10 +102,15 @@ export function useWorkDiscussion(artifactId: string, enabled = true) {
         if (current === generation.current) setError(e instanceof Error ? e.message : String(e));
       });
   }, [artifactId]);
+  // Another work, or the discussion switched back on, starts from nothing.
+  const source = enabled ? artifactId : null;
+  const [shown, setShown] = useState(source);
+  if (shown !== source) {
+    setShown(source);
+    if (source !== null) setData(null);
+  }
   useEffect(() => {
-    if (!enabled) return;
-    setData(null);
-    reload();
+    if (enabled) reload();
   }, [reload, enabled]);
   usePolling(reload, enabled);
   const after = useCallback(

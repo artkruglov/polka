@@ -13,7 +13,9 @@ export function useSaveUpload() {
   const operation = useRef<PendingUpload | null>(null);
   const [stage, setStage] = useState(""),
     [error, setError] = useState(""),
-    [saved, setSaved] = useState<SavedUpload | null>(null);
+    [saved, setSaved] = useState<SavedUpload | null>(null),
+    // Mirrors `operation.current !== null` for render, which may not read the ref.
+    [pending, setPending] = useState(false);
 
   const showSaved = async (receipt: Receipt) => {
     setError("");
@@ -31,6 +33,7 @@ export function useSaveUpload() {
   const save = async (file: Blob, input: Omit<UploadInput, "key" | "mime" | "size" | "sha256">) => {
     setError("");
     operation.current ??= { file, key: crypto.randomUUID() };
+    setPending(true);
     let receipt: Receipt;
     try {
       receipt = await saveUpload(operation.current, input, setStage);
@@ -40,12 +43,14 @@ export function useSaveUpload() {
       return;
     }
     operation.current = null;
+    setPending(false);
     await showSaved(receipt);
   };
 
   /** The content or destination changed: the next save is a new upload. */
   const invalidate = () => {
     operation.current = null;
+    setPending(false);
     setError("");
   };
 
@@ -61,7 +66,7 @@ export function useSaveUpload() {
     setError,
     saved,
     /** A failed attempt that «Повторить сохранение» would resume with the same key. */
-    retrying: !!error && !!operation.current,
+    retrying: !!error && pending,
     save,
     showSaved,
     invalidate,
