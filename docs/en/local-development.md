@@ -15,6 +15,8 @@ npm run build
 npm run dev
 ```
 
+The first `infra:up` builds MinIO from source (`deploy/minio/Dockerfile`, about 10 minutes): MinIO no longer publishes images. After that the image comes from your local Docker.
+
 `local:setup` prints the same sequence when it finishes. Open http://127.0.0.1:4390/ and sign in with the login and password from `.local/demo-account.txt`. Do not publish that file. You only create the account once.
 
 The server serves the built `dist`. After a UI change run `npm run build` and reload the page; after a backend change restart `npm run dev`.
