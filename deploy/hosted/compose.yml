@@ -182,6 +182,9 @@ x-runtime-env: &runtime-env
   # Moderation letters with one-click actions; empty: none (scripts only).
   # Needs MAIL_MODE=smtp.
   OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+  # Requests from /enterprise also to this Telegram chat; empty: mail only.
+  OPERATOR_TELEGRAM_BOT_TOKEN: ${OPERATOR_TELEGRAM_BOT_TOKEN:-}
+  OPERATOR_TELEGRAM_CHAT_ID: ${OPERATOR_TELEGRAM_CHAT_ID:-}
   MODERATION_AUTOPAUSE_REPORTS: ${MODERATION_AUTOPAUSE_REPORTS:-3}
   NEW_ACCOUNT_DAYS: ${NEW_ACCOUNT_DAYS:-7}
   NEW_ACCOUNT_MAX_LINKS: ${NEW_ACCOUNT_MAX_LINKS:-5}

@@ -153,6 +153,39 @@ test("one field is enough: a Telegram name, nothing else", async () => {
   assert.equal(letter.subject, `Заявка «Для компаний»: @anna_${marker}`);
 });
 
+test("with a bot configured, a request also goes to the operator's Telegram chat", async () => {
+  const saved = [config.OPERATOR_TELEGRAM_BOT_TOKEN, config.OPERATOR_TELEGRAM_CHAT_ID] as const;
+  const realFetch = globalThis.fetch;
+  const sent: Array<{ url: string; body: any }> = [];
+  config.OPERATOR_TELEGRAM_BOT_TOKEN = "123456789:" + "A".repeat(35);
+  config.OPERATOR_TELEGRAM_CHAT_ID = "-1001234567890";
+  let answer = 200;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (!String(url).startsWith("https://api.telegram.org/")) return realFetch(url, init);
+    sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+    return new Response("{}", { status: answer });
+  }) as typeof fetch;
+  try {
+    const marker = randomBytes(6).toString("hex");
+    const res = await post({ key: randomUUID(), contact: `@tg_${marker}`, policyRead: true, comment: `Пилот на 30 человек ${marker}` });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].url, `https://api.telegram.org/bot${config.OPERATOR_TELEGRAM_BOT_TOKEN}/sendMessage`);
+    assert.equal(sent[0].body.chat_id, "-1001234567890");
+    assert.equal(sent[0].body.parse_mode, undefined, "plain text, nothing interpreted");
+    assert.match(sent[0].body.text, new RegExp(`^Заявка «Для компаний»\nКонтакт: @tg_${marker} — https://t\.me/tg_${marker}\n`));
+    assert.match(sent[0].body.text, new RegExp(`Пилот на 30 человек ${marker}$`));
+    // Telegram failing never fails the request.
+    answer = 502;
+    const again = await post({ key: randomUUID(), contact: `@tg2_${marker}`, policyRead: true });
+    assert.equal(again.statusCode, 200, again.body);
+    assert.equal(sent.length, 2);
+  } finally {
+    globalThis.fetch = realFetch;
+    [config.OPERATOR_TELEGRAM_BOT_TOKEN, config.OPERATOR_TELEGRAM_CHAT_ID] = saved;
+  }
+});
+
 test("a repeated submit with the same key is one request; another body under it is refused", async () => {
   const body = valid();
   const ip = address();
