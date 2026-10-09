@@ -683,6 +683,16 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   assert.equal(account.email, null);
   assert.equal(account.display_name, null);
   assert.equal(account.name, `deleted-${ids.account}`);
+  // The shelf's journal is gone except one account.erased, without personal data (069).
+  assert.deepEqual(
+    (
+      await owner.query(
+        "SELECT action,target_id,payload FROM audit_outbox WHERE tenant_id=$1",
+        [ids.tenant],
+      )
+    ).rows,
+    [{ action: "account.erased", target_id: ids.account, payload: {} }],
+  );
   const tenant = (
     await owner.query("SELECT * FROM tenants WHERE id=$1", [ids.tenant])
   ).rows[0];
