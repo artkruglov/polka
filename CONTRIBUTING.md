@@ -16,7 +16,7 @@
 ```bash
 npm ci
 npm run local:setup              # .env с локальными секретами и локальным интерактивным просмотром
-npm run infra:up                 # PostgreSQL и MinIO в Docker, только 127.0.0.1
+npm run infra:up                 # PostgreSQL и MinIO в Docker, только 127.0.0.1; MinIO в первый раз собирается ~10 минут
 npm run db:migrate
 npm run storage:bootstrap-local
 npm run account:create -- demo --generate
@@ -35,7 +35,7 @@ npm test -- --live     # файлы из tests/live-suite.json с включён
 
 `npm test -- --live` обязателен, если изменения касаются viewer, сборщика, runtime, корзины или «Ленты». Один файл запускается так: `npm test -- --live tests/trash.test.ts`. `npm run test:live` — то же, что `npm test -- --live`. Прочие отдельные команды (`test:restore-guards`, `test:url-import-runtime` и другие из `package.json`) описаны в [docs/local-development.md](docs/local-development.md).
 
-Перед pull request запустите `npm run verify`: облачного CI в проекте нет, все проверки локальные. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов; `--print-steps` перечисляет шаги, `--only=<шаг,…>` запускает выбранные. Шаг `grants` полного прогона ожидает MinIO на порту по умолчанию 9038 и отказывается работать с другим.
+Перед pull request запустите `npm run verify`. Те же шаги GitHub Actions выполняет на каждый pull request и push в `main` ([.github/workflows/verify.yml](.github/workflows/verify.yml)), а `main` принимает изменения только через pull request с зелёными проверками; локальный прогон просто быстрее покажет ошибку. Он по очереди выполняет `check`, проверку ссылок в документации, `build`, `npm test`, `npm test -- --live`, проверку прав ролей БД (`scripts/test-runtime-grants-isolated.ts`), лицензий production-зависимостей и секретов в истории (gitleaks в Docker) и собирает Docker-образы приложения и бэкапа. `npm run verify -- --quick` — только типы, ссылки, сборка и основной набор тестов; `--print-steps` перечисляет шаги, `--only=<шаг,…>` запускает выбранные. Шаг `grants` полного прогона ожидает MinIO на порту по умолчанию 9038 и отказывается работать с другим.
 
 ## Правила
 

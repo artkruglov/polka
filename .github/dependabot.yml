@@ -1,0 +1,36 @@
+# Security and version updates. Every dependency is pinned exactly, so nothing
+# moves unless one of these pull requests is reviewed and merged. Minor and
+# patch updates come grouped, one pull request per ecosystem and week; majors
+# come one by one.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    # @types/node tracks the Node major in .nvmrc.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /deploy/hosted/backup
+      - /apps/renderer
+    schedule: { interval: weekly }
+    # Node follows .nvmrc and moves to a new major on purpose, not by a bot.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]

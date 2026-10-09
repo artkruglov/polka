@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Everything to check before a push or a deploy, run locally in order (the
-// project has no hosted CI by the owner's choice). --only runs chosen steps;
+// Everything to check before a push or a deploy, run in order — locally and,
+// step by step, by GitHub Actions (.github/workflows/verify.yml). --only runs chosen steps;
 // the licence allowlist and the gitleaks digest live here alone. Needs the local infrastructure (npm run infra:up) and .env. Stops at
 // the first failing step.
 //

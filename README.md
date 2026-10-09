@@ -24,6 +24,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="Проверки CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="Лицензия AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/коммерческая_лицензия-есть-1f4fff" alt="Есть коммерческая лицензия"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=версия&color=0f1420" alt="Последняя версия"></a>
@@ -175,7 +176,7 @@ flowchart LR
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
 npm run local:setup              # .env с уникальными секретами и локальным интерактивным просмотром (HTML_LIVE_MODE=local)
-npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1
+npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1; первый раз MinIO собирается из исходников, ~10 минут
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket и проверка его возможностей
 npm run account:create -- demo --generate   # логин и пароль в .local/demo-account.txt
@@ -198,7 +199,7 @@ npm run check          # слои frontend + TypeScript
 npm run build
 npm test               # временные БД и bucket, после прогона удаляются
 npm test -- --live     # наборы с включённым локальным viewer
-npm run verify         # всё перед push: облачного CI нет, проверки локальные
+npm run verify         # всё перед push; то же проверяет GitHub Actions на каждый pull request
 ```
 
 </details>

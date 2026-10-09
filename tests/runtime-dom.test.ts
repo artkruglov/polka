@@ -230,7 +230,8 @@ after(async () => {
   // Chrome may still be flushing its profile; a leftover temp directory is
   // not a test failure.
   try {
-    if (profile) rmSync(profile, { recursive: true, force: true });
+    // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
+    if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
   } catch {
     /* the OS cleans the temp directory */
   }

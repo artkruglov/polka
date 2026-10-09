@@ -24,6 +24,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="CI checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="License: AGPL-3.0"></a>
   <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/commercial_license-available-1f4fff" alt="Commercial license available"></a>
   <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=version&color=0f1420" alt="Latest version"></a>
@@ -177,7 +178,7 @@ You need Node.js ≥ 22.16, npm and a running Docker.
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
 npm run local:setup              # .env with unique secrets and the local interactive viewer (HTML_LIVE_MODE=local)
-npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1
+npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1; the first run builds MinIO from source, ~10 min
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket and a capability check
 npm run account:create -- demo --generate   # login and password in .local/demo-account.txt
@@ -200,7 +201,7 @@ npm run check          # frontend layers + TypeScript
 npm run build
 npm test               # throwaway database and bucket, removed afterwards
 npm test -- --live     # suites that need the local viewer
-npm run verify         # everything before a push: no hosted CI, checks run locally
+npm run verify         # everything before a push; GitHub Actions runs the same on every pull request
 ```
 
 </details>

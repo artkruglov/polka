@@ -16,8 +16,10 @@ services:
       interval: 2s
       retries: 30
   # Development compatibility fixture, not the supported production distribution.
+  # Built from MinIO's source (deploy/minio/Dockerfile): its images are gone.
   objects:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    image: polka-local-minio:RELEASE.2025-04-22T22-12-26Z
+    build: ./minio
     command: server /data
     environment:
       MINIO_ROOT_USER: polka-local

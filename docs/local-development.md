@@ -15,6 +15,8 @@ npm run build
 npm run dev
 ```
 
+Первый `infra:up` собирает MinIO из исходников (`deploy/minio/Dockerfile`, около 10 минут): готовых образов MinIO больше не публикует. Дальше образ берётся из локального Docker.
+
 `local:setup` в конце печатает эту же последовательность. Откройте http://127.0.0.1:4390/ и войдите с логином и паролем из `.local/demo-account.txt`. Не публикуйте этот файл. Повторно тот же аккаунт создавать не нужно.
 
 Сервер отдаёт собранный `dist`. После изменений интерфейса выполните `npm run build` и перезагрузите страницу, после изменений backend перезапустите `npm run dev`.
@@ -59,7 +61,7 @@ npm run verify -- --print-steps   # шаги; --only=<шаг,…> запуска
 
 Если сервер слушает порт 4390, это ещё не значит, что база и хранилище доступны. Проверьте `docker compose ps` и `/api/health`.
 
-Облачного CI в проекте нет: все проверки запускает локально `npm run verify`. Отдельные шаги — `node scripts/verify.mjs --print-steps` и `--only=<шаг>`; список разрешённых лицензий и digest образа gitleaks определены только в `scripts/verify.mjs`. Проверка renderer — отдельная команда `npm run test:renderer-runtime`.
+Те же проверки на каждый pull request и push в `main` выполняет GitHub Actions ([.github/workflows/verify.yml](../.github/workflows/verify.yml)): каждый шаг там вызывает `node scripts/verify.mjs --only=<шаг>`. Локально всё запускает `npm run verify`. Отдельные шаги — `node scripts/verify.mjs --print-steps` и `--only=<шаг>`; список разрешённых лицензий и digest образа gitleaks определены только в `scripts/verify.mjs`. Проверка renderer — отдельная команда `npm run test:renderer-runtime`.
 
 ## Интерактивный просмотр
 

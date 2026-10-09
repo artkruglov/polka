@@ -289,7 +289,8 @@ after(async () => {
   chrome?.kill("SIGKILL");
   await new Promise((resolve) => (chrome ? chrome.once("exit", resolve) : resolve(null)));
   server?.close();
-  if (profile) rmSync(profile, { recursive: true, force: true });
+  // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
+  if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
 });
 
 test("Claude chat: the panel's title and Copy button, not the message's", { skip }, async () => {

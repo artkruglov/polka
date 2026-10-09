@@ -343,7 +343,8 @@ after(async () => {
       (resolve) => each?.close(() => resolve()) ?? resolve(),
     );
   try {
-    if (profile) rmSync(profile, { recursive: true, force: true });
+    // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
+    if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
   } catch {
     /* the OS cleans the temp directory */
   }

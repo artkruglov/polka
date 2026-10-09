@@ -179,10 +179,19 @@ test("the journal: commit order, a cursor to keep, nothing skipped behind a late
   } finally {
     late.release();
   }
+  // Rows show once no open transaction can precede them; other test files
+  // running beside this one hold transactions open for a moment.
+  const settled = async (cursor: typeof start | null) => {
+    for (let tries = 0; ; tries++) {
+      const result = await context.auditFeed.read(cursor, { actions: [action], limit: 10 });
+      if (result.items.length === 2 || tries === 100) return result;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
   // The cursor kept from the early read did not move past either row.
-  const resumed = await context.auditFeed.read(early.next, { actions: [action], limit: 10 });
+  const resumed = await settled(early.next);
   assert.deepEqual(resumed.items.map((item) => item.payload?.n), [1, 2]);
-  const page = await context.auditFeed.read(start, { actions: [action], limit: 10 });
+  const page = await settled(start);
   assert.deepEqual(page.items.map((item) => item.payload?.n), [1, 2]);
   assert.equal(page.items[0]!.tenantId, owner.tenant);
   // Read from the returned cursor: nothing again; a full page stops at its last row.
