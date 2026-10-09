@@ -9,10 +9,7 @@ import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { captureFromAgent } from "../apps/server/agent-capture.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-} from "../apps/server/service-auth.ts";
+import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 
 const host = new URL(process.env.DATABASE_URL ?? "").hostname;
 if (!["127.0.0.1", "localhost", "[::1]"].includes(host))
@@ -212,14 +209,11 @@ async function call(method: string, url: string, body?: unknown) {
     headers: {
       origin,
       ...(cookie ? { cookie } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body as never,
   });
-  if (response.statusCode >= 400)
-    throw new Error(`${method} ${url} → ${response.statusCode} ${response.body}`);
+  if (response.statusCode >= 400) throw new Error(`${method} ${url} → ${response.statusCode} ${response.body}`);
   return response;
 }
 type Saved = { artifactId: string; revisionId: string; number: number };
@@ -257,8 +251,7 @@ try {
     name: string;
   }[];
   const folder = async (name: string) =>
-    folders.find((f) => f.name === name) ??
-    ((await call("POST", "/api/folders", { name })).json() as { id: string });
+    folders.find((f) => f.name === name) ?? ((await call("POST", "/api/folders", { name })).json() as { id: string });
   const research = await folder("Исследования");
   const team = await folder("Команда");
   // Idempotent: every step checks the shelf first, so a partial run can be resumed.
@@ -274,13 +267,9 @@ try {
     return save(title, filename, mime, bytes, extra);
   };
   {
-    const sleep = await ensure(
-      "Как устроен сон",
-      "sleep-report.html",
-      "text/html",
-      Buffer.from(sleepReport),
-      { folderId: research.id },
-    );
+    const sleep = await ensure("Как устроен сон", "sleep-report.html", "text/html", Buffer.from(sleepReport), {
+      folderId: research.id,
+    });
     // Link first, then a newer version: the shelf shows v2 while the link still opens v1.
     if (!byTitle("Как устроен сон")?.share)
       await call("POST", `/api/artifacts/${sleep.artifactId}/share`, {
@@ -288,30 +277,16 @@ try {
         expiresInDays: 7,
       });
     if (sleep.number === 1)
-      await save(
-        "Как устроен сон",
-        "sleep-report-v2.html",
-        "text/html",
-        Buffer.from(sleepReportV2),
-        { artifactId: sleep.artifactId, baseRevisionId: sleep.revisionId },
-      );
+      await save("Как устроен сон", "sleep-report-v2.html", "text/html", Buffer.from(sleepReportV2), {
+        artifactId: sleep.artifactId,
+        baseRevisionId: sleep.revisionId,
+      });
     await ensure("Бюджет поездки", "trip-budget.html", "text/html", Buffer.from(calculator));
     await ensure("План на неделю", "week-plan.html", "text/html", Buffer.from(weekPlan), {
       folderId: team.id,
     });
-    await ensure(
-      "Варианты решения",
-      "comparison.html",
-      "text/html",
-      Buffer.from(comparison),
-      { folderId: team.id },
-    );
-    await ensure(
-      "Обложка для рассылки",
-      "newsletter-cover.png",
-      "image/png",
-      gradientPng(960, 600),
-    );
+    await ensure("Варианты решения", "comparison.html", "text/html", Buffer.from(comparison), { folderId: team.id });
+    await ensure("Обложка для рассылки", "newsletter-cover.png", "image/png", gradientPng(960, 600));
     await ensure(
       "Город в деталях",
       "city-observation.jpg",
@@ -319,73 +294,60 @@ try {
       await readFile("apps/web/public/editorial-covers/city-observation.jpg"),
       { folderId: research.id },
     );
-    await ensure(
-      "Меньше пересылок. Больше контекста.",
-      "note.txt",
-      "text/plain",
-      Buffer.from(noteOne),
-    );
-    await ensure(
-      "Заметки со встречи 18 сентября",
-      "meeting-notes.txt",
-      "text/plain",
-      Buffer.from(noteTwo),
-      { folderId: team.id },
-    );
+    await ensure("Меньше пересылок. Больше контекста.", "note.txt", "text/plain", Buffer.from(noteOne));
+    await ensure("Заметки со встречи 18 сентября", "meeting-notes.txt", "text/plain", Buffer.from(noteTwo), {
+      folderId: team.id,
+    });
 
     // Single-file capture through the agent path (MCP token, capture scope).
     if (!byTitle("Отчёт команды за квартал")) {
-    const csrf = (await call("POST", "/api/agent-connections/csrf", {})).json();
-    const issued = await app.inject({
-      remoteAddress,
-      method: "POST",
-      url: "/api/agent-connections",
-      headers: { origin, cookie, "x-polka-csrf": csrf.csrfToken },
-      payload: {
-        name: "Claude Code (демо)",
-        scopes: ["context", "capture"],
-        audience: MCP_AUDIENCE,
-        ttlDays: 30,
-      },
-    });
-    if (issued.statusCode >= 400) throw new Error(issued.body);
-    const actor = await authenticateServiceToken(
-      issued.json().token,
-      MCP_AUDIENCE,
-      "capture",
-    );
-    const html = Buffer.from(teamReport);
-    await captureFromAgent(
-      actor,
-      {
-        key: randomUUID(),
-        title: "Отчёт команды за квартал",
-        folderId: team.id,
-        manifest: {
-          version: 1,
-          entrypoint: "index.html",
-          runtime: "static-sandbox-v1",
-          files: [
-            {
-              path: "index.html",
-              mime: "text/html",
-              size: html.length,
-              sha256: sha256(html),
-            },
-          ],
-          provenance: {
-            kind: "mcp",
-            sourceUrl: null,
-            capturedAt: new Date().toISOString(),
-            attribution: "Собрано агентом для владельца полки",
-            license: "unknown",
-          },
-          dependencies: { status: "self-contained", unresolved: [] },
+      const csrf = (await call("POST", "/api/agent-connections/csrf", {})).json();
+      const issued = await app.inject({
+        remoteAddress,
+        method: "POST",
+        url: "/api/agent-connections",
+        headers: { origin, cookie, "x-polka-csrf": csrf.csrfToken },
+        payload: {
+          name: "Claude Code (демо)",
+          scopes: ["context", "capture"],
+          audience: MCP_AUDIENCE,
+          ttlDays: 30,
         },
-        files: [{ path: "index.html", encoding: "utf8", data: teamReport }],
-      },
-      "capture",
-    );
+      });
+      if (issued.statusCode >= 400) throw new Error(issued.body);
+      const actor = await authenticateServiceToken(issued.json().token, MCP_AUDIENCE, "capture");
+      const html = Buffer.from(teamReport);
+      await captureFromAgent(
+        actor,
+        {
+          key: randomUUID(),
+          title: "Отчёт команды за квартал",
+          folderId: team.id,
+          manifest: {
+            version: 1,
+            entrypoint: "index.html",
+            runtime: "static-sandbox-v1",
+            files: [
+              {
+                path: "index.html",
+                mime: "text/html",
+                size: html.length,
+                sha256: sha256(html),
+              },
+            ],
+            provenance: {
+              kind: "mcp",
+              sourceUrl: null,
+              capturedAt: new Date().toISOString(),
+              attribution: "Собрано агентом для владельца полки",
+              license: "unknown",
+            },
+            dependencies: { status: "self-contained", unresolved: [] },
+          },
+          files: [{ path: "index.html", encoding: "utf8", data: teamReport }],
+        },
+        "capture",
+      );
     }
     console.log(
       `Seeded ${NAME}: 9 materials, 2 folders, 1 active link, 1 agent capture. ${created ? "New credentials" : "Credentials"}: ${CREDENTIALS}`,

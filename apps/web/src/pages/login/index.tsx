@@ -8,30 +8,14 @@ import { Wave } from "../../shared/ui/Wave.tsx";
 import { ProviderButtons } from "../../features/provider-sign-in/index.tsx";
 import "./styles.css";
 import React from "react";
-import {
-  ArrowUpRight,
-  Bookmark,
-  Bot,
-  Compass,
-  FileUp,
-  History,
-  Link2,
-  Mail,
-} from "lucide-react";
+import { ArrowUpRight, Bookmark, Bot, Compass, FileUp, History, Link2, Mail } from "lucide-react";
 import type { Account } from "../../../../../packages/contracts/index.ts";
 export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
   const capabilities = useCapabilities();
-  const emailLogin =
-    capabilities.status === "ready" &&
-    capabilities.capabilities.emailLogin !== "disabled";
-  const inviteOnly =
-    capabilities.status === "ready" &&
-    capabilities.capabilities.emailSignup === "invite";
-  const providers =
-    capabilities.status === "ready" ? capabilities.capabilities.signInProviders : [];
-  const toFileSave = safeNext(
-    new URLSearchParams(location.search).get("next"),
-  )?.startsWith("/bring#file");
+  const emailLogin = capabilities.status === "ready" && capabilities.capabilities.emailLogin !== "disabled";
+  const inviteOnly = capabilities.status === "ready" && capabilities.capabilities.emailSignup === "invite";
+  const providers = capabilities.status === "ready" ? capabilities.capabilities.signInProviders : [];
+  const toFileSave = safeNext(new URLSearchParams(location.search).get("next"))?.startsWith("/bring#file");
   return (
     <AppShell current="shelf" account={null} className="mkt-page" bare>
       <SiteHeader signedIn={false} />
@@ -45,10 +29,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
             <br />
             <em>Отправили ссылкой.</em>
           </h1>
-          <p>
-            Каждую сохранённую работу видите только вы, пока сами не поделитесь
-            ссылкой.
-          </p>
+          <p>Каждую сохранённую работу видите только вы, пока сами не поделитесь ссылкой.</p>
           <Wave compact className="login-wave" />
           <ul className="login-points">
             <li>
@@ -76,28 +57,20 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
               <div className="idp-or">или с логином и паролем</div>
             </>
           )}
-          <PasswordLoginForm
-            onLogin={onLogin}
-            submitLabel={toFileSave ? "Войти и продолжить" : "Открыть Полку"}
-          >
+          <PasswordLoginForm onLogin={onLogin} submitLabel={toFileSave ? "Войти и продолжить" : "Открыть Полку"}>
             {toFileSave && (
               <div className="login-intent" role="note">
                 <Bookmark />
                 <span>
-                  После входа вернём к <strong>сохранению файла</strong>.
-                  Выбранный до входа файл нужно будет выбрать ещё раз.
+                  После входа вернём к <strong>сохранению файла</strong>. Выбранный до входа файл нужно будет выбрать
+                  ещё раз.
                 </span>
               </div>
             )}
           </PasswordLoginForm>
           {emailLogin && (
-            <a
-              className="login-email"
-              href={`/signup?next=${encodeURIComponent(authReturnTo(location))}`}
-            >
-              <Mail />{" "}
-              {inviteOnly ? "Войти по почте" : "Войти по почте или создать свою полку"}{" "}
-              <ArrowUpRight />
+            <a className="login-email" href={`/signup?next=${encodeURIComponent(authReturnTo(location))}`}>
+              <Mail /> {inviteOnly ? "Войти по почте" : "Войти по почте или создать свою полку"} <ArrowUpRight />
             </a>
           )}
           <div className="login-else">
@@ -109,10 +82,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
             </a>
           </div>
           {!emailLogin && (
-            <small>
-              Нет логина? Попросите администратора создать аккаунт — публичной
-              регистрации здесь нет.
-            </small>
+            <small>Нет логина? Попросите администратора создать аккаунт — публичной регистрации здесь нет.</small>
           )}
         </section>
       </main>

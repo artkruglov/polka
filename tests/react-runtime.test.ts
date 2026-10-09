@@ -21,9 +21,7 @@ const mimeOf = (path: string) =>
         : "text/javascript";
 
 function fixture(sources: Record<string, string>) {
-  const bytes = new Map(
-    Object.entries(sources).map(([path, text]) => [path, Buffer.from(text)]),
-  );
+  const bytes = new Map(Object.entries(sources).map(([path, text]) => [path, Buffer.from(text)]));
   const manifest = canonicalizeManifest({
     version: 1,
     entrypoint: "index.html",
@@ -319,8 +317,14 @@ test("computed imports and import attributes are refused before esbuild can glob
   const computed = /must name a module with a plain string|require must be called directly with one plain string/;
   const attributes = /import attributes/;
   await refused('const n = ""; export default async () => (await import(`../../.env${n}`)).default;', computed);
-  await refused('const n = ""; export default async () => (await import(`../../.env${n}`, { with: { type: "text" } })).default;', attributes);
-  await refused('const n = "self/environ"; export default async () => (await import(`../../../../../../../../proc/${n}`, { with: { type: "text" } })).default;', attributes);
+  await refused(
+    'const n = ""; export default async () => (await import(`../../.env${n}`, { with: { type: "text" } })).default;',
+    attributes,
+  );
+  await refused(
+    'const n = "self/environ"; export default async () => (await import(`../../../../../../../../proc/${n}`, { with: { type: "text" } })).default;',
+    attributes,
+  );
   await refused('const n = "package"; export default () => require(`./${n}.json`);', computed);
   await refused('const n = "package"; export default () => require("../../" + n + ".json");', computed);
   await refused('const n = "x"; export default () => require.resolve(n);', computed);
@@ -328,18 +332,24 @@ test("computed imports and import attributes are refused before esbuild can glob
   await refused('import text from "./App.jsx" with { type: "text" };\nexport default () => text;', attributes);
   await refused('export * from "react" with { type: "js" };', attributes, "App.tsx");
   // A plain string, or a template without expressions, stays allowed.
-  const ok = await compile('export default async () => { const m = await import(`react`); return typeof m; };');
+  const ok = await compile("export default async () => { const m = await import(`react`); return typeof m; };");
   assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
 });
 
 test("page modules are named only through the generated entry", async () => {
-  await refused('import secret from "user:../../.env";\nexport default () => secret;', /import "user:\.\.\/\.\.\/\.env" needs the network/);
+  await refused(
+    'import secret from "user:../../.env";\nexport default () => secret;',
+    /import "user:\.\.\/\.\.\/\.env" needs the network/,
+  );
   await refused('import secret from "/etc/hosts";\nexport default () => secret;', /is not available/);
 });
 
 test("only files of allowlisted library packages and their dependencies are readable", async () => {
   const { allowedPackageDirs, isAllowedLibraryFile } = await import("../apps/server/runtime-guards.ts");
-  const dirs = allowedPackageDirs(ROOT, RUNTIME_LIBRARIES.map((library) => library.name));
+  const dirs = allowedPackageDirs(
+    ROOT,
+    RUNTIME_LIBRARIES.map((library) => library.name),
+  );
   const at = (file: string) => isAllowedLibraryFile(path.join(ROOT, file), dirs);
   assert.equal(at("node_modules/react/index.js"), true);
   assert.equal(at("node_modules/d3-array/src/index.js"), true); // a resolved d3 dependency
@@ -377,7 +387,8 @@ export default () => <svg>${'<path d="M0 0" fill="red" stroke="blue" />'.repeat(
 
 test("a runtime page is limited in source files and size", async () => {
   const many: Record<string, string> = { "index.html": componentShell("App", "App.jsx") };
-  many["App.jsx"] = `${Array.from({ length: 32 }, (_, index) => `import { v${index} } from "./lib/m${index}.js";`).join("\n")}\nexport default () => v0;`;
+  many["App.jsx"] =
+    `${Array.from({ length: 32 }, (_, index) => `import { v${index} } from "./lib/m${index}.js";`).join("\n")}\nexport default () => v0;`;
   for (let index = 0; index < 32; index++) many[`lib/m${index}.js`] = `export const v${index} = ${index};`;
   const tooMany = fixture(many);
   const result = await buildDerivative(tooMany.manifest, tooMany.bytes);
@@ -431,7 +442,7 @@ test("require is usable only as a direct call with one plain string", async () =
     'const x = "a"; export default () => require.call(null, x);',
     'const x = "a"; export default () => (0, require)(x);',
     'const x = "a"; export default () => [require][0](x);',
-    'export default () => typeof require;',
+    "export default () => typeof require;",
     'export default () => require("react", "x");',
   ])
     await refused(source, plain);
@@ -439,10 +450,10 @@ test("require is usable only as a direct call with one plain string", async () =
   const ok = await compile('const React = require("react");\nexport default () => React.version;');
   assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
   // An object key named require is not a reference.
-  const key = await compile('const o = { require: 1 };\nexport default () => o.require;');
+  const key = await compile("const o = { require: 1 };\nexport default () => o.require;");
   assert.equal(key.ok, false);
   if (!key.ok) assert.match(key.reason, plain); // o.require is a member named require
-  const literal = await compile('const o = { require: 1 };\nexport default () => o.value;');
+  const literal = await compile("const o = { require: 1 };\nexport default () => o.value;");
   assert.equal(literal.ok, true, literal.ok ? "" : literal.reason);
 });
 
@@ -476,7 +487,9 @@ test("keyword, statement and label nesting counts toward the pre-filter", async 
   await refused(`let a; export function f() { ${"while (a) ".repeat(1200)}a++; }\nexport default () => null;`, deep);
   await refused(`export function f() { ${"x: ".repeat(1200)}return 1; }\nexport default () => null;`, deep);
   // Prose in JSX mentions these words often; tags keep the count local.
-  const prose = Array.from({ length: 600 }, () => "<p>If you do this for a new user, wait while it loads.</p>").join("");
+  const prose = Array.from({ length: 600 }, () => "<p>If you do this for a new user, wait while it loads.</p>").join(
+    "",
+  );
   const ok = await compile(`export default () => <main>${prose}</main>;`);
   assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
 });
@@ -535,7 +548,9 @@ const C = 1 +* 2;
   if (result.ok) return;
   assert.equal(result.path, "index.html");
   assert.match(result.reason, /\(index\.html:8\)$/);
-  const module = await page(`<!doctype html><html><body>\n<script type="module">\nimport x from "left-pad";\n</script></body></html>`);
+  const module = await page(
+    `<!doctype html><html><body>\n<script type="module">\nimport x from "left-pad";\n</script></body></html>`,
+  );
   assert.equal(module.ok, false);
   if (!module.ok) {
     assert.equal(module.path, "index.html");
@@ -553,8 +568,14 @@ import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 export default () => <p>{typeof createRoot}{typeof debounce}{typeof OrbitControls}{THREE.REVISION}<Camera/>{String(useState)}</p>;`);
   assert.equal(result.ok, true, result.ok ? "" : result.reason);
   if (result.ok) assert.doesNotMatch(result.html.toString("utf8"), /esm\.sh|skypack|jsdelivr|unpkg/);
-  await refused(`import confetti from "https://esm.sh/canvas-confetti"; export default () => null;`, /needs the network/);
-  await refused(`import x from "https://esm.sh/react@18/cjs/react.development.js"; export default () => null;`, /needs the network/);
+  await refused(
+    `import confetti from "https://esm.sh/canvas-confetti"; export default () => null;`,
+    /needs the network/,
+  );
+  await refused(
+    `import x from "https://esm.sh/react@18/cjs/react.development.js"; export default () => null;`,
+    /needs the network/,
+  );
 });
 
 test("three.js example scripts from a CDN become THREE members or refuse by name", async () => {
@@ -568,7 +589,8 @@ test("three.js example scripts from a CDN become THREE members or refuse by name
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/NoSuchAddon.js"></script></body></html>`);
   assert.equal(missing.ok, false);
-  if (!missing.ok) assert.match(missing.reason, /three\.js example examples\/js\/NoSuchAddon\.js is not part of the runtime/);
+  if (!missing.ok)
+    assert.match(missing.reason, /three\.js example examples\/js\/NoSuchAddon\.js is not part of the runtime/);
 });
 
 test("an inline Tailwind v3 config is applied and v3 borders keep their gray", async () => {

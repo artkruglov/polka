@@ -25,8 +25,7 @@ const ports = {
   PORT: port("PORT", "4390"),
   VIEWER_PORT: port("VIEWER_PORT", "4391"),
 };
-if (new Set(Object.values(ports)).size !== 4)
-  throw new Error("The four local ports must differ");
+if (new Set(Object.values(ports)).size !== 4) throw new Error("The four local ports must differ");
 
 const password = randomBytes(24).toString("hex");
 const storage = randomBytes(24).toString("hex");

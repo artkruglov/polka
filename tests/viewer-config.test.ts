@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  isLiveRevisionEligible,
-  parseViewerConfig,
-  type ViewerConfigInput,
-} from "../apps/server/viewer-config.ts";
+import { isLiveRevisionEligible, parseViewerConfig, type ViewerConfigInput } from "../apps/server/viewer-config.ts";
 
 const allowed = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
@@ -85,10 +81,7 @@ test("local mode retains opposite loopback origins and matching public ports", (
       }),
     /opposite loopback/,
   );
-  assert.throws(
-    () => parseViewerConfig({ ...base, HTML_LIVE_MODE: "local", PORT: 4400 }),
-    /port must match/,
-  );
+  assert.throws(() => parseViewerConfig({ ...base, HTML_LIVE_MODE: "local", PORT: 4400 }), /port must match/);
 });
 
 test("staging requires canonical HTTPS origins on distinct PSL domains", () => {
@@ -103,10 +96,7 @@ test("staging requires canonical HTTPS origins on distinct PSL domains", () => {
     { APP_ORIGIN: "https://app.example.com/path" },
   ])
     assert.throws(() => staging(patch), /canonical HTTPS/);
-  assert.throws(
-    () => staging({ VIEWER_ORIGIN: "https://viewer.example.com" }),
-    /different registrable domains/,
-  );
+  assert.throws(() => staging({ VIEWER_ORIGIN: "https://viewer.example.com" }), /different registrable domains/);
   assert.throws(() => staging({ COOKIE_SECURE: "false" }), /secure cookies/);
   assert.throws(() => staging({ HOST: "0.0.0.0" }), /bind to loopback/);
   assert.throws(() => staging({ VIEWER_PORT: 4390 }), /different ports/);
@@ -131,25 +121,15 @@ test("private PSL suffixes do not collapse to a last-two-label heuristic", () =>
 });
 
 test("staging allowlist is required, bounded, unique and revision-specific", () => {
-  assert.throws(
-    () => staging({ HTML_LIVE_STAGING_REVISION_IDS: "" }),
-    /non-empty/,
-  );
-  assert.throws(
-    () => staging({ HTML_LIVE_STAGING_REVISION_IDS: "not-a-uuid" }),
-    /invalid UUID/,
-  );
-  assert.throws(
-    () => staging({ HTML_LIVE_STAGING_REVISION_IDS: `${allowed},${allowed}` }),
-    /duplicates/,
-  );
+  assert.throws(() => staging({ HTML_LIVE_STAGING_REVISION_IDS: "" }), /non-empty/);
+  assert.throws(() => staging({ HTML_LIVE_STAGING_REVISION_IDS: "not-a-uuid" }), /invalid UUID/);
+  assert.throws(() => staging({ HTML_LIVE_STAGING_REVISION_IDS: `${allowed},${allowed}` }), /duplicates/);
   assert.throws(
     () =>
       staging({
         HTML_LIVE_STAGING_REVISION_IDS: Array.from(
           { length: 101 },
-          (_, index) =>
-            `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         ).join(","),
       }),
     /limited to 100/,
@@ -168,10 +148,7 @@ test("staging allowlist is required, bounded, unique and revision-specific", () 
   });
   assert.equal(isLiveRevisionEligible(viewer, allowed), true);
   assert.equal(isLiveRevisionEligible(viewer, other), true);
-  assert.equal(
-    isLiveRevisionEligible(viewer, "33333333-3333-4333-8333-333333333333"),
-    false,
-  );
+  assert.equal(isLiveRevisionEligible(viewer, "33333333-3333-4333-8333-333333333333"), false);
   assert.ok(Object.isFrozen(viewer.HTML_LIVE_STAGING_REVISION_IDS));
 });
 
@@ -195,10 +172,7 @@ test("production serves every eligible revision behind the staging delivery chec
   assert.deepEqual(viewer.HTML_LIVE_STAGING_REVISION_IDS, []);
   assert.equal(isLiveRevisionEligible(viewer, allowed), true);
   assert.equal(isLiveRevisionEligible(viewer, other.toUpperCase()), true);
-  assert.equal(
-    isLiveRevisionEligible(parseViewerConfig(base), allowed),
-    false,
-  );
+  assert.equal(isLiveRevisionEligible(parseViewerConfig(base), allowed), false);
 
   for (const patch of [
     { APP_ORIGIN: "http://polochka.app" },
@@ -218,27 +192,16 @@ test("production serves every eligible revision behind the staging delivery chec
   ])
     assert.throws(() => production(patch), /different registrable domains/);
   assert.throws(() => production({ COOKIE_SECURE: "false" }), /secure cookies/);
-  for (const patch of [
-    { HOST: "0.0.0.0" },
-    { VIEWER_HOST: "0.0.0.0" },
-    { VIEWER_HOST: "172.28.0.5" },
-    { HOST: "::" },
-  ])
+  for (const patch of [{ HOST: "0.0.0.0" }, { VIEWER_HOST: "0.0.0.0" }, { VIEWER_HOST: "172.28.0.5" }, { HOST: "::" }])
     assert.throws(() => production(patch), /bind to loopback/);
   assert.throws(() => production({ VIEWER_PORT: 4390 }), /different ports/);
 });
 
 test("production is explicit and never takes a staging allowlist or legacy flag", () => {
-  assert.throws(
-    () => production({ HTML_LIVE_STAGING_REVISION_IDS: allowed }),
-    /only valid in staging/,
-  );
+  assert.throws(() => production({ HTML_LIVE_STAGING_REVISION_IDS: allowed }), /only valid in staging/);
   assert.throws(() => production({ HTML_LIVE_ENABLED: "true" }), /conflicts/);
   assert.throws(() => production({ HTML_LIVE_ENABLED: "false" }), /conflicts/);
-  assert.throws(
-    () => parseViewerConfig({ ...base, HTML_LIVE_MODE: "prod" }),
-    /disabled, local, staging or production/,
-  );
+  assert.throws(() => parseViewerConfig({ ...base, HTML_LIVE_MODE: "prod" }), /disabled, local, staging or production/);
   // A plain HTTPS deployment without an explicit mode stays static-only.
   assert.equal(
     parseViewerConfig({

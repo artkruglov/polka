@@ -16,8 +16,7 @@ import { resolveProjectPath } from "../apps/server/project-markdown.ts";
 import { VIEWER_GUARD } from "../apps/server/html.ts";
 import { withProjectScripts } from "../apps/server/project-viewer.ts";
 
-if (!config.HTML_LIVE_ENABLED)
-  throw new Error("Run project-viewer.test.ts with HTML_LIVE_ENABLED=true");
+if (!config.HTML_LIVE_ENABLED) throw new Error("Run project-viewer.test.ts with HTML_LIVE_ENABLED=true");
 
 // A revoke or a trashed work closes a view at once in these tests; the cache
 // that lets it take up to VIEWER_AUTH_CACHE_SECONDS has its own test below.
@@ -36,9 +35,17 @@ const PNG = Buffer.from(
   "hex",
 );
 const files = [
-  ["README.md", "text/markdown", "# Исследование\n\nСм. `02-users/stories.md`, [экраны](screens/) и `05-old/gone.md`.\n\n<script>alert(1)</script>\n\n[внешняя](https://example.com/a) · [плохая](javascript:alert(1))\n\n![скрин](screens/shot.png)\n"],
+  [
+    "README.md",
+    "text/markdown",
+    "# Исследование\n\nСм. `02-users/stories.md`, [экраны](screens/) и `05-old/gone.md`.\n\n<script>alert(1)</script>\n\n[внешняя](https://example.com/a) · [плохая](javascript:alert(1))\n\n![скрин](screens/shot.png)\n",
+  ],
   ["02-users/stories.md", "text/markdown", "# Истории\n\nНазад: `README.md`.\n"],
-  ["screens/index.html", "text/html", '<!doctype html><html><head><title>Экраны</title><link rel="stylesheet" href="shared/ui.css"></head><body><h1>Экраны</h1><a href="../README.md">назад</a><a href="https://example.com/b">наружу</a><script>document.body.dataset.ok="1"</script></body></html>'],
+  [
+    "screens/index.html",
+    "text/html",
+    '<!doctype html><html><head><title>Экраны</title><link rel="stylesheet" href="shared/ui.css"></head><body><h1>Экраны</h1><a href="../README.md">назад</a><a href="https://example.com/b">наружу</a><script>document.body.dataset.ok="1"</script></body></html>',
+  ],
   ["screens/shared/ui.css", "text/css", "h1{color:red}"],
   ["screens/shot.png", "image/png", PNG],
 ] as const;
@@ -79,7 +86,11 @@ before(async () => {
      VALUES($1,$2,$3,$4,'viewer',$5,$6,now()+interval '1 day')`,
     [randomUUID(), owner.tenant, owner.id, sha256(secret), ["capture"], MCP_AUDIENCE],
   );
-  const bodies = files.map(([path, mime, data]) => ({ path, mime, bytes: Buffer.isBuffer(data) ? data : Buffer.from(data) }));
+  const bodies = files.map(([path, mime, data]) => ({
+    path,
+    mime,
+    bytes: Buffer.isBuffer(data) ? data : Buffer.from(data),
+  }));
   const auth = { authorization: `Bearer ${secret}` };
   const begun = await app.inject({
     method: "POST",
@@ -92,8 +103,19 @@ before(async () => {
         version: 1,
         entrypoint: "README.md",
         runtime: "project-v1",
-        files: bodies.map((f) => ({ path: f.path, mime: f.mime, size: f.bytes.length, sha256: createHash("sha256").update(f.bytes).digest("hex") })),
-        provenance: { kind: "file", sourceUrl: null, capturedAt: new Date().toISOString(), attribution: "unknown", license: "unknown" },
+        files: bodies.map((f) => ({
+          path: f.path,
+          mime: f.mime,
+          size: f.bytes.length,
+          sha256: createHash("sha256").update(f.bytes).digest("hex"),
+        })),
+        provenance: {
+          kind: "file",
+          sourceUrl: null,
+          capturedAt: new Date().toISOString(),
+          attribution: "unknown",
+          license: "unknown",
+        },
         dependencies: { status: "unknown", unresolved: [] },
       },
     }),
@@ -167,7 +189,9 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   // Полка's scripts come first, the WebRTC guard before nav.js, right after
   // the doctype: no script of the page runs before them.
   assert.ok(
-    page.body.startsWith(`<!doctype html>${VIEWER_GUARD}<script src="${url}__polka/nav.js"></script><html><head><title>`),
+    page.body.startsWith(
+      `<!doctype html>${VIEWER_GUARD}<script src="${url}__polka/nav.js"></script><html><head><title>`,
+    ),
     page.body.slice(0, 200),
   );
   assert.equal(page.body.split(VIEWER_GUARD).length, 2);
@@ -232,7 +256,11 @@ test("the view ends with the session and with the trash", async () => {
   await db.query("UPDATE artifacts SET trashed_at=now() WHERE id=$1", [saved.artifactId]);
   try {
     assert.equal((await view(url)).statusCode, 404);
-    const refused = await app.inject({ method: "POST", url: `/api/revisions/${saved.revisionId}/project-view`, headers: { origin, cookie } });
+    const refused = await app.inject({
+      method: "POST",
+      url: `/api/revisions/${saved.revisionId}/project-view`,
+      headers: { origin, cookie },
+    });
     assert.equal(refused.statusCode, 404);
   } finally {
     await db.query("UPDATE artifacts SET trashed_at=NULL WHERE id=$1", [saved.artifactId]);
@@ -312,7 +340,12 @@ test("a checked view is kept for a few seconds and a file answers 304 to its ETa
     const again = await viewer.inject({
       method: "GET",
       url: new URL(url + "screens/shared/ui.css").pathname,
-      headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "style", "sec-fetch-mode": "no-cors", "if-none-match": tag },
+      headers: {
+        host: config.VIEWER_UPSTREAM_HOST,
+        "sec-fetch-dest": "style",
+        "sec-fetch-mode": "no-cors",
+        "if-none-match": tag,
+      },
     });
     assert.equal(again.statusCode, 304);
     assert.equal(again.body, "");

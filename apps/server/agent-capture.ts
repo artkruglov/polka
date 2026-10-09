@@ -7,10 +7,7 @@ import { z } from "zod";
 import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
 import { MAX_TITLE, uuid } from "../../packages/contracts/index.ts";
 import { Problem, missing } from "./errors.ts";
-import {
-  withServiceActorTransaction,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import {
   beginBundleUploadInTransaction,
   uploadBundleFileInTransaction,
@@ -77,31 +74,17 @@ export const CAPTURE_EXAMPLE = {
   files: [{ path: "index.html", encoding: "utf8", data: EXAMPLE_HTML }],
 } as const;
 
-export function validateAgentCapture(
-  body: unknown,
-  mode: "capture" | "revise",
-) {
+export function validateAgentCapture(body: unknown, mode: "capture" | "revise") {
   const input = captureSchema.parse(body);
-  if (
-    mode === "capture"
-      ? !!(input.artifactId || input.baseRevisionId)
-      : !(input.artifactId && input.baseRevisionId)
-  )
+  if (mode === "capture" ? !!(input.artifactId || input.baseRevisionId) : !(input.artifactId && input.baseRevisionId))
     throw new Problem(400, "invalid", "Укажите корректную область сохранения.");
   const manifest = canonicalizeManifest(input.manifest);
-  if (
-    input.files.reduce((sum, file) => sum + Buffer.byteLength(file.data), 0) >
-    8 * 1024 * 1024
-  )
+  if (input.files.reduce((sum, file) => sum + Buffer.byteLength(file.data), 0) > 8 * 1024 * 1024)
     throw new Problem(413, "quota", "Пакет превышает лимит передачи.");
   const source = new Map<string, Buffer>();
   for (const file of input.files) {
-    if (source.has(file.path))
-      throw new Problem(400, "invalid", "Файл указан повторно.");
-    const bytes = Buffer.from(
-      file.data,
-      file.encoding === "utf8" ? "utf8" : "base64",
-    );
+    if (source.has(file.path)) throw new Problem(400, "invalid", "Файл указан повторно.");
+    const bytes = Buffer.from(file.data, file.encoding === "utf8" ? "utf8" : "base64");
     if (file.encoding === "utf8" && bytes.toString("utf8") !== file.data)
       throw new Problem(400, "invalid", "Некорректный UTF-8.");
     if (file.encoding === "base64" && bytes.toString("base64") !== file.data)
@@ -165,8 +148,7 @@ export async function saveBundle(
       }
     : (actor as Actor);
   // Browser actors must never impersonate a service connection.
-  if (!service && owner.connectionId)
-    throw new Problem(403, "forbidden", "Некорректная область сохранения.");
+  if (!service && owner.connectionId) throw new Problem(403, "forbidden", "Некорректная область сохранения.");
   const run = <T>(operation: (c: PoolClient) => Promise<T>) => {
     const guarded = async (c: PoolClient) => {
       await hooks.beforeStep?.(c);
@@ -181,17 +163,13 @@ export async function saveBundle(
   };
   const begun = await run(async (c) => {
     const old = (
-      await c.query(
-        "SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-        [owner.tenant, input.key],
-      )
+      await c.query("SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [
+        owner.tenant,
+        input.key,
+      ])
     ).rows[0];
     if (old && old.connection_id !== (owner.connectionId ?? null))
-      throw new Problem(
-        409,
-        "conflict",
-        "Ключ уже относится к другой операции.",
-      );
+      throw new Problem(409, "conflict", "Ключ уже относится к другой операции.");
     const result = await beginBundleUploadInTransaction(
       c,
       owner,
@@ -208,10 +186,11 @@ export async function saveBundle(
           : {}),
       }),
     );
-    await c.query(
-      "UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3",
-      [result.uploadId, owner.connectionId ?? null, owner.tenant],
-    );
+    await c.query("UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3", [
+      result.uploadId,
+      owner.connectionId ?? null,
+      owner.tenant,
+    ]);
     return result;
   });
   // Bytes go to S3 and the files are read back for finalize outside the
@@ -233,19 +212,8 @@ export async function saveBundle(
       ).rows[0];
       if (!row) throw missing();
       if (!!row.request.artifactId !== (mode === "revise"))
-        throw new Problem(
-          403,
-          "forbidden",
-          "Неверное разрешение для операции.",
-        );
-      await uploadBundleFileInTransaction(
-        c,
-        owner,
-        begun.uploadId,
-        index,
-        bytes,
-        staged,
-      );
+        throw new Problem(403, "forbidden", "Неверное разрешение для операции.");
+      await uploadBundleFileInTransaction(c, owner, begun.uploadId, index, bytes, staged);
     });
   }
   const prepared = await prepareBundleFinalize(owner, begun.uploadId);
@@ -259,12 +227,7 @@ export async function saveBundle(
     if (!row) throw missing();
     if (!!row.request.artifactId !== (mode === "revise"))
       throw new Problem(403, "forbidden", "Неверное разрешение для операции.");
-    const receipt = await finalizeBundleUploadInTransaction(
-      c,
-      owner,
-      begun.uploadId,
-      prepared,
-    );
+    const receipt = await finalizeBundleUploadInTransaction(c, owner, begun.uploadId, prepared);
     await hooks.afterSave?.(c, receipt);
     return receipt;
   });
@@ -280,18 +243,11 @@ export function captureFromAgent(
 }
 
 /** Shared persistence for browser URL jobs; auth is rechecked at every step. */
-export function captureForOwner(
-  actor: Actor,
-  body: unknown,
-  hooks: CaptureHooks = {},
-) {
+export function captureForOwner(actor: Actor, body: unknown, hooks: CaptureHooks = {}) {
   return capturePrepared(actor, body, "capture", hooks);
 }
 
-export async function statusForAgent(
-  actor: ServiceActor,
-  query: { uploadId?: string; key?: string },
-) {
+export async function statusForAgent(actor: ServiceActor, query: { uploadId?: string; key?: string }) {
   const input = z
     .object({ uploadId: uuid.optional(), key: uuid.optional() })
     .strict()
@@ -311,22 +267,13 @@ export async function statusForAgent(
          WHERE upload.tenant_id=$1 AND upload.connection_id=$2
            AND ($3::uuid IS NULL OR upload.id=$3)
            AND ($4::uuid IS NULL OR upload.idempotency_key=$4)`,
-        [
-          actor.tenantId,
-          actor.connectionId,
-          input.uploadId ?? null,
-          input.key ?? null,
-        ],
+        [actor.tenantId, actor.connectionId, input.uploadId ?? null, input.key ?? null],
       )
     ).rows[0];
     if (!row) throw missing();
     const preview =
       row.receipt?.revisionId && row.artifact_state === "active"
-        ? await previewStatusInTransaction(
-            c,
-            actor.tenantId,
-            uuid.parse(row.receipt.revisionId),
-          )
+        ? await previewStatusInTransaction(c, actor.tenantId, uuid.parse(row.receipt.revisionId))
         : null;
     return {
       uploadId: row.id,

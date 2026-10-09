@@ -26,12 +26,18 @@ type LibraryPreviewTemplate = Template & { libraryId: string; publicationId: str
 
 function formatLabel(mime: string | undefined) {
   switch (mime) {
-    case "text/html": return "HTML";
-    case "text/plain": return "Текст";
-    case "image/png": return "PNG";
-    case "image/jpeg": return "JPEG";
-    case "image/webp": return "WebP";
-    default: return "Неизвестный формат";
+    case "text/html":
+      return "HTML";
+    case "text/plain":
+      return "Текст";
+    case "image/png":
+      return "PNG";
+    case "image/jpeg":
+      return "JPEG";
+    case "image/webp":
+      return "WebP";
+    default:
+      return "Неизвестный формат";
   }
 }
 
@@ -55,7 +61,9 @@ export function Templates() {
     [librariesLoading, setLibrariesLoading] = useState(false),
     [libraryError, setLibraryError] = useState(""),
     [libraryAttempt, setLibraryAttempt] = useState(0);
-  const [personalReleases, setPersonalReleases] = useState<Template[]>([]), [personalError, setPersonalError] = useState(""), [personalAttempt, setPersonalAttempt] = useState(0);
+  const [personalReleases, setPersonalReleases] = useState<Template[]>([]),
+    [personalError, setPersonalError] = useState(""),
+    [personalAttempt, setPersonalAttempt] = useState(0);
   useEffect(() => {
     if (!account) {
       setLibraries([]);
@@ -82,7 +90,9 @@ export function Templates() {
         }
       })
       .finally(() => live && setLibrariesLoading(false));
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [account?.id, libraryAttempt]);
   useEffect(() => {
     let live = true;
@@ -94,7 +104,9 @@ export function Templates() {
     setHasMore(false);
     const validLibrary = !libraryId || libraries.some((library) => library.id === libraryId);
     if (account && validLibrary && !libraryError)
-      request<{ items: Template[]; hasMore: boolean }>(`/templates?${new URLSearchParams({ query, includePrevious: String(includePrevious), ...(libraryId ? { libraryId } : {}) })}`)
+      request<{ items: Template[]; hasMore: boolean }>(
+        `/templates?${new URLSearchParams({ query, includePrevious: String(includePrevious), ...(libraryId ? { libraryId } : {}) })}`,
+      )
         .then((x) => {
           if (live) {
             setItems(x.items);
@@ -119,13 +131,22 @@ export function Templates() {
     request<{ items: Template[] }>("/templates?" + new URLSearchParams({ includePrevious: "true" }))
       .then((result) => live && setPersonalReleases(result.items))
       .catch((e) => live && setPersonalError(e instanceof Error ? e.message : "Не удалось загрузить личные выпуски."));
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [account?.id, libraryId, personalAttempt]);
   function selectLibrary(value: string) {
     setLibraryId(value);
-    setItems([]); setSelected(null); setPreview(null); setLoaded(false); setError(""); setLibraryError(""); setHasMore(false);
+    setItems([]);
+    setSelected(null);
+    setPreview(null);
+    setLoaded(false);
+    setError("");
+    setLibraryError("");
+    setHasMore(false);
     const params = new URLSearchParams(location.search);
-    if (value) params.set("libraryId", value); else params.delete("libraryId");
+    if (value) params.set("libraryId", value);
+    else params.delete("libraryId");
     const search = params.toString();
     history.replaceState(null, "", `${location.pathname}${search ? `?${search}` : ""}`);
   }
@@ -150,65 +171,123 @@ export function Templates() {
           )}
         </header>
         {account && (
-          <form className="templates-toolbar" onSubmit={(event) => {
-            event.preventDefault(); setQuery(draftQuery.trim());
-          }}>
+          <form
+            className="templates-toolbar"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setQuery(draftQuery.trim());
+            }}
+          >
             <label className="ui-search templates-search">
               <Search aria-hidden="true" />
-              <input type="search" aria-label="Найти шаблон" value={draftQuery}
-                onChange={(event) => setDraftQuery(event.target.value)} maxLength={200}
-                placeholder="Найти шаблон" />
+              <input
+                type="search"
+                aria-label="Найти шаблон"
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                maxLength={200}
+                placeholder="Найти шаблон"
+              />
             </label>
             {(librariesLoading || libraries.length > 0) && (
               <Segmented label="Каталог шаблонов" value={libraryId} onChange={selectLibrary} options={scopes} wide />
             )}
             <label className="templates-history">
-              <input type="checkbox" checked={includePrevious}
-                onChange={(event) => setIncludePrevious(event.target.checked)} />
+              <input
+                type="checkbox"
+                checked={includePrevious}
+                onChange={(event) => setIncludePrevious(event.target.checked)}
+              />
               Предыдущие выпуски
             </label>
-            <button type="submit" className="sr-only">Найти</button>
+            <button type="submit" className="sr-only">
+              Найти
+            </button>
           </form>
         )}
         {account && (
           <div className="templates-libraries">
-            <CreateLibrary key={account.id} accountId={account.id} onCreated={(library) => {
-              setLibraries((current) => [library, ...current]);
-              selectLibrary(library.id);
-            }} />
-            <span className="fine">Общая библиотека показывает опубликованные версии, доступные вашей команде. По умолчанию — последний закреплённый выпуск каждого шаблона.</span>
+            <CreateLibrary
+              key={account.id}
+              accountId={account.id}
+              onCreated={(library) => {
+                setLibraries((current) => [library, ...current]);
+                selectLibrary(library.id);
+              }}
+            />
+            <span className="fine">
+              Общая библиотека показывает опубликованные версии, доступные вашей команде. По умолчанию — последний
+              закреплённый выпуск каждого шаблона.
+            </span>
           </div>
         )}
-        {account && selectedLibrary && <TemplateLibraryManagement
-          key={`${account.id}:${selectedLibrary.id}`}
-          library={selectedLibrary}
-          account={account}
-          personalReleases={personalReleases}
-          onRefreshCatalog={() => setAttempt((value) => value + 1)}
-          onRefreshLibraries={() => setLibraryAttempt((value) => value + 1)}
-        />}
-        {account && selectedLibrary && personalError && <div><ErrorNotice error={personalError} /><Button onClick={() => setPersonalAttempt((value) => value + 1)}>Повторить загрузку личных выпусков</Button></div>}
+        {account && selectedLibrary && (
+          <TemplateLibraryManagement
+            key={`${account.id}:${selectedLibrary.id}`}
+            library={selectedLibrary}
+            account={account}
+            personalReleases={personalReleases}
+            onRefreshCatalog={() => setAttempt((value) => value + 1)}
+            onRefreshLibraries={() => setLibraryAttempt((value) => value + 1)}
+          />
+        )}
+        {account && selectedLibrary && personalError && (
+          <div>
+            <ErrorNotice error={personalError} />
+            <Button onClick={() => setPersonalAttempt((value) => value + 1)}>Повторить загрузку личных выпусков</Button>
+          </div>
+        )}
         {account === null ? (
-          <EmptyState title="Шаблоны живут на вашей полке" action={<LinkButton variant="primary" href="/?login=1&next=%2Ftemplates">Войти в Полку</LinkButton>}>
+          <EmptyState
+            title="Шаблоны живут на вашей полке"
+            action={
+              <LinkButton variant="primary" href="/?login=1&next=%2Ftemplates">
+                Войти в Полку
+              </LinkButton>
+            }
+          >
             Оформление, структура и правила — для следующей задачи в вашем агенте.
           </EmptyState>
         ) : libraryError ? (
-          <div><ErrorNotice error={libraryError} /><Button onClick={() => setLibraryAttempt((value) => value + 1)}>Повторить загрузку библиотек</Button></div>
+          <div>
+            <ErrorNotice error={libraryError} />
+            <Button onClick={() => setLibraryAttempt((value) => value + 1)}>Повторить загрузку библиотек</Button>
+          </div>
         ) : error ? (
           <div>
             <ErrorNotice error={error} />
-            <Button onClick={() => { setError(""); setLoaded(false); setAttempt((value) => value + 1); }}>
+            <Button
+              onClick={() => {
+                setError("");
+                setLoaded(false);
+                setAttempt((value) => value + 1);
+              }}
+            >
               Повторить загрузку
             </Button>
           </div>
         ) : !loaded ? (
           <div className="templates-grid" role="status" aria-label="Загружаем шаблоны…">
-            {[0, 1, 2].map((i) => <div key={i} className="template-card"><div className="template-cover placeholder" /></div>)}
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="template-card">
+                <div className="template-cover placeholder" />
+              </div>
+            ))}
           </div>
         ) : items.length === 0 && query ? (
-          <EmptyState title="Подходящих шаблонов не найдено" action={<Button onClick={() => {
-            setDraftQuery(""); setQuery("");
-          }}>Сбросить поиск</Button>}>
+          <EmptyState
+            title="Подходящих шаблонов не найдено"
+            action={
+              <Button
+                onClick={() => {
+                  setDraftQuery("");
+                  setQuery("");
+                }}
+              >
+                Сбросить поиск
+              </Button>
+            }
+          >
             Попробуйте название работы или её назначение. Для старых выпусков включите показ предыдущих версий.
           </EmptyState>
         ) : items.length === 0 && libraryId ? (
@@ -218,23 +297,44 @@ export function Templates() {
         ) : items.length === 0 ? (
           <EmptyState
             title="Сохраните первый шаблон"
-            action={<LinkButton variant="primary" href="/"><Sparkles /> Открыть мою полку</LinkButton>}
+            action={
+              <LinkButton variant="primary" href="/">
+                <Sparkles /> Открыть мою полку
+              </LinkButton>
+            }
           >
-            Откройте работу → «Скопировать для агента» → «Сохранить эту версию
-            как шаблон». Исходники и правила останутся вместе.
+            Откройте работу → «Скопировать для агента» → «Сохранить эту версию как шаблон». Исходники и правила
+            останутся вместе.
           </EmptyState>
         ) : (
           <div className="templates-grid">
             {items.map((t) => (
-              <article className="template-card" key={t.releaseId} data-selected={selected?.releaseId === t.releaseId || undefined}>
-                <button type="button" className="template-cover" onClick={() => setSelected(t)} aria-label={`Открыть контекст: ${t.title}`}>
-                  <TextCover id={t.artifactId} title={t.title} eyebrow={`Шаблон · ${formatLabel(t.mime)}`} note={`v${t.revisionNumber}`} />
+              <article
+                className="template-card"
+                key={t.releaseId}
+                data-selected={selected?.releaseId === t.releaseId || undefined}
+              >
+                <button
+                  type="button"
+                  className="template-cover"
+                  onClick={() => setSelected(t)}
+                  aria-label={`Открыть контекст: ${t.title}`}
+                >
+                  <TextCover
+                    id={t.artifactId}
+                    title={t.title}
+                    eyebrow={`Шаблон · ${formatLabel(t.mime)}`}
+                    note={`v${t.revisionNumber}`}
+                  />
                 </button>
                 <div className="template-card-body">
                   <h2>{t.title}</h2>
                   <p>{t.summary}</p>
                   <div className="template-card-meta">
-                    <Badge tone={t.isLatest ? "accent" : "neutral"}>v{t.revisionNumber}{t.isLatest ? "" : " · предыдущий"}</Badge>
+                    <Badge tone={t.isLatest ? "accent" : "neutral"}>
+                      v{t.revisionNumber}
+                      {t.isLatest ? "" : " · предыдущий"}
+                    </Badge>
                     <span>{formatLabel(t.mime)}</span>
                   </div>
                 </div>
@@ -242,15 +342,29 @@ export function Templates() {
                   <Button variant="primary" onClick={() => setSelected(t)}>
                     <Sparkles /> Для агента
                   </Button>
-                  {isHtmlTemplate(t) && libraryId && t.publicationId ? <Button variant="quiet" onClick={() => openPreview(t)}><Eye /> Предпросмотр</Button> :
-                    isHtmlTemplate(t) ? <LinkButton variant="quiet" href={savedWorkHref(t.artifactId, `?revision=${t.revisionId}`)}>Работа <ArrowUpRight /></LinkButton> :
-                      <Button variant="quiet" onClick={() => setSelected(t)}><FileCode2 /> Исходники</Button>}
+                  {isHtmlTemplate(t) && libraryId && t.publicationId ? (
+                    <Button variant="quiet" onClick={() => openPreview(t)}>
+                      <Eye /> Предпросмотр
+                    </Button>
+                  ) : isHtmlTemplate(t) ? (
+                    <LinkButton variant="quiet" href={savedWorkHref(t.artifactId, `?revision=${t.revisionId}`)}>
+                      Работа <ArrowUpRight />
+                    </LinkButton>
+                  ) : (
+                    <Button variant="quiet" onClick={() => setSelected(t)}>
+                      <FileCode2 /> Исходники
+                    </Button>
+                  )}
                 </div>
               </article>
             ))}
           </div>
         )}
-        {loaded && hasMore && <p className="fine templates-more" role="status">Показаны первые 100 совпадений. Уточните поиск по названию или назначению.</p>}
+        {loaded && hasMore && (
+          <p className="fine templates-more" role="status">
+            Показаны первые 100 совпадений. Уточните поиск по названию или назначению.
+          </p>
+        )}
       </main>
       {selected && (
         <AgentContextPanel

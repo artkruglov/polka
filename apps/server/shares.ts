@@ -4,31 +4,14 @@ import { checkLinkIssue, emitEvent } from "./extensions.ts";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
-import {
-  publishSchema,
-  shareSchema,
-  uuid,
-} from "../../packages/contracts/index.ts";
-import {
-  assertLinkable,
-  audit,
-  getArtifact,
-  tokenFor,
-  type Actor,
-} from "./artifacts.ts";
+import { publishSchema, shareSchema, uuid } from "../../packages/contracts/index.ts";
+import { assertLinkable, audit, getArtifact, tokenFor, type Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
 import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
-import {
-  withServiceActorTransaction,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
-import {
-  answeringAccountSql,
-  lockActiveOwnerTenant,
-  lockAnsweringAccount,
-} from "./owner-state.ts";
+import { answeringAccountSql, lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
 import { lockShelf } from "./shelves.ts";
 import { trackShareCreated, viaFor } from "./analytics.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
@@ -57,12 +40,7 @@ import {
 import { contentModels } from "./content-filter/model.ts";
 import { assertClaimed } from "./provisional.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
-import {
-  fraudScore,
-  mergeResults,
-  scanText,
-  type FilterResult,
-} from "./content-filter/scanner.ts";
+import { fraudScore, mergeResults, scanText, type FilterResult } from "./content-filter/scanner.ts";
 import { rescanPhishingSignals } from "./phishing-rescan.ts";
 
 type ShareInput = z.infer<typeof shareSchema>;
@@ -77,12 +55,7 @@ export const agentRevokeShareSchema = z.object({ shareId: uuid }).strict();
 
 type ExistingPolicy = "web" | "agent-exact";
 
-async function lockArtifact(
-  c: PoolClient,
-  actor: Actor,
-  artifactId: string,
-  requireActive = true,
-) {
+async function lockArtifact(c: PoolClient, actor: Actor, artifactId: string, requireActive = true) {
   await assertArtifactInAgentScope(c, actor, artifactId);
   const {
     rows: [artifact],
@@ -100,24 +73,19 @@ async function lockArtifact(
 async function revisionSignals(c: PoolClient, revisionId: string) {
   const {
     rows: [row],
-  } = await c.query("SELECT phishing_signals FROM revisions WHERE id=$1", [
-    revisionId,
-  ]);
+  } = await c.query("SELECT phishing_signals FROM revisions WHERE id=$1", [revisionId]);
   return (row?.phishing_signals ?? []) as string[];
 }
 
 /** Where an owner appeals a block. */
-export const appealContact = () =>
-  config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null;
+export const appealContact = () => config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null;
 
 const blockedRefusal = () =>
   new Problem(
     403,
     "forbidden",
     `Эта работа заблокирована модератором Полки: ссылку на неё создать нельзя.${
-      appealContact()
-        ? ` Если считаете решение ошибочным, напишите на ${appealContact()}.`
-        : ""
+      appealContact() ? ` Если считаете решение ошибочным, напишите на ${appealContact()}.` : ""
     }`,
   );
 
@@ -242,17 +210,9 @@ async function moderationFor(
   // budget, or images not sent (CONTENT_MODEL_IMAGES=false).
   const images =
     !!revision &&
-    (String(revision.mime).startsWith("image/") ||
-      revision.bundle_images ||
-      (stored.images ?? 0) > 0) &&
+    (String(revision.mime).startsWith("image/") || revision.bundle_images || (stored.images ?? 0) > 0) &&
     !(model.state === "checked" && config.CONTENT_MODEL_IMAGES);
-  return decideModeration(
-    standing,
-    signals,
-    config.SHARE_MODERATION,
-    content,
-    images,
-  );
+  return decideModeration(standing, signals, config.SHARE_MODERATION, content, images);
 }
 
 /**
@@ -274,10 +234,13 @@ async function applyDecision(
     shareId: share.id,
   };
   const details = decision.content
-    ? { findings: decision.content.findings.map((finding) =>
-        finding.category === "csam"
-          ? { category: finding.category, score: finding.score, source: finding.source }
-          : finding) }
+    ? {
+        findings: decision.content.findings.map((finding) =>
+          finding.category === "csam"
+            ? { category: finding.category, score: finding.score, source: finding.source }
+            : finding,
+        ),
+      }
     : {};
   if (decision.block) {
     const outcome = await blockRevisionInTransaction(c, {
@@ -333,10 +296,7 @@ async function applyDecision(
  * model-unavailable, review-all), a pause and a block wait for a person.
  */
 export function releasableHold(reason: string | null | undefined) {
-  return (
-    reason === "image-unchecked" ||
-    (reason === "new-account" && config.SHARE_MODERATION === "auto")
-  );
+  return reason === "image-unchecked" || (reason === "new-account" && config.SHARE_MODERATION === "auto");
 }
 
 /** What deciding a link again did (or, in a dry run, would do). */
@@ -398,12 +358,10 @@ async function reconsiderShare(
        FOR UPDATE OF share`,
       [shareId],
     );
-    if (!share || share.revision_id !== revisionId || share.moderation === "blocked")
-      return;
+    if (!share || share.revision_id !== revisionId || share.moderation === "blocked") return;
     const waiting =
       share.moderation === "held" &&
-      (releasableHold(share.moderation_reason) ||
-        (!!options.fraudHold && FRAUD_HOLDS.has(share.moderation_reason)));
+      (releasableHold(share.moderation_reason) || (!!options.fraudHold && FRAUD_HOLDS.has(share.moderation_reason)));
     result.from = share.moderation_reason ?? null;
     await options.before?.(c);
     const decision = await moderationFor(
@@ -426,10 +384,7 @@ async function reconsiderShare(
       result.outcome = "blocked";
       result.to = `blocked:${decision.block}`;
       if (dryRun) return;
-      await c.query("UPDATE shares SET moderation_reason=$2 WHERE id=$1", [
-        shareId,
-        result.to,
-      ]);
+      await c.query("UPDATE shares SET moderation_reason=$2 WHERE id=$1", [shareId, result.to]);
       await applyDecision(c, actor, share, decision, notices);
     } else if (waiting) {
       if (!decision.hold) {
@@ -450,18 +405,17 @@ async function reconsiderShare(
           action: "share.released",
           reason: share.moderation_reason,
         });
-        if (decision.notify)
-          await applyDecision(c, actor, share, { ...decision, hold: null }, notices);
+        if (decision.notify) await applyDecision(c, actor, share, { ...decision, hold: null }, notices);
       } else if (decision.hold === share.moderation_reason) {
         result.outcome = "kept";
       } else {
         result.outcome = "held";
         result.to = decision.hold;
         if (dryRun) return;
-        await c.query(
-          "UPDATE shares SET moderation_reason=$2,moderated_at=now() WHERE id=$1",
-          [shareId, decision.hold],
-        );
+        await c.query("UPDATE shares SET moderation_reason=$2,moderated_at=now() WHERE id=$1", [
+          shareId,
+          decision.hold,
+        ]);
         // An old new-account hold that now waits only for the model: the
         // operator already had a letter about this link.
         if (decision.hold === "image-unchecked")
@@ -511,8 +465,7 @@ export async function reconsiderLinks(revisionId: string, dryRun = false) {
   );
   const notices: ModerationNotice[] = [];
   const results: Reconsidered[] = [];
-  for (const row of rows)
-    results.push(await reconsiderShare(row.id, revisionId, notices, dryRun));
+  for (const row of rows) results.push(await reconsiderShare(row.id, revisionId, notices, dryRun));
   // Awaited (it never throws): a script must not close the pool under a
   // letter still being written.
   if (!dryRun) await dispatchModerationNotices(notices);
@@ -532,10 +485,7 @@ export async function recheckHeldShares(
   /** Only these shelves (tests share one database). */
   tenantIds: string[] | null = null,
 ) {
-  const reasons =
-    config.SHARE_MODERATION === "auto"
-      ? ["image-unchecked", "new-account"]
-      : ["image-unchecked"];
+  const reasons = config.SHARE_MODERATION === "auto" ? ["image-unchecked", "new-account"] : ["image-unchecked"];
   const { rows } = await db.query(
     `SELECT share.id,share.revision_id,share.moderation_reason,
        revision.content_filter->'model'->>'state' AS model_state,
@@ -552,8 +502,7 @@ export async function recheckHeldShares(
   const toDecide = new Set<string>();
   for (const row of rows) {
     const answered =
-      row.model_state === "checked" ||
-      (row.model_state === "unchecked" && row.attempts >= MAX_REVIEW_ATTEMPTS);
+      row.model_state === "checked" || (row.model_state === "unchecked" && row.attempts >= MAX_REVIEW_ATTEMPTS);
     (reviewing && !answered ? toReview : toDecide).add(row.revision_id);
   }
   const held = new Set(rows.map((row) => row.id as string));
@@ -568,9 +517,7 @@ export async function recheckHeldShares(
   for (const row of rows.filter((row) => toReview.has(row.revision_id))) {
     const {
       rows: [now],
-    } = await db.query("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [
-      row.id,
-    ]);
+    } = await db.query("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [row.id]);
     const outcome: Reconsidered["outcome"] = dryRun
       ? "skipped"
       : now?.moderation === "none"
@@ -700,12 +647,7 @@ export async function recheckFraudHolds(
            WHERE id=$1 AND (phishing_signals IS DISTINCT FROM $2::text[]
              OR content_filter->'hits'->'fraud' IS DISTINCT FROM $4::jsonb)
            RETURNING tenant_id,artifact_id`,
-          [
-            row.revision_id,
-            after,
-            JSON.stringify(fraud ? { fraud } : {}),
-            fraud ? JSON.stringify(fraud) : null,
-          ],
+          [row.revision_id, after, JSON.stringify(fraud ? { fraud } : {}), fraud ? JSON.stringify(fraud) : null],
         );
         const [revision] = updated.rows;
         if (revision)
@@ -734,13 +676,9 @@ export function formatFraudRecheck(report: Awaited<ReturnType<typeof recheckFrau
       `share ${result.shareId}`,
       `revision ${result.revisionId}`,
       result.from ?? "-",
-      result.signalsAfter
-        ? `${dryRun ? "would be " : ""}${result.outcome}`
-        : "unreadable: kept",
+      result.signalsAfter ? `${dryRun ? "would be " : ""}${result.outcome}` : "unreadable: kept",
       result.to && result.to !== result.from ? `-> ${result.to}` : "",
-      result.signalsAfter
-        ? `signals: ${result.signalsAfter.join(",") || "none"}`
-        : "",
+      result.signalsAfter ? `signals: ${result.signalsAfter.join(",") || "none"}` : "",
     ]
       .filter(Boolean)
       .join("  "),
@@ -786,11 +724,7 @@ async function enableShareInTransaction(
   await assertClaimed(c, actor.id);
   const artifact = await lockArtifact(c, actor, artifactId);
   if (artifact.latest_revision_id !== input.expectedRevisionId)
-    throw new Problem(
-      409,
-      "conflict",
-      "Работа изменилась. Проверьте текущую версию перед отправкой.",
-    );
+    throw new Problem(409, "conflict", "Работа изменилась. Проверьте текущую версию перед отправкой.");
   const {
     rows: [existing],
   } = await c.query(
@@ -804,18 +738,10 @@ async function enableShareInTransaction(
     if (existing.moderation === "blocked") throw blockedRefusal();
     if (existingPolicy === "agent-exact") {
       if (existing.revision_id !== input.expectedRevisionId)
-        throw new Problem(
-          409,
-          "conflict",
-          "Активная ссылка указывает на другую версию.",
-        );
+        throw new Problem(409, "conflict", "Активная ссылка указывает на другую версию.");
       const derivativeId = await assertLinkable(c, existing.revision_id);
       if (existing.derivative_id !== derivativeId)
-        throw new Problem(
-          409,
-          "conflict",
-          "Активная ссылка использует другую подготовленную версию.",
-        );
+        throw new Problem(409, "conflict", "Активная ссылка использует другую подготовленную версию.");
     }
     return existing;
   }
@@ -835,18 +761,9 @@ async function enableShareInTransaction(
   );
   const standing = await authorStanding(c, actor.tenant, actor.id);
   await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
-  const decision = await moderationFor(
-    c,
-    standing,
-    actor.tenant,
-    artifact.title,
-    artifact.latest_revision_id,
-    notices,
-  );
+  const decision = await moderationFor(c, standing, actor.tenant, artifact.title, artifact.latest_revision_id, notices);
   const holdReason = decision.block ? `blocked:${decision.block}` : decision.hold;
-  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1", [
-    artifactId,
-  ]);
+  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1", [artifactId]);
   const shareId = randomUUID();
   const {
     rows: [created],
@@ -878,24 +795,12 @@ async function enableShareInTransaction(
   return created;
 }
 
-async function artifactIdForShare(
-  c: PoolClient,
-  actor: Actor,
-  shareId: string,
-) {
-  return (
-    await c.query(
-      "SELECT artifact_id FROM shares WHERE id=$1 AND tenant_id=$2",
-      [shareId, actor.tenant],
-    )
-  ).rows[0]?.artifact_id as string | undefined;
+async function artifactIdForShare(c: PoolClient, actor: Actor, shareId: string) {
+  return (await c.query("SELECT artifact_id FROM shares WHERE id=$1 AND tenant_id=$2", [shareId, actor.tenant])).rows[0]
+    ?.artifact_id as string | undefined;
 }
 
-export async function revokeLockedShareInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  share: any,
-) {
+export async function revokeLockedShareInTransaction(c: PoolClient, actor: Actor, share: any) {
   if (!share) return { ok: true };
   if (share.tenant_id !== actor.tenant) throw missing();
   if (share.revoked) return { ok: true };
@@ -904,20 +809,13 @@ export async function revokeLockedShareInTransaction(
   return { ok: true };
 }
 
-export async function revokeShareInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  shareId: string,
-) {
+export async function revokeShareInTransaction(c: PoolClient, actor: Actor, shareId: string) {
   const artifactId = await artifactIdForShare(c, actor, shareId);
   if (!artifactId) return { ok: true };
   await lockArtifact(c, actor, artifactId, false);
   const {
     rows: [share],
-  } = await c.query(
-    "SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [shareId, actor.tenant],
-  );
+  } = await c.query("SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [shareId, actor.tenant]);
   return revokeLockedShareInTransaction(c, actor, share);
 }
 
@@ -942,33 +840,19 @@ async function publishShareInTransaction(
   );
   if (!row) throw missing();
   const { expired, seconds_left: secondsLeft, ...share } = row;
-  if (share.revoked || expired)
-    throw new Problem(410, "expired", "Ссылка уже закрыта или истекла.");
+  if (share.revoked || expired) throw new Problem(410, "expired", "Ссылка уже закрыта или истекла.");
   if (share.moderation === "blocked") throw blockedRefusal();
-  if (
-    (
-      await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [
-        shareId,
-      ])
-    ).rowCount
-  )
-    throw new Problem(
-      409,
-      "conflict",
-      "Версия ссылки зафиксирована редакционной публикацией.",
-    );
+  if ((await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [shareId])).rowCount)
+    throw new Problem(409, "conflict", "Версия ссылки зафиксирована редакционной публикацией.");
   if (share.revision_id !== input.expectedPublishedRevisionId)
-    throw new Problem(
-      409,
-      "conflict",
-      "Ссылка уже обновлена. Проверьте отправленную версию.",
-    );
+    throw new Problem(409, "conflict", "Ссылка уже обновлена. Проверьте отправленную версию.");
   if (
     !(
-      await c.query(
-        "SELECT 1 FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-        [input.revisionId, share.artifact_id, actor.tenant],
-      )
+      await c.query("SELECT 1 FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+        input.revisionId,
+        share.artifact_id,
+        actor.tenant,
+      ])
     ).rowCount
   )
     throw missing();
@@ -1026,24 +910,13 @@ async function publishShareInTransaction(
   return { ok: true };
 }
 
-export async function enableOwnerShare(
-  actor: Actor,
-  artifactId: string,
-  body: unknown,
-) {
+export async function enableOwnerShare(actor: Actor, artifactId: string, body: unknown) {
   const input = shareSchema.parse(body);
   const notices: ModerationNotice[] = [];
   const created = await transaction(async (c) => {
     // A link out of a department shelf is a curator's (TEAM_SHELVES.md).
     await lockShelf(c, actor, "curator");
-    return enableShareInTransaction(
-      c,
-      actor,
-      artifactId,
-      input,
-      "web",
-      notices,
-    );
+    return enableShareInTransaction(c, actor, artifactId, input, "web", notices);
   });
   if (created?.id)
     emitEvent({
@@ -1075,11 +948,7 @@ export async function revokeOwnerShare(actor: Actor, shareId: string) {
   return result;
 }
 
-export async function publishOwnerShare(
-  actor: Actor,
-  shareId: string,
-  body: unknown,
-) {
+export async function publishOwnerShare(actor: Actor, shareId: string, body: unknown) {
   const input = publishSchema.parse(body);
   const notices: ModerationNotice[] = [];
   const result = await transaction(async (c) => {
@@ -1109,20 +978,14 @@ const agentShareResultSchema = z
   })
   .strict();
 
-const canonicalAgentShareRequest = (
-  input: z.infer<typeof agentShareSchema>,
-) => ({
+const canonicalAgentShareRequest = (input: z.infer<typeof agentShareSchema>) => ({
   key: input.key,
   artifactId: input.artifactId,
   expectedRevisionId: input.expectedRevisionId,
   expiresInDays: input.expiresInDays,
 });
 
-async function agentShareResponse(
-  c: PoolClient,
-  actor: ServiceActor,
-  result: AgentShareResult,
-) {
+async function agentShareResponse(c: PoolClient, actor: ServiceActor, result: AgentShareResult) {
   const {
     rows: [share],
   } = await c.query(
@@ -1138,18 +1001,15 @@ async function agentShareResponse(
     share.unexpired &&
     share.revision_id === result.revisionId &&
     share.derivative_id === result.derivativeId;
-  const moderation = (
-    share?.moderation === "blocked" ? "blocked" : active ? share.moderation : "none"
-  ) as "none" | "held" | "paused" | "blocked";
+  const moderation = (share?.moderation === "blocked" ? "blocked" : active ? share.moderation : "none") as
+    "none" | "held" | "paused" | "blocked";
   return {
     ...result,
     state: active ? ("active" as const) : ("closed" as const),
     url: active ? `${config.APP_ORIGIN}/s#${tokenFor(result.shareId)}` : null,
     // A waiting link is not a finished one: the agent must say so. Present
     // only while the link waits, so ordinary answers keep their shape.
-    ...(moderation !== "none"
-      ? { moderation, moderationMessage: MODERATION_MESSAGE[moderation] }
-      : {}),
+    ...(moderation !== "none" ? { moderation, moderationMessage: MODERATION_MESSAGE[moderation] } : {}),
   };
 }
 
@@ -1159,12 +1019,9 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
   const requestHash = sha256(JSON.stringify(request));
   const notices: ModerationNotice[] = [];
 
-  const response = await withServiceActorTransaction(
-    actor,
-    "share",
-    async (c, verified) => {
-      // On a department shelf links are a curator's (TEAM_SHELVES.md).
-      await lockShelf(c, { id: verified.accountId, tenant: verified.tenantId }, "curator");
+  const response = await withServiceActorTransaction(actor, "share", async (c, verified) => {
+    // On a department shelf links are a curator's (TEAM_SHELVES.md).
+    await lockShelf(c, { id: verified.accountId, tenant: verified.tenantId }, "curator");
     const {
       rows: [old],
     } = await c.query(
@@ -1175,41 +1032,20 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
     );
     if (old) {
       if (old.connection_id !== verified.connectionId)
-        throw new Problem(
-          409,
-          "conflict",
-          "Ключ уже относится к другой операции.",
-        );
+        throw new Problem(409, "conflict", "Ключ уже относится к другой операции.");
       if (
         old.request_hash !== requestHash ||
-        JSON.stringify(
-          canonicalAgentShareRequest(agentShareSchema.parse(old.request)),
-        ) !== JSON.stringify(request)
+        JSON.stringify(canonicalAgentShareRequest(agentShareSchema.parse(old.request))) !== JSON.stringify(request)
       )
-        throw new Problem(
-          409,
-          "conflict",
-          "Этот повтор относится к другой ссылке.",
-        );
-      return agentShareResponse(
-        c,
-        verified,
-        agentShareResultSchema.parse(old.result),
-      );
+        throw new Problem(409, "conflict", "Этот повтор относится к другой ссылке.");
+      return agentShareResponse(c, verified, agentShareResultSchema.parse(old.result));
     }
     const owner: Actor = {
       id: verified.accountId,
       tenant: verified.tenantId,
       connectionId: verified.connectionId,
     };
-    const share = await enableShareInTransaction(
-      c,
-      owner,
-      input.artifactId,
-      input,
-      "agent-exact",
-      notices,
-    );
+    const share = await enableShareInTransaction(c, owner, input.artifactId, input, "agent-exact", notices);
     const result: AgentShareResult = {
       shareId: share.id,
       artifactId: share.artifact_id,
@@ -1234,8 +1070,7 @@ export async function shareFromAgent(actor: ServiceActor, body: unknown) {
       ],
     );
     return agentShareResponse(c, verified, result);
-    },
-  );
+  });
   void dispatchModerationNotices(notices);
   throwIfBlocked(notices);
   return response;
@@ -1262,109 +1097,94 @@ export async function moveShareFromAgent(actor: ServiceActor, body: unknown) {
   const requestHash = sha256(JSON.stringify(request));
   const notices: ModerationNotice[] = [];
 
-  const response = await withServiceActorTransaction(
-    actor,
-    "share",
-    async (c, verified) => {
-      // On a department shelf links are a curator's (TEAM_SHELVES.md).
-      await lockShelf(c, { id: verified.accountId, tenant: verified.tenantId }, "curator");
-      const {
-        rows: [old],
-      } = await c.query(
-        `SELECT * FROM agent_operations
+  const response = await withServiceActorTransaction(actor, "share", async (c, verified) => {
+    // On a department shelf links are a curator's (TEAM_SHELVES.md).
+    await lockShelf(c, { id: verified.accountId, tenant: verified.tenantId }, "curator");
+    const {
+      rows: [old],
+    } = await c.query(
+      `SELECT * FROM agent_operations
          WHERE tenant_id=$1 AND operation='share-move' AND idempotency_key=$2
          FOR UPDATE`,
-        [verified.tenantId, input.key],
+      [verified.tenantId, input.key],
+    );
+    if (old) {
+      if (old.connection_id !== verified.connectionId || old.request_hash !== requestHash)
+        throw new Problem(409, "conflict", "Ключ уже относится к другой операции.");
+      return agentShareResponse(c, verified, agentShareResultSchema.parse(old.result));
+    }
+    const owner: Actor = {
+      id: verified.accountId,
+      tenant: verified.tenantId,
+      connectionId: verified.connectionId,
+    };
+    const artifact = await lockArtifact(c, owner, input.artifactId);
+    // An unattended agent moves only a link set to follow new versions.
+    const {
+      rows: [target],
+    } = await c.query("SELECT follow_mode FROM shares WHERE id=$1 AND tenant_id=$2", [
+      input.shareId,
+      verified.tenantId,
+    ]);
+    if (target && !agentMayMoveLink(verified.principal, target.follow_mode))
+      throw new Problem(
+        409,
+        "conflict",
+        "Ссылка закреплена на своей версии: сервисный доступ её не двигает. Куратор может включить «следует за новыми версиями».",
       );
-      if (old) {
-        if (
-          old.connection_id !== verified.connectionId ||
-          old.request_hash !== requestHash
-        )
-          throw new Problem(
-            409,
-            "conflict",
-            "Ключ уже относится к другой операции.",
-          );
-        return agentShareResponse(
-          c,
-          verified,
-          agentShareResultSchema.parse(old.result),
-        );
-      }
-      const owner: Actor = {
-        id: verified.accountId,
-        tenant: verified.tenantId,
-        connectionId: verified.connectionId,
-      };
-      const artifact = await lockArtifact(c, owner, input.artifactId);
-      // An unattended agent moves only a link set to follow new versions.
-      const {
-        rows: [target],
-      } = await c.query("SELECT follow_mode FROM shares WHERE id=$1 AND tenant_id=$2", [
-        input.shareId,
-        verified.tenantId,
-      ]);
-      if (target && !agentMayMoveLink(verified.principal, target.follow_mode))
-        throw new Problem(
-          409,
-          "conflict",
-          "Ссылка закреплена на своей версии: сервисный доступ её не двигает. Куратор может включить «следует за новыми версиями».",
-        );
-      if (artifact.latest_revision_id !== input.expectedRevisionId)
-        throw new Problem(
-          409,
-          "conflict",
-          `Работа изменилась: последняя версия ${artifact.latest_revision_id}. Переносите ссылку на неё.`,
-        );
-      const {
-        rows: [share],
-      } = await c.query(
-        `SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 AND artifact_id=$3
+    if (artifact.latest_revision_id !== input.expectedRevisionId)
+      throw new Problem(
+        409,
+        "conflict",
+        `Работа изменилась: последняя версия ${artifact.latest_revision_id}. Переносите ссылку на неё.`,
+      );
+    const {
+      rows: [share],
+    } = await c.query(
+      `SELECT * FROM shares WHERE id=$1 AND tenant_id=$2 AND artifact_id=$3
          FOR UPDATE`,
-        [input.shareId, owner.tenant, input.artifactId],
+      [input.shareId, owner.tenant, input.artifactId],
+    );
+    if (!share) throw missing();
+    if (share.revision_id !== input.expectedRevisionId)
+      await publishShareInTransaction(
+        c,
+        owner,
+        input.shareId,
+        {
+          revisionId: input.expectedRevisionId,
+          expectedPublishedRevisionId: share.revision_id,
+        },
+        notices,
       );
-      if (!share) throw missing();
-      if (share.revision_id !== input.expectedRevisionId)
-        await publishShareInTransaction(
-          c,
-          owner,
-          input.shareId,
-          {
-            revisionId: input.expectedRevisionId,
-            expectedPublishedRevisionId: share.revision_id,
-          },
-          notices,
-        );
-      const {
-        rows: [moved],
-      } = await c.query("SELECT * FROM shares WHERE id=$1", [input.shareId]);
-      const result: AgentShareResult = {
-        shareId: moved.id,
-        artifactId: moved.artifact_id,
-        revisionId: moved.revision_id,
-        derivativeId: moved.derivative_id ?? null,
-        expiresAt: new Date(moved.expires_at).toISOString(),
-      };
-      await c.query(
-        `INSERT INTO agent_operations(
+    const {
+      rows: [moved],
+    } = await c.query("SELECT * FROM shares WHERE id=$1", [input.shareId]);
+    const result: AgentShareResult = {
+      shareId: moved.id,
+      artifactId: moved.artifact_id,
+      revisionId: moved.revision_id,
+      derivativeId: moved.derivative_id ?? null,
+      expiresAt: new Date(moved.expires_at).toISOString(),
+    };
+    await c.query(
+      `INSERT INTO agent_operations(
            id,tenant_id,account_id,connection_id,operation,idempotency_key,
            request,request_hash,result
          ) VALUES($1,$2,$3,$4,'share-move',$5,$6,$7,$8)`,
-        [
-          randomUUID(),
-          verified.tenantId,
-          verified.accountId,
-          verified.connectionId,
-          input.key,
-          request,
-          requestHash,
-          result,
-        ],
-      );
-      return agentShareResponse(c, verified, result);
-    },
-  );
+      [
+        randomUUID(),
+        verified.tenantId,
+        verified.accountId,
+        verified.connectionId,
+        input.key,
+        request,
+        requestHash,
+        result,
+      ],
+    );
+    return agentShareResponse(c, verified, result);
+  });
   void dispatchModerationNotices(notices);
   throwIfBlocked(notices);
   return response;

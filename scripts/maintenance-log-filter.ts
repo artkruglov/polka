@@ -1,38 +1,14 @@
 /** Filter untrusted child output before it reaches operator logs. */
 export type SafeMaintenanceLog = {
-  event:
-    | "maintenance.started"
-    | "maintenance.completed"
-    | "maintenance.failed"
-    | "maintenance.skipped";
-  reason?:
-    | "busy"
-    | "deadline"
-    | "stopping"
-    | "guard_lost"
-    | "database"
-    | "storage"
-    | "internal";
+  event: "maintenance.started" | "maintenance.completed" | "maintenance.failed" | "maintenance.skipped";
+  reason?: "busy" | "deadline" | "stopping" | "guard_lost" | "database" | "storage" | "internal";
   durationMs?: number;
   expiredUploadsReconciled?: number;
   expiredDerivativesReconciled?: number;
   emailChallengesRemoved?: number;
 };
-const events = new Set([
-  "maintenance.started",
-  "maintenance.completed",
-  "maintenance.failed",
-  "maintenance.skipped",
-]);
-const reasons = new Set([
-  "busy",
-  "deadline",
-  "stopping",
-  "guard_lost",
-  "database",
-  "storage",
-  "internal",
-]);
+const events = new Set(["maintenance.started", "maintenance.completed", "maintenance.failed", "maintenance.skipped"]);
+const reasons = new Set(["busy", "deadline", "stopping", "guard_lost", "database", "storage", "internal"]);
 const counters = [
   "durationMs",
   "expiredUploadsReconciled",
@@ -40,9 +16,7 @@ const counters = [
   "emailChallengesRemoved",
 ] as const;
 
-export function createMaintenanceLogFilter(
-  emit: (event: SafeMaintenanceLog) => void,
-) {
+export function createMaintenanceLogFilter(emit: (event: SafeMaintenanceLog) => void) {
   const maxLine = 4096,
     maxAccepted = 65536;
   let line: number[] = [],
@@ -58,8 +32,7 @@ export function createMaintenanceLogFilter(
     line = [];
     try {
       const value = JSON.parse(bytes.toString("utf8"));
-      if (!value || typeof value !== "object" || !events.has(value.event))
-        return;
+      if (!value || typeof value !== "object" || !events.has(value.event)) return;
       const safe: SafeMaintenanceLog = { event: value.event };
       if (value.reason !== undefined) {
         if (!reasons.has(value.reason)) return;

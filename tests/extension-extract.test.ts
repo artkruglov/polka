@@ -20,11 +20,7 @@ import {
   publishBody,
   type Extracted,
 } from "../extensions/chrome/src/shared/payload.ts";
-import {
-  matchPattern,
-  normaliseOrigin,
-  sameOrigin,
-} from "../extensions/chrome/src/shared/origin.ts";
+import { matchPattern, normaliseOrigin, sameOrigin } from "../extensions/chrome/src/shared/origin.ts";
 
 const JSX = `import React, { useState } from "react";
 export default function App() {
@@ -79,16 +75,16 @@ test("publish bodies: components as source, the rest as one HTML page", () => {
   const html = publishBody(extracted(doc, { title: "Claude" }), key);
   assert.deepEqual(html, { key, title: "Отчёт & план", html: doc.slice(1) });
 
-  const text = publishBody(
-    extracted("<script>alert(1)</script> & co", { provider: "chatgpt", language: "text" }),
-    key,
-  );
+  const text = publishBody(extracted("<script>alert(1)</script> & co", { provider: "chatgpt", language: "text" }), key);
   assert.ok("html" in text);
   assert.equal(text.title, "Артефакт ChatGPT");
   assert.match(text.html, /<pre>&lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; co<\/pre>/);
   assert.doesNotMatch(text.html, /<script>/);
 
-  const svg = publishBody(extracted('<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>', { title: "Круг" }), key);
+  const svg = publishBody(
+    extracted('<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>', { title: "Круг" }),
+    key,
+  );
   assert.ok("html" in svg && svg.html.startsWith("<!doctype html>") && svg.html.includes("<circle"));
   const escapedTitle = publishBody(extracted("<div>x</div>", { title: 'A "<b>" title' }), key);
   assert.ok("html" in escapedTitle);
@@ -125,7 +121,10 @@ test("the Полка address: https, or http on this computer only", () => {
     assert.equal(normaliseOrigin(bad), null, bad);
   assert.equal(matchPattern("http://127.0.0.1:6390"), "http://127.0.0.1/*");
   assert.equal(matchPattern("https://polochka.app"), "https://polochka.app/*");
-  assert.equal(sameOrigin("https://polochka.app/oauth/token", "https://polochka.app"), "https://polochka.app/oauth/token");
+  assert.equal(
+    sameOrigin("https://polochka.app/oauth/token", "https://polochka.app"),
+    "https://polochka.app/oauth/token",
+  );
   assert.equal(sameOrigin("https://evil.example/oauth/token", "https://polochka.app"), null);
   assert.equal(sameOrigin(42, "https://polochka.app"), null);
 });
@@ -158,9 +157,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function send(method: string, params: Record<string, unknown> = {}) {
   const id = ++nextId;
   return new Promise<any>((resolve, reject) => {
-    pending.set(id, (message) =>
-      message.error ? reject(new Error(message.error.message)) : resolve(message.result),
-    );
+    pending.set(id, (message) => (message.error ? reject(new Error(message.error.message)) : resolve(message.result)));
     socket!.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -171,8 +168,7 @@ async function evaluate(expression: string) {
     returnByValue: true,
     awaitPromise: true,
   });
-  if (value.exceptionDetails)
-    throw new Error(value.exceptionDetails.exception?.description ?? "evaluation failed");
+  if (value.exceptionDetails) throw new Error(value.exceptionDetails.exception?.description ?? "evaluation failed");
   return value.result?.value;
 }
 
@@ -225,8 +221,7 @@ before(async () => {
       return;
     }
     // The same frame without the viewer's CSP meta: its own fetch succeeds.
-    if (name === "frame-without-csp.html")
-      html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, "");
+    if (name === "frame-without-csp.html") html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, "");
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     response.end(html);
   });
@@ -290,7 +285,10 @@ after(async () => {
   await new Promise((resolve) => (chrome ? chrome.once("exit", resolve) : resolve(null)));
   server?.close();
   // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
-  if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+  if (profile)
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    } catch {}
 });
 
 test("Claude chat: the panel's title and Copy button, not the message's", { skip }, async () => {
@@ -303,25 +301,17 @@ test("Claude chat: the panel's title and Copy button, not the message's", { skip
   assert.match(report.copyMarker, /^[0-9a-f]{24}$/);
   // With a Copy button there is no need to go through a menu.
   assert.equal(report.menuMarker, null);
-  assert.equal(
-    await evaluate(`document.querySelector("[data-polka-copy]").id`),
-    "artifact-copy",
-  );
+  assert.equal(await evaluate(`document.querySelector("[data-polka-copy]").id`), "artifact-copy");
   // The MAIN-world capture, serialised as chrome.scripting does it.
   const capture = (marker: string, ms: number) =>
-    evaluate(
-      `new Function("return (" + __test.captureSource + ")")()(${JSON.stringify(marker)}, ${ms})`,
-    );
+    evaluate(`new Function("return (" + __test.captureSource + ")")()(${JSON.stringify(marker)}, ${ms})`);
   const copied = await capture(report.copyMarker, 2000);
   assert.match(copied, /^import React, \{ useState \} from "react";/);
   assert.match(copied, /export default function Mortgage/);
   // The page's own Copy flow ran (it relabels itself) and everything is put back.
   assert.equal(await evaluate(`document.getElementById("artifact-copy").textContent`), "Copied");
   assert.equal(await evaluate(`document.querySelector("[data-polka-copy]")`), null);
-  assert.equal(
-    await evaluate(`Object.prototype.hasOwnProperty.call(navigator.clipboard, "writeText")`),
-    false,
-  );
+  assert.equal(await evaluate(`Object.prototype.hasOwnProperty.call(navigator.clipboard, "writeText")`), false);
   // A stale or unknown marker presses nothing.
   assert.equal(await capture("nope", 100), null);
 });
@@ -392,9 +382,7 @@ const ORIGINALS_BACK = `(() => {
   return now.every((value, index) => value === window.__originals[index]);
 })()`;
 const downloadCapture = (marker: string, ms = 3000) =>
-  evaluate(
-    `new Function("return (" + __test.downloadSource + ")")()(${JSON.stringify(marker)}, ${ms})`,
-  );
+  evaluate(`new Function("return (" + __test.downloadSource + ")")()(${JSON.stringify(marker)}, ${ms})`);
 
 test("standalone artifact page: title menu → Export → Download, read and never saved", { skip }, async () => {
   await open("claude-artifact-page.html");
@@ -440,7 +428,9 @@ test("the fixture's menu is as stubborn as the real one: no pointer, no Enter", 
   })()`);
   await wait(300);
   assert.equal(await evaluate(`document.querySelector('[role="menu"]')`), null);
-  await evaluate(`document.getElementById("title").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))`);
+  await evaluate(
+    `document.getElementById("title").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))`,
+  );
   await wait(300);
   assert.notEqual(await evaluate(`document.querySelector('[role="menu"]')`), null);
   // A document-level Escape leaves it open.
@@ -488,10 +478,7 @@ test("the page button's anchor on an artifact page is the Share button", { skip 
     /^Share, shared with anyone/,
   );
   // The menu path is for standalone artifact pages only, never a chat's menus.
-  assert.equal(
-    (await evaluate(`__test.inspectPage(document, "claude.ai", "/chat/1")`)).menuMarker,
-    null,
-  );
+  assert.equal((await evaluate(`__test.inspectPage(document, "claude.ai", "/chat/1")`)).menuMarker, null);
   assert.equal(
     await evaluate(`__test.findArtifactFrames(document).map((f) => f.title).join("|")`),
     "User-generated artifact content",

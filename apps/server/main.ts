@@ -58,13 +58,9 @@ async function shutdown() {
 try {
   await registerHealthRoutes(app, health);
   viewer = config.HTML_LIVE_ENABLED ? await createLiveViewerApp() : null;
-  await registerFrontend(
-    app,
-    fileURLToPath(new URL("../../dist", import.meta.url)),
-  );
+  await registerFrontend(app, fileURLToPath(new URL("../../dist", import.meta.url)));
   await app.listen({ host: config.HOST, port: config.PORT });
-  if (viewer)
-    await viewer.listen({ host: config.VIEWER_HOST, port: config.VIEWER_PORT });
+  if (viewer) await viewer.listen({ host: config.VIEWER_HOST, port: config.VIEWER_PORT });
 } catch (error) {
   await shutdown();
   throw error;
@@ -95,8 +91,7 @@ const reviewLetters = async () => {
 setInterval(reviewLetters, 5 * 60 * 1000).unref();
 setTimeout(sweep, 30_000).unref();
 setInterval(sweep, 60 * 60 * 1000).unref();
-if (viewer)
-  console.log(`Experimental ${config.HTML_LIVE_MODE} HTML viewer is enabled.`);
+if (viewer) console.log(`Experimental ${config.HTML_LIVE_MODE} HTML viewer is enabled.`);
 let closing = false;
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {

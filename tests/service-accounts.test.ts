@@ -23,7 +23,12 @@ let shelf: { id: string };
 
 async function account(prefix: string): Promise<Account> {
   const created = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
-  const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: created.name, password } });
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: created.name, password },
+  });
   assert.equal(login.statusCode, 200, login.body);
   return { ...created, cookie: `polka_session=${login.cookies[0].value}` };
 }
@@ -81,7 +86,14 @@ before(async () => {
   admin = await account("svc-admin");
   curator = await account("svc-curator");
   await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [admin.id]);
-  shelf = (await app.inject({ method: "POST", url: "/api/shelves", headers: { origin, cookie: admin.cookie }, payload: { name: "Отдел сервисов" } })).json();
+  shelf = (
+    await app.inject({
+      method: "POST",
+      url: "/api/shelves",
+      headers: { origin, cookie: admin.cookie },
+      payload: { name: "Отдел сервисов" },
+    })
+  ).json();
   const added = await app.inject({
     method: "POST",
     url: `/api/shelves/${shelf.id}/members`,
@@ -122,7 +134,9 @@ test("off by default; scopes are limited; read and share never together", async 
 });
 
 test("a service token reads and saves as its responsible person; people's lists do not show it", async () => {
-  const { token, servicePrincipal } = (await create(admin, { name: "Рабочий", scopes: ["context", "read", "capture"] })).json();
+  const { token, servicePrincipal } = (
+    await create(admin, { name: "Рабочий", scopes: ["context", "read", "capture"] })
+  ).json();
   const works = await api(token, "GET", "/api/v1/works");
   assert.equal(works.statusCode, 200, works.body);
   const saved = await publish(token, "Сводка сервиса");
@@ -133,7 +147,10 @@ test("a service token reads and saves as its responsible person; people's lists 
   assert.deepEqual(work, { tenant_id: shelf.id, created_by: admin.id });
   const {
     rows: [event],
-  } = await db.query("SELECT actor_type,connection_id FROM audit_outbox WHERE action='revision.saved' AND target_id=$1", [saved.json().revisionId]);
+  } = await db.query(
+    "SELECT actor_type,connection_id FROM audit_outbox WHERE action='revision.saved' AND target_id=$1",
+    [saved.json().revisionId],
+  );
   assert.equal(event.actor_type, "agent");
   assert.ok(event.connection_id);
   const mine = (await session(admin, "GET", "/api/agent-connections")).json();
@@ -161,7 +178,11 @@ test("task tokens: a subset of scopes, 5–60 minutes, stop with the parent, min
   assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 3 })).statusCode, 400);
   assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 61 })).statusCode, 400);
   assert.equal((await api(token, "POST", "/api/v1/task-token", { scopes: ["share"] })).statusCode, 403);
-  const issued = await api(token, "POST", "/api/v1/task-token", { scopes: ["read"], minutes: 10, taskId: "nightly-42" });
+  const issued = await api(token, "POST", "/api/v1/task-token", {
+    scopes: ["read"],
+    minutes: 10,
+    taskId: "nightly-42",
+  });
   assert.equal(issued.statusCode, 200, issued.body);
   const task = issued.json();
   assert.deepEqual(task.scopes, ["context", "read"]);
@@ -171,11 +192,16 @@ test("task tokens: a subset of scopes, 5–60 minutes, stop with the parent, min
   assert.equal((await api(task.token, "POST", "/api/v1/task-token", {})).statusCode, 403);
   const {
     rows: [audit],
-  } = await db.query("SELECT payload FROM audit_outbox WHERE action='service_account.task_token' ORDER BY id DESC LIMIT 1");
+  } = await db.query(
+    "SELECT payload FROM audit_outbox WHERE action='service_account.task_token' ORDER BY id DESC LIMIT 1",
+  );
   assert.equal(audit.payload.taskId, "nightly-42");
   assert.equal(audit.payload.servicePrincipalId, servicePrincipal.id);
   // A person's token cannot ask for one.
-  assert.equal((await api(await humanToken(admin, ["context", "read"]), "POST", "/api/v1/task-token", {})).statusCode, 403);
+  assert.equal(
+    (await api(await humanToken(admin, ["context", "read"]), "POST", "/api/v1/task-token", {})).statusCode,
+    403,
+  );
   // Disabling the account ends the parent and the child.
   assert.equal((await session(admin, "POST", `/api/service-accounts/${servicePrincipal.id}/disable`)).statusCode, 200);
   assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
@@ -189,15 +215,24 @@ test("rotating a token ends the old one", async () => {
   assert.equal((await api(token, "GET", "/api/v1/works")).statusCode, 401);
   assert.equal((await api(rotated.json().token, "GET", "/api/v1/works")).statusCode, 200);
   // The connection row stays the same: what an extension keeps per connection (a folder limit) is not lost.
-  const rows = (await db.query("SELECT id,revoked_at FROM agent_connections WHERE service_principal_id=$1", [servicePrincipal.id])).rows;
+  const rows = (
+    await db.query("SELECT id,revoked_at FROM agent_connections WHERE service_principal_id=$1", [servicePrincipal.id])
+  ).rows;
   assert.equal(rows.length, 1, "rotation reuses the connection, it does not add one");
   assert.equal(rows[0].revoked_at, null);
   const rootId = rows[0].id;
   // A task token of the old secret dies with the rotation.
   const again = await session(admin, "POST", `/api/service-accounts/${servicePrincipal.id}/rotate`, { ttlDays: 5 });
   assert.equal(again.statusCode, 200, again.body);
-  const after = (await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [servicePrincipal.id])).rows;
-  assert.deepEqual(after.map((row) => row.id), [rootId]);
+  const after = (
+    await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [
+      servicePrincipal.id,
+    ])
+  ).rows;
+  assert.deepEqual(
+    after.map((row) => row.id),
+    [rootId],
+  );
 });
 
 test("the responsible person leaves: the account freezes; an admin names another and it thaws", async () => {
@@ -224,7 +259,10 @@ test("the responsible person leaves: the account freezes; an admin names another
   assert.equal(connection.revoked_at, null);
   // Only a curator or admin of the shelf may take it over; a stranger cannot.
   const stranger = await account("svc-stranger");
-  assert.equal((await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: stranger.id })).statusCode, 422);
+  assert.equal(
+    (await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: stranger.id })).statusCode,
+    422,
+  );
   const thawed = await session(admin, "PUT", `/api/service-accounts/${id}/responsible`, { accountId: admin.id });
   assert.equal(thawed.statusCode, 200, thawed.body);
   // The departed person's copy of the token stays dead; the new responsible gets a fresh one.
@@ -234,7 +272,9 @@ test("the responsible person leaves: the account freezes; an admin names another
     rows: [after],
   } = await db.query("SELECT status,frozen_at,responsible_account_id FROM service_principals WHERE id=$1", [id]);
   assert.deepEqual([after.status, after.frozen_at, after.responsible_account_id], ["active", null, admin.id]);
-  const reused = (await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [id])).rows;
+  const reused = (
+    await db.query("SELECT id FROM agent_connections WHERE service_principal_id=$1 AND parent_id IS NULL", [id])
+  ).rows;
   assert.equal(reused.length, 1, "a new responsible person reuses the connection row");
 });
 
@@ -242,7 +282,9 @@ test("a service account moves a link only when it is set to follow new versions"
   const humanTok = await humanToken(admin, ["context", "capture", "revise", "share"]);
   const first = (await publish(humanTok, "Отчёт со ссылкой")).json();
   assert.equal(first.state, "shared", JSON.stringify(first));
-  const { token } = (await create(admin, { name: "Ночная правка", scopes: ["context", "capture", "revise", "share"] })).json();
+  const { token } = (
+    await create(admin, { name: "Ночная правка", scopes: ["context", "capture", "revise", "share"] })
+  ).json();
   const next = (extra: object = {}) =>
     publish(token, "Отчёт со ссылкой", { artifactId: first.artifactId, baseRevisionId: first.revisionId, ...extra });
   const pinned = await next();
@@ -264,7 +306,10 @@ test("a service account moves a link only when it is set to follow new versions"
     }),
     { status: 409 },
   );
-  assert.equal((await session(admin, "PUT", `/api/shares/${share.id}/follow`, { followMode: "follows" })).statusCode, 200);
+  assert.equal(
+    (await session(admin, "PUT", `/api/shares/${share.id}/follow`, { followMode: "follows" })).statusCode,
+    200,
+  );
   const latest = pinned.json().revisionId;
   const followed = await publish(token, "Отчёт со ссылкой", { artifactId: first.artifactId, baseRevisionId: latest });
   assert.equal(followed.statusCode, 200, followed.body);
@@ -279,7 +324,17 @@ test("rotation is the responsible person's or an admin's; personal shelves have 
   const owner = await account("svc-owner");
   const other = await account("svc-other");
   for (const who of [owner, other])
-    assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: who.name, role: "curator" } })).statusCode, 200);
+    assert.equal(
+      (
+        await app.inject({
+          method: "POST",
+          url: `/api/shelves/${shelf.id}/members`,
+          headers: { origin, cookie: admin.cookie },
+          payload: { who: who.name, role: "curator" },
+        })
+      ).statusCode,
+      200,
+    );
   const made = (await create(owner, { name: "Ротация куратора", scopes: ["context", "read"] })).json();
   const id = made.servicePrincipal.id as string;
   // Another curator (not responsible, not admin) cannot rotate.
@@ -296,13 +351,24 @@ test("rotation is the responsible person's or an admin's; personal shelves have 
   assert.equal(personal.statusCode, 422, personal.body);
   // Task tokens: no more than 20 live at once.
   const { token } = (await create(admin, { name: "Много задач", scopes: ["context", "read"] })).json();
-  for (let n = 0; n < 20; n++) assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 200);
+  for (let n = 0; n < 20; n++)
+    assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 200);
   assert.equal((await api(token, "POST", "/api/v1/task-token", { minutes: 5 })).statusCode, 413);
 });
 
 test("erasing the responsible account freezes the service account and ends its token", async () => {
   const person = await account("svc-erased");
-  assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: person.name, role: "curator" } })).statusCode, 200);
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: `/api/shelves/${shelf.id}/members`,
+        headers: { origin, cookie: admin.cookie },
+        payload: { who: person.name, role: "curator" },
+      })
+    ).statusCode,
+    200,
+  );
   const made = (await create(person, { name: "Стирание", scopes: ["context", "read"] })).json();
   assert.equal((await api(made.token, "GET", "/api/v1/works")).statusCode, 200);
   // The erasure renames the account (030); its trigger acts on the department rows.
@@ -315,19 +381,34 @@ test("erasing the responsible account freezes the service account and ends its t
   const listed = (await session(admin, "GET", "/api/service-accounts")).json();
   assert.equal(listed.items.find((item: any) => item.id === made.servicePrincipal.id).status, "frozen");
   // An admin names another person and a fresh token comes back.
-  const thawed = await session(admin, "PUT", `/api/service-accounts/${made.servicePrincipal.id}/responsible`, { accountId: admin.id });
+  const thawed = await session(admin, "PUT", `/api/service-accounts/${made.servicePrincipal.id}/responsible`, {
+    accountId: admin.id,
+  });
   assert.equal(thawed.statusCode, 200, thawed.body);
   assert.equal((await api(thawed.json().token, "GET", "/api/v1/works")).statusCode, 200);
 });
 
 test("erasing an account clears its shelf card and its mark as a work's owner (migration 060)", async () => {
   const person = await account("svc-erase-marks");
-  assert.equal((await app.inject({ method: "POST", url: `/api/shelves/${shelf.id}/members`, headers: { origin, cookie: admin.cookie }, payload: { who: person.name, role: "curator" } })).statusCode, 200);
-  const token = (await create(admin, { name: "Для стирания меток", scopes: ["context", "capture"] })).json().token as string;
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: `/api/shelves/${shelf.id}/members`,
+        headers: { origin, cookie: admin.cookie },
+        payload: { who: person.name, role: "curator" },
+      })
+    ).statusCode,
+    200,
+  );
+  const token = (await create(admin, { name: "Для стирания меток", scopes: ["context", "capture"] })).json()
+    .token as string;
   const saved = (await publish(token, "Работа с ответственным")).json();
   await db.query("UPDATE artifacts SET owner_account_id=$2 WHERE id=$1", [saved.artifactId, person.id]);
   await db.query("UPDATE tenants SET card_md='Мои правила' WHERE id=$1", [person.tenant]);
-  await db.query("INSERT INTO agent_read_days(tenant_id,day,principal_type,reads) VALUES($1,current_date,'human',3)", [person.tenant]);
+  await db.query("INSERT INTO agent_read_days(tenant_id,day,principal_type,reads) VALUES($1,current_date,'human',3)", [
+    person.tenant,
+  ]);
   await db.query("UPDATE accounts SET name='deleted-'||id::text WHERE id=$1", [person.id]);
   const {
     rows: [work],
@@ -342,7 +423,8 @@ test("erasing an account clears its shelf card and its mark as a work's owner (m
 });
 
 test("the events feed and the works list carry metadata only: no bytes, no payload", async () => {
-  const token = (await create(admin, { name: "Только метаданные", scopes: ["context", "read", "capture"] })).json().token as string;
+  const token = (await create(admin, { name: "Только метаданные", scopes: ["context", "read", "capture"] })).json()
+    .token as string;
   const tail = (await api(token, "GET", "/api/v1/events")).json();
   const saved = (await publish(token, "Метаданные")).json();
   let events: any[] = [];
@@ -352,9 +434,13 @@ test("the events feed and the works list carry metadata only: no bytes, no paylo
   }
   assert.ok(events.length);
   const allowed = new Set(["id", "action", "artifactId", "revisionId", "actorType", "at"]);
-  for (const event of events) for (const key of Object.keys(event)) assert.ok(allowed.has(key), `unexpected event field ${key}`);
+  for (const event of events)
+    for (const key of Object.keys(event)) assert.ok(allowed.has(key), `unexpected event field ${key}`);
   const body = (await api(token, "GET", `/api/v1/works?query=Метаданные`)).body;
   for (const forbidden of ["bytes", "html", "data", "payload", "objectKey", "object_key", "/s#"])
-    assert.ok(!body.includes(`"${forbidden}"`) && !body.includes(forbidden === "/s#" ? forbidden : `"${forbidden}":`), `works list shows ${forbidden}`);
+    assert.ok(
+      !body.includes(`"${forbidden}"`) && !body.includes(forbidden === "/s#" ? forbidden : `"${forbidden}":`),
+      `works list shows ${forbidden}`,
+    );
   assert.ok(saved.artifactId);
 });

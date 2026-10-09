@@ -6,25 +6,14 @@
 // identities with the rest.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import {
-  createHash,
-  createSign,
-  generateKeyPairSync,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createHash, createSign, generateKeyPairSync, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { SIGNED_UP_SQL } from "../apps/server/share-moderation.ts";
-import {
-  IdpError,
-  providerEndpoints,
-  resetOidcCache,
-  verifyIdToken,
-} from "../apps/server/sign-in-providers.ts";
+import { IdpError, providerEndpoints, resetOidcCache, verifyIdToken } from "../apps/server/sign-in-providers.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const app = await createApp();
@@ -53,10 +42,7 @@ type Tamper = {
   forge?: boolean;
   nonce?: string;
 };
-const codes = new Map<
-  string,
-  { person: Person; challenge: string; nonce: string; tamper: Tamper }
->();
+const codes = new Map<string, { person: Person; challenge: string; nonce: string; tamper: Tamper }>();
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
 });
@@ -72,13 +58,10 @@ const jwk = {
 let base = "";
 let issuer = "";
 /** What Google's token endpoint last received (client auth, redirect). */
-let lastTokenRequest: { authorization?: string; form: Record<string, string> } =
-  { form: {} };
+let lastTokenRequest: { authorization?: string; form: Record<string, string> } = { form: {} };
 
 function sign(claims: Record<string, unknown>, forge = false) {
-  const header = Buffer.from(
-    JSON.stringify({ alg: "RS256", kid: "g1", typ: "JWT" }),
-  ).toString("base64url");
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "g1", typ: "JWT" })).toString("base64url");
   const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const signer = createSign("RSA-SHA256");
   signer.update(`${header}.${body}`);
@@ -110,18 +93,16 @@ before(async () => {
     if (url.pathname === "/google/token" && req.method === "POST") {
       const form = await readForm(req);
       lastTokenRequest = { authorization: req.headers.authorization, form };
-      if (
-        req.headers.authorization !==
-        `Basic ${Buffer.from(`${CLIENT}:${SECRET}`).toString("base64")}`
-      )
+      if (req.headers.authorization !== `Basic ${Buffer.from(`${CLIENT}:${SECRET}`).toString("base64")}`)
         return send(401, { error: "invalid_client" });
       const grant = codes.get(form.code);
       codes.delete(form.code);
       if (
         !grant ||
         form.redirect_uri !== `${origin}/api/auth/idp/google/callback` ||
-        createHash("sha256").update(form.code_verifier ?? "").digest("base64url") !==
-          grant.challenge
+        createHash("sha256")
+          .update(form.code_verifier ?? "")
+          .digest("base64url") !== grant.challenge
       )
         return send(400, { error: "invalid_grant" });
       const now = Math.floor(Date.now() / 1000);
@@ -177,13 +158,10 @@ after(async () => {
 // ---------------------------------------------------------------------------
 // Driving the browser
 
-const address = () =>
-  `2001:db8:9e::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:9e::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
-const cookieFrom = (
-  response: { cookies: Array<{ name: string; value: string }> },
-  name: string,
-) => response.cookies.find((cookie) => cookie.name === name)?.value;
+const cookieFrom = (response: { cookies: Array<{ name: string; value: string }> }, name: string) =>
+  response.cookies.find((cookie) => cookie.name === name)?.value;
 
 type Begun = { location: URL; flow: string; ip: string };
 
@@ -217,10 +195,7 @@ async function linkStart(cookie: string): Promise<Begun> {
 }
 
 /** Google "authorizes" `person` and sends the browser back. */
-async function signIn(
-  person: Person,
-  options: { tamper?: Tamper; begun?: Begun } = {},
-) {
+async function signIn(person: Person, options: { tamper?: Tamper; begun?: Begun } = {}) {
   const begun = options.begun ?? (await start());
   const params = begun.location.searchParams;
   const code = randomBytes(12).toString("hex");
@@ -242,11 +217,8 @@ async function signIn(
     location: response.headers.location as string,
     session,
     accountId: session
-      ? ((
-          await db.query("SELECT account_id FROM sessions WHERE hash=$1", [
-            sha256(session),
-          ])
-        ).rows[0]?.account_id as string)
+      ? ((await db.query("SELECT account_id FROM sessions WHERE hash=$1", [sha256(session)])).rows[0]
+          ?.account_id as string)
       : null,
   };
 }
@@ -267,23 +239,14 @@ async function emailAccount(email: string | null, provisional = false) {
     `INSERT INTO accounts(id,name,password_hash,email,email_verified_at,display_name,provisional_at)
      VALUES($1,$2,'unused',$3,CASE WHEN $3::text IS NULL THEN NULL ELSE now() END,$4,
             CASE WHEN $5 THEN now() END)`,
-    [
-      id,
-      provisional ? `guest-${id}` : `email-${id}`,
-      email,
-      provisional ? "Временная полка" : null,
-      provisional,
-    ],
+    [id, provisional ? `guest-${id}` : `email-${id}`, email, provisional ? "Временная полка" : null, provisional],
   );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-    tenant,
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
+  const token = randomBytes(32).toString("base64url");
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
     id,
   ]);
-  const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), id],
-  );
   return { id, cookie: `polka_session=${token}` };
 }
 
@@ -292,24 +255,13 @@ const sub = () => String(100000000000000000000n + BigInt(Math.floor(Math.random(
 // ---------------------------------------------------------------------------
 
 test("the Google button follows its client: listed when configured, 404 when not", async () => {
-  const capabilities = (
-    await app.inject({ method: "GET", url: "/api/capabilities" })
-  ).json();
-  assert.deepEqual(capabilities.signInProviders, [
-    { id: "google", name: "Google", signup: true },
-  ]);
+  const capabilities = (await app.inject({ method: "GET", url: "/api/capabilities" })).json();
+  assert.deepEqual(capabilities.signInProviders, [{ id: "google", name: "Google", signup: true }]);
   config.SIGN_IN_PROVIDERS = [];
   try {
-    for (const url of [
-      "/api/auth/idp/google/start",
-      "/api/auth/idp/google/callback?code=x&state=y",
-    ])
+    for (const url of ["/api/auth/idp/google/start", "/api/auth/idp/google/callback?code=x&state=y"])
       assert.equal((await app.inject({ method: "GET", url })).statusCode, 404);
-    assert.deepEqual(
-      (await app.inject({ method: "GET", url: "/api/capabilities" })).json()
-        .signInProviders,
-      [],
-    );
+    assert.deepEqual((await app.inject({ method: "GET", url: "/api/capabilities" })).json().signInProviders, []);
   } finally {
     config.SIGN_IN_PROVIDERS = ["google"];
   }
@@ -349,10 +301,7 @@ test("a new person gets a shelf; the verified address, name and Workspace domain
   assert.ok(lastTokenRequest.form.code_verifier);
   assert.equal(lastTokenRequest.form.client_secret, undefined);
   const [account] = (
-    await db.query(
-      "SELECT name,email,email_verified_at,display_name FROM accounts WHERE id=$1",
-      [first.accountId],
-    )
+    await db.query("SELECT name,email,email_verified_at,display_name FROM accounts WHERE id=$1", [first.accountId])
   ).rows;
   assert.equal(account.name, `google-${first.accountId}`);
   assert.equal(account.email, email.toLowerCase());
@@ -369,10 +318,9 @@ test("a new person gets a shelf; the verified address, name and Workspace domain
   // A self-signed-up Google shelf is a new account for moderation, not an
   // operator-created one.
   const [row] = (
-    await db.query(
-      `SELECT ${SIGNED_UP_SQL("account")} AS signed_up FROM accounts account WHERE id=$1`,
-      [first.accountId],
-    )
+    await db.query(`SELECT ${SIGNED_UP_SQL("account")} AS signed_up FROM accounts account WHERE id=$1`, [
+      first.accountId,
+    ])
   ).rows;
   assert.equal(row.signed_up, true);
   // Again: the same shelf, one identity. A personal account has no hd.
@@ -389,11 +337,7 @@ test("a new person gets a shelf; the verified address, name and Workspace domain
   });
   const [identity] = await googleIdentities(personal);
   assert.equal(identity.hosted_domain, null);
-  const [named] = (
-    await db.query("SELECT display_name FROM accounts WHERE id=$1", [
-      identity.account_id,
-    ])
-  ).rows;
+  const [named] = (await db.query("SELECT display_name FROM accounts WHERE id=$1", [identity.account_id])).rows;
   assert.equal(named.display_name, "Пётр Иванов");
 });
 
@@ -407,10 +351,7 @@ test("the id_token is refused with a foreign signature, audience, issuer, nonce 
   ];
   for (const [tamper, expected] of cases) {
     const subject = sub();
-    const result = await signIn(
-      { sub: subject, email: `${subject}@gmail.test`, email_verified: true },
-      { tamper },
-    );
+    const result = await signIn({ sub: subject, email: `${subject}@gmail.test`, email_verified: true }, { tamper });
     assert.match(result.location, expected, JSON.stringify(tamper));
     assert.equal(result.session, undefined);
     assert.equal((await googleIdentities(subject)).length, 0);
@@ -459,11 +400,8 @@ test("email_verified false (or anything but true) never links a shelf or gives i
     const result = await signIn({ sub: subject, email, email_verified: flag });
     assert.ok(result.accountId, String(flag));
     assert.notEqual(result.accountId, existing.id, String(flag));
-    const [fresh] = (
-      await db.query("SELECT email,email_verified_at FROM accounts WHERE id=$1", [
-        result.accountId,
-      ])
-    ).rows;
+    const [fresh] = (await db.query("SELECT email,email_verified_at FROM accounts WHERE id=$1", [result.accountId]))
+      .rows;
     assert.deepEqual(fresh, { email: null, email_verified_at: null });
     const [identity] = await googleIdentities(subject);
     assert.equal(identity.email, email);
@@ -494,15 +432,10 @@ test("linking from settings and unlinking; the last way in stays", async () => {
     })
   ).json();
   assert.deepEqual(
-    listed.identities.map((item: { provider: string; name: string }) => [
-      item.provider,
-      item.name,
-    ]),
+    listed.identities.map((item: { provider: string; name: string }) => [item.provider, item.name]),
     [["google", "Google"]],
   );
-  assert.deepEqual(listed.available, [
-    { provider: "google", name: "Google", signup: true },
-  ]);
+  assert.deepEqual(listed.available, [{ provider: "google", name: "Google", signup: true }]);
   // The same Google account cannot be linked to a second shelf.
   const other = await emailAccount(`o-${randomUUID().slice(0, 8)}@yandex.ru`);
   const second = await signIn(
@@ -532,14 +465,9 @@ test("linking from settings and unlinking; the last way in stays", async () => {
 test("GOOGLE_SIGNUP=link-only: no new shelf, no link by address, no claim; a linked Google signs in", async () => {
   config.GOOGLE_SIGNUP = "link-only";
   try {
-    const capabilities = (
-      await app.inject({ method: "GET", url: "/api/capabilities" })
-    ).json();
-    assert.deepEqual(capabilities.signInProviders, [
-      { id: "google", name: "Google", signup: false },
-    ]);
-    const accounts = async () =>
-      Number((await db.query("SELECT count(*) FROM accounts")).rows[0].count);
+    const capabilities = (await app.inject({ method: "GET", url: "/api/capabilities" })).json();
+    assert.deepEqual(capabilities.signInProviders, [{ id: "google", name: "Google", signup: false }]);
+    const accounts = async () => Number((await db.query("SELECT count(*) FROM accounts")).rows[0].count);
     // A newcomer: refused, nothing created.
     const before = await accounts();
     const newcomer = sub();
@@ -590,14 +518,9 @@ test("GOOGLE_SIGNUP=link-only: no new shelf, no link by address, no claim; a lin
     const begun = await linkStart(guest.cookie);
     config.GOOGLE_SIGNUP = "link-only";
     const late = sub();
-    const lateClaim = await signIn(
-      { sub: late, email: `${late}@gmail.test`, email_verified: true },
-      { begun },
-    );
+    const lateClaim = await signIn({ sub: late, email: `${late}@gmail.test`, email_verified: true }, { begun });
     assert.match(lateClaim.location, /idp_error=link_only/);
-    const [still] = (
-      await db.query("SELECT claimed_at FROM accounts WHERE id=$1", [guest.id])
-    ).rows;
+    const [still] = (await db.query("SELECT claimed_at FROM accounts WHERE id=$1", [guest.id])).rows;
     assert.equal(still.claimed_at, null);
     assert.equal((await googleIdentities(late)).length, 0);
     // «Закрепите полку» names no link-only provider.
@@ -621,18 +544,12 @@ test("erasure takes the Google identity and its Workspace domain; the column is 
     hd: "erase.test",
   });
   assert.equal((await googleIdentities(subject))[0].hosted_domain, "erase.test");
-  await db.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1",
-    [shelf.accountId],
-  );
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [shelf.accountId]);
   assert.equal((await googleIdentities(subject)).length, 0);
   // Signing in with the same Google account again does not reach the shelf
   // being deleted, and no identity reappears for it.
   const [gone] = (
-    await db.query(
-      "SELECT count(*)::int AS n FROM account_identities WHERE account_id=$1",
-      [shelf.accountId],
-    )
+    await db.query("SELECT count(*)::int AS n FROM account_identities WHERE account_id=$1", [shelf.accountId])
   ).rows;
   assert.equal(gone.n, 0);
   const again = await signIn({

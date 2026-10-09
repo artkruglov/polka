@@ -30,11 +30,8 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 const app = await createApp();
 const origin = config.APP_ORIGIN;
 const password = randomBytes(24).toString("hex");
-const cliPath = fileURLToPath(
-  new URL("../scripts/polka-publish.mjs", import.meta.url),
-);
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const cliPath = fileURLToPath(new URL("../scripts/polka-publish.mjs", import.meta.url));
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; name: string };
 let owner: Owner;
@@ -44,10 +41,7 @@ async function newOwner(prefix: string): Promise<Owner> {
   return createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
 }
 
-async function token(
-  who: Owner,
-  scopes: AgentScope[] = ["context", "capture", "share"],
-) {
+async function token(who: Owner, scopes: AgentScope[] = ["context", "capture", "share"]) {
   const id = randomUUID(),
     secret = randomBytes(32).toString("base64url");
   await db.query(
@@ -61,11 +55,7 @@ async function token(
 const page = (heading: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>${heading}</title><style>body{font-family:system-ui;margin:40px}</style></head><body><h1>${heading}</h1><p>A self-contained report produced by a company agent for the account owner.</p></body></html>`;
 
-function publish(
-  body: unknown,
-  headers: Record<string, string> = {},
-  remoteAddress = address(),
-) {
+function publish(body: unknown, headers: Record<string, string> = {}, remoteAddress = address()) {
   return app.inject({
     method: "POST",
     url: "/api/v1/publish",
@@ -139,19 +129,10 @@ test("requires a valid bearer token and never reads cookies", async () => {
   const missing = await publish(input);
   assert.equal(missing.statusCode, 401);
   assert.equal(missing.json().code, "unauthorized");
-  assert.match(
-    String(missing.headers["www-authenticate"]),
-    /^Bearer realm="polka"$/,
-  );
-  const invalid = await publish(
-    input,
-    bearer(randomBytes(32).toString("base64url")),
-  );
+  assert.match(String(missing.headers["www-authenticate"]), /^Bearer realm="polka"$/);
+  const invalid = await publish(input, bearer(randomBytes(32).toString("base64url")));
   assert.equal(invalid.statusCode, 401);
-  assert.match(
-    String(invalid.headers["www-authenticate"]),
-    /error="invalid_token"/,
-  );
+  assert.match(String(invalid.headers["www-authenticate"]), /error="invalid_token"/);
   // An owner's browser session is not a credential here.
   const login = await app.inject({
     method: "POST",
@@ -166,17 +147,14 @@ test("requires a valid bearer token and never reads cookies", async () => {
   assert.equal(withCookie.statusCode, 401);
   // A revoked connection stops working at once.
   const revoked = await token(owner);
-  await db.query(
-    "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1",
-    [revoked.id],
-  );
+  await db.query("UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1", [revoked.id]);
   assert.equal((await publish(input, bearer(revoked.secret))).statusCode, 401);
   assert.equal(
     (
-      await db.query(
-        "SELECT count(*)::int AS count FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-        [owner.tenant, input.key],
-      )
+      await db.query("SELECT count(*)::int AS count FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [
+        owner.tenant,
+        input.key,
+      ])
     ).rows[0].count,
     0,
   );
@@ -194,17 +172,11 @@ test("a browser page on another origin is refused", async () => {
 
 test("scopes: capture is required, the link needs share", async () => {
   const reader = await token(owner, ["context", "read"]);
-  const refused = await publish(
-    { key: randomUUID(), title: "Reader", html: page("Reader") },
-    bearer(reader.secret),
-  );
+  const refused = await publish({ key: randomUUID(), title: "Reader", html: page("Reader") }, bearer(reader.secret));
   assert.equal(refused.statusCode, 403);
   assert.equal(refused.json().code, "forbidden");
   const saver = await token(owner, ["context", "capture"]);
-  const saved = await publish(
-    { key: randomUUID(), title: "Private", html: page("Private") },
-    bearer(saver.secret),
-  );
+  const saved = await publish({ key: randomUUID(), title: "Private", html: page("Private") }, bearer(saver.secret));
   assert.equal(saved.statusCode, 200, saved.body);
   const body = saved.json();
   publishResponseSchema.parse(body);
@@ -223,19 +195,12 @@ test("a retry with the same key returns the same work and link", async () => {
   assert.equal(second.statusCode, 200, second.body);
   assert.deepEqual(second.json(), first.json());
   assert.equal(
-    (
-      await db.query(
-        "SELECT count(*)::int AS count FROM shares WHERE artifact_id=$1",
-        [first.json().artifactId],
-      )
-    ).rows[0].count,
+    (await db.query("SELECT count(*)::int AS count FROM shares WHERE artifact_id=$1", [first.json().artifactId]))
+      .rows[0].count,
     1,
   );
   // The same key with different content is a conflict, not a second work.
-  const changed = await publish(
-    { ...input, html: page("Something else") },
-    bearer(secret),
-  );
+  const changed = await publish({ ...input, html: page("Something else") }, bearer(secret));
   assert.equal(changed.statusCode, 409, changed.body);
 });
 
@@ -245,10 +210,7 @@ test("size limits and field errors are JSON", async () => {
     {
       key: randomUUID(),
       title: "Large",
-      html: page("Large").replace(
-        "</body>",
-        `<p>${"x".repeat(MAX_BYTES)}</p></body>`,
-      ),
+      html: page("Large").replace("</body>", `<p>${"x".repeat(MAX_BYTES)}</p></body>`),
     },
     bearer(secret),
   );
@@ -269,22 +231,16 @@ test("size limits and field errors are JSON", async () => {
   assert.match(invalid.json().message, /key/);
   assert.match(invalid.json().message, /title/);
   assert.match(invalid.json().message, /expiresInDays/);
-  const notHtml = await publish(
-    { key: randomUUID(), title: "Plain", html: "just words, no markup" },
-    bearer(secret),
-  );
+  const notHtml = await publish({ key: randomUUID(), title: "Plain", html: "just words, no markup" }, bearer(secret));
   assert.equal(notHtml.statusCode, 422, notHtml.body);
 });
 
 test("rate limits apply per connection and per address", async () => {
   const limited = await token(owner);
-  await db.query(
-    "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
-    [
-      sha256(`api-v1:connection:${limited.id}`),
-      PUBLISH_API_LIMITS.perConnection,
-    ],
-  );
+  await db.query("INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')", [
+    sha256(`api-v1:connection:${limited.id}`),
+    PUBLISH_API_LIMITS.perConnection,
+  ]);
   const input = { key: randomUUID(), title: "Limited", html: page("Limited") };
   const response = await publish(input, bearer(limited.secret));
   assert.equal(response.statusCode, 429);
@@ -292,17 +248,13 @@ test("rate limits apply per connection and per address", async () => {
   const retryAfter = Number(response.headers["retry-after"]);
   assert.ok(retryAfter > 0 && retryAfter <= 600, String(retryAfter));
   const ip = address();
-  await db.query(
-    "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
-    [sha256(`api-v1:ip:${ip}`), PUBLISH_API_LIMITS.perIp],
-  );
+  await db.query("INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')", [
+    sha256(`api-v1:ip:${ip}`),
+    PUBLISH_API_LIMITS.perIp,
+  ]);
   const other = await token(owner);
   // Agents on hosted platforms share addresses: a valid token passes.
-  const byAddress = await publish(
-    { ...input, key: randomUUID() },
-    bearer(other.secret),
-    ip,
-  );
+  const byAddress = await publish({ ...input, key: randomUUID() }, bearer(other.secret), ip);
   assert.ok(byAddress.statusCode < 300, byAddress.body);
   // Unauthenticated guesses count against the address.
   assert.equal((await publish(input, {}, ip)).statusCode, 429);
@@ -311,10 +263,7 @@ test("rate limits apply per connection and per address", async () => {
 test("status shows works this connection saved; read sees the whole shelf", async () => {
   const publisher = await token(owner);
   const published = (
-    await publish(
-      { key: randomUUID(), title: "Status", html: page("Status") },
-      bearer(publisher.secret),
-    )
+    await publish({ key: randomUUID(), title: "Status", html: page("Status") }, bearer(publisher.secret))
   ).json();
   const status = (secret: string, id = published.artifactId) =>
     app.inject({
@@ -360,11 +309,7 @@ test("the installation serves the CLI pointed at itself", async () => {
   });
   assert.equal(response.statusCode, 200);
   assert.match(String(response.headers["content-type"]), /^text\/javascript/);
-  assert.ok(
-    response.body.includes(
-      `const DEFAULT_ENDPOINT = ${JSON.stringify(origin)};`,
-    ),
-  );
+  assert.ok(response.body.includes(`const DEFAULT_ENDPOINT = ${JSON.stringify(origin)};`));
   assert.ok(!response.body.includes('"https://polochka.app";'));
 });
 
@@ -378,12 +323,10 @@ function runCli(args: string[], env: Record<string, string>) {
     stderr = "";
   child.stdout.on("data", (chunk) => (stdout += chunk));
   child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise<{ code: number | null; stdout: string; stderr: string }>(
-    (resolve, reject) => {
-      child.once("error", reject);
-      child.once("close", (code) => resolve({ code, stdout, stderr }));
-    },
-  );
+  return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code, stdout, stderr }));
+  });
 }
 
 test("CLI publishes a file against a running server, retries idempotently", async () => {
@@ -398,22 +341,14 @@ test("CLI publishes a file against a running server, retries idempotently", asyn
     const env = { POLKA_TOKEN: secret, POLKA_ENDPOINT: endpoint };
     const first = await runCli([file, "--share", "7", "--key", key], env);
     assert.equal(first.code, 0, first.stderr);
-    assert.match(
-      first.stdout.trim(),
-      new RegExp(`^${origin}/s#[A-Za-z0-9_-]{43}$`),
-    );
+    assert.match(first.stdout.trim(), new RegExp(`^${origin}/s#[A-Za-z0-9_-]{43}$`));
     assert.match(first.stderr, /Saved and shared/);
-    const retry = await runCli(
-      [file, "--share", "7", "--key", key, "--json"],
-      env,
-    );
+    const retry = await runCli([file, "--share", "7", "--key", key, "--json"], env);
     assert.equal(retry.code, 0, retry.stderr);
     const json = JSON.parse(retry.stdout);
     assert.equal(json.url, first.stdout.trim());
     assert.equal(json.key, key);
-    const artifact = await db.query("SELECT title FROM artifacts WHERE id=$1", [
-      json.artifactId,
-    ]);
+    const artifact = await db.query("SELECT title FROM artifacts WHERE id=$1", [json.artifactId]);
     assert.equal(artifact.rows[0].title, "CLI report");
 
     const notes = join(scratch, "notes.md");
@@ -422,11 +357,7 @@ test("CLI publishes a file against a running server, retries idempotently", asyn
     assert.equal(markdown.code, 0, markdown.stderr);
     const saved = JSON.parse(markdown.stdout);
     assert.equal(
-      (
-        await db.query("SELECT title FROM artifacts WHERE id=$1", [
-          saved.artifactId,
-        ])
-      ).rows[0].title,
+      (await db.query("SELECT title FROM artifacts WHERE id=$1", [saved.artifactId])).rows[0].title,
       "notes",
     );
 
@@ -456,10 +387,7 @@ test("CLI publishes a file against a running server, retries idempotently", asyn
 
 test("a new version through publish keeps the work's link", async () => {
   const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
-  const first = await publish(
-    { key: randomUUID(), title: "Прототип", html: page("Версия 1") },
-    bearer(secret),
-  );
+  const first = await publish({ key: randomUUID(), title: "Прототип", html: page("Версия 1") }, bearer(secret));
   assert.equal(first.statusCode, 200, first.body);
   const v1 = first.json();
   const second = await publish(
@@ -480,10 +408,7 @@ test("a new version through publish keeps the work's link", async () => {
   assert.equal(v2.linkMoved, true);
   const {
     rows: [share],
-  } = await db.query(
-    "SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
-    [v1.artifactId],
-  );
+  } = await db.query("SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [v1.artifactId]);
   assert.equal(share.revision_id, v2.revisionId);
   // A stale base is refused, and half a new version is a field error.
   const stale = await publish(
@@ -536,10 +461,7 @@ test("CLI sends .jsx as a component and saves new versions", async () => {
     await writeFile(file, page("Версия 1"));
     const first = JSON.parse((await runCli([file, "--json"], env)).stdout);
     await writeFile(file, page("Версия 2"));
-    const next = await runCli(
-      [file, "--artifact", first.artifactId, "--base-revision", first.revisionId],
-      env,
-    );
+    const next = await runCli([file, "--artifact", first.artifactId, "--base-revision", first.revisionId], env);
     assert.equal(next.code, 0, next.stderr);
     assert.equal(next.stdout.trim(), first.url);
     assert.match(next.stderr, /New version saved; the link now shows it/);
@@ -550,11 +472,7 @@ test("CLI sends .jsx as a component and saves new versions", async () => {
   }
 });
 
-function edits(
-  artifactId: string,
-  body: unknown,
-  headers: Record<string, string> = {},
-) {
+function edits(artifactId: string, body: unknown, headers: Record<string, string> = {}) {
   return app.inject({
     method: "POST",
     url: `/api/v1/works/${artifactId}/edits`,
@@ -617,18 +535,12 @@ test("patch edits: a new revision, the link moved, structured refusals", async (
   assert.equal(body.link?.moved, true);
   assert.equal(body.link?.revisionId, body.revisionId);
   // The link, its token and its discussion now show the new version.
-  const share = await db.query(
-    "SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
-    [work.artifactId],
-  );
+  const share = await db.query("SELECT revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [
+    work.artifactId,
+  ]);
   assert.equal(share.rows[0].revision_id, body.revisionId);
-  const bytes = await db.query(
-    "SELECT r.size,r.sha256 FROM revisions r WHERE r.id=$1",
-    [body.revisionId],
-  );
-  const expected = Buffer.from(
-    page("Patchable").replace("A self-contained report", "A patched report"),
-  );
+  const bytes = await db.query("SELECT r.size,r.sha256 FROM revisions r WHERE r.id=$1", [body.revisionId]);
+  const expected = Buffer.from(page("Patchable").replace("A self-contained report", "A patched report"));
   assert.equal(Number(bytes.rows[0].size), expected.length);
   assert.equal(bytes.rows[0].sha256, sha256(expected));
   // The same key replays the receipt, even though the base moved on.
@@ -645,11 +557,7 @@ test("patch edits: a new revision, the link moved, structured refusals", async (
   assert.equal(replay.statusCode, 200, replay.body);
   assert.equal(replay.json().revisionId, body.revisionId);
   // A new key against the old base: 409 with the latest revision.
-  const stale = await edits(
-    work.artifactId,
-    { ...request, key: randomUUID() },
-    bearer(secret),
-  );
+  const stale = await edits(work.artifactId, { ...request, key: randomUUID() }, bearer(secret));
   assert.equal(stale.statusCode, 409, stale.body);
   baseMismatchSchema.parse(stale.json());
   assert.equal(stale.json().currentRevisionId, body.revisionId);
@@ -706,10 +614,7 @@ test("patch edits: a new revision, the link moved, structured refusals", async (
   );
   // Another shelf's work is missing.
   const stranger = await newOwner("publish-api-other");
-  const { secret: strangerSecret } = await token(stranger, [
-    "context",
-    "revise",
-  ]);
+  const { secret: strangerSecret } = await token(stranger, ["context", "revise"]);
   assert.equal(
     (
       await edits(
@@ -725,18 +630,12 @@ test("patch edits: a new revision, the link moved, structured refusals", async (
 test("GET /works lists the shelf of a read token, finds by query and by since", async () => {
   const publisher = await token(owner);
   const first = (
-    await publish(
-      { key: randomUUID(), title: "Works list alpha", html: page("alpha") },
-      bearer(publisher.secret),
-    )
+    await publish({ key: randomUUID(), title: "Works list alpha", html: page("alpha") }, bearer(publisher.secret))
   ).json();
   const mark = new Date(Date.now() + 1).toISOString();
   await new Promise((resolve) => setTimeout(resolve, 20));
   const second = (
-    await publish(
-      { key: randomUUID(), title: "Works list beta", html: page("beta") },
-      bearer(publisher.secret),
-    )
+    await publish({ key: randomUUID(), title: "Works list beta", html: page("beta") }, bearer(publisher.secret))
   ).json();
   const list = (secret: string | null, qs = "") =>
     app.inject({
@@ -751,10 +650,7 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
   const ids = all.json().items.map((item: { id: string }) => item.id);
   assert.ok(ids.includes(first.artifactId) && ids.includes(second.artifactId));
   assert.ok(!JSON.stringify(all.json()).includes("https://polochka.app/s#"));
-  const since = await list(
-    reader.secret,
-    `?query=Works%20list&since=${encodeURIComponent(mark)}`,
-  );
+  const since = await list(reader.secret, `?query=Works%20list&since=${encodeURIComponent(mark)}`);
   assert.deepEqual(
     since.json().items.map((item: { id: string }) => item.id),
     [second.artifactId],
@@ -782,7 +678,14 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
   assert.ok(!detail.body.includes("https://polochka.app/s#"));
   const strangerOwner = await token(await newOwner("publish-api-detail-other"), ["context", "read"]);
   assert.equal(
-    (await app.inject({ method: "GET", url: `/api/v1/works/${second.artifactId}`, remoteAddress: address(), headers: bearer(strangerOwner.secret) })).statusCode,
+    (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/works/${second.artifactId}`,
+        remoteAddress: address(),
+        headers: bearer(strangerOwner.secret),
+      })
+    ).statusCode,
     404,
   );
   const noRead = await token(owner, ["context", "capture"]);
@@ -795,32 +698,22 @@ test("GET /works lists the shelf of a read token, finds by query and by since", 
 
 test("a link is pinned by default; the rule holds back a service account (not wired until service accounts exist)", async () => {
   const { secret } = await token(owner, ["context", "capture", "revise", "share"]);
-  const first = (
-    await publish(
-      { key: randomUUID(), title: "Pinned", html: page("1") },
-      bearer(secret),
-    )
-  ).json();
+  const first = (await publish({ key: randomUUID(), title: "Pinned", html: page("1") }, bearer(secret))).json();
   const {
     rows: [share],
-  } = await db.query("SELECT id,follow_mode FROM shares WHERE artifact_id=$1", [
-    first.artifactId,
-  ]);
+  } = await db.query("SELECT id,follow_mode FROM shares WHERE artifact_id=$1", [first.artifactId]);
   assert.equal(share.follow_mode, "pinned");
   const {
     rows: [event],
-  } = await db.query(
-    "SELECT payload FROM audit_outbox WHERE action='revision.saved' AND target_id=$1",
-    [first.revisionId],
-  );
+  } = await db.query("SELECT payload FROM audit_outbox WHERE action='revision.saved' AND target_id=$1", [
+    first.revisionId,
+  ]);
   assert.deepEqual(event.payload, {
     artifactId: first.artifactId,
     revisionId: first.revisionId,
     number: 1,
   });
-  await assert.rejects(
-    db.query("UPDATE shares SET follow_mode='other' WHERE id=$1", [share.id]),
-  );
+  await assert.rejects(db.query("UPDATE shares SET follow_mode='other' WHERE id=$1", [share.id]));
   // A curator switches it; a stranger's shelf cannot.
   const me = { id: owner.id, tenant: owner.tenant };
   assert.deepEqual(await setShareFollowMode(me, share.id, { followMode: "follows" }), {
@@ -852,10 +745,17 @@ test("a link is pinned by default; the rule holds back a service account (not wi
 
 test("GET /api/v1/snapshot over HTTP: needs read, a valid moment, answers by cursor", async () => {
   const publisher = await token(owner);
-  const saved = (await publish({ key: randomUUID(), title: "Snapshot over HTTP", html: page("snap") }, bearer(publisher.secret))).json();
+  const saved = (
+    await publish({ key: randomUUID(), title: "Snapshot over HTTP", html: page("snap") }, bearer(publisher.secret))
+  ).json();
   const reader = await token(owner, ["context", "read"]);
   const snap = (secret: string | null, qs: string) =>
-    app.inject({ method: "GET", url: `/api/v1/snapshot${qs}`, remoteAddress: address(), headers: secret ? bearer(secret) : {} });
+    app.inject({
+      method: "GET",
+      url: `/api/v1/snapshot${qs}`,
+      remoteAddress: address(),
+      headers: secret ? bearer(secret) : {},
+    });
   const now = new Date(Date.now() + 500).toISOString();
   const answer = await snap(reader.secret, `?at=${encodeURIComponent(now)}&limit=100`);
   assert.equal(answer.statusCode, 200, answer.body);
@@ -870,7 +770,10 @@ test("GET /api/v1/snapshot over HTTP: needs read, a valid moment, answers by cur
   // Refusals: no moment, a bad moment, the future, no token, no read scope.
   assert.equal((await snap(reader.secret, "")).statusCode, 400);
   assert.equal((await snap(reader.secret, "?at=yesterday")).statusCode, 400);
-  assert.equal((await snap(reader.secret, `?at=${encodeURIComponent(new Date(Date.now() + 3_600_000).toISOString())}`)).statusCode, 400);
+  assert.equal(
+    (await snap(reader.secret, `?at=${encodeURIComponent(new Date(Date.now() + 3_600_000).toISOString())}`)).statusCode,
+    400,
+  );
   assert.equal((await snap(null, `?at=${encodeURIComponent(now)}`)).statusCode, 401);
   const noRead = await token(owner, ["context", "capture"]);
   assert.equal((await snap(noRead.secret, `?at=${encodeURIComponent(now)}`)).statusCode, 403);

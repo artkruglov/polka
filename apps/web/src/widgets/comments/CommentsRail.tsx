@@ -1,26 +1,6 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  Check,
-  CornerDownRight,
-  Flag,
-  LogIn,
-  MessageSquarePlus,
-  RotateCcw,
-  SmilePlus,
-  Trash2,
-  X,
-} from "lucide-react";
-import {
-  COMMENT_MAX_CHARS,
-  REACTIONS,
-} from "../../../../../packages/contracts/comment-constants.ts";
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, CornerDownRight, Flag, LogIn, MessageSquarePlus, RotateCcw, SmilePlus, Trash2, X } from "lucide-react";
+import { COMMENT_MAX_CHARS, REACTIONS } from "../../../../../packages/contracts/comment-constants.ts";
 import type {
   CommentAnchor,
   CommentThread,
@@ -91,18 +71,13 @@ const GAP = 8;
  * open thread quotes. Sent whether or not the rail is open.
  */
 export function anchorsOf(discussion: ShareDiscussion): BridgeAnchor[] {
-  const open = discussion.threads.filter(
-    (thread) => !thread.resolvedAt && thread.anchor && !thread.deleted,
-  );
+  const open = discussion.threads.filter((thread) => !thread.resolvedAt && thread.anchor && !thread.deleted);
   const quoted = new Set(open.map((thread) => thread.sig));
   const fragments = new Map<string, BridgeAnchor>();
   for (const group of discussion.reactions)
     if (group.sig && group.anchor && !quoted.has(group.sig))
       fragments.set(group.sig, { id: `r:${group.sig}`, ...group.anchor });
-  return [
-    ...open.map((thread) => ({ id: thread.id, ...thread.anchor! })),
-    ...fragments.values(),
-  ];
+  return [...open.map((thread) => ({ id: thread.id, ...thread.anchor! })), ...fragments.values()];
 }
 const quote = (text: string, max = 140) => {
   const chars = [...text.replace(/\s+/g, " ").trim()];
@@ -134,9 +109,7 @@ export function CommentsRail({
   const [error, setError] = useState("");
   const state = bridge?.state;
   const resolvedCount = discussion.threads.filter((t) => t.resolvedAt).length;
-  const threads = discussion.threads.filter(
-    (thread) => showResolved || !thread.resolvedAt,
-  );
+  const threads = discussion.threads.filter((thread) => showResolved || !thread.resolvedAt);
   // Reactions on a fragment no thread quotes get their own small card.
   const threadSigs = new Set(threads.map((thread) => thread.sig));
   const bySig = new Map<string, ReactionGroup[]>();
@@ -154,17 +127,12 @@ export function CommentsRail({
   useEffect(() => {
     if (!state?.focus) return;
     setActive(state.focus.id);
-    cardRefs.current
-      .get(state.focus.id)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    cardRefs.current.get(state.focus.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [state?.focus]);
 
-  const positionOf = (id: string) =>
-    state?.ready && !state.missing.has(id) ? state.positions[id] : undefined;
+  const positionOf = (id: string) => (state?.ready && !state.missing.has(id) ? state.positions[id] : undefined);
   const items: Item[] = [
-    ...(pending && !readOnly
-      ? [{ key: "composer", kind: "composer" as const, anchor: pending.anchor }]
-      : []),
+    ...(pending && !readOnly ? [{ key: "composer", kind: "composer" as const, anchor: pending.anchor }] : []),
     ...threads.map((thread) => ({
       key: thread.id,
       kind: "thread" as const,
@@ -180,18 +148,13 @@ export function CommentsRail({
   ];
   // Where each item belongs in the document; the composer follows the selection.
   const yOf = (item: Item): number | undefined => {
-    if (item.kind === "composer")
-      return undefined;
-    if (item.kind === "thread")
-      return item.thread.anchor ? positionOf(item.thread.id) : undefined;
+    if (item.kind === "composer") return undefined;
+    if (item.kind === "thread") return item.thread.anchor ? positionOf(item.thread.id) : undefined;
     return positionOf(item.key);
   };
   const unplaced = items.filter((item) => yOf(item) === undefined);
-  const placed = items
-    .filter((item) => yOf(item) !== undefined)
-    .sort((a, b) => yOf(a)! - yOf(b)!);
-  const aligned =
-    layout === "rail" && !!state?.ready && placed.length > 0 && !!bridge;
+  const placed = items.filter((item) => yOf(item) !== undefined).sort((a, b) => yOf(a)! - yOf(b)!);
+  const aligned = layout === "rail" && !!state?.ready && placed.length > 0 && !!bridge;
 
   // Aligned cards: measured after render, then placed at their fragment's
   // height, pushed down so none overlaps the one before. Items without a
@@ -220,9 +183,7 @@ export function CommentsRail({
     const changed =
       Math.abs(cursor - layout2.height) > 0.5 ||
       Object.keys(tops).length !== Object.keys(layout2.tops).length ||
-      Object.entries(tops).some(
-        ([key, top]) => Math.abs((layout2.tops[key] ?? -1e9) - top) > 0.5,
-      );
+      Object.entries(tops).some(([key, top]) => Math.abs((layout2.tops[key] ?? -1e9) - top) > 0.5);
     if (changed) setLayout2({ tops, height: cursor });
   });
 
@@ -295,11 +256,7 @@ export function CommentsRail({
         thread={thread}
         reactions={thread.sig ? discussion.reactions.filter((g) => g.sig === thread.sig) : []}
         missing={
-          missing
-            ? thread.revisionId !== discussion.revisionId
-              ? "К прежней версии"
-              : "Фрагмент не найден"
-            : null
+          missing ? (thread.revisionId !== discussion.revisionId ? "К прежней версии" : "Фрагмент не найден") : null
         }
         active={active === thread.id}
         onActivate={() => focusThread(thread.id)}
@@ -322,91 +279,85 @@ export function CommentsRail({
         suggested: viewer?.name ?? "",
       }}
     >
-    <section className="comments" data-layout={layout} aria-label="Обсуждение">
-      <header className="comments-head">
-        <h2>
-          {notes ? (viewer?.owner ? "Заметки" : "Заметки автора") : "Комментарии"}{" "}
-          <span className="comments-count">{count}</span>
-        </h2>
-        {!readOnly && (
-          <Button
-            variant="quiet"
-            className="comments-new"
-            onClick={() => onPendingChange({ anchor: null })}
-            title={notes ? "Заметка ко всей работе" : "Комментарий ко всей работе"}
-          >
-            <MessageSquarePlus /> <span>Ко всей работе</span>
-          </Button>
-        )}
-        {onClose && (
-          <Button variant="quiet" className="comments-close" aria-label="Скрыть комментарии" onClick={onClose}>
-            <X />
-          </Button>
-        )}
-      </header>
-      {header}
-      {workReactions.length > 0 && (
-        <div className="comments-work-reactions">
-          <span>Работе целиком:</span>
-          <ReactionChips
-            groups={workReactions}
-            disabled={!signedIn || readOnly}
-            onToggle={(emoji) => run(() => actions.react(emoji, null))}
-          />
-        </div>
-      )}
-      {error && (
-        <p className="comments-error" role="alert">
-          {error}
-        </p>
-      )}
-      {items.length === 0 && (
-        <p className="comments-empty">
-          {notes
-            ? readOnly
-              ? "Автор пока не оставил заметок."
-              : "Выделите фрагмент текста, чтобы оставить заметку, или напишите заметку ко всей работе. Получатели ссылки читают заметки, но не отвечают на них."
-            : readOnly
-            ? "Здесь пока нет комментариев."
-            : state?.ready
-              ? "Выделите фрагмент текста, чтобы прокомментировать его, или оставьте комментарий ко всей работе."
-              : "Пока нет комментариев. Оставьте первый — ко всей работе."}
-        </p>
-      )}
-      {aligned ? (
-        <div
-          className="comments-aligned"
-          ref={region}
-          style={{ height: layout2.height }}
-        >
-          {[...unplaced, ...placed].map((item) =>
-            card(item, {
-              position: "absolute",
-              top: layout2.tops[item.key] ?? 0,
-              left: 0,
-              right: 0,
-            }),
+      <section className="comments" data-layout={layout} aria-label="Обсуждение">
+        <header className="comments-head">
+          <h2>
+            {notes ? (viewer?.owner ? "Заметки" : "Заметки автора") : "Комментарии"}{" "}
+            <span className="comments-count">{count}</span>
+          </h2>
+          {!readOnly && (
+            <Button
+              variant="quiet"
+              className="comments-new"
+              onClick={() => onPendingChange({ anchor: null })}
+              title={notes ? "Заметка ко всей работе" : "Комментарий ко всей работе"}
+            >
+              <MessageSquarePlus /> <span>Ко всей работе</span>
+            </Button>
           )}
-        </div>
-      ) : (
-        <div className="comments-list">
-          {[...unplaced, ...placed].map((item) => card(item))}
-        </div>
-      )}
-      {resolvedCount > 0 && (
-        <button
-          type="button"
-          className="comments-resolved-toggle"
-          onClick={() => setShowResolved((value) => !value)}
-          aria-pressed={showResolved}
-        >
-          {showResolved ? "Скрыть решённые" : `Показать решённые (${resolvedCount})`}
-        </button>
-      )}
-      {viewer?.signedIn && onSettings && (
-        <Settings viewer={viewer} onSettings={(value) => run(() => onSettings(value))} />
-      )}
-    </section>
+          {onClose && (
+            <Button variant="quiet" className="comments-close" aria-label="Скрыть комментарии" onClick={onClose}>
+              <X />
+            </Button>
+          )}
+        </header>
+        {header}
+        {workReactions.length > 0 && (
+          <div className="comments-work-reactions">
+            <span>Работе целиком:</span>
+            <ReactionChips
+              groups={workReactions}
+              disabled={!signedIn || readOnly}
+              onToggle={(emoji) => run(() => actions.react(emoji, null))}
+            />
+          </div>
+        )}
+        {error && (
+          <p className="comments-error" role="alert">
+            {error}
+          </p>
+        )}
+        {items.length === 0 && (
+          <p className="comments-empty">
+            {notes
+              ? readOnly
+                ? "Автор пока не оставил заметок."
+                : "Выделите фрагмент текста, чтобы оставить заметку, или напишите заметку ко всей работе. Получатели ссылки читают заметки, но не отвечают на них."
+              : readOnly
+                ? "Здесь пока нет комментариев."
+                : state?.ready
+                  ? "Выделите фрагмент текста, чтобы прокомментировать его, или оставьте комментарий ко всей работе."
+                  : "Пока нет комментариев. Оставьте первый — ко всей работе."}
+          </p>
+        )}
+        {aligned ? (
+          <div className="comments-aligned" ref={region} style={{ height: layout2.height }}>
+            {[...unplaced, ...placed].map((item) =>
+              card(item, {
+                position: "absolute",
+                top: layout2.tops[item.key] ?? 0,
+                left: 0,
+                right: 0,
+              }),
+            )}
+          </div>
+        ) : (
+          <div className="comments-list">{[...unplaced, ...placed].map((item) => card(item))}</div>
+        )}
+        {resolvedCount > 0 && (
+          <button
+            type="button"
+            className="comments-resolved-toggle"
+            onClick={() => setShowResolved((value) => !value)}
+            aria-pressed={showResolved}
+          >
+            {showResolved ? "Скрыть решённые" : `Показать решённые (${resolvedCount})`}
+          </button>
+        )}
+        {viewer?.signedIn && onSettings && (
+          <Settings viewer={viewer} onSettings={(value) => run(() => onSettings(value))} />
+        )}
+      </section>
     </NameChoice.Provider>
   );
 }
@@ -435,8 +386,8 @@ function Settings({
   };
   return (
     <footer className="comments-settings">
-      {viewer.nameChosen && (
-        editing ? (
+      {viewer.nameChosen &&
+        (editing ? (
           <form
             className="comments-settings-name"
             onSubmit={(event) => {
@@ -462,8 +413,7 @@ function Settings({
               Изменить
             </button>
           </p>
-        )
-      )}
+        ))}
       <p>
         Письма о комментариях {viewer.commentMail ? "приходят" : "отключены"}.{" "}
         <button
@@ -557,12 +507,12 @@ function Composer({
       </Tag>
     );
   return (
-    <Tag ref={cardRef as any} style={style} className={`comment-card comment-card--composer${compact ? " comment-card--inline" : ""}`}>
-      {!compact && (
-        <blockquote className="comment-quote">
-          {anchor ? quote(anchor.exact) : "Ко всей работе"}
-        </blockquote>
-      )}
+    <Tag
+      ref={cardRef as any}
+      style={style}
+      className={`comment-card comment-card--composer${compact ? " comment-card--inline" : ""}`}
+    >
+      {!compact && <blockquote className="comment-quote">{anchor ? quote(anchor.exact) : "Ко всей работе"}</blockquote>}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -591,8 +541,7 @@ function Composer({
               />
             </label>
             <small>
-              Имя и текст комментария увидят все, у кого есть ссылка, и автор
-              работы. Почту мы не показываем.
+              Имя и текст комментария увидят все, у кого есть ссылка, и автор работы. Почту мы не показываем.
             </small>
           </div>
         )}
@@ -621,11 +570,7 @@ function Composer({
             variant="primary"
             type="submit"
             busy={busy}
-            disabled={
-              !body.trim() ||
-              length > COMMENT_MAX_CHARS ||
-              (naming.needed && !name.trim())
-            }
+            disabled={!body.trim() || length > COMMENT_MAX_CHARS || (naming.needed && !name.trim())}
           >
             Отправить
           </Button>
@@ -641,7 +586,10 @@ function Byline({ comment }: { comment: CommentView }) {
       <strong>{comment.author ? comment.author.name : "Комментарий удалён"}</strong>
       {comment.author?.owner && <span className="comment-badge">автор работы</span>}
       {comment.held && (
-        <span className="comment-badge comment-badge--held" title="Комментарий похож на попытку выманить данные. Его видят только автор и владелец работы, пока модератор Полки не решит.">
+        <span
+          className="comment-badge comment-badge--held"
+          title="Комментарий похож на попытку выманить данные. Его видят только автор и владелец работы, пока модератор Полки не решит."
+        >
           на проверке
         </span>
       )}
@@ -703,10 +651,7 @@ function ThreadCard({
       ) : (
         <>
           {root && !readOnly && !thread.deleted && (
-            <Button
-              variant="quiet"
-              onClick={() => (signedIn ? setReplying(true) : onSignIn?.())}
-            >
+            <Button variant="quiet" onClick={() => (signedIn ? setReplying(true) : onSignIn?.())}>
               <CornerDownRight /> Ответить
             </Button>
           )}
@@ -723,9 +668,7 @@ function ThreadCard({
           {root && comment.canResolve && (
             <Button
               variant="quiet"
-              onClick={() =>
-                void run(() => actions.resolve(comment.id, !comment.resolvedAt)).catch(() => {})
-              }
+              onClick={() => void run(() => actions.resolve(comment.id, !comment.resolvedAt)).catch(() => {})}
             >
               {comment.resolvedAt ? (
                 <>

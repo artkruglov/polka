@@ -54,9 +54,8 @@ export function FeedProposalBody({
       {!pending && (
         <>
           <p className="ui-field-hint">
-            Лента — подборка Редакции Полки, её видят все. Редакция проверит
-            работу по своему чек-листу и, если она подходит, опубликует копию
-            выбранной версии. Новые версии в Ленту сами не попадают.
+            Лента — подборка Редакции Полки, её видят все. Редакция проверит работу по своему чек-листу и, если она
+            подходит, опубликует копию выбранной версии. Новые версии в Ленту сами не попадают.
           </p>
           <SelectField
             label="Версия"
@@ -152,8 +151,7 @@ export function ProposeToFeedPanel({ artifact, onClose }: { artifact: Artifact; 
     }
   };
   const pending = proposal?.state === "pending";
-  const ready =
-    !!revisions && draft.title.trim() && draft.summary.trim() && draft.rights && draft.noPersonalData;
+  const ready = !!revisions && draft.title.trim() && draft.summary.trim() && draft.rights && draft.noPersonalData;
 
   return (
     <Dialog title="Предложить в Ленту" busy={busy} onClose={() => !busy && onClose()}>
@@ -177,13 +175,7 @@ export function ProposeToFeedPanel({ artifact, onClose }: { artifact: Artifact; 
             {error ? <Notice tone="error">{error}</Notice> : <p role="status">Загружаем…</p>}
           </div>
         ) : (
-          <FeedProposalBody
-            proposal={proposal}
-            revisions={revisions}
-            draft={draft}
-            setDraft={setDraft}
-            error={error}
-          />
+          <FeedProposalBody proposal={proposal} revisions={revisions} draft={draft} setDraft={setDraft} error={error} />
         )}
         <div className="dialog-footer">
           <Button type="button" onClick={onClose} disabled={busy}>

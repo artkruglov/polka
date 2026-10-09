@@ -1,11 +1,7 @@
-import {
-  MAX_BYTES,
-  MIME,
-} from "../../../../../packages/contracts/constants.ts";
+import { MAX_BYTES, MIME } from "../../../../../packages/contracts/constants.ts";
 
 /** One description of what an upload may be, for every save form. */
-export const UPLOAD_ACCEPT =
-  "text/html,.html,.htm,text/plain,.txt,image/png,image/jpeg,image/webp";
+export const UPLOAD_ACCEPT = "text/html,.html,.htm,text/plain,.txt,image/png,image/jpeg,image/webp";
 export const UPLOAD_FORMATS = "HTML, TXT, PNG, JPEG или WebP · до 5 МБ";
 
 // Browsers may report an empty or generic type for downloaded files; use the
@@ -21,8 +17,7 @@ function fileMime(file: File) {
 }
 
 /** The bytes to send with the type the server expects. */
-export const uploadBlob = (file: File) =>
-  new Blob([file], { type: fileMime(file) });
+export const uploadBlob = (file: File) => new Blob([file], { type: fileMime(file) });
 
 /** Why this content cannot be saved, or null when it can. */
 export function uploadProblem(blob: Blob): string | null {

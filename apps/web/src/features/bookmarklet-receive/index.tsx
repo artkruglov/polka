@@ -12,13 +12,7 @@ import { Button, LinkButton, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { clearPending, savePending, sourceSize, toUpload } from "./model.ts";
 
-export {
-  FAILURE_TEXT,
-  clearPending,
-  loadPending,
-  useBookmarkletMessage,
-  type Received,
-} from "./model.ts";
+export { FAILURE_TEXT, clearPending, loadPending, useBookmarkletMessage, type Received } from "./model.ts";
 
 const RECEIVE_LOGIN = `/signup?next=${encodeURIComponent("/bring/receive")}`;
 
@@ -36,13 +30,7 @@ const hostOf = (url: string) => {
  * path as «Загрузить файл», with the page's address in provenance; then the
  * work's page (with «Поделиться») opens.
  */
-export function ReceivedCard({
-  source,
-  onDismiss,
-}: {
-  source: BookmarkletSource;
-  onDismiss: () => void;
-}) {
+export function ReceivedCard({ source, onDismiss }: { source: BookmarkletSource; onDismiss: () => void }) {
   const { account, error: accountError, retry } = useAccountState();
   const folders = useFolders(account?.id);
   const [folderId, setFolderId] = useState("");
@@ -133,8 +121,7 @@ export function ReceivedCard({
           <ErrorNotice error={upload.error} />
           <div className="bring-actions receive-actions">
             <Button type="button" variant="primary" onClick={save} disabled={upload.busy}>
-              <LockKeyhole />{" "}
-              {upload.stage || (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
+              <LockKeyhole /> {upload.stage || (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
             </Button>
             <Button type="button" variant="quiet" onClick={onDismiss} disabled={upload.busy}>
               Не сохранять

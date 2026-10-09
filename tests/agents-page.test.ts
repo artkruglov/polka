@@ -40,16 +40,12 @@ test("every client has a card and a panel; the commands are the ones /connect gi
     const copies = setup.steps.flatMap((step) => step.copies ?? []);
     assert.ok(copies.length >= 1, `${id} has something to copy`);
     for (const copy of copies) {
-      if (copy.kind === "command")
-        assert.ok(guide.includes(copy.value), `guide lacks ${copy.value}`);
+      if (copy.kind === "command") assert.ok(guide.includes(copy.value), `guide lacks ${copy.value}`);
       if (copy.kind === "url") assert.equal(copy.value, `${origin}/mcp`);
     }
     // Every panel ends with the phrase the person says afterwards, or says where the token is.
     const text = setup.steps.map((step) => step.text).join(" ");
-    assert.ok(
-      text.includes(SAVE_PHRASE) || text.includes("Для разработчиков"),
-      id,
-    );
+    assert.ok(text.includes(SAVE_PHRASE) || text.includes("Для разработчиков"), id);
   }
   // Web chats: the address is copied, nothing is executed.
   for (const id of ["chatgpt", "claude-ai"] as const) {
@@ -79,10 +75,7 @@ test("every client has a card and a panel; the commands are the ones /connect gi
     "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
   );
   // Codex is not the ChatGPT website; the card and the panel both say so.
-  assert.match(
-    agentClients.find((c) => c.id === "codex")!.hint,
-    /не сайт ChatGPT/,
-  );
+  assert.match(agentClients.find((c) => c.id === "codex")!.hint, /не сайт ChatGPT/);
   assert.match(clientSetup(origin, "codex").intro, /ChatGPT/);
 });
 
@@ -176,24 +169,15 @@ test("relative time, fresh accounts and the sign-in method read like Russian", (
     linkedAt: at(3_600_000),
     lastUsedAt: at(3_600_000),
   };
-  assert.equal(
-    signInMethodLabel(signInMethod([yandex], "a@yandex.ru", now)),
-    "через Яндекс ID",
-  );
+  assert.equal(signInMethodLabel(signInMethod([yandex], "a@yandex.ru", now)), "через Яндекс ID");
   // Linked long ago and not used since: this session came from the mailbox code.
   const stale = {
     ...yandex,
     linkedAt: at(30 * 86_400_000),
     lastUsedAt: at(30 * 86_400_000),
   };
-  assert.equal(
-    signInMethodLabel(signInMethod([stale], "a@yandex.ru", now)),
-    "через почту",
-  );
-  assert.equal(
-    signInMethodLabel(signInMethod([], "a@example.com", now)),
-    "через почту",
-  );
+  assert.equal(signInMethodLabel(signInMethod([stale], "a@yandex.ru", now)), "через почту");
+  assert.equal(signInMethodLabel(signInMethod([], "a@example.com", now)), "через почту");
   assert.equal(signInMethodLabel(signInMethod([], null, now)), "по логину");
   // The most recently used provider wins.
   const vk = {
@@ -202,10 +186,7 @@ test("relative time, fresh accounts and the sign-in method read like Russian", (
     name: "VK ID",
     lastUsedAt: at(60_000),
   };
-  assert.equal(
-    signInMethodLabel(signInMethod([yandex, vk], null, now)),
-    "через VK ID",
-  );
+  assert.equal(signInMethodLabel(signInMethod([yandex, vk], null, now)), "через VK ID");
 });
 
 test("each connection gets one human status line", () => {
@@ -221,14 +202,8 @@ test("each connection gets one human status line", () => {
     expiresAt: new Date(now + 86_400_000).toISOString(),
     lastSeenAt: null,
   };
-  assert.equal(
-    connectionStatus(base, now),
-    "Доступ разрешён · запросов ещё не было",
-  );
-  assert.equal(
-    connectionStatus({ ...base, kind: "token" }, now),
-    "Токен выдан · запросов ещё не было",
-  );
+  assert.equal(connectionStatus(base, now), "Доступ разрешён · запросов ещё не было");
+  assert.equal(connectionStatus({ ...base, kind: "token" }, now), "Токен выдан · запросов ещё не было");
   assert.equal(
     connectionStatus(
       {
@@ -240,34 +215,15 @@ test("each connection gets one human status line", () => {
     ),
     "Работает · последний раз 2 минуты назад",
   );
-  assert.equal(
-    connectionStatus({ ...base, status: "revoked" }, now),
-    "Доступ отозван",
-  );
-  assert.match(
-    connectionStatus({ ...base, status: "expired" }, now),
-    /подключите заново/,
-  );
-  assert.equal(
-    connectionStatus({ ...base, status: "expired", kind: "token" }, now),
-    "Срок токена истёк",
-  );
+  assert.equal(connectionStatus({ ...base, status: "revoked" }, now), "Доступ отозван");
+  assert.match(connectionStatus({ ...base, status: "expired" }, now), /подключите заново/);
+  assert.equal(connectionStatus({ ...base, status: "expired", kind: "token" }, now), "Срок токена истёк");
 });
 
 test("/connect, llms.txt and the skill send web ChatGPT and Claude.ai users to the step pages", () => {
-  for (const text of [
-    connectGuide(origin),
-    llmsText(origin),
-    skillMarkdown(origin),
-  ]) {
-    assert.ok(
-      text.includes(`${origin}/settings/agents?client=chatgpt`),
-      "chatgpt deep link",
-    );
-    assert.ok(
-      text.includes(`${origin}/settings/agents?client=claude-ai`),
-      "claude-ai deep link",
-    );
+  for (const text of [connectGuide(origin), llmsText(origin), skillMarkdown(origin)]) {
+    assert.ok(text.includes(`${origin}/settings/agents?client=chatgpt`), "chatgpt deep link");
+    assert.ok(text.includes(`${origin}/settings/agents?client=claude-ai`), "claude-ai deep link");
     assert.ok(text.includes("Add custom connector"));
     assert.ok(text.includes("Developer mode"));
     assert.ok(text.includes(`${origin}/mcp`));

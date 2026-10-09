@@ -1,10 +1,4 @@
-import {
-  parseRobots,
-  robotsAllow,
-  robotsCache,
-  robotsFromAnswer,
-  type Robots,
-} from "../../../packages/robots.ts";
+import { parseRobots, robotsAllow, robotsCache, robotsFromAnswer, type Robots } from "../../../packages/robots.ts";
 import { RENDERER_USER_AGENT } from "../../../packages/renderer-contract.ts";
 import { fetchPublic, ImportFetchError, type PublicResponse } from "./public-fetch.ts";
 
@@ -19,7 +13,13 @@ export { parseRobots, robotsAllow, type Robots };
 
 type Fetch = (url: string) => Promise<PublicResponse>;
 const defaultFetch: Fetch = (url) =>
-  fetchPublic(url, { maxBytes: 512 * 1024, timeoutMs: 8_000, maxRedirects: 5, accept: "text/plain", userAgent: RENDERER_USER_AGENT });
+  fetchPublic(url, {
+    maxBytes: 512 * 1024,
+    timeoutMs: 8_000,
+    maxRedirects: 5,
+    accept: "text/plain",
+    userAgent: RENDERER_USER_AGENT,
+  });
 
 async function answer(fetcher: Fetch, origin: string): Promise<Robots> {
   try {
@@ -33,7 +33,10 @@ async function answer(fetcher: Fetch, origin: string): Promise<Robots> {
 let fetcherInUse: Fetch = defaultFetch;
 const cache = robotsCache((origin) => answer(fetcherInUse, origin));
 
-export async function robotsFor(origin: URL, { fetcher = defaultFetch, now = Date.now() }: { fetcher?: Fetch; now?: number } = {}): Promise<Robots> {
+export async function robotsFor(
+  origin: URL,
+  { fetcher = defaultFetch, now = Date.now() }: { fetcher?: Fetch; now?: number } = {},
+): Promise<Robots> {
   fetcherInUse = fetcher;
   return cache.get(origin, now);
 }

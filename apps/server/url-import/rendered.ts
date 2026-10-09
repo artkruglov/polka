@@ -30,7 +30,10 @@ const FAILURES: Record<RenderError, [string, string]> = {
     "robots_unavailable",
     "Сайт не отдал robots.txt, поэтому Полка его сейчас не открывает. Повторите позже.",
   ],
-  timeout: ["timeout", "Страница не ответила вовремя (25 секунд в браузере, 15 — без него). Полка не повторяет попытку сама."],
+  timeout: [
+    "timeout",
+    "Страница не ответила вовремя (25 секунд в браузере, 15 — без него). Полка не повторяет попытку сама.",
+  ],
   not_allowed: ["not_allowed", "Страница ведёт на сайт, который Полка не открывает."],
   navigation_failed: ["source_unavailable", "Страница не открылась: сайт недоступен или вернул ошибку."],
   too_large: ["too_large", "Страница больше 5 МБ."],
@@ -43,7 +46,10 @@ const FAILURES: Record<RenderError, [string, string]> = {
 export function rendererFailure(error: RenderError, detail?: string): HtmlCaptureError {
   // A share that redirects away (to a login page or «not found») is gone or closed, not a foreign site.
   if (error === "not_allowed" && detail === "redirect")
-    return new HtmlCaptureError("source_unavailable", "Ссылка перенаправила на другую страницу: скорее всего, её удалили или закрыли доступ.");
+    return new HtmlCaptureError(
+      "source_unavailable",
+      "Ссылка перенаправила на другую страницу: скорее всего, её удалили или закрыли доступ.",
+    );
   const [code, message] = FAILURES[error];
   return new HtmlCaptureError(code, message);
 }
@@ -64,7 +70,11 @@ function documentOf(url: URL, result: Extract<RenderResult, { finalUrl: string }
   const match = matchLink(url);
   // Gemini's tab title is the app's; the conversation's own title is its first heading.
   if (match?.provider?.id === "gemini") {
-    const heading = /<h1[^>]*>([\s\S]{1,400}?)<\/h1>/i.exec(result.html)?.[1]?.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    const heading = /<h1[^>]*>([\s\S]{1,400}?)<\/h1>/i
+      .exec(result.html)?.[1]
+      ?.replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
     return { url: result.finalUrl, html: result.html, title: heading || "Чат Gemini" };
   }
   if (match?.route !== "server-try") return { url: result.finalUrl, html: result.html, title: result.title };
@@ -72,14 +82,23 @@ function documentOf(url: URL, result: Extract<RenderResult, { finalUrl: string }
   // srcdoc child); the page around it is the chat app, and a hidden helper frame next to it
   // holds only «Claude User Content». A frame without visible text is not the artifact.
   const visible = (html: string) =>
-    html.replace(/<head[\s\S]*?<\/head>|<title[\s\S]*?<\/title>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    html
+      .replace(/<head[\s\S]*?<\/head>|<title[\s\S]*?<\/title>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   const frames = result.frames
     .filter((frame) => frame.url === "about:srcdoc" || /^https:\/\/[^/]*\.claudeusercontent\.com\//.test(frame.url))
     .filter((frame) => visible(frame.html).length >= 30 && !/^Claude User Content$/i.test(visible(frame.html)));
   const artifactHost = (url: string) => /\.frame\.claudeusercontent\.com\//.test(url) || url === "about:srcdoc";
-  const best = frames.sort((a, b) => Number(artifactHost(b.url)) - Number(artifactHost(a.url)) || b.html.length - a.html.length)[0];
+  const best = frames.sort(
+    (a, b) => Number(artifactHost(b.url)) - Number(artifactHost(a.url)) || b.html.length - a.html.length,
+  )[0];
   if (!best)
-    throw new HtmlCaptureError("source_blocked", "Артефакт не отрисовался для сервера Полки. Сохраните его другим способом.");
+    throw new HtmlCaptureError(
+      "source_blocked",
+      "Артефакт не отрисовался для сервера Полки. Сохраните его другим способом.",
+    );
   return { url: result.finalUrl, html: best.html, title: result.title.replace(/\s*[|–-]\s*Claude\s*$/i, "") };
 }
 
@@ -98,7 +117,8 @@ export async function captureRendered(
   }
   if ("error" in result) throw rendererFailure(result.error, result.detail);
   const final = publicUrl(result.finalUrl);
-  if (!renderable(final)) throw new HtmlCaptureError("not_allowed", "Страница перенаправила на сайт, который Полка не открывает.");
+  if (!renderable(final))
+    throw new HtmlCaptureError("not_allowed", "Страница перенаправила на сайт, который Полка не открывает.");
   const document = documentOf(target, result);
   return captureHtmlDocument(
     { url: final.href, contentType: "text/html", bytes: Buffer.from(document.html, "utf8") },

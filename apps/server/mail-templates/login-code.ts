@@ -25,8 +25,7 @@ const ESCAPES: Record<string, string> = {
   "'": "&#39;",
 };
 /** Text or attribute value → HTML; everything interpolated goes through this. */
-export const escapeMailHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ESCAPES[c]);
+export const escapeMailHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ESCAPES[c]);
 
 /** «12345678» → «1234 5678»: two groups of four, easier to read aloud and type. */
 export function groupCode(code: string) {
@@ -53,8 +52,7 @@ export function loginCodeMail(input: {
   contact?: string | null;
 }): LoginCodeMail {
   const origin = input.origin ?? HOSTED_MAIL_SITE.origin;
-  const contact =
-    input.contact === undefined ? HOSTED_MAIL_SITE.contact : input.contact;
+  const contact = input.contact === undefined ? HOSTED_MAIL_SITE.contact : input.contact;
   const grouped = groupCode(input.code);
   const host = hostOf(origin);
   const subject = `${grouped} — код для входа в Полку`;
@@ -73,10 +71,8 @@ export function loginCodeMail(input: {
   ].join("\n");
 
   const e = escapeMailHtml;
-  const sans =
-    "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-  const mono =
-    "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace";
+  const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  const mono = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace";
   const html = `<!doctype html>
 <html lang="ru">
 <head>

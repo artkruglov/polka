@@ -17,8 +17,7 @@ function github(
 ): GistFetcher {
   return async (url, options) => {
     requests.push({ url, accept: options.accept, authorization: options.authorization });
-    if (url === api)
-      return { url, contentType: "application/json", bytes: Buffer.from(JSON.stringify(gist)) };
+    if (url === api) return { url, contentType: "application/json", bytes: Buffer.from(JSON.stringify(gist)) };
     const entry = extra[url];
     if (entry) return { url, contentType: entry[0], bytes: Buffer.from(entry[1]) };
     throw Error(`unexpected request ${url}`);
@@ -85,7 +84,12 @@ test("an HTML gist becomes the page, its own CSS comes from the API answer", asy
   assert.equal(result.manifest.provenance.sourceUrl, `https://gist.github.com/octocat/${ID}`);
   assert.equal(result.files.length, 3);
   const parsed = validateAgentCapture(
-    { key: "12345678-1234-4234-8234-123456789012", title: result.title, manifest: result.manifest, files: result.files },
+    {
+      key: "12345678-1234-4234-8234-123456789012",
+      title: result.title,
+      manifest: result.manifest,
+      files: result.files,
+    },
     "capture",
   );
   const css = [...parsed.source.entries()].find(([, bytes]) => bytes.toString().includes("teal"));
@@ -144,7 +148,10 @@ test("GitHub's rate limit and a missing gist are reported, never retried", async
   });
   await assert.rejects(
     captureGist(`https://gist.github.com/${ID}`, {
-      fetcher: github({ id: ID, files: { "big.html": { filename: "big.html", size: 2e6, truncated: true, content: "" } } }),
+      fetcher: github({
+        id: ID,
+        files: { "big.html": { filename: "big.html", size: 2e6, truncated: true, content: "" } },
+      }),
     }),
     { code: "too_large" },
   );

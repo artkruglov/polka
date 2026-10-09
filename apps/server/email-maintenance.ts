@@ -1,9 +1,6 @@
 import { unlink } from "node:fs/promises";
 type EmailMaintenanceClient = {
-  query: (
-    sql: string,
-    values?: unknown[],
-  ) => Promise<{ rows: Array<Record<string, any>> }>;
+  query: (sql: string, values?: unknown[]) => Promise<{ rows: Array<Record<string, any>> }>;
 };
 
 export async function cleanupEmailChallengesInTransaction(

@@ -77,12 +77,10 @@ if (values.APP_HOST && values.APP_HOST === values.VIEWER_HOST_NAME)
   fail("the viewer needs its own host, ideally on another registrable domain");
 if (values.S3_ENDPOINT && !/^https?:\/\/[^\s/]+\/?$/.test(values.S3_ENDPOINT))
   fail("S3_ENDPOINT must be a URL like https://storage.example.com");
-if (values.S3_SECRET_KEY && values.S3_SECRET_KEY.length < 16)
-  fail("S3_SECRET_KEY must be at least 16 characters");
+if (values.S3_SECRET_KEY && values.S3_SECRET_KEY.length < 16) fail("S3_SECRET_KEY must be at least 16 characters");
 if (values.S3_ACCESS_KEY && values.S3_ACCESS_KEY === values.BACKUP_S3_ACCESS_KEY)
   fail("the backup job needs its own write-only key, not the app's");
-for (const [key, value] of Object.entries(values))
-  if (/[\r\n]/.test(value)) fail(`${key} must be one line`);
+for (const [key, value] of Object.entries(values)) if (/[\r\n]/.test(value)) fail(`${key} must be one line`);
 
 if (existsSync(out) && !force) fail(`${out} exists; pass --force to replace it`);
 

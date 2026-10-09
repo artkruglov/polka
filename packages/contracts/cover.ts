@@ -14,15 +14,7 @@
 
 export type CoverKind = "text" | "visual";
 /** What the work looks like to its owner; the card names it (coverLabel in the web app). */
-export type CoverGenre =
-  | "report"
-  | "document"
-  | "note"
-  | "markdown"
-  | "dashboard"
-  | "app"
-  | "page"
-  | "image";
+export type CoverGenre = "report" | "document" | "note" | "markdown" | "dashboard" | "app" | "page" | "image";
 /**
  * ready: /api/revisions/:id/cover.jpg answers with a picture;
  * pending: the renderer will draw one soon (ask again);

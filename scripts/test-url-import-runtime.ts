@@ -10,9 +10,7 @@ import { SCHEMA_MIGRATIONS, migrationFileUrl } from "../packages/migrations.ts";
 // application database supplies a local connection, never a migration target.
 const source = new URL(process.env.DATABASE_URL!);
 if (!["127.0.0.1", "localhost", "[::1]"].includes(source.hostname))
-  throw new Error(
-    "This test requires a local PostgreSQL server with CREATEDB.",
-  );
+  throw new Error("This test requires a local PostgreSQL server with CREATEDB.");
 const name = "polka_import_test_" + randomBytes(8).toString("hex");
 const admin = new pg.Client({ connectionString: source.href });
 await admin.connect();
@@ -30,15 +28,10 @@ try {
   await client.connect();
   try {
     if (restricted) {
-      const owner = (await client.query("SELECT current_user AS name")).rows[0]
-        .name as string;
-      await client.query(
-        `ALTER SCHEMA public OWNER TO "${owner.replaceAll('"', '""')}"`,
-      );
+      const owner = (await client.query("SELECT current_user AS name")).rows[0].name as string;
+      await client.query(`ALTER SCHEMA public OWNER TO "${owner.replaceAll('"', '""')}"`);
     }
-    await runMigrations(client, SCHEMA_MIGRATIONS, (file) =>
-      readFile(migrationFileUrl(file), "utf8"),
-    );
+    await runMigrations(client, SCHEMA_MIGRATIONS, (file) => readFile(migrationFileUrl(file), "utf8"));
   } finally {
     await client.end();
   }
@@ -49,15 +42,12 @@ try {
     roleCreated = true;
     await admin.query(`REVOKE ALL ON DATABASE ${name} FROM PUBLIC`);
     await admin.query(`GRANT CONNECT ON DATABASE ${name} TO ${runtimeRole}`);
-    const owner = (await admin.query("SELECT current_user AS name")).rows[0]
-      .name as string;
-    const container = execFileSync(
-      "docker",
-      ["compose", "-f", "deploy/compose.local.yml", "ps", "-q", "postgres"],
-      { encoding: "utf8", timeout: 10000 },
-    ).trim();
-    if (!/^[a-f0-9]{12,64}$/.test(container))
-      throw new Error("Local PostgreSQL container unavailable");
+    const owner = (await admin.query("SELECT current_user AS name")).rows[0].name as string;
+    const container = execFileSync("docker", ["compose", "-f", "deploy/compose.local.yml", "ps", "-q", "postgres"], {
+      encoding: "utf8",
+      timeout: 10000,
+    }).trim();
+    if (!/^[a-f0-9]{12,64}$/.test(container)) throw new Error("Local PostgreSQL container unavailable");
     // Exact operator recipe, credentials on stdin, no SQL/password in argv or output.
     execFileSync(
       "docker",
@@ -79,10 +69,7 @@ try {
         input:
           decodeURIComponent(source.password) +
           "\n" +
-          (await readFile(
-            new URL("../deploy/runtime-grants.sql", import.meta.url),
-            "utf8",
-          )),
+          (await readFile(new URL("../deploy/runtime-grants.sql", import.meta.url), "utf8")),
         stdio: ["pipe", "ignore", "pipe"],
         timeout: 35000,
       },
@@ -93,25 +80,26 @@ try {
   const probe = createServer();
   await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
   const port = (probe.address() as { port: number }).port;
-  await new Promise<void>((resolve, reject) =>
-    probe.close((error) => (error ? reject(error) : resolve())),
-  );
+  await new Promise<void>((resolve, reject) => probe.close((error) => (error ? reject(error) : resolve())));
   const child = spawn(
     process.execPath,
     process.argv.includes("--browser")
       ? ["--import", "tsx", "scripts/url-import-browser-check.ts"]
-      : ["--import", "tsx", "--test", process.argv.includes("--library-access")
-          ? "tests/template-library-access.test.ts"
-          : "tests/url-import-runtime.test.ts"],
+      : [
+          "--import",
+          "tsx",
+          "--test",
+          process.argv.includes("--library-access")
+            ? "tests/template-library-access.test.ts"
+            : "tests/url-import-runtime.test.ts",
+        ],
     {
       stdio: "inherit",
       env: {
         ...process.env,
         DATABASE_URL: target.href,
         URL_IMPORT_EXPECT_RUNTIME_ROLE: restricted ? runtimeRole : "",
-        URL_IMPORT_PUBLIC_SOURCE_CHECK: process.argv.includes("--public-source")
-          ? "true"
-          : "false",
+        URL_IMPORT_PUBLIC_SOURCE_CHECK: process.argv.includes("--public-source") ? "true" : "false",
         URL_IMPORT_ENABLED: "true",
         HTML_LIVE_ENABLED: "true",
         APP_ORIGIN: `http://127.0.0.1:${port}`,
@@ -151,8 +139,7 @@ try {
       "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1) OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=$2) AS found",
       [name, runtimeRole],
     );
-    if (remains.rows[0].found)
-      throw new Error("Synthetic database/role cleanup incomplete");
+    if (remains.rows[0].found) throw new Error("Synthetic database/role cleanup incomplete");
     console.log(
       JSON.stringify({
         event: "url-import-runtime.cleanup",

@@ -1,49 +1,195 @@
 /* Dialogs: a centered card on desktop, a bottom sheet on phones. The panel variant docks to the right. */
 .ui-dialog {
-  padding: 0; border: 1px solid var(--line); border-radius: var(--radius-xl);
-  width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
-  box-shadow: var(--shadow-lg); color: inherit; background: var(--canvas);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  box-shadow: var(--shadow-lg);
+  color: inherit;
+  background: var(--canvas);
 }
-.ui-dialog::backdrop { background: rgb(15 20 32 / 36%); backdrop-filter: blur(2px); }
-.ui-dialog[open] { animation: dialog-in var(--dur-slow) var(--ease); }
-@keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
-.dialog-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 18px 20px 18px 24px; border-bottom: 1px solid var(--line); }
-.dialog-title { display: grid; gap: 4px; min-width: 0; }
-.dialog-head h2 { font-size: var(--text-xl); letter-spacing: var(--tracking-snug); overflow-wrap: anywhere; }
-.dialog-head .ui-button { color: var(--muted); }
-.dialog-body { padding: 22px 24px; display: flex; flex-direction: column; gap: var(--space-4); }
-.dialog-body > p { color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; }
-.dialog-body > p.fine, .dialog-body .fine { color: var(--muted-2); font-size: var(--text-sm); }
-.dialog-body > p.muted { color: var(--muted); }
-.dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--line); background: var(--soft-3); }
-.dialog-footer > button:first-child { margin-right: auto; }
-.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.dialog-body > .dialog-actions { margin-top: var(--space-1); }
+.ui-dialog::backdrop {
+  background: rgb(15 20 32 / 36%);
+  backdrop-filter: blur(2px);
+}
+.ui-dialog[open] {
+  animation: dialog-in var(--dur-slow) var(--ease);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 18px 20px 18px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.dialog-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.dialog-head h2 {
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-snug);
+  overflow-wrap: anywhere;
+}
+.dialog-head .ui-button {
+  color: var(--muted);
+}
+.dialog-body {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.dialog-body > p {
+  color: var(--ink-2);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+.dialog-body > p.fine,
+.dialog-body .fine {
+  color: var(--muted-2);
+  font-size: var(--text-sm);
+}
+.dialog-body > p.muted {
+  color: var(--muted);
+}
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--soft-3);
+}
+.dialog-footer > button:first-child {
+  margin-right: auto;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dialog-body > .dialog-actions {
+  margin-top: var(--space-1);
+}
 
 /* Right-docked panel (templates «Для вашего агента», agent context). */
-.ui-dialog--panel { width: min(460px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-radius: 0; border-width: 0 0 0 1px; display: flex; flex-direction: column; }
-.ui-dialog--panel[open] { animation: panel-in var(--dur-slow) var(--ease); }
-@keyframes panel-in { from { transform: translateX(24px); opacity: 0; } }
-.ui-dialog--panel > .dialog-head { flex-shrink: 0; }
-.ui-dialog--panel > form, .ui-dialog--panel > .dialog-body { flex: 1; min-height: 0; overflow: auto; }
+.ui-dialog--panel {
+  width: min(460px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0 0 0 auto;
+  border-radius: 0;
+  border-width: 0 0 0 1px;
+  display: flex;
+  flex-direction: column;
+}
+.ui-dialog--panel[open] {
+  animation: panel-in var(--dur-slow) var(--ease);
+}
+@keyframes panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+.ui-dialog--panel > .dialog-head {
+  flex-shrink: 0;
+}
+.ui-dialog--panel > form,
+.ui-dialog--panel > .dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
 
 /* Wide dialogs (previews). */
-.ui-dialog--wide { width: min(1120px, calc(100vw - 32px)); }
+.ui-dialog--wide {
+  width: min(1120px, calc(100vw - 32px));
+}
 
 @media (max-width: 720px) {
-  .ui-dialog, .ui-dialog--panel { width: 100%; max-width: 100%; height: auto; max-height: calc(100dvh - 24px - env(safe-area-inset-top)); margin: auto 0 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0; border-bottom: 0; border-width: 1px 0 0; }
+  .ui-dialog,
+  .ui-dialog--panel {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top));
+    margin: auto 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: 0;
+    border-width: 1px 0 0;
+  }
   /* A tall sheet (sharing) scrolls its body; the title and the buttons stay on screen. */
-  .ui-dialog[open] { display: flex; flex-direction: column; }
-  .ui-dialog > .dialog-head, .ui-dialog > .dialog-footer, .ui-dialog > form > .dialog-footer { flex-shrink: 0; }
-  .ui-dialog > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-  .ui-dialog > .dialog-body, .ui-dialog > form > .dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-  .ui-dialog[open], .ui-dialog--panel[open] { animation: sheet-in var(--dur-slow) var(--ease); }
-  @keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
-  .dialog-head { padding: 14px 12px 14px 20px; }
-  .dialog-body { padding: 20px; gap: 14px; }
-  .dialog-footer { padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
-  .dialog-footer > .ui-button--primary { flex: 1 1 100%; order: -1; }
-  .dialog-footer > button:first-child { margin-right: 0; }
-  .dialog-head .icon { min-height: 44px; min-width: 44px; }
+  .ui-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  .ui-dialog > .dialog-head,
+  .ui-dialog > .dialog-footer,
+  .ui-dialog > form > .dialog-footer {
+    flex-shrink: 0;
+  }
+  .ui-dialog > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .ui-dialog > .dialog-body,
+  .ui-dialog > form > .dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .ui-dialog[open],
+  .ui-dialog--panel[open] {
+    animation: sheet-in var(--dur-slow) var(--ease);
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  .dialog-head {
+    padding: 14px 12px 14px 20px;
+  }
+  .dialog-body {
+    padding: 20px;
+    gap: 14px;
+  }
+  .dialog-footer {
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+  }
+  .dialog-footer > .ui-button--primary {
+    flex: 1 1 100%;
+    order: -1;
+  }
+  .dialog-footer > button:first-child {
+    margin-right: 0;
+  }
+  .dialog-head .icon {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
-@media (prefers-reduced-motion: reduce) { .ui-dialog[open], .ui-dialog--panel[open] { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog[open],
+  .ui-dialog--panel[open] {
+    animation: none;
+  }
+}

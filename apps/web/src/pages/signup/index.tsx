@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
-import {
-  knownShelf,
-  rememberSignInMethod,
-} from "../../shared/lib/known-shelf.ts";
+import { knownShelf, rememberSignInMethod } from "../../shared/lib/known-shelf.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { loadCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { SiteHeader } from "../../widgets/site-header/index.tsx";
@@ -22,10 +19,7 @@ import {
   signupDomainsPhrase,
   typedDomainOf,
 } from "./code-help.tsx";
-import {
-  ProviderButtons,
-  providerErrorMessage,
-} from "../../features/provider-sign-in/index.tsx";
+import { ProviderButtons, providerErrorMessage } from "../../features/provider-sign-in/index.tsx";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 export function Signup() {
   const account = useAccount();
@@ -42,13 +36,10 @@ export function Signup() {
   const [signupDomains, setSignupDomains] = useState<"any" | string[]>("any");
   const [loginDomains, setLoginDomains] = useState<"any" | "signup">("any");
   const query = new URLSearchParams(location.search);
-  const [error, setError] = useState(
-    providerErrorMessage(query.get("idp_error")) ?? "",
-  );
+  const [error, setError] = useState(providerErrorMessage(query.get("idp_error")) ?? "");
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const next =
-    safeNext(query.get("next")) || "/start";
+  const next = safeNext(query.get("next")) || "/start";
   // /signup/choose → «Войти в существующую полку»: after this sign-in the
   // waiting provider is linked to the shelf (docs/specs/SIGN_IN_PROVIDERS.md § 1).
   const linking = query.get("link") === "pending";
@@ -57,8 +48,7 @@ export function Signup() {
   const [askNew, setAskNew] = useState(false);
   // A provisional shelf is claimed on /claim; this page is its email step.
   useEffect(() => {
-    if (account?.provisional && query.get("claim") !== "1")
-      location.replace(`/claim?${new URLSearchParams({ next })}`);
+    if (account?.provisional && query.get("claim") !== "1") location.replace(`/claim?${new URLSearchParams({ next })}`);
   }, [account]);
   useEffect(() => {
     loadCapabilities()
@@ -81,8 +71,7 @@ export function Signup() {
           setEmail(pending.email);
           setChallenge(pending);
           setCooldown(pending.retryAfter);
-          if (pending.locked)
-            setError("Попытки закончились. Запросите новый код.");
+          if (pending.locked) setError("Попытки закончились. Запросите новый код.");
         }
       })
       .catch(() => {
@@ -96,21 +85,12 @@ export function Signup() {
     return () => clearTimeout(t);
   }, [cooldown]);
   async function send() {
-    if (
-      sending.current ||
-      mode === "loading" ||
-      mode === "error" ||
-      mode === "disabled"
-    )
-      return;
+    if (sending.current || mode === "loading" || mode === "error" || mode === "disabled") return;
     sending.current = true;
     setBusy(true);
     setError("");
     try {
-      const res = await request<{ id: string; delivery: string }>(
-        "/auth/email/start",
-        { email },
-      );
+      const res = await request<{ id: string; delivery: string }>("/auth/email/start", { email });
       setChallenge(res);
       setCode("");
       setCooldown(60);
@@ -143,12 +123,7 @@ export function Signup() {
       if (result.collision) location.assign("/claim?collision=1");
       else location.assign(result.claimed ? "/?claimed=1" : next);
     } catch (e) {
-      if (
-        e instanceof ApiError &&
-        e.status === 409 &&
-        e.details.reason === "new_shelf"
-      )
-        setAskNew(true);
+      if (e instanceof ApiError && e.status === 409 && e.details.reason === "new_shelf") setAskNew(true);
       else setError((e as Error).message);
     } finally {
       sending.current = false;
@@ -187,11 +162,7 @@ export function Signup() {
       <main className="onboard">
         <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
         <span className="eyebrow">
-          {forAgent
-            ? "Агент просит доступ к Полке"
-            : passwordOnly
-              ? "Вход в Полку"
-              : "Своя полка за пару шагов"}
+          {forAgent ? "Агент просит доступ к Полке" : passwordOnly ? "Вход в Полку" : "Своя полка за пару шагов"}
         </span>
         <h1>
           {mode === "loading"
@@ -211,12 +182,12 @@ export function Signup() {
               ? challenge.delivery === "local"
                 ? "Код сохранён в локальном тестовом ящике. Настоящее письмо не отправлено."
                 : codeNotice?.kind === "never"
-                ? `Код на ${email} не придёт.`
-                : outsideDomains && !inviteOnly
-                ? `Если у адреса ${email} уже есть полка, код придёт в течение минуты. Он действует 10 минут.`
-                : inviteOnly
-                  ? `Если адрес ${email} приглашён на эту Полку, код придёт в течение минуты. Он действует 10 минут.`
-                  : `Отправили код на ${email}. Он действует 10 минут.`
+                  ? `Код на ${email} не придёт.`
+                  : outsideDomains && !inviteOnly
+                    ? `Если у адреса ${email} уже есть полка, код придёт в течение минуты. Он действует 10 минут.`
+                    : inviteOnly
+                      ? `Если адрес ${email} приглашён на эту Полку, код придёт в течение минуты. Он действует 10 минут.`
+                      : `Отправили код на ${email}. Он действует 10 минут.`
               : inviteOnly
                 ? "Вход по приглашению. Введите почту, на которую вас пригласили, — пришлём код."
                 : providers.length
@@ -227,28 +198,24 @@ export function Signup() {
           <>
             {passwordOnly && error && <Notice tone="error">{error}</Notice>}
             <ProviderButtons providers={providers} next={next} />
-            {mode !== "error" && (
-              <div className="idp-or">{passwordOnly ? "или" : "или по почте"}</div>
-            )}
+            {mode !== "error" && <div className="idp-or">{passwordOnly ? "или" : "или по почте"}</div>}
           </>
         )}
         {forAgent && !challenge && !passwordOnly && mode !== "loading" && (
           <aside className="onboard-note">
-            Войдите или создайте полку{providers.length ? "" : " по почте"}.
-            Сразу после этого Полка спросит, что разрешить агенту, — и
-            подключение готово.
+            Войдите или создайте полку{providers.length ? "" : " по почте"}. Сразу после этого Полка спросит, что
+            разрешить агенту, — и подключение готово.
           </aside>
         )}
         {linking && (
           <aside className="onboard-note">
-            Войдите в свою полку{hint ? ` «${hint.displayName}»` : ""} любым
-            способом — сразу после входа привяжем к ней новый способ входа.
+            Войдите в свою полку{hint ? ` «${hint.displayName}»` : ""} любым способом — сразу после входа привяжем к ней
+            новый способ входа.
           </aside>
         )}
         {account?.provisional && (
           <aside className="onboard-note">
-            Адрес закрепит вашу временную полку: он станет способом входа, и
-            полкой можно будет делиться.
+            Адрес закрепит вашу временную полку: он станет способом входа, и полкой можно будет делиться.
           </aside>
         )}
         {askNew && (
@@ -257,8 +224,7 @@ export function Signup() {
               Похоже, у вас уже есть полка
               {hint ? ` «${hint.displayName}»` : ""}.
             </strong>{" "}
-            На {email} полки нет. Войдите в существующую — или создайте
-            новую полку на этот адрес.
+            На {email} полки нет. Войдите в существующую — или создайте новую полку на этот адрес.
             <div className="shelf-choice">
               <Button
                 variant="primary"
@@ -284,8 +250,7 @@ export function Signup() {
         )}
         {mode === "local" && (
           <aside className="onboard-note">
-            Локальная проверка: используйте адрес вроде author@example.test. Это
-            не подтверждение реальной почты.
+            Локальная проверка: используйте адрес вроде author@example.test. Это не подтверждение реальной почты.
           </aside>
         )}
         {mode === "error" && (
@@ -304,8 +269,7 @@ export function Signup() {
               }}
             />
             <p className="onboard-fine">
-              Нет логина? Попросите администратора создать аккаунт: он выдаётся
-              вручную, без публичной регистрации.
+              Нет логина? Попросите администратора создать аккаунт: он выдаётся вручную, без публичной регистрации.
             </p>
           </div>
         ) : null}
@@ -318,10 +282,7 @@ export function Signup() {
             onChangeAddress={changeAddress}
           />
         )}
-        {passwordOnly ? null : mode !== "loading" &&
-          mode !== "error" &&
-          !askNew &&
-          codeNotice?.kind !== "never" ? (
+        {passwordOnly ? null : mode !== "loading" && mode !== "error" && !askNew && codeNotice?.kind !== "never" ? (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -338,9 +299,7 @@ export function Signup() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={
-                  mode === "local" ? "author@example.test" : "you@company.ru"
-                }
+                placeholder={mode === "local" ? "author@example.test" : "you@company.ru"}
               />
             ) : (
               <>
@@ -354,22 +313,15 @@ export function Signup() {
                   required
                   value={code}
                   // The browser's own message would be in its language.
-                  onInvalid={(e) =>
-                    e.currentTarget.setCustomValidity(
-                      "Введите восемь цифр из письма.",
-                    )
-                  }
+                  onInvalid={(e) => e.currentTarget.setCustomValidity("Введите восемь цифр из письма.")}
                   onInput={(e) => e.currentTarget.setCustomValidity("")}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 />
-                {challenge.delivery !== "local" && (
-                  <p className="onboard-fine code-spam-hint">{SPAM_HINT}</p>
-                )}
+                {challenge.delivery !== "local" && <p className="onboard-fine code-spam-hint">{SPAM_HINT}</p>}
                 {challenge.delivery === "local" && (
                   <p className="onboard-note">
-                    Файл для разработчика:{" "}
-                    <code>.local/mail/{challenge.id}.json</code>. Код доступен
-                    на диске этого компьютера, не через публичный API.
+                    Файл для разработчика: <code>.local/mail/{challenge.id}.json</code>. Код доступен на диске этого
+                    компьютера, не через публичный API.
                   </p>
                 )}
               </>
@@ -379,30 +331,18 @@ export function Signup() {
                 {loginDomains === "signup"
                   ? `Код на адреса ${typedDomain} на этой Полке не отправляется.`
                   : `Новые полки по почте открываются ${signupDomainsPhrase(signupDomains)}. Если на ${typedDomain} полки у вас ещё нет, код не придёт.`}
-                {providerNames
-                  ? ` Войдите с ${providerNames} — полка откроется сразу.`
-                  : ""}
+                {providerNames ? ` Войдите с ${providerNames} — полка откроется сразу.` : ""}
               </Notice>
             )}
             {error && <Notice tone="error">{error}</Notice>}
             <Button variant="primary" type="submit" disabled={busy}>
-              {busy
-                ? "Пожалуйста, подождите…"
-                : challenge
-                  ? "Открыть мою полку"
-                  : "Получить код"}
+              {busy ? "Пожалуйста, подождите…" : challenge ? "Открыть мою полку" : "Получить код"}
               <ArrowRight size={17} />
             </Button>
             {challenge && (
               <div className="onboard-secondary">
-                <Button
-                  type="button"
-                  disabled={busy || cooldown > 0}
-                  onClick={send}
-                >
-                  {cooldown
-                    ? `Повторить через ${cooldown} с`
-                    : "Отправить новый код"}
+                <Button type="button" disabled={busy || cooldown > 0} onClick={send}>
+                  {cooldown ? `Повторить через ${cooldown} с` : "Отправить новый код"}
                 </Button>
                 {!codeNotice && (
                   <Button type="button" disabled={busy} onClick={changeAddress}>
@@ -413,15 +353,10 @@ export function Signup() {
             )}
           </form>
         ) : null}
-        {!passwordOnly && mode !== "loading" && mode !== "error" && (
-          <SignupConsent />
-        )}
+        {!passwordOnly && mode !== "loading" && mode !== "error" && <SignupConsent />}
         {mode !== "loading" && !account?.provisional && <AskAgentHint />}
         {!passwordOnly && mode !== "loading" && (
-          <a
-            className="onboard-legacy"
-            href={`/?login=1&next=${encodeURIComponent(next)}`}
-          >
+          <a className="onboard-legacy" href={`/?login=1&next=${encodeURIComponent(next)}`}>
             <KeyRound size={15} /> Есть логин и пароль этой Полки
           </a>
         )}

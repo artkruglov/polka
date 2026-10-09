@@ -19,13 +19,9 @@ import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
 import { putImmutable, readBlob, s3, sha256 } from "../apps/server/storage.ts";
-import {
-  canonicalizeManifest,
-  type BundleManifest,
-} from "../packages/contracts/bundle.ts";
+import { canonicalizeManifest, type BundleManifest } from "../packages/contracts/bundle.ts";
 
-if (!config.HTML_LIVE_ENABLED)
-  throw new Error("Run bundle-runtime.test.ts with HTML_LIVE_ENABLED=true");
+if (!config.HTML_LIVE_ENABLED) throw new Error("Run bundle-runtime.test.ts with HTML_LIVE_ENABLED=true");
 
 const app = await createApp();
 const viewer = await createLiveViewerApp();
@@ -36,13 +32,7 @@ let other: Awaited<ReturnType<typeof createAccount>>;
 let ownerCookie = "";
 let otherCookie = "";
 
-async function call(
-  method: any,
-  url: string,
-  body?: any,
-  cookie = ownerCookie,
-  authorization?: string,
-) {
+async function call(method: any, url: string, body?: any, cookie = ownerCookie, authorization?: string) {
   return app.inject({
     method,
     url,
@@ -50,9 +40,7 @@ async function call(
       origin,
       ...(cookie ? { cookie } : {}),
       ...(authorization ? { authorization: `Bearer ${authorization}` } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
@@ -64,10 +52,7 @@ async function login(name: string) {
   return `${response.cookies[0].name}=${response.cookies[0].value}`;
 }
 
-const fixtureRoot = new URL(
-  "fixtures/bundle-corpus/team-report/",
-  import.meta.url,
-);
+const fixtureRoot = new URL("fixtures/bundle-corpus/team-report/", import.meta.url);
 const fixtureMimes: Record<string, string> = {
   "index.html": "text/html",
   "assets/mark.svg": "image/svg+xml",
@@ -98,10 +83,7 @@ function makeManifest(files: Map<string, Buffer>): BundleManifest {
   });
 }
 
-async function saveBundle(
-  files = originalFiles,
-  patch: Record<string, unknown> = {},
-) {
+async function saveBundle(files = originalFiles, patch: Record<string, unknown> = {}) {
   const manifest = makeManifest(files);
   const start = await call("POST", "/api/bundle-uploads", {
     key: randomUUID(),
@@ -118,11 +100,7 @@ async function saveBundle(
     );
     assert.equal(upload.statusCode, 200, upload.body);
   }
-  const finish = await call(
-    "POST",
-    `/api/bundle-uploads/${start.json().uploadId}/finalize`,
-    {},
-  );
+  const finish = await call("POST", `/api/bundle-uploads/${start.json().uploadId}/finalize`, {});
   assert.equal(finish.statusCode, 200, finish.body);
   return { ...finish.json(), manifest, files };
 }
@@ -144,10 +122,7 @@ const staticDocument = async (grant: string) => {
 before(async () => {
   originalFiles = new Map(
     await Promise.all(
-      Object.keys(fixtureMimes).map(
-        async (path) =>
-          [path, await readFile(new URL(path, fixtureRoot))] as const,
-      ),
+      Object.keys(fixtureMimes).map(async (path) => [path, await readFile(new URL(path, fixtureRoot))] as const),
     ),
   );
   const suffix = randomBytes(5).toString("hex");
@@ -165,98 +140,52 @@ after(async () => {
 
 test("ready derivative is tenant-private, charged once, exported unchanged, and pinned through grants", async () => {
   const saved = await saveBundle();
-  const exportBefore = await call(
-    "GET",
-    `/api/revisions/${saved.revisionId}/export`,
-  );
+  const exportBefore = await call("GET", `/api/revisions/${saved.revisionId}/export`);
   const usedBefore = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        owner.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+      .derivative_used_bytes,
   );
   const builds = await Promise.all([
     call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {}),
     call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {}),
   ]);
-  assert.ok(
-    builds.every((response) => [200, 202].includes(response.statusCode)),
-  );
-  const status = await call(
-    "GET",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-  );
+  assert.ok(builds.every((response) => [200, 202].includes(response.statusCode)));
+  const status = await call("GET", `/api/revisions/${saved.revisionId}/build-inline`);
   assert.equal(status.statusCode, 200, status.body);
   assert.equal(status.json().state, "ready");
   assert.equal(status.json().runtimeProfile, BUNDLE_RUNTIME_PROFILE);
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/revisions/${saved.revisionId}/build-inline`,
-        undefined,
-        otherCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`, undefined, otherCookie)).statusCode,
     404,
   );
-  const derivative = (
-    await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [
-      saved.revisionId,
-    ])
-  ).rows[0];
+  const derivative = (await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [saved.revisionId]))
+    .rows[0];
   assert.equal(derivative.state, "ready");
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT derivative_used_bytes FROM tenants WHERE id=$1",
-          [owner.tenant],
-        )
-      ).rows[0].derivative_used_bytes,
+      (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+        .derivative_used_bytes,
     ),
     usedBefore + derivative.size,
   );
-  const exportAfter = await call(
-    "GET",
-    `/api/revisions/${saved.revisionId}/export`,
-  );
+  const exportAfter = await call("GET", `/api/revisions/${saved.revisionId}/export`);
   assert.deepEqual(exportAfter.json(), exportBefore.json());
   const artifact = await call("GET", `/api/artifacts/${saved.artifactId}`);
   assert.equal(artifact.json().revision.inlineBuild.state, "ready");
-  assert.equal(
-    artifact.json().revision.inlineBuild.runtimeProfile,
-    BUNDLE_RUNTIME_PROFILE,
-  );
+  assert.equal(artifact.json().revision.inlineBuild.runtimeProfile, BUNDLE_RUNTIME_PROFILE);
 
-  const shared = await call(
-    "POST",
-    `/api/artifacts/${saved.artifactId}/share`,
-    {
-      expectedRevisionId: saved.revisionId,
-      expiresInDays: 1,
-    },
-  );
+  const shared = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+    expectedRevisionId: saved.revisionId,
+    expiresInDays: 1,
+  });
   assert.equal(shared.statusCode, 200, shared.body);
   const share = shared.json().share;
   const shareToken = new URL(share.url).hash.slice(1);
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: shareToken },
-    "",
-  );
+  const resolved = await call("POST", "/api/resolve", { token: shareToken }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
   assert.equal(resolved.json().revision.inlineBuild.state, "ready");
   const grant = resolved.json().grant;
-  const recipientLive = await call(
-    "POST",
-    "/api/view/live-view",
-    {},
-    "",
-    grant,
-  );
+  const recipientLive = await call("POST", "/api/view/live-view", {}, "", grant);
   assert.equal(recipientLive.statusCode, 200, recipientLive.body);
   assert.equal(recipientLive.json().profile, BUNDLE_RUNTIME_PROFILE);
   const oldDocument = await embedded(tokenFrom(recipientLive.json().url));
@@ -270,38 +199,22 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
      WHERE hash=$1`,
     [sha256(tokenFrom(recipientLive.json().url))],
   );
-  assert.equal(
-    (await embedded(tokenFrom(recipientLive.json().url))).statusCode,
-    404,
-  );
-  const ownerLive = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    {},
-  );
+  assert.equal((await embedded(tokenFrom(recipientLive.json().url))).statusCode, 404);
+  const ownerLive = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(ownerLive.statusCode, 200, ownerLive.body);
   assert.equal(ownerLive.json().profile, BUNDLE_RUNTIME_PROFILE);
-  assert.equal(
-    (await embedded(tokenFrom(ownerLive.json().url))).statusCode,
-    200,
-  );
+  assert.equal((await embedded(tokenFrom(ownerLive.json().url))).statusCode, 200);
 
   const changedFiles = new Map(originalFiles);
   changedFiles.set(
     "assets/report.js",
-    Buffer.from(
-      `${originalFiles.get("assets/report.js")!.toString()}\nwindow.__v2=true;`,
-    ),
+    Buffer.from(`${originalFiles.get("assets/report.js")!.toString()}\nwindow.__v2=true;`),
   );
   const v2 = await saveBundle(changedFiles, {
     artifactId: saved.artifactId,
     baseRevisionId: saved.revisionId,
   });
-  assert.equal(
-    (await call("POST", `/api/revisions/${v2.revisionId}/build-inline`, {}))
-      .statusCode,
-    200,
-  );
+  assert.equal((await call("POST", `/api/revisions/${v2.revisionId}/build-inline`, {})).statusCode, 200);
   assert.equal(
     (
       await call("POST", `/api/shares/${share.id}/publish`, {
@@ -312,10 +225,7 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
     200,
   );
   await assert.rejects(
-    db.query("UPDATE shares SET derivative_id=$2 WHERE id=$1", [
-      share.id,
-      derivative.id,
-    ]),
+    db.query("UPDATE shares SET derivative_id=$2 WHERE id=$1", [share.id, derivative.id]),
     (error: any) => error.code === "23503",
   );
   const oldGrantLive = await call("POST", "/api/view/live-view", {}, "", grant);
@@ -351,31 +261,19 @@ test("ready derivative is tenant-private, charged once, exported unchanged, and 
   assert.equal(disabled.status, 0, disabled.stderr);
   assert.deepEqual(JSON.parse(disabled.stdout), { resolve: 404, inline: null });
 
-  assert.equal(
-    (await call("POST", `/api/shares/${share.id}/revoke`, {})).statusCode,
-    200,
-  );
-  assert.equal(
-    (await embedded(tokenFrom(oldGrantLive.json().url))).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", `/api/shares/${share.id}/revoke`, {})).statusCode, 200);
+  assert.equal((await embedded(tokenFrom(oldGrantLive.json().url))).statusCode, 404);
 });
 
 test("unsupported builds are durable and derivative quota plus pending-two admission are separate", async () => {
   const unsupportedFiles = new Map<string, Buffer>([
     [
       "index.html",
-      Buffer.from(
-        '<!doctype html><html><body><script type=module>import "left-pad"</script></body></html>',
-      ),
+      Buffer.from('<!doctype html><html><body><script type=module>import "left-pad"</script></body></html>'),
     ],
   ]);
   const unsupported = await saveBundle(unsupportedFiles);
-  const built = await call(
-    "POST",
-    `/api/revisions/${unsupported.revisionId}/build-inline`,
-    {},
-  );
+  const built = await call("POST", `/api/revisions/${unsupported.revisionId}/build-inline`, {});
   assert.equal(built.statusCode, 200, built.body);
   assert.equal(built.json().state, "unsupported");
   assert.ok(built.json().reason);
@@ -391,35 +289,19 @@ test("unsupported builds are durable and derivative quota plus pending-two admis
 
   const quotaRevision = await saveBundle();
   const tenant = (
-    await db.query(
-      "SELECT derivative_used_bytes,derivative_quota_bytes FROM tenants WHERE id=$1",
-      [owner.tenant],
-    )
+    await db.query("SELECT derivative_used_bytes,derivative_quota_bytes FROM tenants WHERE id=$1", [owner.tenant])
   ).rows[0];
   await db.query("UPDATE tenants SET derivative_quota_bytes=$2 WHERE id=$1", [
     owner.tenant,
     Number(tenant.derivative_used_bytes) + DERIVATIVE_RESERVATION_BYTES - 1,
   ]);
-  assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/revisions/${quotaRevision.revisionId}/build-inline`,
-        {},
-      )
-    ).statusCode,
-    413,
-  );
+  assert.equal((await call("POST", `/api/revisions/${quotaRevision.revisionId}/build-inline`, {})).statusCode, 413);
   await db.query("UPDATE tenants SET derivative_quota_bytes=$2 WHERE id=$1", [
     owner.tenant,
     tenant.derivative_quota_bytes,
   ]);
 
-  const pendingRevisions = await Promise.all([
-    saveBundle(),
-    saveBundle(),
-    saveBundle(),
-  ]);
+  const pendingRevisions = await Promise.all([saveBundle(), saveBundle(), saveBundle()]);
   const pendingIds: string[] = [];
   for (const revision of pendingRevisions.slice(0, 2)) {
     const id = randomUUID();
@@ -428,24 +310,11 @@ test("unsupported builds are durable and derivative quota plus pending-two admis
       `INSERT INTO revision_derivatives(
          id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,attempt_id,attempt_expires_at
        ) VALUES($1,$2,$3,$4,$5,'pending',$6,now()+interval '5 minutes')`,
-      [
-        id,
-        owner.tenant,
-        revision.revisionId,
-        revision.manifestSha256,
-        BUNDLE_BUILDER_VERSION,
-        randomUUID(),
-      ],
+      [id, owner.tenant, revision.revisionId, revision.manifestSha256, BUNDLE_BUILDER_VERSION, randomUUID()],
     );
   }
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/revisions/${pendingRevisions[2].revisionId}/build-inline`,
-        {},
-      )
-    ).statusCode,
+    (await call("POST", `/api/revisions/${pendingRevisions[2].revisionId}/build-inline`, {})).statusCode,
     413,
   );
   await db.query(
@@ -467,29 +336,14 @@ test("a stored attempt resumes immutably and expired cleanup deletes its exact o
     `INSERT INTO revision_derivatives(
        id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,attempt_id,attempt_expires_at
      ) VALUES($1,$2,$3,$4,$5,'pending',$6,now()+interval '5 minutes')`,
-    [
-      derivativeId,
-      owner.tenant,
-      saved.revisionId,
-      saved.manifestSha256,
-      BUNDLE_BUILDER_VERSION,
-      attemptId,
-    ],
+    [derivativeId, owner.tenant, saved.revisionId, saved.manifestSha256, BUNDLE_BUILDER_VERSION, attemptId],
   );
   const key = `${owner.tenant}/derivatives/${derivativeId}/${attemptId}.html`;
   const originalVersion = await putImmutable(key, built.html);
-  const response = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  const response = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json().state, "ready");
-  const ready = (
-    await db.query("SELECT * FROM revision_derivatives WHERE id=$1", [
-      derivativeId,
-    ])
-  ).rows[0];
+  const ready = (await db.query("SELECT * FROM revision_derivatives WHERE id=$1", [derivativeId])).rows[0];
   assert.equal(ready.object_version, originalVersion);
   assert.equal((await readBlob(key, originalVersion)).equals(built.html), true);
 
@@ -511,95 +365,59 @@ test("a stored attempt resumes immutably and expired cleanup deletes its exact o
       orphanAttempt,
     ],
   );
-  const cleanup = spawnSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"],
-    { cwd: process.cwd(), encoding: "utf8" },
-  );
+  const cleanup = spawnSync(process.execPath, ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
   assert.equal(cleanup.status, 0, cleanup.stderr);
   await assert.rejects(readBlob(orphanKey, orphanVersion));
-  const failed = (
-    await db.query(
-      "SELECT state,attempt_expires_at FROM revision_derivatives WHERE id=$1",
-      [orphanId],
-    )
-  ).rows[0];
+  const failed = (await db.query("SELECT state,attempt_expires_at FROM revision_derivatives WHERE id=$1", [orphanId]))
+    .rows[0];
   assert.equal(failed.state, "failed");
   assert.equal(failed.attempt_expires_at, null);
 });
 
 test("a static single-file bundle links statically until a ready derivative exists", async () => {
-  const page = Buffer.from(
-    "<!doctype html><html><body><h1>Lone page</h1><p>Static text.</p></body></html>",
-  );
+  const page = Buffer.from("<!doctype html><html><body><h1>Lone page</h1><p>Static text.</p></body></html>");
   const saved = await saveBundle(new Map([["index.html", page]]));
   assert.equal(saved.htmlProfile, "static");
   const shareOnce = async () => {
-    const response = await call(
-      "POST",
-      `/api/artifacts/${saved.artifactId}/share`,
-      { expectedRevisionId: saved.revisionId, expiresInDays: 1 },
-    );
+    const response = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+      expectedRevisionId: saved.revisionId,
+      expiresInDays: 1,
+    });
     assert.equal(response.statusCode, 200, response.body);
     const share = response.json().share;
-    const resolved = await call(
-      "POST",
-      "/api/resolve",
-      { token: new URL(share.url).hash.slice(1) },
-      "",
-    );
+    const resolved = await call("POST", "/api/resolve", { token: new URL(share.url).hash.slice(1) }, "");
     assert.equal(resolved.statusCode, 200, resolved.body);
-    const row = (
-      await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])
-    ).rows[0];
+    const row = (await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])).rows[0];
     return { share, grant: resolved.json().grant, derivativeId: row.derivative_id };
   };
 
   // No derivative yet: the static sandbox serves the page, as with live off.
   const before = await shareOnce();
   assert.equal(before.derivativeId, null);
-  assert.equal(
-    (await call("GET", `/api/view/${before.grant}/document`, undefined, ""))
-      .statusCode,
-    404,
-  );
+  assert.equal((await call("GET", `/api/view/${before.grant}/document`, undefined, "")).statusCode, 404);
   const document = await staticDocument(before.grant);
   assert.equal(document.statusCode, 200, document.body);
-  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-popups allow-popups-to-escape-sandbox;/);
+  assert.match(
+    document.headers["content-security-policy"] as string,
+    /^sandbox allow-popups allow-popups-to-escape-sandbox;/,
+  );
   // The static view (not the download) opens links in a new tab.
   assert.equal(document.body, `<base target="_blank">${page}`);
-  assert.equal(
-    (await call("POST", `/api/shares/${before.share.id}/revoke`, {})).statusCode,
-    200,
-  );
+  assert.equal((await call("POST", `/api/shares/${before.share.id}/revoke`, {})).statusCode, 200);
 
   // A ready derivative keeps the existing live-mode binding.
-  const build = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  const build = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.ok([200, 202].includes(build.statusCode), build.body);
-  assert.equal(
-    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json()
-      .state,
-    "ready",
-  );
+  assert.equal((await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json().state, "ready");
   const after = await shareOnce();
   const derivative = (
-    await db.query(
-      "SELECT id FROM revision_derivatives WHERE revision_id=$1 AND state='ready'",
-      [saved.revisionId],
-    )
+    await db.query("SELECT id FROM revision_derivatives WHERE revision_id=$1 AND state='ready'", [saved.revisionId])
   ).rows[0];
   assert.equal(after.derivativeId, derivative.id);
-  const live = await call(
-    "POST",
-    "/api/view/live-view",
-    undefined,
-    "",
-    after.grant,
-  );
+  const live = await call("POST", "/api/view/live-view", undefined, "", after.grant);
   assert.equal(live.statusCode, 200, live.body);
   assert.equal(live.json().profile, BUNDLE_RUNTIME_PROFILE);
 });
@@ -611,24 +429,12 @@ async function shareAndOpen(artifactId: string, revisionId: string) {
   });
   assert.equal(shared.statusCode, 200, shared.body);
   const share = shared.json().share;
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: new URL(share.url).hash.slice(1) },
-    "",
-  );
+  const resolved = await call("POST", "/api/resolve", { token: new URL(share.url).hash.slice(1) }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
-  const live = await call(
-    "POST",
-    "/api/view/live-view",
-    undefined,
-    "",
-    resolved.json().grant,
-  );
+  const live = await call("POST", "/api/view/live-view", undefined, "", resolved.json().grant);
   assert.equal(live.statusCode, 200, live.body);
-  const derivativeId = (
-    await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])
-  ).rows[0].derivative_id;
+  const derivativeId = (await db.query("SELECT derivative_id FROM shares WHERE id=$1", [share.id])).rows[0]
+    .derivative_id;
   return { share, viewer: resolved.json(), live: live.json(), derivativeId };
 }
 
@@ -660,29 +466,17 @@ test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", asy
       objectVersion,
     ],
   );
-  await db.query(
-    "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
-    [owner.tenant, output.size],
-  );
+  await db.query("UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1", [
+    owner.tenant,
+    output.size,
+  ]);
   const old = { id };
-  assert.equal(
-    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json()
-      .state,
-    "ready",
-  );
-  const again = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  assert.equal((await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).json().state, "ready");
+  const again = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(again.json().state, "ready");
   assert.deepEqual(
-    (
-      await db.query(
-        "SELECT id,builder_version FROM revision_derivatives WHERE revision_id=$1",
-        [saved.revisionId],
-      )
-    ).rows,
+    (await db.query("SELECT id,builder_version FROM revision_derivatives WHERE revision_id=$1", [saved.revisionId]))
+      .rows,
     [{ id: old.id, builder_version: "bundle-inline-v3" }],
   );
   const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
@@ -690,11 +484,7 @@ test("a ready bundle-inline-v3 derivative keeps serving and is not rebuilt", asy
   assert.equal(opened.viewer.revision.inlineBuild.state, "ready");
   assert.equal(opened.live.profile, BUNDLE_RUNTIME_PROFILE);
   assert.equal((await embedded(tokenFrom(opened.live.url))).statusCode, 200);
-  const ownerView = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    {},
-  );
+  const ownerView = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(ownerView.statusCode, 200, ownerView.body);
   assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
 });
@@ -711,23 +501,13 @@ test("a page the v3 builder refused is built again by the current builder", asyn
     [randomUUID(), owner.tenant, saved.revisionId, saved.manifestSha256],
   );
   // The old refusal is not reported as the page's state.
-  assert.equal(
-    (await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).body,
-    "null",
-  );
-  const built = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  assert.equal((await call("GET", `/api/revisions/${saved.revisionId}/build-inline`)).body, "null");
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(built.json().state, "ready", built.body);
   const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
   const {
     rows: [derivative],
-  } = await db.query(
-    "SELECT builder_version FROM revision_derivatives WHERE id=$1",
-    [opened.derivativeId],
-  );
+  } = await db.query("SELECT builder_version FROM revision_derivatives WHERE id=$1", [opened.derivativeId]);
   assert.equal(derivative.builder_version, BUNDLE_BUILDER_VERSION);
 });
 
@@ -792,9 +572,7 @@ test("runtime builds get a minimal environment and run one at a time", async () 
     );
   const [first, second] = [await component("one"), await component("two")];
   const [a, b] = await Promise.all(
-    [first, second].map((saved) =>
-      call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {}),
-    ),
+    [first, second].map((saved) => call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {})),
   );
   assert.deepEqual([a.statusCode, b.statusCode].sort(), [200, 429]);
   const busy = a.statusCode === 429 ? { response: a, saved: first } : { response: b, saved: second };
@@ -846,10 +624,7 @@ async function saveSingle(source: string) {
   });
   assert.equal(begun.statusCode, 200, begun.body);
   const uploadId = begun.json().uploadId as string;
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode,
-    200,
-  );
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode, 200);
   const finalized = await call("POST", `/api/uploads/${uploadId}/finalize`, {});
   assert.equal(finalized.statusCode, 200, finalized.body);
   return finalized.json() as any;
@@ -865,11 +640,7 @@ test("an unsupported single upload is linked only through its built interactive 
     expiresInDays: 1,
   });
   assert.equal(refused.statusCode, 422, refused.body);
-  const built = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(built.json().state, "ready", built.body);
   const opened = await shareAndOpen(saved.artifactId, saved.revisionId);
   assert.ok(opened.derivativeId);
@@ -878,30 +649,11 @@ test("an unsupported single upload is linked only through its built interactive 
   assert.equal(document.statusCode, 200);
   assert.match(document.body, /Rendered by script/);
   // Neither the static document nor the raw upload reaches the recipient.
-  assert.equal(
-    (
-      await call(
-        "GET",
-        "/api/view/bytes",
-        undefined,
-        "",
-        opened.viewer.grant,
-      )
-    ).statusCode,
-    404,
-  );
-  assert.equal(
-    (await call("GET", `/api/view/${opened.viewer.grant}/document`, undefined, ""))
-      .statusCode,
-    404,
-  );
+  assert.equal((await call("GET", "/api/view/bytes", undefined, "", opened.viewer.grant)).statusCode, 404);
+  assert.equal((await call("GET", `/api/view/${opened.viewer.grant}/document`, undefined, "")).statusCode, 404);
   assert.equal((await staticDocument(opened.viewer.grant)).statusCode, 404);
   // The owner sees what the recipient sees: the built version, not the upload.
-  const ownerView = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    {},
-  );
+  const ownerView = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(ownerView.statusCode, 200, ownerView.body);
   assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
   const ownerDocument = await embedded(tokenFrom(ownerView.json().url));
@@ -912,11 +664,7 @@ test("an unsupported single upload is linked only through its built interactive 
   const networked = await saveSingle(
     '<!doctype html><div id="root"></div><script src="https://cdn.example/app.js"></script>',
   );
-  const refusedBuild = await call(
-    "POST",
-    `/api/revisions/${networked.revisionId}/build-inline`,
-    {},
-  );
+  const refusedBuild = await call("POST", `/api/revisions/${networked.revisionId}/build-inline`, {});
   assert.equal(refusedBuild.json().state, "unsupported", refusedBuild.body);
   assert.equal(
     (
@@ -941,70 +689,33 @@ test("a limited single upload links statically until its interactive version is 
     });
     assert.equal(response.statusCode, 200, response.body);
     const created = response.json().share;
-    const resolved = await call(
-      "POST",
-      "/api/resolve",
-      { token: new URL(created.url).hash.slice(1) },
-      "",
-    );
+    const resolved = await call("POST", "/api/resolve", { token: new URL(created.url).hash.slice(1) }, "");
     assert.equal(resolved.statusCode, 200, resolved.body);
     return { share: created, grant: resolved.json().grant as string };
   };
   // Before any build the owner runs the upload itself.
-  const beforeBuild = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    {},
-  );
+  const beforeBuild = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(beforeBuild.statusCode, 200, beforeBuild.body);
   assert.equal(beforeBuild.json().profile, "inline-live-experimental-v1");
   // No interactive version yet: static sandbox only, no direct run of the upload.
   const staticLink = await share();
-  assert.equal(
-    (await call("POST", "/api/view/live-view", undefined, "", staticLink.grant))
-      .statusCode,
-    404,
-  );
-  assert.equal(
-    (await staticDocument(staticLink.grant)).statusCode,
-    200,
-  );
-  assert.equal(
-    (await call("GET", "/api/view/bytes", undefined, "", staticLink.grant))
-      .statusCode,
-    200,
-  );
-  assert.equal(
-    (await call("POST", `/api/shares/${staticLink.share.id}/revoke`, {})).statusCode,
-    200,
-  );
+  assert.equal((await call("POST", "/api/view/live-view", undefined, "", staticLink.grant)).statusCode, 404);
+  assert.equal((await staticDocument(staticLink.grant)).statusCode, 200);
+  assert.equal((await call("GET", "/api/view/bytes", undefined, "", staticLink.grant)).statusCode, 200);
+  assert.equal((await call("POST", `/api/shares/${staticLink.share.id}/revoke`, {})).statusCode, 200);
 
-  const built = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-  );
+  const built = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(built.json().state, "ready", built.body);
   const liveLink = await share();
-  const derivativeId = (
-    await db.query("SELECT derivative_id FROM shares WHERE id=$1", [
-      liveLink.share.id,
-    ])
-  ).rows[0].derivative_id;
+  const derivativeId = (await db.query("SELECT derivative_id FROM shares WHERE id=$1", [liveLink.share.id])).rows[0]
+    .derivative_id;
   assert.ok(derivativeId);
   const live = await call("POST", "/api/view/live-view", undefined, "", liveLink.grant);
   assert.equal(live.statusCode, 200, live.body);
   assert.equal(live.json().profile, BUNDLE_RUNTIME_PROFILE);
-  assert.equal(
-    (await call("GET", "/api/view/bytes", undefined, "", liveLink.grant)).statusCode,
-    404,
-  );
+  assert.equal((await call("GET", "/api/view/bytes", undefined, "", liveLink.grant)).statusCode, 404);
   // Once a build is ready the owner runs it too, not the upload.
-  const ownerView = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    {},
-  );
+  const ownerView = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(ownerView.statusCode, 200, ownerView.body);
   assert.equal(ownerView.json().profile, BUNDLE_RUNTIME_PROFILE);
 });

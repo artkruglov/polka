@@ -54,12 +54,7 @@ export async function authorizeTemplateRevision(
           AND publication.library_id=$2
           AND publication.artifact_id=$3
           AND publication.revision_id=$4`,
-      [
-        request.publicationId,
-        request.libraryId,
-        request.artifactId,
-        request.revisionId,
-      ],
+      [request.publicationId, request.libraryId, request.artifactId, request.revisionId],
     )
   ).rows[0];
   if (!source) throw missing();
@@ -72,14 +67,8 @@ export async function authorizeTemplateRevision(
     [[actor.tenant, source.sourceTenantId]],
   );
   const actorTenant = tenants.rows.find((row) => row.id === actor.tenant);
-  const sourceTenant = tenants.rows.find(
-    (row) => row.id === source.sourceTenantId,
-  );
-  if (
-    actorTenant?.ownerId !== actor.id ||
-    sourceTenant?.ownerId !== source.sourceOwnerId
-  )
-    throw missing();
+  const sourceTenant = tenants.rows.find((row) => row.id === source.sourceTenantId);
+  if (actorTenant?.ownerId !== actor.id || sourceTenant?.ownerId !== source.sourceOwnerId) throw missing();
 
   const accounts = await c.query(
     `SELECT id FROM accounts
@@ -88,8 +77,7 @@ export async function authorizeTemplateRevision(
       ORDER BY id FOR SHARE`,
     [[actor.id, source.sourceOwnerId]],
   );
-  if (accounts.rowCount !== new Set([actor.id, source.sourceOwnerId]).size)
-    throw missing();
+  if (accounts.rowCount !== new Set([actor.id, source.sourceOwnerId]).size) throw missing();
 
   const library = (
     await c.query(
@@ -142,13 +130,7 @@ export async function authorizeTemplateRevision(
           AND artifact.trashed_at IS NULL
           AND artifact.tenant_id=$5
         ${sourceLocks}`,
-      [
-        request.publicationId,
-        request.libraryId,
-        request.artifactId,
-        request.revisionId,
-        source.sourceTenantId,
-      ],
+      [request.publicationId, request.libraryId, request.artifactId, request.revisionId, source.sourceTenantId],
     )
   ).rows[0];
   if (!publication) throw missing();

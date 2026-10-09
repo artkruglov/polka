@@ -34,12 +34,7 @@ export function takeConvertReturn(path: string, storage = tab(), now = Date.now(
     if (!raw) return false;
     storage!.removeItem(KEY);
     const value = JSON.parse(raw) as { path?: unknown; at?: unknown };
-    return (
-      value.path === path &&
-      typeof value.at === "number" &&
-      now - value.at >= 0 &&
-      now - value.at < TTL_MS
-    );
+    return value.path === path && typeof value.at === "number" && now - value.at >= 0 && now - value.at < TTL_MS;
   } catch {
     return false;
   }

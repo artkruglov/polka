@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  collapseDiff,
-  DIFF_LIMITS,
-  type DiffLine,
-  type DiffResult,
-} from "../../shared/lib/line-diff.ts";
+import { collapseDiff, DIFF_LIMITS, type DiffLine, type DiffResult } from "../../shared/lib/line-diff.ts";
 
 /** Changed lines shown at most; the rest is summarised, not rendered. */
 export const MAX_SHOWN_CHANGES = 2000;
@@ -14,14 +9,7 @@ const MAX_LINE_CHARS = 2000;
 export function lines(count: number) {
   const n = Math.abs(count) % 100,
     last = n % 10;
-  const word =
-    n > 10 && n < 20
-      ? "строк"
-      : last === 1
-        ? "строка"
-        : last >= 2 && last <= 4
-          ? "строки"
-          : "строк";
+  const word = n > 10 && n < 20 ? "строк" : last === 1 ? "строка" : last >= 2 && last <= 4 ? "строки" : "строк";
   return `${count.toLocaleString("ru-RU")} ${word}`;
 }
 
@@ -44,9 +32,7 @@ function Row({ line }: { line: DiffLine }) {
       <code>
         {line.kind !== "same" && (
           <span className="sr-only">
-            {line.kind === "add"
-              ? `Добавлено, строка ${line.b}: `
-              : `Удалено, строка ${line.a}: `}
+            {line.kind === "add" ? `Добавлено, строка ${line.b}: ` : `Удалено, строка ${line.a}: `}
           </span>
         )}
         {text || " "}
@@ -105,21 +91,18 @@ export function DiffView({
         <ul className="revision-diff-notes">
           {fileNotes.length > 0 && <li>Файлы пакета: {fileNotes.join("; ")}.</li>}
           {result.clipped && (
-            <li>
-              Сравнены первые {lines(DIFF_LIMITS.maxLines)} каждой версии; дальше
-              файл не сравнивался.
-            </li>
+            <li>Сравнены первые {lines(DIFF_LIMITS.maxLines)} каждой версии; дальше файл не сравнивался.</li>
           )}
           {!result.exact && (
             <li>
-              Версии слишком различаются для точного построчного сравнения:
-              изменённый участок показан как замена целиком.
+              Версии слишком различаются для точного построчного сравнения: изменённый участок показан как замена
+              целиком.
             </li>
           )}
           {truncated && (
             <li>
-              Показаны первые {lines(MAX_SHOWN_CHANGES)} изменений — показано не
-              всё. Чтобы сравнить полностью, скачайте обе версии.
+              Показаны первые {lines(MAX_SHOWN_CHANGES)} изменений — показано не всё. Чтобы сравнить полностью, скачайте
+              обе версии.
             </li>
           )}
         </ul>
@@ -140,9 +123,7 @@ export function DiffView({
               <Row line={row.line} key={index} />
             ),
           )}
-          {truncated && (
-            <div className="revision-diff-skip">Дальше — показано не всё.</div>
-          )}
+          {truncated && <div className="revision-diff-skip">Дальше — показано не всё.</div>}
         </div>
       )}
     </div>

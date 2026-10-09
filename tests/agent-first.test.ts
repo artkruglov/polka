@@ -18,15 +18,8 @@ import {
   skillDescription,
   skillMarkdown,
 } from "../apps/server/agent-discovery.ts";
-import {
-  agentGetArtifactInputSchema,
-  artifactIdOf,
-  artifactRef,
-} from "../apps/server/agent-management.ts";
-import {
-  agentCommentsInputSchema,
-  agentNoteInputSchema,
-} from "../apps/server/agent-comments.ts";
+import { agentGetArtifactInputSchema, artifactIdOf, artifactRef } from "../apps/server/agent-management.ts";
+import { agentCommentsInputSchema, agentNoteInputSchema } from "../apps/server/agent-comments.ts";
 import {
   SKILL_INDEX_PATH,
   SKILL_INSTALL,
@@ -37,12 +30,7 @@ import {
 } from "../apps/web/src/entities/onboarding/agent-setup.ts";
 import { HarvestPrompt } from "../apps/web/src/entities/onboarding/HarvestPrompt.tsx";
 import { deriveFirstRun } from "../apps/web/src/entities/onboarding/steps.ts";
-import {
-  improvePhrase,
-  notesPhrase,
-  shelfUrl,
-  updatePhrase,
-} from "../apps/web/src/entities/artifact/agent-phrases.ts";
+import { improvePhrase, notesPhrase, shelfUrl, updatePhrase } from "../apps/web/src/entities/artifact/agent-phrases.ts";
 import { FirstRunSteps } from "../apps/web/src/features/first-run/index.tsx";
 import { NextStep } from "../apps/web/src/pages/agents/index.tsx";
 import { ArtifactReader, workMenu } from "../apps/web/src/widgets/artifact-reader/index.tsx";
@@ -82,14 +70,8 @@ test("the harvest task is one text for terminal agents and one for web chats, th
   assert.equal(harvestPrompt("codex"), harvestPrompts.terminal);
   assert.equal(harvestPrompt("claude-ai"), harvestPrompts.chat);
   assert.equal(harvestPrompt("chatgpt"), harvestPrompts.chat);
-  assert.match(
-    harvestPrompts.terminal,
-    /^Посмотри наши прошлые сессии и файлы проекта на этом компьютере\./,
-  );
-  assert.match(
-    harvestPrompts.chat,
-    /^Поищи в наших прошлых чатах \(поиск по истории\/памяти\)\./,
-  );
+  assert.match(harvestPrompts.terminal, /^Посмотри наши прошлые сессии и файлы проекта на этом компьютере\./);
+  assert.match(harvestPrompts.chat, /^Поищи в наших прошлых чатах \(поиск по истории\/памяти\)\./);
   for (const text of Object.values(harvestPrompts)) {
     assert.match(text, /3–5 самых интересных работ/);
     assert.match(text, /Пропусти личное/);
@@ -104,11 +86,7 @@ test("the harvest task is one text for terminal agents and one for web chats, th
     harvestClients.map((c) => c.id),
     ["claude-code", "codex", "claude-ai", "chatgpt"],
   );
-  for (const text of [
-    connectGuide(origin),
-    llmsText(origin),
-    skillMarkdown(origin),
-  ]) {
+  for (const text of [connectGuide(origin), llmsText(origin), skillMarkdown(origin)]) {
     assert.ok(text.includes(harvestPrompts.terminal), "terminal task");
     assert.ok(text.includes(harvestPrompts.chat), "chat task");
   }
@@ -124,45 +102,27 @@ test("the skill line names the same package on the landing, in /connect, llms.tx
     assert.ok(text.includes(SKILL_INSTALL));
     assert.ok(text.includes(`${origin}${SKILL_INDEX_PATH}`));
   }
-  assert.match(
-    connectGuide(origin),
-    /Плагин для Claude Code и Codex \(команды выше\) ставит их сам/,
-  );
+  assert.match(connectGuide(origin), /Плагин для Claude Code и Codex \(команды выше\) ставит их сам/);
   assert.match(skillDescription(origin), /Открой на Полке работу/);
 });
 
 test("the owner's phrases name the work by title and shelf address; the agent side knows them", () => {
   assert.equal(url, `${origin}/works/${id}`);
-  assert.equal(
-    improvePhrase("Отчёт", url),
-    `Открой на Полке работу «Отчёт» (${url}) и помоги её улучшить.`,
-  );
+  assert.equal(improvePhrase("Отчёт", url), `Открой на Полке работу «Отчёт» (${url}) и помоги её улучшить.`);
   assert.equal(updatePhrase("Отчёт", url), `Обнови работу «Отчёт» (${url}).`);
-  assert.equal(
-    notesPhrase("Отчёт", url),
-    `Поправь работу «Отчёт» (${url}) по моим заметкам на Полке.`,
-  );
-  assert.match(
-    notesPhrase("Отчёт", url, "comments"),
-    /по комментариям на Полке\.$/,
-  );
+  assert.equal(notesPhrase("Отчёт", url), `Поправь работу «Отчёт» (${url}) по моим заметкам на Полке.`);
+  assert.match(notesPhrase("Отчёт", url, "comments"), /по комментариям на Полке\.$/);
   assert.equal(ownerPhrases.improve("Отчёт", url), improvePhrase("Отчёт", url));
   assert.equal(ownerPhrases.update("Отчёт", url), updatePhrase("Отчёт", url));
   assert.equal(ownerPhrases.notes("Отчёт", url), notesPhrase("Отчёт", url));
   for (const text of [llmsText(origin), skillMarkdown(origin)]) {
     assert.ok(text.includes(`${origin}/works/<id>`));
-    assert.ok(
-      text.includes(ownerPhrases.improve("<title>", `${origin}/works/<id>`)),
-    );
-    assert.ok(
-      text.includes(ownerPhrases.notes("<title>", `${origin}/works/<id>`)),
-    );
+    assert.ok(text.includes(ownerPhrases.improve("<title>", `${origin}/works/<id>`)));
+    assert.ok(text.includes(ownerPhrases.notes("<title>", `${origin}/works/<id>`)));
     assert.match(text, /author\.owner true/);
     assert.match(text, /polka_get_artifact \{artifactId: that address or id\}/);
   }
-  const get = mcpToolCatalog().find(
-    (tool) => tool.name === "polka_get_artifact",
-  )!;
+  const get = mcpToolCatalog().find((tool) => tool.name === "polka_get_artifact")!;
   assert.match(get.summary, /by its id or by the address of its page/);
 });
 
@@ -170,27 +130,15 @@ test("polka_get_artifact, polka_comments and polka_note take the work's page add
   assert.equal(artifactIdOf(id), id);
   assert.equal(artifactIdOf(url), id);
   assert.equal(artifactIdOf(`${url}?revision=r2#top`), id);
-  assert.equal(
-    artifactIdOf(`http://127.0.0.1:6290/works/${id.toUpperCase()}/`),
-    id,
-  );
+  assert.equal(artifactIdOf(`http://127.0.0.1:6290/works/${id.toUpperCase()}/`), id);
   assert.equal(artifactRef.parse(url), url);
   assert.equal(artifactRef.parse(id), id);
   assert.throws(() => artifactRef.parse("Отчёт"));
   assert.throws(() => artifactRef.parse(`${origin}/s#token`));
   assert.throws(() => artifactRef.parse(`${origin}/works/not-an-id`));
-  assert.equal(
-    agentGetArtifactInputSchema.parse({ artifactId: url }).artifactId,
-    url,
-  );
-  assert.equal(
-    agentCommentsInputSchema.parse({ artifactId: url }).artifactId,
-    url,
-  );
-  assert.equal(
-    agentNoteInputSchema.parse({ artifactId: url, body: "Заметка" }).artifactId,
-    url,
-  );
+  assert.equal(agentGetArtifactInputSchema.parse({ artifactId: url }).artifactId, url);
+  assert.equal(agentCommentsInputSchema.parse({ artifactId: url }).artifactId, url);
+  assert.equal(agentNoteInputSchema.parse({ artifactId: url, body: "Заметка" }).artifactId, url);
 });
 
 function steps(over: Partial<Parameters<typeof FirstRunSteps>[0]> = {}) {
@@ -224,16 +172,12 @@ test("step 2 leads with the harvest task for the chosen client, then the file, t
   assert.match(html, /Скопировать задание агенту/);
   assert.ok(html.includes(harvestPrompts.terminal));
   assert.ok(!html.includes(harvestPrompts.chat));
-  for (const client of harvestClients)
-    assert.ok(html.includes(`>${client.name}<`), client.name);
+  for (const client of harvestClients) assert.ok(html.includes(`>${client.name}<`), client.name);
   assert.match(html, /aria-pressed="true"[^>]*>Claude Code</);
   const taskAt = html.indexOf("Скопировать задание агенту");
   const uploadAt = html.indexOf("Загрузить файл");
   const sampleAt = html.indexOf("Сохранить пример");
-  assert.ok(
-    taskAt > 0 && uploadAt > taskAt && sampleAt > uploadAt,
-    `${taskAt} ${uploadAt} ${sampleAt}`,
-  );
+  assert.ok(taskAt > 0 && uploadAt > taskAt && sampleAt > uploadAt, `${taskAt} ${uploadAt} ${sampleAt}`);
   assert.match(html, /ui-button--quiet[^>]*>Сохранить пример/);
   assert.doesNotMatch(html, /Попробовать за 10 секунд|Сохранить без агента/);
   // A web chat: its own task, and the tab says so.
@@ -249,9 +193,7 @@ test("step 2 leads with the harvest task for the chosen client, then the file, t
 });
 
 test("the agents page, once connected, offers the same task under «Что дальше»", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(NextStep, { client: "codex", onClient: () => {} }),
-  );
+  const html = renderToStaticMarkup(React.createElement(NextStep, { client: "codex", onClient: () => {} }));
   assert.match(html, /Что дальше: соберите свои лучшие работы/);
   assert.ok(html.includes(harvestPrompts.terminal));
   assert.match(html, /aria-pressed="true"[^>]*>Codex</);
@@ -263,10 +205,7 @@ test("the agents page, once connected, offers the same task under «Что да�
     }),
   );
   assert.ok(prompt.includes(harvestPrompts.chat));
-  assert.match(
-    prompt,
-    /ui-button--secondary[^>]*>[\s\S]*?Скопировать задание агенту/,
-  );
+  assert.match(prompt, /ui-button--secondary[^>]*>[\s\S]*?Скопировать задание агенту/);
 });
 
 test("the work page copies one phrase; the new-version panel asks the agent first", () => {

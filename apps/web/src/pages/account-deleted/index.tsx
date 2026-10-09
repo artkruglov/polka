@@ -5,7 +5,11 @@ import { LinkButton } from "../../shared/ui/controls.tsx";
 import "./styles.css";
 
 function day(iso: string | null) {
-  return iso ? new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }).replace(/\s*г\.$/, " г") : "";
+  return iso
+    ? new Date(iso)
+        .toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
+        .replace(/\s*г\.$/, " г")
+    : "";
 }
 
 /**
@@ -58,8 +62,8 @@ export function AccountDeleted() {
         <>
           <h1>Заявка не найдена в этом браузере</h1>
           <p>
-            Если вы удаляли аккаунт с другого устройства, статус виден только там. Заявка могла не
-            отправиться: тогда аккаунт остался на месте, и вы можете войти.
+            Если вы удаляли аккаунт с другого устройства, статус виден только там. Заявка могла не отправиться: тогда
+            аккаунт остался на месте, и вы можете войти.
           </p>
           <LinkButton href="/signup">Войти</LinkButton>
         </>
@@ -85,7 +89,9 @@ export function AccountDeleted() {
       ) : receipt.state === "failed" ? (
         <>
           <h1>Удаление остановилось</h1>
-          <p>Доступ к аккаунту уже закрыт. Оператор видит сбой и продолжит; напишите ему, если ждёте дольше обычного.</p>
+          <p>
+            Доступ к аккаунту уже закрыт. Оператор видит сбой и продолжит; напишите ему, если ждёте дольше обычного.
+          </p>
         </>
       ) : (
         <>

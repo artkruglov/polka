@@ -34,21 +34,14 @@ const staticViewResult = (token: string, expiresAt: Date) => ({
   expiresAt: expiresAt.toISOString(),
 });
 
-export async function issueOwnerStaticView(
-  actor: Actor,
-  sessionToken: string,
-  revisionId: string,
-  comments = false,
-) {
+export async function issueOwnerStaticView(actor: Actor, sessionToken: string, revisionId: string, comments = false) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sessionHash = sha256(sessionToken);
   const grant = await transaction(async (c) => {
     // Read locks: shelf covers issue these in parallel, while trash, disable
     // and deletion (FOR UPDATE) still serialize with them.
-    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [
-      actor.tenant,
-    ]);
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [actor.tenant]);
     return (
       await c.query(
         `INSERT INTO viewer_grants(hash,revision_id,owner_session_hash,derivative_id,expires_at,comments)
@@ -66,14 +59,7 @@ export async function issueOwnerStaticView(
            AND session.expires_at>now() AND NOT account.disabled
            AND account.deletion_requested_at IS NULL
          RETURNING expires_at`,
-        [
-          staticHash(token),
-          sessionHash,
-          actor.id,
-          revisionId,
-          actor.tenant,
-          comments,
-        ],
+        [staticHash(token), sessionHash, actor.id, revisionId, actor.tenant, comments],
       )
     ).rows[0];
   });
@@ -81,10 +67,7 @@ export async function issueOwnerStaticView(
   return staticViewResult(token, grant.expires_at);
 }
 
-export async function issueRecipientStaticView(
-  sourceGrant: string,
-  comments = false,
-) {
+export async function issueRecipientStaticView(sourceGrant: string, comments = false) {
   if (!config.HTML_LIVE_ENABLED || !TOKEN.test(sourceGrant)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sourceGrantHash = sha256(sourceGrant);
@@ -98,17 +81,15 @@ export async function issueRecipientStaticView(
     ).rows[0];
     if (!candidate) throw missing();
     // As in issueRecipientLiveView: read locks, rechecked below.
-    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [candidate.tenant_id]);
+    await c.query("SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR SHARE", [
+      candidate.artifact_id,
       candidate.tenant_id,
     ]);
-    await c.query(
-      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR SHARE",
-      [candidate.artifact_id, candidate.tenant_id],
-    );
-    await c.query(
-      "SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR SHARE",
-      [candidate.share_id, candidate.tenant_id],
-    );
+    await c.query("SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR SHARE", [
+      candidate.share_id,
+      candidate.tenant_id,
+    ]);
     await assertEditorialShareAccessible(c, candidate.share_id);
     return (
       await c.query(
@@ -185,8 +166,7 @@ async function authorizedStaticRevision(token: string) {
        )`,
     [staticHash(token)],
   );
-  if (revision?.authorized_share_id)
-    await assertEditorialShareAccessible(db, revision.authorized_share_id);
+  if (revision?.authorized_share_id) await assertEditorialShareAccessible(db, revision.authorized_share_id);
   return revision ?? null;
 }
 
@@ -195,11 +175,7 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
     // Embedding only, as /document: a top-level load of a user's page at a
     // Полка-run address could pose as Полка. Fetch Metadata is not
     // authentication; the grant is.
-    if (
-      req.headers["sec-fetch-dest"] !== "iframe" ||
-      req.headers["sec-fetch-mode"] !== "navigate"
-    )
-      throw missing();
+    if (req.headers["sec-fetch-dest"] !== "iframe" || req.headers["sec-fetch-mode"] !== "navigate") throw missing();
     const token = (req.params as { token?: string }).token ?? "";
     const revision = await authorizedStaticRevision(token);
     if (!revision) throw missing();
@@ -216,10 +192,7 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
       .type("text/html; charset=utf-8")
       // Replaces the interactive CSP set for every viewer response: no
       // scripts of the page, and only the app may frame it.
-      .header(
-        "content-security-policy",
-        staticHtmlCsp(config.APP_ORIGIN, nonce),
-      );
+      .header("content-security-policy", staticHtmlCsp(config.APP_ORIGIN, nonce));
     return nonce ? withStaticOverlay(page, config.APP_ORIGIN, nonce) : page;
   });
 }

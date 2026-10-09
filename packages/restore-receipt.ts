@@ -39,10 +39,8 @@ export function sha256Hex(bytes: string | Uint8Array) {
 
 function canonicalDatabaseTarget(databaseUrl: string) {
   const url = new URL(databaseUrl);
-  if (url.search || url.hash)
-    throw new Error("Database URL routing parameters are not supported");
-  if (!url.pathname || url.pathname === "/")
-    throw new Error("Database URL must name a database");
+  if (url.search || url.hash) throw new Error("Database URL routing parameters are not supported");
+  if (!url.pathname || url.pathname === "/") throw new Error("Database URL must name a database");
   return {
     databaseProtocol: url.protocol.toLowerCase(),
     databaseHost: url.hostname.toLowerCase(),
@@ -53,10 +51,8 @@ function canonicalDatabaseTarget(databaseUrl: string) {
 
 function canonicalStorageOrigin(storageEndpoint: string) {
   const url = new URL(storageEndpoint);
-  if (url.search || url.hash)
-    throw new Error("Storage endpoint routing parameters are not supported");
-  if (url.username || url.password)
-    throw new Error("Storage endpoint must not contain credentials");
+  if (url.search || url.hash) throw new Error("Storage endpoint routing parameters are not supported");
+  if (url.username || url.password) throw new Error("Storage endpoint must not contain credentials");
   const pathname = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
   return `${url.origin.toLowerCase()}${pathname}`;
 }
@@ -107,9 +103,7 @@ export function schemaManifestSha256(appliedVersions: readonly number[]) {
   );
 }
 
-export function ledgerManifestSha256(
-  records: readonly { key: string; versionId: string; sha256: string }[],
-) {
+export function ledgerManifestSha256(records: readonly { key: string; versionId: string; sha256: string }[]) {
   const canonical = records
     .map(({ key, versionId, sha256 }) => ({ key, versionId, sha256 }))
     .sort((left, right) => {
@@ -137,10 +131,8 @@ export function canonicalRestoreReceipt(input: RestoreCompletionReceipt) {
 }
 
 export function parseRestoreReceipt(bytes: Uint8Array | string) {
-  const text =
-    typeof bytes === "string" ? bytes : Buffer.from(bytes).toString("utf8");
-  if (Buffer.byteLength(text) > MAX_RECEIPT_BYTES)
-    throw new Error("Restore receipt exceeds its size limit");
+  const text = typeof bytes === "string" ? bytes : Buffer.from(bytes).toString("utf8");
+  if (Buffer.byteLength(text) > MAX_RECEIPT_BYTES) throw new Error("Restore receipt exceeds its size limit");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -148,26 +140,19 @@ export function parseRestoreReceipt(bytes: Uint8Array | string) {
     throw new Error("Restore receipt is invalid");
   }
   const receipt = receiptSchema.parse(parsed);
-  if (canonicalRestoreReceipt(receipt) !== text)
-    throw new Error("Restore receipt is not canonical");
+  if (canonicalRestoreReceipt(receipt) !== text) throw new Error("Restore receipt is not canonical");
   return Object.freeze(receipt);
 }
 
 export async function readRestoreReceipt(path: string) {
-  const handle = await open(
-    path,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-  );
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await handle.stat();
-    if (!stat.isFile())
-      throw new Error("Restore receipt must be a regular file");
-    if (stat.size > MAX_RECEIPT_BYTES)
-      throw new Error("Restore receipt exceeds its size limit");
+    if (!stat.isFile()) throw new Error("Restore receipt must be a regular file");
+    if (stat.size > MAX_RECEIPT_BYTES) throw new Error("Restore receipt exceeds its size limit");
     const bytes = Buffer.alloc(MAX_RECEIPT_BYTES + 1);
     const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
-    if (bytesRead > MAX_RECEIPT_BYTES)
-      throw new Error("Restore receipt exceeds its size limit");
+    if (bytesRead > MAX_RECEIPT_BYTES) throw new Error("Restore receipt exceeds its size limit");
     return parseRestoreReceipt(bytes.subarray(0, bytesRead));
   } finally {
     await handle.close();
@@ -185,8 +170,7 @@ export async function writeRestoreReceipt(
   } = {},
 ) {
   const active = () => {
-    if (options.signal?.aborted)
-      throw new Error("Restore stopped before completion receipt publication");
+    if (options.signal?.aborted) throw new Error("Restore stopped before completion receipt publication");
   };
   active();
   const canonical = canonicalRestoreReceipt(receipt);
@@ -211,9 +195,7 @@ export async function writeRestoreReceipt(
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       const existing = await readRestoreReceipt(path);
       if (canonicalRestoreReceipt(existing) !== canonical)
-        throw new Error(
-          "Restore receipt already belongs to another restore generation",
-        );
+        throw new Error("Restore receipt already belongs to another restore generation");
     }
   } finally {
     await unlink(temporary).catch(() => undefined);

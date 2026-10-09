@@ -44,8 +44,19 @@ const manifestOf = (files: File[], entrypoint: string) => ({
   version: 1,
   entrypoint,
   runtime: "project-v1",
-  files: files.map((f) => ({ path: f.path, mime: f.mime, size: f.bytes.length, sha256: createHash("sha256").update(f.bytes).digest("hex") })),
-  provenance: { kind: "file", sourceUrl: null, capturedAt: new Date().toISOString(), attribution: "unknown", license: "unknown" },
+  files: files.map((f) => ({
+    path: f.path,
+    mime: f.mime,
+    size: f.bytes.length,
+    sha256: createHash("sha256").update(f.bytes).digest("hex"),
+  })),
+  provenance: {
+    kind: "file",
+    sourceUrl: null,
+    capturedAt: new Date().toISOString(),
+    attribution: "unknown",
+    license: "unknown",
+  },
   dependencies: { status: "unknown", unresolved: [] },
 });
 const api = (secret: string, method: string, url: string, payload?: unknown) =>
@@ -53,7 +64,10 @@ const api = (secret: string, method: string, url: string, payload?: unknown) =>
     method: method as "GET",
     url,
     remoteAddress: address(),
-    headers: { authorization: `Bearer ${secret}`, ...(payload === undefined ? {} : { "content-type": "application/json" }) },
+    headers: {
+      authorization: `Bearer ${secret}`,
+      ...(payload === undefined ? {} : { "content-type": "application/json" }),
+    },
     ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
   });
 
@@ -103,11 +117,19 @@ async function mcp(secret: string, name: string, args: Record<string, unknown>) 
     });
   const parse = (response: Awaited<ReturnType<typeof call>>) => {
     const text = String(response.headers["content-type"]).startsWith("text/event-stream")
-      ? response.body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("")
+      ? response.body
+          .split("\n")
+          .filter((line) => line.startsWith("data: "))
+          .map((line) => line.slice(6))
+          .join("")
       : response.body;
     return JSON.parse(text);
   };
-  await call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-code", version: "1.0" } }, 1);
+  await call(
+    "initialize",
+    { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-code", version: "1.0" } },
+    1,
+  );
   const message = parse(await call("tools/call", { name, arguments: args }, 2));
   return { error: !!message.result?.isError, value: JSON.parse(message.result.content[0].text) };
 }
@@ -135,10 +157,21 @@ test("list, read one file by path, change the files: the others are copied, the 
   const secret = await token(owner, ALL);
   const made = await project(secret, files(), "README.md");
   const listing = (await api(secret, "GET", `/api/v1/works/${made.artifactId}/files`)).json();
-  assert.deepEqual(listing.files.map((f: any) => f.path).sort(), ["README.md", "big.txt", "docs/a.md", "logo.png", "medium.txt", "style.css"]);
+  assert.deepEqual(listing.files.map((f: any) => f.path).sort(), [
+    "README.md",
+    "big.txt",
+    "docs/a.md",
+    "logo.png",
+    "medium.txt",
+    "style.css",
+  ]);
 
   // One file by its path: text as UTF-8, a picture as base64, a missing path 404, a big one refused.
-  const text = await api(secret, "GET", `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}`);
+  const text = await api(
+    secret,
+    "GET",
+    `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}`,
+  );
   assert.equal(text.statusCode, 200, text.body);
   assert.equal(text.json().encoding, "utf8");
   assert.match(text.json().data, /Первая версия/);
@@ -167,16 +200,29 @@ test("list, read one file by path, change the files: the others are copied, the 
   assert.equal(changed.json().number, 2);
   assert.notEqual(changed.json().revisionId, made.revisionId);
   const next = (await api(secret, "GET", `/api/v1/works/${made.artifactId}/files`)).json();
-  assert.deepEqual(next.files.map((f: any) => f.path).sort(), ["README.md", "big.txt", "docs/a.md", "docs/b.md", "logo.png", "medium.txt"]);
+  assert.deepEqual(next.files.map((f: any) => f.path).sort(), [
+    "README.md",
+    "big.txt",
+    "docs/a.md",
+    "docs/b.md",
+    "logo.png",
+    "medium.txt",
+  ]);
   const byPath = new Map<string, any>(next.files.map((f: any) => [f.path, f]));
   assert.equal(byPath.get("docs/b.md").mime, "text/markdown");
   // Untouched files keep their bytes (copied inside the store).
   assert.equal(byPath.get("logo.png").sha256, createHash("sha256").update(PNG).digest("hex"));
-  const readBack = (await api(secret, "GET", `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}`)).json();
+  const readBack = (
+    await api(secret, "GET", `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}`)
+  ).json();
   assert.match(readBack.data, /Вторая версия/);
   // The old version is untouched.
   const old = (
-    await api(secret, "GET", `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}&revisionId=${made.revisionId}`)
+    await api(
+      secret,
+      "GET",
+      `/api/v1/works/${made.artifactId}/file?path=${encodeURIComponent("docs/a.md")}&revisionId=${made.revisionId}`,
+    )
   ).json();
   assert.match(old.data, /Первая версия/);
 
@@ -198,27 +244,45 @@ test("refusals: the entrypoint, a missing path, an unknown type, a doubled or co
   const secret = await token(owner, ALL);
   const made = await project(secret, files().slice(0, 4), "README.md");
   const change = (extra: Record<string, unknown>) =>
-    api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, { key: randomUUID(), baseRevisionId: made.revisionId, ...extra });
+    api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, {
+      key: randomUUID(),
+      baseRevisionId: made.revisionId,
+      ...extra,
+    });
   assert.equal((await change({ remove: ["README.md"] })).statusCode, 422);
   assert.equal((await change({ remove: ["nope.md"] })).statusCode, 404);
   assert.equal((await change({ put: [{ path: "tool.exe", encoding: "utf8", data: "x" }] })).statusCode, 422);
-  assert.equal((await change({ put: [{ path: "docs/a.md", encoding: "utf8", data: "x" }], remove: ["docs/a.md"] })).statusCode, 400);
+  assert.equal(
+    (await change({ put: [{ path: "docs/a.md", encoding: "utf8", data: "x" }], remove: ["docs/a.md"] })).statusCode,
+    400,
+  );
   assert.equal((await change({ put: [{ path: "DOCS/A.md", encoding: "utf8", data: "x" }] })).statusCode, 400);
   assert.equal((await change({})).statusCode, 400);
   assert.equal((await change({ put: [{ path: "../escape.md", encoding: "utf8", data: "x" }] })).statusCode, 400);
   assert.equal((await change({ put: [{ path: "docs/", encoding: "utf8", data: "x" }] })).statusCode, 400);
   assert.equal((await change({ put: [{ path: "заметка.md", encoding: "utf8", data: "x" }] })).statusCode, 400);
   // Base64 that does not decode back, a data: prefix, and a lone surrogate are refused, not repaired.
-  assert.equal((await change({ put: [{ path: "pic.gif", encoding: "base64", data: "data:image/gif;base64,AAAA" }] })).statusCode, 400);
+  assert.equal(
+    (await change({ put: [{ path: "pic.gif", encoding: "base64", data: "data:image/gif;base64,AAAA" }] })).statusCode,
+    400,
+  );
   assert.equal((await change({ put: [{ path: "bad.md", encoding: "utf8", data: "\ud800" }] })).statusCode, 400);
   // The reply names the rule that failed.
   const named = await change({ put: [{ path: "../escape.md", encoding: "utf8", data: "x" }] });
   assert.match(named.json().message, /path|путь/i);
   // The same key with a different body is a conflict about the key, not a second version.
   const key = randomUUID();
-  const first = await api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, { key, baseRevisionId: made.revisionId, put: [{ path: "docs/k.md", encoding: "utf8", data: "один" }] });
+  const first = await api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, {
+    key,
+    baseRevisionId: made.revisionId,
+    put: [{ path: "docs/k.md", encoding: "utf8", data: "один" }],
+  });
   assert.equal(first.statusCode, 200, first.body);
-  const other = await api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, { key, baseRevisionId: made.revisionId, put: [{ path: "docs/k.md", encoding: "utf8", data: "два" }] });
+  const other = await api(secret, "POST", `/api/v1/works/${made.artifactId}/changes`, {
+    key,
+    baseRevisionId: made.revisionId,
+    put: [{ path: "docs/k.md", encoding: "utf8", data: "два" }],
+  });
   assert.ok(other.statusCode >= 400, other.body);
 });
 
@@ -227,24 +291,32 @@ test("scopes and shelves: source:read to read, revise to change; another shelf's
   const made = await project(full, files().slice(0, 4), "README.md");
   const noSource = await token(owner, ["context", "revise"]);
   const noRevise = await token(owner, ["context", "source:read"]);
-  assert.ok([403, 404].includes((await api(noSource, "GET", `/api/v1/works/${made.artifactId}/file?path=README.md`)).statusCode));
   assert.ok(
     [403, 404].includes(
-      (await api(noRevise, "POST", `/api/v1/works/${made.artifactId}/changes`, {
-        key: randomUUID(),
-        baseRevisionId: made.revisionId,
-        put: [{ path: "docs/z.md", encoding: "utf8", data: "x" }],
-      })).statusCode,
+      (await api(noSource, "GET", `/api/v1/works/${made.artifactId}/file?path=README.md`)).statusCode,
+    ),
+  );
+  assert.ok(
+    [403, 404].includes(
+      (
+        await api(noRevise, "POST", `/api/v1/works/${made.artifactId}/changes`, {
+          key: randomUUID(),
+          baseRevisionId: made.revisionId,
+          put: [{ path: "docs/z.md", encoding: "utf8", data: "x" }],
+        })
+      ).statusCode,
     ),
   );
   const stranger = await token(other, ALL);
   assert.equal((await api(stranger, "GET", `/api/v1/works/${made.artifactId}/file?path=README.md`)).statusCode, 404);
   assert.equal(
-    (await api(stranger, "POST", `/api/v1/works/${made.artifactId}/changes`, {
-      key: randomUUID(),
-      baseRevisionId: made.revisionId,
-      put: [{ path: "docs/z.md", encoding: "utf8", data: "x" }],
-    })).statusCode,
+    (
+      await api(stranger, "POST", `/api/v1/works/${made.artifactId}/changes`, {
+        key: randomUUID(),
+        baseRevisionId: made.revisionId,
+        put: [{ path: "docs/z.md", encoding: "utf8", data: "x" }],
+      })
+    ).statusCode,
     404,
   );
 });
@@ -267,7 +339,12 @@ test("the same three operations over MCP", async () => {
   assert.equal(changed.error, false, JSON.stringify(changed.value));
   assert.equal(changed.value.number, 2);
   const after2 = await mcp(secret, "polka_list_files", { artifactId: made.artifactId });
-  assert.deepEqual(after2.value.files.map((f: any) => f.path).sort(), ["README.md", "docs/a.md", "docs/mcp.md", "logo.png"]);
+  assert.deepEqual(after2.value.files.map((f: any) => f.path).sort(), [
+    "README.md",
+    "docs/a.md",
+    "docs/mcp.md",
+    "logo.png",
+  ]);
   const conflict = await mcp(secret, "polka_change_files", {
     key: randomUUID(),
     artifactId: made.artifactId,
@@ -281,7 +358,7 @@ test("the same three operations over MCP", async () => {
   const page = await api(secret, "POST", "/api/v1/publish", {
     key: randomUUID(),
     title: "Одна страница",
-    html: "<!doctype html><html><head><meta charset=\"utf-8\"><title>t</title></head><body><h1>t</h1></body></html>",
+    html: '<!doctype html><html><head><meta charset="utf-8"><title>t</title></head><body><h1>t</h1></body></html>',
   });
   assert.equal(page.statusCode, 200, page.body);
   const refused = await mcp(secret, "polka_change_files", {

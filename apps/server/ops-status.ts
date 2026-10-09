@@ -73,11 +73,8 @@ async function backup(): Promise<Check> {
     let newest = 0;
     let ContinuationToken: string | undefined;
     do {
-      const page = await s3.send(
-        new ListObjectsV2Command({ Bucket, Prefix: "postgres/", ContinuationToken }),
-      );
-      for (const object of page.Contents ?? [])
-        newest = Math.max(newest, object.LastModified?.getTime() ?? 0);
+      const page = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: "postgres/", ContinuationToken }));
+      for (const object of page.Contents ?? []) newest = Math.max(newest, object.LastModified?.getTime() ?? 0);
       ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (ContinuationToken);
     if (!newest) return { ok: false, reason: "no dumps" };
@@ -99,12 +96,7 @@ async function disk(): Promise<Check> {
 }
 
 export async function opsStatus(version: string) {
-  const [db_, maintenance_, backup_, disk_] = await Promise.all([
-    database(),
-    maintenance(),
-    backup(),
-    disk(),
-  ]);
+  const [db_, maintenance_, backup_, disk_] = await Promise.all([database(), maintenance(), backup(), disk()]);
   const checks = {
     database: db_,
     maintenance: maintenance_,

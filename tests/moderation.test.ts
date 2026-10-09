@@ -22,10 +22,7 @@ import {
   unpauseShareAsOperator,
   approveShareAsOperator,
 } from "../apps/server/moderation.ts";
-import {
-  assertActiveOwner,
-  lockActiveOwnerTenant,
-} from "../apps/server/owner-state.ts";
+import { assertActiveOwner, lockActiveOwnerTenant } from "../apps/server/owner-state.ts";
 import { reportShare } from "../apps/server/reports.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -39,15 +36,8 @@ after(async () => {
 });
 
 async function account(prefix: string, email?: string) {
-  const created = await createAccount(
-    `${prefix}-${randomBytes(4).toString("hex")}`,
-    password,
-  );
-  if (email)
-    await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [
-      created.id,
-      email,
-    ]);
+  const created = await createAccount(`${prefix}-${randomBytes(4).toString("hex")}`, password);
+  if (email) await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [created.id, email]);
   return created;
 }
 
@@ -55,39 +45,24 @@ async function sharedArtifact(owner: Account, title: string, days = 7) {
   const artifactId = randomUUID(),
     revisionId = randomUUID(),
     shareId = randomUUID();
-  await db.query(
-    "INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,$4)",
-    [artifactId, owner.tenant, owner.id, title],
-  );
+  await db.query("INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,$4)", [
+    artifactId,
+    owner.tenant,
+    owner.id,
+    title,
+  ]);
   await db.query(
     `INSERT INTO revisions(
        id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
        object_key,object_version,storage_kind,total_size
      ) VALUES($1,$2,$3,1,$4,'note.txt','text/plain',4,$5,$6,'version','single',4)`,
-    [
-      revisionId,
-      owner.tenant,
-      artifactId,
-      owner.id,
-      sha256("note"),
-      `${owner.tenant}/moderation/${revisionId}`,
-    ],
+    [revisionId, owner.tenant, artifactId, owner.id, sha256("note"), `${owner.tenant}/moderation/${revisionId}`],
   );
-  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
-    artifactId,
-    revisionId,
-  ]);
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [artifactId, revisionId]);
   await db.query(
     `INSERT INTO shares(id,tenant_id,artifact_id,revision_id,token_hash,expires_at)
      VALUES($1,$2,$3,$4,$5,now()+$6*interval '1 day')`,
-    [
-      shareId,
-      owner.tenant,
-      artifactId,
-      revisionId,
-      sha256(tokenFor(shareId)),
-      days,
-    ],
+    [shareId, owner.tenant, artifactId, revisionId, sha256(tokenFor(shareId)), days],
   );
   return { artifactId, revisionId, shareId, token: tokenFor(shareId) };
 }
@@ -99,10 +74,10 @@ const report = (token: string, reason: string, comment?: string) =>
   );
 
 async function session(owner: Account) {
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(randomBytes(32)), owner.id],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(randomBytes(32)),
+    owner.id,
+  ]);
 }
 
 async function tokenConnection(owner: Account) {
@@ -111,14 +86,7 @@ async function tokenConnection(owner: Account) {
     `INSERT INTO agent_connections(
        id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
      ) VALUES($1,$2,$3,$4,'moderation token',$5,$6,now()+interval '1 day')`,
-    [
-      id,
-      owner.tenant,
-      owner.id,
-      sha256(randomBytes(32)),
-      ["read"],
-      MCP_AUDIENCE,
-    ],
+    [id, owner.tenant, owner.id, sha256(randomBytes(32)), ["read"], MCP_AUDIENCE],
   );
   return id;
 }
@@ -128,11 +96,7 @@ async function oauthConnection(owner: Account) {
   await db.query(
     `INSERT INTO oauth_clients(client_id,auth_method,client_name,redirect_uris,grant_types)
      VALUES($1,'none','moderation client',$2,$3)`,
-    [
-      clientId,
-      ["https://client.example/callback"],
-      ["authorization_code", "refresh_token"],
-    ],
+    [clientId, ["https://client.example/callback"], ["authorization_code", "refresh_token"]],
   );
   const id = randomUUID();
   await db.query(
@@ -141,28 +105,13 @@ async function oauthConnection(owner: Account) {
        oauth_client_id,access_expires_at
      ) VALUES($1,$2,$3,$4,'moderation oauth',$5,$6,now()+interval '30 days',
        $7,now()+interval '1 hour')`,
-    [
-      id,
-      owner.tenant,
-      owner.id,
-      sha256(randomBytes(32)),
-      ["read"],
-      MCP_AUDIENCE,
-      clientId,
-    ],
+    [id, owner.tenant, owner.id, sha256(randomBytes(32)), ["read"], MCP_AUDIENCE, clientId],
   );
   await db.query(
     `INSERT INTO oauth_refresh_tokens(
        id,connection_id,tenant_id,account_id,client_id,token_hash,expires_at
      ) VALUES($1,$2,$3,$4,$5,$6,now()+interval '30 days')`,
-    [
-      randomUUID(),
-      id,
-      owner.tenant,
-      owner.id,
-      clientId,
-      sha256(randomBytes(32)),
-    ],
+    [randomUUID(), id, owner.tenant, owner.id, clientId, sha256(randomBytes(32))],
   );
   return id;
 }
@@ -181,18 +130,12 @@ test("runs as the expected database role", async () => {
 });
 
 const actions = async (owner: Account) =>
-  (
-    await db.query(
-      "SELECT action FROM audit_outbox WHERE tenant_id=$1 ORDER BY id",
-      [owner.tenant],
-    )
-  ).rows.map((row) => row.action);
+  (await db.query("SELECT action FROM audit_outbox WHERE tenant_id=$1 ORDER BY id", [owner.tenant])).rows.map(
+    (row) => row.action,
+  );
 
 test("reports list newest first with owner, share state and counts", async () => {
-  const owner = await account(
-    "mod-list",
-    `list-${randomBytes(4).toString("hex")}@example.com`,
-  );
+  const owner = await account("mod-list", `list-${randomBytes(4).toString("hex")}@example.com`);
   const first = await sharedArtifact(owner, "Первый\u001b[31m отчёт");
   const second = await sharedArtifact(owner, "Второй");
   await report(first.token, "phishing", "похоже на\nфишинг " + "x".repeat(200));
@@ -202,14 +145,10 @@ test("reports list newest first with owner, share state and counts", async () =>
     "UPDATE share_reports SET created_at=now()-interval '10 days' WHERE share_id=$1 AND reason='malware'",
     [first.shareId],
   );
-  await db.query("UPDATE shares SET revoked=true WHERE id=$1", [
-    second.shareId,
-  ]);
+  await db.query("UPDATE shares SET revoked=true WHERE id=$1", [second.shareId]);
 
   const result = await listReports(7);
-  const mine = result.reports.filter((row) =>
-    [first.shareId, second.shareId as string].includes(row.shareId),
-  );
+  const mine = result.reports.filter((row) => [first.shareId, second.shareId as string].includes(row.shareId));
   assert.deepEqual(
     mine.map((row) => [row.shareId, row.reason, row.shareActive]),
     [
@@ -223,11 +162,7 @@ test("reports list newest first with owner, share state and counts", async () =>
   assert.equal(mine[1].ownerName, owner.name);
 
   const wide = await listReports(30);
-  assert.ok(
-    wide.reports.some(
-      (row) => row.reason === "malware" && row.shareId === first.shareId,
-    ),
-  );
+  assert.ok(wide.reports.some((row) => row.reason === "malware" && row.shareId === first.shareId));
 
   const text = formatReports({ ...result, reports: mine });
   const lines = text.split("\n");
@@ -235,17 +170,11 @@ test("reports list newest first with owner, share state and counts", async () =>
   assert.ok(lines[1].includes(second.shareId) && / no /.test(lines[1]));
   assert.ok(lines[2].includes(first.shareId) && / yes /.test(lines[2]));
   assert.ok(lines[2].includes(owner.name) && lines[2].includes("@example.com"));
-  assert.ok(
-    !text.includes("\u001b"),
-    "control characters never reach the terminal",
-  );
+  assert.ok(!text.includes("\u001b"), "control characters never reach the terminal");
   assert.ok(lines[2].includes("похоже на фишинг") && lines[2].endsWith("…"));
   assert.ok(!text.includes(first.token) && !text.includes(second.token));
   assert.match(text, /2 report\(s\) in the last 7 day\(s\)/);
-  assert.equal(
-    formatReports({ days: 3, truncated: false, reports: [] }),
-    "No reports in the last 3 day(s).",
-  );
+  assert.equal(formatReports({ days: 3, truncated: false, reports: [] }), "No reports in the last 3 day(s).");
   await assert.rejects(listReports(0), ModerationError);
   await assert.rejects(listReports(Number.NaN), ModerationError);
   assert.equal(clean("a\u202eb\tc  d", 10), "a b c d");
@@ -265,15 +194,11 @@ test("revoke-share closes one share through the owner revoke path", async () => 
   assert.ok(text.includes("Спорная страница") && text.includes(owner.name));
   assert.ok(!text.includes(target.token));
 
-  const states = (
-    await db.query("SELECT id,revoked FROM shares WHERE tenant_id=$1", [
-      owner.tenant,
-    ])
-  ).rows;
-  assert.deepEqual(
-    Object.fromEntries(states.map((row) => [row.id, row.revoked])),
-    { [target.shareId]: true, [other.shareId]: false },
-  );
+  const states = (await db.query("SELECT id,revoked FROM shares WHERE tenant_id=$1", [owner.tenant])).rows;
+  assert.deepEqual(Object.fromEntries(states.map((row) => [row.id, row.revoked])), {
+    [target.shareId]: true,
+    [other.shareId]: false,
+  });
   assert.deepEqual(await actions(owner), ["share.revoked"]);
 
   const again = await revokeShareAsOperator(target.shareId);
@@ -295,10 +220,7 @@ test("disable ends sessions, revokes connections and closes shares without delet
   const bystander = await account("mod-by");
   const live = await sharedArtifact(owner, "Живая");
   const expired = await sharedArtifact(owner, "Истёкшая", 1);
-  await db.query(
-    "UPDATE shares SET expires_at=now()-interval '1 hour' WHERE id=$1",
-    [expired.shareId],
-  );
+  await db.query("UPDATE shares SET expires_at=now()-interval '1 hour' WHERE id=$1", [expired.shareId]);
   const kept = await sharedArtifact(bystander, "Чужая");
   await session(owner);
   await session(owner);
@@ -325,54 +247,22 @@ test("disable ends sessions, revokes connections and closes shares without delet
   assert.match(text, /Agent connections revoked: 2 \(token 1, OAuth 1\)/);
   assert.match(text, /Shares closed: 2 \(live 1, expired 1\)/);
 
-  const accountRow = (
-    await db.query(
-      "SELECT disabled,deletion_requested_at FROM accounts WHERE id=$1",
-      [owner.id],
-    )
-  ).rows[0];
+  const accountRow = (await db.query("SELECT disabled,deletion_requested_at FROM accounts WHERE id=$1", [owner.id]))
+    .rows[0];
   assert.deepEqual(accountRow, { disabled: true, deletion_requested_at: null });
-  const count = async (sql: string, params: unknown[]) =>
-    Number((await db.query(sql, params)).rows[0].count);
+  const count = async (sql: string, params: unknown[]) => Number((await db.query(sql, params)).rows[0].count);
+  assert.equal(await count("SELECT count(*) FROM sessions WHERE account_id=$1", [owner.id]), 0);
   assert.equal(
-    await count("SELECT count(*) FROM sessions WHERE account_id=$1", [
-      owner.id,
-    ]),
+    await count("SELECT count(*) FROM agent_connections WHERE tenant_id=$1 AND revoked_at IS NULL", [owner.tenant]),
     0,
   );
   assert.equal(
-    await count(
-      "SELECT count(*) FROM agent_connections WHERE tenant_id=$1 AND revoked_at IS NULL",
-      [owner.tenant],
-    ),
+    await count("SELECT count(*) FROM oauth_refresh_tokens WHERE connection_id=$1 AND revoked_at IS NULL", [oauth]),
     0,
   );
-  assert.equal(
-    await count(
-      "SELECT count(*) FROM oauth_refresh_tokens WHERE connection_id=$1 AND revoked_at IS NULL",
-      [oauth],
-    ),
-    0,
-  );
-  assert.equal(
-    await count(
-      "SELECT count(*) FROM shares WHERE tenant_id=$1 AND NOT revoked",
-      [owner.tenant],
-    ),
-    0,
-  );
-  assert.equal(
-    await count("SELECT count(*) FROM artifacts WHERE tenant_id=$1", [
-      owner.tenant,
-    ]),
-    2,
-  );
-  assert.equal(
-    await count("SELECT count(*) FROM revisions WHERE tenant_id=$1", [
-      owner.tenant,
-    ]),
-    2,
-  );
+  assert.equal(await count("SELECT count(*) FROM shares WHERE tenant_id=$1 AND NOT revoked", [owner.tenant]), 0);
+  assert.equal(await count("SELECT count(*) FROM artifacts WHERE tenant_id=$1", [owner.tenant]), 2);
+  assert.equal(await count("SELECT count(*) FROM revisions WHERE tenant_id=$1", [owner.tenant]), 2);
   assert.deepEqual((await actions(owner)).sort(), [
     "account.disabled",
     "agent.connection.revoked",
@@ -384,47 +274,22 @@ test("disable ends sessions, revokes connections and closes shares without delet
 
   // The product's own owner checks now refuse the account.
   const actor = { id: owner.id, tenant: owner.tenant };
-  await assert.rejects(
-    assertActiveOwner(db, actor),
-    (error: any) => error?.status === 403,
-  );
+  await assert.rejects(assertActiveOwner(db, actor), (error: any) => error?.status === 403);
   await assert.rejects(transaction((c) => lockActiveOwnerTenant(c, actor)));
 
   // Nobody else is touched.
+  assert.equal(await count("SELECT count(*) FROM sessions WHERE account_id=$1", [bystander.id]), 1);
   assert.equal(
-    await count("SELECT count(*) FROM sessions WHERE account_id=$1", [
-      bystander.id,
-    ]),
+    await count("SELECT count(*) FROM agent_connections WHERE id=$1 AND revoked_at IS NULL", [bystanderConnection]),
     1,
   );
-  assert.equal(
-    await count(
-      "SELECT count(*) FROM agent_connections WHERE id=$1 AND revoked_at IS NULL",
-      [bystanderConnection],
-    ),
-    1,
-  );
-  assert.equal(
-    await count("SELECT count(*) FROM shares WHERE id=$1 AND NOT revoked", [
-      kept.shareId,
-    ]),
-    1,
-  );
+  assert.equal(await count("SELECT count(*) FROM shares WHERE id=$1 AND NOT revoked", [kept.shareId]), 1);
 
   const repeat = await disableAccount(owner.name);
   assert.equal(repeat.alreadyDisabled, true);
-  assert.equal(
-    repeat.sessions +
-      repeat.tokenConnections +
-      repeat.oauthConnections +
-      repeat.liveShares,
-    0,
-  );
+  assert.equal(repeat.sessions + repeat.tokenConnections + repeat.oauthConnections + repeat.liveShares, 0);
   assert.match(formatDisabled(repeat), /was already disabled/);
-  assert.equal(
-    (await actions(owner)).filter((a) => a === "account.disabled").length,
-    1,
-  );
+  assert.equal((await actions(owner)).filter((a) => a === "account.disabled").length, 1);
   assert.ok(live);
 
   await assert.rejects(disableAccount("no-such-login-xyz"), /No account/);
@@ -445,17 +310,9 @@ test("enable lifts the disable but leaves shares and connections closed", async 
   });
   assert.match(formatEnabled(result), /is enabled\. Closed shares/);
   await assertActiveOwner(db, { id: owner.id, tenant: owner.tenant });
-  assert.equal(
-    (await db.query("SELECT revoked FROM shares WHERE id=$1", [shared.shareId]))
-      .rows[0].revoked,
-    true,
-  );
+  assert.equal((await db.query("SELECT revoked FROM shares WHERE id=$1", [shared.shareId])).rows[0].revoked, true);
   assert.notEqual(
-    (
-      await db.query("SELECT revoked_at FROM agent_connections WHERE id=$1", [
-        connection,
-      ])
-    ).rows[0].revoked_at,
+    (await db.query("SELECT revoked_at FROM agent_connections WHERE id=$1", [connection])).rows[0].revoked_at,
     null,
   );
   assert.ok((await actions(owner)).includes("account.enabled"));
@@ -466,10 +323,7 @@ test("enable lifts the disable but leaves shares and connections closed", async 
 
   // An account in deletion stays disabled.
   const leaving = await account("mod-del");
-  await db.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1",
-    [leaving.id],
-  );
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [leaving.id]);
   await assert.rejects(enableAccount(leaving.name), /being deleted/);
   await assert.rejects(disableAccount(leaving.name), /being deleted/);
 });
@@ -480,17 +334,15 @@ test("queue, approve, unpause and trust act once and repeat harmlessly", async (
   await db.query("UPDATE accounts SET trusted_at=NULL WHERE id=$1", [owner.id]);
   const held = await sharedArtifact(owner, "Held page");
   const paused = await sharedArtifact(owner, "Paused page");
-  await db.query(
-    "UPDATE shares SET moderation='held',moderation_reason='new-account',moderated_at=now() WHERE id=$1",
-    [held.shareId],
-  );
-  await db.query(
-    "UPDATE shares SET moderation='paused',moderation_reason='reports',moderated_at=now() WHERE id=$1",
-    [paused.shareId],
-  );
+  await db.query("UPDATE shares SET moderation='held',moderation_reason='new-account',moderated_at=now() WHERE id=$1", [
+    held.shareId,
+  ]);
+  await db.query("UPDATE shares SET moderation='paused',moderation_reason='reports',moderated_at=now() WHERE id=$1", [
+    paused.shareId,
+  ]);
   await report(paused.token, "phishing", "fake bank");
-  const mine = (await listModerationQueue()).filter((item) =>
-    item.shareId === held.shareId || item.shareId === paused.shareId,
+  const mine = (await listModerationQueue()).filter(
+    (item) => item.shareId === held.shareId || item.shareId === paused.shareId,
   );
   assert.deepEqual(mine.map((item) => item.state).sort(), ["held", "paused"]);
   assert.match(formatModerationQueue(mine), /HELD/);
@@ -502,10 +354,9 @@ test("queue, approve, unpause and trust act once and repeat harmlessly", async (
   assert.equal((await unpauseShareAsOperator(paused.shareId)).changed, false);
   assert.equal(
     (
-      await db.query(
-        "SELECT count(*)::int AS n FROM share_reports WHERE share_id=$1 AND status='new'",
-        [paused.shareId],
-      )
+      await db.query("SELECT count(*)::int AS n FROM share_reports WHERE share_id=$1 AND status='new'", [
+        paused.shareId,
+      ])
     ).rows[0].n,
     0,
   );
@@ -520,11 +371,9 @@ test("queue, approve, unpause and trust act once and repeat harmlessly", async (
   assert.equal(state.rows[0].moderation, "none");
   assert.notEqual(state.rows[0].trusted_at, null);
   assert.equal((await approveShareAsOperator(held.shareId, true)).changed, false);
-  const audited = (
-    await db.query("SELECT action FROM audit_outbox WHERE tenant_id=$1", [
-      owner.tenant,
-    ])
-  ).rows.map((row) => row.action);
+  const audited = (await db.query("SELECT action FROM audit_outbox WHERE tenant_id=$1", [owner.tenant])).rows.map(
+    (row) => row.action,
+  );
   assert.ok(audited.includes("share.approved"));
   assert.ok(audited.includes("account.trusted"));
 

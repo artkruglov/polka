@@ -44,9 +44,7 @@ export async function sendSmtpMail(mail: Mail) {
     port: config.SMTP_PORT,
     secure: config.SMTP_PORT === 465,
     requireTLS: true,
-    auth: config.SMTP_USER
-      ? { user: config.SMTP_USER, pass: config.SMTP_PASS }
-      : undefined,
+    auth: config.SMTP_USER ? { user: config.SMTP_USER, pass: config.SMTP_PASS } : undefined,
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
@@ -70,17 +68,11 @@ export async function sendSmtpMail(mail: Mail) {
  * Sends one message the way this installation is configured. Returns false
  * when mail is disabled. Local mode returns the written file's path.
  */
-export async function sendMail(
-  mail: Mail,
-  localDirectory = LOCAL_OPERATOR_MAIL_DIRECTORY,
-): Promise<string | boolean> {
+export async function sendMail(mail: Mail, localDirectory = LOCAL_OPERATOR_MAIL_DIRECTORY): Promise<string | boolean> {
   if (config.MAIL_MODE === "disabled") return false;
   if (config.MAIL_MODE === "local") {
     const path = `${localDirectory}/${Date.now()}-${randomUUID()}.json`;
-    await writeLocalMailFile(
-      path,
-      JSON.stringify({ ...mail, notice: LOCAL_MAIL_NOTICE }, null, 2),
-    );
+    await writeLocalMailFile(path, JSON.stringify({ ...mail, notice: LOCAL_MAIL_NOTICE }, null, 2));
     return path;
   }
   await sendSmtpMail(mail);

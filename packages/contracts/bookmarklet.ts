@@ -171,16 +171,10 @@ export function acceptBookmarkletEvent(
   event: BookmarkletEvent,
   expected: { opener: unknown; nonce: string | null },
 ): Accepted | null {
-  if (!expected.nonce || !expected.opener || event.source !== expected.opener)
-    return null;
+  if (!expected.nonce || !expected.opener || event.source !== expected.opener) return null;
   if (!allowedSourceOrigin(event.origin)) return null;
   const data = event.data;
-  if (
-    !isObject(data) ||
-    data.type !== BOOKMARKLET_MESSAGE ||
-    data.nonce !== expected.nonce
-  )
-    return null;
+  if (!isObject(data) || data.type !== BOOKMARKLET_MESSAGE || data.nonce !== expected.nonce) return null;
   if ("failure" in data)
     return FAILURES.includes(data.failure as BookmarkletFailure)
       ? { status: "failure", failure: data.failure as BookmarkletFailure }
@@ -194,8 +188,7 @@ export function acceptBookmarkletEvent(
  * within MAX_BYTES.
  */
 export function checkSource(source: unknown, sender: string): Accepted {
-  if (!isObject(source) || !allowedSourceOrigin(sender))
-    return { status: "rejected", reason: "invalid" };
+  if (!isObject(source) || !allowedSourceOrigin(sender)) return { status: "rejected", reason: "invalid" };
   const { url, title, kind, language, text } = source;
   if (
     typeof url !== "string" ||
@@ -241,18 +234,9 @@ export function parseBookmarkletReply(
 ): BookmarkletReply | null {
   if (event.source !== expected.tab || event.origin !== expected.origin) return null;
   const data = event.data;
-  if (
-    !isObject(data) ||
-    data.type !== BOOKMARKLET_MESSAGE ||
-    data.nonce !== expected.nonce
-  )
-    return null;
-  if (data.reply === "ready")
-    return { type: BOOKMARKLET_MESSAGE, nonce: expected.nonce, reply: "ready" };
-  if (
-    data.reply === "rejected" &&
-    (data.reason === "too_large" || data.reason === "invalid")
-  )
+  if (!isObject(data) || data.type !== BOOKMARKLET_MESSAGE || data.nonce !== expected.nonce) return null;
+  if (data.reply === "ready") return { type: BOOKMARKLET_MESSAGE, nonce: expected.nonce, reply: "ready" };
+  if (data.reply === "rejected" && (data.reason === "too_large" || data.reason === "invalid"))
     return {
       type: BOOKMARKLET_MESSAGE,
       nonce: expected.nonce,

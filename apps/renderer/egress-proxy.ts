@@ -95,7 +95,9 @@ export function createEgressProxy(policy: EgressPolicy = {}): Server {
 }
 
 function refuse(client: Socket, reason: string, status: number) {
-  client.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Busy"}\r\nx-egress-refused: ${reason}\r\nconnection: close\r\n\r\n`);
+  client.end(
+    `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Busy"}\r\nx-egress-refused: ${reason}\r\nconnection: close\r\n\r\n`,
+  );
 }
 
 function hostOf(req: IncomingMessage) {

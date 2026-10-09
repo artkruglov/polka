@@ -35,15 +35,13 @@ const PUBLIC_PROVIDERS = new Set([
   "protonmail.com",
 ]);
 
-export const mailDomain = (email: string) =>
-  email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+export const mailDomain = (email: string) => email.slice(email.lastIndexOf("@") + 1).toLowerCase();
 
 /** A throwaway mail service, the domain or any parent of it. */
 export function disposableEmail(email: string) {
   const labels = mailDomain(email).split(".");
   const { disposable } = filterLists();
-  for (let i = 0; i < labels.length - 1; i++)
-    if (disposable.has(labels.slice(i).join("."))) return true;
+  for (let i = 0; i < labels.length - 1; i++) if (disposable.has(labels.slice(i).join("."))) return true;
   return false;
 }
 
@@ -69,8 +67,7 @@ export function signupSpamKeys(ip: string, email: string | null) {
     {
       key: `email-signup-subnet:${subnetOf(ip)}`,
       max: () => config.EMAIL_SIGNUP_DAILY_PER_SUBNET || Number.MAX_SAFE_INTEGER,
-      message:
-        "Из этой сети сегодня уже создано много полок. Попробуйте завтра или войдите в существующую полку.",
+      message: "Из этой сети сегодня уже создано много полок. Попробуйте завтра или войдите в существующую полку.",
     },
     ...(!domain || PUBLIC_PROVIDERS.has(domain) || !config.EMAIL_SIGNUP_DAILY_PER_DOMAIN
       ? []
@@ -78,8 +75,7 @@ export function signupSpamKeys(ip: string, email: string | null) {
           {
             key: `email-signup-domain:${domain}`,
             max: () => config.EMAIL_SIGNUP_DAILY_PER_DOMAIN,
-            message:
-              "С адресов этого почтового домена сегодня уже создано много полок. Попробуйте завтра.",
+            message: "С адресов этого почтового домена сегодня уже создано много полок. Попробуйте завтра.",
           },
         ]),
   ];

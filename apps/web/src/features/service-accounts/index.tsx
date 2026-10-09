@@ -64,9 +64,8 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
     <section className="agent-card" aria-labelledby="service-accounts-title">
       <h2 id="service-accounts-title">Сервисные доступы</h2>
       <p>
-        Агент для расписания или CI без человека за клавиатурой. За него отвечает человек: если он уйдёт
-        с полки, доступ заморозится, пока администратор не назначит другого. Нельзя давать права
-        «читать» и «ссылки» вместе.
+        Агент для расписания или CI без человека за клавиатурой. За него отвечает человек: если он уйдёт с полки, доступ
+        заморозится, пока администратор не назначит другого. Нельзя давать права «читать» и «ссылки» вместе.
       </p>
       {(items ?? []).map((item) => (
         <div key={item.id} className="agent-existing service-accounts-row">
@@ -74,18 +73,30 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
           {item.responsibleName && <>; отвечает: {item.responsibleName}</>}
           {item.token && (
             <>
-              ; права: {item.token.scopes.filter((scope): scope is ServiceScope => scope in SCOPE_LABEL).map((scope) => SCOPE_LABEL[scope]).join(", ") || "—"}; токен до{" "}
-              {new Date(item.token.expiresAt).toLocaleDateString("ru-RU")}
+              ; права:{" "}
+              {item.token.scopes
+                .filter((scope): scope is ServiceScope => scope in SCOPE_LABEL)
+                .map((scope) => SCOPE_LABEL[scope])
+                .join(", ") || "—"}
+              ; токен до {new Date(item.token.expiresAt).toLocaleDateString("ru-RU")}
             </>
           )}
           <div className="service-accounts-actions">
             {item.status === "active" && (item.responsibleAccountId === accountId || admin) && (
-              <Button type="button" disabled={busy} onClick={() => void run(() => client.serviceAccounts.rotate(item.id), item.name)}>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => client.serviceAccounts.rotate(item.id), item.name)}
+              >
                 Новый токен
               </Button>
             )}
             {item.status === "frozen" && admin && (
-              <Button type="button" disabled={busy} onClick={() => void run(() => client.serviceAccounts.setResponsible(item.id, accountId), item.name)}>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => client.serviceAccounts.setResponsible(item.id, accountId), item.name)}
+              >
                 Отвечать самому и разморозить
               </Button>
             )}
@@ -130,7 +141,13 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
           }, name.trim());
         }}
       >
-        <TextField label="Название" value={name} maxLength={80} onChange={(event) => setName(event.target.value)} required />
+        <TextField
+          label="Название"
+          value={name}
+          maxLength={80}
+          onChange={(event) => setName(event.target.value)}
+          required
+        />
         <fieldset className="service-accounts-scopes">
           <legend>Права</legend>
           {(Object.keys(SCOPE_LABEL) as ServiceScope[]).map((scope) => (
@@ -139,7 +156,9 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
                 type="checkbox"
                 checked={scopes.includes(scope)}
                 onChange={(event) =>
-                  setScopes((current) => (event.target.checked ? [...current, scope] : current.filter((value) => value !== scope)))
+                  setScopes((current) =>
+                    event.target.checked ? [...current, scope] : current.filter((value) => value !== scope),
+                  )
                 }
               />{" "}
               {SCOPE_LABEL[scope]}

@@ -32,13 +32,10 @@ const activeBuilds = new Set<string>();
 
 // A single HTML upload is built like a one-file bundle: its interactive
 // version is how a page the static view cannot show gets a link.
-const buildableStorage = (kind: string) =>
-  kind === "bundle" || kind === "single";
+const buildableStorage = (kind: string) => kind === "bundle" || kind === "single";
 let runningWorkers = 0;
 
-export type DerivativeTransactionRunner = <T>(
-  operation: (c: PoolClient) => Promise<T>,
-) => Promise<T>;
+export type DerivativeTransactionRunner = <T>(operation: (c: PoolClient) => Promise<T>) => Promise<T>;
 
 const statusDTO = (row: any): InlineBuildStatus => ({
   state: row.state,
@@ -145,9 +142,7 @@ const requireFromHere = createRequire(import.meta.url);
 export function builderEnv() {
   let binary = "";
   try {
-    binary = requireFromHere.resolve(
-      `@esbuild/${process.platform}-${process.arch}/bin/esbuild`,
-    );
+    binary = requireFromHere.resolve(`@esbuild/${process.platform}-${process.arch}/bin/esbuild`);
   } catch {
     // Without a platform binary the runtime build fails; classic builds run.
   }
@@ -155,9 +150,7 @@ export function builderEnv() {
     PATH: "/usr/local/bin:/usr/bin:/bin",
     GOMEMLIMIT: "256MiB",
     GOMAXPROCS: "2",
-    ESBUILD_BINARY_PATH: fileURLToPath(
-      new URL("./esbuild-limited.sh", import.meta.url),
-    ),
+    ESBUILD_BINARY_PATH: fileURLToPath(new URL("./esbuild-limited.sh", import.meta.url)),
     POLKA_ESBUILD_BINARY: binary,
   };
 }
@@ -185,19 +178,16 @@ async function runBuilder(
   files: Array<{ path: string; bytes: Buffer }>,
 ) {
   return new Promise<WorkerResult>((resolve, reject) => {
-    const worker = new Worker(
-      new URL("./bundle-build-worker.mjs", import.meta.url),
-      {
-        resourceLimits: {
-          maxOldGenerationSizeMb: BUILD_LIMITS.workerHeapMb,
-          maxYoungGenerationSizeMb: BUILD_LIMITS.workerYoungMb,
-          stackSizeMb: BUILD_LIMITS.workerStackMb,
-        },
-        // esbuild runs as a child process of this worker, inherits this
-        // environment and ends with the worker.
-        env: builderEnv(),
+    const worker = new Worker(new URL("./bundle-build-worker.mjs", import.meta.url), {
+      resourceLimits: {
+        maxOldGenerationSizeMb: BUILD_LIMITS.workerHeapMb,
+        maxYoungGenerationSizeMb: BUILD_LIMITS.workerYoungMb,
+        stackSizeMb: BUILD_LIMITS.workerStackMb,
       },
-    );
+      // esbuild runs as a child process of this worker, inherits this
+      // environment and ends with the worker.
+      env: builderEnv(),
+    });
     let settled = false;
     let runtimeSlot = false;
     const settle = async (outcome: () => void) => {
@@ -222,18 +212,11 @@ async function runBuilder(
         return;
       }
       // Anything but a result is a broken worker, never a build to store.
-      if (kind === "invalid")
-        return void settle(() => reject(new BuildWorkerError("crash")));
+      if (kind === "invalid") return void settle(() => reject(new BuildWorkerError("crash")));
       void settle(() => resolve((message as { result: WorkerResult }).result));
     });
     worker.once("error", (error: Error & { code?: string }) => {
-      void settle(() =>
-        reject(
-          new BuildWorkerError(
-            error?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "oom" : "crash",
-          ),
-        ),
-      );
+      void settle(() => reject(new BuildWorkerError(error?.code === "ERR_WORKER_OUT_OF_MEMORY" ? "oom" : "crash")));
     });
     worker.once("exit", () => {
       void settle(() => reject(new BuildWorkerError("crash")));
@@ -269,8 +252,7 @@ export async function checkBuildInWorker(
       try {
         result = await runBuilder(manifest, files);
       } catch (error) {
-        const category =
-          error instanceof BuildWorkerError ? error.category : "crash";
+        const category = error instanceof BuildWorkerError ? error.category : "crash";
         logBuildFailure(category, "check");
         return {
           ok: false,
@@ -283,8 +265,7 @@ export async function checkBuildInWorker(
         await new Promise((resolve) => setTimeout(resolve, 200));
         continue;
       }
-      if (!result.ok && result.failed)
-        logBuildFailure(result.category ?? "crash", "check");
+      if (!result.ok && result.failed) logBuildFailure(result.category ?? "crash", "check");
       return result;
     }
   } finally {
@@ -292,12 +273,7 @@ export async function checkBuildInWorker(
   }
 }
 
-async function lockDerivative(
-  c: PoolClient,
-  tenantId: string,
-  id: string,
-  revisionId: string,
-) {
+async function lockDerivative(c: PoolClient, tenantId: string, id: string, revisionId: string) {
   const {
     rows: [tenant],
   } = await c.query("SELECT * FROM tenants WHERE id=$1", [tenantId]);
@@ -312,18 +288,11 @@ async function lockDerivative(
   );
   const {
     rows: [row],
-  } = await c.query(
-    "SELECT * FROM revision_derivatives WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [id, tenantId],
-  );
+  } = await c.query("SELECT * FROM revision_derivatives WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [id, tenantId]);
   return { tenant, artifact, row };
 }
 
-async function prepare(
-  sourceTenantId: string,
-  revisionId: string,
-  runTransaction: DerivativeTransactionRunner,
-) {
+async function prepare(sourceTenantId: string, revisionId: string, runTransaction: DerivativeTransactionRunner) {
   return runTransaction(async (c) => {
     const {
       rows: [tenant],
@@ -361,8 +330,7 @@ async function prepare(
        FOR UPDATE`,
       [revisionId, revision.manifest_sha256],
     );
-    if (existing && ["ready", "unsupported"].includes(existing.state))
-      return { row: existing, run: false };
+    if (existing && ["ready", "unsupported"].includes(existing.state)) return { row: existing, run: false };
     // A build the builder itself gave up on (timeout, out of memory, crash)
     // is the expensive kind; a client retrying it in a loop would hold the
     // process's build slots for every other owner, so the same source is not
@@ -371,35 +339,27 @@ async function prepare(
     if (
       existing?.state === "failed" &&
       BUILDER_FAILURES.has(existing.reason) &&
-      Date.now() - new Date(existing.updated_at).getTime() <
-        BUILD_RETRY_COOLDOWN_MS
+      Date.now() - new Date(existing.updated_at).getTime() < BUILD_RETRY_COOLDOWN_MS
     )
       return { row: existing, run: false };
     if (existing?.state === "pending")
       return {
         row: existing,
         run:
-          Number(existing.artifact_lifecycle_version) ===
-            Number(revision.artifact_lifecycle_version) &&
+          Number(existing.artifact_lifecycle_version) === Number(revision.artifact_lifecycle_version) &&
           new Date(existing.attempt_expires_at).getTime() > Date.now(),
       };
     const {
       rows: [pending],
-    } = await c.query(
-      "SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending'",
-      [sourceTenantId],
-    );
+    } = await c.query("SELECT count(*) AS count FROM revision_derivatives WHERE tenant_id=$1 AND state='pending'", [
+      sourceTenantId,
+    ]);
     if (
       Number(pending.count) >= 2 ||
-      Number(tenant.derivative_used_bytes) +
-        (Number(pending.count) + 1) * DERIVATIVE_RESERVATION_BYTES >
+      Number(tenant.derivative_used_bytes) + (Number(pending.count) + 1) * DERIVATIVE_RESERVATION_BYTES >
         Number(tenant.derivative_quota_bytes)
     )
-      throw new Problem(
-        413,
-        "quota",
-        "Достигнут лимит собранных страниц или одновременных сборок.",
-      );
+      throw new Problem(413, "quota", "Достигнут лимит собранных страниц или одновременных сборок.");
     const attemptId = randomUUID();
     if (existing) {
       const {
@@ -445,18 +405,12 @@ async function finishNonReady(
   errorPath?: string,
 ) {
   return runTransaction(async (c) => {
-    const { artifact, row } = await lockDerivative(
-      c,
-      sourceTenantId,
-      derivative.id,
-      derivative.revision_id,
-    );
+    const { artifact, row } = await lockDerivative(c, sourceTenantId, derivative.id, derivative.revision_id);
     if (
       !row ||
       !artifact ||
       artifact.trashed_at ||
-      Number(artifact.lifecycle_version) !==
-        Number(row.artifact_lifecycle_version) ||
+      Number(artifact.lifecycle_version) !== Number(row.artifact_lifecycle_version) ||
       row.state !== "pending" ||
       row.attempt_id !== derivative.attempt_id
     )
@@ -467,13 +421,7 @@ async function finishNonReady(
       `UPDATE revision_derivatives
        SET state=$3,attempt_expires_at=NULL,reason=$4,error_path=$5,updated_at=now()
        WHERE id=$1 AND attempt_id=$2 RETURNING *`,
-      [
-        derivative.id,
-        derivative.attempt_id,
-        state,
-        reason.slice(0, 300),
-        errorPath?.slice(0, 300) ?? null,
-      ],
+      [derivative.id, derivative.attempt_id, state, reason.slice(0, 300), errorPath?.slice(0, 300) ?? null],
     );
     return updated;
   });
@@ -487,19 +435,8 @@ async function executeBuild(
 ) {
   // Every outcome ends this attempt (a resumed one too); finishNonReady
   // changes only the row still pending under this attempt_id.
-  const finish = async (
-    state: "unsupported" | "failed",
-    reason: string,
-    errorPath?: string,
-  ) => {
-    const row = await finishNonReady(
-      sourceTenantId,
-      derivative,
-      state,
-      reason,
-      runTransaction,
-      errorPath,
-    );
+  const finish = async (state: "unsupported" | "failed", reason: string, errorPath?: string) => {
+    const row = await finishNonReady(sourceTenantId, derivative, state, reason, runTransaction, errorPath);
     if (!row) throw missing();
     return statusDTO(row);
   };
@@ -508,29 +445,19 @@ async function executeBuild(
   try {
     source = await readSource();
     if (!buildableStorage(source.revision.storage_kind)) throw missing();
-    if (source.manifestSha256 !== derivative.source_manifest_sha256)
-      throw new Error("Derivative source changed");
+    if (source.manifestSha256 !== derivative.source_manifest_sha256) throw new Error("Derivative source changed");
     result = await runBuilder(source.manifest, source.files);
   } catch (error) {
     const category = error instanceof BuildWorkerError ? error.category : null;
     logBuildFailure(category ?? "internal", "build");
-    return finish(
-      "failed",
-      category
-        ? BUILD_FAILURE_MESSAGES[category]
-        : "Не удалось безопасно собрать страницу.",
-    );
+    return finish("failed", category ? BUILD_FAILURE_MESSAGES[category] : "Не удалось безопасно собрать страницу.");
   }
   if (!result.ok) {
     // esbuild runs outside the worker heap, so runtime pages are admitted
     // one at a time; the row stays pending and a retry resumes it.
     if (result.busy) throw runtimeBusy();
     if (result.failed) logBuildFailure(result.category ?? "crash", "build");
-    return finish(
-      result.failed ? "failed" : "unsupported",
-      result.reason,
-      result.path,
-    );
+    return finish(result.failed ? "failed" : "unsupported", result.reason, result.path);
   }
   const built = result;
   const objectKey = `${sourceTenantId}/derivatives/${derivative.id}/${derivative.attempt_id}.html`;
@@ -560,8 +487,7 @@ async function executeBuild(
           !row ||
           !artifact ||
           artifact.trashed_at ||
-          Number(artifact.lifecycle_version) !==
-            Number(row.artifact_lifecycle_version) ||
+          Number(artifact.lifecycle_version) !== Number(row.artifact_lifecycle_version) ||
           row.state !== "pending" ||
           row.attempt_id !== derivative.attempt_id ||
           new Date(row.attempt_expires_at).getTime() <= Date.now()
@@ -574,24 +500,16 @@ async function executeBuild(
           [sourceTenantId, derivative.id],
         );
         if (
-          Number(tenant.derivative_used_bytes) +
-            Number(pending.count) * DERIVATIVE_RESERVATION_BYTES +
-            built.size >
+          Number(tenant.derivative_used_bytes) + Number(pending.count) * DERIVATIVE_RESERVATION_BYTES + built.size >
           Number(tenant.derivative_quota_bytes)
         )
-          throw new Problem(
-            413,
-            "quota",
-            "Недостаточно места для собранной страницы.",
-          );
-        await c.query(
-          "UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1",
-          [sourceTenantId, built.size],
-        );
+          throw new Problem(413, "quota", "Недостаточно места для собранной страницы.");
+        await c.query("UPDATE tenants SET derivative_used_bytes=derivative_used_bytes+$2 WHERE id=$1", [
+          sourceTenantId,
+          built.size,
+        ]);
         // A ready row's reason lists what the builder left out, if anything.
-        const warnings = built.warnings?.length
-          ? `Пропущено: ${built.warnings.join("; ")}`
-          : null;
+        const warnings = built.warnings?.length ? `Пропущено: ${built.warnings.join("; ")}` : null;
         const {
           rows: [updated],
         } = await c.query(
@@ -626,12 +544,7 @@ async function executeBuild(
     // instead of staying pending until it expires.
     const quota = error instanceof Problem && error.status === 413;
     logBuildFailure(quota ? "quota" : "store", "finish");
-    return finish(
-      "failed",
-      quota
-        ? error.message
-        : "Не удалось сохранить собранную страницу. Повторите подготовку.",
-    );
+    return finish("failed", quota ? error.message : "Не удалось сохранить собранную страницу. Повторите подготовку.");
   }
   return statusDTO(ready);
 }
@@ -657,8 +570,7 @@ export async function getInlineBuildStatus(actor: Actor, revisionId: string) {
     [revisionId, actor.tenant],
   );
   if (!revision) throw missing();
-  if (!buildableStorage(revision.storage_kind) || !revision.manifest_sha256)
-    return null;
+  if (!buildableStorage(revision.storage_kind) || !revision.manifest_sha256) return null;
   const {
     rows: [row],
   } = await db.query(
@@ -674,11 +586,7 @@ export async function getInlineBuildStatus(actor: Actor, revisionId: string) {
 
 export async function buildInlineRevision(actor: Actor, revisionId: string) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
-  return buildInlineRevisionWithRunner(
-    actor,
-    revisionId,
-    ownerTransactionRunner(actor),
-  );
+  return buildInlineRevisionWithRunner(actor, revisionId, ownerTransactionRunner(actor));
 }
 
 function ownerTransactionRunner(actor: Actor): DerivativeTransactionRunner {
@@ -715,25 +623,14 @@ export async function buildInlineRevisionFromSource({
 }) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
   const prepared = await prepare(sourceTenantId, revisionId, runTransaction);
-  if (!prepared.run)
-    return { status: statusDTO(prepared.row), concurrent: false };
-  if (activeBuilds.has(prepared.row.id))
-    return { status: statusDTO(prepared.row), concurrent: true };
+  if (!prepared.run) return { status: statusDTO(prepared.row), concurrent: false };
+  if (activeBuilds.has(prepared.row.id)) return { status: statusDTO(prepared.row), concurrent: true };
   if (!acquireWorkerSlot())
-    throw new Problem(
-      429,
-      "quota",
-      "Сервер уже собирает другие страницы. Повторите запрос.",
-    ).retryIn(5);
+    throw new Problem(429, "quota", "Сервер уже собирает другие страницы. Повторите запрос.").retryIn(5);
   activeBuilds.add(prepared.row.id);
   try {
     return {
-      status: await executeBuild(
-        sourceTenantId,
-        prepared.row,
-        runTransaction,
-        readSource,
-      ),
+      status: await executeBuild(sourceTenantId, prepared.row, runTransaction, readSource),
       concurrent: false,
     };
   } finally {

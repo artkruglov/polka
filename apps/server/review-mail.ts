@@ -27,7 +27,7 @@ export function setReviewMailTransport(next: Transport | undefined) {
 
 const workUrl = (artifactId: string) => `${config.APP_ORIGIN}/works/${artifactId}`;
 const contact = () =>
-  config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL
+  (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL)
     ? ` Если вопросов больше, чем ответов, напишите на ${config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL}.`
     : "";
 
@@ -113,7 +113,8 @@ export async function sendReviewLetters() {
       [BATCH],
     );
     for (const row of rows) {
-      if (!(await deliver(row.email, releasedLetter(clean(row.title, 120) || "Без названия", row.artifact_id)))) continue;
+      if (!(await deliver(row.email, releasedLetter(clean(row.title, 120) || "Без названия", row.artifact_id))))
+        continue;
       await c.query("UPDATE shares SET release_notified_at=now() WHERE id=$1", [row.id]);
       sent++;
     }

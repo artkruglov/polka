@@ -15,18 +15,12 @@ type DesiredLifecycle = "active" | "trashed";
 
 const snapshot = (artifact: any): ArtifactLifecycleSnapshot => ({
   id: artifact.id,
-  trashedAt: artifact.trashed_at
-    ? new Date(artifact.trashed_at).toISOString()
-    : null,
+  trashedAt: artifact.trashed_at ? new Date(artifact.trashed_at).toISOString() : null,
   lifecycleVersion: Number(artifact.lifecycle_version),
 });
 
 const conflict = () =>
-  new Problem(
-    409,
-    "conflict",
-    "Состояние работы изменилось. Обновите данные и повторите действие.",
-  );
+  new Problem(409, "conflict", "Состояние работы изменилось. Обновите данные и повторите действие.");
 
 /**
  * Shared owner/service-actor business operation. Callers pass their current
@@ -54,25 +48,16 @@ export async function transitionArtifactLifecycleInTransaction(
   );
   const {
     rows: [artifact],
-  } = await c.query(
-    "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [artifactId, actor.tenant],
-  );
+  } = await c.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [artifactId, actor.tenant]);
   if (!artifact || artifact.purged_at) throw missing();
   await assertArtifactInAgentScope(c, actor, artifactId);
   assertMayChange(role, artifact.created_by, actor.id);
-  if (artifact.latest_revision_id !== input.expectedRevisionId)
-    throw conflict();
+  if (artifact.latest_revision_id !== input.expectedRevisionId) throw conflict();
 
   const currentVersion = Number(artifact.lifecycle_version);
-  const isDesired =
-    desired === "trashed"
-      ? artifact.trashed_at !== null
-      : artifact.trashed_at === null;
-  if (currentVersion === input.expectedLifecycleVersion + 1 && isDesired)
-    return snapshot(artifact);
-  if (currentVersion !== input.expectedLifecycleVersion || isDesired)
-    throw conflict();
+  const isDesired = desired === "trashed" ? artifact.trashed_at !== null : artifact.trashed_at === null;
+  if (currentVersion === input.expectedLifecycleVersion + 1 && isDesired) return snapshot(artifact);
+  if (currentVersion !== input.expectedLifecycleVersion || isDesired) throw conflict();
 
   if (desired === "active") {
     const {
@@ -88,10 +73,7 @@ export async function transitionArtifactLifecycleInTransaction(
     return snapshot(restored);
   }
 
-  await c.query(
-    "SELECT id FROM shares WHERE artifact_id=$1 ORDER BY id FOR UPDATE",
-    [artifactId],
-  );
+  await c.query("SELECT id FROM shares WHERE artifact_id=$1 ORDER BY id FOR UPDATE", [artifactId]);
   await c.query(
     `SELECT derivative.id
      FROM revision_derivatives derivative
@@ -123,10 +105,7 @@ export async function transitionArtifactLifecycleInTransaction(
        AND share.tenant_id=$2`,
     [artifactId, actor.tenant],
   );
-  await c.query(
-    "UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2",
-    [artifactId, actor.tenant],
-  );
+  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2", [artifactId, actor.tenant]);
   // A proposal to «Лента» waiting for the operator goes with the work.
   await withdrawFeedProposalsOfWork(c, artifactId);
   await c.query(
@@ -155,13 +134,5 @@ export async function transitionOwnerArtifactLifecycle(
   desired: DesiredLifecycle,
 ) {
   const input = artifactLifecycleSchema.parse(body);
-  return transaction((c) =>
-    transitionArtifactLifecycleInTransaction(
-      c,
-      actor,
-      artifactId,
-      input,
-      desired,
-    ),
-  );
+  return transaction((c) => transitionArtifactLifecycleInTransaction(c, actor, artifactId, input, desired));
 }

@@ -3,31 +3,16 @@ import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import { SearchText, addScriptText } from "./search-text.ts";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
-import {
-  fraudScore,
-  mergeResults,
-  scanText,
-  type FilterResult,
-} from "./content-filter/scanner.ts";
-import {
-  SCAN_INCOMPLETE,
-  SECRET_AUTOCOMPLETE,
-  SignalCollector,
-  scanScript,
-} from "./phishing-signals.ts";
-import {
-  mergeSensitive,
-  sensitiveFields,
-  type SensitiveInput,
-} from "./content-filter/sensitive-input.ts";
+import { fraudScore, mergeResults, scanText, type FilterResult } from "./content-filter/scanner.ts";
+import { SCAN_INCOMPLETE, SECRET_AUTOCOMPLETE, SignalCollector, scanScript } from "./phishing-signals.ts";
+import { mergeSensitive, sensitiveFields, type SensitiveInput } from "./content-filter/sensitive-input.ts";
 
 // The only HTML view this build supports: an opaque-origin sandbox with no
 // scripts, forms, plugins or network. Inline styles and data: images still work.
 // Links open only in a new, unsandboxed tab (the view adds <base
 // target="_blank">). There is no top navigation: a link with target=_top
 // could otherwise replace the Полка tab with a look-alike page.
-export const STATIC_HTML_SANDBOX =
-  "allow-popups allow-popups-to-escape-sandbox";
+export const STATIC_HTML_SANDBOX = "allow-popups allow-popups-to-escape-sandbox";
 /**
  * With comments (docs/specs/COMMENTS.md) the static view runs exactly one
  * script of Полка's, the comment overlay: the sandbox gains allow-scripts
@@ -105,12 +90,7 @@ export function withLeadingMarkup(html: Buffer, markup: Buffer): Buffer {
   }
   if (text.slice(at, at + 9).toLowerCase() === "<!doctype") {
     const end = text.indexOf(">", at);
-    if (end !== -1)
-      return Buffer.concat([
-        html.subarray(0, end + 1),
-        markup,
-        html.subarray(end + 1),
-      ]);
+    if (end !== -1) return Buffer.concat([html.subarray(0, end + 1), markup, html.subarray(end + 1)]);
   }
   return Buffer.concat([markup, html]);
 }
@@ -133,17 +113,10 @@ export function withNewTabLinks(html: Buffer): Buffer {
       at = end + 2;
       continue;
     }
-    if (
-      text.slice(at + 1, at + 5).toLowerCase() === "head" &&
-      /^[\s/>]$/.test(text[at + 5] ?? "")
-    ) {
+    if (text.slice(at + 1, at + 5).toLowerCase() === "head" && /^[\s/>]$/.test(text[at + 5] ?? "")) {
       const close = text.indexOf(">", at);
       if (close === -1) break;
-      return Buffer.concat([
-        html.subarray(0, close + 1),
-        LINK_TARGET,
-        html.subarray(close + 1),
-      ]);
+      return Buffer.concat([html.subarray(0, close + 1), LINK_TARGET, html.subarray(close + 1)]);
     }
   }
   return Buffer.concat([LINK_TARGET, html]);
@@ -167,21 +140,14 @@ export function withNewTabLinks(html: Buffer): Buffer {
 // makes it quadratic, and this runs on each view of a shared page.
 
 const RAW_TEXT_END: Record<string, RegExp> = Object.fromEntries(
-  [
-    "script",
-    "style",
-    "textarea",
-    "title",
-    "xmp",
-    "iframe",
-    "noembed",
-    "noframes",
-  ].map((name) => [name, new RegExp(`</${name}[\\t\\n\\f\\r />]`, "gi")]),
+  ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"].map((name) => [
+    name,
+    new RegExp(`</${name}[\\t\\n\\f\\r />]`, "gi"),
+  ]),
 );
 // "-->" and "--!>" both close a comment; "<!-->" and "<!--->" are empty ones.
 const COMMENT_END = /--!?>/g;
-const isSpace = (c: number) =>
-  c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
+const isSpace = (c: number) => c === 9 || c === 10 || c === 12 || c === 13 || c === 32;
 const isAlpha = (c: number) => (c | 32) >= 97 && (c | 32) <= 122;
 
 type Tag = {
@@ -197,8 +163,7 @@ function readTag(text: string, from: number): Tag | null {
   const n = text.length;
   let i = from;
   let c = 0;
-  while (i < n && !isSpace((c = text.charCodeAt(i))) && c !== 47 && c !== 62)
-    i++;
+  while (i < n && !isSpace((c = text.charCodeAt(i))) && c !== 47 && c !== 62) i++;
   if (i >= n) return null;
   const name = text.slice(from, i).toLowerCase();
   const links: Tag["links"] = [];
@@ -209,21 +174,13 @@ function readTag(text: string, from: number): Tag | null {
     c = text.charCodeAt(i);
     if (c === 62) return { name, end: i + 1, selfClosing: false, links };
     if (c === 47) {
-      if (text.charCodeAt(i + 1) === 62)
-        return { name, end: i + 2, selfClosing: true, links };
+      if (text.charCodeAt(i + 1) === 62) return { name, end: i + 2, selfClosing: true, links };
       i++;
       continue;
     }
     // The first character of a name may be "=", as in the tokenizer.
     const nameStart = i++;
-    while (
-      i < n &&
-      !isSpace((c = text.charCodeAt(i))) &&
-      c !== 47 &&
-      c !== 62 &&
-      c !== 61
-    )
-      i++;
+    while (i < n && !isSpace((c = text.charCodeAt(i))) && c !== 47 && c !== 62 && c !== 61) i++;
     const attr = text.slice(nameStart, i).toLowerCase();
     while (i < n && isSpace(text.charCodeAt(i))) i++;
     if (i >= n) return null;
@@ -273,11 +230,7 @@ function externalTarget(value: string, base: URL) {
  * base its relative links resolve against. Returns the input when nothing
  * changes.
  */
-export function withAwayLinks(
-  html: Buffer,
-  documentUrl: string,
-  away: (url: string) => string,
-): Buffer {
+export function withAwayLinks(html: Buffer, documentUrl: string, away: (url: string) => string): Buffer {
   const text = html.toString("latin1");
   if (!/href/i.test(text)) return html;
   const base = new URL(documentUrl);
@@ -316,8 +269,7 @@ export function withAwayLinks(
       if (isAlpha(next)) {
         const tag = readTag(text, lt + 2);
         if (!tag) break;
-        if ((tag.name === "svg" || tag.name === "math") && foreign > 0)
-          foreign--;
+        if ((tag.name === "svg" || tag.name === "math") && foreign > 0) foreign--;
         at = tag.end;
       } else if (next === 62) at = lt + 3;
       else if ((at = skipTo(lt + 2, ">")) === -1) break;
@@ -334,9 +286,7 @@ export function withAwayLinks(
     at = tag.end;
     if (tag.name === "a" || tag.name === "area")
       for (const [start, end, quoted] of tag.links) {
-        const raw = html
-          .subarray(quoted ? start + 1 : start, quoted ? end - 1 : end)
-          .toString("utf8");
+        const raw = html.subarray(quoted ? start + 1 : start, quoted ? end - 1 : end).toString("utf8");
         const target = externalTarget(decodeHTMLAttribute(raw), base);
         if (!target) continue;
         let href = signed.get(target);
@@ -379,30 +329,16 @@ type Node = {
 
 // Browsers drop tabs and newlines anywhere in a URL and leading control
 // characters and spaces, so "\tjava\nscript:" still runs.
-const url = (value: string) =>
-  value.replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
+const url = (value: string) => value.replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+/, "");
 const SCRIPT_URL = /^javascript:/i;
 const REMOTE_URL = /^(?:https?:|[\\/]{2})/i;
-const ACTIVE_ELEMENTS = new Set([
-  "script",
-  "iframe",
-  "frame",
-  "object",
-  "embed",
-  "applet",
-]);
+const ACTIVE_ELEMENTS = new Set(["script", "iframe", "frame", "object", "embed", "applet"]);
 const HIDDEN_TEXT = new Set(["script", "style", "template", "noscript"]);
 
 // Attributes whose value names or labels a field: the secret signal (a).
 const FIELD_NAMING = new Set(["name", "id", "placeholder", "aria-label"]);
 // Attributes whose value is shown or read out: brand and urgency (b, c).
-const SHOWN_ATTRIBUTES = new Set([
-  "placeholder",
-  "aria-label",
-  "alt",
-  "title",
-  "value",
-]);
+const SHOWN_ATTRIBUTES = new Set(["placeholder", "aria-label", "alt", "title", "value"]);
 
 // Attributes that hold an address the page links to or loads.
 const URL_ATTRIBUTES = new Set([
@@ -452,10 +388,7 @@ export type HtmlInspection = {
 // The same walk collects phishing signals (phishing-signals.ts): secret
 // fields, brands and urgency, each read from one node or attribute at a time
 // and from the strings of inline scripts. Never a regex over the raw source.
-export function inspectHtml(
-  source: string,
-  collector = new SignalCollector(),
-): HtmlInspection {
+export function inspectHtml(source: string, collector = new SignalCollector()): HtmlInspection {
   // A page with a submission target, password field, script URL or remote
   // asset is kept as an unsupported source. CSP still protects the viewer, but
   // refusing a link avoids presenting an unsafe page as a trusted copy.
@@ -495,11 +428,7 @@ export function inspectHtml(
       const attrs = node.attrs ?? [];
       for (const { name, value } of attrs) {
         const attr = name.toLowerCase();
-        if (
-          attr === "hidden" ||
-          (attr === "style" && CONCEALING_STYLE.test(value))
-        )
-          concealed = true;
+        if (attr === "hidden" || (attr === "style" && CONCEALING_STYLE.test(value))) concealed = true;
       }
       collector.sensitive.element(tag, attrs);
       for (const { name, value } of attrs) {
@@ -509,10 +438,7 @@ export function inspectHtml(
           collector.sensitive.script(value);
         }
         if (tag === "a" && attr === "download")
-          content.download(
-            attrs.find((item) => item.name.toLowerCase() === "href")?.value ?? "",
-            value,
-          );
+          content.download(attrs.find((item) => item.name.toLowerCase() === "href")?.value ?? "", value);
         // Look-alike domains and sign-in pages elsewhere (phishing-signals.ts).
         if (URL_ATTRIBUTES.has(attr)) collector.address(value);
         if ((tag === "a" || tag === "area") && attr === "href") {
@@ -521,12 +447,10 @@ export function inspectHtml(
           if (SCRIPT_URL.test(url(value))) content.code(url(value).slice(11));
         } else if (URL_ATTRIBUTES.has(attr)) content.url(value);
         else if (attr === "srcset")
-          for (const candidate of value.split(",").slice(0, 50))
-            content.url(candidate.trim().split(/\s/)[0] ?? "");
+          for (const candidate of value.split(",").slice(0, 50)) content.url(candidate.trim().split(/\s/)[0] ?? "");
         else if (attr === "style") content.css(value);
         else if (tag === "meta" && attr === "content") content.text(value);
-        if (tag === "img" && attr === "src" && value.startsWith("data:"))
-          content.image(value);
+        if (tag === "img" && attr === "src" && value.startsWith("data:")) content.image(value);
       }
       if (tag === "form") unsafe = true;
       if (ACTIVE_ELEMENTS.has(tag)) interactive = true;
@@ -535,24 +459,13 @@ export function inspectHtml(
         const target = url(value);
         if (attr.startsWith("on")) interactive = true;
         if (SCRIPT_URL.test(target)) interactive = true;
-        if (
-          (attr.endsWith("src") || attr.endsWith("action")) &&
-          (REMOTE_URL.test(target) || SCRIPT_URL.test(target))
-        )
+        if ((attr.endsWith("src") || attr.endsWith("action")) && (REMOTE_URL.test(target) || SCRIPT_URL.test(target)))
           unsafe = true;
-        if (
-          tag === "input" &&
-          attr === "type" &&
-          value.trim().toLowerCase() === "password"
-        ) {
+        if (tag === "input" && attr === "type" && value.trim().toLowerCase() === "password") {
           unsafe = true;
           collector.add("secret:password-field");
         }
-        if (
-          tag === "meta" &&
-          attr === "http-equiv" &&
-          value.trim().toLowerCase() === "refresh"
-        ) {
+        if (tag === "meta" && attr === "http-equiv" && value.trim().toLowerCase() === "refresh") {
           unsafe = true;
           content.metaRefresh();
         }
@@ -572,8 +485,7 @@ export function inspectHtml(
     // Children in reverse so text is collected in document order.
     const children = node.childNodes ?? [];
     if (node.content) stack.push([node.content, true, tag, concealed]);
-    for (let i = children.length - 1; i >= 0; i--)
-      stack.push([children[i]!, inner, tag, concealed]);
+    for (let i = children.length - 1; i >= 0; i--) stack.push([children[i]!, inner, tag, concealed]);
   }
   const signals = collector.list();
   const sensitive = collector.sensitive.result();
@@ -716,8 +628,7 @@ export async function inspectHtmlBounded(
   deadlineMs = CLASSIFY_DEADLINE_MS,
   options: InspectOptions = {},
 ): Promise<HtmlInspection> {
-  if (source.length <= CLASSIFY_INLINE_BYTES)
-    return inspectHtml(source, new SignalCollector(options));
+  if (source.length <= CLASSIFY_INLINE_BYTES) return inspectHtml(source, new SignalCollector(options));
   return inWorker({ source, options }, deadlineMs, UNREAD);
 }
 
@@ -766,10 +677,7 @@ export class ScriptCollector extends SignalCollector {
 }
 
 /** Every script into one collector, each with its own context budget. */
-export function scanScripts(
-  sources: readonly string[],
-  collector = new ScriptCollector(),
-): ScriptScan {
+export function scanScripts(sources: readonly string[], collector = new ScriptCollector()): ScriptScan {
   for (const source of sources) {
     collector.budget = SCRIPT_CONTEXT_CHARS;
     scanScript(source, collector);
@@ -837,10 +745,7 @@ export async function scanScriptsBounded(
   };
 }
 
-export async function classifyHtmlBounded(
-  source: string,
-  deadlineMs = CLASSIFY_DEADLINE_MS,
-): Promise<HtmlProfile> {
+export async function classifyHtmlBounded(source: string, deadlineMs = CLASSIFY_DEADLINE_MS): Promise<HtmlProfile> {
   return (await inspectHtmlBounded(source, deadlineMs)).profile;
 }
 

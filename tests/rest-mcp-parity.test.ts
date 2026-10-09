@@ -60,6 +60,8 @@ test("every MCP tool has a REST twin in the OpenAPI document or an explicit reas
   // No stale entries for tools that no longer exist.
   // (A tool behind an installation flag may be absent from the catalog.)
   const conditional = new Set(["polka_prepare_preview"]);
-  const stale = [...Object.keys(REST), ...Object.keys(MCP_ONLY)].filter((name) => !tools.includes(name) && !conditional.has(name));
+  const stale = [...Object.keys(REST), ...Object.keys(MCP_ONLY)].filter(
+    (name) => !tools.includes(name) && !conditional.has(name),
+  );
   assert.deepEqual(stale, [], `tools that are gone: ${stale.join(", ")}`);
 });

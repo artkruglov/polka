@@ -26,11 +26,7 @@ import { db } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { updateArtifactMetadataInTransaction } from "./artifact-metadata.ts";
 import { transitionArtifactLifecycleInTransaction } from "./artifact-trash.ts";
-import {
-  recheckServiceActor,
-  type ServiceActor,
-  withServiceActorTransaction,
-} from "./service-auth.ts";
+import { recheckServiceActor, type ServiceActor, withServiceActorTransaction } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 import { linkOfRevision } from "./saved-link-format.ts";
 
@@ -41,7 +37,12 @@ const datedCursorSchema = z
     date: z.string().datetime({ offset: true }),
     id: uuid,
     /** Only in a ranked search: searchRank. */
-    rank: z.number().int().min(0).max(3 * SEARCH_RANK_TIER).optional(),
+    rank: z
+      .number()
+      .int()
+      .min(0)
+      .max(3 * SEARCH_RANK_TIER)
+      .optional(),
     /** The rank scale: 2 since phrase search (#21); a ranked cursor without it is from before. */
     v: z.literal(2).optional(),
   })
@@ -52,9 +53,7 @@ const legacyCursorSchema = z
     id: uuid,
   })
   .strict();
-const folderCursorSchema = z
-  .object({ name: z.string().max(80), id: uuid })
-  .strict();
+const folderCursorSchema = z.object({ name: z.string().max(80), id: uuid }).strict();
 
 export const agentArtifactListInputSchema = z
   .object({
@@ -74,8 +73,7 @@ export const agentArtifactListInputSchema = z
   .strict();
 
 /** …/works/<id>: the page of a work on the owner's shelf, as the owner copies it. */
-const WORKS_PATH =
-  /\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
+const WORKS_PATH = /\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
 
 /**
  * A work named the way the owner names it: by id, or by the address of its
@@ -88,8 +86,7 @@ export const artifactRef = z
     "The work's id, or the address of its page on the owner's shelf (<origin>/works/<id>) as the owner pastes it.",
   );
 
-export const artifactIdOf = (ref: string) =>
-  WORKS_PATH.exec(ref)?.[1]?.toLowerCase() ?? ref;
+export const artifactIdOf = (ref: string) => WORKS_PATH.exec(ref)?.[1]?.toLowerCase() ?? ref;
 
 export const agentGetArtifactInputSchema = z
   .object({
@@ -113,21 +110,16 @@ export const agentUpdateArtifactInputSchema = z
     ...updateArtifactMetadataFields,
   })
   .strict()
-  .refine(
-    (value) => value.title !== undefined || value.folderId !== undefined,
-    { message: "At least one metadata field must be changed" },
-  );
+  .refine((value) => value.title !== undefined || value.folderId !== undefined, {
+    message: "At least one metadata field must be changed",
+  });
 
 export const agentLifecycleInputSchema = artifactLifecycleSchema.extend({
   artifactId: uuid,
 });
 
 function invalidCursor(): never {
-  throw new Problem(
-    400,
-    "invalid",
-    "Обновите список: указатель страницы некорректен.",
-  );
+  throw new Problem(400, "invalid", "Обновите список: указатель страницы некорректен.");
 }
 
 function parseJsonCursor(value: string): unknown {
@@ -139,11 +131,7 @@ function parseJsonCursor(value: string): unknown {
   }
 }
 
-function decodeArtifactCursor(
-  value: string | undefined,
-  state: "active" | "trashed",
-  ranked: boolean,
-) {
+function decodeArtifactCursor(value: string | undefined, state: "active" | "trashed", ranked: boolean) {
   if (!value) return null;
   const decoded = parseJsonCursor(value);
   const current = datedCursorSchema.safeParse(decoded);
@@ -163,11 +151,7 @@ function decodeArtifactCursor(
   return { ...legacy.data, rank: null };
 }
 
-function encodeArtifactCursor(
-  row: any,
-  state: "active" | "trashed",
-  ranked: boolean,
-) {
+function encodeArtifactCursor(row: any, state: "active" | "trashed", ranked: boolean) {
   return Buffer.from(
     JSON.stringify({
       state,
@@ -186,9 +170,7 @@ function decodeFolderCursor(value?: string) {
 }
 
 function encodeFolderCursor(row: any) {
-  return Buffer.from(JSON.stringify({ name: row.name, id: row.id })).toString(
-    "base64url",
-  );
+  return Buffer.from(JSON.stringify({ name: row.name, id: row.id })).toString("base64url");
 }
 
 /**
@@ -204,9 +186,7 @@ export function workKind(mime: string) {
 }
 
 function artifactProjection(row: any) {
-  const trashedAt = row.trashed_at
-    ? new Date(row.trashed_at).toISOString()
-    : null;
+  const trashedAt = row.trashed_at ? new Date(row.trashed_at).toISOString() : null;
   const kind = workKind(row.mime);
   return {
     id: row.id,
@@ -260,10 +240,7 @@ const artifactColumns = `artifact.id,artifact.tenant_id AS shelf_id,artifact.tit
   (SELECT created_at FROM revisions first
    WHERE first.artifact_id=artifact.id AND first.number=1) AS first_created_at`;
 
-export async function listArtifactsForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof agentArtifactListInputSchema>,
-) {
+export async function listArtifactsForAgent(actor: ServiceActor, raw: z.input<typeof agentArtifactListInputSchema>) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentArtifactListInputSchema.parse(raw);
   const scope = await agentFolderScope(db, {
@@ -280,7 +257,11 @@ export async function listArtifactsForAgent(
       throw new Problem(400, "invalid", "Поиск по нескольким полкам не сочетается с папкой и корзиной.");
     const allowed = new Set([verified.tenantId, ...(verified.allowedShelfIds ?? [])]);
     if (input.shelfIds.some((id) => !allowed.has(id)))
-      throw new Problem(403, "forbidden", "Эта полка не разрешена для подключения: владелец выбирает полки при создании токена.");
+      throw new Problem(
+        403,
+        "forbidden",
+        "Эта полка не разрешена для подключения: владелец выбирает полки при создании токена.",
+      );
     // A folder limit of an extension is known for the connection's own shelf only.
     if (scope && input.shelfIds.some((id) => id !== verified.tenantId))
       throw new Problem(403, "forbidden", "Подключение ограничено папками: поиск по другим полкам недоступен.");
@@ -298,8 +279,7 @@ export async function listArtifactsForAgent(
   const ranked = Boolean(input.query) && input.state === "active";
   const cursor = decodeArtifactCursor(input.cursor, input.state, ranked);
   const query = input.query ? titlePattern(input.query) : null;
-  const timestamp =
-    input.state === "active" ? "artifact.updated_at" : "artifact.trashed_at";
+  const timestamp = input.state === "active" ? "artifact.updated_at" : "artifact.trashed_at";
   const statePredicate =
     input.state === "active"
       ? "artifact.trashed_at IS NULL AND artifact.purged_at IS NULL"
@@ -347,21 +327,13 @@ export async function listArtifactsForAgent(
   return {
     items: page.map((row) => {
       const snippet = plainSnippet(row.search_snippet);
-      return snippet
-        ? { ...artifactProjection(row), snippet }
-        : artifactProjection(row);
+      return snippet ? { ...artifactProjection(row), snippet } : artifactProjection(row);
     }),
-    nextCursor:
-      more && page.length
-        ? encodeArtifactCursor(page.at(-1), input.state, ranked)
-        : null,
+    nextCursor: more && page.length ? encodeArtifactCursor(page.at(-1), input.state, ranked) : null,
   };
 }
 
-export async function getArtifactForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof agentGetArtifactInputSchema>,
-) {
+export async function getArtifactForAgent(actor: ServiceActor, raw: z.input<typeof agentGetArtifactInputSchema>) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentGetArtifactInputSchema.parse(raw);
   const scope = await agentFolderScope(db, {
@@ -406,10 +378,7 @@ export async function getArtifactForAgent(
  * Metadata for the HTTP publish API's status call. A connection with `read`
  * sees any work of the shelf; otherwise only works this connection saved.
  */
-export async function artifactStatusForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof agentGetArtifactInputSchema>,
-) {
+export async function artifactStatusForAgent(actor: ServiceActor, raw: z.input<typeof agentGetArtifactInputSchema>) {
   const verified = await recheckServiceActor(actor, "context");
   const input = agentGetArtifactInputSchema.parse(raw);
   const scope = await agentFolderScope(db, {
@@ -431,22 +400,13 @@ export async function artifactStatusForAgent(
            AND upload.connection_id=$4
            AND upload.receipt->>'artifactId'=artifact.id::text))
        AND ${inScopeSql("artifact", "$5")}`,
-    [
-      artifactIdOf(input.artifactId),
-      verified.tenantId,
-      verified.scopes.includes("read"),
-      verified.connectionId,
-      scope,
-    ],
+    [artifactIdOf(input.artifactId), verified.tenantId, verified.scopes.includes("read"), verified.connectionId, scope],
   );
   if (!row) throw missing();
   return artifactProjection(row);
 }
 
-export async function listFoldersForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof agentFolderListInputSchema>,
-) {
+export async function listFoldersForAgent(actor: ServiceActor, raw: z.input<typeof agentFolderListInputSchema>) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentFolderListInputSchema.parse(raw);
   const scope = await agentFolderScope(db, {
@@ -467,13 +427,7 @@ export async function listFoldersForAgent(
        AND ($2::text IS NULL OR (name,id)>($2,$3::uuid))
        AND ($5::uuid[] IS NULL OR folder.id=ANY($5::uuid[]))
      ORDER BY name ASC,id ASC LIMIT $4`,
-    [
-      verified.tenantId,
-      cursor?.name ?? null,
-      cursor?.id ?? null,
-      input.limit + 1,
-      scope,
-    ],
+    [verified.tenantId, cursor?.name ?? null, cursor?.id ?? null, input.limit + 1, scope],
   );
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);
@@ -487,13 +441,9 @@ export async function listFoldersForAgent(
   };
 }
 
-const metadataResultSchema = z
-  .object({ artifactId: uuid, title: z.string(), folderId: uuid.nullable() })
-  .strict();
+const metadataResultSchema = z.object({ artifactId: uuid, title: z.string(), folderId: uuid.nullable() }).strict();
 
-function canonicalMetadataRequest(
-  input: z.infer<typeof agentUpdateArtifactInputSchema>,
-) {
+function canonicalMetadataRequest(input: z.infer<typeof agentUpdateArtifactInputSchema>) {
   return {
     key: input.key,
     artifactId: input.artifactId,
@@ -504,13 +454,9 @@ function canonicalMetadataRequest(
   };
 }
 
-const operationConflict = () =>
-  new Problem(409, "conflict", "Ключ уже относится к другой операции.");
+const operationConflict = () => new Problem(409, "conflict", "Ключ уже относится к другой операции.");
 
-export async function updateArtifactFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-) {
+export async function updateArtifactFromAgent(actor: ServiceActor, body: unknown) {
   const input = agentUpdateArtifactInputSchema.parse(body);
   const request = canonicalMetadataRequest(input);
   const requestHash = sha256(JSON.stringify(request));
@@ -524,15 +470,9 @@ export async function updateArtifactFromAgent(
       [verified.tenantId, input.key],
     );
     if (old) {
-      if (old.connection_id !== verified.connectionId)
-        throw operationConflict();
-      const oldRequest = canonicalMetadataRequest(
-        agentUpdateArtifactInputSchema.parse(old.request),
-      );
-      if (
-        old.request_hash !== requestHash ||
-        JSON.stringify(oldRequest) !== JSON.stringify(request)
-      )
+      if (old.connection_id !== verified.connectionId) throw operationConflict();
+      const oldRequest = canonicalMetadataRequest(agentUpdateArtifactInputSchema.parse(old.request));
+      if (old.request_hash !== requestHash || JSON.stringify(oldRequest) !== JSON.stringify(request))
         throw operationConflict();
       return {
         operation: "metadata" as const,
@@ -587,11 +527,7 @@ export async function updateArtifactFromAgent(
   });
 }
 
-export async function transitionArtifactFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-  desired: "active" | "trashed",
-) {
+export async function transitionArtifactFromAgent(actor: ServiceActor, body: unknown, desired: "active" | "trashed") {
   const input = agentLifecycleInputSchema.parse(body);
   return withServiceActorTransaction(actor, "manage", (c, verified) =>
     transitionArtifactLifecycleInTransaction(

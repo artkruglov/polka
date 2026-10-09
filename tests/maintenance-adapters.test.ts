@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  createMaintenanceObjectStore,
-} from "../scripts/maintenance-adapters.ts";
+import { createMaintenanceObjectStore } from "../scripts/maintenance-adapters.ts";
 import { MaintenanceStorageFailure } from "../scripts/maintenance-cleanup.ts";
 
 const storage = (response: unknown) =>
@@ -16,7 +14,9 @@ const storage = (response: unknown) =>
     },
     {
       createClient: () => ({
-        async send() { return response; },
+        async send() {
+          return response;
+        },
         destroy() {},
       }),
     },
@@ -33,22 +33,16 @@ test("maintenance object listing requires an explicit complete/truncated result"
     { IsTruncated: false, DeleteMarkers: [{ Key: "key", VersionId: "null" }] },
   ]) {
     const client = storage(malformed);
-    await assert.rejects(
-      client.listVersions({ prefix: "tenant/", maxKeys: 100 }, signal),
-      MaintenanceStorageFailure,
-    );
+    await assert.rejects(client.listVersions({ prefix: "tenant/", maxKeys: 100 }, signal), MaintenanceStorageFailure);
     client.close();
   }
   const valid = storage({ IsTruncated: false });
-  assert.deepEqual(
-    await valid.listVersions({ prefix: "tenant/", maxKeys: 100 }, signal),
-    {
-      versions: [],
-      deleteMarkers: [],
-      truncated: false,
-      nextKeyMarker: undefined,
-      nextVersionIdMarker: undefined,
-    },
-  );
+  assert.deepEqual(await valid.listVersions({ prefix: "tenant/", maxKeys: 100 }, signal), {
+    versions: [],
+    deleteMarkers: [],
+    truncated: false,
+    nextKeyMarker: undefined,
+    nextVersionIdMarker: undefined,
+  });
   valid.close();
 });

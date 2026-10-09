@@ -5,19 +5,10 @@
  * so both read a source the same way. Pure: no DOM, no Node APIs.
  */
 
-export type SourceKind =
-  | "html"
-  | "html-fragment"
-  | "jsx"
-  | "tsx"
-  | "svg"
-  | "markdown"
-  | "text";
+export type SourceKind = "html" | "html-fragment" | "jsx" | "tsx" | "svg" | "markdown" | "text";
 
 /** A saved page: an HTML document, or a React component for the runtime. */
-export type SourceBody =
-  | { html: string }
-  | { component: string; componentLanguage: "jsx" | "tsx" };
+export type SourceBody = { html: string } | { component: string; componentLanguage: "jsx" | "tsx" };
 
 const lang = (hint: string | null) =>
   (hint ?? "")
@@ -29,17 +20,14 @@ export function detectKind(source: string, hint: string | null): SourceKind {
   const text = source.replace(/^﻿/, "").trim();
   const language = lang(hint);
   if (/^(<!--[\s\S]*?-->\s*)*<!doctype\s+html/i.test(text)) return "html";
-  if (/^<html[\s>]/i.test(text) || /<body[\s>]/i.test(text.slice(0, 20000)))
-    return "html";
-  if (/^(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(text) || language === "svg")
-    return "svg";
+  if (/^<html[\s>]/i.test(text) || /<body[\s>]/i.test(text.slice(0, 20000))) return "html";
+  if (/^(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(text) || language === "svg") return "svg";
   if (["tsx", "typescript", "ts"].includes(language)) return "tsx";
   if (["jsx", "javascript", "js", "react"].includes(language))
     return reactLike(text) ? (typed(text) ? "tsx" : "jsx") : "text";
   if (reactLike(text)) return typed(text) ? "tsx" : "jsx";
   if (["html", "htm", "text/html"].includes(language)) return "html-fragment";
-  if (/^<([a-z][a-z0-9-]*)[\s>][\s\S]*<\/\1>\s*$/i.test(text))
-    return "html-fragment";
+  if (/^<([a-z][a-z0-9-]*)[\s>][\s\S]*<\/\1>\s*$/i.test(text)) return "html-fragment";
   if (["markdown", "md", "text/markdown"].includes(language)) return "markdown";
   if (/^#{1,6} \S/.test(text)) return "markdown";
   return "text";
@@ -64,11 +52,7 @@ function typed(text: string) {
 }
 
 export const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** A minimal page around a body, as the extension and the CLI build it. */
 export function simplePage(title: string, body: string, style = "") {

@@ -1,21 +1,8 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import "./styles.css";
 import { Button, Chip, IconButton, Segmented } from "../../shared/ui/controls.tsx";
-import {
-  Bot,
-  Compass,
-  FileUp,
-  Folder as FolderIcon,
-  Grid2X2,
-  List,
-  Search,
-  X,
-} from "lucide-react";
-import type {
-  Account,
-  Artifact,
-  Folder,
-} from "../../../../../packages/contracts/index.ts";
+import { Bot, Compass, FileUp, Folder as FolderIcon, Grid2X2, List, Search, X } from "lucide-react";
+import type { Account, Artifact, Folder } from "../../../../../packages/contracts/index.ts";
 import { ShelfCard, seriesCounts, type CardAction } from "../../widgets/shelf-card/index.ts";
 import { AgentHero } from "../../features/agent-hero/index.tsx";
 import type { Shelf, ShelfCounts } from "../../shared/api/client.ts";
@@ -108,8 +95,8 @@ export function ShelfPage({
           <span className="eyebrow">Полка отдела · вы — {ROLE_LABEL[team.role].toLowerCase()}</span>
           <h1>{team.name}</h1>
           <p className="shelf-team-lead">
-            Работы здесь видят все участники полки и находят поиском. Они принадлежат отделу: если
-            сотрудник уходит, работы остаются.
+            Работы здесь видят все участники полки и находят поиском. Они принадлежат отделу: если сотрудник уходит,
+            работы остаются.
           </p>
           {canSave && (
             <div className="button-row">
@@ -123,15 +110,9 @@ export function ShelfPage({
         <AgentHero account={account} onUpload={() => setPanel("upload")} />
       )}
 
-      <section
-        className="shelf-library"
-        aria-label="Сохранённые работы"
-        aria-busy={loading}
-      >
+      <section className="shelf-library" aria-label="Сохранённые работы" aria-busy={loading}>
         <div className="shelf-library-head">
-          <h2>
-            {query ? "Результаты поиска" : activeFolder ? "В этой папке" : team ? "Все работы" : "Моя полка"}
-          </h2>
+          <h2>{query ? "Результаты поиска" : activeFolder ? "В этой папке" : team ? "Все работы" : "Моя полка"}</h2>
           <div className="shelf-tools">
             <label className="ui-search ui-search--quiet shelf-search">
               <Search aria-hidden="true" />
@@ -189,7 +170,8 @@ export function ShelfPage({
         )}
         {stale && (
           <p className="shelf-stale" role="status">
-            Нет связи с Полкой: {items.length ? "показаны прежние результаты, они могли устареть" : "результаты не загрузились"}.
+            Нет связи с Полкой:{" "}
+            {items.length ? "показаны прежние результаты, они могли устареть" : "результаты не загрузились"}.
           </p>
         )}
 
@@ -203,10 +185,7 @@ export function ShelfPage({
           </div>
         ) : visible.length ? (
           <>
-            <div
-              className={view === "grid" ? "shelf-gallery" : "shelf-list"}
-              data-stale={stale || undefined}
-            >
+            <div className={view === "grid" ? "shelf-gallery" : "shelf-list"} data-stale={stale || undefined}>
               {visible.map((a) => (
                 <ShelfCard key={a.id} a={a} view={view} series={series} open={open} onTrash={onTrash} />
               ))}
@@ -221,14 +200,23 @@ export function ShelfPage({
           </>
         ) : stale ? null : active || acceptedOnly ? (
           <div className="shelf-empty">
-            <div className="empty-icon"><FolderIcon /></div>
+            <div className="empty-icon">
+              <FolderIcon />
+            </div>
             <h2>Таких работ нет</h2>
             <p>
               {acceptedOnly
                 ? `Здесь нет работ с принятой версией${active ? " этого типа" : ""}${query ? " по вашему запросу" : ""}. Принять версию можно в меню работы.`
                 : `Здесь нет работ этого типа${query ? " по вашему запросу" : ""}.`}
             </p>
-            <Button onClick={() => { setKind(null); setAcceptedOnly(false); }}>Показать все</Button>
+            <Button
+              onClick={() => {
+                setKind(null);
+                setAcceptedOnly(false);
+              }}
+            >
+              Показать все
+            </Button>
           </div>
         ) : team && !query ? (
           <p className="shelf-empty-quiet" role="note">
@@ -242,23 +230,29 @@ export function ShelfPage({
             <header>
               <h2>Здесь появятся ваши работы</h2>
               <p>
-                Страницы, отчёты, прототипы и целые папки проектов. Каждая хранится версиями, а кто может её
-                открыть, решаете вы. Попросите агента: «Сохрани это на Полку».
+                Страницы, отчёты, прототипы и целые папки проектов. Каждая хранится версиями, а кто может её открыть,
+                решаете вы. Попросите агента: «Сохрани это на Полку».
               </p>
             </header>
             <div className="shelf-start-grid">
               <a className="shelf-start-card shelf-start-card--main" href="/settings/agents">
-                <span className="shelf-start-icon"><Bot /></span>
+                <span className="shelf-start-icon">
+                  <Bot />
+                </span>
                 <strong>Подключить агента</strong>
                 <span>Claude, ChatGPT или Codex сохраняют работы сами и продолжают их в новых чатах.</span>
               </a>
               <button type="button" className="shelf-start-card" onClick={() => setPanel("upload")}>
-                <span className="shelf-start-icon"><FileUp /></span>
+                <span className="shelf-start-icon">
+                  <FileUp />
+                </span>
                 <strong>Загрузить файл</strong>
                 <span>HTML, текст, изображение или папку проекта — прямо с компьютера.</span>
               </button>
               <a className="shelf-start-card" href="/discover">
-                <span className="shelf-start-icon"><Compass /></span>
+                <span className="shelf-start-icon">
+                  <Compass />
+                </span>
                 <strong>Посмотреть примеры</strong>
                 <span>Что уже делают с агентами: исследования, разборы и инструменты.</span>
               </a>
@@ -267,13 +261,7 @@ export function ShelfPage({
         ) : (
           <div className="shelf-empty">
             <div className="empty-icon">{query ? <Search /> : <FolderIcon />}</div>
-            <h2>
-              {query
-                ? "Ничего не нашлось"
-                : activeFolder
-                  ? "В этой папке пока пусто"
-                  : "На полке пока пусто"}
-            </h2>
+            <h2>{query ? "Ничего не нашлось" : activeFolder ? "В этой папке пока пусто" : "На полке пока пусто"}</h2>
             <p>
               {query
                 ? "Попробуйте другое название."
@@ -291,8 +279,12 @@ export function ShelfPage({
                   </Button>
                 </div>
                 <div className="shelf-empty-links">
-                  <a href="/settings/agents"><Bot /> Подключить агента</a>
-                  <a href="/discover"><Compass /> Посмотреть примеры</a>
+                  <a href="/settings/agents">
+                    <Bot /> Подключить агента
+                  </a>
+                  <a href="/discover">
+                    <Compass /> Посмотреть примеры
+                  </a>
                 </div>
               </>
             )}

@@ -32,8 +32,8 @@ export function CreateFolderPanel({
         error instanceof ApiError && error.status === 409
           ? "Папка с таким названием уже есть. Выберите другое."
           : error instanceof Error
-          ? error.message
-          : "Не удалось создать папку. Попробуйте ещё раз.",
+            ? error.message
+            : "Не удалось создать папку. Попробуйте ещё раз.",
       );
     } finally {
       saving.current = false;

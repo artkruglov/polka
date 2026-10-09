@@ -1,20 +1,9 @@
 import { fileURLToPath } from "node:url";
-import {
-  spawn,
-  type ChildProcess,
-  type SpawnOptions,
-} from "node:child_process";
-import {
-  createMaintenanceLogFilter,
-  type SafeMaintenanceLog,
-} from "./maintenance-log-filter.ts";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { createMaintenanceLogFilter, type SafeMaintenanceLog } from "./maintenance-log-filter.ts";
 import type { MaintenanceChild } from "./maintenance-scheduler.ts";
 
-export type MaintenanceSpawn = (
-  command: string,
-  args: string[],
-  options: SpawnOptions,
-) => ChildProcess;
+export type MaintenanceSpawn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 
 export type MaintenanceChildOptions = {
   scriptPath?: string;
@@ -26,12 +15,8 @@ export type MaintenanceChildOptions = {
  * Start one bounded maintenance run. The scheduler owns the deadline; this
  * adapter only translates ChildProcess close/kill semantics to its contract.
  */
-export function startMaintenanceChild(
-  options: MaintenanceChildOptions = {},
-): MaintenanceChild {
-  const scriptPath =
-    options.scriptPath ??
-    fileURLToPath(new URL("./maintenance.ts", import.meta.url));
+export function startMaintenanceChild(options: MaintenanceChildOptions = {}): MaintenanceChild {
+  const scriptPath = options.scriptPath ?? fileURLToPath(new URL("./maintenance.ts", import.meta.url));
   const start = options.spawnProcess ?? spawn;
   const child = start(process.execPath, ["--import", "tsx", scriptPath], {
     env: process.env,
@@ -53,17 +38,12 @@ export function startMaintenanceChild(
   }
   let created = false;
   let exited = false;
-  let resolveExit!: (result: {
-    code: number | null;
-    signal?: string | null;
-  }) => void;
+  let resolveExit!: (result: { code: number | null; signal?: string | null }) => void;
   let rejectExit!: (reason: Error) => void;
-  const exit = new Promise<{ code: number | null; signal?: string | null }>(
-    (resolve, reject) => {
-      resolveExit = resolve;
-      rejectExit = reject;
-    },
-  );
+  const exit = new Promise<{ code: number | null; signal?: string | null }>((resolve, reject) => {
+    resolveExit = resolve;
+    rejectExit = reject;
+  });
   child.once("spawn", () => {
     created = true;
   });

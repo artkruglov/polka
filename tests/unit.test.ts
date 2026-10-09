@@ -2,17 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { profileView } from "../apps/web/src/entities/artifact/format.ts";
-import { STATIC_HTML_CSP, VIEWER_GUARD, classifyHtml, classifyHtmlBounded, withNewTabLinks, withViewerGuard } from "../apps/server/html.ts";
+import {
+  STATIC_HTML_CSP,
+  VIEWER_GUARD,
+  classifyHtml,
+  classifyHtmlBounded,
+  withNewTabLinks,
+  withViewerGuard,
+} from "../apps/server/html.ts";
 
 const prose =
   "Отчёт за квартал: выручка выросла, расходы снизились, команда закрыла все ключевые задачи и подготовила план на следующий период.";
 
 // Expected profiles of the current static build. Interactive fixtures stay "limited" (seen, not working)
 // until a networkless runtime exists; anything with forms, passwords, remote code or redirects is owner-only.
-const fixtures: Record<
-  string,
-  { html: string; profile: "static" | "limited" | "unsupported" }
-> = {
+const fixtures: Record<string, { html: string; profile: "static" | "limited" | "unsupported" }> = {
   "static-report": {
     html: `<!doctype html><h1>Итоги</h1><p>${prose}</p><style>p{color:#333}</style>`,
     profile: "static",
@@ -75,21 +79,13 @@ test("Static CSP stays scriptless and networkless", () => {
   // replace the Полка tab with a look-alike page).
   const sandbox = STATIC_HTML_CSP.split(";")[0]!.split(" ");
   assert.equal(sandbox[0], "sandbox");
-  assert.deepEqual(sandbox.slice(1).sort(), [
-    "allow-popups",
-    "allow-popups-to-escape-sandbox",
-  ]);
+  assert.deepEqual(sandbox.slice(1).sort(), ["allow-popups", "allow-popups-to-escape-sandbox"]);
   assert.doesNotMatch(STATIC_HTML_CSP, /allow-scripts|allow-top-navigation|script-src|connect-src/);
   assert.match(STATIC_HTML_CSP, /default-src 'none'/);
 });
 
 test("User-facing profile strings do not promise universal VPN-free availability", () => {
-  for (const htmlProfile of [
-    "static",
-    "limited",
-    "unsupported",
-    null,
-  ] as const) {
+  for (const htmlProfile of ["static", "limited", "unsupported", null] as const) {
     const view = profileView({
       mime: htmlProfile ? "text/html" : "image/png",
       htmlProfile,
@@ -103,10 +99,7 @@ test("User-facing TSX does not claim universal VPN-free availability", () => {
   const dir = new URL("../apps/web/src/", import.meta.url);
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx"))) {
     // Identifiers like ArtifactPreview are Latin; only Cyrillic prose and VPN promises are user-facing.
-    const code = readFileSync(new URL(file, dir), "utf8").replace(
-      /^\s*\/\/.*$/gm,
-      "",
-    );
+    const code = readFileSync(new URL(file, dir), "utf8").replace(/^\s*\/\/.*$/gm, "");
     assert.doesNotMatch(code, /без\s+VPN/i, file);
   }
 });
@@ -121,10 +114,7 @@ test("Auth return destination rejects cross-origin and browser-normalized redire
     "javascript:alert(1)",
   ])
     assert.equal(safeNext(url), null);
-  assert.equal(
-    safeNext("/bring?url=https%3A%2F%2Fexample.com#file"),
-    "/bring?url=https%3A%2F%2Fexample.com#file",
-  );
+  assert.equal(safeNext("/bring?url=https%3A%2F%2Fexample.com#file"), "/bring?url=https%3A%2F%2Fexample.com#file");
 });
 
 test("HTML acceptance corpus has intact standalone fixtures and honest static profiles", async () => {
@@ -145,17 +135,20 @@ test("HTML acceptance corpus has intact standalone fixtures and honest static pr
   }
 });
 
-
 test("authentication return target preserves protected pages without nesting login URLs", async () => {
-  const {authReturnTo} = await import("../apps/web/src/shared/lib/safe-next.ts");
-  assert.equal(authReturnTo({pathname:"/works/example",search:"",hash:""}), "/works/example");
-  assert.equal(authReturnTo({pathname:"/",search:"?login=1&next=%2Fbring%3Furl%3D",hash:""}), "/bring?url=");
-  assert.equal(authReturnTo({pathname:"/signup",search:"?next=https%3A%2F%2Fevil.example",hash:""}), "/start");
-  assert.equal(authReturnTo({pathname:"/",search:"?login=1",hash:""}), "/start");
+  const { authReturnTo } = await import("../apps/web/src/shared/lib/safe-next.ts");
+  assert.equal(authReturnTo({ pathname: "/works/example", search: "", hash: "" }), "/works/example");
+  assert.equal(authReturnTo({ pathname: "/", search: "?login=1&next=%2Fbring%3Furl%3D", hash: "" }), "/bring?url=");
+  assert.equal(authReturnTo({ pathname: "/signup", search: "?next=https%3A%2F%2Fevil.example", hash: "" }), "/start");
+  assert.equal(authReturnTo({ pathname: "/", search: "?login=1", hash: "" }), "/start");
   // The share token lives in the fragment and must not move into ?next=.
-  assert.equal(authReturnTo({pathname:"/s",search:"",hash:"#share-token"}), "/start");
+  assert.equal(authReturnTo({ pathname: "/s", search: "", hash: "#share-token" }), "/start");
   for (const escape of ["/.//evil.example", "/a/..//evil.example", "/%2e//evil.example"])
-    assert.equal(authReturnTo({pathname:"/",search:`?login=1&next=${encodeURIComponent(escape)}`,hash:""}), "/start", escape);
+    assert.equal(
+      authReturnTo({ pathname: "/", search: `?login=1&next=${encodeURIComponent(escape)}`, hash: "" }),
+      "/start",
+      escape,
+    );
 });
 
 test("Static view opens links in a new tab without touching the stored bytes' content", () => {
@@ -181,7 +174,7 @@ test("Page classification reads attributes the way a browser does, not as raw te
   for (const page of [
     '<meta http-equiv="refresh" content="0;url=https://evil.example">',
     '<meta http-equiv="&#x72;efresh" content="0;url=https://evil.example">',
-    "<meta http-equiv=refres&#x68; content=\"0;url=https://evil.example\">",
+    '<meta http-equiv=refres&#x68; content="0;url=https://evil.example">',
     '<a href="&#x6a;avascript:alert(1)">x</a>',
   ])
     assert.equal(classifyHtml(page), "unsupported", page);
@@ -231,11 +224,7 @@ test("the zod-free comment constants and anchor guard match comments.ts", async 
     ["x"],
   ]) {
     const parsed = comments.anchorSchema.safeParse(sample);
-    assert.deepEqual(
-      light.parseCommentAnchor(sample),
-      parsed.success ? parsed.data : null,
-      JSON.stringify(sample),
-    );
+    assert.deepEqual(light.parseCommentAnchor(sample), parsed.success ? parsed.data : null, JSON.stringify(sample));
   }
 });
 

@@ -1,10 +1,6 @@
 import type { PoolClient } from "pg";
 import { transaction } from "../db.ts";
-import {
-  captureForOwner,
-  captureFromAgent,
-  type CaptureHooks,
-} from "../agent-capture.ts";
+import { captureForOwner, captureFromAgent, type CaptureHooks } from "../agent-capture.ts";
 import { MCP_AUDIENCE } from "../service-auth.ts";
 import type { Actor } from "../artifacts.ts";
 import { captureHtmlUrl, HtmlCaptureError } from "./html-capture.ts";
@@ -17,11 +13,7 @@ import { Problem } from "../errors.ts";
 
 type Run = <T>(fn: (c: PoolClient) => Promise<T>) => Promise<T>;
 type Prepared = Awaited<ReturnType<typeof captureHtmlUrl>>;
-type Save = (
-  actor: Actor,
-  body: unknown,
-  hooks: CaptureHooks,
-) => Promise<unknown>;
+type Save = (actor: Actor, body: unknown, hooks: CaptureHooks) => Promise<unknown>;
 const save: Save = (actor, body, hooks) =>
   actor.connectionId
     ? captureFromAgent(
@@ -65,14 +57,11 @@ export async function runImportOnce({
       // A committed copy survives process death. Retry builds from stored files,
       // never by downloading a potentially changed source.
       const built = config.HTML_LIVE_ENABLED
-        ? await buildInlineRevisionWithRunner(
-            actor,
-            job.receipt.revisionId,
-            (fn) =>
-              run(async (c) => {
-                await guard(c);
-                return fn(c);
-              }),
+        ? await buildInlineRevisionWithRunner(actor, job.receipt.revisionId, (fn) =>
+            run(async (c) => {
+              await guard(c);
+              return fn(c);
+            }),
           )
         : null;
       if (built?.status.state === "pending") return true; // Keep lease until retry; no tight loop.
@@ -102,10 +91,7 @@ export async function runImportOnce({
         onRendering: () =>
           run(async (c) => {
             await guard(c);
-            await c.query(
-              "UPDATE url_import_jobs SET state='rendering',updated_at=now() WHERE id=$1",
-              [job.id],
-            );
+            await c.query("UPDATE url_import_jobs SET state='rendering',updated_at=now() WHERE id=$1", [job.id]);
           }),
       });
       await run(async (c) => {

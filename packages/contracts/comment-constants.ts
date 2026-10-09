@@ -28,11 +28,9 @@ const text = (value: unknown, max: number): value is string =>
 export function parseCommentAnchor(value: unknown): CommentAnchor | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).some((key) => key !== "exact" && key !== "prefix" && key !== "suffix"))
-    return null;
+  if (Object.keys(record).some((key) => key !== "exact" && key !== "prefix" && key !== "suffix")) return null;
   const { exact, prefix = "", suffix = "" } = record;
   if (!text(exact, ANCHOR_EXACT_MAX) || !exact.length || !exact.trim()) return null;
-  if (!text(prefix, ANCHOR_CONTEXT_CHARS * 2) || !text(suffix, ANCHOR_CONTEXT_CHARS * 2))
-    return null;
+  if (!text(prefix, ANCHOR_CONTEXT_CHARS * 2) || !text(suffix, ANCHOR_CONTEXT_CHARS * 2)) return null;
   return { exact, prefix, suffix };
 }

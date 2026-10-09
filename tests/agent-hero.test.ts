@@ -7,10 +7,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  AgentHeroView,
-  type AgentHeroProps,
-} from "../apps/web/src/features/agent-hero/index.tsx";
+import { AgentHeroView, type AgentHeroProps } from "../apps/web/src/features/agent-hero/index.tsx";
 import {
   CLAUDE_PLUGIN_INSTALL,
   CODEX_LOGIN,
@@ -145,8 +142,7 @@ test("hidden or still checking: one line, and the steps come back on request", (
   assert.match(failed, /Не удалось проверить подключения/);
 });
 
-const json = async (path: string) =>
-  JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), "utf8"));
+const json = async (path: string) => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), "utf8"));
 
 test("the repository is a Claude Code and Codex marketplace with one plugin: the MCP server and every skill", async () => {
   const mcp = await json(".mcp.json");
@@ -187,11 +183,7 @@ test("the repository is a Claude Code and Codex marketplace with one plugin: the
     const text = await readFile(new URL(`../skills/${dir}/SKILL.md`, import.meta.url), "utf8");
     assert.match(text, new RegExp(`^---\\r?\\n(?:.*\\r?\\n)*?name: ["']?${dir}["']?\\s*\\r?\\n`), dir);
   }
-  const versions = new Set([
-    claudePlugin.version,
-    codexPlugin.version,
-    (await json("package.json")).version,
-  ]);
+  const versions = new Set([claudePlugin.version, codexPlugin.version, (await json("package.json")).version]);
   assert.equal(versions.size, 1, "plugin versions follow package.json");
 });
 
@@ -203,7 +195,18 @@ test("scripts/plugin-repo.mjs writes the light plugin repository the install com
   const out = await mkdtemp(join(tmpdir(), "polka-plugin-"));
   try {
     execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/plugin-repo.mjs", import.meta.url)), out]);
-    for (const path of [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", ".codex-plugin/plugin.json", ".agents/plugins/marketplace.json", ".mcp.json", "skills/polka/SKILL.md", "assets/logo.png", "assets/composer-icon.svg", "LICENSE", "README.md"])
+    for (const path of [
+      ".claude-plugin/plugin.json",
+      ".claude-plugin/marketplace.json",
+      ".codex-plugin/plugin.json",
+      ".agents/plugins/marketplace.json",
+      ".mcp.json",
+      "skills/polka/SKILL.md",
+      "assets/logo.png",
+      "assets/composer-icon.svg",
+      "LICENSE",
+      "README.md",
+    ])
       assert.ok((await readFile(join(out, path))).length > 0, path);
     assert.deepEqual(JSON.parse(await readFile(join(out, ".mcp.json"), "utf8")), await json(".mcp.json"));
     assert.match(CLAUDE_PLUGIN_INSTALL, /^claude plugin marketplace add artkruglov\/polka-plugin /);
@@ -223,7 +226,13 @@ test("scripts/chatgpt-plugin.mjs packs the ChatGPT submission ZIP without hooks"
     const zip = join(out, "polka.zip");
     execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/chatgpt-plugin.mjs", import.meta.url)), zip]);
     const names = execFileSync("unzip", ["-Z1", zip], { encoding: "utf8" }).split("\n").filter(Boolean);
-    for (const path of [".codex-plugin/plugin.json", ".mcp.json", "skills/polka/SKILL.md", "assets/logo.png", "assets/composer-icon.svg"])
+    for (const path of [
+      ".codex-plugin/plugin.json",
+      ".mcp.json",
+      "skills/polka/SKILL.md",
+      "assets/logo.png",
+      "assets/composer-icon.svg",
+    ])
       assert.ok(names.includes(path), path);
     assert.ok(!names.some((name) => name.startsWith("hooks/") || name.startsWith("scripts/")), names.join(" "));
   } finally {

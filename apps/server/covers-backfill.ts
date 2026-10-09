@@ -63,7 +63,9 @@ export async function backfillCovers({
     for (const r of rows) {
       report.scanned++;
       try {
-        const facts = dryRun ? await computeCoverFacts(r) : await refreshCover({ ...r, cover: null }, { schedule: false });
+        const facts = dryRun
+          ? await computeCoverFacts(r)
+          : await refreshCover({ ...r, cover: null }, { schedule: false });
         if (facts?.kind === "text") report.text++;
         else if (facts?.kind === "visual") report.visual++;
         if (!dryRun) report.covered++;

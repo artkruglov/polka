@@ -1,10 +1,7 @@
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import type { CoverGenre, RevisionCover } from "../../../../../packages/contracts/cover.ts";
 import { hueOf, kindOf } from "../../entities/artifact/format.ts";
-import {
-  SEARCH_MATCH_END,
-  SEARCH_MATCH_START,
-} from "../../../../../packages/contracts/constants.ts";
+import { SEARCH_MATCH_END, SEARCH_MATCH_START } from "../../../../../packages/contracts/constants.ts";
 
 const WORD = /[\p{L}\p{N}]/u;
 
@@ -36,7 +33,10 @@ export function snippetBesideTitle(snippet: string, title: string): string | nul
   }
   // The title must end on a word boundary, not inside a longer word.
   if (matched < titleChars.length || WORD.test(chars[index] ?? "")) return snippet;
-  let rest = chars.slice(index).join("").replace(/^[\s\p{P}]+/u, "");
+  let rest = chars
+    .slice(index)
+    .join("")
+    .replace(/^[\s\p{P}]+/u, "");
   // A mark opened inside the title closes inside the rest: keep the pair whole.
   if (open) rest = SEARCH_MATCH_START + rest;
   const words = [...rest].filter((ch) => WORD.test(ch)).length;
@@ -64,7 +64,7 @@ export const GENRE_LABEL: Record<CoverGenre, string> = {
 export const cardKind = (
   a: Pick<Artifact, "revision">,
   cover: Pick<RevisionCover, "genre"> | null | undefined = a.revision.cover,
-) => (cover && !a.revision.link ? GENRE_LABEL[cover.genre] ?? kindOf(a.revision) : kindOf(a.revision));
+) => (cover && !a.revision.link ? (GENRE_LABEL[cover.genre] ?? kindOf(a.revision)) : kindOf(a.revision));
 
 const SEPARATOR = /\s+[·|—–:]\s+|:\s+/;
 

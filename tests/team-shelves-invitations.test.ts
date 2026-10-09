@@ -55,10 +55,10 @@ const accept = (account: Account, token: string, shelfId = shelf.id) =>
   call("POST", `/api/shelves/${shelfId}/invitations/accept`, account, { token });
 const roleOn = async (account: Account) =>
   (
-    await db.query(
-      "SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'",
-      [shelf.id, account.id],
-    )
+    await db.query("SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'", [
+      shelf.id,
+      account.id,
+    ])
   ).rows[0]?.role ?? null;
 
 before(async () => {
@@ -69,7 +69,10 @@ before(async () => {
   stranger = await signUp("inv-stranger");
   await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [admin.id]);
   shelf = (await call("POST", "/api/shelves", admin, { name: "Отдел закупок" })).json();
-  for (const [account, role] of [[curator, "curator"], [author, "author"]] as const) {
+  for (const [account, role] of [
+    [curator, "curator"],
+    [author, "author"],
+  ] as const) {
     const added = await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: account.name, role });
     assert.equal(added.statusCode, 200, added.body);
   }
@@ -121,10 +124,12 @@ test("someone who had never signed in joins by the link with its role", async ()
   assert.equal(row.invitationUrl, undefined);
 
   // The journal says who issued the link and who came by it.
-  const events = (await db.query(
-    "SELECT action,actor_id,target_account_id,new_role FROM tenant_member_events WHERE invitation_id=$1 ORDER BY id",
-    [link.id],
-  )).rows;
+  const events = (
+    await db.query(
+      "SELECT action,actor_id,target_account_id,new_role FROM tenant_member_events WHERE invitation_id=$1 ORDER BY id",
+      [link.id],
+    )
+  ).rows;
   assert.deepEqual(events, [
     { action: "invitation_created", actor_id: admin.id, target_account_id: null, new_role: "curator" },
     { action: "invitation_accepted", actor_id: newcomer.id, target_account_id: newcomer.id, new_role: "curator" },

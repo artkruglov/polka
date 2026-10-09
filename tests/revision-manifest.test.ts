@@ -9,8 +9,7 @@ import { createSingleHtmlRevisionManifest } from "../apps/server/revision-manife
 import { readBlob, s3 } from "../apps/server/storage.ts";
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 
-const sha256 = (value: Buffer | string) =>
-  createHash("sha256").update(value).digest("hex");
+const sha256 = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
 
 const app = await createApp();
 const password = randomBytes(24).toString("hex");
@@ -23,19 +22,14 @@ async function call(method: any, url: string, body?: any) {
     headers: {
       origin: config.APP_ORIGIN,
       ...(cookie ? { cookie } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
 }
 
 before(async () => {
-  const account = await createAccount(
-    `manifest-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const account = await createAccount(`manifest-${randomBytes(5).toString("hex")}`, password);
   const login = await call("POST", "/api/login", {
     name: account.name,
     password,
@@ -99,46 +93,30 @@ test("single HTML bytes produce a canonical versioned manifest and hash", () => 
     result.manifest.files.reduce((total, file) => total + file.size, 0),
     bytes.length,
   );
-  assert.equal(
-    result.manifestSha256,
-    sha256(JSON.stringify(canonicalizeManifest(result.manifest))),
-  );
-  assert.deepEqual(
-    createSingleHtmlRevisionManifest(bytes, "static", capturedAt),
-    result,
-  );
+  assert.equal(result.manifestSha256, sha256(JSON.stringify(canonicalizeManifest(result.manifest))));
+  assert.deepEqual(createSingleHtmlRevisionManifest(bytes, "static", capturedAt), result);
 });
 
 test("limited HTML uses the static profile and unsupported HTML is preserved only", () => {
-  const bytes = Buffer.from(
-    "<html><script>globalThis.ready=true</script></html>",
-  );
+  const bytes = Buffer.from("<html><script>globalThis.ready=true</script></html>");
   const capturedAt = new Date("2026-09-20T12:34:56Z");
+  assert.equal(createSingleHtmlRevisionManifest(bytes, "limited", capturedAt).manifest.runtime, "static-sandbox-v1");
   assert.equal(
-    createSingleHtmlRevisionManifest(bytes, "limited", capturedAt).manifest
-      .runtime,
-    "static-sandbox-v1",
-  );
-  assert.equal(
-    createSingleHtmlRevisionManifest(bytes, "unsupported", capturedAt).manifest
-      .runtime,
+    createSingleHtmlRevisionManifest(bytes, "unsupported", capturedAt).manifest.runtime,
     "preserved-only-v1",
   );
 });
 
 test("HTML finalization stores the canonical manifest atomically and retries its original receipt", async () => {
-  const bytes = Buffer.from(
-    "<!doctype html><html><body><h1>Принятый HTML</h1></body></html>",
-  );
+  const bytes = Buffer.from("<!doctype html><html><body><h1>Принятый HTML</h1></body></html>");
   const saved = await save(bytes, "text/html");
   assert.match(saved.receipt.manifestSha256, /^[a-f0-9]{64}$/);
 
   const {
     rows: [stored],
-  } = await db.query(
-    "SELECT manifest,manifest_sha256,object_key,object_version FROM revisions WHERE id=$1",
-    [saved.receipt.revisionId],
-  );
+  } = await db.query("SELECT manifest,manifest_sha256,object_key,object_version FROM revisions WHERE id=$1", [
+    saved.receipt.revisionId,
+  ]);
   const canonical = canonicalizeManifest(stored.manifest);
   const blob = await readBlob(stored.object_key, stored.object_version);
   assert.equal(blob.equals(bytes), true);
@@ -150,16 +128,9 @@ test("HTML finalization stores the canonical manifest atomically and retries its
   );
   assert.equal(canonical.files[0].sha256, sha256(blob));
   assert.equal(stored.manifest_sha256, saved.receipt.manifestSha256);
-  assert.equal(
-    stored.manifest_sha256,
-    sha256(JSON.stringify(canonicalizeManifest(stored.manifest))),
-  );
+  assert.equal(stored.manifest_sha256, sha256(JSON.stringify(canonicalizeManifest(stored.manifest))));
 
-  const retry = await call(
-    "POST",
-    `/api/uploads/${saved.uploadId}/finalize`,
-    {},
-  );
+  const retry = await call("POST", `/api/uploads/${saved.uploadId}/finalize`, {});
   assert.equal(retry.statusCode, 200, retry.body);
   assert.deepEqual(retry.json(), saved.receipt);
   const beginRetry = await call("POST", "/api/uploads", saved.input);
@@ -167,19 +138,13 @@ test("HTML finalization stores the canonical manifest atomically and retries its
   assert.deepEqual(beginRetry.json().receipt, saved.receipt);
   const {
     rows: [afterRetry],
-  } = await db.query(
-    "SELECT manifest,manifest_sha256 FROM revisions WHERE id=$1",
-    [saved.receipt.revisionId],
-  );
+  } = await db.query("SELECT manifest,manifest_sha256 FROM revisions WHERE id=$1", [saved.receipt.revisionId]);
   assert.deepEqual(afterRetry, {
     manifest: stored.manifest,
     manifest_sha256: stored.manifest_sha256,
   });
 
-  const revision = await call(
-    "GET",
-    `/api/artifacts/${saved.receipt.artifactId}/revisions`,
-  );
+  const revision = await call("GET", `/api/artifacts/${saved.receipt.artifactId}/revisions`);
   assert.equal(revision.statusCode, 200, revision.body);
   assert.deepEqual(revision.json()[0].manifest, stored.manifest);
   assert.equal(revision.json()[0].manifestSha256, stored.manifest_sha256);
@@ -190,9 +155,6 @@ test("non-HTML finalization leaves manifest columns null", async () => {
   assert.equal("manifestSha256" in saved.receipt, false);
   const {
     rows: [stored],
-  } = await db.query(
-    "SELECT manifest,manifest_sha256 FROM revisions WHERE id=$1",
-    [saved.receipt.revisionId],
-  );
+  } = await db.query("SELECT manifest,manifest_sha256 FROM revisions WHERE id=$1", [saved.receipt.revisionId]);
   assert.deepEqual(stored, { manifest: null, manifest_sha256: null });
 });

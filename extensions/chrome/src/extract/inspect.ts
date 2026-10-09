@@ -36,8 +36,7 @@ function randomMarker() {
 export function inspectPage(doc: Document, host: string, path: string): PageReport {
   const signIn =
     /^\/(login|signin|sign-in|auth)(\/|$)/i.test(path) ||
-    (!!doc.querySelector('input[type="email"]') &&
-      !doc.querySelector('[data-message-author-role], iframe'));
+    (!!doc.querySelector('input[type="email"]') && !doc.querySelector("[data-message-author-role], iframe"));
   if (host === "chatgpt.com" || host.endsWith(".chatgpt.com")) {
     const found = chatgptSource(doc);
     return {
@@ -51,7 +50,15 @@ export function inspectPage(doc: Document, host: string, path: string): PageRepo
     };
   }
   if (host !== "claude.ai") {
-    return { provider: null, title: doc.title, copyMarker: null, menuMarker: null, code: null, frames: 0, signIn: false };
+    return {
+      provider: null,
+      title: doc.title,
+      copyMarker: null,
+      menuMarker: null,
+      code: null,
+      frames: 0,
+      signIn: false,
+    };
   }
   const frames = findArtifactFrames(doc);
   const panel = frames[0] ? artifactPanel(frames[0]) : null;

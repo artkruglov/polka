@@ -1,7 +1,4 @@
-import type {
-  InlineBuildStatus,
-  Revision,
-} from "../../../../../packages/contracts/index.ts";
+import type { InlineBuildStatus, Revision } from "../../../../../packages/contracts/index.ts";
 import { isStaticSingleFileBundle } from "../../entities/artifact/format.ts";
 
 export type LiveMode = "local" | "staging" | "production";
@@ -21,27 +18,14 @@ export const isLive = (state: CapabilityState): state is LiveMode =>
  * (typically CDN React/Babel/Tailwind, which only the build can run) waits
  * for that build; if the build is refused, the upload still runs as is.
  */
-export function liveKind(
-  revision: Revision,
-  recipient = false,
-): "none" | "direct" | "build" {
-  if (recipient && revision.storageKind === "single")
-    return revision.inlineBuild?.state === "ready" ? "build" : "none";
+export function liveKind(revision: Revision, recipient = false): "none" | "direct" | "build" {
+  if (recipient && revision.storageKind === "single") return revision.inlineBuild?.state === "ready" ? "build" : "none";
   if (revision.storageKind === "bundle")
-    return isStaticSingleFileBundle(revision) &&
-      revision.htmlProfile === "static"
-      ? "none"
-      : "build";
-  if (revision.mime !== "text/html" || revision.htmlProfile === "static")
-    return "none";
+    return isStaticSingleFileBundle(revision) && revision.htmlProfile === "static" ? "none" : "build";
+  if (revision.mime !== "text/html" || revision.htmlProfile === "static") return "none";
   const build = revision.inlineBuild?.state;
   if (build === "ready") return "build";
-  if (
-    revision.htmlProfile === "unsupported" &&
-    build !== "unsupported" &&
-    build !== "failed"
-  )
-    return "build";
+  if (revision.htmlProfile === "unsupported" && build !== "unsupported" && build !== "failed") return "build";
   return "direct";
 }
 
@@ -74,7 +58,6 @@ export function nextLiveSteps({
   if (!isLive(capability) || stopped) return [];
   const steps: Array<"launch" | "prepare"> = [];
   if ((!requiresBuild || build === "ready") && !launched) steps.push("launch");
-  if ((requiresBuild || buildForLink) && owner && build === null && !prepared)
-    steps.push("prepare");
+  if ((requiresBuild || buildForLink) && owner && build === null && !prepared) steps.push("prepare");
   return steps;
 }

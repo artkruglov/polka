@@ -79,9 +79,22 @@ const USAGE = `Usage:
   moderation.ts recheck [--fraud] [--dry-run]`;
 
 const CATEGORY = new Set([
-  "csam", "extremism_terror", "drugs", "weapons_explosives", "doxxing", "porn",
-  "suicide", "gambling", "piracy", "blocklisted_domain", "fraud", "spam", "vpn",
-  "malicious_code", "copyright", "other",
+  "csam",
+  "extremism_terror",
+  "drugs",
+  "weapons_explosives",
+  "doxxing",
+  "porn",
+  "suicide",
+  "gambling",
+  "piracy",
+  "blocklisted_domain",
+  "fraud",
+  "spam",
+  "vpn",
+  "malicious_code",
+  "copyright",
+  "other",
 ]);
 const category = (value: string | undefined) => {
   if (value === undefined) return undefined;
@@ -111,31 +124,17 @@ try {
     return target;
   };
   if (command === "reports" && !target)
-    console.log(
-      formatReports(await listReports(values.days ? Number(values.days) : 7)),
-    );
-  else if (command === "revoke-share")
-    console.log(formatRevokedShare(await revokeShareAsOperator(one())));
-  else if (command === "disable")
-    console.log(formatDisabled(await disableAccount(one(), values.reason)));
-  else if (command === "enable")
-    console.log(formatEnabled(await enableAccount(one())));
-  else if (command === "queue" && !target)
-    console.log(formatModerationQueue(await listModerationQueue()));
-  else if (command === "approve")
-    console.log(
-      (await approveShareAsOperator(one(), values.trust === true)).message,
-    );
-  else if (command === "unpause")
-    console.log((await unpauseShareAsOperator(one())).message);
-  else if (command === "trust")
-    console.log(formatTrusted(await trustAccount(one())));
-  else if (command === "comments")
-    console.log(formatShareComments(await listShareComments(one())));
-  else if (command === "delete-comment")
-    console.log((await deleteCommentAsOperator(one())).message);
-  else if (command === "release-comment")
-    console.log((await releaseCommentAsOperator(one())).message);
+    console.log(formatReports(await listReports(values.days ? Number(values.days) : 7)));
+  else if (command === "revoke-share") console.log(formatRevokedShare(await revokeShareAsOperator(one())));
+  else if (command === "disable") console.log(formatDisabled(await disableAccount(one(), values.reason)));
+  else if (command === "enable") console.log(formatEnabled(await enableAccount(one())));
+  else if (command === "queue" && !target) console.log(formatModerationQueue(await listModerationQueue()));
+  else if (command === "approve") console.log((await approveShareAsOperator(one(), values.trust === true)).message);
+  else if (command === "unpause") console.log((await unpauseShareAsOperator(one())).message);
+  else if (command === "trust") console.log(formatTrusted(await trustAccount(one())));
+  else if (command === "comments") console.log(formatShareComments(await listShareComments(one())));
+  else if (command === "delete-comment") console.log((await deleteCommentAsOperator(one())).message);
+  else if (command === "release-comment") console.log((await releaseCommentAsOperator(one())).message);
   else if (command === "takedown")
     console.log(
       formatTakedown(
@@ -156,51 +155,38 @@ try {
           actor: "operator-script",
           reason: values.reason,
           category: category(values.category) ?? "other",
-          legalHold: values["legal-hold"] ? values.authority ?? values.reason : null,
+          legalHold: values["legal-hold"] ? (values.authority ?? values.reason) : null,
           authority: values.authority ?? null,
         })
       ).message,
     );
-  } else if (command === "unblock")
-    console.log(await unblock(one(), values.reason ?? ""));
+  } else if (command === "unblock") console.log(await unblock(one(), values.reason ?? ""));
   else if (command === "legal-hold") {
     const [id, state] = [target, extra[0]];
-    if (!id || !["on", "off"].includes(state ?? "") || extra.length !== 1)
-      throw new ModerationError(USAGE);
+    if (!id || !["on", "off"].includes(state ?? "") || extra.length !== 1) throw new ModerationError(USAGE);
     console.log(await setLegalHold(id, values.authority ?? "", state === "on"));
-  } else if (command === "handed-over")
-    console.log(await handedOver(one(), values.reason ?? ""));
-  else if (command === "purge-artifact")
-    console.log(await purgeArtifactNow(one(), values.reason ?? ""));
-  else if (command === "events" && extra.length === 0)
-    console.log(formatEvents(await listEvents(target)));
+  } else if (command === "handed-over") console.log(await handedOver(one(), values.reason ?? ""));
+  else if (command === "purge-artifact") console.log(await purgeArtifactNow(one(), values.reason ?? ""));
+  else if (command === "events" && extra.length === 0) console.log(formatEvents(await listEvents(target)));
   else if (command === "recheck" && !target) {
     const { recheckHeldShares, formatRecheck, recheckFraudHolds, formatFraudRecheck } =
       await import("../apps/server/shares.ts");
     // --fraud: links held for phishing, their versions read again under the
     // current rules (docs/specs/CONTENT_FILTER.md, «Фишинг»).
-    if (values.fraud)
-      console.log(formatFraudRecheck(await recheckFraudHolds(values["dry-run"] === true)));
+    if (values.fraud) console.log(formatFraudRecheck(await recheckFraudHolds(values["dry-run"] === true)));
     else console.log(formatRecheck(await recheckHeldShares(values["dry-run"] === true)));
   } else if (command === "sweep" && !target) {
-    const { sweepBlocks, retryUnchecked, reviewsSettled } = await import(
-      "../apps/server/content-moderation.ts"
-    );
+    const { sweepBlocks, retryUnchecked, reviewsSettled } = await import("../apps/server/content-moderation.ts");
     const result = await sweepBlocks();
     const retried = await retryUnchecked();
     await reviewsSettled();
     console.log(
       `Reminders sent: ${result.reminded}; blocks deleted: ${result.deleted}; unchecked revisions queued again: ${retried}.`,
     );
-  }
-  else throw new ModerationError(USAGE);
+  } else throw new ModerationError(USAGE);
 } catch (error) {
   const message = (error as Error).message;
-  console.error(
-    error instanceof ModerationError
-      ? message
-      : `Moderation failed: ${message}`,
-  );
+  console.error(error instanceof ModerationError ? message : `Moderation failed: ${message}`);
   process.exitCode = 1;
 } finally {
   await db.end();

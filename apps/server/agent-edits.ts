@@ -19,10 +19,7 @@ import { readBlob, sha256 } from "./storage.ts";
 import { db } from "./db.ts";
 import { applyEdits } from "./edit-patch.ts";
 import { Problem, missing } from "./errors.ts";
-import {
-  withServiceActorTransaction,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 
 export const agentEditsInputSchema = z
   .object({
@@ -66,56 +63,47 @@ export async function reviseWithEdits(actor: ServiceActor, raw: unknown) {
   const input = agentEditsInputSchema.parse(raw);
   // The base version, read under the connection's own checks. A replay of a
   // saved key is recognized by captureFromAgent even after the work moved on.
-  const base = await withServiceActorTransaction(
-    actor,
-    "revise",
-    async (c, verified) => {
-      // An agent limited to folders revises only works in them (agent-scope.ts).
-      await assertArtifactInAgentScope(
-        c,
-        { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId },
-        input.artifactId,
-      );
-      const {
-        rows: [artifact],
-      } = await c.query(
-        `SELECT latest_revision_id FROM artifacts
+  const base = await withServiceActorTransaction(actor, "revise", async (c, verified) => {
+    // An agent limited to folders revises only works in them (agent-scope.ts).
+    await assertArtifactInAgentScope(
+      c,
+      { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId },
+      input.artifactId,
+    );
+    const {
+      rows: [artifact],
+    } = await c.query(
+      `SELECT latest_revision_id FROM artifacts
          WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE`,
-        [input.artifactId, verified.tenantId],
-      );
-      if (!artifact) throw missing();
-      const {
-        rows: [revision],
-      } = await c.query(
-        "SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-        [input.baseRevisionId, input.artifactId, verified.tenantId],
-      );
-      if (!revision) throw missing();
-      if (artifact.latest_revision_id !== input.baseRevisionId) {
-        const replay = await c.query(
-          `SELECT 1 FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2
+      [input.artifactId, verified.tenantId],
+    );
+    if (!artifact) throw missing();
+    const {
+      rows: [revision],
+    } = await c.query("SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+      input.baseRevisionId,
+      input.artifactId,
+      verified.tenantId,
+    ]);
+    if (!revision) throw missing();
+    if (artifact.latest_revision_id !== input.baseRevisionId) {
+      const replay = await c.query(
+        `SELECT 1 FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2
              AND connection_id=$3 AND receipt IS NOT NULL`,
-          [verified.tenantId, input.key, verified.connectionId],
-        );
-        if (!replay.rowCount)
-          throw new BaseMismatch(artifact.latest_revision_id);
-      }
-      // A project's files are only located here; one of them is read below.
-      return revision.manifest?.runtime === PROJECT_RUNTIME
-        ? { project: await authorizedRevisionFiles(c, revision) }
-        : { bundle: await readAuthorizedRevisionSource(c, revision) };
-    },
-  );
+        [verified.tenantId, input.key, verified.connectionId],
+      );
+      if (!replay.rowCount) throw new BaseMismatch(artifact.latest_revision_id);
+    }
+    // A project's files are only located here; one of them is read below.
+    return revision.manifest?.runtime === PROJECT_RUNTIME
+      ? { project: await authorizedRevisionFiles(c, revision) }
+      : { bundle: await readAuthorizedRevisionSource(c, revision) };
+  });
   if (base.project) return reviseProjectFile(actor, input, base.project);
   const prepared = base.bundle!;
   const path = input.path ?? prepared.manifest.entrypoint;
   const target = prepared.files.find((file) => file.path === path);
-  if (!target)
-    throw new Problem(
-      404,
-      "not_found",
-      `В версии нет файла ${JSON.stringify(path)}.`,
-    );
+  if (!target) throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
   if (!TEXT_MIMES.has(target.mime))
     throw new Problem(
       422,
@@ -171,8 +159,7 @@ async function reviseProjectFile(
 ) {
   const path = input.path ?? base.manifest.entrypoint;
   const target = base.stored.find((file) => file.path === path);
-  if (!target)
-    throw new Problem(404, "not_found", `В проекте нет файла ${JSON.stringify(path)}.`);
+  if (!target) throw new Problem(404, "not_found", `В проекте нет файла ${JSON.stringify(path)}.`);
   if (!TEXT_MIMES.has(target.mime))
     throw new Problem(
       422,
@@ -218,11 +205,7 @@ async function reviseProjectFile(
 }
 
 /** The save of a patched version; a version that landed meanwhile is a BaseMismatch. */
-async function saved(
-  actor: ServiceActor,
-  input: AgentEditsInput,
-  save: () => Promise<unknown>,
-) {
+async function saved(actor: ServiceActor, input: AgentEditsInput, save: () => Promise<unknown>) {
   try {
     return (await save()) as {
       uploadId: string;
@@ -237,16 +220,12 @@ async function saved(
     if (error instanceof Problem && error.status === 409) {
       const {
         rows: [state],
-      } = await db.query(
-        "SELECT latest_revision_id FROM artifacts WHERE id=$1 AND tenant_id=$2",
-        [input.artifactId, actor.tenantId],
-      );
+      } = await db.query("SELECT latest_revision_id FROM artifacts WHERE id=$1 AND tenant_id=$2", [
+        input.artifactId,
+        actor.tenantId,
+      ]);
       // The key refusals of the upload path name the key; they stay as is.
-      if (
-        state &&
-        state.latest_revision_id !== input.baseRevisionId &&
-        !/ключ/i.test(error.message)
-      )
+      if (state && state.latest_revision_id !== input.baseRevisionId && !/ключ/i.test(error.message))
         throw new BaseMismatch(state.latest_revision_id);
     }
     throw error;
@@ -332,10 +311,11 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
     if (!artifact) throw missing();
     const {
       rows: [revision],
-    } = await c.query(
-      "SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-      [input.baseRevisionId, input.artifactId, verified.tenantId],
-    );
+    } = await c.query("SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+      input.baseRevisionId,
+      input.artifactId,
+      verified.tenantId,
+    ]);
     if (!revision) throw missing();
     if (artifact.latest_revision_id !== input.baseRevisionId) {
       const replay = await c.query(
@@ -360,8 +340,7 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
   const lower = (value: string) => value.toLocaleLowerCase("en-US");
   const removed = new Set<string>();
   for (const path of input.remove) {
-    if (!stored.has(path))
-      throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
+    if (!stored.has(path)) throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
     if (path === base.manifest.entrypoint)
       throw new Problem(
         422,
@@ -373,7 +352,11 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
   const put = new Map<string, { bytes: Buffer; mime: string }>();
   for (const file of input.put) {
     if (/^\/|\/$|\/\//.test(file.path))
-      throw new Problem(400, "invalid", `Некорректный путь ${JSON.stringify(file.path)}: относительный, без пустых частей.`);
+      throw new Problem(
+        400,
+        "invalid",
+        `Некорректный путь ${JSON.stringify(file.path)}: относительный, без пустых частей.`,
+      );
     // A file that exists keeps its type; a new one gets it from the extension.
     const existing = base.manifest.files.find((f) => f.path === file.path);
     const dot = file.path.lastIndexOf(".");
@@ -386,13 +369,16 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
       );
     if (put.has(file.path) || removed.has(file.path))
       throw new Problem(400, "invalid", `Путь ${JSON.stringify(file.path)} указан дважды.`);
-    const bytes =
-      file.encoding === "base64" ? Buffer.from(file.data, "base64") : Buffer.from(file.data, "utf8");
+    const bytes = file.encoding === "base64" ? Buffer.from(file.data, "base64") : Buffer.from(file.data, "utf8");
     // As in polka_capture: what does not decode back is refused, not repaired silently.
     if (file.encoding === "utf8" && bytes.toString("utf8") !== file.data)
       throw new Problem(400, "invalid", `Некорректный UTF-8 в ${JSON.stringify(file.path)}.`);
     if (file.encoding === "base64" && bytes.toString("base64") !== file.data)
-      throw new Problem(400, "invalid", `Некорректный base64 в ${JSON.stringify(file.path)} (без префикса data:, стандартный алфавит).`);
+      throw new Problem(
+        400,
+        "invalid",
+        `Некорректный base64 в ${JSON.stringify(file.path)} (без префикса data:, стандартный алфавит).`,
+      );
     put.set(file.path, { bytes, mime });
   }
   // The new set of files: kept from the store, replaced or added from `put`.
@@ -413,7 +399,11 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
   for (const entry of entries) {
     const clash = seen.get(lower(entry.path));
     if (clash)
-      throw new Problem(400, "invalid", `Путь ${JSON.stringify(entry.path)} совпадает с ${JSON.stringify(clash)} без учёта регистра.`);
+      throw new Problem(
+        400,
+        "invalid",
+        `Путь ${JSON.stringify(entry.path)} совпадает с ${JSON.stringify(clash)} без учёта регистра.`,
+      );
     seen.set(lower(entry.path), entry.path);
   }
   let manifest: ReturnType<typeof canonicalizeManifest>;
@@ -447,4 +437,3 @@ export async function changeFiles(actor: ServiceActor, raw: unknown) {
     ),
   );
 }
-

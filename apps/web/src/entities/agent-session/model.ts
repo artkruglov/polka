@@ -91,7 +91,12 @@ export type SessionList = {
   next: string | null;
 };
 
-export type SessionDetail = { session: AgentSession; toolCalls: ToolCall[]; secrets: SessionSecret[]; links: SessionLink[] };
+export type SessionDetail = {
+  session: AgentSession;
+  toolCalls: ToolCall[];
+  secrets: SessionSecret[];
+  links: SessionLink[];
+};
 
 export type Fingerprint = {
   fingerprint: string;
@@ -110,7 +115,15 @@ export type Fingerprint = {
 export type SessionStats = {
   days: number;
   totals: { sessions: number; toolCalls: number; cost: number; withoutCost: number; someEstimated: boolean | null };
-  byDay: { day: string; sessions: number; toolCalls: number; input: number; output: number; cacheRead: number; cost: number | null }[];
+  byDay: {
+    day: string;
+    sessions: number;
+    toolCalls: number;
+    input: number;
+    output: number;
+    cacheRead: number;
+    cost: number | null;
+  }[];
   byModel: { model: string; sessions: number; input: number; output: number; cacheRead: number; cacheWrite: number }[];
   secrets: Partial<Record<SecretsStatus, number>>;
   fingerprints: Fingerprint[];
@@ -136,7 +149,8 @@ export function listQuery(filters: SessionFilters, before?: string | null, limit
 }
 
 export const sessionsApi = {
-  list: (filters: SessionFilters, before?: string | null) => request<SessionList>(`/sessions?${listQuery(filters, before)}`),
+  list: (filters: SessionFilters, before?: string | null) =>
+    request<SessionList>(`/sessions?${listQuery(filters, before)}`),
   get: (id: string) => request<SessionDetail>(`/sessions/${id}`),
   transcript: (id: string, offset: number, limit = 200) =>
     request<{ events: TranscriptEvent[]; total: number; offset: number; tooLarge: boolean }>(
@@ -200,13 +214,16 @@ export const STATUS_LABEL: Record<ToolCall["status"], string> = {
 };
 
 /** Where a secret went, in words: «в команде, в сеть». */
-export function secretFlags(secret: Pick<SessionSecret, "seenByModel" | "modelEmitted" | "toCommand" | "toNetwork" | "writtenToFile">) {
+export function secretFlags(
+  secret: Pick<SessionSecret, "seenByModel" | "modelEmitted" | "toCommand" | "toNetwork" | "writtenToFile">,
+) {
   const flags: string[] = [];
   if (secret.toNetwork) flags.push("отправлен в сеть");
   if (secret.toCommand) flags.push("в команде");
   if (secret.writtenToFile) flags.push("записан в файл");
   if (secret.seenByModel) flags.push("модель видела");
-  if (secret.modelEmitted && !secret.toNetwork && !secret.toCommand && !secret.writtenToFile) flags.push("модель написала");
+  if (secret.modelEmitted && !secret.toNetwork && !secret.toCommand && !secret.writtenToFile)
+    flags.push("модель написала");
   return flags;
 }
 
@@ -271,4 +288,5 @@ export function permissionLabel(mode: string | null) {
 }
 
 /** The bar width of `value` against `max`, as a CSS percentage. */
-export const barWidth = (value: number, max: number) => `${max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0}%`;
+export const barWidth = (value: number, max: number) =>
+  `${max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0}%`;

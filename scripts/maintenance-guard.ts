@@ -55,9 +55,7 @@ export async function runMaintenanceGuard<T>(options: {
   signal: AbortSignal;
   run: (scope: {
     signal: AbortSignal;
-    transaction: <R>(
-      operation: (client: MaintenanceClient) => Promise<R>,
-    ) => Promise<R>;
+    transaction: <R>(operation: (client: MaintenanceClient) => Promise<R>) => Promise<R>;
   }) => Promise<T>;
 }): Promise<MaintenanceRunResult<T>> {
   const { client, signal } = options;
@@ -117,20 +115,14 @@ export async function runMaintenanceGuard<T>(options: {
     closing = true;
     signal.removeEventListener("abort", externalAbort);
     if (!destroyed) destroyConnection();
-    await boundedCleanup(
-      closePromise ?? Promise.resolve(),
-      ROLLBACK_TIMEOUT_MS,
-    );
+    await boundedCleanup(closePromise ?? Promise.resolve(), ROLLBACK_TIMEOUT_MS);
     // A forced/delayed close can emit after this bounded wait. Keep the
     // sanitized closing listener attached to the dedicated dying client so a
     // late `error` event cannot become an uncaught process exception.
   };
-  const transaction = async <R>(
-    operation: (tx: MaintenanceClient) => Promise<R>,
-  ): Promise<R> => {
+  const transaction = async <R>(operation: (tx: MaintenanceClient) => Promise<R>): Promise<R> => {
     assertActive(internal.signal, () => guardLost);
-    if (transactionActive)
-      throw new Error("Maintenance transactions must be sequential");
+    if (transactionActive) throw new Error("Maintenance transactions must be sequential");
     transactionActive = true;
     let committed = false;
     try {
@@ -143,10 +135,7 @@ export async function runMaintenanceGuard<T>(options: {
       return value;
     } finally {
       if (!committed) {
-        const rolledBack = await boundedCleanup(
-          query("ROLLBACK"),
-          ROLLBACK_TIMEOUT_MS,
-        );
+        const rolledBack = await boundedCleanup(query("ROLLBACK"), ROLLBACK_TIMEOUT_MS);
         if (!rolledBack) {
           if (!internal.signal.aborted) internal.abort();
           destroyConnection();
@@ -160,26 +149,20 @@ export async function runMaintenanceGuard<T>(options: {
     if (signal.aborted) return { state: "aborted" };
     let lockResult: MaintenanceQueryResult;
     try {
-      lockResult = await query("SELECT pg_try_advisory_lock($1) AS locked", [
-        ADVISORY_LOCK,
-      ]);
+      lockResult = await query("SELECT pg_try_advisory_lock($1) AS locked", [ADVISORY_LOCK]);
     } catch {
       return { state: "guard_lost" };
     }
-    if (internal.signal.aborted)
-      return guardLost ? { state: "guard_lost" } : { state: "aborted" };
+    if (internal.signal.aborted) return guardLost ? { state: "guard_lost" } : { state: "aborted" };
     if (!locked(lockResult)) return { state: "busy" };
     try {
       const value = await options.run({ signal: internal.signal, transaction });
-      if (internal.signal.aborted)
-        return guardLost ? { state: "guard_lost" } : { state: "aborted" };
+      if (internal.signal.aborted) return guardLost ? { state: "guard_lost" } : { state: "aborted" };
       if (guardLost) return { state: "guard_lost" };
       return { state: "completed", value };
     } catch (error) {
-      if (error instanceof MaintenanceGuardLost || guardLost)
-        return { state: "guard_lost" };
-      if (error instanceof MaintenanceAborted || internal.signal.aborted)
-        return { state: "aborted" };
+      if (error instanceof MaintenanceGuardLost || guardLost) return { state: "guard_lost" };
+      if (error instanceof MaintenanceAborted || internal.signal.aborted) return { state: "aborted" };
       return { state: "failed", error };
     } finally {
       if (!guardLost && !internal.signal.aborted) {

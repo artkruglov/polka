@@ -1,98 +1,395 @@
 /* Recipient view, document first: a thin bar (title, actions, one line about the page),
    then the work filling the rest of the viewport. Guests get no app navigation at all. */
-.recipient-frame { display: flex; flex-direction: column; min-height: 100dvh; }
+.recipient-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
 
 /* Top bar: two rows, both thin. */
-.recipient-topbar { flex: 0 0 auto; border-bottom: 1px solid var(--line); background: var(--canvas); }
-.recipient-topbar-row { display: flex; align-items: center; gap: 8px 12px; min-height: 48px; padding: 4px var(--gutter); }
-.recipient-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 600 var(--text-md) / 1.3 var(--font-sans); letter-spacing: var(--tracking-snug); }
-.recipient-topbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
-.recipient-topbar-actions .ui-button { min-height: 36px; padding: 6px 10px; font-size: var(--text-sm); color: var(--ink-2); }
-.recipient-topbar-actions .ui-button svg { width: 16px; height: 16px; }
-.recipient-comments-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-.report-sent { color: var(--success); font-size: var(--text-sm); white-space: nowrap; }
+.recipient-topbar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+}
+.recipient-topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 48px;
+  padding: 4px var(--gutter);
+}
+.recipient-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font: 600 var(--text-md) / 1.3 var(--font-sans);
+  letter-spacing: var(--tracking-snug);
+}
+.recipient-topbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+.recipient-topbar-actions .ui-button {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+.recipient-topbar-actions .ui-button svg {
+  width: 16px;
+  height: 16px;
+}
+.recipient-comments-toggle[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.report-sent {
+  color: var(--success);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
 
 /* Second row: the note about the page and the link home. */
-.recipient-topbar-row--note { min-height: 32px; padding-top: 0; padding-bottom: 6px; }
-.recipient-note { flex: 1 1 auto; min-width: 0; }
-.recipient-note-line { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.4; }
-.recipient-note-line > svg { flex: 0 0 15px; width: 15px; height: 15px; color: var(--warning); }
+.recipient-topbar-row--note {
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 6px;
+}
+.recipient-note {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.recipient-note-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.recipient-note-line > svg {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  color: var(--warning);
+}
 .recipient-note[data-tone="editorial"] .recipient-note-line > svg,
-.recipient-note[data-tone="quiet"] .recipient-note-line > svg { color: var(--muted); }
-.recipient-note[data-tone="editorial"] .recipient-note-line { color: var(--muted); font-weight: 500; }
+.recipient-note[data-tone="quiet"] .recipient-note-line > svg {
+  color: var(--muted);
+}
+.recipient-note[data-tone="editorial"] .recipient-note-line {
+  color: var(--muted);
+  font-weight: 500;
+}
 /* A page without fields for secrets: a plain byline, not a warning. */
-.recipient-note[data-tone="quiet"] .recipient-note-line { color: var(--muted); }
-.recipient-note-line > span { min-width: 0; }
-.recipient-note-more { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; min-height: 28px; margin: -4px 0; padding: 2px 6px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--accent); font: 500 var(--text-sm) / 1.4 var(--font-sans); cursor: pointer; }
-.recipient-note-more:hover { background: var(--accent-soft); }
-.recipient-note-more svg { width: 14px; height: 14px; }
-.recipient-note-details { display: grid; gap: 6px; max-width: 72ch; padding: 6px 0 4px 23px; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.5; }
-.recipient-note-details[hidden] { display: none; }
-.recipient-note-details strong { color: var(--warning); }
-.recipient-note-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.recipient-note-links a { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--accent); font-weight: 500; }
-.recipient-made { flex: 0 0 auto; align-self: flex-start; margin-top: 3px; color: var(--muted); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
-.recipient-made:hover { color: var(--accent); }
+.recipient-note[data-tone="quiet"] .recipient-note-line {
+  color: var(--muted);
+}
+.recipient-note-line > span {
+  min-width: 0;
+}
+.recipient-note-more {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  margin: -4px 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--accent);
+  font: 500 var(--text-sm) / 1.4 var(--font-sans);
+  cursor: pointer;
+}
+.recipient-note-more:hover {
+  background: var(--accent-soft);
+}
+.recipient-note-more svg {
+  width: 14px;
+  height: 14px;
+}
+.recipient-note-details {
+  display: grid;
+  gap: 6px;
+  max-width: 72ch;
+  padding: 6px 0 4px 23px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.recipient-note-details[hidden] {
+  display: none;
+}
+.recipient-note-details strong {
+  color: var(--warning);
+}
+.recipient-note-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.recipient-note-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.recipient-made {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.recipient-made:hover {
+  color: var(--accent);
+}
 
 /* The work takes what is left; a comments rail (stage 3) may sit to its right. */
-.recipient-body { display: flex; flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.recipient-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
 /* A guest's bar (features/recipient-convert): in the flow, so the work shrinks by
    its height and is never covered; sticky, so it stays in view while text scrolls. */
-.recipient-footer { position: sticky; bottom: 0; z-index: 60; flex: 0 0 auto; }
-.recipient-body > .empty { flex: 1 1 auto; }
-.recipient-stage { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
-.recipient-stage .html-preview { flex: 1 1 auto; height: auto; min-height: 420px; }
-.recipient-stage .html-preview-expanded { flex: none; }
-.recipient-stage .html-preview-note { border-top: 1px solid var(--line); }
-.recipient-stage .html-preview-toolbar { border-top: 0; border-bottom: 1px solid var(--line); padding: 6px var(--gutter); }
-.recipient-stage .html-preview-toolbar > .ui-button { min-height: 32px; padding: 4px 8px; font-size: var(--text-sm); }
-.recipient-stage .preview-error { padding: 32px var(--gutter); }
-.recipient-stage[data-kind="image"] { background: var(--soft); }
-.recipient-stage[data-kind="image"] .work-image { flex: 1 1 0; width: 100%; height: auto; min-height: 0; max-height: none; object-fit: contain; background: none; }
-.recipient-stage[data-kind="text"] { display: block; padding: 8px var(--gutter) 64px; }
-.recipient-stage[data-kind="text"] .work-text { padding-top: 32px; }
+.recipient-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 60;
+  flex: 0 0 auto;
+}
+.recipient-body > .empty {
+  flex: 1 1 auto;
+}
+.recipient-stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--canvas);
+}
+.recipient-stage .html-preview {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 420px;
+}
+.recipient-stage .html-preview-expanded {
+  flex: none;
+}
+.recipient-stage .html-preview-note {
+  border-top: 1px solid var(--line);
+}
+.recipient-stage .html-preview-toolbar {
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 6px var(--gutter);
+}
+.recipient-stage .html-preview-toolbar > .ui-button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: var(--text-sm);
+}
+.recipient-stage .preview-error {
+  padding: 32px var(--gutter);
+}
+.recipient-stage[data-kind="image"] {
+  background: var(--soft);
+}
+.recipient-stage[data-kind="image"] .work-image {
+  flex: 1 1 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  object-fit: contain;
+  background: none;
+}
+.recipient-stage[data-kind="text"] {
+  display: block;
+  padding: 8px var(--gutter) 64px;
+}
+.recipient-stage[data-kind="text"] .work-text {
+  padding-top: 32px;
+}
 /* A project fills the stage edge to edge. */
-.recipient-stage .project-view { flex: 1 1 auto; min-height: 420px; border: 0; border-radius: 0; }
-.recipient-stage .project-tree { max-height: none; }
+.recipient-stage .project-view {
+  flex: 1 1 auto;
+  min-height: 420px;
+  border: 0;
+  border-radius: 0;
+}
+.recipient-stage .project-tree {
+  max-height: none;
+}
 /* On the whole screen the work is all there is. */
-.recipient-stage:fullscreen { overflow: auto; }
-.recipient-stage:fullscreen .html-preview, .recipient-stage:fullscreen .project-view { height: 100vh; min-height: 0; }
-.recipient-comments { display: flex; flex: 0 0 360px; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--canvas); overflow: auto; }
+.recipient-stage:fullscreen {
+  overflow: auto;
+}
+.recipient-stage:fullscreen .html-preview,
+.recipient-stage:fullscreen .project-view {
+  height: 100vh;
+  min-height: 0;
+}
+.recipient-comments {
+  display: flex;
+  flex: 0 0 360px;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--canvas);
+  overflow: auto;
+}
 
 /* Denied: no hint whether a work ever existed here. */
-.recipient-denied { max-width: 620px; margin: 0 auto; padding: 72px var(--gutter) 96px; }
-.recipient-denied h1 { font-size: clamp(28px, 3vw, 36px); }
-.recipient-request { display: grid; gap: 8px; width: 100%; margin-top: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); text-align: left; }
-.recipient-request strong { color: var(--ink); font-size: var(--text-md); }
-.recipient-request small { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.recipient-request .copy-text { margin-top: 6px; }
-.recipient-explore { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink-2); font-size: var(--text-base); }
-.recipient-explore:hover { color: var(--accent); }
-.recipient-explore svg { width: 18px; height: 18px; }
-.recipient-review p { max-width: 52ch; }
-.recipient-review-hint { color: var(--muted); }
+.recipient-denied {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 72px var(--gutter) 96px;
+}
+.recipient-denied h1 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+.recipient-request {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--soft-3);
+  text-align: left;
+}
+.recipient-request strong {
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+.recipient-request small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.recipient-request .copy-text {
+  margin-top: 6px;
+}
+.recipient-explore {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--ink-2);
+  font-size: var(--text-base);
+}
+.recipient-explore:hover {
+  color: var(--accent);
+}
+.recipient-explore svg {
+  width: 18px;
+  height: 18px;
+}
+.recipient-review p {
+  max-width: 52ch;
+}
+.recipient-review-hint {
+  color: var(--muted);
+}
 
 @media (max-width: 760px) {
   /* Under the app shell the sticky header takes 60px; the tab bar is padding on the shell. */
-  .recipient:not(.app-shell--bare) .recipient-frame { min-height: calc(100dvh - 60px); }
-  .recipient-topbar-row { padding-left: var(--gutter-mobile); padding-right: var(--gutter-mobile); }
-  .recipient-stage .html-preview { min-height: 360px; }
-  .recipient-stage .html-preview-toolbar { padding: 4px var(--gutter-mobile); gap: 4px 6px; }
-  .recipient-stage[data-kind="text"] { padding: 4px var(--gutter-mobile) 48px; }
-  .recipient-denied { padding: 40px var(--gutter-mobile) 64px; }
+  .recipient:not(.app-shell--bare) .recipient-frame {
+    min-height: calc(100dvh - 60px);
+  }
+  .recipient-topbar-row {
+    padding-left: var(--gutter-mobile);
+    padding-right: var(--gutter-mobile);
+  }
+  .recipient-stage .html-preview {
+    min-height: 360px;
+  }
+  .recipient-stage .html-preview-toolbar {
+    padding: 4px var(--gutter-mobile);
+    gap: 4px 6px;
+  }
+  .recipient-stage[data-kind="text"] {
+    padding: 4px var(--gutter-mobile) 48px;
+  }
+  .recipient-denied {
+    padding: 40px var(--gutter-mobile) 64px;
+  }
   /* The note wraps as text; the link home follows it in the flow. */
   /* A short note and «Сделано на Полке» share a line; a long one takes the line and the link goes under it, from the left edge. */
-  .recipient-topbar-row--note { flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding-bottom: 8px; }
-  .recipient-note { flex: 0 1 auto; }
-  .recipient-note-line { display: inline; }
-  .recipient-note-line > svg { display: inline-block; vertical-align: -3px; margin-right: 4px; }
-  .recipient-note-more { margin: 0 0 0 2px; vertical-align: -2px; }
-  .recipient-made { display: inline-block; align-self: baseline; margin: 0; }
-  .recipient-note-details { padding-left: 0; }
+  .recipient-topbar-row--note {
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding-bottom: 8px;
+  }
+  .recipient-note {
+    flex: 0 1 auto;
+  }
+  .recipient-note-line {
+    display: inline;
+  }
+  .recipient-note-line > svg {
+    display: inline-block;
+    vertical-align: -3px;
+    margin-right: 4px;
+  }
+  .recipient-note-more {
+    margin: 0 0 0 2px;
+    vertical-align: -2px;
+  }
+  .recipient-made {
+    display: inline-block;
+    align-self: baseline;
+    margin: 0;
+  }
+  .recipient-note-details {
+    padding-left: 0;
+  }
   /* The comments rail becomes a bottom sheet. */
-  .recipient-comments { position: fixed; inset: auto 0 0; z-index: 70; flex: none; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }
+  .recipient-comments {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 70;
+    flex: none;
+    max-height: 60dvh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-lg);
+  }
 }
 @media (max-width: 560px) {
-  .report-button > span, .recipient-fullscreen > span, .recipient-note-more > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .recipient-topbar-actions .ui-button { min-width: 36px; padding: 6px 8px; }
+  .report-button > span,
+  .recipient-fullscreen > span,
+  .recipient-note-more > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .recipient-topbar-actions .ui-button {
+    min-width: 36px;
+    padding: 6px 8px;
+  }
 }

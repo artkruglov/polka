@@ -37,22 +37,15 @@ export async function rescanPhishingSignals(revision: Row): Promise<string[] | n
       )
     ).rows;
     const collector = new SignalCollector();
-    if (
-      revision.mime === "text/html" &&
-      !files.some((file) => file.object_key === revision.object_key)
-    )
-      for (const signal of await page(revision.object_key, revision.object_version))
-        collector.add(signal);
+    if (revision.mime === "text/html" && !files.some((file) => file.object_key === revision.object_key))
+      for (const signal of await page(revision.object_key, revision.object_version)) collector.add(signal);
     const scripts: string[] = [];
     for (const file of files)
       if (file.mime === "text/html")
-        for (const signal of await page(file.object_key, file.object_version))
-          collector.add(signal);
-      else
-        scripts.push((await readBlob(file.object_key, file.object_version)).toString("utf8"));
+        for (const signal of await page(file.object_key, file.object_version)) collector.add(signal);
+      else scripts.push((await readBlob(file.object_key, file.object_version)).toString("utf8"));
     // Off the main thread with a deadline, as at saving (html.ts).
-    if (scripts.length)
-      for (const signal of (await scanScriptsBounded(scripts)).signals) collector.add(signal);
+    if (scripts.length) for (const signal of (await scanScriptsBounded(scripts)).signals) collector.add(signal);
     return collector.list().slice(0, MAX_SIGNALS);
   } catch {
     return null;

@@ -21,12 +21,7 @@ type StoredFile = {
 };
 
 /** The work, the version (the latest by default) and where its files are. */
-async function locate(
-  c: PoolClient,
-  actor: ServiceActor,
-  artifactId: string,
-  revisionId?: string,
-) {
+async function locate(c: PoolClient, actor: ServiceActor, artifactId: string, revisionId?: string) {
   await assertArtifactInAgentScope(
     c,
     { id: actor.accountId, tenant: actor.tenantId, connectionId: actor.connectionId },
@@ -41,10 +36,11 @@ async function locate(
   if (!artifact) throw missing();
   const {
     rows: [revision],
-  } = await c.query(
-    "SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-    [revisionId ?? artifact.latest_revision_id, artifactId, actor.tenantId],
-  );
+  } = await c.query("SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+    revisionId ?? artifact.latest_revision_id,
+    artifactId,
+    actor.tenantId,
+  ]);
   if (!revision) throw missing();
   return { artifact, revision, ...(await storedRevisionFiles(c, revision)) };
 }
@@ -80,18 +76,9 @@ export async function storedRevisionFiles(c: Pick<PoolClient, "query">, revision
   return { files, entrypoint, runtime };
 }
 
-export function workFilesForAgent(
-  actor: ServiceActor,
-  artifactId: string,
-  revisionId?: string,
-) {
+export function workFilesForAgent(actor: ServiceActor, artifactId: string, revisionId?: string) {
   return withServiceActorTransaction(actor, "source:read", async (c, verified) => {
-    const { artifact, revision, files, entrypoint, runtime } = await locate(
-      c,
-      verified,
-      artifactId,
-      revisionId,
-    );
+    const { artifact, revision, files, entrypoint, runtime } = await locate(c, verified, artifactId, revisionId);
     return {
       artifactId,
       title: artifact.title as string,
@@ -112,12 +99,7 @@ export function workFilesForAgent(
 }
 
 /** One file's bytes, checked against the version's record of it. */
-export async function workFileForAgent(
-  actor: ServiceActor,
-  artifactId: string,
-  revisionId: string,
-  index: number,
-) {
+export async function workFileForAgent(actor: ServiceActor, artifactId: string, revisionId: string, index: number) {
   const file = await withServiceActorTransaction(
     actor,
     "source:read",
@@ -131,11 +113,9 @@ export async function workFileForAgent(
 export async function readStoredFile(file: StoredFile) {
   // A video is streamed, never held whole; its size and SHA-256 were checked
   // against the store's record when it was saved (the CLI checks it again).
-  if (isVideoMime(file.mime))
-    return { ...file, stream: await readStream(file.objectKey, file.objectVersion) };
+  if (isVideoMime(file.mime)) return { ...file, stream: await readStream(file.objectKey, file.objectVersion) };
   const bytes = await readBlob(file.objectKey, file.objectVersion);
-  if (bytes.length !== file.size || sha256(bytes) !== file.sha256)
-    throw new Error("Revision file checksum mismatch");
+  if (bytes.length !== file.size || sha256(bytes) !== file.sha256) throw new Error("Revision file checksum mismatch");
   return { ...file, bytes };
 }
 
@@ -157,22 +137,12 @@ const TEXT_FILE_MIMES = new Set([
  * UTF-8, anything else as base64, at most READ_FILE_MAX_BYTES (the MCP reply
  * must stay small). The file is checked against the version's record of it.
  */
-export async function readWorkFileByPath(
-  actor: ServiceActor,
-  artifactId: string,
-  path: string,
-  revisionId?: string,
-) {
+export async function readWorkFileByPath(actor: ServiceActor, artifactId: string, path: string, revisionId?: string) {
   const listing = await workFilesForAgent(actor, artifactId, revisionId);
   const entry = listing.files.find((file) => file.path === path);
-  if (!entry)
-    throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
+  if (!entry) throw new Problem(404, "not_found", `В версии нет файла ${JSON.stringify(path)}.`);
   if (isVideoMime(entry.mime))
-    throw new Problem(
-      422,
-      "unsupported",
-      "Видео не читается через чат: скачайте его через polka pull или HTTP API.",
-    );
+    throw new Problem(422, "unsupported", "Видео не читается через чат: скачайте его через polka pull или HTTP API.");
   if (entry.size > READ_FILE_MAX_BYTES)
     throw new Problem(
       413,
@@ -180,8 +150,7 @@ export async function readWorkFileByPath(
       `Файл ${entry.size} байт, через чат читается не больше ${READ_FILE_MAX_BYTES}. Скачайте его через polka pull или GET /api/v1/works/:id/revisions/:rev/files/:index.`,
     );
   const file = await workFileForAgent(actor, artifactId, listing.revisionId, entry.index);
-  if (!("bytes" in file))
-    throw new Problem(422, "unsupported", "Файл нельзя прочитать целиком через чат.");
+  if (!("bytes" in file)) throw new Problem(422, "unsupported", "Файл нельзя прочитать целиком через чат.");
   let encoding: "utf8" | "base64" = "base64";
   let data = file.bytes.toString("base64");
   if (TEXT_FILE_MIMES.has(file.mime)) {

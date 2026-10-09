@@ -60,9 +60,7 @@ function database(options: { oid?: string; versions?: number[] } = {}) {
           rows: [{ database_name: "polka", database_oid: options.oid ?? "42" }],
         };
       return {
-        rows: (options.versions ?? EXPECTED_MIGRATION_VERSIONS).map(
-          (version) => ({ version }),
-        ),
+        rows: (options.versions ?? EXPECTED_MIGRATION_VERSIONS).map((version) => ({ version })),
       };
     },
   };

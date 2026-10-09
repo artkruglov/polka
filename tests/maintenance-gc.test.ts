@@ -3,18 +3,9 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { cleanupEmailChallengesInTransaction } from "../apps/server/email-maintenance.ts";
-import {
-  runMaintenanceCli,
-  runMaintenanceOnce,
-} from "../scripts/maintenance-cli.ts";
-import {
-  createMaintenanceDatabase,
-  type MaintenanceDatabase,
-} from "../scripts/maintenance-adapters.ts";
-import type {
-  MaintenanceObjectPage,
-  MaintenanceObjectStore,
-} from "../scripts/maintenance-cleanup.ts";
+import { runMaintenanceCli, runMaintenanceOnce } from "../scripts/maintenance-cli.ts";
+import { createMaintenanceDatabase, type MaintenanceDatabase } from "../scripts/maintenance-adapters.ts";
+import type { MaintenanceObjectPage, MaintenanceObjectStore } from "../scripts/maintenance-cleanup.ts";
 
 type Fixture = {
   tenantId: string;
@@ -49,8 +40,7 @@ class FakeDatabase extends EventEmitter implements MaintenanceDatabase {
   }
   async query(sql: string) {
     this.calls.push(sql);
-    if (sql.includes("pg_try_advisory_lock"))
-      return { rows: [{ locked: this.options.locked ?? true }] };
+    if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: this.options.locked ?? true }] };
     if (sql.includes("SELECT id,tenant_id FROM uploads"))
       return {
         rows:
@@ -97,8 +87,7 @@ class FakeDatabase extends EventEmitter implements MaintenanceDatabase {
           },
         ],
       };
-    if (sql.includes("SELECT id,delivery FROM login_challenges"))
-      return { rows: [] };
+    if (sql.includes("SELECT id,delivery FROM login_challenges")) return { rows: [] };
     return { rows: [] };
   }
   release(force?: boolean) {
@@ -109,9 +98,7 @@ class FakeDatabase extends EventEmitter implements MaintenanceDatabase {
   }
 }
 
-function versionPage(
-  versions: Array<{ key: string; versionId: string }>,
-): MaintenanceObjectPage {
+function versionPage(versions: Array<{ key: string; versionId: string }>): MaintenanceObjectPage {
   return {
     versions,
     deleteMarkers: [],
@@ -166,26 +153,14 @@ test("one guarded run reconciles exact upload and derivative versions before com
     { key: uploadKey, versionId: `${uploadKey}-version` },
     { key: derivativeKey, versionId: `${derivativeKey}-version` },
   ]);
-  const uploadUpdate = database.calls.findIndex((sql) =>
-    sql.includes("UPDATE uploads"),
-  );
-  const derivativeUpdate = database.calls.findIndex((sql) =>
-    sql.includes("UPDATE revision_derivatives"),
-  );
+  const uploadUpdate = database.calls.findIndex((sql) => sql.includes("UPDATE uploads"));
+  const derivativeUpdate = database.calls.findIndex((sql) => sql.includes("UPDATE revision_derivatives"));
   assert.ok(uploadUpdate > -1 && derivativeUpdate > uploadUpdate);
   // Candidates, upload, derivative, idle provisional shelves, the sweep.
   assert.equal(database.calls.filter((sql) => sql === "COMMIT").length, 6);
   // The privacy policy keeps a report for one year.
-  assert.ok(
-    database.calls.includes(
-      "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
-    ),
-  );
-  assert.ok(
-    database.calls.includes(
-      "DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'",
-    ),
-  );
+  assert.ok(database.calls.includes("DELETE FROM share_reports WHERE created_at<now()-interval '1 year'"));
+  assert.ok(database.calls.includes("DELETE FROM enterprise_requests WHERE created_at<now()-interval '1 year'"));
   // Usage analytics: raw events and active days for 13 months, and those of
   // deleted accounts (the fake database has none); the counters stay.
   for (const sql of [
@@ -309,8 +284,7 @@ test("email transaction checks cancellation after unlink and before metadata del
       {
         async query(statement) {
           sql.push(statement);
-          if (statement.includes("SELECT id,delivery"))
-            return { rows: [{ id: randomUUID(), delivery: "local" }] };
+          if (statement.includes("SELECT id,delivery")) return { rows: [{ id: randomUUID(), delivery: "local" }] };
           return { rows: [] };
         },
       },
@@ -362,8 +336,7 @@ test("missing object VersionId fails before delete or reconciliation commit", as
   const database = new FakeDatabase({ derivative: false });
   const key = `${database.fixture.tenantId}/${database.fixture.uploadId}`;
   const objects = store({});
-  objects.storage.listVersions = async () =>
-    versionPage([{ key, versionId: "null" }]);
+  objects.storage.listVersions = async () => versionPage([{ key, versionId: "null" }]);
   const result = await runMaintenanceOnce({
     database,
     storage: objects.storage,

@@ -7,11 +7,7 @@ import { parseAccountPurgeConfig } from "./account-purge-config.ts";
 import { createAccountPurgeAdapters } from "./account-purge-adapters.ts";
 
 type PurgeEvent = {
-  event:
-    | "account_purge.started"
-    | "account_purge.completed"
-    | "account_purge.failed"
-    | "account_purge.skipped";
+  event: "account_purge.started" | "account_purge.completed" | "account_purge.failed" | "account_purge.skipped";
   reason?: "busy" | "deadline" | "stopping" | "guard_lost" | "setup" | "run";
   durationMs?: number;
   counters?: AccountPurgeCounters;
@@ -72,8 +68,7 @@ export async function runAccountPurgeCli(
 ) {
   const started = performance.now();
   const deadlineMs = Math.min(dependencies.deadlineMs ?? 60_000, 60_000);
-  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0)
-    throw new Error("Invalid purge deadline");
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) throw new Error("Invalid purge deadline");
   const emit = dependencies.emit ?? ((event: PurgeEvent) => console.log(JSON.stringify(event)));
   const safeEmit = (event: PurgeEvent) => {
     try {
@@ -105,16 +100,9 @@ export async function runAccountPurgeCli(
     const config = parseAccountPurgeConfig(dependencies.env ?? process.env);
     adapters = dependencies.createAdapters?.() ?? createAccountPurgeAdapters(config);
     await adapters.database.connect();
-    const identity = await adapters.database.query(
-      "SELECT current_user AS current_user,session_user AS session_user",
-    );
-    const expectedWorker = decodeURIComponent(
-      new URL(config.MAINTENANCE_DATABASE_URL).username,
-    );
-    if (
-      identity.rows?.[0]?.current_user !== expectedWorker ||
-      identity.rows?.[0]?.session_user !== expectedWorker
-    )
+    const identity = await adapters.database.query("SELECT current_user AS current_user,session_user AS session_user");
+    const expectedWorker = decodeURIComponent(new URL(config.MAINTENANCE_DATABASE_URL).username);
+    if (identity.rows?.[0]?.current_user !== expectedWorker || identity.rows?.[0]?.session_user !== expectedWorker)
       throw new Error("Purge database identity mismatch");
     if (controller.signal.aborted) throw new Error("Purge stopped before guard");
     const pending = runAccountPurgeOnce({
@@ -136,12 +124,7 @@ export async function runAccountPurgeCli(
     } else {
       safeEmit({
         event: "account_purge.failed",
-        reason:
-          result.state === "guard_lost"
-            ? "guard_lost"
-            : result.state === "aborted"
-              ? (reason ?? "run")
-              : "run",
+        reason: result.state === "guard_lost" ? "guard_lost" : result.state === "aborted" ? (reason ?? "run") : "run",
         durationMs,
       });
     }

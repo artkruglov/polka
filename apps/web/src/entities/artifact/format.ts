@@ -1,24 +1,16 @@
-import type {
-  Artifact,
-  Revision,
-} from "../../../../../packages/contracts/index.ts";
+import type { Artifact, Revision } from "../../../../../packages/contracts/index.ts";
 import { LINK_MIME } from "../../../../../packages/contracts/constants.ts";
-export const date = (s: string) =>
-  new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+export const date = (s: string) => new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 export const size = (n: number) =>
-  n < 1024
-    ? `${n} Б`
-    : n < 1024 * 1024
-      ? `${Math.round(n / 1024)} КБ`
-      : `${(n / 1024 / 1024).toFixed(1)} МБ`;
+  n < 1024 ? `${n} Б` : n < 1024 * 1024 ? `${Math.round(n / 1024)} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
 export const status = (a: Artifact) =>
   a.share?.moderation === "blocked"
     ? "Заблокировано модератором"
     : a.share && ["active", "behind"].includes(a.share.status)
-    ? a.share.moderation === "held" || a.share.moderation === "paused"
-      ? `Ссылка на проверке · v${a.share.number}`
-      : `По ссылке · v${a.share.number}`
-    : "Только вы";
+      ? a.share.moderation === "held" || a.share.moderation === "paused"
+        ? `Ссылка на проверке · v${a.share.number}`
+        : `По ссылке · v${a.share.number}`
+      : "Только вы";
 /** What the owner is told while a link waits for the Полка moderator. */
 export const moderationNote = (a: Artifact) =>
   a.share?.moderation === "blocked"
@@ -28,15 +20,14 @@ export const moderationNote = (a: Artifact) =>
           : " Обжаловать решение можно у оператора этой установки."
       }`
     : a.share?.moderation === "held"
-    ? `Ссылка на проверке у модератора Полки${since(a.share)}. Получатели увидят работу после одобрения: отправлять ссылку заново не нужно, экран у них обновится сам. Если на аккаунте есть почта, мы напишем о решении.`
-    : a.share?.moderation === "paused"
-      ? `Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки${since(a.share)}. Получатели сейчас видят экран «на проверке».`
-      : null;
-const since = (share: NonNullable<Artifact["share"]>) =>
-  share.reviewSince ? ` с ${dateTime(share.reviewSince)}` : "";
+      ? `Ссылка на проверке у модератора Полки${since(a.share)}. Получатели увидят работу после одобрения: отправлять ссылку заново не нужно, экран у них обновится сам. Если на аккаунте есть почта, мы напишем о решении.`
+      : a.share?.moderation === "paused"
+        ? `Ссылка приостановлена после жалоб получателей и ждёт решения модератора Полки${since(a.share)}. Получатели сейчас видят экран «на проверке».`
+        : null;
+const since = (share: NonNullable<Artifact["share"]>) => (share.reviewSince ? ` с ${dateTime(share.reviewSince)}` : "");
 /** A new link's lifetime, the same in the share dialog and after saving on /bring. */
 export const DEFAULT_LINK_DAYS = 7;
-export const isImage =(r: Revision) => r.mime.startsWith("image/");
+export const isImage = (r: Revision) => r.mime.startsWith("image/");
 /** Mirrors the server: a lone static HTML entrypoint needs no runtime. */
 export const isStaticSingleFileBundle = (r: Revision) =>
   r.storageKind === "bundle" &&
@@ -47,20 +38,18 @@ export const isStaticSingleFileBundle = (r: Revision) =>
 /** A folder of linked pages saved as one work (docs/specs/PROJECTS.md). */
 export const isProject = (r: Partial<Pick<Revision, "storageKind" | "manifest">>) =>
   r.storageKind === "bundle" && r.manifest?.runtime === "project-v1";
-export const kindOf = (
-  r: Pick<Revision, "mime"> & Partial<Pick<Revision, "storageKind" | "manifest">>,
-) =>
+export const kindOf = (r: Pick<Revision, "mime"> & Partial<Pick<Revision, "storageKind" | "manifest">>) =>
   isProject(r)
     ? "Проект"
     : r.mime === "text/markdown"
       ? "Документ"
       : r.mime === "text/html"
-    ? "Страница"
-    : r.mime === "text/plain"
-      ? "Текст"
-      : r.mime === LINK_MIME
-        ? "Ссылка"
-        : "Изображение";
+        ? "Страница"
+        : r.mime === "text/plain"
+          ? "Текст"
+          : r.mime === LINK_MIME
+            ? "Ссылка"
+            : "Изображение";
 export type ProfileView = {
   label: string;
   text: string;
@@ -71,8 +60,7 @@ export type ProfileView = {
 // Describe the saved profile. The separate LivePreview controls determine
 // whether an isolated interactive session is available in this deployment.
 export function profileView(
-  r: Pick<Revision, "mime" | "htmlProfile"> &
-    Partial<Pick<Revision, "inlineBuild" | "storageKind" | "manifest">>,
+  r: Pick<Revision, "mime" | "htmlProfile"> & Partial<Pick<Revision, "inlineBuild" | "storageKind" | "manifest">>,
 ): ProfileView {
   if (isProject(r))
     return {
@@ -127,8 +115,7 @@ export function profileView(
     badge: "Только для владельца",
   };
 }
-export const dateLong = (s: string) =>
-  new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+export const dateLong = (s: string) => new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 export const dateTime = (s: string) =>
   new Date(s).toLocaleString("ru-RU", {
     day: "numeric",
@@ -144,13 +131,11 @@ const times = new Intl.PluralRules("ru");
 export const opensNote = (share: Artifact["share"]) => {
   const opens = share?.opens;
   if (!opens || opens.total === 0) return "Пока никто не открывал ссылку.";
-  const word =
-    ({ one: "раз", few: "раза" } as Record<string, string>)[times.select(opens.total)] ?? "раз";
+  const word = ({ one: "раз", few: "раза" } as Record<string, string>)[times.select(opens.total)] ?? "раз";
   return `Открывали ${opens.total} ${word}${opens.lastOpenedAt ? `, последний раз ${dateTime(opens.lastOpenedAt)}` : ""}. Себя не считаем.`;
 };
 /** Whether an active link exists (a link that is behind still opens). */
-export const isLinked = (a: Pick<Artifact, "share">) =>
-  !!a.share && ["active", "behind"].includes(a.share.status);
+export const isLinked = (a: Pick<Artifact, "share">) => !!a.share && ["active", "behind"].includes(a.share.status);
 /** Short access label for cards and toolbars. */
 export const accessLabel = (a: Pick<Artifact, "share" | "author">) =>
   isLinked(a) ? "Доступно по ссылке" : a.author ? "Участники полки" : "Только я";

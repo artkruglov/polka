@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  AgentConnection,
-  Artifact,
-} from "../../../../../packages/contracts/index.ts";
+import type { AgentConnection, Artifact } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
 
 export type Loaded<T> =
-  | { status: "loading"; value: T }
-  | { status: "ready"; value: T }
-  | { status: "error"; value: T; error: string };
+  { status: "loading"; value: T } | { status: "ready"; value: T } | { status: "error"; value: T; error: string };
 
 /**
  * The data behind the first-run steps. Connections are always fetched here;
@@ -42,8 +37,7 @@ export function useFirstRun({
     client.agentConnections
       .list()
       .then((list) => {
-        if (current === generation.current)
-          setConnections({ status: "ready", value: list });
+        if (current === generation.current) setConnections({ status: "ready", value: list });
       })
       .catch((e: Error) => {
         if (current === generation.current)
@@ -58,12 +52,10 @@ export function useFirstRun({
     client
       .shelf("", null)
       .then((page) => {
-        if (current === generation.current)
-          setOwnWorks({ status: "ready", value: page.items });
+        if (current === generation.current) setOwnWorks({ status: "ready", value: page.items });
       })
       .catch((e: Error) => {
-        if (current === generation.current)
-          setOwnWorks((s) => ({ status: "error", value: s.value, error: e.message }));
+        if (current === generation.current) setOwnWorks((s) => ({ status: "error", value: s.value, error: e.message }));
       });
   }, [selfLoads]);
 

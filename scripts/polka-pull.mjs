@@ -177,7 +177,9 @@ async function main() {
     return;
   }
   // An id, or the work's address on the shelf (…/works/<id>).
-  const artifactId = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?(?:[?#].*)?$/i.exec(positionals[0])?.[1];
+  const artifactId = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?(?:[?#].*)?$/i.exec(
+    positionals[0],
+  )?.[1];
   if (!artifactId) throw new CliError(`${positionals[0]} is not a work id or a work address.`, 2);
   const token = process.env.POLKA_TOKEN;
   if (!token) throw new CliError("Set POLKA_TOKEN (Полка → Агенты).", 2);
@@ -255,14 +257,18 @@ async function main() {
   else {
     console.log(`Pulled «${version.title}» v${version.number}: ${targets.length} files into ${root}`);
     if (overwritten.length)
-      console.log(`Replaced ${overwritten.length} local file(s) that differed: ${overwritten.slice(0, 10).join(", ")}${overwritten.length > 10 ? ", …" : ""}`);
+      console.log(
+        `Replaced ${overwritten.length} local file(s) that differed: ${overwritten.slice(0, 10).join(", ")}${overwritten.length > 10 ? ", …" : ""}`,
+      );
     if (!result.latest) console.log("This is not the latest version: a new version made from it would be refused.");
     if (version.runtime === "project-v1")
-      console.log("Change the files, then publish the folder with polka-publish-project.mjs: it saves the next version.");
+      console.log(
+        "Change the files, then publish the folder with polka-publish-project.mjs: it saves the next version.",
+      );
   }
 }
 
 main().catch((error) => {
-  console.error(error instanceof CliError ? error.message : error?.stack ?? String(error));
+  console.error(error instanceof CliError ? error.message : (error?.stack ?? String(error)));
   process.exitCode = error instanceof CliError ? error.code : 1;
 });

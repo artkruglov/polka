@@ -8,10 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PricingPlans } from "../apps/web/src/pages/pricing/plans.tsx";
 import { LegalLinks } from "../apps/web/src/widgets/navigation/index.tsx";
 import { isAppPage } from "../packages/contracts/app-routes.ts";
-import {
-  SOURCE_LICENSE,
-  SOURCE_URL,
-} from "../apps/web/src/shared/lib/project-links.ts";
+import { SOURCE_LICENSE, SOURCE_URL } from "../apps/web/src/shared/lib/project-links.ts";
 
 const render = (element: React.ReactElement) => renderToStaticMarkup(element);
 const read = (path: string) => readFileSync(path, "utf8");
@@ -33,9 +30,7 @@ test("every page shell offers the source code and the page for companies", () =>
   const html = render(React.createElement(LegalLinks));
   // Before /api/capabilities answers, the upstream repository is the link.
   assert.ok(
-    html.includes(
-      `<a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">Открытый код на GitHub</a>`,
-    ),
+    html.includes(`<a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">Открытый код на GitHub</a>`),
   );
   assert.match(html, /<a href="\/enterprise">Для компаний<\/a>/);
   // The pages outside AppShell carry the footer themselves.
@@ -46,11 +41,7 @@ test("every page shell offers the source code and the page for companies", () =>
 test("/pricing: the cloud, self-hosting the open core under the AGPL and the commercial edition", () => {
   const html = render(React.createElement(PricingPlans));
   assert.equal((html.match(/<article>/g) ?? []).length, 3);
-  for (const heading of [
-    "Облако polochka.app",
-    "Своя установка",
-    "Коммерческая редакция",
-  ])
+  for (const heading of ["Облако polochka.app", "Своя установка", "Коммерческая редакция"])
     assert.ok(html.includes(`<h2>${heading}</h2>`), heading);
   assert.match(html, /Бесплатно на время пилота/);
   assert.match(html, /Бесплатно по AGPL-3\.0/);

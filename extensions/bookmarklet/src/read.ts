@@ -13,26 +13,19 @@ import type {
 import { captureCopy } from "../../chrome/src/extract/copy-capture.ts";
 import { captureDownload } from "../../chrome/src/extract/download-capture.ts";
 import { inspectPage } from "../../chrome/src/extract/inspect.ts";
-import {
-  cleanTitle,
-  pickBest,
-  publishBody,
-  type Extracted,
-} from "../../chrome/src/shared/payload.ts";
+import { cleanTitle, pickBest, publishBody, type Extracted } from "../../chrome/src/shared/payload.ts";
 
 export type Read = { source: BookmarkletSource } | { failure: BookmarkletFailure };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A file name's extension as a language hint: page.jsx → jsx (as save.ts). */
-const extensionOf = (name: string | null) =>
-  /\.([a-z0-9]+)$/i.exec(name ?? "")?.[1]?.toLowerCase() ?? null;
+const extensionOf = (name: string | null) => /\.([a-z0-9]+)$/i.exec(name ?? "")?.[1]?.toLowerCase() ?? null;
 
 /** The extension's publish shape, as the bookmark's message. */
 function asSource(extracted: Extracted): BookmarkletSource {
   const body = publishBody(extracted, "");
-  const language: BookmarkletLanguage =
-    "html" in body ? "html" : body.componentLanguage;
+  const language: BookmarkletLanguage = "html" in body ? "html" : body.componentLanguage;
   return {
     url: location.href,
     title: body.title,

@@ -23,8 +23,7 @@ import { bucket, s3, sha256 } from "../apps/server/storage.ts";
 import { parseRange } from "../apps/server/project-viewer.ts";
 import { bundleManifestSchema } from "../packages/contracts/bundle.ts";
 
-if (!config.HTML_LIVE_ENABLED)
-  throw new Error("Run project-video.test.ts with HTML_LIVE_ENABLED=true");
+if (!config.HTML_LIVE_ENABLED) throw new Error("Run project-video.test.ts with HTML_LIVE_ENABLED=true");
 
 (config as { VIEWER_AUTH_CACHE_SECONDS: number }).VIEWER_AUTH_CACHE_SECONDS = 0;
 const app = await createApp();
@@ -52,7 +51,13 @@ const manifestOf = (files: Array<{ path: string; mime: string; bytes: Buffer }>)
   entrypoint: "README.md",
   runtime: "project-v1",
   files: files.map((f) => ({ path: f.path, mime: f.mime, size: f.bytes.length, sha256: hashOf(f.bytes) })),
-  provenance: { kind: "file", sourceUrl: null, capturedAt: new Date().toISOString(), attribution: "unknown", license: "unknown" },
+  provenance: {
+    kind: "file",
+    sourceUrl: null,
+    capturedAt: new Date().toISOString(),
+    attribution: "unknown",
+    license: "unknown",
+  },
   dependencies: { status: "unknown", unresolved: [] },
 });
 const project = (clip = CLIP) => [
@@ -127,7 +132,12 @@ async function issue(revisionId: string) {
 
 before(async () => {
   owner = await createAccount(`video-${randomBytes(5).toString("hex")}`, password);
-  const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: owner.name, password } });
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: owner.name, password },
+  });
   cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
   secret = randomBytes(32).toString("base64url");
   await db.query(
@@ -169,9 +179,16 @@ test("the manifest takes video only in a project, in its own size class", () => 
   assert.throws(() => bundleManifestSchema.parse(manifest([doc, clip(200 * 1024 * 1024 + 1)])));
   assert.throws(() => bundleManifestSchema.parse(manifest([doc, clip(1, "video/quicktime")])));
   // Not a project: no video, and the usual 5 MiB.
-  assert.throws(() => bundleManifestSchema.parse(manifest([{ ...doc, mime: "text/html" }, clip(10)], "preserved-only-v1")));
+  assert.throws(() =>
+    bundleManifestSchema.parse(manifest([{ ...doc, mime: "text/html" }, clip(10)], "preserved-only-v1")),
+  );
   // Together, videos are bounded.
-  const two = [doc, clip(200 * 1024 * 1024), { ...clip(200 * 1024 * 1024), path: "b.mp4" }, { ...clip(1), path: "c.mp4" }];
+  const two = [
+    doc,
+    clip(200 * 1024 * 1024),
+    { ...clip(200 * 1024 * 1024), path: "b.mp4" },
+    { ...clip(1), path: "c.mp4" },
+  ];
   assert.throws(() => bundleManifestSchema.parse(manifest(two)));
   // Other files keep 5 MiB.
   assert.throws(() => bundleManifestSchema.parse(manifest([{ ...doc, size: 6 * 1024 * 1024 }])));
@@ -212,7 +229,12 @@ test("a video that is not the file the manifest names leaves nothing in the stor
   // A page is not sent as a stream.
   assert.equal((await putMedia(uploadId, 0, README)).statusCode, 415);
   // Without the connection's token nothing is read.
-  const anonymous = await app.inject({ method: "PUT", url: `/api/v1/projects/${uploadId}/media/${index}`, headers: { "content-type": "application/octet-stream" }, payload: CLIP });
+  const anonymous = await app.inject({
+    method: "PUT",
+    url: `/api/v1/projects/${uploadId}/media/${index}`,
+    headers: { "content-type": "application/octet-stream" },
+    payload: CLIP,
+  });
   assert.equal(anonymous.statusCode, 401);
   // A refusal ends the connection rather than reading on through a 200 MB body.
   assert.equal(anonymous.headers.connection, "close");
@@ -222,13 +244,24 @@ test("a video that is not the file the manifest names leaves nothing in the stor
 });
 
 test("a project with a video is saved, counted, played in ranges and taken down again", async () => {
-  const before = Number((await db.query("SELECT used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0].used_bytes);
+  const before = Number(
+    (await db.query("SELECT used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0].used_bytes,
+  );
   const saved = await save();
-  const { rows: [revision] } = await db.query("SELECT total_size FROM revisions WHERE id=$1", [saved.revisionId]);
+  const {
+    rows: [revision],
+  } = await db.query("SELECT total_size FROM revisions WHERE id=$1", [saved.revisionId]);
   assert.equal(Number(revision.total_size), README.length + CLIP.length);
-  const after = Number((await db.query("SELECT used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0].used_bytes);
+  const after = Number(
+    (await db.query("SELECT used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0].used_bytes,
+  );
   assert.equal(after - before, README.length + CLIP.length);
-  const { rows: [file] } = await db.query("SELECT object_key,object_version,size FROM revision_files WHERE revision_id=$1 AND path='intro.mp4'", [saved.revisionId]);
+  const {
+    rows: [file],
+  } = await db.query(
+    "SELECT object_key,object_version,size FROM revision_files WHERE revision_id=$1 AND path='intro.mp4'",
+    [saved.revisionId],
+  );
   assert.equal(Number(file.size), CLIP.length);
 
   const url = await issue(saved.revisionId);
@@ -280,7 +313,11 @@ test("a project with a video is saved, counted, played in ranges and taken down 
   assert.equal(pulled.statusCode, 200);
   assert.equal(pulled.headers["x-polka-sha256"], hashOf(CLIP));
   assert.ok(pulled.rawPayload.equals(CLIP));
-  const source = await app.inject({ method: "GET", url: `/api/revisions/${saved.revisionId}/export`, headers: { origin, cookie } });
+  const source = await app.inject({
+    method: "GET",
+    url: `/api/revisions/${saved.revisionId}/export`,
+    headers: { origin, cookie },
+  });
   assert.equal(source.statusCode, 422, source.body);
 
   // A new version keeps the video by reference: it is copied in the store, not sent.
@@ -288,12 +325,17 @@ test("a project with a video is saved, counted, played in ranges and taken down 
   next[0] = { ...next[0]!, bytes: Buffer.from("# Игра\n\nНовая версия.\n") };
   const begun = await begin(next, { artifactId: saved.artifactId, baseRevisionId: saved.revisionId });
   assert.equal(begun.statusCode, 200, begun.body);
-  const reuse = await app.inject({ method: "POST", url: `/api/v1/projects/${begun.json().uploadId}/reuse`, headers: { ...auth(), "content-type": "application/json" }, payload: "{}" });
+  const reuse = await app.inject({
+    method: "POST",
+    url: `/api/v1/projects/${begun.json().uploadId}/reuse`,
+    headers: { ...auth(), "content-type": "application/json" },
+    payload: "{}",
+  });
   assert.deepEqual(reuse.json().reused, [1]);
   assert.equal((await putFile(begun.json().uploadId, 0, next[0]!.bytes)).statusCode, 200);
   const done = await finalize(begun.json().uploadId);
   assert.equal(done.statusCode, 200, done.body);
-  const second = await view(await issue(done.json().revisionId) + "intro.mp4", { range: "bytes=100-199" });
+  const second = await view((await issue(done.json().revisionId)) + "intro.mp4", { range: "bytes=100-199" });
   assert.equal(second.statusCode, 206);
   assert.ok(second.rawPayload.equals(CLIP.subarray(100, 200)));
 
@@ -317,7 +359,9 @@ test("sending the same video again is safe, and a small video may come as a plai
   assert.equal((await versionsOf(`${owner.tenant}/${uploadId}/files/1`)).length, 1);
   const tiny = fakeMp4(4096);
   const saved = await save(project(tiny));
-  const { rows: [file] } = await db.query("SELECT size FROM revision_files WHERE revision_id=$1 AND path='intro.mp4'", [saved.revisionId]);
+  const {
+    rows: [file],
+  } = await db.query("SELECT size FROM revision_files WHERE revision_id=$1 AND path='intro.mp4'", [saved.revisionId]);
   assert.equal(Number(file.size), 4096);
 });
 
@@ -327,7 +371,8 @@ test("the command-line tools send a video as a stream and bring it back to disk"
   const node = (script: string, args: string[], env: Record<string, string>) =>
     new Promise<{ code: number; out: string; err: string }>((resolve) => {
       const child = spawn(process.execPath, [script, ...args], { env: { ...process.env, ...env } });
-      let out = "", err = "";
+      let out = "",
+        err = "";
       child.stdout.on("data", (chunk) => (out += chunk));
       child.stderr.on("data", (chunk) => (err += chunk));
       child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
@@ -338,7 +383,10 @@ test("the command-line tools send a video as a stream and bring it back to disk"
   const game = join(scratch, "game");
   await mkdir(game, { recursive: true });
   const clip = fakeMp4(21 * 1024 * 1024);
-  await writeFile(join(game, "index.html"), '<!doctype html><title>Игра</title><video src="intro.mp4" controls></video>');
+  await writeFile(
+    join(game, "index.html"),
+    '<!doctype html><title>Игра</title><video src="intro.mp4" controls></video>',
+  );
   await writeFile(join(game, "intro.mp4"), clip);
   await writeFile(join(game, "too-big.mp4"), Buffer.alloc(0));
   await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
@@ -354,13 +402,19 @@ test("the command-line tools send a video as a stream and bring it back to disk"
     assert.equal(pushed.code, 0, pushed.err);
     const saved = JSON.parse(pushed.out);
     assert.equal(saved.megabytes, 21);
-    assert.deepEqual(saved.skipped.map((item: { path: string }) => item.path), ["too-big.mp4"]);
+    assert.deepEqual(
+      saved.skipped.map((item: { path: string }) => item.path),
+      ["too-big.mp4"],
+    );
     const back = join(scratch, "back");
     const pulled = await node(pull, [saved.artifactId, back, "--json"], env);
     assert.equal(pulled.code, 0, pulled.err);
     assert.ok((await readFile(join(back, "intro.mp4"))).equals(clip));
     // The next version from that folder sends the changed page only.
-    await writeFile(join(back, "index.html"), '<!doctype html><title>Игра 2</title><video src="intro.mp4" controls></video>');
+    await writeFile(
+      join(back, "index.html"),
+      '<!doctype html><title>Игра 2</title><video src="intro.mp4" controls></video>',
+    );
     const next = await node(publish, [back, "--json"], env);
     assert.equal(next.code, 0, next.err);
     assert.equal(JSON.parse(next.out).unchanged, 1);

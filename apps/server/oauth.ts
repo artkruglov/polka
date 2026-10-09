@@ -1,20 +1,8 @@
-import {
-  oauthClientKind,
-  sanitizeSource,
-  trackAgentConnected,
-} from "./analytics.ts";
+import { oauthClientKind, sanitizeSource, trackAgentConnected } from "./analytics.ts";
 import { shelfSummary } from "./account-identities.ts";
-import {
-  createProvisionalShelf,
-  PROVISIONAL_SESSION_SECONDS,
-} from "./provisional.ts";
+import { createProvisionalShelf, PROVISIONAL_SESSION_SECONDS } from "./provisional.ts";
 import { sessionCookie } from "./sign-in-routes.ts";
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
@@ -22,24 +10,14 @@ import {
   getOAuthProtectedResourceMetadataUrl,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-  AGENT_SCOPES,
-  agentScopeSchema,
-  uuid,
-  type AgentScope,
-} from "../../packages/contracts/index.ts";
+import { AGENT_SCOPES, agentScopeSchema, uuid, type AgentScope } from "../../packages/contracts/index.ts";
 import type { Actor } from "./artifacts.ts";
 import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { lockShelf, shelvesOf } from "./shelves.ts";
-import {
-  lockOwner,
-  MAX_ACTIVE_CONNECTIONS,
-  MCP_AUDIENCE,
-  assertScopesFitRole,
-} from "./service-auth.ts";
+import { lockOwner, MAX_ACTIVE_CONNECTIONS, MCP_AUDIENCE, assertScopesFitRole } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 
 /*
@@ -54,11 +32,7 @@ const CODE_TTL_SECONDS = 60;
 const REFRESH_REUSE_GRACE_SECONDS = 60;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
-const AUTH_METHODS = [
-  "none",
-  "client_secret_post",
-  "client_secret_basic",
-] as const;
+const AUTH_METHODS = ["none", "client_secret_post", "client_secret_basic"] as const;
 type AuthMethod = (typeof AUTH_METHODS)[number];
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -70,13 +44,8 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
  */
 export const OAUTH_DEFAULT_SCOPES: readonly AgentScope[] = AGENT_SCOPES;
 export const OAUTH_BROWSER_COOKIE = "polka_oauth";
-export const OAUTH_MACHINE_PATHS = new Set([
-  "/oauth/token",
-  "/oauth/register",
-  "/oauth/revoke",
-]);
-export const PROTECTED_RESOURCE_METADATA_URL =
-  getOAuthProtectedResourceMetadataUrl(new URL(MCP_AUDIENCE));
+export const OAUTH_MACHINE_PATHS = new Set(["/oauth/token", "/oauth/register", "/oauth/revoke"]);
+export const PROTECTED_RESOURCE_METADATA_URL = getOAuthProtectedResourceMetadataUrl(new URL(MCP_AUDIENCE));
 
 const issuer = config.APP_ORIGIN;
 const endpoint = (path: string) => new URL(path, issuer).href;
@@ -122,14 +91,12 @@ class OAuthFailure extends Error {
     super(error);
   }
 }
-const invalidGrant = (
-  description = "The grant is invalid, expired or already used.",
-) => new OAuthFailure("invalid_grant", description);
+const invalidGrant = (description = "The grant is invalid, expired or already used.") =>
+  new OAuthFailure("invalid_grant", description);
 
 const secret = () => randomBytes(32).toString("base64url");
 const sameHash = (a: string, b: string) =>
-  a.length === b.length &&
-  timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+  a.length === b.length && timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
 
 /** Only the canonical MCP endpoint is a valid RFC 8707 resource here. */
 export function acceptedResource(value: string) {
@@ -168,8 +135,7 @@ export function browserExtensionId(redirectUri: string): string | null {
 }
 
 /** An extension listed in BROWSER_EXTENSION_IDS: the official «На Полку». */
-export const officialExtension = (id: string | null) =>
-  !!id && config.BROWSER_EXTENSION_IDS.includes(id);
+export const officialExtension = (id: string | null) => !!id && config.BROWSER_EXTENSION_IDS.includes(id);
 
 /** Exact match; a loopback http redirect may use any port (RFC 8252 §7.3). */
 function redirectMatches(registered: readonly string[], candidate: string) {
@@ -181,34 +147,23 @@ function redirectMatches(registered: readonly string[], candidate: string) {
     return false;
   }
   if (url.protocol !== "http:" || !LOOPBACK.has(url.hostname)) return false;
-  const withoutPort = (value: URL) =>
-    `${value.protocol}//${value.hostname}${value.pathname}${value.search}`;
+  const withoutPort = (value: URL) => `${value.protocol}//${value.hostname}${value.pathname}${value.search}`;
   return registered.some((entry) => {
     const known = new URL(entry);
-    return (
-      known.protocol === "http:" && withoutPort(known) === withoutPort(url)
-    );
+    return known.protocol === "http:" && withoutPort(known) === withoutPort(url);
   });
 }
 
-function withParams(
-  target: string,
-  params: Record<string, string | undefined>,
-) {
+function withParams(target: string, params: Record<string, string | undefined>) {
   const url = new URL(target);
-  for (const [key, value] of Object.entries(params))
-    if (value !== undefined) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(params)) if (value !== undefined) url.searchParams.set(key, value);
   return url.href;
 }
 
 /** Requested scopes the server knows, always with context; none → all. */
 export function offeredScopes(scope: string | undefined): AgentScope[] {
   const known = new Set<AgentScope>(
-    (scope ?? "")
-      .split(" ")
-      .filter((item): item is AgentScope =>
-        (AGENT_SCOPES as readonly string[]).includes(item),
-      ),
+    (scope ?? "").split(" ").filter((item): item is AgentScope => (AGENT_SCOPES as readonly string[]).includes(item)),
   );
   if (!known.size) return [...AGENT_SCOPES];
   known.add("context");
@@ -247,21 +202,89 @@ const RESERVED_NAMES: { words: string[]; hosts: () => string[] }[] = [
 // capital omicron) fold as well.
 const TO_LATIN: Record<string, string> = {
   // Cyrillic
-  а: "a", в: "b", г: "r", д: "d", е: "e", ё: "e", и: "u", к: "k", м: "m",
-  н: "h", о: "o", п: "n", р: "p", с: "c", т: "t", у: "y", х: "x", ь: "b",
-  ѕ: "s", і: "i", ї: "i", ј: "j", ӏ: "l", ԁ: "d", ԛ: "q", ԝ: "w", ү: "y",
+  а: "a",
+  в: "b",
+  г: "r",
+  д: "d",
+  е: "e",
+  ё: "e",
+  и: "u",
+  к: "k",
+  м: "m",
+  н: "h",
+  о: "o",
+  п: "n",
+  р: "p",
+  с: "c",
+  т: "t",
+  у: "y",
+  х: "x",
+  ь: "b",
+  ѕ: "s",
+  і: "i",
+  ї: "i",
+  ј: "j",
+  ӏ: "l",
+  ԁ: "d",
+  ԛ: "q",
+  ԝ: "w",
+  ү: "y",
   һ: "h",
   // Greek
-  α: "a", β: "b", γ: "y", ε: "e", ζ: "z", η: "n", ι: "i", κ: "k", ν: "v",
-  ο: "o", ρ: "p", σ: "o", τ: "t", υ: "u", χ: "x", ω: "w", ϲ: "c", ϳ: "j",
+  α: "a",
+  β: "b",
+  γ: "y",
+  ε: "e",
+  ζ: "z",
+  η: "n",
+  ι: "i",
+  κ: "k",
+  ν: "v",
+  ο: "o",
+  ρ: "p",
+  σ: "o",
+  τ: "t",
+  υ: "u",
+  χ: "x",
+  ω: "w",
+  ϲ: "c",
+  ϳ: "j",
   // Latin letters that look like other Latin letters
-  ı: "i", ɩ: "i", ɑ: "a", ɡ: "g",
+  ı: "i",
+  ɩ: "i",
+  ɑ: "a",
+  ɡ: "g",
 };
 const TO_CYRILLIC: Record<string, string> = {
-  a: "а", b: "в", c: "с", e: "е", h: "н", k: "к", m: "м", n: "п", o: "о",
-  p: "р", r: "г", t: "т", u: "и", x: "х", y: "у", "0": "о",
-  α: "а", β: "в", ε: "е", η: "п", κ: "к", λ: "л", ο: "о", π: "п", ρ: "р",
-  τ: "т", υ: "у", χ: "х", ё: "е",
+  a: "а",
+  b: "в",
+  c: "с",
+  e: "е",
+  h: "н",
+  k: "к",
+  m: "м",
+  n: "п",
+  o: "о",
+  p: "р",
+  r: "г",
+  t: "т",
+  u: "и",
+  x: "х",
+  y: "у",
+  "0": "о",
+  α: "а",
+  β: "в",
+  ε: "е",
+  η: "п",
+  κ: "к",
+  λ: "л",
+  ο: "о",
+  π: "п",
+  ρ: "р",
+  τ: "т",
+  υ: "у",
+  χ: "х",
+  ё: "е",
 };
 /** The Latin skeleton: I, l, 1 and | are one letter, as are O and 0. */
 const latinSkeleton = (value: string) =>
@@ -280,9 +303,7 @@ const cyrillicSkeleton = (value: string) =>
     .replace(/[^а-я]/g, "");
 const RESERVED_SKELETONS = RESERVED_NAMES.map((entry) => ({
   ...entry,
-  skeletons: entry.words.map((word) =>
-    /[а-я]/.test(word) ? cyrillicSkeleton(word) : latinSkeleton(word),
-  ),
+  skeletons: entry.words.map((word) => (/[а-я]/.test(word) ? cyrillicSkeleton(word) : latinSkeleton(word))),
 }));
 
 const onHost = (uri: string, hosts: string[]) => {
@@ -296,8 +317,7 @@ export function vettedClientName(name: string, redirectUris: string[]) {
   const claimed = RESERVED_SKELETONS.find((entry) =>
     entry.skeletons.some((word) => latin.includes(word) || cyrillic.includes(word)),
   );
-  if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts())))
-    return name;
+  if (!claimed || redirectUris.every((uri) => onHost(uri, claimed.hosts()))) return name;
   return unconfirmed(name);
 }
 
@@ -317,9 +337,7 @@ export function vettedExtensionName(name: string, redirectUris: string[]) {
     .replace(/ё/g, "е")
     .replace(/[^a-zа-я]/g, "");
   if (!["наполку", "napolku"].includes(folded)) return name;
-  const official = redirectUris.every((uri) =>
-    officialExtension(browserExtensionId(uri)),
-  );
+  const official = redirectUris.every((uri) => officialExtension(browserExtensionId(uri)));
   return official ? name : unconfirmed(name);
 }
 
@@ -347,10 +365,7 @@ export async function registerClient(body: unknown, ip: string) {
   await limitAttempts("oauth-register:all", REGISTER_LIMITS.perDay, "24 hours");
   const parsed = registrationSchema.safeParse(body);
   if (!parsed.success)
-    throw new OAuthFailure(
-      "invalid_client_metadata",
-      "redirect_uris is required; metadata must be JSON strings.",
-    );
+    throw new OAuthFailure("invalid_client_metadata", "redirect_uris is required; metadata must be JSON strings.");
   const input = parsed.data;
   const redirectUris = [...new Set(input.redirect_uris)];
   if (!redirectUris.every(validRedirectUri))
@@ -361,9 +376,7 @@ export async function registerClient(body: unknown, ip: string) {
   const grantTypes = [...new Set(input.grant_types ?? ["authorization_code"])];
   if (
     !grantTypes.includes("authorization_code") ||
-    grantTypes.some(
-      (grant) => grant !== "authorization_code" && grant !== "refresh_token",
-    )
+    grantTypes.some((grant) => grant !== "authorization_code" && grant !== "refresh_token")
   )
     throw new OAuthFailure(
       "invalid_client_metadata",
@@ -371,13 +384,9 @@ export async function registerClient(body: unknown, ip: string) {
     );
   const responseTypes = input.response_types ?? ["code"];
   if (responseTypes.some((type) => type !== "code"))
-    throw new OAuthFailure(
-      "invalid_client_metadata",
-      "Only the code response type is supported.",
-    );
+    throw new OAuthFailure("invalid_client_metadata", "Only the code response type is supported.");
   // RFC 7591 §2: an omitted method means client_secret_basic.
-  const method = (input.token_endpoint_auth_method ??
-    "client_secret_basic") as AuthMethod;
+  const method = (input.token_endpoint_auth_method ?? "client_secret_basic") as AuthMethod;
   if (!AUTH_METHODS.includes(method))
     throw new OAuthFailure(
       "invalid_client_metadata",
@@ -385,31 +394,19 @@ export async function registerClient(body: unknown, ip: string) {
     );
   const clientId = `pc_${randomBytes(16).toString("base64url")}`;
   const clientSecret = method === "none" ? null : secret();
-  const clientName = vettedExtensionName(
-    vettedClientName(cleanName(input.client_name), redirectUris),
-    redirectUris,
-  );
+  const clientName = vettedExtensionName(vettedClientName(cleanName(input.client_name), redirectUris), redirectUris);
   const {
     rows: [row],
   } = await db.query(
     `INSERT INTO oauth_clients(
        client_id,secret_hash,auth_method,client_name,redirect_uris,grant_types
      ) VALUES($1,$2,$3,$4,$5,$6) RETURNING created_at`,
-    [
-      clientId,
-      clientSecret ? sha256(clientSecret) : null,
-      method,
-      clientName,
-      redirectUris,
-      grantTypes,
-    ],
+    [clientId, clientSecret ? sha256(clientSecret) : null, method, clientName, redirectUris, grantTypes],
   );
   return {
     client_id: clientId,
     client_id_issued_at: Math.floor(new Date(row.created_at).getTime() / 1000),
-    ...(clientSecret
-      ? { client_secret: clientSecret, client_secret_expires_at: 0 }
-      : {}),
+    ...(clientSecret ? { client_secret: clientSecret, client_secret_expires_at: 0 } : {}),
     client_name: clientName,
     redirect_uris: redirectUris,
     grant_types: grantTypes,
@@ -431,26 +428,17 @@ async function findClient(clientId: string | undefined) {
   if (!clientId || !/^pc_[A-Za-z0-9_-]{22}$/.test(clientId)) return null;
   const {
     rows: [client],
-  } = await db.query("SELECT * FROM oauth_clients WHERE client_id=$1", [
-    clientId,
-  ]);
+  } = await db.query("SELECT * FROM oauth_clients WHERE client_id=$1", [clientId]);
   return (client as Client | undefined) ?? null;
 }
 
 /** Client authentication at the token and revocation endpoints. */
-async function authenticateClient(
-  params: Record<string, string>,
-  authorization: string | undefined,
-) {
+async function authenticateClient(params: Record<string, string>, authorization: string | undefined) {
   let clientId = params.client_id;
   let presented = params.client_secret || undefined;
   const basic = /^Basic ([A-Za-z0-9+/=]+)$/i.exec(authorization ?? "");
   if (basic) {
-    if (presented)
-      throw new OAuthFailure(
-        "invalid_request",
-        "Use one client authentication method.",
-      );
+    if (presented) throw new OAuthFailure("invalid_request", "Use one client authentication method.");
     const decoded = Buffer.from(basic[1], "base64").toString("utf8");
     const split = decoded.indexOf(":");
     try {
@@ -459,35 +447,17 @@ async function authenticateClient(
       clientId = basicId;
       presented = decodeURIComponent(decoded.slice(split + 1));
     } catch {
-      throw new OAuthFailure(
-        "invalid_client",
-        "Client authentication failed.",
-        401,
-      );
+      throw new OAuthFailure("invalid_client", "Client authentication failed.", 401);
     }
   }
   const client = await findClient(clientId);
-  if (!client)
-    throw new OAuthFailure(
-      "invalid_client",
-      "Client authentication failed.",
-      401,
-    );
+  if (!client) throw new OAuthFailure("invalid_client", "Client authentication failed.", 401);
   if (client.auth_method === "none") {
-    if (presented)
-      throw new OAuthFailure(
-        "invalid_client",
-        "Client authentication failed.",
-        401,
-      );
+    if (presented) throw new OAuthFailure("invalid_client", "Client authentication failed.", 401);
     return client;
   }
   if (!presented || !sameHash(sha256(presented), client.secret_hash!))
-    throw new OAuthFailure(
-      "invalid_client",
-      "Client authentication failed.",
-      401,
-    );
+    throw new OAuthFailure("invalid_client", "Client authentication failed.", 401);
   return client;
 }
 
@@ -496,13 +466,9 @@ async function authenticateClient(
 
 type AuthorizeOutcome = { location: string; browserToken?: string };
 
-const consentError = (reason: string) =>
-  `/oauth/consent?error=${encodeURIComponent(reason)}`;
+const consentError = (reason: string) => `/oauth/consent?error=${encodeURIComponent(reason)}`;
 
-export async function beginAuthorization(
-  query: Record<string, unknown>,
-  ip: string,
-): Promise<AuthorizeOutcome> {
+export async function beginAuthorization(query: Record<string, unknown>, ip: string): Promise<AuthorizeOutcome> {
   try {
     await limitAttempts(`oauth-authorize:ip:${ip}`, 60);
   } catch {
@@ -533,21 +499,14 @@ export async function beginAuthorization(
     "code_challenge_method",
     "resource",
   ];
-  if (names.some((name) => single(name) === null))
-    return fail("invalid_request");
-  if (single("response_type") !== "code")
-    return fail("unsupported_response_type");
+  if (names.some((name) => single(name) === null)) return fail("invalid_request");
+  if (single("response_type") !== "code") return fail("unsupported_response_type");
   const challenge = single("code_challenge");
-  if (
-    single("code_challenge_method") !== "S256" ||
-    !challenge ||
-    !TOKEN.test(challenge)
-  )
+  if (single("code_challenge_method") !== "S256" || !challenge || !TOKEN.test(challenge))
     return fail("invalid_request");
   if (state && state.length > 2048) return fail("invalid_request");
   const resource = single("resource");
-  if (resource !== undefined && !acceptedResource(resource!))
-    return fail("invalid_target");
+  if (resource !== undefined && !acceptedResource(resource!)) return fail("invalid_target");
   const scope = single("scope");
   if (scope && scope.length > 1000) return fail("invalid_scope");
   const id = randomUUID();
@@ -578,13 +537,8 @@ const expiredRequest = () =>
     "Запрос на подключение устарел или открыт в другом браузере. Начните подключение заново в приложении.",
   );
 
-export async function authorizationDetails(
-  actor: Actor,
-  requestId: string,
-  browserToken: string,
-) {
-  if (!uuid.safeParse(requestId).success || !TOKEN.test(browserToken))
-    throw expiredRequest();
+export async function authorizationDetails(actor: Actor, requestId: string, browserToken: string) {
+  if (!uuid.safeParse(requestId).success || !TOKEN.test(browserToken)) throw expiredRequest();
   const {
     rows: [row],
   } = await db.query(
@@ -619,14 +573,10 @@ export async function authorizationDetails(
       name: row.client_name,
       redirectHost: new URL(row.redirect_uri).host,
       // The consent page names a browser extension as such, not by a host.
-      extension: extensionId
-        ? { id: extensionId, official: officialExtension(extensionId) }
-        : null,
+      extension: extensionId ? { id: extensionId, official: officialExtension(extensionId) } : null,
     },
     scopes,
-    defaultScopes: scopes.filter((scope) =>
-      OAUTH_DEFAULT_SCOPES.includes(scope),
-    ),
+    defaultScopes: scopes.filter((scope) => OAUTH_DEFAULT_SCOPES.includes(scope)),
     accessMinutes: ACCESS_TTL_SECONDS / 60,
     refreshDays: 30,
     maxDays: 365,
@@ -680,22 +630,14 @@ export async function decideAuthorization(
       }),
     });
     if (input.decision === "deny") {
-      await c.query(
-        "UPDATE oauth_authorizations SET status='denied' WHERE id=$1",
-        [row.id],
-      );
+      await c.query("UPDATE oauth_authorizations SET status='denied' WHERE id=$1", [row.id]);
       return answer({
         error: "access_denied",
         error_description: "The owner declined the connection.",
       });
     }
-    const granted = AGENT_SCOPES.filter((scope) =>
-      input.scopes.includes(scope),
-    );
-    if (
-      !granted.includes("context") ||
-      granted.some((scope) => !row.requested_scopes.includes(scope))
-    )
+    const granted = AGENT_SCOPES.filter((scope) => input.scopes.includes(scope));
+    if (!granted.includes("context") || granted.some((scope) => !row.requested_scopes.includes(scope)))
       throw new Problem(
         400,
         "invalid",
@@ -744,24 +686,11 @@ export async function revokeConnectionInTransaction(
     );
 }
 
-const lockOwnerOrInvalidGrant = (
-  c: PoolClient,
-  owner: { account_id: string; tenant_id: string },
-) =>
+const lockOwnerOrInvalidGrant = (c: PoolClient, owner: { account_id: string; tenant_id: string }) =>
   // The connection's shelf, its own or a department's (docs/specs/TEAM_SHELVES.md).
-  lockShelf(
-    c,
-    { id: owner.account_id, tenant: owner.tenant_id },
-    "reader",
-    "UPDATE",
-    () => invalidGrant(),
-  );
+  lockShelf(c, { id: owner.account_id, tenant: owner.tenant_id }, "reader", "UPDATE", () => invalidGrant());
 
-function tokenAnswer(
-  accessToken: string,
-  refreshToken: string | null,
-  scopes: AgentScope[],
-): TokenAnswer {
+function tokenAnswer(accessToken: string, refreshToken: string | null, scopes: AgentScope[]): TokenAnswer {
   return {
     access_token: accessToken,
     token_type: "Bearer",
@@ -771,41 +700,25 @@ function tokenAnswer(
   };
 }
 
-async function exchangeCode(
-  client: Client,
-  params: Record<string, string>,
-): Promise<TokenAnswer> {
+async function exchangeCode(client: Client, params: Record<string, string>): Promise<TokenAnswer> {
   const code = params.code ?? "";
   if (!TOKEN.test(code)) throw invalidGrant();
-  if (!params.redirect_uri)
-    throw new OAuthFailure("invalid_request", "redirect_uri is required.");
+  if (!params.redirect_uri) throw new OAuthFailure("invalid_request", "redirect_uri is required.");
   if (!VERIFIER.test(params.code_verifier ?? ""))
-    throw new OAuthFailure(
-      "invalid_request",
-      "code_verifier must be 43-128 unreserved characters.",
-    );
+    throw new OAuthFailure("invalid_request", "code_verifier must be 43-128 unreserved characters.");
   if (params.resource !== undefined && !acceptedResource(params.resource))
-    throw new OAuthFailure(
-      "invalid_target",
-      `The only resource is ${MCP_AUDIENCE}.`,
-    );
+    throw new OAuthFailure("invalid_target", `The only resource is ${MCP_AUDIENCE}.`);
   const codeHash = sha256(code);
   const {
     rows: [owner],
-  } = await db.query(
-    "SELECT account_id,tenant_id FROM oauth_authorizations WHERE code_hash=$1",
-    [codeHash],
-  );
+  } = await db.query("SELECT account_id,tenant_id FROM oauth_authorizations WHERE code_hash=$1", [codeHash]);
   if (!owner) throw invalidGrant();
   const outcome = await transaction(async (c) => {
     // Owner before authorization row: the same lock order as the consent step.
     await lockOwnerOrInvalidGrant(c, owner);
     const {
       rows: [row],
-    } = await c.query(
-      "SELECT * FROM oauth_authorizations WHERE code_hash=$1 FOR UPDATE",
-      [codeHash],
-    );
+    } = await c.query("SELECT * FROM oauth_authorizations WHERE code_hash=$1 FOR UPDATE", [codeHash]);
     if (!row || row.client_id !== client.client_id) return invalidGrant();
     if (row.status === "consumed") {
       // A replayed code means it leaked: close whatever it produced.
@@ -819,16 +732,12 @@ async function exchangeCode(
     }
     if (row.status !== "approved") return invalidGrant();
     // Any redemption attempt uses the code up, successful or not.
-    await c.query(
-      "UPDATE oauth_authorizations SET status='consumed',consumed_at=clock_timestamp() WHERE id=$1",
-      [row.id],
-    );
-    if (new Date(row.code_expires_at).getTime() <= Date.now())
-      return invalidGrant();
+    await c.query("UPDATE oauth_authorizations SET status='consumed',consumed_at=clock_timestamp() WHERE id=$1", [
+      row.id,
+    ]);
+    if (new Date(row.code_expires_at).getTime() <= Date.now()) return invalidGrant();
     if (params.redirect_uri !== row.redirect_uri) return invalidGrant();
-    const challenge = createHash("sha256")
-      .update(params.code_verifier)
-      .digest("base64url");
+    const challenge = createHash("sha256").update(params.code_verifier).digest("base64url");
     // Both sides are 43-character base64url SHA-256 digests.
     if (
       challenge.length !== row.code_challenge.length ||
@@ -861,8 +770,7 @@ async function exchangeCode(
         "invalid_grant",
         "Too many active agent connections. Revoke one on the Polka agents page.",
       );
-    for (const connection of previous)
-      await revokeConnectionInTransaction(c, connection);
+    for (const connection of previous) await revokeConnectionInTransaction(c, connection);
     const accessToken = secret();
     const connectionId = randomUUID();
     const {
@@ -886,10 +794,7 @@ async function exchangeCode(
         ACCESS_TTL_SECONDS,
       ],
     );
-    await c.query(
-      "UPDATE oauth_authorizations SET connection_id=$2 WHERE id=$1",
-      [row.id, connectionId],
-    );
+    await c.query("UPDATE oauth_authorizations SET connection_id=$2 WHERE id=$1", [row.id, connectionId]);
     // Analytics: an agent connected (a new grant; re-authorising counts
     // again, the report counts accounts). `first`: no earlier connection
     // of this account ever worked.
@@ -901,12 +806,7 @@ async function exchangeCode(
            AND (oauth_client_id IS NOT NULL OR last_seen_at IS NOT NULL)) AS found`,
       [row.tenant_id, connectionId],
     );
-    trackAgentConnected(
-      c,
-      row.account_id,
-      oauthClientKind(client.client_name, client.redirect_uris),
-      !earlier.found,
-    );
+    trackAgentConnected(c, row.account_id, oauthClientKind(client.client_name, client.redirect_uris), !earlier.found);
     await c.query(
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'agent.connection.issued',$3)",
       [row.tenant_id, row.account_id, connectionId],
@@ -935,29 +835,17 @@ async function exchangeCode(
   return outcome;
 }
 
-async function refresh(
-  client: Client,
-  params: Record<string, string>,
-): Promise<TokenAnswer> {
+async function refresh(client: Client, params: Record<string, string>): Promise<TokenAnswer> {
   if (!client.grant_types.includes("refresh_token"))
-    throw new OAuthFailure(
-      "unauthorized_client",
-      "This client did not register the refresh_token grant.",
-    );
+    throw new OAuthFailure("unauthorized_client", "This client did not register the refresh_token grant.");
   const token = params.refresh_token ?? "";
   if (!TOKEN.test(token)) throw invalidGrant();
   if (params.resource !== undefined && !acceptedResource(params.resource))
-    throw new OAuthFailure(
-      "invalid_target",
-      `The only resource is ${MCP_AUDIENCE}.`,
-    );
+    throw new OAuthFailure("invalid_target", `The only resource is ${MCP_AUDIENCE}.`);
   const tokenHash = sha256(token);
   const {
     rows: [owner],
-  } = await db.query(
-    "SELECT account_id,tenant_id FROM oauth_refresh_tokens WHERE token_hash=$1",
-    [tokenHash],
-  );
+  } = await db.query("SELECT account_id,tenant_id FROM oauth_refresh_tokens WHERE token_hash=$1", [tokenHash]);
   if (!owner) throw invalidGrant();
   const outcome = await transaction(async (c) => {
     await lockOwnerOrInvalidGrant(c, owner);
@@ -993,9 +881,7 @@ async function refresh(
         [row.id, REFRESH_REUSE_GRACE_SECONDS],
       );
       if (grace.retry && !row.revoked_at && !row.connection_revoked_at)
-        return invalidGrant(
-          "This refresh token was just rotated; use the tokens from that response.",
-        );
+        return invalidGrant("This refresh token was just rotated; use the tokens from that response.");
       // Reuse of a rotated refresh token: assume theft and end the grant.
       await revokeConnectionInTransaction(c, {
         id: row.connection_id,
@@ -1012,20 +898,9 @@ async function refresh(
     )
       return invalidGrant();
     const scopes = row.scopes as AgentScope[];
-    if (
-      params.scope !== undefined &&
-      params.scope
-        .split(" ")
-        .some((scope) => !(scopes as string[]).includes(scope))
-    )
-      return new OAuthFailure(
-        "invalid_scope",
-        "A refresh cannot add scopes beyond the original grant.",
-      );
-    await c.query(
-      "UPDATE oauth_refresh_tokens SET rotated_at=clock_timestamp() WHERE id=$1",
-      [row.id],
-    );
+    if (params.scope !== undefined && params.scope.split(" ").some((scope) => !(scopes as string[]).includes(scope)))
+      return new OAuthFailure("invalid_scope", "A refresh cannot add scopes beyond the original grant.");
+    await c.query("UPDATE oauth_refresh_tokens SET rotated_at=clock_timestamp() WHERE id=$1", [row.id]);
     const accessToken = secret();
     const refreshToken = secret();
     // The refresh window slides with use but never past one year.
@@ -1058,37 +933,23 @@ async function refresh(
   return outcome;
 }
 
-export async function tokenRequest(
-  params: Record<string, string>,
-  authorization: string | undefined,
-  ip: string,
-) {
+export async function tokenRequest(params: Record<string, string>, authorization: string | undefined, ip: string) {
   // Platforms exchange codes from shared addresses: only failed client
   // authentication counts per address alone. A known client is capped per
   // address too: a public client is known to everyone, so a cap on the client
   // alone would let a stranger spend it for every user of that client.
-  const client = await authenticateClient(params, authorization).catch(
-    async (error) => {
-      await limitAttempts(`oauth-token:ip:${ip}`, 300);
-      throw error;
-    },
-  );
+  const client = await authenticateClient(params, authorization).catch(async (error) => {
+    await limitAttempts(`oauth-token:ip:${ip}`, 300);
+    throw error;
+  });
   await limitAttempts(`oauth-token:client:${client.client_id}:${ip}`, 300);
-  if (params.grant_type === "authorization_code")
-    return exchangeCode(client, params);
+  if (params.grant_type === "authorization_code") return exchangeCode(client, params);
   if (params.grant_type === "refresh_token") return refresh(client, params);
-  throw new OAuthFailure(
-    "unsupported_grant_type",
-    "Supported grants: authorization_code, refresh_token.",
-  );
+  throw new OAuthFailure("unsupported_grant_type", "Supported grants: authorization_code, refresh_token.");
 }
 
 /** RFC 7009: revoking either token ends the whole grant. */
-export async function revokeRequest(
-  params: Record<string, string>,
-  authorization: string | undefined,
-  ip: string,
-) {
+export async function revokeRequest(params: Record<string, string>, authorization: string | undefined, ip: string) {
   await limitAttempts(`oauth-revoke:ip:${ip}`, 300);
   const client = await authenticateClient(params, authorization);
   const token = params.token ?? "";
@@ -1112,15 +973,9 @@ export async function revokeRequest(
   // revoke takes the same order so the three cannot deadlock each other. The
   // owner need not be active: a disabled owner's grant is still revoked.
   await transaction(async (c) => {
-    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
-      connection.tenant_id,
-    ]);
-    await c.query("SELECT 1 FROM accounts WHERE id=$1 FOR UPDATE", [
-      connection.account_id,
-    ]);
-    await c.query("SELECT id FROM agent_connections WHERE id=$1 FOR UPDATE", [
-      connection.id,
-    ]);
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [connection.tenant_id]);
+    await c.query("SELECT 1 FROM accounts WHERE id=$1 FOR UPDATE", [connection.account_id]);
+    await c.query("SELECT id FROM agent_connections WHERE id=$1 FOR UPDATE", [connection.id]);
     await revokeConnectionInTransaction(c, connection);
   });
 }
@@ -1144,18 +999,13 @@ function formParams(req: FastifyRequest) {
   if (type !== "application/x-www-form-urlencoded") return null;
   const body = req.body;
   if (!(body instanceof FormBody) || body.duplicate) return null;
-  return Object.values(body.params).every((value) => typeof value === "string")
-    ? body.params
-    : null;
+  return Object.values(body.params).every((value) => typeof value === "string") ? body.params : null;
 }
 
 function sendFailure(reply: FastifyReply, error: unknown) {
   if (error instanceof OAuthFailure) {
-    if (error.status === 401)
-      reply.header("www-authenticate", 'Basic realm="polka"');
-    return reply
-      .code(error.status)
-      .send({ error: error.error, error_description: error.description });
+    if (error.status === 401) reply.header("www-authenticate", 'Basic realm="polka"');
+    return reply.code(error.status).send({ error: error.error, error_description: error.description });
   }
   if (error instanceof Problem && error.status === 429) {
     if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
@@ -1174,27 +1024,18 @@ function sendFailure(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
-const browserCookie = (req: FastifyRequest) =>
-  req.cookies[OAUTH_BROWSER_COOKIE] ?? "";
+const browserCookie = (req: FastifyRequest) => req.cookies[OAUTH_BROWSER_COOKIE] ?? "";
 
 export async function registerOAuthRoutes(app: FastifyInstance) {
   const discovery = { "access-control-allow-origin": "*" };
-  for (const path of [
-    "/.well-known/oauth-protected-resource",
-    new URL(PROTECTED_RESOURCE_METADATA_URL).pathname,
-  ])
-    app.get(path, async (_req, reply) =>
-      reply.headers(discovery).send(protectedResourceMetadata()),
-    );
+  for (const path of ["/.well-known/oauth-protected-resource", new URL(PROTECTED_RESOURCE_METADATA_URL).pathname])
+    app.get(path, async (_req, reply) => reply.headers(discovery).send(protectedResourceMetadata()));
   app.get("/.well-known/oauth-authorization-server", async (_req, reply) =>
     reply.headers(discovery).send(authorizationServerMetadata()),
   );
 
   app.get("/oauth/authorize", async (req, reply) => {
-    const outcome = await beginAuthorization(
-      (req.query ?? {}) as Record<string, unknown>,
-      req.ip,
-    );
+    const outcome = await beginAuthorization((req.query ?? {}) as Record<string, unknown>, req.ip);
     if (outcome.browserToken)
       reply.setCookie(OAUTH_BROWSER_COOKIE, outcome.browserToken, {
         httpOnly: true,
@@ -1209,83 +1050,61 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
   // «Начать без регистрации» (provisional.ts): a shelf for this browser,
   // only while it has a real pending connection request of its own (the
   // request's browser cookie) and only from a page of Полка (Origin).
-  app.post(
-    "/oauth/authorize/provisional",
-    { bodyLimit: 2048 },
-    async (req, reply) => {
-      const input = z
-        .object({
-          request: uuid,
-          source: z
-            .object({
-              ref: z.string().max(200).optional(),
-              referrer: z.string().max(300).optional(),
-            })
-            .strict()
-            .optional(),
-        })
-        .strict()
-        .parse(req.body);
-      const signedIn = await identity(req).then(
-        () => true,
-        () => false,
-      );
-      if (signedIn)
-        throw new Problem(
-          409,
-          "conflict",
-          "Этот браузер уже вошёл в полку. Обновите страницу.",
-        );
-      await limitAttempts(`provisional-ip:${req.ip}`, 10, "1 hour");
-      const browserToken = browserCookie(req);
-      if (!TOKEN.test(browserToken)) throw expiredRequest();
-      const pending = await db.query(
-        `SELECT 1 FROM oauth_authorizations
+  app.post("/oauth/authorize/provisional", { bodyLimit: 2048 }, async (req, reply) => {
+    const input = z
+      .object({
+        request: uuid,
+        source: z
+          .object({
+            ref: z.string().max(200).optional(),
+            referrer: z.string().max(300).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .parse(req.body);
+    const signedIn = await identity(req).then(
+      () => true,
+      () => false,
+    );
+    if (signedIn) throw new Problem(409, "conflict", "Этот браузер уже вошёл в полку. Обновите страницу.");
+    await limitAttempts(`provisional-ip:${req.ip}`, 10, "1 hour");
+    const browserToken = browserCookie(req);
+    if (!TOKEN.test(browserToken)) throw expiredRequest();
+    const pending = await db.query(
+      `SELECT 1 FROM oauth_authorizations
           WHERE id=$1 AND browser_hash=$2 AND status='pending'
             AND expires_at>now()`,
-        [input.request, sha256(browserToken)],
-      );
-      if (!pending.rowCount) throw expiredRequest();
-      // One provisional shelf per connection request.
-      await limitAttempts(`provisional-request:${input.request}`, 1, "24 hours");
-      const shelf = await createProvisionalShelf(
-        req.ip,
-        sanitizeSource(input.source ?? null),
-      );
-      reply.setCookie(
-        "polka_session",
-        shelf.session,
-        sessionCookie(PROVISIONAL_SESSION_SECONDS),
-      );
-      return { ok: true };
-    },
-  );
+      [input.request, sha256(browserToken)],
+    );
+    if (!pending.rowCount) throw expiredRequest();
+    // One provisional shelf per connection request.
+    await limitAttempts(`provisional-request:${input.request}`, 1, "24 hours");
+    const shelf = await createProvisionalShelf(req.ip, sanitizeSource(input.source ?? null));
+    reply.setCookie("polka_session", shelf.session, sessionCookie(PROVISIONAL_SESSION_SECONDS));
+    return { ok: true };
+  });
   app.get("/oauth/authorize/details", async (req) => {
     const actor = await identity(req);
-    const { request } = z
-      .object({ request: z.string().max(64) })
-      .parse(req.query);
+    const { request } = z.object({ request: z.string().max(64) }).parse(req.query);
     return authorizationDetails(actor, request, browserCookie(req));
   });
   // Browser-only: the global Origin check, session and CSRF token all apply.
-  app.post(
-    "/oauth/authorize/decision",
-    { bodyLimit: 4096 },
-    async (req, reply) => {
-      const actor = await identity(req);
-      // Granting an agent needs a real sign-in, not an agent's link.
-      assertStrongSession(actor);
-      const result = await decideAuthorization(
-        actor,
-        req.cookies.polka_session ?? "",
-        String(req.headers["x-polka-csrf"] ?? ""),
-        browserCookie(req),
-        req.body,
-      );
-      reply.clearCookie(OAUTH_BROWSER_COOKIE, { path: "/oauth" });
-      return result;
-    },
-  );
+  app.post("/oauth/authorize/decision", { bodyLimit: 4096 }, async (req, reply) => {
+    const actor = await identity(req);
+    // Granting an agent needs a real sign-in, not an agent's link.
+    assertStrongSession(actor);
+    const result = await decideAuthorization(
+      actor,
+      req.cookies.polka_session ?? "",
+      String(req.headers["x-polka-csrf"] ?? ""),
+      browserCookie(req),
+      req.body,
+    );
+    reply.clearCookie(OAUTH_BROWSER_COOKIE, { path: "/oauth" });
+    return result;
+  });
 
   // Machine endpoints: called server-to-server by the connector platform. They
   // read no cookies, so the global browser Origin check does not apply.
@@ -1303,29 +1122,20 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
         done(null, new FormBody(params, duplicate));
       },
     );
-    machine.post(
-      "/oauth/register",
-      { bodyLimit: 16 * 1024 },
-      async (req, reply) => {
-        try {
-          return reply.code(201).send(await registerClient(req.body, req.ip));
-        } catch (error) {
-          return sendFailure(reply, error);
-        }
-      },
-    );
+    machine.post("/oauth/register", { bodyLimit: 16 * 1024 }, async (req, reply) => {
+      try {
+        return reply.code(201).send(await registerClient(req.body, req.ip));
+      } catch (error) {
+        return sendFailure(reply, error);
+      }
+    });
     machine.post("/oauth/token", async (req, reply) => {
       reply.header("pragma", "no-cache");
       try {
         const params = formParams(req);
         if (!params)
-          throw new OAuthFailure(
-            "invalid_request",
-            "Send one application/x-www-form-urlencoded value per parameter.",
-          );
-        return reply.send(
-          await tokenRequest(params, req.headers.authorization, req.ip),
-        );
+          throw new OAuthFailure("invalid_request", "Send one application/x-www-form-urlencoded value per parameter.");
+        return reply.send(await tokenRequest(params, req.headers.authorization, req.ip));
       } catch (error) {
         return sendFailure(reply, error);
       }
@@ -1334,10 +1144,7 @@ export async function registerOAuthRoutes(app: FastifyInstance) {
       try {
         const params = formParams(req);
         if (!params)
-          throw new OAuthFailure(
-            "invalid_request",
-            "Send one application/x-www-form-urlencoded value per parameter.",
-          );
+          throw new OAuthFailure("invalid_request", "Send one application/x-www-form-urlencoded value per parameter.");
         await revokeRequest(params, req.headers.authorization, req.ip);
         return reply.send({});
       } catch (error) {

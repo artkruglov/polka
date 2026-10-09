@@ -24,23 +24,14 @@ try {
   if (command === "publish") {
     const inputPath = resolve(value("--input"));
     const encoded = await readFile(inputPath);
-    if (encoded.length > 64 * 1024)
-      throw new Error("Editorial manifest exceeds 64 KiB");
-    result = await publishEditorialOperatorInput(
-      { id: owner, tenant },
-      JSON.parse(encoded.toString("utf8")),
-    );
+    if (encoded.length > 64 * 1024) throw new Error("Editorial manifest exceeds 64 KiB");
+    result = await publishEditorialOperatorInput({ id: owner, tenant }, JSON.parse(encoded.toString("utf8")));
   } else {
-    result = await withdrawEditorial(
-      { id: owner, tenant },
-      { publicationId: uuid.parse(value("--publication")) },
-    );
+    result = await withdrawEditorial({ id: owner, tenant }, { publicationId: uuid.parse(value("--publication")) });
   }
   process.stdout.write(`${JSON.stringify(result)}\n`);
 } catch {
-  process.stderr.write(
-    `${JSON.stringify({ event: "editorial.operator.failed", reason: "rejected" })}\n`,
-  );
+  process.stderr.write(`${JSON.stringify({ event: "editorial.operator.failed", reason: "rejected" })}\n`);
   process.exitCode = 1;
 } finally {
   await db.end();

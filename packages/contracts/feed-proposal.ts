@@ -10,11 +10,7 @@ export const createFeedProposalInput = z
   .object({
     revisionId: uuid,
     title: z.string().trim().min(1, "Назовите материал.").max(120, "Название — до 120 символов."),
-    summary: z
-      .string()
-      .trim()
-      .min(1, "Одной строкой: что узнает читатель.")
-      .max(200, "Описание — до 200 символов."),
+    summary: z.string().trim().min(1, "Одной строкой: что узнает читатель.").max(200, "Описание — до 200 символов."),
     // The two confirmations of DISCOVER_V2 §5: the shelf may show it, and it
     // names no one's personal data.
     rights: z.literal(true, { message: "Подтвердите, что отдел может показывать эту работу." }),

@@ -27,7 +27,10 @@ const SITEMAP_PAGES = ["/", "/connect", "/discover", "/enterprise", "/pricing", 
 
 /** sitemap.xml: the public pages and the feed's materials (by slug). */
 export function sitemapXml(origin: string, slugs: string[]) {
-  const urls = [...SITEMAP_PAGES, ...slugs.filter((slug) => /^[a-z0-9-]+$/.test(slug)).map((slug) => `/discover/${slug}`)];
+  const urls = [
+    ...SITEMAP_PAGES,
+    ...slugs.filter((slug) => /^[a-z0-9-]+$/.test(slug)).map((slug) => `/discover/${slug}`),
+  ];
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',

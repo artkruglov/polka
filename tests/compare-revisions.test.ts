@@ -2,11 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  DiffView,
-  lines,
-  MAX_SHOWN_CHANGES,
-} from "../apps/web/src/features/compare-revisions/DiffView.tsx";
+import { DiffView, lines, MAX_SHOWN_CHANGES } from "../apps/web/src/features/compare-revisions/DiffView.tsx";
 import {
   decodeText,
   fileChanges,
@@ -60,8 +56,22 @@ test("a bundle compares its entry point and lists changed files", async () => {
         manifest: { entrypoint: "index.html" },
         manifestSha256: "x",
         files: [
-          { path: "index.html", mime: "text/html", size: 1, sha256: entry, encoding: "base64", data: Buffer.from(`<p>${entry}</p>`).toString("base64") },
-          ...Object.entries(extra).map(([path, sha256]) => ({ path, mime: "text/css", size: 1, sha256, encoding: "base64", data: "" })),
+          {
+            path: "index.html",
+            mime: "text/html",
+            size: 1,
+            sha256: entry,
+            encoding: "base64",
+            data: Buffer.from(`<p>${entry}</p>`).toString("base64"),
+          },
+          ...Object.entries(extra).map(([path, sha256]) => ({
+            path,
+            mime: "text/css",
+            size: 1,
+            sha256,
+            encoding: "base64",
+            data: "",
+          })),
         ],
       }),
     ]);
@@ -97,9 +107,7 @@ test("DiffView: counts, highlighted rows, folded context and honest notes", () =
   assert.match(html, /revision-diff-skip">28 строк без изменений/);
   assert.doesNotMatch(html, /показано не всё/);
 
-  const same = renderToStaticMarkup(
-    React.createElement(DiffView, { from: 1, to: 2, result: diffTexts("a", "a") }),
-  );
+  const same = renderToStaticMarkup(React.createElement(DiffView, { from: 1, to: 2, result: diffTexts("a", "a") }));
   assert.match(same, /исходный код не изменился/);
   assert.doesNotMatch(same, /revision-diff-row/);
 

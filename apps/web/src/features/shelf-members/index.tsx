@@ -1,11 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Building2, ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
-import {
-  client,
-  type Shelf,
-  type ShelfMember,
-} from "../../shared/api/client.ts";
+import { client, type Shelf, type ShelfMember } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Avatar, Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
 import { ROLE_HINT, ROLE_LABEL, loadShelves, switchShelf } from "../../entities/shelf/model.ts";
@@ -53,8 +49,12 @@ export function CreateShelfPanel({ onClose }: { onClose: () => void }) {
           <ErrorNotice error={error} />
         </div>
         <div className="dialog-footer">
-          <Button onClick={onClose} disabled={busy}>Отмена</Button>
-          <Button variant="primary" type="submit" busy={busy}>Создать полку</Button>
+          <Button onClick={onClose} disabled={busy}>
+            Отмена
+          </Button>
+          <Button variant="primary" type="submit" busy={busy}>
+            Создать полку
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -206,10 +206,16 @@ export function ShelfMembersPanel({
         {(role === "admin" || role === "curator") && (
           <ShelfInviteLinks shelfId={shelf.id} inviter={role} accountId={accountId} />
         )}
-        {notice && <p className="shelf-members-notice" role="status">{notice}</p>}
+        {notice && (
+          <p className="shelf-members-notice" role="status">
+            {notice}
+          </p>
+        )}
         <ErrorNotice error={error} />
         {members === null ? (
-          <p className="shelf-members-lead" role="status">Загружаем участников…</p>
+          <p className="shelf-members-lead" role="status">
+            Загружаем участников…
+          </p>
         ) : (
           <ul className="shelf-members-list" aria-label="Участники полки">
             {members.map((member) => (
@@ -234,7 +240,9 @@ export function ShelfMembersPanel({
                     }
                   >
                     {ROLES.map((r) => (
-                      <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                      <option key={r} value={r}>
+                        {ROLE_LABEL[r]}
+                      </option>
                     ))}
                   </select>
                 ) : (
@@ -276,7 +284,9 @@ export function ShelfMembersPanel({
             Покинуть полку
           </Button>
         )}
-        <Button variant="primary" onClick={onClose} disabled={busy}>Готово</Button>
+        <Button variant="primary" onClick={onClose} disabled={busy}>
+          Готово
+        </Button>
       </div>
     </Dialog>
   );
@@ -316,7 +326,12 @@ export function ShelfSwitcher({
       ? [
           { id: "create", label: "Новая полка отдела", icon: <Plus />, onSelect: onCreate },
           // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4).
-          { id: "company", label: "Полки компании", icon: <Building2 />, onSelect: () => location.assign("/settings/company") },
+          {
+            id: "company",
+            label: "Полки компании",
+            icon: <Building2 />,
+            onSelect: () => location.assign("/settings/company"),
+          },
         ]
       : []),
   ];

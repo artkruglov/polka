@@ -30,10 +30,7 @@ export async function lockTeamShelf(c: PoolClient, shelfId: string) {
   if (config.TEAM_SHELVES !== "on") throw missing();
   const {
     rows: [shelf],
-  } = await c.query(
-    `SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`,
-    [shelfId],
-  );
+  } = await c.query(`SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`, [shelfId]);
   if (!shelf) throw missing();
   return shelf as { id: string; name: string };
 }
@@ -71,8 +68,7 @@ export function roleOf(
 }
 
 const adminOnly = (role: ShelfRole) => {
-  if (role !== "admin")
-    throw new Problem(403, "forbidden", "Участниками полки управляет её администратор.");
+  if (role !== "admin") throw new Problem(403, "forbidden", "Участниками полки управляет её администратор.");
 };
 
 async function ensureAnotherAdmin(c: PoolClient, shelfId: string, accountId: string) {
@@ -86,11 +82,7 @@ async function ensureAnotherAdmin(c: PoolClient, shelfId: string, accountId: str
     [shelfId, accountId],
   );
   if (!rowCount)
-    throw new Problem(
-      409,
-      "conflict",
-      "На полке должен остаться администратор. Сначала назначьте другого.",
-    );
+    throw new Problem(409, "conflict", "На полке должен остаться администратор. Сначала назначьте другого.");
 }
 
 const event = (
@@ -145,10 +137,10 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
     // answer which addresses and logins exist. Rechecked under lock below.
     const {
       rows: [asker],
-    } = await c.query(
-      "SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'",
-      [shelfId, actor.id],
-    );
+    } = await c.query("SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'", [
+      shelfId,
+      actor.id,
+    ]);
     if (!asker) throw missing();
     adminOnly(asker.role);
     const found = await c.query(
@@ -170,8 +162,7 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
     adminOnly(roleOf(memberships, active, actor.id));
     if (!active.has(target.id)) throw missing();
     const existing = memberships.get(target.id);
-    if (existing?.state === "active")
-      throw new Problem(409, "conflict", `${target.name} уже на этой полке.`);
+    if (existing?.state === "active") throw new Problem(409, "conflict", `${target.name} уже на этой полке.`);
     await c.query(
       `INSERT INTO tenant_members(tenant_id,account_id,role,invited_by)
        VALUES($1,$2,$3,$4)
@@ -185,12 +176,7 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
   });
 }
 
-export async function changeShelfMemberRole(
-  actor: Actor,
-  shelfId: string,
-  accountId: string,
-  body: unknown,
-) {
+export async function changeShelfMemberRole(actor: Actor, shelfId: string, accountId: string, body: unknown) {
   const { role } = z.object({ role: roleSchema }).strict().parse(body);
   return transaction(async (c) => {
     await lockTeamShelf(c, shelfId);
@@ -201,10 +187,7 @@ export async function changeShelfMemberRole(
     if (!target || target.state !== "active") throw missing();
     if (target.role === role) return { accountId, role };
     if (target.role === "admin") await ensureAnotherAdmin(c, shelfId, accountId);
-    await c.query(
-      "UPDATE tenant_members SET role=$3 WHERE tenant_id=$1 AND account_id=$2",
-      [shelfId, accountId, role],
-    );
+    await c.query("UPDATE tenant_members SET role=$3 WHERE tenant_id=$1 AND account_id=$2", [shelfId, accountId, role]);
     await event(c, shelfId, actor, "member_role_changed", accountId, target.role, role);
     return { accountId, role };
   });
@@ -213,8 +196,7 @@ export async function changeShelfMemberRole(
 /** An admin removes a member, or a member leaves. The works stay on the shelf. */
 export async function revokeShelfMember(actor: Actor, shelfId: string, accountId: string) {
   const result = await revokeShelfMemberInTransaction(actor, shelfId, accountId);
-  if (result.revoked)
-    emitEvent({ type: "member.revoked", tenantId: shelfId, accountId, at: new Date().toISOString() });
+  if (result.revoked) emitEvent({ type: "member.revoked", tenantId: shelfId, accountId, at: new Date().toISOString() });
   return { ok: true };
 }
 
@@ -240,7 +222,10 @@ async function revokeShelfMemberInTransaction(actor: Actor, shelfId: string, acc
 }
 
 export async function renameShelf(actor: Actor, shelfId: string, body: unknown) {
-  const { name: raw } = z.object({ name: z.string().max(200) }).strict().parse(body);
+  const { name: raw } = z
+    .object({ name: z.string().max(200) })
+    .strict()
+    .parse(body);
   const name = teamShelfNameSchema.parse(raw);
   return transaction(async (c) => {
     const shelf = await lockTeamShelf(c, shelfId);

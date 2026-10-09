@@ -6,10 +6,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
-import {
-  BUNDLE_BUILDER_VERSION,
-  BUNDLE_RUNTIME_PROFILE,
-} from "../apps/server/bundle-runtime-contract.ts";
+import { BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE } from "../apps/server/bundle-runtime-contract.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
@@ -28,12 +25,7 @@ let sourceCookie = "";
 let memberCookie = "";
 let outsiderCookie = "";
 
-async function call(
-  method: any,
-  url: string,
-  body?: any,
-  cookie = sourceCookie,
-) {
+async function call(method: any, url: string, body?: any, cookie = sourceCookie) {
   return app.inject({
     method,
     url,
@@ -73,24 +65,17 @@ async function saveHtml(html: string) {
   assert.equal(uploaded.statusCode, 200, uploaded.body);
   const saved = await call("POST", `/api/uploads/${uploadId}/finalize`, {});
   assert.equal(saved.statusCode, 200, saved.body);
-  const pinned = await call(
-    "POST",
-    `/api/artifacts/${saved.json().artifactId}/template-releases`,
-    {
-      revisionId: saved.json().revisionId,
-      summary: "Example",
-      rules: "Keep layout",
-      questions: "",
-    },
-  );
+  const pinned = await call("POST", `/api/artifacts/${saved.json().artifactId}/template-releases`, {
+    revisionId: saved.json().revisionId,
+    summary: "Example",
+    rules: "Keep layout",
+    questions: "",
+  });
   assert.equal(pinned.statusCode, 200, pinned.body);
   return { ...saved.json(), releaseId: pinned.json().releaseId };
 }
 
-const fixtureRoot = new URL(
-  "fixtures/bundle-corpus/team-report/",
-  import.meta.url,
-);
+const fixtureRoot = new URL("fixtures/bundle-corpus/team-report/", import.meta.url);
 const fixtureMimes: Record<string, string> = {
   "index.html": "text/html",
   "assets/mark.svg": "image/svg+xml",
@@ -101,10 +86,7 @@ const fixtureMimes: Record<string, string> = {
 async function saveBundle() {
   const files = new Map(
     await Promise.all(
-      Object.keys(fixtureMimes).map(
-        async (path) =>
-          [path, await readFile(new URL(path, fixtureRoot))] as const,
-      ),
+      Object.keys(fixtureMimes).map(async (path) => [path, await readFile(new URL(path, fixtureRoot))] as const),
     ),
   );
   const manifest = canonicalizeManifest({
@@ -145,22 +127,14 @@ async function saveBundle() {
     });
     assert.equal(uploaded.statusCode, 200, uploaded.body);
   }
-  const saved = await call(
-    "POST",
-    `/api/bundle-uploads/${begun.json().uploadId}/finalize`,
-    {},
-  );
+  const saved = await call("POST", `/api/bundle-uploads/${begun.json().uploadId}/finalize`, {});
   assert.equal(saved.statusCode, 200, saved.body);
-  const release = await call(
-    "POST",
-    `/api/artifacts/${saved.json().artifactId}/template-releases`,
-    {
-      revisionId: saved.json().revisionId,
-      summary: "Interactive library bundle",
-      rules: "Keep exact styling",
-      questions: "",
-    },
-  );
+  const release = await call("POST", `/api/artifacts/${saved.json().artifactId}/template-releases`, {
+    revisionId: saved.json().revisionId,
+    summary: "Interactive library bundle",
+    rules: "Keep exact styling",
+    questions: "",
+  });
   assert.equal(release.statusCode, 200, release.body);
   return { ...saved.json(), releaseId: release.json().releaseId };
 }
@@ -193,8 +167,7 @@ after(async () => {
 });
 
 test("library capabilities serve exact single and ready bundle bytes and expire with authority", async () => {
-  const singleHtml =
-    "<!doctype html><html><body><h1>Member preview</h1></body></html>";
+  const singleHtml = "<!doctype html><html><body><h1>Member preview</h1></body></html>";
   const single = await saveHtml(singleHtml);
   const created = await call("POST", "/api/template-libraries", {
     name: "Viewer library",
@@ -206,42 +179,17 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
      VALUES($1,$2,'reader','2026-09-21 12:34:56.123456+00')`,
     [libraryId, member.id],
   );
-  const published = await call(
-    "POST",
-    `/api/template-libraries/${libraryId}/publications`,
-    { releaseId: single.releaseId },
-  );
+  const published = await call("POST", `/api/template-libraries/${libraryId}/publications`, {
+    releaseId: single.releaseId,
+  });
   assert.equal(published.statusCode, 200, published.body);
   const publicationId = published.json().id;
   const endpoint = `/api/template-libraries/${libraryId}/publications/${publicationId}/live-view`;
   const body = { artifactId: single.artifactId, revisionId: single.revisionId };
 
-  assert.equal(
-    (await call("POST", endpoint, body, outsiderCookie)).statusCode,
-    404,
-  );
-  assert.equal(
-    (
-      await call(
-        "POST",
-        endpoint,
-        { ...body, revisionId: randomUUID() },
-        memberCookie,
-      )
-    ).statusCode,
-    404,
-  );
-  assert.equal(
-    (
-      await call(
-        "POST",
-        endpoint,
-        { ...body, artifactId: randomUUID() },
-        memberCookie,
-      )
-    ).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", endpoint, body, outsiderCookie)).statusCode, 404);
+  assert.equal((await call("POST", endpoint, { ...body, revisionId: randomUUID() }, memberCookie)).statusCode, 404);
+  assert.equal((await call("POST", endpoint, { ...body, artifactId: randomUUID() }, memberCookie)).statusCode, 404);
   const issued = await call("POST", endpoint, body, memberCookie);
   assert.equal(issued.statusCode, 200, issued.body);
   assert.equal(issued.json().status, "ready");
@@ -252,18 +200,9 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   const document = await embedded(tokenPath(issued.json().url));
   assert.equal(document.statusCode, 200, document.body);
   assert.equal(document.body, withViewerGuard(Buffer.from(singleHtml)).toString());
-  assert.match(
-    String(document.headers["content-security-policy"]),
-    /^sandbox allow-scripts allow-forms;/,
-  );
-  assert.match(
-    String(document.headers["content-security-policy"]),
-    /connect-src 'none'/,
-  );
-  assert.match(
-    String(document.headers["content-security-policy"]),
-    new RegExp(`frame-ancestors ${config.APP_ORIGIN}`),
-  );
+  assert.match(String(document.headers["content-security-policy"]), /^sandbox allow-scripts allow-forms;/);
+  assert.match(String(document.headers["content-security-policy"]), /connect-src 'none'/);
+  assert.match(String(document.headers["content-security-policy"]), new RegExp(`frame-ancestors ${config.APP_ORIGIN}`));
   assert.equal(
     (
       await viewer.inject({
@@ -288,38 +227,18 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
 
   const expireGrant = await call("POST", endpoint, body, memberCookie);
   const memberSession = sha256(memberCookie.split("=")[1]!);
-  await db.query(
-    "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE hash=$1",
-    [memberSession],
-  );
-  assert.equal(
-    (await embedded(tokenPath(expireGrant.json().url))).statusCode,
-    404,
-  );
-  await db.query(
-    "UPDATE sessions SET expires_at=now()+interval '1 day' WHERE hash=$1",
-    [memberSession],
-  );
+  await db.query("UPDATE sessions SET expires_at=now()-interval '1 second' WHERE hash=$1", [memberSession]);
+  assert.equal((await embedded(tokenPath(expireGrant.json().url))).statusCode, 404);
+  await db.query("UPDATE sessions SET expires_at=now()+interval '1 day' WHERE hash=$1", [memberSession]);
 
   const trashGrant = await call("POST", endpoint, body, memberCookie);
-  await db.query(
-    "UPDATE artifacts SET trashed_at=clock_timestamp() WHERE id=$1",
-    [single.artifactId],
-  );
-  assert.equal(
-    (await embedded(tokenPath(trashGrant.json().url))).statusCode,
-    404,
-  );
-  await db.query("UPDATE artifacts SET trashed_at=NULL WHERE id=$1", [
-    single.artifactId,
-  ]);
+  await db.query("UPDATE artifacts SET trashed_at=clock_timestamp() WHERE id=$1", [single.artifactId]);
+  assert.equal((await embedded(tokenPath(trashGrant.json().url))).statusCode, 404);
+  await db.query("UPDATE artifacts SET trashed_at=NULL WHERE id=$1", [single.artifactId]);
 
   const disabledGrant = await call("POST", endpoint, body, memberCookie);
   await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [source.id]);
-  assert.equal(
-    (await embedded(tokenPath(disabledGrant.json().url))).statusCode,
-    404,
-  );
+  assert.equal((await embedded(tokenPath(disabledGrant.json().url))).statusCode, 404);
   await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [source.id]);
 
   const bundleArtifact = randomUUID(),
@@ -330,10 +249,11 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   const sourceBytes = Buffer.from("bundle source placeholder");
   const sourceKey = `${source.tenant}/library-viewer/${bundleRevision}/source`;
   const sourceVersion = await putImmutable(sourceKey, sourceBytes);
-  await db.query(
-    `INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Bundle template')`,
-    [bundleArtifact, source.tenant, source.id],
-  );
+  await db.query(`INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Bundle template')`, [
+    bundleArtifact,
+    source.tenant,
+    source.id,
+  ]);
   await db.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
        object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
@@ -359,23 +279,11 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
   await db.query(
     `INSERT INTO template_library_publications(id,library_id,release_id,artifact_id,revision_id,publisher_id)
      VALUES($1,$2,$3,$4,$5,$6)`,
-    [
-      bundlePublication,
-      libraryId,
-      bundleRelease,
-      bundleArtifact,
-      bundleRevision,
-      source.id,
-    ],
+    [bundlePublication, libraryId, bundleRelease, bundleArtifact, bundleRevision, source.id],
   );
   const bundleEndpoint = `/api/template-libraries/${libraryId}/publications/${bundlePublication}/live-view`;
   const bundleBody = { artifactId: bundleArtifact, revisionId: bundleRevision };
-  const unprepared = await call(
-    "POST",
-    bundleEndpoint,
-    bundleBody,
-    memberCookie,
-  );
+  const unprepared = await call("POST", bundleEndpoint, bundleBody, memberCookie);
   assert.equal(unprepared.statusCode, 409, unprepared.body);
   assert.deepEqual(unprepared.json(), {
     status: "preparation_required",
@@ -385,9 +293,7 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
 
   const derivativeId = randomUUID(),
     attemptId = randomUUID();
-  const bundleHtml = Buffer.from(
-    "<!doctype html><html><body>Exact bundle derivative</body></html>",
-  );
+  const bundleHtml = Buffer.from("<!doctype html><html><body>Exact bundle derivative</body></html>");
   const derivativeKey = `${source.tenant}/derivatives/${derivativeId}/${attemptId}.html`;
   const derivativeVersion = await putImmutable(derivativeKey, bundleHtml);
   await db.query(
@@ -408,12 +314,7 @@ test("library capabilities serve exact single and ready bundle bytes and expire 
       derivativeVersion,
     ],
   );
-  const bundleIssued = await call(
-    "POST",
-    bundleEndpoint,
-    bundleBody,
-    memberCookie,
-  );
+  const bundleIssued = await call("POST", bundleEndpoint, bundleBody, memberCookie);
   assert.equal(bundleIssued.statusCode, 200, bundleIssued.body);
   assert.equal(bundleIssued.json().profile, BUNDLE_RUNTIME_PROFILE);
   const bundleDocument = await embedded(tokenPath(bundleIssued.json().url));
@@ -433,44 +334,26 @@ test("a member prepares an exact published bundle against source quota and opens
      VALUES($1,$2,'reader')`,
     [libraryId, member.id],
   );
-  const published = await call(
-    "POST",
-    `/api/template-libraries/${libraryId}/publications`,
-    { releaseId: saved.releaseId },
-  );
+  const published = await call("POST", `/api/template-libraries/${libraryId}/publications`, {
+    releaseId: saved.releaseId,
+  });
   assert.equal(published.statusCode, 200, published.body);
   const publicationId = published.json().id;
   const endpoint = `/api/template-libraries/${libraryId}/publications/${publicationId}`;
   const body = { artifactId: saved.artifactId, revisionId: saved.revisionId };
   const sourceBefore = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        source.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [source.tenant])).rows[0]
+      .derivative_used_bytes,
   );
   const memberBefore = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        member.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [member.tenant])).rows[0]
+      .derivative_used_bytes,
   );
 
+  assert.equal((await call("POST", `${endpoint}/prepare-live-view`, body, outsiderCookie)).statusCode, 404);
   assert.equal(
-    (await call("POST", `${endpoint}/prepare-live-view`, body, outsiderCookie))
+    (await call("POST", `${endpoint}/prepare-live-view`, { ...body, revisionId: randomUUID() }, memberCookie))
       .statusCode,
-    404,
-  );
-  assert.equal(
-    (
-      await call(
-        "POST",
-        `${endpoint}/prepare-live-view`,
-        { ...body, revisionId: randomUUID() },
-        memberCookie,
-      )
-    ).statusCode,
     404,
   );
 
@@ -484,46 +367,27 @@ test("a member prepares an exact published bundle against source quota and opens
   );
   assert.ok(prepared.some((response) => response.statusCode === 202));
   assert.ok(prepared.some((response) => response.json().state === "ready"));
-  const derivative = (
-    await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [
-      saved.revisionId,
-    ])
-  ).rows[0];
+  const derivative = (await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [saved.revisionId]))
+    .rows[0];
   assert.equal(derivative.state, "ready");
   assert.equal(derivative.tenant_id, source.tenant);
-  assert.match(
-    derivative.object_key,
-    new RegExp(`^${source.tenant}/derivatives/`),
-  );
+  assert.match(derivative.object_key, new RegExp(`^${source.tenant}/derivatives/`));
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT derivative_used_bytes FROM tenants WHERE id=$1",
-          [source.tenant],
-        )
-      ).rows[0].derivative_used_bytes,
+      (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [source.tenant])).rows[0]
+        .derivative_used_bytes,
     ),
     sourceBefore + derivative.size,
   );
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT derivative_used_bytes FROM tenants WHERE id=$1",
-          [member.tenant],
-        )
-      ).rows[0].derivative_used_bytes,
+      (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [member.tenant])).rows[0]
+        .derivative_used_bytes,
     ),
     memberBefore,
   );
 
-  const issued = await call(
-    "POST",
-    `${endpoint}/live-view`,
-    body,
-    memberCookie,
-  );
+  const issued = await call("POST", `${endpoint}/live-view`, body, memberCookie);
   assert.equal(issued.statusCode, 200, issued.body);
   const document = await embedded(tokenPath(issued.json().url));
   assert.equal(document.statusCode, 200, document.body);
@@ -531,12 +395,7 @@ test("a member prepares an exact published bundle against source quota and opens
   assert.equal(document.body.split(VIEWER_GUARD).length, 2);
   assert.equal(sha256(Buffer.from(document.body.replace(VIEWER_GUARD, ""))), derivative.sha256);
 
-  const ownerBuild = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/build-inline`,
-    {},
-    sourceCookie,
-  );
+  const ownerBuild = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {}, sourceCookie);
   assert.equal(ownerBuild.statusCode, 200, ownerBuild.body);
   assert.equal(ownerBuild.json().state, "ready");
 
@@ -545,11 +404,7 @@ test("a member prepares an exact published bundle against source quota and opens
      WHERE library_id=$1 AND account_id=$2 AND state='active'`,
     [libraryId, member.id],
   );
-  assert.equal(
-    (await call("POST", `${endpoint}/prepare-live-view`, body, memberCookie))
-      .statusCode,
-    404,
-  );
+  assert.equal((await call("POST", `${endpoint}/prepare-live-view`, body, memberCookie)).statusCode, 404);
 });
 
 test("revocation during a build leaves only an expiring attempt that maintenance makes retryable", async () => {
@@ -563,11 +418,9 @@ test("revocation during a build leaves only an expiring attempt that maintenance
      VALUES($1,$2,'reader')`,
     [libraryId, member.id],
   );
-  const published = await call(
-    "POST",
-    `/api/template-libraries/${libraryId}/publications`,
-    { releaseId: saved.releaseId },
-  );
+  const published = await call("POST", `/api/template-libraries/${libraryId}/publications`, {
+    releaseId: saved.releaseId,
+  });
   const publicationId = published.json().id;
   const endpoint = `/api/template-libraries/${libraryId}/publications/${publicationId}/prepare-live-view`;
   const body = { artifactId: saved.artifactId, revisionId: saved.revisionId };
@@ -597,11 +450,8 @@ test("revocation during a build leaves only an expiring attempt that maintenance
     },
   );
   await bytesWereRead;
-  const pending = (
-    await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [
-      saved.revisionId,
-    ])
-  ).rows[0];
+  const pending = (await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1", [saved.revisionId]))
+    .rows[0];
   assert.equal(pending.state, "pending");
   await db.query(
     `UPDATE template_library_members SET state='revoked',revoked_at=clock_timestamp()
@@ -611,32 +461,23 @@ test("revocation during a build leaves only an expiring attempt that maintenance
   continueBuild();
   await assert.rejects(request, (error: any) => error?.status === 404);
   const residue = (
-    await db.query(
-      "SELECT state,attempt_expires_at,object_key FROM revision_derivatives WHERE id=$1",
-      [pending.id],
-    )
+    await db.query("SELECT state,attempt_expires_at,object_key FROM revision_derivatives WHERE id=$1", [pending.id])
   ).rows[0];
   assert.equal(residue.state, "pending");
   assert.ok(residue.attempt_expires_at);
   assert.equal(residue.object_key, null);
 
-  await db.query(
-    "UPDATE revision_derivatives SET attempt_expires_at=now()-interval '1 second' WHERE id=$1",
-    [pending.id],
-  );
-  const maintenance = spawnSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"],
-    { cwd: process.cwd(), encoding: "utf8" },
-  );
+  await db.query("UPDATE revision_derivatives SET attempt_expires_at=now()-interval '1 second' WHERE id=$1", [
+    pending.id,
+  ]);
+  const maintenance = spawnSync(process.execPath, ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
   assert.equal(maintenance.status, 0, maintenance.stderr);
   assert.equal(
-    (
-      await db.query(
-        "SELECT state,attempt_expires_at FROM revision_derivatives WHERE id=$1",
-        [pending.id],
-      )
-    ).rows[0].state,
+    (await db.query("SELECT state,attempt_expires_at FROM revision_derivatives WHERE id=$1", [pending.id])).rows[0]
+      .state,
     "failed",
   );
   await db.query(

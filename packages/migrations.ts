@@ -83,8 +83,7 @@ export const EXPECTED_MIGRATION_VERSIONS: readonly number[] = Object.freeze(
   SCHEMA_MIGRATIONS.map(({ version }) => version),
 );
 
-export const CURRENT_SCHEMA_VERSION =
-  SCHEMA_MIGRATIONS[SCHEMA_MIGRATIONS.length - 1]!.version;
+export const CURRENT_SCHEMA_VERSION = SCHEMA_MIGRATIONS[SCHEMA_MIGRATIONS.length - 1]!.version;
 
 export function migrationFileUrl(file: string): URL {
   return new URL(`../deploy/migrations/${file}`, import.meta.url);

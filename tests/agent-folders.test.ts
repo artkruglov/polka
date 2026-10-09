@@ -9,15 +9,9 @@ import {
   moveFromAgent,
   renameFolderFromAgent,
 } from "../apps/server/agent-folders.ts";
-import {
-  listArtifactsForAgent,
-  listFoldersForAgent,
-} from "../apps/server/agent-management.ts";
+import { listArtifactsForAgent, listFoldersForAgent } from "../apps/server/agent-management.ts";
 import { MAX_FOLDERS } from "../apps/server/folders.ts";
-import {
-  MCP_AUDIENCE,
-  type ServiceActor,
-} from "../apps/server/service-auth.ts";
+import { MCP_AUDIENCE, type ServiceActor } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { LINK_MIME } from "../packages/contracts/index.ts";
 
@@ -38,14 +32,7 @@ async function connection(account: Account, scopes: string[]) {
     `INSERT INTO agent_connections(
        id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
      ) VALUES($1,$2,$3,$4,'folders test',$5,$6,now()+interval '1 day')`,
-    [
-      id,
-      account.tenant,
-      account.id,
-      sha256(randomBytes(32)),
-      scopes,
-      MCP_AUDIENCE,
-    ],
+    [id, account.tenant, account.id, sha256(randomBytes(32)), scopes, MCP_AUDIENCE],
   );
   return {
     accountId: account.id,
@@ -101,24 +88,16 @@ async function artifact(
       mime === "text/html" ? "static" : null,
     ],
   );
-  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
-    artifactId,
-    revisionId,
-  ]);
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [artifactId, revisionId]);
   return artifactId;
 }
 
 async function folderOf(artifactId: string) {
-  return (
-    await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [artifactId])
-  ).rows[0].folder_id as string | null;
+  return (await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [artifactId])).rows[0].folder_id as
+    string | null;
 }
 
-async function auditCount(
-  action: string,
-  target: string,
-  connectionId: string,
-) {
+async function auditCount(action: string, target: string, connectionId: string) {
   return Number(
     (
       await db.query(
@@ -130,12 +109,8 @@ async function auditCount(
   );
 }
 
-const rejected =
-  (status: number, code: string, check?: (error: any) => boolean) =>
-  (error: any) =>
-    error?.status === status &&
-    error?.code === code &&
-    (!check || check(error));
+const rejected = (status: number, code: string, check?: (error: any) => boolean) => (error: any) =>
+  error?.status === status && error?.code === code && (!check || check(error));
 
 before(async () => {
   const suffix = randomBytes(5).toString("hex");
@@ -157,10 +132,7 @@ test("create and rename: unique names, keyed replays, audit, other shelves untou
   assert.equal(created.operation, "folder-create");
   assert.equal(created.applied.name, "Y360 Radar");
   const folderId = created.applied.id;
-  assert.equal(
-    await auditCount("folder.created", folderId, actor.connectionId),
-    1,
-  );
+  assert.equal(await auditCount("folder.created", folderId, actor.connectionId), 1);
 
   // The same key and request: the stored result, nothing new.
   const replayed = await createFolderFromAgent(actor, createInput);
@@ -168,43 +140,24 @@ test("create and rename: unique names, keyed replays, audit, other shelves untou
   assert.deepEqual(replayed.applied, created.applied);
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT count(*) FROM folders WHERE tenant_id=$1 AND name='Y360 Radar'",
-          [owner.tenant],
-        )
-      ).rows[0].count,
+      (await db.query("SELECT count(*) FROM folders WHERE tenant_id=$1 AND name='Y360 Radar'", [owner.tenant])).rows[0]
+        .count,
     ),
     1,
   );
   // The same key for another request, or from another connection: conflict.
-  await assert.rejects(
-    createFolderFromAgent(actor, { ...createInput, name: "Другое" }),
-    rejected(409, "conflict"),
-  );
-  await assert.rejects(
-    createFolderFromAgent(sibling, createInput),
-    rejected(409, "conflict"),
-  );
+  await assert.rejects(createFolderFromAgent(actor, { ...createInput, name: "Другое" }), rejected(409, "conflict"));
+  await assert.rejects(createFolderFromAgent(sibling, createInput), rejected(409, "conflict"));
   // A taken name names the folder that has it.
   await assert.rejects(
     createFolderFromAgent(actor, { key: randomUUID(), name: "Y360 Radar" }),
-    rejected(
-      409,
-      "conflict",
-      (error) =>
-        error.details.reason === "name_taken" &&
-        error.details.folderId === folderId,
-    ),
+    rejected(409, "conflict", (error) => error.details.reason === "name_taken" && error.details.folderId === folderId),
   );
   // Another shelf may use the same name.
-  const foreign = await createFolderFromAgent(
-    await connection(other, ["manage"]),
-    {
-      key: randomUUID(),
-      name: "Y360 Radar",
-    },
-  );
+  const foreign = await createFolderFromAgent(await connection(other, ["manage"]), {
+    key: randomUUID(),
+    name: "Y360 Radar",
+  });
   assert.notEqual(foreign.applied.id, folderId);
 
   const lessons = await createFolderFromAgent(actor, {
@@ -218,25 +171,15 @@ test("create and rename: unique names, keyed replays, audit, other shelves untou
     name: "Отчёты Y360",
     previousName: "Y360 Radar",
   });
-  assert.equal(
-    await auditCount("folder.renamed", folderId, actor.connectionId),
-    1,
-  );
-  assert.equal(
-    (await renameFolderFromAgent(actor, renameInput)).replayed,
-    true,
-  );
+  assert.equal(await auditCount("folder.renamed", folderId, actor.connectionId), 1);
+  assert.equal((await renameFolderFromAgent(actor, renameInput)).replayed, true);
   await assert.rejects(
     renameFolderFromAgent(actor, {
       key: randomUUID(),
       folderId,
       name: "Учёба",
     }),
-    rejected(
-      409,
-      "conflict",
-      (error) => error.details.folderId === lessons.applied.id,
-    ),
+    rejected(409, "conflict", (error) => error.details.folderId === lessons.applied.id),
   );
   // Another shelf's folder is not there at all.
   await assert.rejects(
@@ -248,37 +191,23 @@ test("create and rename: unique names, keyed replays, audit, other shelves untou
     rejected(404, "not_found"),
   );
   assert.equal(
-    (
-      await db.query("SELECT name FROM folders WHERE id=$1", [
-        foreign.applied.id,
-      ])
-    ).rows[0].name,
+    (await db.query("SELECT name FROM folders WHERE id=$1", [foreign.applied.id])).rows[0].name,
     "Y360 Radar",
   );
   // Names are 1-80 characters after trimming.
-  await assert.rejects(
-    createFolderFromAgent(actor, { key: randomUUID(), name: "   " }),
-  );
-  await assert.rejects(
-    createFolderFromAgent(actor, { key: randomUUID(), name: "я".repeat(81) }),
-  );
+  await assert.rejects(createFolderFromAgent(actor, { key: randomUUID(), name: "   " }));
+  await assert.rejects(createFolderFromAgent(actor, { key: randomUUID(), name: "я".repeat(81) }));
 });
 
 test("a shelf holds at most MAX_FOLDERS folders", async () => {
-  const account = await createAccount(
-    `folders-cap-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const account = await createAccount(`folders-cap-${randomBytes(5).toString("hex")}`, password);
   const actor = await connection(account, ["manage"]);
   await db.query(
     `INSERT INTO folders(id,tenant_id,name)
      SELECT gen_random_uuid(),$1,'Папка '||n FROM generate_series(1,$2::int) n`,
     [account.tenant, MAX_FOLDERS],
   );
-  await assert.rejects(
-    createFolderFromAgent(actor, { key: randomUUID(), name: "Лишняя" }),
-    rejected(413, "quota"),
-  );
+  await assert.rejects(createFolderFromAgent(actor, { key: randomUUID(), name: "Лишняя" }), rejected(413, "quota"));
 });
 
 test("delete: only an empty folder; trashed works lose it; audit", async () => {
@@ -296,13 +225,7 @@ test("delete: only an empty folder; trashed works lose it; audit", async () => {
   });
   await assert.rejects(
     deleteFolderFromAgent(actor, { key: randomUUID(), folderId: folder.id }),
-    rejected(
-      409,
-      "conflict",
-      (error) =>
-        error.details.reason === "folder_not_empty" &&
-        error.details.works === 1,
-    ),
+    rejected(409, "conflict", (error) => error.details.reason === "folder_not_empty" && error.details.works === 1),
   );
   assert.equal(await folderOf(onShelf), folder.id);
 
@@ -319,14 +242,8 @@ test("delete: only an empty folder; trashed works lose it; audit", async () => {
     trashedWorksDetached: 1,
   });
   assert.equal(await folderOf(inTrash), null);
-  assert.equal(
-    (await db.query("SELECT 1 FROM folders WHERE id=$1", [folder.id])).rowCount,
-    0,
-  );
-  assert.equal(
-    await auditCount("folder.deleted", folder.id, actor.connectionId),
-    1,
-  );
+  assert.equal((await db.query("SELECT 1 FROM folders WHERE id=$1", [folder.id])).rowCount, 0);
+  assert.equal(await auditCount("folder.deleted", folder.id, actor.connectionId), 1);
   // A retry after the folder is gone returns what was done.
   const replay = await deleteFolderFromAgent(actor, deleteInput);
   assert.equal(replay.replayed, true);
@@ -336,19 +253,15 @@ test("delete: only an empty folder; trashed works lose it; audit", async () => {
     deleteFolderFromAgent(actor, { key: randomUUID(), folderId: folder.id }),
     rejected(404, "not_found"),
   );
-  const { applied: foreign } = await createFolderFromAgent(
-    await connection(other, ["manage"]),
-    { key: randomUUID(), name: `Чужая ${randomUUID().slice(0, 8)}` },
-  );
+  const { applied: foreign } = await createFolderFromAgent(await connection(other, ["manage"]), {
+    key: randomUUID(),
+    name: `Чужая ${randomUUID().slice(0, 8)}`,
+  });
   await assert.rejects(
     deleteFolderFromAgent(actor, { key: randomUUID(), folderId: foreign.id }),
     rejected(404, "not_found"),
   );
-  assert.equal(
-    (await db.query("SELECT 1 FROM folders WHERE id=$1", [foreign.id]))
-      .rowCount,
-    1,
-  );
+  assert.equal((await db.query("SELECT 1 FROM folders WHERE id=$1", [foreign.id])).rowCount, 1);
 });
 
 test("move: a batch at once, all or nothing, order kept, replayed by key", async () => {
@@ -359,8 +272,7 @@ test("move: a batch at once, all or nothing, order kept, replayed by key", async
   });
   const updatedAt = "2026-09-01T10:00:00.000Z";
   const works = [];
-  for (const week of ["W36", "W37", "W38"])
-    works.push(await artifact(owner, `Y360 Radar · ${week}`, { updatedAt }));
+  for (const week of ["W36", "W37", "W38"]) works.push(await artifact(owner, `Y360 Radar · ${week}`, { updatedAt }));
   const already = await artifact(owner, "Уже в папке", {
     folderId: radar.id,
     updatedAt,
@@ -381,26 +293,16 @@ test("move: a batch at once, all or nothing, order kept, replayed by key", async
   for (const id of [...works, already]) {
     assert.equal(await folderOf(id), radar.id);
     // Tidying up does not reorder the shelf.
-    const { rows } = await db.query(
-      "SELECT updated_at FROM artifacts WHERE id=$1",
-      [id],
-    );
+    const { rows } = await db.query("SELECT updated_at FROM artifacts WHERE id=$1", [id]);
     assert.equal(new Date(rows[0].updated_at).toISOString(), updatedAt);
   }
-  for (const id of works)
-    assert.equal(await auditCount("artifact.moved", id, actor.connectionId), 1);
-  assert.equal(
-    await auditCount("artifact.moved", already, actor.connectionId),
-    0,
-  );
+  for (const id of works) assert.equal(await auditCount("artifact.moved", id, actor.connectionId), 1);
+  assert.equal(await auditCount("artifact.moved", already, actor.connectionId), 0);
 
   const replay = await moveFromAgent(actor, moveInput);
   assert.equal(replay.replayed, true);
   assert.deepEqual(replay.applied, moved.applied);
-  await assert.rejects(
-    moveFromAgent(actor, { ...moveInput, folderId: null }),
-    rejected(409, "conflict"),
-  );
+  await assert.rejects(moveFromAgent(actor, { ...moveInput, folderId: null }), rejected(409, "conflict"));
 
   // One foreign, trashed or unknown id refuses the whole batch and is named.
   const foreign = await artifact(other, "Чужая работа");
@@ -422,10 +324,10 @@ test("move: a batch at once, all or nothing, order kept, replayed by key", async
   assert.equal(await folderOf(loose), null);
   assert.equal(await folderOf(foreign), null);
   // Into another shelf's folder: not found, nothing moved.
-  const { applied: foreignFolder } = await createFolderFromAgent(
-    await connection(other, ["manage"]),
-    { key: randomUUID(), name: `Чужая папка ${randomUUID().slice(0, 8)}` },
-  );
+  const { applied: foreignFolder } = await createFolderFromAgent(await connection(other, ["manage"]), {
+    key: randomUUID(),
+    name: `Чужая папка ${randomUUID().slice(0, 8)}`,
+  });
   await assert.rejects(
     moveFromAgent(actor, {
       key: randomUUID(),
@@ -484,8 +386,7 @@ test("move: 1-100 distinct works per call", async () => {
     name: `Сотня ${randomUUID().slice(0, 8)}`,
   });
   const hundred = [];
-  for (let i = 0; i < 100; i++)
-    hundred.push(await artifact(owner, `Работа ${i}`));
+  for (let i = 0; i < 100; i++) hundred.push(await artifact(owner, `Работа ${i}`));
   const moved = await moveFromAgent(actor, {
     key: randomUUID(),
     artifactIds: hundred,
@@ -501,8 +402,7 @@ test("move: 1-100 distinct works per call", async () => {
 test("the folder tools need manage, and a revoked connection stops", async () => {
   const readOnly = await connection(owner, ["read", "capture"]);
   for (const call of [
-    () =>
-      createFolderFromAgent(readOnly, { key: randomUUID(), name: "Нельзя" }),
+    () => createFolderFromAgent(readOnly, { key: randomUUID(), name: "Нельзя" }),
     () =>
       moveFromAgent(readOnly, {
         key: randomUUID(),
@@ -510,18 +410,12 @@ test("the folder tools need manage, and a revoked connection stops", async () =>
         folderId: null,
       }),
   ])
-    await assert.rejects(
-      call(),
-      (error: any) => error?.status === 403 || error?.status === 401,
-    );
+    await assert.rejects(call(), (error: any) => error?.status === 403 || error?.status === 401);
   const actor = await connection(owner, ["manage"]);
-  await db.query("UPDATE agent_connections SET revoked_at=now() WHERE id=$1", [
-    actor.connectionId,
-  ]);
+  await db.query("UPDATE agent_connections SET revoked_at=now() WHERE id=$1", [actor.connectionId]);
   await assert.rejects(
     createFolderFromAgent(actor, { key: randomUUID(), name: "После отзыва" }),
-    (error: any) =>
-      error?.status === 401 || error?.name === "UnauthorizedError",
+    (error: any) => error?.status === 401 || error?.name === "UnauthorizedError",
   );
 });
 

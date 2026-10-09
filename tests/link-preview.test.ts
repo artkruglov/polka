@@ -27,9 +27,7 @@ const call = (method: any, url: string, body?: any, headers = {}) =>
     headers: {
       origin,
       ...(cookie ? { cookie } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
       ...headers,
     },
     payload: body,
@@ -51,15 +49,9 @@ before(async () => {
   await cp(join(import.meta.dirname, "../apps/web/public/og"), join(root, "og"), {
     recursive: true,
   });
-  await cp(
-    join(import.meta.dirname, "../apps/web/index.html"),
-    join(root, "index.html"),
-  );
+  await cp(join(import.meta.dirname, "../apps/web/index.html"), join(root, "index.html"));
   await registerFrontend(app, root);
-  const account = await createAccount(
-    `og-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const account = await createAccount(`og-${randomBytes(5).toString("hex")}`, password);
   const login = await call("POST", "/api/login", {
     name: account.name,
     password,
@@ -78,13 +70,8 @@ before(async () => {
   });
   assert.equal(begin.statusCode, 200, begin.body);
   const { uploadId } = begin.json();
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode,
-    200,
-  );
-  const receipt = (
-    await call("POST", `/api/uploads/${uploadId}/finalize`, {})
-  ).json();
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode, 200);
+  const receipt = (await call("POST", `/api/uploads/${uploadId}/finalize`, {})).json();
   artifactId = receipt.artifactId;
   const shared = await call("POST", `/api/artifacts/${artifactId}/share`, {
     expectedRevisionId: receipt.revisionId,
@@ -153,8 +140,7 @@ test("/s shows one generic card that never carries share data", async () => {
     assert.equal(page.statusCode, 200, url);
     assert.equal(page.body, plain.body, url);
   }
-  for (const secret of [secretTitle, token, artifactId, "secret.html"])
-    assert.ok(!plain.body.includes(secret), secret);
+  for (const secret of [secretTitle, token, artifactId, "secret.html"]) assert.ok(!plain.body.includes(secret), secret);
 });
 
 test("public pages may be indexed; shared works, shelves and the API stay noindex", async () => {

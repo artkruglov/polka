@@ -20,8 +20,7 @@ const RANK: Record<ShelfRole, number> = {
 };
 
 /** The owner of a personal shelf passes every check; otherwise by rank. */
-export const atLeast = (role: ShelfRole, min: ShelfRole) =>
-  role === "owner" || RANK[role] >= RANK[min];
+export const atLeast = (role: ShelfRole, min: ShelfRole) => role === "owner" || RANK[role] >= RANK[min];
 
 /**
  * An author changes the works it saved; a curator and above change any. On a
@@ -39,11 +38,7 @@ export function assertMayChange(role: ShelfRole, createdBy: string, actorId: str
     );
 }
 
-export const teamShelfNameSchema = z
-  .string()
-  .trim()
-  .min(1, "Назовите полку.")
-  .max(80, "Название — до 80 символов.");
+export const teamShelfNameSchema = z.string().trim().min(1, "Назовите полку.").max(80, "Название — до 80 символов.");
 
 export type Shelf = {
   id: string;
@@ -126,8 +121,7 @@ export async function lockShelf(
     )
   ).rows[0];
   if (!member) throw denied();
-  if (!atLeast(member.role, min))
-    throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
+  if (!atLeast(member.role, min)) throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
   return { tenant, role: member.role as ShelfRole };
 }
 
@@ -147,17 +141,13 @@ export async function createTeamShelfInTransaction(
     [actor.id],
   );
   if (!admin) throw missing();
-  if (!admin.company_admin)
-    throw new Problem(
-      403,
-      "forbidden",
-      "Полки отделов создаёт администратор компании.",
-    );
+  if (!admin.company_admin) throw new Problem(403, "forbidden", "Полки отделов создаёт администратор компании.");
   const id = randomUUID();
-  await c.query(
-    `INSERT INTO tenants(id,owner_id,kind,name,created_by) VALUES($1,NULL,'team',$2,$3)`,
-    [id, name, actor.id],
-  );
+  await c.query(`INSERT INTO tenants(id,owner_id,kind,name,created_by) VALUES($1,NULL,'team',$2,$3)`, [
+    id,
+    name,
+    actor.id,
+  ]);
   await c.query(
     `INSERT INTO tenant_members(tenant_id,account_id,role,invited_by)
      VALUES($1,$2,'admin',$2)`,

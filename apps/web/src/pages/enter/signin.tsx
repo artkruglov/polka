@@ -32,17 +32,10 @@ export function SignIn() {
       location.replace("/signup");
       return;
     }
-    Promise.all([
-      request<Hint>(`/auth/shelf-hint?${new URLSearchParams({ h: hint })}`),
-      loadCapabilities(),
-    ])
+    Promise.all([request<Hint>(`/auth/shelf-hint?${new URLSearchParams({ h: hint })}`), loadCapabilities()])
       .then(([value, capabilities]) => {
         setShelf(value);
-        setProviders(
-          capabilities.signInProviders.filter((provider) =>
-            value.providers.includes(provider.id),
-          ),
-        );
+        setProviders(capabilities.signInProviders.filter((provider) => value.providers.includes(provider.id)));
       })
       .catch((e) =>
         setError(
@@ -62,19 +55,11 @@ export function SignIn() {
         {shelf ? (
           <>
             <h1>Войдите в полку «{shelf.displayName}».</h1>
-            {account && (
-              <Notice>
-                Этот браузер уже вошёл в полку «{account.name}». Вход ниже
-                откроет выбранную.
-              </Notice>
-            )}
+            {account && <Notice>Этот браузер уже вошёл в полку «{account.name}». Вход ниже откроет выбранную.</Notice>}
             <p>Так же, как входили раньше:</p>
             <ProviderButtons providers={providers} next="/" />
             {shelf.email && (
-              <a
-                className="ui-button ui-button--secondary ui-button--block"
-                href="/signup?next=%2F"
-              >
+              <a className="ui-button ui-button--secondary ui-button--block" href="/signup?next=%2F">
                 <Mail /> Код на почту {shelf.email}
               </a>
             )}

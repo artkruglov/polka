@@ -1,5 +1,26 @@
-.component-catalog { width: 100%; max-width: 960px; margin: 0 auto; padding: 40px var(--gutter) 96px; display: grid; gap: 40px; }
-.component-catalog header p { color: var(--muted); }
-.component-catalog section { display: grid; gap: 14px; }
-.component-samples { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.component-fields { display: grid; gap: 16px; max-width: 480px; }
+.component-catalog {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px var(--gutter) 96px;
+  display: grid;
+  gap: 40px;
+}
+.component-catalog header p {
+  color: var(--muted);
+}
+.component-catalog section {
+  display: grid;
+  gap: 14px;
+}
+.component-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.component-fields {
+  display: grid;
+  gap: 16px;
+  max-width: 480px;
+}

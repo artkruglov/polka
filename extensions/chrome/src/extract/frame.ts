@@ -16,9 +16,11 @@ export type FrameReport = {
 
 const ARTIFACT_HOST = /(^|\.)claudeusercontent\.com$/i;
 
-export async function extractFrame(options: {
-  anyHost?: boolean;
-} = {}): Promise<FrameReport | null> {
+export async function extractFrame(
+  options: {
+    anyHost?: boolean;
+  } = {},
+): Promise<FrameReport | null> {
   if (!options.anyHost && !ARTIFACT_HOST.test(location.hostname)) return null;
   if (window === window.top && !options.anyHost) return null;
   // The hidden 1×1 helper frame next to the artifact is not it.
@@ -30,10 +32,7 @@ export async function extractFrame(options: {
     });
     const type = response.headers.get("content-type") ?? "";
     if (response.ok && /text\/html/i.test(type)) {
-      const parsed = new DOMParser().parseFromString(
-        await response.text(),
-        "text/html",
-      );
+      const parsed = new DOMParser().parseFromString(await response.text(), "text/html");
       if (!looksLikeRuntimeShell(parsed))
         return {
           html: cleanArtifactDocument(parsed),

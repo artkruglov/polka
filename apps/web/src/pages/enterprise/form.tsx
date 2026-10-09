@@ -14,9 +14,7 @@ export const CONTACT = "hello@polochka.app";
 /** /enterprise?interest=commercial-license preselects what the person wants. */
 export function initialInterest(search: string): EnterpriseInterest | "" {
   const value = new URLSearchParams(search).get("interest");
-  return (ENTERPRISE_INTERESTS as readonly string[]).includes(value ?? "")
-    ? (value as EnterpriseInterest)
-    : "";
+  return (ENTERPRISE_INTERESTS as readonly string[]).includes(value ?? "") ? (value as EnterpriseInterest) : "";
 }
 
 const newKey = () =>
@@ -70,9 +68,8 @@ export function EnterpriseForm({
         <CircleCheck aria-hidden="true" />
         <h3>Заявка отправлена</h3>
         <p>
-          Спасибо! {telegram ? "Напишем в Telegram" : "Ответим на"}{" "}
-          <strong>{sent.contact}</strong>. Если долго нет ответа, напишите на{" "}
-          <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+          Спасибо! {telegram ? "Напишем в Telegram" : "Ответим на"} <strong>{sent.contact}</strong>. Если долго нет
+          ответа, напишите на <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
         </p>
         <Button
           onClick={() => {
@@ -94,17 +91,14 @@ export function EnterpriseForm({
     setBusy(true);
     setError("");
     try {
-      const answer = await request<{ ok: true; contact?: string }>(
-        "/enterprise-requests",
-        {
-          key,
-          contact: fields.contact,
-          ...(interest ? { interest } : {}),
-          ...(fields.comment.trim() ? { comment: fields.comment } : {}),
-          policyRead: fields.policyRead,
-          ...(fields.website ? { website: fields.website } : {}),
-        },
-      );
+      const answer = await request<{ ok: true; contact?: string }>("/enterprise-requests", {
+        key,
+        contact: fields.contact,
+        ...(interest ? { interest } : {}),
+        ...(fields.comment.trim() ? { comment: fields.comment } : {}),
+        policyRead: fields.policyRead,
+        ...(fields.website ? { website: fields.website } : {}),
+      });
       setSent({ contact: answer.contact ?? fields.contact.trim() });
     } catch (e) {
       setError(
@@ -164,13 +158,7 @@ export function EnterpriseForm({
         </label>
       </div>
       <label className="enterprise-policy">
-        <input
-          type="checkbox"
-          name="policyRead"
-          required
-          checked={fields.policyRead}
-          onChange={set("policyRead")}
-        />
+        <input type="checkbox" name="policyRead" required checked={fields.policyRead} onChange={set("policyRead")} />
         <span>
           Я прочитал(а){" "}
           <a href="/privacy" target="_blank" rel="noopener">

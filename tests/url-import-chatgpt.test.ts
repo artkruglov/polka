@@ -77,7 +77,10 @@ function share(title: string, nodes: unknown[]) {
     root: { dd: {}, disableSSR: false },
     "routes/share.$shareId.($action)": {
       sharedConversationId: "68063082-c2d8-8012-8d45-fa674aa1c1ed",
-      serverResponse: { type: "data", data: { title, linear_conversation: [{ id: "client-created-root", children: [] }, ...nodes], is_public: true } },
+      serverResponse: {
+        type: "data",
+        data: { title, linear_conversation: [{ id: "client-created-root", children: [] }, ...nodes], is_public: true },
+      },
       meta: { pageTitle: title },
     },
   });
@@ -85,7 +88,8 @@ function share(title: string, nodes: unknown[]) {
 
 const SHARE = "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed";
 const CANVAS = "https://chatgpt.com/canvas/shared/68d0334db1c08191b91094c29bee3c78";
-const HTML_APP = "<!doctype html>\n<html><head><title>Timer</title><style>h1{color:teal}</style></head><body><h1>Pomodoro</h1><script>let t=25</script></body></html>";
+const HTML_APP =
+  "<!doctype html>\n<html><head><title>Timer</title><style>h1{color:teal}</style></head><body><h1>Pomodoro</h1><script>let t=25</script></body></html>";
 
 test("turbo-stream: objects, arrays, shared strings and null come back as plain values", () => {
   const root = turboStreamRoot(page("x", { a: { list: ["one", "two", "one"], none: null, n: 3, yes: true } })) as any;
@@ -103,7 +107,11 @@ test("a share with an HTML page in the last reply becomes that page", () => {
   ]);
   const content = parseChatgpt(html);
   assert.equal(content.title, "Pomodoro timer");
-  assert.deepEqual(content.messages.map((m) => m.role), ["user", "assistant"], "hidden, tool and python messages are left out");
+  assert.deepEqual(
+    content.messages.map((m) => m.role),
+    ["user", "assistant"],
+    "hidden, tool and python messages are left out",
+  );
   const work = chatgptWork(content);
   assert.equal(work.what, "code");
   assert.deepEqual(work.body, { html: `${HTML_APP}\n` });
@@ -114,7 +122,10 @@ test("a React component in the reply is a component; the last page-like block wi
   const content = parseChatgpt(
     share("Counter", [
       message("user", "counter"),
-      message("assistant", `Install:\n\`\`\`bash\nnpm i react\n\`\`\`\nComponent:\n\`\`\`jsx\n${component}\`\`\`\nAnd a python helper:\n\`\`\`python\nprint(1)\n\`\`\``),
+      message(
+        "assistant",
+        `Install:\n\`\`\`bash\nnpm i react\n\`\`\`\nComponent:\n\`\`\`jsx\n${component}\`\`\`\nAnd a python helper:\n\`\`\`python\nprint(1)\n\`\`\``,
+      ),
     ]),
   );
   const work = chatgptWork(content);
@@ -125,7 +136,12 @@ test("a React component in the reply is a component; the last page-like block wi
 
 test("a share without a page or component is saved as the conversation text", () => {
   const work = chatgptWork(
-    parseChatgpt(share("Python Beginner Guide", [message("user", "Explain <loops>"), message("assistant", "Use `for x in y:`\n```python\nfor i in range(3): print(i)\n```")])),
+    parseChatgpt(
+      share("Python Beginner Guide", [
+        message("user", "Explain <loops>"),
+        message("assistant", "Use `for x in y:`\n```python\nfor i in range(3): print(i)\n```"),
+      ]),
+    ),
   );
   assert.equal(work.what, "conversation");
   assert.ok("html" in work.body);
@@ -141,7 +157,14 @@ test("a canvas: shared textdoc pages and components, and a canvas created in a c
     page("Site", {
       root: {},
       "routes/canvas.shared.$sharedTextdocId": {
-        sharedTextdoc: { sharedTextdocId: "68d0334db1c08191b91094c29bee3c78", versionInt: null, title: "Site", type: "code/react", content: react, access: "public" },
+        sharedTextdoc: {
+          sharedTextdocId: "68d0334db1c08191b91094c29bee3c78",
+          versionInt: null,
+          title: "Site",
+          type: "code/react",
+          content: react,
+          access: "public",
+        },
         isAuthenticated: false,
       },
     }),
@@ -152,7 +175,11 @@ test("a canvas: shared textdoc pages and components, and a canvas created in a c
   assert.ok("component" in work.body);
   const doc = chatgptWork(
     parseChatgpt(
-      page("Notes", { "routes/canvas.shared.$sharedTextdocId": { sharedTextdoc: { title: "Notes", type: "document", content: "# Plan\n\n- one" } } }),
+      page("Notes", {
+        "routes/canvas.shared.$sharedTextdocId": {
+          sharedTextdoc: { title: "Notes", type: "document", content: "# Plan\n\n- one" },
+        },
+      }),
     ),
   );
   assert.ok("html" in doc.body && /<pre># Plan/.test(doc.body.html));
@@ -162,7 +189,11 @@ test("a canvas: shared textdoc pages and components, and a canvas created in a c
       message("user", "landing page"),
       message("assistant", "", {
         recipient: "canmore.create_textdoc",
-        content: { content_type: "code", language: "json", text: JSON.stringify({ name: "Landing", type: "code/html", content: HTML_APP }) },
+        content: {
+          content_type: "code",
+          language: "json",
+          text: JSON.stringify({ name: "Landing", type: "code/html", content: HTML_APP }),
+        },
       }),
       message("assistant", "I created the landing page in the canvas."),
     ]),
@@ -171,7 +202,10 @@ test("a canvas: shared textdoc pages and components, and a canvas created in a c
   // An update is a patch this page cannot replay: the conversation is kept instead of a stale canvas.
   const updated = parseChatgpt(
     share("Landing", [
-      message("assistant", "", { recipient: "canmore.create_textdoc", content: { content_type: "code", text: JSON.stringify({ name: "L", type: "code/html", content: HTML_APP }) } }),
+      message("assistant", "", {
+        recipient: "canmore.create_textdoc",
+        content: { content_type: "code", text: JSON.stringify({ name: "L", type: "code/html", content: HTML_APP }) },
+      }),
       message("assistant", "", { recipient: "canmore.update_textdoc", content: { content_type: "code", text: "{}" } }),
       message("assistant", "Updated."),
     ]),
@@ -193,16 +227,27 @@ test("capture: one /fetch through the renderer, no request to chatgpt.com from t
   const fetcher = async (url: string) => {
     throw Error(`the app must not download ${url}`);
   };
-  const html = share("Pomodoro timer", [message("user", "timer"), message("assistant", `\`\`\`html\n${HTML_APP}\n\`\`\``)]);
+  const html = share("Pomodoro timer", [
+    message("user", "timer"),
+    message("assistant", `\`\`\`html\n${HTML_APP}\n\`\`\``),
+  ]);
   const result = await captureChatgpt(SHARE, { fetch: fetch({ finalUrl: SHARE, status: 200, html }), fetcher });
   assert.deepEqual(asked, [SHARE]);
   assert.equal(result.title, "Pomodoro timer");
   assert.equal(result.manifest.provenance.sourceUrl, SHARE);
   assert.ok(result.warnings.some((w) => /последнего ответа/.test(w)));
-  const parsed = validateAgentCapture({ key: randomUUID(), title: result.title, manifest: result.manifest, files: result.files }, "capture");
+  const parsed = validateAgentCapture(
+    { key: randomUUID(), title: result.title, manifest: result.manifest, files: result.files },
+    "capture",
+  );
   assert.match(parsed.source.get("index.html")!.toString(), /Pomodoro/);
-  await assert.rejects(captureChatgpt(SHARE, { fetch: fetch({ error: "robots_disallowed" }), fetcher }), { code: "robots_disallowed" });
-  await assert.rejects(captureChatgpt(SHARE, { fetch: fetch({ error: "source_blocked", detail: "cloudflare_challenge" }), fetcher }), { code: "source_blocked" });
+  await assert.rejects(captureChatgpt(SHARE, { fetch: fetch({ error: "robots_disallowed" }), fetcher }), {
+    code: "robots_disallowed",
+  });
+  await assert.rejects(
+    captureChatgpt(SHARE, { fetch: fetch({ error: "source_blocked", detail: "cloudflare_challenge" }), fetcher }),
+    { code: "source_blocked" },
+  );
   await assert.rejects(
     captureChatgpt(SHARE, {
       fetch: async () => {
@@ -212,16 +257,26 @@ test("capture: one /fetch through the renderer, no request to chatgpt.com from t
     }),
     { code: "renderer_unavailable" },
   );
-  await assert.rejects(captureChatgpt("https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed", { fetch: fetch({ error: "busy" }), fetcher }), {
-    code: "not_allowed",
-  });
+  await assert.rejects(
+    captureChatgpt("https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed", {
+      fetch: fetch({ error: "busy" }),
+      fetcher,
+    }),
+    {
+      code: "not_allowed",
+    },
+  );
   // One request per attempt (the refusing stand-in and the /c/ link, never sent, are not counted).
   assert.equal(asked.length, 3, "one request per attempt, never a retry");
   const canvas = await captureChatgpt(CANVAS, {
     fetch: fetch({
       finalUrl: CANVAS,
       status: 200,
-      html: page("Doc", { "routes/canvas.shared.$sharedTextdocId": { sharedTextdoc: { title: "Doc", type: "code/html", content: HTML_APP } } }),
+      html: page("Doc", {
+        "routes/canvas.shared.$sharedTextdocId": {
+          sharedTextdoc: { title: "Doc", type: "code/html", content: HTML_APP },
+        },
+      }),
     }),
     fetcher,
   });

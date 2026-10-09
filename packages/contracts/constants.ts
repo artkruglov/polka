@@ -13,8 +13,7 @@ export const PROJECT_MAX_BYTES = 48 * 1024 * 1024;
  * PROJECT_VIDEO_MAX_BYTES, apart from the 48 MiB of pages, pictures and text.
  */
 export const VIDEO_MIME = ["video/mp4", "video/webm"] as const;
-export const isVideoMime = (mime: string) =>
-  (VIDEO_MIME as readonly string[]).includes(mime);
+export const isVideoMime = (mime: string) => (VIDEO_MIME as readonly string[]).includes(mime);
 export const PROJECT_VIDEO_MAX_FILE_BYTES = 200 * 1024 * 1024;
 export const PROJECT_VIDEO_MAX_BYTES = 400 * 1024 * 1024;
 /** Longest stored title; every path that names a work uses this one limit. */
@@ -22,13 +21,7 @@ export const MAX_TITLE = 160;
 /** Around a found word in Artifact.snippet; never part of a work's text. */
 export const SEARCH_MATCH_START = "";
 export const SEARCH_MATCH_END = "";
-export const MIME = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "text/plain",
-  "text/html",
-] as const;
+export const MIME = ["image/png", "image/jpeg", "image/webp", "text/plain", "text/html"] as const;
 export type UploadMime = (typeof MIME)[number];
 /**
  * A work that is a link kept as it is («Сохранить как ссылку»): its one file
@@ -54,9 +47,7 @@ export function savedLinkUrl(value: unknown): URL | null {
 }
 /** Whether text is an HTML page rather than prose; the server refuses text/html without it. */
 export const looksLikeHtml = (source: string) =>
-  /<(?:!doctype\s+html|html|head|body|main|div|p|h[1-6]|table|section|article|ul|ol|style)\b/i.test(
-    source,
-  );
+  /<(?:!doctype\s+html|html|head|body|main|div|p|h[1-6]|table|section|article|ul|ol|style)\b/i.test(source);
 export const REPORT_REASONS = [
   "phishing",
   "malware",
@@ -87,20 +78,9 @@ export const AGENT_SCOPES = [
   "sessions",
 ] as const;
 /** «Для компаний» (/enterprise): the request form's choices and limits. */
-export const ENTERPRISE_TEAM_SIZES = [
-  "1-10",
-  "11-50",
-  "51-200",
-  "201-1000",
-  "1000+",
-] as const;
+export const ENTERPRISE_TEAM_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
 export type EnterpriseTeamSize = (typeof ENTERPRISE_TEAM_SIZES)[number];
-export const ENTERPRISE_INTERESTS = [
-  "cloud",
-  "self-hosted",
-  "commercial-license",
-  "other",
-] as const;
+export const ENTERPRISE_INTERESTS = ["cloud", "self-hosted", "commercial-license", "other"] as const;
 export type EnterpriseInterest = (typeof ENTERPRISE_INTERESTS)[number];
 export const ENTERPRISE_LIMITS = {
   name: 100,

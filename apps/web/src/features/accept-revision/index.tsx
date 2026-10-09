@@ -27,14 +27,10 @@ export function AcceptRevisionPanel({
   const [accepted, setAccepted] = useState(artifact.acceptedRevisionId ?? "");
   // Own shelf: «я отвечаю». A department shelf: pick among its members.
   const team = currentShelf();
-  const [mine, setMine] = useState(
-    !!accountId && artifact.ownerAccountId === accountId,
-  );
+  const [mine, setMine] = useState(!!accountId && artifact.ownerAccountId === accountId);
   const [owner, setOwner] = useState(artifact.ownerAccountId ?? "");
   const [members, setMembers] = useState<{ accountId: string; name: string }[]>([]);
-  const link = artifact.share && ["active", "behind"].includes(artifact.share.status)
-    ? artifact.share
-    : null;
+  const link = artifact.share && ["active", "behind"].includes(artifact.share.status) ? artifact.share : null;
   const [follows, setFollows] = useState(link?.followMode === "follows");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -67,14 +63,11 @@ export function AcceptRevisionPanel({
     setBusy(true);
     setError("");
     try {
-      if ((artifact.acceptedRevisionId ?? "") !== accepted)
-        await client.acceptRevision(artifact.id, accepted || null);
+      if ((artifact.acceptedRevisionId ?? "") !== accepted) await client.acceptRevision(artifact.id, accepted || null);
       // Own shelf: only a change of the box is sent; a department's: the picked member.
       const wasMine = !!accountId && artifact.ownerAccountId === accountId;
       const nextOwner = team ? owner || null : mine ? (accountId ?? null) : null;
-      const ownerChanged = team
-        ? nextOwner !== (artifact.ownerAccountId ?? null)
-        : !!accountId && mine !== wasMine;
+      const ownerChanged = team ? nextOwner !== (artifact.ownerAccountId ?? null) : !!accountId && mine !== wasMine;
       if (ownerChanged) await client.setWorkOwner(artifact.id, nextOwner);
       if (link && follows !== (link.followMode === "follows"))
         await client.setShareFollow(link.id, follows ? "follows" : "pinned");
@@ -82,9 +75,7 @@ export function AcceptRevisionPanel({
     } catch (cause) {
       // One of the three may already have been saved: show the work as it is.
       void Promise.resolve(onChanged()).catch(() => {});
-      setError(
-        cause instanceof Error ? cause.message : "Не удалось сохранить отметки.",
-      );
+      setError(cause instanceof Error ? cause.message : "Не удалось сохранить отметки.");
     } finally {
       setBusy(false);
     }
@@ -114,15 +105,10 @@ export function AcceptRevisionPanel({
             ))}
           </SelectField>
           <p className="ui-field-hint">
-            Отметка видна коллегам и агентам. Ссылки она не меняет: ссылка
-            остаётся на своей версии.
+            Отметка видна коллегам и агентам. Ссылки она не меняет: ссылка остаётся на своей версии.
           </p>
           {team && (
-            <SelectField
-              label="Ответственный"
-              value={owner}
-              onChange={(event) => setOwner(event.target.value)}
-            >
+            <SelectField label="Ответственный" value={owner} onChange={(event) => setOwner(event.target.value)}>
               <option value="">Не назначен</option>
               {members.map((member) => (
                 <option value={member.accountId} key={member.accountId}>
@@ -133,28 +119,19 @@ export function AcceptRevisionPanel({
           )}
           {!team && accountId && (
             <label>
-              <input
-                type="checkbox"
-                checked={mine}
-                onChange={(event) => setMine(event.target.checked)}
-              />{" "}
-              Я отвечаю за эту работу
+              <input type="checkbox" checked={mine} onChange={(event) => setMine(event.target.checked)} /> Я отвечаю за
+              эту работу
             </label>
           )}
           {link && (
             <>
               <label>
-                <input
-                  type="checkbox"
-                  checked={follows}
-                  onChange={(event) => setFollows(event.target.checked)}
-                />{" "}
+                <input type="checkbox" checked={follows} onChange={(event) => setFollows(event.target.checked)} />{" "}
                 Ссылка следует за новыми версиями
               </label>
               <p className="ui-field-hint">
-                Включено: агент без человека (сервисный доступ) может
-                переставить ссылку на новую версию. Выключено: ссылка остаётся
-                на своей версии, пока её не переставит человек.
+                Включено: агент без человека (сервисный доступ) может переставить ссылку на новую версию. Выключено:
+                ссылка остаётся на своей версии, пока её не переставит человек.
               </p>
             </>
           )}

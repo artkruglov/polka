@@ -50,21 +50,37 @@ const runtime = {
   MAIL_MODE: "disabled",
 };
 const envArgs = (values) => Object.entries(values).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
-const run = (args, options = {}) =>
-  execFileSync("docker", args, { stdio: "inherit", ...options });
+const run = (args, options = {}) => execFileSync("docker", args, { stdio: "inherit", ...options });
 const compose = ["compose", "--env-file=.env", "-f", "deploy/compose.local.yml"];
 // Local socket inside the fixture container; SQL goes over stdin, never argv.
 const psql = (user, database, sql, variables = {}) =>
   execFileSync(
     "docker",
-    [...compose, "exec", "-T", "postgres", "psql", "-X", "-q", "--set=ON_ERROR_STOP=1",
-     "-U", user, "-d", database,
-     ...Object.entries(variables).map(([k, v]) => `--set=${k}=${v}`), "-f", "-"],
+    [
+      ...compose,
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-X",
+      "-q",
+      "--set=ON_ERROR_STOP=1",
+      "-U",
+      user,
+      "-d",
+      database,
+      ...Object.entries(variables).map(([k, v]) => `--set=${k}=${v}`),
+      "-f",
+      "-",
+    ],
     { input: sql, stdio: ["pipe", "inherit", "inherit"] },
   );
 
 // Same shape as deploy/hosted/init-roles.sh, with random names and passwords.
-psql("polka", "polka", `
+psql(
+  "polka",
+  "polka",
+  `
 CREATE ROLE ${schemaRole} LOGIN PASSWORD :'schema_password';
 CREATE ROLE ${runtimeRole} LOGIN PASSWORD :'runtime_password';
 CREATE DATABASE ${databaseName};
@@ -75,37 +91,94 @@ ALTER ROLE ${runtimeRole} SET search_path = pg_catalog, public;
 ALTER SCHEMA public OWNER TO ${schemaRole};
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE ${schemaRole} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
-`, { schema_password: schemaPassword, runtime_password: runtimePassword });
+`,
+  { schema_password: schemaPassword, runtime_password: runtimePassword },
+);
 
 const name = `polka-smoke-${suffix}`;
 try {
-  const base = ["run", "--rm", "--network=host", "--read-only",
-    "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m"];
+  const base = ["run", "--rm", "--network=host", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m"];
   // The migration job gets only the schema owner's URL, as in compose.
-  run([...base, ...envArgs({ DATABASE_URL: roleUrl(schemaRole, schemaPassword) }), image,
-    "node", "--import", "tsx", "scripts/migrate.ts"]);
-  psql(schemaRole, databaseName, readFileSync("deploy/runtime-grants.sql", "utf8"),
-    { schema_owner: schemaRole, runtime_role: runtimeRole });
-  run([...base, ...envArgs(runtime), image, "node", "--import", "tsx",
-    "scripts/local-storage-bootstrap.ts", "--confirm-local-bootstrap"]);
-  run([...base, ...envArgs(runtime), image, "node", "--import", "tsx",
-    "scripts/storage-check.ts", "--confirm-bootstrap"]);
+  run([
+    ...base,
+    ...envArgs({ DATABASE_URL: roleUrl(schemaRole, schemaPassword) }),
+    image,
+    "node",
+    "--import",
+    "tsx",
+    "scripts/migrate.ts",
+  ]);
+  psql(schemaRole, databaseName, readFileSync("deploy/runtime-grants.sql", "utf8"), {
+    schema_owner: schemaRole,
+    runtime_role: runtimeRole,
+  });
+  run([
+    ...base,
+    ...envArgs(runtime),
+    image,
+    "node",
+    "--import",
+    "tsx",
+    "scripts/local-storage-bootstrap.ts",
+    "--confirm-local-bootstrap",
+  ]);
+  run([
+    ...base,
+    ...envArgs(runtime),
+    image,
+    "node",
+    "--import",
+    "tsx",
+    "scripts/storage-check.ts",
+    "--confirm-bootstrap",
+  ]);
 
   // The runtime builder's memory-limited esbuild wrapper must start in the image.
-  const esbuild = execFileSync("docker", [...base, "--user", "node", "--entrypoint", "sh", image, "-c",
-    "POLKA_ESBUILD_BINARY=$(node -p \"require.resolve('@esbuild/linux-' + (process.arch === 'arm64' ? 'arm64' : 'x64') + '/bin/esbuild')\") apps/server/esbuild-limited.sh --version"],
-    { encoding: "utf8" }).trim();
+  const esbuild = execFileSync(
+    "docker",
+    [
+      ...base,
+      "--user",
+      "node",
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "POLKA_ESBUILD_BINARY=$(node -p \"require.resolve('@esbuild/linux-' + (process.arch === 'arm64' ? 'arm64' : 'x64') + '/bin/esbuild')\") apps/server/esbuild-limited.sh --version",
+    ],
+    { encoding: "utf8" },
+  ).trim();
   if (!/^\d+\.\d+\.\d+$/.test(esbuild)) throw new Error("Limited esbuild did not start");
 
-  run(["run", "-d", "--name", name, "--network=host", "--read-only", "--user", "node",
-    "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m", ...envArgs(runtime), image]);
+  run([
+    "run",
+    "-d",
+    "--name",
+    name,
+    "--network=host",
+    "--read-only",
+    "--user",
+    "node",
+    "--tmpfs",
+    "/tmp:rw,noexec,nosuid,size=64m",
+    ...envArgs(runtime),
+    image,
+  ]);
   // Probe from inside the container: its loopback listener is the one the
   // hosted reverse proxy reaches (and Docker Desktop does not expose it).
   const status = (path) =>
-    spawnSync("docker", ["exec", name, "node", "-e",
-      `fetch(${JSON.stringify(origin + path)},{signal:AbortSignal.timeout(2000)})` +
-      ".then(r=>process.stdout.write(String(r.status)),()=>process.stdout.write('0'))"],
-    { encoding: "utf8" }).stdout;
+    spawnSync(
+      "docker",
+      [
+        "exec",
+        name,
+        "node",
+        "-e",
+        `fetch(${JSON.stringify(origin + path)},{signal:AbortSignal.timeout(2000)})` +
+          ".then(r=>process.stdout.write(String(r.status)),()=>process.stdout.write('0'))",
+      ],
+      { encoding: "utf8" },
+    ).stdout;
   let ready = false;
   for (let attempt = 0; attempt < 30 && !ready; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -118,9 +191,13 @@ try {
 } finally {
   spawnSync("docker", ["logs", "--tail", "50", name], { stdio: "inherit" });
   spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
-  psql("polka", "polka", `
+  psql(
+    "polka",
+    "polka",
+    `
 DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE);
 DROP ROLE IF EXISTS ${runtimeRole};
 DROP ROLE IF EXISTS ${schemaRole};
-`);
+`,
+  );
 }

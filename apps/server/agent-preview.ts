@@ -1,18 +1,8 @@
 import type { PoolClient } from "pg";
 import { z } from "zod";
-import {
-  uuid,
-  type AgentScope,
-  type InlineBuildStatus,
-} from "../../packages/contracts/index.ts";
-import {
-  buildInlineRevisionWithRunner,
-  type DerivativeTransactionRunner,
-} from "./bundle-derivatives.ts";
-import {
-  derivativePreferenceSql,
-  derivativeVersionSql,
-} from "./bundle-runtime-contract.ts";
+import { uuid, type AgentScope, type InlineBuildStatus } from "../../packages/contracts/index.ts";
+import { buildInlineRevisionWithRunner, type DerivativeTransactionRunner } from "./bundle-derivatives.ts";
+import { derivativePreferenceSql, derivativeVersionSql } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { missing } from "./errors.ts";
 import {
@@ -53,13 +43,7 @@ async function findFinalizedUpload(
        AND ($4::uuid IS NULL OR id=$4)
        AND ($5::uuid IS NULL OR idempotency_key=$5)
      ${lock ? "FOR UPDATE" : ""}`,
-    [
-      actor.tenantId,
-      actor.accountId,
-      actor.connectionId,
-      input.uploadId ?? null,
-      input.key ?? null,
-    ],
+    [actor.tenantId, actor.accountId, actor.connectionId, input.uploadId ?? null, input.key ?? null],
   );
   if (!upload || upload.kind !== "bundle" || !upload.receipt) throw missing();
   const revisionId = uuid.parse(upload.receipt.revisionId);
@@ -70,10 +54,7 @@ async function findFinalizedUpload(
   } satisfies ResolvedUpload;
 }
 
-async function resolveUpload(
-  actor: ServiceActor,
-  input: z.infer<typeof agentPreviewInputSchema>,
-) {
+async function resolveUpload(actor: ServiceActor, input: z.infer<typeof agentPreviewInputSchema>) {
   return withServiceActorDerivedScopeTransaction(
     actor,
     async (c, verified) => {
@@ -84,23 +65,11 @@ async function resolveUpload(
   );
 }
 
-function transactionRunner(
-  actor: ServiceActor,
-  resolved: ResolvedUpload,
-): DerivativeTransactionRunner {
+function transactionRunner(actor: ServiceActor, resolved: ResolvedUpload): DerivativeTransactionRunner {
   return (operation) =>
     withServiceActorTransaction(actor, resolved.scope, async (c, verified) => {
-      const current = await findFinalizedUpload(
-        c,
-        verified,
-        { uploadId: resolved.uploadId },
-        false,
-      );
-      if (
-        current.revisionId !== resolved.revisionId ||
-        current.scope !== resolved.scope
-      )
-        throw missing();
+      const current = await findFinalizedUpload(c, verified, { uploadId: resolved.uploadId }, false);
+      if (current.revisionId !== resolved.revisionId || current.scope !== resolved.scope) throw missing();
       return operation(c);
     });
 }
@@ -139,10 +108,7 @@ export async function previewStatusInTransaction(
   };
 }
 
-export async function preparePreviewFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-) {
+export async function preparePreviewFromAgent(actor: ServiceActor, body: unknown) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
   const input = agentPreviewInputSchema.parse(body);
   const resolved = await resolveUpload(actor, input);

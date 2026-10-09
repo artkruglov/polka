@@ -36,10 +36,7 @@ test("the typed domain and the outside check", () => {
 test("an allowed address gets no notice on the code screen", () => {
   assert.equal(codeScreenNotice({ ...base, email: "d@yandex.ru" }), null);
   assert.equal(codeScreenNotice({ ...base, email: "d@bk.ru" }), null);
-  assert.equal(
-    codeScreenNotice({ ...base, signupDomains: "any", email: "d@gmail.com" }),
-    null,
-  );
+  assert.equal(codeScreenNotice({ ...base, signupDomains: "any", email: "d@gmail.com" }), null);
 });
 
 test("an address outside the list keeps the rule on the code screen", () => {
@@ -57,25 +54,13 @@ test("an address outside the list keeps the rule on the code screen", () => {
 });
 
 test("invitations and the local test box say nothing about domains", () => {
-  assert.equal(
-    codeScreenNotice({ ...base, inviteOnly: true, email: "d@gmail.com" }),
-    null,
-  );
-  assert.equal(
-    codeScreenNotice({ ...base, delivery: "local", email: "d@gmail.com" }),
-    null,
-  );
+  assert.equal(codeScreenNotice({ ...base, inviteOnly: true, email: "d@gmail.com" }), null);
+  assert.equal(codeScreenNotice({ ...base, delivery: "local", email: "d@gmail.com" }), null);
 });
 
 test("the phrase follows the configured list", () => {
-  assert.equal(
-    signupDomainsPhrase(ruOnly),
-    "на почте Яндекса, Mail.ru, Рамблера и VK",
-  );
-  assert.equal(
-    signupDomainsPhrase(["example.ru", "yandex.ru"]),
-    "на адресах @example.ru, @yandex.ru",
-  );
+  assert.equal(signupDomainsPhrase(ruOnly), "на почте Яндекса, Mail.ru, Рамблера и VK");
+  assert.equal(signupDomainsPhrase(["example.ru", "yandex.ru"]), "на адресах @example.ru, @yandex.ru");
 });
 
 test("the help puts the sign-up providers first and a way back to the address", () => {
@@ -105,8 +90,5 @@ test("the help puts the sign-up providers first and a way back to the address", 
 });
 
 test("the spam hint names both folders", () => {
-  assert.equal(
-    SPAM_HINT,
-    "Письмо не пришло за минуту? Проверьте «Спам» и «Промоакции».",
-  );
+  assert.equal(SPAM_HINT, "Письмо не пришло за минуту? Проверьте «Спам» и «Промоакции».");
 });

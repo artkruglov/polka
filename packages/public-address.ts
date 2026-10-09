@@ -45,7 +45,5 @@ export function publicAddress(address: string): boolean {
   const family = isIP(address);
   return family === 4
     ? !denied4.check(address, "ipv4")
-    : family === 6 &&
-        global6.check(address, "ipv6") &&
-        !denied6.check(address, "ipv6");
+    : family === 6 && global6.check(address, "ipv6") && !denied6.check(address, "ipv6");
 }

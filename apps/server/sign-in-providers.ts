@@ -38,15 +38,7 @@ export type ProviderProfile = {
 export class IdpError extends Error {
   constructor(
     readonly code:
-      | "state"
-      | "denied"
-      | "provider"
-      | "blocked"
-      | "signup"
-      | "domain"
-      | "linked"
-      | "link_only"
-      | "unavailable",
+      "state" | "denied" | "provider" | "blocked" | "signup" | "domain" | "linked" | "link_only" | "unavailable",
   ) {
     super(code);
   }
@@ -91,20 +83,17 @@ export const PROVIDER_NAMES: Record<ProviderId, () => string> = {
  * by its signed-in owner. It opens no shelf, links nothing by address and
  * claims no provisional shelf (docs/specs/SIGN_IN_PROVIDERS.md, «Google»).
  */
-export const linkOnly = (provider: ProviderId) =>
-  provider === "google" && config.GOOGLE_SIGNUP === "link-only";
+export const linkOnly = (provider: ProviderId) => provider === "google" && config.GOOGLE_SIGNUP === "link-only";
 
 /** A login self sign-up generated (`<way>-<account id>`), not one to type. */
-export const GENERATED_LOGIN =
-  /^(email|yandex|vk|google|oidc|guest)-[0-9a-f-]{36}$/;
+export const GENERATED_LOGIN = /^(email|yandex|vk|google|oidc|guest)-[0-9a-f-]{36}$/;
 
 export function providerEnabled(provider: string): provider is ProviderId {
   return (config.SIGN_IN_PROVIDERS as string[]).includes(provider);
 }
 
 /** Exactly what is registered with the provider; never taken from a request. */
-export const redirectUri = (provider: ProviderId) =>
-  `${config.APP_ORIGIN}/api/auth/idp/${provider}/callback`;
+export const redirectUri = (provider: ProviderId) => `${config.APP_ORIGIN}/api/auth/idp/${provider}/callback`;
 
 // ---------------------------------------------------------------------------
 // The sealed flow cookie
@@ -137,17 +126,13 @@ export type Flow = {
   carry?: string;
 };
 
-const sealKey = (label: string) =>
-  createHmac("sha256", config.LINK_KEY).update(label).digest();
+const sealKey = (label: string) => createHmac("sha256", config.LINK_KEY).update(label).digest();
 
 /** AES-256-GCM under a key for `label`, as one base64url string. */
 export function sealValue(value: unknown, label: string) {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", sealKey(label), iv);
-  const body = Buffer.concat([
-    cipher.update(JSON.stringify(value), "utf8"),
-    cipher.final(),
-  ]);
+  const body = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
   return Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");
 }
 
@@ -161,17 +146,10 @@ export function openValue<T extends { expires: number }>(
   try {
     const raw = Buffer.from(value, "base64url");
     if (raw.length < 12 + 16 + 2) return null;
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      sealKey(label),
-      raw.subarray(0, 12),
-    );
+    const decipher = createDecipheriv("aes-256-gcm", sealKey(label), raw.subarray(0, 12));
     decipher.setAuthTag(raw.subarray(raw.length - 16));
     const opened = JSON.parse(
-      Buffer.concat([
-        decipher.update(raw.subarray(12, raw.length - 16)),
-        decipher.final(),
-      ]).toString("utf8"),
+      Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]).toString("utf8"),
     ) as T;
     if (typeof opened.expires !== "number" || opened.expires < now) return null;
     return opened;
@@ -220,8 +198,7 @@ export function safeReturnPath(value: unknown) {
 }
 
 const random = () => randomBytes(32).toString("base64url");
-const challenge = (verifier: string) =>
-  createHash("sha256").update(verifier).digest("base64url");
+const challenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
 // ---------------------------------------------------------------------------
 // HTTP to providers
@@ -231,18 +208,11 @@ const MAX_RESPONSE = 256 * 1024;
 
 function providerUrl(value: string) {
   const url = new URL(value);
-  if (
-    url.protocol === "https:" ||
-    (url.protocol === "http:" && LOOPBACK.has(url.hostname))
-  )
-    return url;
+  if (url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK.has(url.hostname))) return url;
   throw new IdpError("provider");
 }
 
-async function fetchJson(
-  value: string,
-  init: RequestInit = {},
-): Promise<Record<string, any>> {
+async function fetchJson(value: string, init: RequestInit = {}): Promise<Record<string, any>> {
   let response: Response;
   try {
     response = await fetch(providerUrl(value), {
@@ -258,12 +228,10 @@ async function fetchJson(
   const length = Number(response.headers.get("content-length") ?? 0);
   if (length > MAX_RESPONSE) throw new IdpError("provider");
   const text = await response.text().catch(() => "");
-  if (text.length > MAX_RESPONSE || !response.ok)
-    throw new IdpError("provider");
+  if (text.length > MAX_RESPONSE || !response.ok) throw new IdpError("provider");
   try {
     const body = JSON.parse(text);
-    if (!body || typeof body !== "object" || Array.isArray(body))
-      throw new IdpError("provider");
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new IdpError("provider");
     return body;
   } catch {
     throw new IdpError("provider");
@@ -289,10 +257,7 @@ const cleanEmail = (value: unknown) => {
 };
 
 const subjectOf = (value: unknown) => {
-  const subject =
-    typeof value === "number" && Number.isSafeInteger(value)
-      ? String(value)
-      : text(value, 255);
+  const subject = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : text(value, 255);
   if (!subject) throw new IdpError("provider");
   return subject;
 };
@@ -308,10 +273,7 @@ type Discovery = {
 };
 /** Per URL: the company's IdP and Google side by side. */
 const discoveryCache = new Map<string, { at: number; value: Discovery }>();
-const jwksCache = new Map<
-  string,
-  { at: number; keys: Array<Record<string, any>> }
->();
+const jwksCache = new Map<string, { at: number; keys: Array<Record<string, any>> }>();
 const CACHE_MS = 60 * 60 * 1000;
 
 /** Tests switch installations; production reads config once per hour. */
@@ -320,40 +282,23 @@ export function resetOidcCache() {
   jwksCache.clear();
 }
 
-async function discovery(
-  url = config.OIDC_DISCOVERY_URL!,
-): Promise<Discovery> {
+async function discovery(url = config.OIDC_DISCOVERY_URL!): Promise<Discovery> {
   const cached = discoveryCache.get(url);
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
   const body = await fetchJson(url);
   const value = body as Discovery;
-  for (const key of [
-    "issuer",
-    "authorization_endpoint",
-    "token_endpoint",
-    "jwks_uri",
-  ] as const)
+  for (const key of ["issuer", "authorization_endpoint", "token_endpoint", "jwks_uri"] as const)
     if (typeof value[key] !== "string") throw new IdpError("provider");
   // OIDC Discovery § 4.3: the document is at <issuer>/.well-known/…
-  if (
-    `${value.issuer.replace(/\/$/, "")}/.well-known/openid-configuration` !==
-    url
-  )
-    throw new IdpError("provider");
-  for (const endpoint of [
-    value.authorization_endpoint,
-    value.token_endpoint,
-    value.jwks_uri,
-  ])
-    providerUrl(endpoint);
+  if (`${value.issuer.replace(/\/$/, "")}/.well-known/openid-configuration` !== url) throw new IdpError("provider");
+  for (const endpoint of [value.authorization_endpoint, value.token_endpoint, value.jwks_uri]) providerUrl(endpoint);
   discoveryCache.set(url, { at: Date.now(), value });
   return value;
 }
 
 async function jwks(url: string, refresh: boolean) {
   const cached = jwksCache.get(url);
-  if (!refresh && cached && Date.now() - cached.at < CACHE_MS)
-    return cached.keys;
+  if (!refresh && cached && Date.now() - cached.at < CACHE_MS) return cached.keys;
   const body = await fetchJson(url);
   if (!Array.isArray(body.keys)) throw new IdpError("provider");
   jwksCache.set(url, { at: Date.now(), keys: body.keys });
@@ -388,8 +333,7 @@ export async function verifyIdToken(
   },
   now = Date.now(),
 ) {
-  if (typeof token !== "string" || token.length > 16384)
-    throw new IdpError("provider");
+  if (typeof token !== "string" || token.length > 16384) throw new IdpError("provider");
   const parts = token.split(".");
   if (parts.length !== 3) throw new IdpError("provider");
   const header = decodePart(parts[0]);
@@ -408,29 +352,19 @@ export async function verifyIdToken(
     for (const jwk of keys)
       try {
         const key = createPublicKey({ key: jwk as any, format: "jwk" });
-        if (
-          verifySignature(
-            algorithm.hash,
-            signed,
-            { key, ...algorithm.options },
-            signature,
-          )
-        )
-          return true;
+        if (verifySignature(algorithm.hash, signed, { key, ...algorithm.options }, signature)) return true;
       } catch {
         // A key of another type: try the next one.
       }
     return false;
   };
   // An unknown key id may mean the provider rotated keys: fetch once more.
-  if (!(await check(false)) && !(await check(true)))
-    throw new IdpError("provider");
+  if (!(await check(false)) && !(await check(true))) throw new IdpError("provider");
   const skew = 120;
   const seconds = Math.floor(now / 1000);
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   const issuers = [expected.issuer];
-  if (ISSUER_ALIASES[expected.issuer])
-    issuers.push(ISSUER_ALIASES[expected.issuer]);
+  if (ISSUER_ALIASES[expected.issuer]) issuers.push(ISSUER_ALIASES[expected.issuer]);
   if (
     !issuers.includes(claims.iss) ||
     !audiences.includes(expected.audience) ||
@@ -448,9 +382,7 @@ export async function verifyIdToken(
 function orgClaimMatches(claims: Record<string, any>) {
   if (!config.OIDC_ORG_CLAIM) return true;
   const value = claims[config.OIDC_ORG_CLAIM];
-  return Array.isArray(value)
-    ? value.includes(config.OIDC_ORG_VALUE)
-    : value === config.OIDC_ORG_VALUE;
+  return Array.isArray(value) ? value.includes(config.OIDC_ORG_VALUE) : value === config.OIDC_ORG_VALUE;
 }
 
 // ---------------------------------------------------------------------------
@@ -510,18 +442,14 @@ export async function startFlow(
     params.nonce = flow.nonce;
   }
   const url = providerUrl(authorize);
-  for (const [key, value] of Object.entries(params))
-    url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return { location: url.href, cookie: sealFlow(flow) };
 }
 
 // ---------------------------------------------------------------------------
 // Callback: code → token → profile
 
-export async function finishFlow(
-  flow: Flow,
-  query: Record<string, unknown>,
-): Promise<ProviderProfile> {
+export async function finishFlow(flow: Flow, query: Record<string, unknown>): Promise<ProviderProfile> {
   if (!sameState(flow.state, query.state)) throw new IdpError("state");
   if (typeof query.error === "string") throw new IdpError("denied");
   const code = text(query.code, 2048);
@@ -532,10 +460,7 @@ export async function finishFlow(
   return oidcProfile(code, flow);
 }
 
-async function yandexProfile(
-  code: string,
-  flow: Flow,
-): Promise<ProviderProfile> {
+async function yandexProfile(code: string, flow: Flow): Promise<ProviderProfile> {
   const token = await fetchJson(providerEndpoints.yandex.token, {
     ...form({
       grant_type: "authorization_code",
@@ -544,10 +469,7 @@ async function yandexProfile(
     }),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      authorization: basic(
-        config.YANDEX_CLIENT_ID!,
-        config.YANDEX_CLIENT_SECRET!,
-      ),
+      authorization: basic(config.YANDEX_CLIENT_ID!, config.YANDEX_CLIENT_SECRET!),
     },
   });
   const accessToken = text(token.access_token, 4096);
@@ -565,11 +487,7 @@ async function yandexProfile(
   };
 }
 
-async function vkProfile(
-  code: string,
-  flow: Flow,
-  deviceId: unknown,
-): Promise<ProviderProfile> {
+async function vkProfile(code: string, flow: Flow, deviceId: unknown): Promise<ProviderProfile> {
   const device = text(deviceId, 512);
   if (!device) throw new IdpError("provider");
   const token = await fetchJson(
@@ -584,8 +502,7 @@ async function vkProfile(
       state: flow.state,
     }),
   );
-  if (token.state !== undefined && !sameState(flow.state, token.state))
-    throw new IdpError("state");
+  if (token.state !== undefined && !sameState(flow.state, token.state)) throw new IdpError("state");
   const accessToken = text(token.access_token, 4096);
   if (!accessToken) throw new IdpError("provider");
   const info = await fetchJson(
@@ -595,9 +512,7 @@ async function vkProfile(
   const user = info.user;
   if (!user || typeof user !== "object") throw new IdpError("provider");
   const email = cleanEmail(user.email);
-  const name = [text(user.first_name, 40), text(user.last_name, 40)]
-    .filter(Boolean)
-    .join(" ");
+  const name = [text(user.first_name, 40), text(user.last_name, 40)].filter(Boolean).join(" ");
   return {
     provider: "vk",
     subject: subjectOf(user.user_id ?? token.user_id),
@@ -632,13 +547,7 @@ async function oidcProfile(code: string, flow: Flow): Promise<ProviderProfile> {
   if (!orgClaimMatches(claims)) throw new IdpError("domain");
   if (
     config.OIDC_ALLOWED_DOMAINS.length &&
-    !(
-      email &&
-      emailVerified &&
-      config.OIDC_ALLOWED_DOMAINS.includes(
-        email.slice(email.lastIndexOf("@") + 1),
-      )
-    )
+    !(email && emailVerified && config.OIDC_ALLOWED_DOMAINS.includes(email.slice(email.lastIndexOf("@") + 1)))
   )
     throw new IdpError("domain");
   return {
@@ -650,8 +559,7 @@ async function oidcProfile(code: string, flow: Flow): Promise<ProviderProfile> {
   };
 }
 
-const DOMAIN =
-  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 /**
  * Sign in with Google: the code goes to Google's token endpoint over TLS with
@@ -660,10 +568,7 @@ const DOMAIN =
  * nonce), as for any OpenID provider. The address counts only when Google
  * says `email_verified: true`.
  */
-async function googleProfile(
-  code: string,
-  flow: Flow,
-): Promise<ProviderProfile> {
+async function googleProfile(code: string, flow: Flow): Promise<ProviderProfile> {
   const document = await discovery(providerEndpoints.google.discovery);
   const token = await fetchJson(document.token_endpoint, {
     ...form({
@@ -674,10 +579,7 @@ async function googleProfile(
     }),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      authorization: basic(
-        config.GOOGLE_CLIENT_ID!,
-        config.GOOGLE_CLIENT_SECRET!,
-      ),
+      authorization: basic(config.GOOGLE_CLIENT_ID!, config.GOOGLE_CLIENT_SECRET!),
     },
   });
   const claims = await verifyIdToken(token.id_token, {
@@ -688,9 +590,7 @@ async function googleProfile(
   });
   const email = cleanEmail(claims.email);
   const hd = text(claims.hd, 253)?.toLowerCase() ?? null;
-  const fullName = [text(claims.given_name, 40), text(claims.family_name, 40)]
-    .filter(Boolean)
-    .join(" ");
+  const fullName = [text(claims.given_name, 40), text(claims.family_name, 40)].filter(Boolean).join(" ");
   // `picture` (the avatar URL) arrives with the profile scope and is not
   // kept: Полка shows no avatars.
   return {

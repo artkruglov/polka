@@ -25,15 +25,15 @@ export const agentEventsInputSchema = z
      * nextCursor is the current end of the feed, to poll from. "0": from the
      * start of the shelf's history.
      */
-    after: z.string().regex(/^(0|\d{1,20}:\d{1,18})$/).optional(),
+    after: z
+      .string()
+      .regex(/^(0|\d{1,20}:\d{1,18})$/)
+      .optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
   })
   .strict();
 
-export async function listEventsForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof agentEventsInputSchema>,
-) {
+export async function listEventsForAgent(actor: ServiceActor, raw: z.input<typeof agentEventsInputSchema>) {
   const verified = await recheckServiceActor(actor, "read");
   const input = agentEventsInputSchema.parse(raw);
   const scope = await agentFolderScope(db, {
@@ -72,14 +72,7 @@ export async function listEventsForAgent(
        AND ${inScopeSql("artifact", "$5")}
      ORDER BY COALESCE(e.tx_id,'0'::xid8),e.id
      LIMIT $6`,
-    [
-      verified.tenantId,
-      EVENT_ACTIONS,
-      afterTx,
-      afterId,
-      scope,
-      input.limit + 1,
-    ],
+    [verified.tenantId, EVENT_ACTIONS, afterTx, afterId, scope, input.limit + 1],
   );
   const more = rows.length > input.limit;
   const page = rows.slice(0, input.limit);

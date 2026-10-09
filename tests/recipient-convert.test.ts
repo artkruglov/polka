@@ -23,41 +23,18 @@ const storage = (store: Map<string, string>) => ({
 (globalThis as any).window = globalThis;
 
 const { takeShareAfterSignIn } = await import("../apps/web/src/shared/lib/share-return.ts");
-const { setVisitSourceRef, visitSource, visitSourceQuery } = await import(
-  "../apps/web/src/shared/lib/visit-source.ts"
-);
-const { recipientCtaBody, trackRecipientCta } = await import(
-  "../apps/web/src/shared/api/recipient-cta.ts"
-);
-const { connectPhrase } = await import(
-  "../apps/web/src/entities/onboarding/connect-phrase.ts"
-);
+const { setVisitSourceRef, visitSource, visitSourceQuery } = await import("../apps/web/src/shared/lib/visit-source.ts");
+const { recipientCtaBody, trackRecipientCta } = await import("../apps/web/src/shared/api/recipient-cta.ts");
+const { connectPhrase } = await import("../apps/web/src/entities/onboarding/connect-phrase.ts");
 const { arrivedFromShare } = await import("../apps/web/src/entities/onboarding/arrival.ts");
-const {
-  CARD_DISMISSED_KEY,
-  CARD_SHOWN_KEY,
-  markCardDismissed,
-  markCardShown,
-  mayAutoOpen,
-  readCardState,
-} = await import("../apps/web/src/entities/recipient-convert/card-state.ts");
-const { kindWords, remixPrompt } = await import(
-  "../apps/web/src/entities/recipient-convert/remix-prompt.ts"
-);
-const { isFreshAccount } = await import(
-  "../apps/web/src/entities/recipient-convert/fresh-account.ts"
-);
-const { rememberConvertReturn, takeConvertReturn } = await import(
-  "../apps/web/src/entities/recipient-convert/return.ts"
-);
-const {
-  ConvertBar,
-  ConvertCard,
-  SIGN_UP_HREF,
-  SignedInFromShare,
-  leaveForProvider,
-  variantRef,
-} = await import("../apps/web/src/features/recipient-convert/index.tsx");
+const { CARD_DISMISSED_KEY, CARD_SHOWN_KEY, markCardDismissed, markCardShown, mayAutoOpen, readCardState } =
+  await import("../apps/web/src/entities/recipient-convert/card-state.ts");
+const { kindWords, remixPrompt } = await import("../apps/web/src/entities/recipient-convert/remix-prompt.ts");
+const { isFreshAccount } = await import("../apps/web/src/entities/recipient-convert/fresh-account.ts");
+const { rememberConvertReturn, takeConvertReturn } =
+  await import("../apps/web/src/entities/recipient-convert/return.ts");
+const { ConvertBar, ConvertCard, SIGN_UP_HREF, SignedInFromShare, leaveForProvider, variantRef } =
+  await import("../apps/web/src/features/recipient-convert/index.tsx");
 const { FirstRunSteps } = await import("../apps/web/src/features/first-run/index.tsx");
 const { deriveFirstRun } = await import("../apps/web/src/entities/onboarding/steps.ts");
 
@@ -85,9 +62,7 @@ beforeEach(() => {
 });
 
 test("the bar: the sentence and two actions, keyboard reachable buttons", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(ConvertBar, { onTry: () => {}, onRemix: () => {} }),
-  );
+  const html = renderToStaticMarkup(React.createElement(ConvertBar, { onTry: () => {}, onRemix: () => {} }));
   assert.match(html, /Эту страницу сделали с ИИ и сохранили на Полку/);
   assert.match(html, /<button[^>]*>[^<]*Попробовать бесплатно/);
   assert.match(html, /aria-label="Сделать такую же"/);
@@ -236,10 +211,7 @@ test("a feed material: ref feed / feed-remix, the way back is the material's pla
     recipientCtaBody({ event: "click", action: "try", page: "feed" }),
     '{"event":"click","action":"try","page":"feed"}',
   );
-  assert.equal(
-    recipientCtaBody({ event: "view", surface: "bar", page: "share" }),
-    '{"event":"view","surface":"bar"}',
-  );
+  assert.equal(recipientCtaBody({ event: "view", surface: "bar", page: "share" }), '{"event":"view","surface":"bar"}');
   // Leaving for a provider from a material keeps the path, not a token.
   leaveForProvider({ path }, "try", "feed");
   assert.deepEqual(visitSource(), { ref: "feed" });
@@ -313,9 +285,7 @@ test("first-run steps for an account that came from a share: the phrase leads, �
     onClient: () => {},
     onUpload: () => {},
   };
-  const html = renderToStaticMarkup(
-    React.createElement(FirstRunSteps, { ...props, arrival: "share" }),
-  );
+  const html = renderToStaticMarkup(React.createElement(FirstRunSteps, { ...props, arrival: "share" }));
   assert.match(html, /data-arrival="share"/);
   // The same heading as the shelf's hero and /bring.
   assert.match(html, /Подключите агента — он сам сохранит работу на полку/);
@@ -324,9 +294,7 @@ test("first-run steps for an account that came from a share: the phrase leads, �
   assert.ok(phraseAt > 0 && uploadAt > phraseAt, `${phraseAt} ${uploadAt}`);
   assert.doesNotMatch(html, /Сохранить без агента/);
   // Without the arrival the heading is the usual one; without onUpload the link to /bring stays.
-  const plain = renderToStaticMarkup(
-    React.createElement(FirstRunSteps, { ...props, onUpload: undefined }),
-  );
+  const plain = renderToStaticMarkup(React.createElement(FirstRunSteps, { ...props, onUpload: undefined }));
   assert.match(plain, /Три шага до первой ссылки/);
   assert.match(plain, /href="\/bring"/);
 });

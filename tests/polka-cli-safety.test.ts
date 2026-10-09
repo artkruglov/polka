@@ -137,7 +137,11 @@ const reset = (files: Array<{ path: string; bytes: Buffer }>) => {
   redirectExport = false;
 };
 const text = (path: string, body = path) => ({ path, bytes: Buffer.from(body) });
-const exists = (path: string) => lstat(path).then(() => true, () => false);
+const exists = (path: string) =>
+  lstat(path).then(
+    () => true,
+    () => false,
+  );
 
 test("pull writes a version, and lists a local file it replaced", async () => {
   reset([text("index.html", "new"), text("docs/a.md")]);
@@ -152,7 +156,15 @@ test("pull writes a version, and lists a local file it replaced", async () => {
 });
 
 test("pull refuses a manifest path that leaves the folder or starts with a dot", async () => {
-  for (const path of ["../escape.txt", "a/../../escape.txt", "/etc/escape.txt", ".git/hooks/post-checkout", ".polka.json", "a//b.txt", "a\\b.txt"]) {
+  for (const path of [
+    "../escape.txt",
+    "a/../../escape.txt",
+    "/etc/escape.txt",
+    ".git/hooks/post-checkout",
+    ".polka.json",
+    "a//b.txt",
+    "a\\b.txt",
+  ]) {
     reset([text(path)]);
     const folder = join(scratch, `bad-${Math.random().toString(36).slice(2)}`);
     const result = await node(pull, [ARTIFACT, folder], { POLKA_ENDPOINT: origin });
@@ -279,7 +291,10 @@ test("export keeps no damaged file, and never follows a redirect with the token"
   damaged = true;
   const broken = await node(exporter, [join(scratch, "export-damaged")], { POLKA_ENDPOINT: origin });
   assert.equal(broken.code, 1);
-  assert.deepEqual(JSON.parse(await readFile(join(scratch, "export-damaged", "polka-export.json"), "utf8")).items.length, 1);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(scratch, "export-damaged", "polka-export.json"), "utf8")).items.length,
+    1,
+  );
   assert.ok(!(await exists(join(scratch, "export-damaged", "blobs", sha(Buffer.from("a.txt"))))));
 
   reset([text("a.txt")]);

@@ -20,9 +20,7 @@ import {
 import { EXPECTED_MIGRATION_VERSIONS } from "../packages/migrations.ts";
 
 const hex = (value: string) => value.repeat(64).slice(0, 64);
-const receipt = (
-  overrides: Partial<RestoreCompletionReceipt> = {},
-): RestoreCompletionReceipt => ({
+const receipt = (overrides: Partial<RestoreCompletionReceipt> = {}): RestoreCompletionReceipt => ({
   version: 1,
   restoreRunId: "00000000-0000-4000-8000-000000000001",
   backupSha256: hex("a"),
@@ -41,14 +39,8 @@ test("restore receipt is canonical, bounded, and atomically retryable", async (t
   await writeRestoreReceipt(target, receipt());
   assert.deepEqual(await readRestoreReceipt(target), receipt());
   await writeRestoreReceipt(target, receipt());
-  await assert.rejects(
-    writeRestoreReceipt(target, receipt({ backupSha256: hex("d") })),
-    /another restore generation/,
-  );
-  assert.throws(
-    () => parseRestoreReceipt(` ${canonicalRestoreReceipt(receipt())}`),
-    /not canonical/,
-  );
+  await assert.rejects(writeRestoreReceipt(target, receipt({ backupSha256: hex("d") })), /another restore generation/);
+  assert.throws(() => parseRestoreReceipt(` ${canonicalRestoreReceipt(receipt())}`), /not canonical/);
   const oversized = path.join(directory, "oversized.json");
   await writeFile(oversized, Buffer.alloc(16 * 1024 + 1));
   await assert.rejects(readRestoreReceipt(oversized), /size limit/);
@@ -89,10 +81,7 @@ test("target, schema, and ledger hashes have explicit stable identities", () => 
     storageBucket: "content",
   });
   assert.equal(targetIdentitySha256(first), targetIdentitySha256(second));
-  assert.notEqual(
-    targetIdentitySha256(first),
-    targetIdentitySha256({ ...second, databaseOid: "43" }),
-  );
+  assert.notEqual(targetIdentitySha256(first), targetIdentitySha256({ ...second, databaseOid: "43" }));
   assert.notEqual(
     targetIdentitySha256(first),
     targetIdentitySha256({
@@ -104,10 +93,7 @@ test("target, schema, and ledger hashes have explicit stable identities", () => 
     { key: "b", versionId: "2", sha256: hex("b") },
     { key: "a", versionId: "1", sha256: hex("a") },
   ];
-  assert.equal(
-    ledgerManifestSha256(records),
-    ledgerManifestSha256([...records].reverse()),
-  );
+  assert.equal(ledgerManifestSha256(records), ledgerManifestSha256([...records].reverse()));
   assert.notEqual(
     schemaManifestSha256(EXPECTED_MIGRATION_VERSIONS),
     schemaManifestSha256(EXPECTED_MIGRATION_VERSIONS.slice(0, -1)),

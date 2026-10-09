@@ -37,13 +37,7 @@ export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];
 /** Where a guest of a shared work saw the «сделано на Полке» prompt. */
 export const RECIPIENT_CTA_SURFACES = ["bar", "card"] as const;
 /** What they pressed in it. */
-export const RECIPIENT_CTA_ACTIONS = [
-  "try",
-  "remix",
-  "copy_phrase",
-  "yandex",
-  "email",
-] as const;
+export const RECIPIENT_CTA_ACTIONS = ["try", "remix", "copy_phrase", "yandex", "email"] as const;
 /** Which page showed it: a shared work (/s) or a feed material (/discover). */
 export const RECIPIENT_CTA_PAGES = ["share", "feed"] as const;
 export type RecipientCtaEvent = { page?: (typeof RECIPIENT_CTA_PAGES)[number] } & (
@@ -52,32 +46,11 @@ export type RecipientCtaEvent = { page?: (typeof RECIPIENT_CTA_PAGES)[number] } 
 );
 
 /** Landing pages whose loads are counted (anonymous visitors only). */
-export const PUBLIC_PAGES = new Set([
-  "/",
-  "/connect",
-  "/enterprise",
-  "/pricing",
-  "/discover",
-  "/signup",
-]);
+export const PUBLIC_PAGES = new Set(["/", "/connect", "/enterprise", "/pricing", "/discover", "/signup"]);
 
-export type SignupMethod =
-  | "email"
-  | "yandex"
-  | "vk"
-  | "google"
-  | "oidc"
-  | "password"
-  | "provisional";
+export type SignupMethod = "email" | "yandex" | "vk" | "google" | "oidc" | "password" | "provisional";
 export type AgentClient =
-  | "codex"
-  | "claude-code"
-  | "claude-ai"
-  | "chatgpt"
-  | "browser-extension"
-  | "token-http"
-  | "token-mcp"
-  | "other";
+  "codex" | "claude-code" | "claude-ai" | "chatgpt" | "browser-extension" | "token-http" | "token-mcp" | "other";
 export type Via = "agent" | "api" | "web";
 export type VisitSource = { ref?: string; referrer?: string };
 
@@ -152,8 +125,7 @@ export function referrerHost(value: unknown): string | null {
   } catch {
     return null;
   }
-  if (host.length > 100 || !HOST.test(host) || ownHosts().has(host))
-    return null;
+  if (host.length > 100 || !HOST.test(host) || ownHosts().has(host)) return null;
   return host;
 }
 
@@ -163,9 +135,7 @@ export function sanitizeSource(value: unknown): VisitSource | null {
   const raw = value as Record<string, unknown>;
   const ref = sanitizeRef(raw.ref);
   const referrer = referrerHost(raw.referrer);
-  return ref || referrer
-    ? { ...(ref ? { ref } : {}), ...(referrer ? { referrer } : {}) }
-    : null;
+  return ref || referrer ? { ...(ref ? { ref } : {}), ...(referrer ? { referrer } : {}) } : null;
 }
 
 /** The report's source label: the ref, else the referrer host, else "". */
@@ -222,9 +192,7 @@ function write(row: Row, q: Queryable = db) {
     .then(
       () => undefined,
       () => {
-        console.error(
-          JSON.stringify({ event: "analytics.write_failed", name: row.name }),
-        );
+        console.error(JSON.stringify({ event: "analytics.write_failed", name: row.name }));
       },
     );
   pending.add(work);
@@ -250,10 +218,7 @@ export async function flushAnalytics() {
   }
 }
 
-const event = (
-  name: AnalyticsEventName,
-  fields: Partial<Omit<Row, "name">> = {},
-): Row => ({
+const event = (name: AnalyticsEventName, fields: Partial<Omit<Row, "name">> = {}): Row => ({
   name,
   actor: null,
   subject: null,
@@ -286,12 +251,7 @@ export function trackPageView(req: PageRequest, path: string) {
     const value = req.headers[name];
     return Array.isArray(value) ? value[0] : value;
   };
-  if (
-    /prefetch|prerender/i.test(
-      `${header("sec-purpose") ?? ""} ${header("purpose") ?? ""}`,
-    )
-  )
-    return;
+  if (/prefetch|prerender/i.test(`${header("sec-purpose") ?? ""} ${header("purpose") ?? ""}`)) return;
   if (!isHumanAgent(header("user-agent"))) return;
   const query = (req.query ?? {}) as Record<string, unknown>;
   const ref = sanitizeRef(query.ref);
@@ -310,12 +270,7 @@ export function trackPageView(req: PageRequest, path: string) {
 }
 
 /** A new account (email code, Яндекс ID, VK ID, OIDC or operator password). */
-export function trackSignup(
-  c: PoolClient,
-  accountId: string,
-  method: SignupMethod,
-  source?: VisitSource | null,
-) {
+export function trackSignup(c: PoolClient, accountId: string, method: SignupMethod, source?: VisitSource | null) {
   const clean = sanitizeSource(source ?? null);
   later(
     c,
@@ -349,10 +304,7 @@ export function trackShelfClaimed(
 }
 
 /** Which agent an OAuth client is, from its name and where it returns to. */
-export function oauthClientKind(
-  name: string | null | undefined,
-  redirectUris: readonly string[],
-): AgentClient {
+export function oauthClientKind(name: string | null | undefined, redirectUris: readonly string[]): AgentClient {
   const hosts = redirectUris.flatMap((uri) => {
     try {
       return [new URL(uri).hostname.toLowerCase()];
@@ -361,9 +313,7 @@ export function oauthClientKind(
     }
   });
   const on = (...known: string[]) =>
-    hosts.some((host) =>
-      known.some((item) => host === item || host.endsWith(`.${item}`)),
-    );
+    hosts.some((host) => known.some((item) => host === item || host.endsWith(`.${item}`)));
   if (on("claude.ai", "claude.com", "anthropic.com")) return "claude-ai";
   if (on("chatgpt.com", "openai.com")) return "chatgpt";
   if (on("chromiumapp.org")) return "browser-extension";
@@ -374,12 +324,7 @@ export function oauthClientKind(
 }
 
 /** A connection's first success: an OAuth grant, or a token's first call. */
-export function trackAgentConnected(
-  q: PoolClient | null,
-  accountId: string,
-  client: AgentClient,
-  first: boolean,
-) {
+export function trackAgentConnected(q: PoolClient | null, accountId: string, client: AgentClient, first: boolean) {
   const row = event("agent_connected", {
     actor: actorKey(accountId),
     props: { client, first },
@@ -389,13 +334,7 @@ export function trackAgentConnected(
   else void write(row);
 }
 
-export function trackWorkSaved(
-  c: PoolClient,
-  accountId: string,
-  via: Via,
-  first: boolean,
-  kind: "new" | "revision",
-) {
+export function trackWorkSaved(c: PoolClient, accountId: string, via: Via, first: boolean, kind: "new" | "revision") {
   later(
     c,
     event("work_saved", {
@@ -420,11 +359,7 @@ export function trackShareCreated(c: PoolClient, accountId: string, via: Via) {
 }
 
 /** A recipient opened the link: counted for its owner, once a day per link. */
-export function trackShareOpened(
-  c: PoolClient,
-  ownerAccountId: string,
-  shareId: string,
-) {
+export function trackShareOpened(c: PoolClient, ownerAccountId: string, shareId: string) {
   later(
     c,
     event("share_opened", {
@@ -434,12 +369,7 @@ export function trackShareOpened(
   );
 }
 
-export function trackNoteAdded(
-  c: PoolClient,
-  accountId: string,
-  by: "owner" | "reader",
-  via: Via,
-) {
+export function trackNoteAdded(c: PoolClient, accountId: string, by: "owner" | "reader", via: Via) {
   later(
     c,
     event("note_added", {
@@ -460,19 +390,14 @@ export function trackRecipientCta(input: RecipientCtaEvent) {
   const detail = input.event === "view" ? input.surface : input.action;
   const path = input.page === "feed" ? "/discover" : "/s";
   void write(
-    event(
-      input.event === "view" ? "recipient_cta_view" : "recipient_cta_click",
-      {
-        props: {
-          ...(input.event === "view"
-            ? { surface: input.surface }
-            : { action: input.action }),
-          path,
-        },
+    event(input.event === "view" ? "recipient_cta_view" : "recipient_cta_click", {
+      props: {
+        ...(input.event === "view" ? { surface: input.surface } : { action: input.action }),
         path,
-        detail,
       },
-    ),
+      path,
+      detail,
+    }),
   );
 }
 
@@ -527,24 +452,11 @@ export function markActive(accountId: string) {
  * Deletes an account's events and active days. With `optOut` (an objection
  * under the privacy policy) its new events are not written either.
  */
-export async function forgetAccount(
-  q: Queryable,
-  accountId: string,
-  optOut = false,
-) {
+export async function forgetAccount(q: Queryable, accountId: string, optOut = false) {
   const actor = actorKey(accountId);
-  if (optOut)
-    await q.query(
-      "INSERT INTO analytics_optouts(actor) VALUES($1) ON CONFLICT DO NOTHING",
-      [actor],
-    );
-  const events = await q.query("DELETE FROM analytics_events WHERE actor=$1", [
-    actor,
-  ]);
-  const days = await q.query(
-    "DELETE FROM analytics_active_days WHERE actor=$1",
-    [actor],
-  );
+  if (optOut) await q.query("INSERT INTO analytics_optouts(actor) VALUES($1) ON CONFLICT DO NOTHING", [actor]);
+  const events = await q.query("DELETE FROM analytics_events WHERE actor=$1", [actor]);
+  const days = await q.query("DELETE FROM analytics_active_days WHERE actor=$1", [actor]);
   seen.delete(actor);
   return { events: events.rowCount ?? 0, activeDays: days.rowCount ?? 0 };
 }

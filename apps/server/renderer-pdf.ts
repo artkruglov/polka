@@ -62,7 +62,9 @@ export async function pdfForExtension(
     return { skipped: "failed" };
   }
   if ("reason" in page)
-    return { skipped: page.reason === "too_large" ? "too_large" : page.reason === "not_visual" ? "not_visual" : "no_source" };
+    return {
+      skipped: page.reason === "too_large" ? "too_large" : page.reason === "not_visual" ? "not_visual" : "no_source",
+    };
   const body = JSON.stringify({ html: page.html, script: page.script });
   if (Buffer.byteLength(body) > PDF_MAX_BODY) return { skipped: "too_large" };
   let answer: PdfResult | { error: "outdated" };

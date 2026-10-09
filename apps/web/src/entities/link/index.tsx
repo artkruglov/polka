@@ -41,15 +41,7 @@ export function recipientAccessNote(
   return `Получатель откроет оригинал на ${host}. Если страницу закроют или удалят, он увидит только карточку.`;
 }
 
-export function LinkCover({
-  title,
-  host,
-  service,
-}: {
-  title: string;
-  host: string;
-  service: LinkProviderId | null;
-}) {
+export function LinkCover({ title, host, service }: { title: string; host: string; service: LinkProviderId | null }) {
   const provider = providerById(service);
   return (
     <div className="link-cover" aria-hidden="true">

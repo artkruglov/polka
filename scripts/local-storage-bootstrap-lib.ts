@@ -4,9 +4,7 @@ export type LocalStorageBootstrapTarget = {
   accessKey: string;
 };
 
-export function assertLocalStorageBootstrapTarget(
-  target: LocalStorageBootstrapTarget,
-) {
+export function assertLocalStorageBootstrapTarget(target: LocalStorageBootstrapTarget) {
   const endpoint = new URL(target.endpoint);
   if (
     endpoint.origin !== target.endpoint ||
@@ -17,9 +15,7 @@ export function assertLocalStorageBootstrapTarget(
     target.bucket !== "polka-local" ||
     target.accessKey !== "polka-local"
   )
-    throw new Error(
-      "Local storage bootstrap only supports the generated loopback target",
-    );
+    throw new Error("Local storage bootstrap only supports the generated loopback target");
 }
 
 export async function runLocalStorageBootstrap(

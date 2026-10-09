@@ -11,8 +11,7 @@ const LOCAL_LINKS: Record<string, string> = {
   "terms.md": "/terms",
 };
 
-const INLINE =
-  /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]/g;
+const INLINE = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]/g;
 
 function inline(text: string, key = ""): React.ReactNode[] {
   const out: React.ReactNode[] = [];
@@ -22,12 +21,10 @@ function inline(text: string, key = ""): React.ReactNode[] {
     if (at > last) out.push(text.slice(last, at));
     const id = `${key}${at}`;
     const [, bold, code, label, href, placeholder] = match;
-    if (bold !== undefined)
-      out.push(<strong key={id}>{inline(bold, `${id}-`)}</strong>);
+    if (bold !== undefined) out.push(<strong key={id}>{inline(bold, `${id}-`)}</strong>);
     else if (code !== undefined) out.push(<code key={id}>{code}</code>);
     else if (label !== undefined) {
-      const target =
-        LOCAL_LINKS[href] ?? (/^https:\/\//.test(href) ? href : null);
+      const target = LOCAL_LINKS[href] ?? (/^https:\/\//.test(href) ? href : null);
       out.push(
         target ? (
           <a key={id} href={target}>
@@ -65,8 +62,7 @@ export function Markdown({ source }: { source: string }) {
       i++;
     } else if (line.startsWith("- ")) {
       const items: string[] = [];
-      while (i < lines.length && lines[i].startsWith("- "))
-        items.push(lines[i++].slice(2));
+      while (i < lines.length && lines[i].startsWith("- ")) items.push(lines[i++].slice(2));
       blocks.push(
         <ul key={key}>
           {items.map((item, n) => (
@@ -76,8 +72,7 @@ export function Markdown({ source }: { source: string }) {
       );
     } else if (line.startsWith("> ")) {
       const text: string[] = [];
-      while (i < lines.length && lines[i].startsWith("> "))
-        text.push(lines[i++].slice(2));
+      while (i < lines.length && lines[i].startsWith("> ")) text.push(lines[i++].slice(2));
       blocks.push(
         <aside key={key} className="legal-note" role="note">
           {inline(text.join(" "))}
@@ -89,12 +84,7 @@ export function Markdown({ source }: { source: string }) {
       i++;
     } else {
       const text: string[] = [];
-      while (
-        i < lines.length &&
-        lines[i].trim() &&
-        !/^(#{1,3} |- |> )/.test(lines[i])
-      )
-        text.push(lines[i++]);
+      while (i < lines.length && lines[i].trim() && !/^(#{1,3} |- |> )/.test(lines[i])) text.push(lines[i++]);
       blocks.push(<p key={key}>{inline(text.join(" "))}</p>);
     }
   }

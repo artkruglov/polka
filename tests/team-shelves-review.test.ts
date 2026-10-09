@@ -83,7 +83,11 @@ before(async () => {
   reader = await account("review-reader");
   await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [admin.id]);
   shelf = (await call("POST", "/api/shelves", admin, { name: "Отдел ревью" })).json();
-  for (const [who, role] of [[author, "author"], [colleague, "author"], [reader, "reader"]] as const)
+  for (const [who, role] of [
+    [author, "author"],
+    [colleague, "author"],
+    [reader, "reader"],
+  ] as const)
     assert.equal(
       (await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: who.name, role })).statusCode,
       200,

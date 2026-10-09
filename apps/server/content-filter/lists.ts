@@ -89,8 +89,7 @@ export function parseList(category: Category, source: string): CategoryList {
       const [directive, ...args] = line.split(/\s+/);
       const number = (value: string | undefined) => {
         const parsed = Number(value);
-        if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100)
-          fail(`${directive} needs a whole number`);
+        if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) fail(`${directive} needs a whole number`);
         return parsed;
       };
       if (directive === "@threshold") list.threshold = number(args[0]);
@@ -117,17 +116,13 @@ export function parseList(category: Category, source: string): CategoryList {
       .map((word): Word => {
         const stem = word.endsWith("*");
         const text = canonicalToken(stem ? word.slice(0, -1) : word);
-        if (!/^[\p{L}\p{N}]+$/u.test(text))
-          fail(`«${word}»: a term is letters and digits (split words by spaces)`);
-        if (stem && [...text].length < MIN_STEM)
-          fail(`«${word}»: a stem needs at least ${MIN_STEM} letters`);
+        if (!/^[\p{L}\p{N}]+$/u.test(text)) fail(`«${word}»: a term is letters and digits (split words by spaces)`);
+        if (stem && [...text].length < MIN_STEM) fail(`«${word}»: a stem needs at least ${MIN_STEM} letters`);
         return { text, stem };
       });
-    if (!words.length || words.length > MAX_PHRASE)
-      fail(`a term is 1–${MAX_PHRASE} words`);
+    if (!words.length || words.length > MAX_PHRASE) fail(`a term is 1–${MAX_PHRASE} words`);
     const group = groupPart || null;
-    if (group !== null && !/^[a-z_]{2,20}$/.test(group))
-      fail(`group «${group}»: lowercase latin letters`);
+    if (group !== null && !/^[a-z_]{2,20}$/.test(group)) fail(`group «${group}»: lowercase latin letters`);
     if (weight === 0 && group === null) fail("a weight of 0 needs a group");
     const id = match![2]!.trim().replace(/\s+/g, " ");
     if (seen.has(id)) fail(`«${id}» is listed twice`);
@@ -138,11 +133,8 @@ export function parseList(category: Category, source: string): CategoryList {
   for (const pair of list.pairs)
     for (const group of [pair.a, pair.b])
       if (!groups.has(group))
-        throw new Error(
-          `content-filter/lists/${category}.txt: @pair names a group «${group}» with no terms`,
-        );
-  if (list.high < list.threshold)
-    throw new Error(`content-filter/lists/${category}.txt: @high below @threshold`);
+        throw new Error(`content-filter/lists/${category}.txt: @pair names a group «${group}» with no terms`);
+  if (list.high < list.threshold) throw new Error(`content-filter/lists/${category}.txt: @high below @threshold`);
   return list;
 }
 
@@ -187,13 +179,9 @@ let loaded: {
 export function filterLists() {
   if (!loaded)
     loaded = {
-      lists: LISTED.map((category) =>
-        parseList(category, readFileSync(listUrl(`${category}.txt`), "utf8")),
-      ),
+      lists: LISTED.map((category) => parseList(category, readFileSync(listUrl(`${category}.txt`), "utf8"))),
       domains: parseDomains(readFileSync(listUrl("domains.txt"), "utf8")),
-      disposable: parseEmailDomains(
-        readFileSync(listUrl("disposable_email.txt"), "utf8"),
-      ),
+      disposable: parseEmailDomains(readFileSync(listUrl("disposable_email.txt"), "utf8")),
     };
   return loaded;
 }
@@ -205,10 +193,7 @@ export function thresholds(category: Category) {
   return DETECTOR_THRESHOLDS[category];
 }
 
-const DETECTOR_THRESHOLDS: Record<
-  Category,
-  { threshold: number; high: number; block: number | null }
-> = {
+const DETECTOR_THRESHOLDS: Record<Category, { threshold: number; high: number; block: number | null }> = {
   csam: { threshold: 6, high: 12, block: 12 },
   extremism_terror: { threshold: 6, high: 10, block: null },
   drugs: { threshold: 6, high: 10, block: null },

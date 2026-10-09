@@ -40,17 +40,11 @@ import { lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
 import { lockShelf } from "./shelves.ts";
 import { isSuspicious, SignalCollector } from "./phishing-signals.ts";
 import { authorStanding } from "./share-moderation.ts";
-import {
-  blockCommentInTransaction,
-  recordEvent,
-} from "./content-moderation.ts";
+import { blockCommentInTransaction, recordEvent } from "./content-moderation.ts";
 import { decideContent } from "./content-filter/policy.ts";
 import { fraudScore, scanText } from "./content-filter/scanner.ts";
 import { sha256 } from "./storage.ts";
-import {
-  dispatchCommentNotices,
-  type CommentNotice,
-} from "./comment-mail.ts";
+import { dispatchCommentNotices, type CommentNotice } from "./comment-mail.ts";
 
 export type Viewer = { id: string; name: string; tenant: string };
 
@@ -84,12 +78,7 @@ type ShareContext = {
   open: boolean;
 };
 
-export const signInToComment = () =>
-  new Problem(
-    401,
-    "unauthorized",
-    "Войдите по почте, чтобы оставить комментарий.",
-  );
+export const signInToComment = () => new Problem(401, "unauthorized", "Войдите по почте, чтобы оставить комментарий.");
 
 /** COMMENTS_MODE, read per request so the operator's setting applies at once. */
 export const commentsMode = () => config.COMMENTS_MODE;
@@ -101,8 +90,7 @@ export const recipientsDoNotComment = () =>
     "На этой Полке получатели не оставляют комментарии: автор ведёт заметки к работе сам. Напишите ему напрямую — почтой или в мессенджере.",
   );
 
-export const commentsOff = () =>
-  new Problem(404, "not_found", "Комментарии на этой Полке выключены.");
+export const commentsOff = () => new Problem(404, "not_found", "Комментарии на этой Полке выключены.");
 
 /**
  * Who may write under the current mode: anyone signed in (on), the work's
@@ -111,16 +99,10 @@ export const commentsOff = () =>
 function assertMayWrite(context: { ownerIds: string[] }, actorId: string) {
   const mode = commentsMode();
   if (mode === "off") throw commentsOff();
-  if (mode === "owner-notes" && !context.ownerIds.includes(actorId))
-    throw recipientsDoNotComment();
+  if (mode === "owner-notes" && !context.ownerIds.includes(actorId)) throw recipientsDoNotComment();
 }
 
-const closed = () =>
-  new Problem(
-    410,
-    "expired",
-    "Ссылка закрыта: обсуждение по ней больше не принимает комментарии.",
-  );
+const closed = () => new Problem(410, "expired", "Ссылка закрыта: обсуждение по ней больше не принимает комментарии.");
 
 // ---------------------------------------------------------------------------
 // Anchors and signals
@@ -160,8 +142,7 @@ export function commentSignals(body: string) {
     signals,
     // A page's phishing (an off-page channel, a look-alike domain), or a
     // request for a secret next to a link.
-    suspicious:
-      isSuspicious(signals) || (secret && signals.includes("link:address")),
+    suspicious: isSuspicious(signals) || (secret && signals.includes("link:address")),
   };
 }
 
@@ -199,18 +180,13 @@ async function lockShareByToken(c: PoolClient, token: string, viewer: Viewer | n
     await checkLinkOpen(
       {
         shareId: candidate.id,
-        shelf: (
-          await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])
-        ).rows[0],
+        shelf: (await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])).rows[0],
         artifactId: candidate.artifact_id,
         viewer: viewer ? { id: viewer.id } : null,
       },
       c,
     );
-  const bound = await c.query(
-    "SELECT 1 FROM shares WHERE id=$1 AND token_hash=$2",
-    [candidate.id, tokenHash],
-  );
+  const bound = await c.query("SELECT 1 FROM shares WHERE id=$1 AND token_hash=$2", [candidate.id, tokenHash]);
   if (!bound.rowCount) throw missing();
   return context;
 }
@@ -244,11 +220,7 @@ async function lockShare(
   ).rows[0];
   if (!share) throw missing();
   // Links of the editorial catalogue are read by everyone: no comments.
-  const editorial = (
-    await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [
-      share.id,
-    ])
-  ).rowCount;
+  const editorial = (await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [share.id])).rowCount;
   if (editorial) throw missing();
   return shareContext(share, artifact, await shelfSideOf(c, owner.tenant), owner);
 }
@@ -263,8 +235,7 @@ async function shelfSideOf(c: Queryable, tenantId: string) {
   const {
     rows: [shelf],
   } = await c.query("SELECT kind,owner_id FROM tenants WHERE id=$1", [tenantId]);
-  if (shelf.kind !== "team")
-    return { owner: shelf.owner_id as string, ids: [shelf.owner_id as string] };
+  if (shelf.kind !== "team") return { owner: shelf.owner_id as string, ids: [shelf.owner_id as string] };
   const { rows } = await c.query(
     `SELECT account_id FROM tenant_members
      WHERE tenant_id=$1 AND state='active' AND role IN ('curator','admin')`,
@@ -284,11 +255,7 @@ function shareContext(
     ownerId: side.owner ?? share.created_by ?? actor.id,
     ownerIds: side.ids,
     title: artifact.title ?? "Работа",
-    open:
-      !share.revoked &&
-      share.unexpired &&
-      share.moderation === "none" &&
-      !artifact.trashed_at,
+    open: !share.revoked && share.unexpired && share.moderation === "none" && !artifact.trashed_at,
   };
 }
 
@@ -353,15 +320,7 @@ async function discussions(
          AND ($5::boolean OR comment.author_account_id=ANY($6::uuid[]))
        ORDER BY comment.created_at DESC,comment.id DESC
        LIMIT $7) shown`,
-    [
-      ids,
-      tenantId,
-      isOwner,
-      viewerId,
-      mode === "on",
-      ownerIds,
-      COMMENTS_SHOWN_PER_SHARE + 1,
-    ],
+    [ids, tenantId, isOwner, viewerId, mode === "on", ownerIds, COMMENTS_SHOWN_PER_SHARE + 1],
   );
   // Reactions exist only in `on`; in other modes they are kept, not shown.
   const reactions =
@@ -408,34 +367,26 @@ async function discussions(
       revisionId: row.revision_id,
       revisionNumber: row.revision_number,
       createdAt: new Date(row.created_at).toISOString(),
-      resolvedAt: row.resolved_at
-        ? new Date(row.resolved_at).toISOString()
-        : null,
+      resolvedAt: row.resolved_at ? new Date(row.resolved_at).toISOString() : null,
       deleted,
       held: !!row.held_at,
       canDelete: !deleted && (isOwner || (mine && mode === "on")),
-      canResolve:
-        !deleted && !row.parent_id && (isOwner || (mine && mode === "on")),
+      canResolve: !deleted && !row.parent_id && (isOwner || (mine && mode === "on")),
     };
   };
   return contexts.map(({ share }): ShareDiscussion => {
     const newest = commentsOf.get(share.id)!;
     const groups = reactionsOf.get(share.id)!;
-    const truncated =
-      newest.length > COMMENTS_SHOWN_PER_SHARE ||
-      groups.length > REACTION_GROUPS_SHOWN_PER_SHARE;
+    const truncated = newest.length > COMMENTS_SHOWN_PER_SHARE || groups.length > REACTION_GROUPS_SHOWN_PER_SHARE;
     const shown = newest.slice(0, COMMENTS_SHOWN_PER_SHARE).reverse();
     const roots = new Map<string, CommentThread>();
-    for (const row of shown)
-      if (!row.parent_id) roots.set(row.id, { ...view(row), replies: [] });
+    for (const row of shown) if (!row.parent_id) roots.set(row.id, { ...view(row), replies: [] });
     for (const row of shown) {
       if (!row.parent_id || row.deleted_at) continue;
       roots.get(row.parent_id)?.replies.push(view(row));
     }
     // A deleted root stays as a placeholder only while it has replies.
-    const threads = [...roots.values()].filter(
-      (thread) => !thread.deleted || thread.replies.length,
-    );
+    const threads = [...roots.values()].filter((thread) => !thread.deleted || thread.replies.length);
     return {
       mode,
       shareId: share.id,
@@ -443,35 +394,25 @@ async function discussions(
       revisionNumber: numbers.get(share.revision_id) ?? 0,
       state: share.revoked ? "revoked" : share.unexpired ? "active" : "expired",
       threads,
-      reactions: groups.slice(0, REACTION_GROUPS_SHOWN_PER_SHARE).map(
-        (row): ReactionGroup => ({
-          sig: row.anchor_sig,
-          anchor: row.anchor ?? null,
-          emoji: row.emoji,
-          count: row.count,
-          mine: !!row.mine,
-        }),
-      ),
+      reactions: groups.slice(0, REACTION_GROUPS_SHOWN_PER_SHARE).map((row): ReactionGroup => ({
+        sig: row.anchor_sig,
+        anchor: row.anchor ?? null,
+        emoji: row.emoji,
+        count: row.count,
+        mine: !!row.mine,
+      })),
       truncated,
     };
   });
 }
 
 /** One link's discussion (a recipient's view). */
-async function discussion(
-  c: Queryable,
-  context: ShareContext,
-  viewerId: string | null,
-  isOwner: boolean,
-) {
+async function discussion(c: Queryable, context: ShareContext, viewerId: string | null, isOwner: boolean) {
   return (await discussions(c, [context], context.ownerIds, viewerId, isOwner))[0]!;
 }
 
 /** A recipient's view of the link's threads; signed in or not. */
-export async function sharedComments(
-  token: string,
-  viewer: Viewer | null,
-): Promise<SharedComments> {
+export async function sharedComments(token: string, viewer: Viewer | null): Promise<SharedComments> {
   if (commentsMode() === "off") throw commentsOff();
   return transaction(async (c) => {
     const context = await lockShareByToken(c, token, viewer);
@@ -608,12 +549,7 @@ type CreateInput = {
 };
 
 export const nameRequired = () =>
-  new Problem(
-    400,
-    "invalid",
-    "Выберите имя, которое увидят под вашими комментариями.",
-    { nameRequired: true },
-  );
+  new Problem(400, "invalid", "Выберите имя, которое увидят под вашими комментариями.", { nameRequired: true });
 
 /** The writer's name and letters settings, as the rail shows them. */
 async function viewerSettings(c: Queryable, accountId: string) {
@@ -636,17 +572,10 @@ async function viewerSettings(c: Queryable, accountId: string) {
  * Everyone with the link sees the name under a comment, so it is chosen by
  * the person before their first one (not taken silently from their address).
  */
-async function lockWriterWithName(
-  c: PoolClient,
-  writer: Viewer,
-  displayName: string | undefined,
-) {
+async function lockWriterWithName(c: PoolClient, writer: Viewer, displayName: string | undefined) {
   const {
     rows: [account],
-  } = await c.query(
-    "SELECT comment_name_chosen_at IS NOT NULL AS chosen FROM accounts WHERE id=$1",
-    [writer.id],
-  );
+  } = await c.query("SELECT comment_name_chosen_at IS NOT NULL AS chosen FROM accounts WHERE id=$1", [writer.id]);
   if (account?.chosen) return lockWriter(c, writer);
   if (!displayName) throw nameRequired();
   const updated = await c.query(
@@ -670,9 +599,7 @@ async function createInContext(
   const { share } = context;
   // Concurrent comments on one link take turns, so the daily count is exact.
   // An advisory lock, as for reports: the share row is held FOR SHARE only.
-  await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-    `comments:${share.id}`,
-  ]);
+  await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`comments:${share.id}`]);
   const {
     rows: [{ today, retry_after }],
   } = await c.query(
@@ -791,18 +718,11 @@ async function createInContext(
         shadow: content.shadow,
       },
     });
-  if (suspicious || content.action !== "none")
-    notices.push({ kind: "suspicious", commentId: id, held });
+  if (suspicious || content.action !== "none") notices.push({ kind: "suspicious", commentId: id, held });
   // Held comments reach no one else until the operator releases them.
   // Owner notes send no letters: recipients are not a discussion to notify.
-  if (!held && commentsMode() === "on")
-    notices.push({ kind: "comment", commentId: id });
-  trackNoteAdded(
-    c,
-    writer.id,
-    context.ownerIds.includes(writer.id) ? "owner" : "reader",
-    viaFor(),
-  );
+  if (!held && commentsMode() === "on") notices.push({ kind: "comment", commentId: id });
+  trackNoteAdded(c, writer.id, context.ownerIds.includes(writer.id) ? "owner" : "reader", viaFor());
   return { id: created.id as string };
 }
 
@@ -820,8 +740,7 @@ async function commentSpam(
   signals: readonly string[],
 ) {
   const reasons: string[] = [];
-  if (!trusted && signals.includes("link:address"))
-    reasons.push("адрес в комментарии нового автора");
+  if (!trusted && signals.includes("link:address")) reasons.push("адрес в комментарии нового автора");
   const {
     rows: [row],
   } = await c.query(
@@ -833,8 +752,7 @@ async function commentSpam(
      FROM comments WHERE author_account_id=$1 AND created_at>now()-interval '1 day'`,
     [writer.id, shareId, body],
   );
-  if (body.trim().length >= 20 && row.copies >= 2)
-    reasons.push(`тот же текст ещё на ${row.copies} ссылках за сутки`);
+  if (body.trim().length >= 20 && row.copies >= 2) reasons.push(`тот же текст ещё на ${row.copies} ссылках за сутки`);
   if (!trusted && row.burst >= 10) reasons.push("больше 10 комментариев за 10 минут");
   return reasons;
 }
@@ -848,12 +766,7 @@ async function reactInContext(
 ) {
   const mode = commentsMode();
   if (mode === "off") throw commentsOff();
-  if (mode === "owner-notes")
-    throw new Problem(
-      403,
-      "forbidden",
-      "Реакции на этой Полке выключены.",
-    );
+  if (mode === "owner-notes") throw new Problem(403, "forbidden", "Реакции на этой Полке выключены.");
   if (!context.open) throw closed();
   await lockWriter(c, writer);
   const { share } = context;
@@ -871,17 +784,7 @@ async function reactInContext(
        anchor_sig,anchor,emoji
      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
      ON CONFLICT (share_id,author_account_id,anchor_sig,emoji) DO NOTHING`,
-    [
-      randomUUID(),
-      share.tenant_id,
-      share.artifact_id,
-      share.id,
-      share.revision_id,
-      writer.id,
-      sig,
-      stored,
-      emoji,
-    ],
+    [randomUUID(), share.tenant_id, share.artifact_id, share.id, share.revision_id, writer.id, sig, stored, emoji],
   );
   return { active: true };
 }
@@ -899,12 +802,7 @@ async function lockComment(c: PoolClient, context: ShareContext, id: string) {
 }
 
 /** The owner deletes any comment of the work, an author their own. */
-async function deleteInContext(
-  c: PoolClient,
-  context: ShareContext,
-  actorId: string,
-  id: string,
-) {
+async function deleteInContext(c: PoolClient, context: ShareContext, actorId: string, id: string) {
   assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
   const isOwner = context.ownerIds.includes(actorId);
@@ -934,13 +832,7 @@ async function deleteInContext(
 }
 
 /** Roots only; the owner, or the author of the thread. */
-async function resolveInContext(
-  c: PoolClient,
-  context: ShareContext,
-  actorId: string,
-  id: string,
-  resolved: boolean,
-) {
+async function resolveInContext(c: PoolClient, context: ShareContext, actorId: string, id: string, resolved: boolean) {
   assertMayWrite(context, actorId);
   const comment = await lockComment(c, context, id);
   const isOwner = context.ownerIds.includes(actorId);
@@ -959,22 +851,13 @@ async function resolveInContext(
 
 /** 60 comments and reactions per author per hour, across all links. */
 const limitAuthor = (writer: Viewer) =>
-  limitAttempts(
-    `comment-author:${writer.id}`,
-    COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR,
-    "1 hour",
-  );
+  limitAttempts(`comment-author:${writer.id}`, COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR, "1 hour");
 
 // Recipients (by the link's token) ------------------------------------------
 
-export async function createSharedComment(
-  token: string,
-  writer: Viewer | null,
-  input: CreateInput,
-) {
+export async function createSharedComment(token: string, writer: Viewer | null, input: CreateInput) {
   if (commentsMode() === "off") throw commentsOff();
-  if (!writer)
-    throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
+  if (!writer) throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
   await assertAuthorisedForPublic(db, writer.id);
   await limitAuthor(writer);
   const notices: CommentNotice[] = [];
@@ -992,20 +875,13 @@ export async function reactShared(
   anchor: CommentAnchor | null | undefined,
 ) {
   if (commentsMode() === "off") throw commentsOff();
-  if (!writer)
-    throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
+  if (!writer) throw commentsMode() === "on" ? signInToComment() : recipientsDoNotComment();
   await assertAuthorisedForPublic(db, writer.id);
   await limitAuthor(writer);
-  return transaction(async (c) =>
-    reactInContext(c, await lockShareByToken(c, token, writer), writer, emoji, anchor),
-  );
+  return transaction(async (c) => reactInContext(c, await lockShareByToken(c, token, writer), writer, emoji, anchor));
 }
 
-export async function deleteSharedComment(
-  token: string,
-  writer: Viewer | null,
-  id: string,
-) {
+export async function deleteSharedComment(token: string, writer: Viewer | null, id: string) {
   if (!writer) throw signInToComment();
   return transaction(async (c) => {
     const context = await lockShareByToken(c, token, writer);
@@ -1014,12 +890,7 @@ export async function deleteSharedComment(
   });
 }
 
-export async function resolveSharedComment(
-  token: string,
-  writer: Viewer | null,
-  id: string,
-  resolved: boolean,
-) {
+export async function resolveSharedComment(token: string, writer: Viewer | null, id: string, resolved: boolean) {
   if (!writer) throw signInToComment();
   return transaction(async (c) => {
     const context = await lockShareByToken(c, token, writer);
@@ -1037,23 +908,14 @@ async function ownerShareContext(
   allowTrashed = false,
   artifactId?: string,
 ) {
-  const row = (
-    await c.query("SELECT artifact_id FROM shares WHERE id=$1 AND tenant_id=$2", [
-      shareId,
-      owner.tenant,
-    ])
-  ).rows[0];
+  const row = (await c.query("SELECT artifact_id FROM shares WHERE id=$1 AND tenant_id=$2", [shareId, owner.tenant]))
+    .rows[0];
   if (!row || (artifactId && row.artifact_id !== artifactId)) throw missing();
   return lockShare(c, owner, row.artifact_id, shareId, allowTrashed);
 }
 
 async function ownerCommentContext(c: PoolClient, owner: Actor, id: string) {
-  const row = (
-    await c.query("SELECT share_id FROM comments WHERE id=$1 AND tenant_id=$2", [
-      id,
-      owner.tenant,
-    ])
-  ).rows[0];
+  const row = (await c.query("SELECT share_id FROM comments WHERE id=$1 AND tenant_id=$2", [id, owner.tenant])).rows[0];
   if (!row) throw missing();
   return ownerShareContext(c, owner, row.share_id, true);
 }
@@ -1074,13 +936,7 @@ export async function createOwnerComment(
   await limitAuthor(writer);
   const notices: CommentNotice[] = [];
   const result = await transaction(async (c) =>
-    createInContext(
-      c,
-      await ownerShareContext(c, owner, shareId, false, artifactId),
-      writer,
-      input,
-      notices,
-    ),
+    createInContext(c, await ownerShareContext(c, owner, shareId, false, artifactId), writer, input, notices),
   );
   void dispatchCommentNotices(notices);
   return result;
@@ -1144,52 +1000,24 @@ export async function reactOwner(
   const writer = ownerAsViewer(owner);
   await limitAuthor(writer);
   return transaction(async (c) =>
-    reactInContext(
-      c,
-      await ownerShareContext(c, owner, shareId, false, artifactId),
-      writer,
-      emoji,
-      anchor,
-    ),
+    reactInContext(c, await ownerShareContext(c, owner, shareId, false, artifactId), writer, emoji, anchor),
   );
 }
 
 export async function deleteOwnerComment(owner: Actor, id: string) {
-  return transaction(async (c) =>
-    deleteInContext(c, await ownerCommentContext(c, owner, id), owner.id, id),
-  );
+  return transaction(async (c) => deleteInContext(c, await ownerCommentContext(c, owner, id), owner.id, id));
 }
 
-export async function resolveCommentInTransaction(
-  c: PoolClient,
-  owner: Actor,
-  id: string,
-  resolved: boolean,
-) {
-  return resolveInContext(
-    c,
-    await ownerCommentContext(c, owner, id),
-    owner.id,
-    id,
-    resolved,
-  );
+export async function resolveCommentInTransaction(c: PoolClient, owner: Actor, id: string, resolved: boolean) {
+  return resolveInContext(c, await ownerCommentContext(c, owner, id), owner.id, id, resolved);
 }
 
-export async function resolveOwnerComment(
-  owner: Actor,
-  id: string,
-  resolved: boolean,
-) {
-  return transaction((c) =>
-    resolveCommentInTransaction(c, owner, id, resolved),
-  );
+export async function resolveOwnerComment(owner: Actor, id: string, resolved: boolean) {
+  return transaction((c) => resolveCommentInTransaction(c, owner, id, resolved));
 }
 
 /** The name under one's comments and letters about them. */
-export async function updateCommentSettings(
-  actor: Actor,
-  input: { displayName?: string; commentMail?: boolean },
-) {
+export async function updateCommentSettings(actor: Actor, input: { displayName?: string; commentMail?: boolean }) {
   return transaction(async (c) => {
     await lockActiveOwnerTenant(c, actor);
     await c.query(
@@ -1209,12 +1037,6 @@ export async function updateCommentSettings(
 
 /** The share a comment belongs to, for audit and the operator's scripts. */
 export async function commentShare(c: Queryable, id: string) {
-  return (
-    await c.query(
-      "SELECT share_id,tenant_id,artifact_id FROM comments WHERE id=$1",
-      [id],
-    )
-  ).rows[0] as
-    | { share_id: string; tenant_id: string; artifact_id: string }
-    | undefined;
+  return (await c.query("SELECT share_id,tenant_id,artifact_id FROM comments WHERE id=$1", [id])).rows[0] as
+    { share_id: string; tenant_id: string; artifact_id: string } | undefined;
 }

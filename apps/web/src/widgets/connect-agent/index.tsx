@@ -1,10 +1,7 @@
 import "./styles.css";
 import React, { useId } from "react";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
-import {
-  connectPhrase,
-  isLoopbackOrigin,
-} from "../../entities/onboarding/connect-phrase.ts";
+import { connectPhrase, isLoopbackOrigin } from "../../entities/onboarding/connect-phrase.ts";
 import {
   CLAUDE_PLUGIN_INSTALL,
   CODEX_LOGIN,
@@ -47,33 +44,24 @@ export function ConnectAgent({
       </span>
       <div className="connect-agent-phrase">
         <code>{phrase}</code>
-        <CopyButton
-          value={phrase}
-          label="Скопировать"
-          successText="Скопировано"
-          variant="primary"
-        />
+        <CopyButton value={phrase} label="Скопировать" successText="Скопировано" variant="primary" />
       </div>
       {isLoopbackOrigin(location.origin) ? (
         // claude.ai and ChatGPT connect from their servers: not to 127.0.0.1.
         <small>
-          Codex и Claude Code на этом компьютере выполнят одну команду сами —
-          Полка откроется в браузере. Эта Полка работает локально, поэтому
-          claude.ai и ChatGPT до неё не достанут; скриптам нужен{" "}
+          Codex и Claude Code на этом компьютере выполнят одну команду сами — Полка откроется в браузере. Эта Полка
+          работает локально, поэтому claude.ai и ChatGPT до неё не достанут; скриптам нужен{" "}
           <a href="/settings/agents?client=other">токен</a>. Пошагово:{" "}
           <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
           <a href="/settings/agents?client=codex">Codex</a>.
         </small>
       ) : (
         <small>
-          Codex и Claude Code выполнят одну команду сами — Полка откроется в
-          браузере, токен не нужен. В Claude (claude.ai и Desktop) и ChatGPT
-          коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
-          <code>{`${location.origin}/mcp`}</code>. Пошагово:{" "}
-          <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
+          Codex и Claude Code выполнят одну команду сами — Полка откроется в браузере, токен не нужен. В Claude
+          (claude.ai и Desktop) и ChatGPT коннектор добавляют вручную: настройки → коннекторы → адрес{" "}
+          <code>{`${location.origin}/mcp`}</code>. Пошагово: <a href="/settings/agents?client=claude-ai">Claude</a> ·{" "}
           <a href="/settings/agents?client=claude-code">Claude Code</a> ·{" "}
-          <a href="/settings/agents?client=codex">Codex</a> ·{" "}
-          <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
+          <a href="/settings/agents?client=codex">Codex</a> · <a href="/settings/agents?client=chatgpt">ChatGPT</a>.
         </small>
       )}
       <details className="connect-agent-manual">
@@ -82,17 +70,31 @@ export function ConnectAgent({
           <Command
             label="Claude Code"
             command={CLAUDE_PLUGIN_INSTALL}
-            after={<>Плагин ставит подключение и скиллы. Затем в Claude Code: <code>/mcp</code> → <code>plugin:polka:polka</code> → Authenticate.</>}
+            after={
+              <>
+                Плагин ставит подключение и скиллы. Затем в Claude Code: <code>/mcp</code> →{" "}
+                <code>plugin:polka:polka</code> → Authenticate.
+              </>
+            }
           />
           <Command
             label="Codex"
             command={CODEX_PLUGIN_INSTALL}
-            after={<>Затем <code>{CODEX_LOGIN}</code> — вход откроется в браузере.</>}
+            after={
+              <>
+                Затем <code>{CODEX_LOGIN}</code> — вход откроется в браузере.
+              </>
+            }
           />
           <Command
             label="Если плагин не ставится"
             command={`claude mcp add --transport http --scope user polka ${location.origin}/mcp`}
-            after={<>Для Codex: <code>{`codex mcp add polka --url ${location.origin}/mcp`}</code>. GitHub не нужен, подключение то же.</>}
+            after={
+              <>
+                Для Codex: <code>{`codex mcp add polka --url ${location.origin}/mcp`}</code>. GitHub не нужен,
+                подключение то же.
+              </>
+            }
           />
           <Command
             label="Только скилл, для других агентов"

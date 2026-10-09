@@ -49,14 +49,20 @@ function ledger() {
   let lists = 0;
   let puts = 0;
   return {
-    get lists() { return lists; },
-    get puts() { return puts; },
+    get lists() {
+      return lists;
+    },
+    get puts() {
+      return puts;
+    },
     transport: {
       async putIfAbsent() {
         puts++;
         throw new Error("restore must not append to the ledger");
       },
-      async read() { throw new Error("pinned listing supplies bytes"); },
+      async read() {
+        throw new Error("pinned listing supplies bytes");
+      },
       async list() {
         lists++;
         return {
@@ -94,71 +100,72 @@ test("restore reconciles present and absent tenants without changing the journal
             registrations.push(values ?? []);
             const deletionId = String(values?.[1]);
             const metadata = deletionId === ids.presentRequest;
-            if (!suppressions.has(deletionId))
-              suppressions.set(deletionId, { metadata, state: "registered" });
+            if (!suppressions.has(deletionId)) suppressions.set(deletionId, { metadata, state: "registered" });
             return { rows: [{ metadata_present: metadata }] };
           }
           if (sql.includes("restored_erasure_status")) {
             const deletionId = String(values?.[1]);
             const value = suppressions.get(deletionId)!;
             return {
-              rows: [{
-                state: value.state,
-                metadata_present: value.metadata,
-                tenant_id: deletionId === ids.presentRequest
-                  ? ids.presentTenant
-                  : ids.absentTenant,
-              }],
+              rows: [
+                {
+                  state: value.state,
+                  metadata_present: value.metadata,
+                  tenant_id: deletionId === ids.presentRequest ? ids.presentTenant : ids.absentTenant,
+                },
+              ],
             };
           }
           if (sql.includes("claim_restored_account_purge_job")) {
             return {
-              rows: [{
-                deletion_id: ids.presentRequest,
-                account_id: ids.presentAccount,
-                tenant_id: ids.presentTenant,
-                ledger_id: ids.ledger,
-                phase: present.phase,
-                requested_at: new Date(presentRevoke.requestedAt),
-                revoked_at: new Date(presentRevoke.revokedAt),
-                policy_version: presentRevoke.policyVersion,
-                working_data_policy_deadline: new Date(presentRevoke.workingDataPolicyDeadline),
-                backup_retention_policy_deadline: new Date(presentRevoke.backupRetentionPolicyDeadline),
-                revoke_sha256: presentRevokeEncoded.sha256,
-                source_empty_verified_at: present.sourceEmpty,
-                local_mail_cleared_at: present.mailCleared,
-                metadata_purged_at: present.metadataPurged,
-              }],
+              rows: [
+                {
+                  deletion_id: ids.presentRequest,
+                  account_id: ids.presentAccount,
+                  tenant_id: ids.presentTenant,
+                  ledger_id: ids.ledger,
+                  phase: present.phase,
+                  requested_at: new Date(presentRevoke.requestedAt),
+                  revoked_at: new Date(presentRevoke.revokedAt),
+                  policy_version: presentRevoke.policyVersion,
+                  working_data_policy_deadline: new Date(presentRevoke.workingDataPolicyDeadline),
+                  backup_retention_policy_deadline: new Date(presentRevoke.backupRetentionPolicyDeadline),
+                  revoke_sha256: presentRevokeEncoded.sha256,
+                  source_empty_verified_at: present.sourceEmpty,
+                  local_mail_cleared_at: present.mailCleared,
+                  metadata_purged_at: present.metadataPurged,
+                },
+              ],
             };
           }
           if (sql.includes("mark_account_purge_source_empty")) {
             present.phase = "source_empty";
             present.sourceEmpty = new Date(String(values?.[2]));
           }
-          if (sql.includes("lock_account_purge_mail"))
-            return { rows: [{ account_email: null, challenges: [] }] };
-          if (sql.includes("complete_account_purge_mail"))
-            present.mailCleared = new Date(String(values?.[2]));
+          if (sql.includes("lock_account_purge_mail")) return { rows: [{ account_email: null, challenges: [] }] };
+          if (sql.includes("complete_account_purge_mail")) present.mailCleared = new Date(String(values?.[2]));
           if (sql.includes("terminal_erase_account_metadata")) {
             present.phase = "metadata_purged";
             present.metadataPurged = new Date("2026-09-21T10:00:08.000Z");
             return {
-              rows: [{
-                deletion_id: ids.presentRequest,
-                account_id: ids.presentAccount,
-                tenant_id: ids.presentTenant,
-                ledger_id: ids.ledger,
-                phase: present.phase,
-                requested_at: new Date(presentRevoke.requestedAt),
-                revoked_at: new Date(presentRevoke.revokedAt),
-                policy_version: presentRevoke.policyVersion,
-                working_data_policy_deadline: new Date(presentRevoke.workingDataPolicyDeadline),
-                backup_retention_policy_deadline: new Date(presentRevoke.backupRetentionPolicyDeadline),
-                revoke_sha256: presentRevokeEncoded.sha256,
-                source_empty_verified_at: present.sourceEmpty,
-                local_mail_cleared_at: present.mailCleared,
-                metadata_purged_at: present.metadataPurged,
-              }],
+              rows: [
+                {
+                  deletion_id: ids.presentRequest,
+                  account_id: ids.presentAccount,
+                  tenant_id: ids.presentTenant,
+                  ledger_id: ids.ledger,
+                  phase: present.phase,
+                  requested_at: new Date(presentRevoke.requestedAt),
+                  revoked_at: new Date(presentRevoke.revokedAt),
+                  policy_version: presentRevoke.policyVersion,
+                  working_data_policy_deadline: new Date(presentRevoke.workingDataPolicyDeadline),
+                  backup_retention_policy_deadline: new Date(presentRevoke.backupRetentionPolicyDeadline),
+                  revoke_sha256: presentRevokeEncoded.sha256,
+                  source_empty_verified_at: present.sourceEmpty,
+                  local_mail_cleared_at: present.mailCleared,
+                  metadata_purged_at: present.metadataPurged,
+                },
+              ],
             };
           }
           if (sql.includes("acknowledge_historic_restored_purge")) {
@@ -215,7 +222,10 @@ test("restore reconciles present and absent tenants without changing the journal
   assert.equal(presentRegistration[13], "ledger-version-0");
   assert.equal(presentRegistration[16], "ledger-version-1");
   assert.equal(presentRegistration[19], presentPurged.metadataPurgedAt);
-  assert.equal(queries.some((sql) => sql.includes("claim_account_purge_job($1,$2)")), false);
+  assert.equal(
+    queries.some((sql) => sql.includes("claim_account_purge_job($1,$2)")),
+    false,
+  );
 });
 
 test("restore rejects an unclaimable registered tenant and never writes the journal", async () => {
@@ -229,23 +239,27 @@ test("restore rejects an unclaimable registered tenant and never writes the jour
   };
   const scope: MaintenanceScope = {
     signal: controller.signal,
-    transaction: async (operation) => operation({
-      async query(sql) {
-        if (sql.includes("register_restored_erasure"))
-          return { rows: [{ metadata_present: true }] };
-        if (sql.includes("restored_erasure_status"))
-          return { rows: [{ state: "registered", metadata_present: true, tenant_id: ids.presentTenant }] };
-        if (sql.includes("claim_restored_account_purge_job")) return { rows: [{}] };
-        return { rows: [] };
-      },
-    }),
+    transaction: async (operation) =>
+      operation({
+        async query(sql) {
+          if (sql.includes("register_restored_erasure")) return { rows: [{ metadata_present: true }] };
+          if (sql.includes("restored_erasure_status"))
+            return { rows: [{ state: "registered", metadata_present: true, tenant_id: ids.presentTenant }] };
+          if (sql.includes("claim_restored_account_purge_job")) return { rows: [{}] };
+          return { rows: [] };
+        },
+      }),
   };
   await assert.rejects(
     reconcileErasureRestore({
       scope,
       content: {
-        async listVersions() { return { versions: [], deleteMarkers: [], truncated: false }; },
-        async deleteVersion() { throw new Error("unused"); },
+        async listVersions() {
+          return { versions: [], deleteMarkers: [], truncated: false };
+        },
+        async deleteVersion() {
+          throw new Error("unused");
+        },
       },
       ledger: journal.transport,
       plan: presentOnly,

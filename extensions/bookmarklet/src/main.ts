@@ -93,9 +93,13 @@ async function send(note: Toast, tab: Window, nonce: string, outgoing: Bookmarkl
   const reply = await deliver(tab, nonce, outgoing);
   if (reply === "closed") return note.error("Вкладку Полки закрыли до того, как она получила данные.");
   if (reply === "timeout")
-    return note.error("Вкладка Полки не ответила за 15 секунд. Проверьте, что она открылась, и нажмите закладку ещё раз.");
+    return note.error(
+      "Вкладка Полки не ответила за 15 секунд. Проверьте, что она открылась, и нажмите закладку ещё раз.",
+    );
   if (reply.reply === "rejected")
-    return note.error(reply.reason === "too_large" ? FAILURE_TEXT.too_large : "Полка не приняла данные с этой страницы.");
+    return note.error(
+      reply.reason === "too_large" ? FAILURE_TEXT.too_large : "Полка не приняла данные с этой страницы.",
+    );
   if ("failure" in outgoing) return note.error(FAILURE_TEXT[outgoing.failure]);
   note.done("Готово: проверьте название во вкладке Полки и нажмите «Сохранить на полку».");
 }

@@ -41,7 +41,10 @@ const scopesSchema = z
       ctx.addIssue({ code: "custom", message: "Сервисному доступу нельзя manage и sign_in." });
     // source:read reads any work of the shelf by id, as read does: it counts the same.
     if ((scopes.includes("read") || scopes.includes("source:read")) && scopes.includes("share"))
-      ctx.addIssue({ code: "custom", message: "Права read или source:read вместе с share сервисному доступу не выдаются." });
+      ctx.addIssue({
+        code: "custom",
+        message: "Права read или source:read вместе с share сервисному доступу не выдаются.",
+      });
   });
 
 const createInput = z
@@ -51,9 +54,7 @@ const createInput = z
     ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30),
   })
   .strict();
-const rotateInput = z
-  .object({ ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30) })
-  .strict();
+const rotateInput = z.object({ ttlDays: z.number().int().min(1).max(SERVICE_TOKEN_MAX_DAYS).default(30) }).strict();
 const responsibleInput = z
   .object({
     accountId: z.string().uuid(),
@@ -103,7 +104,17 @@ async function issueToken(
        id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,
        principal_type,service_principal_id
      ) VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 day','service',$9)`,
-    [id, principal.tenant_id, responsibleId, sha256(token), principal.name, scopes, MCP_AUDIENCE, ttlDays, principal.id],
+    [
+      id,
+      principal.tenant_id,
+      responsibleId,
+      sha256(token),
+      principal.name,
+      scopes,
+      MCP_AUDIENCE,
+      ttlDays,
+      principal.id,
+    ],
   );
   return { id, token };
 }
@@ -115,15 +126,13 @@ export async function createServicePrincipal(actor: Actor, body: unknown) {
   return transaction(async (c) => {
     const { role, tenant } = await lockShelf(c, actor, "curator");
     // A personal shelf can be merged into another account, which would orphan the token.
-    if (tenant.kind !== "team")
-      throw new Problem(422, "invalid", "Сервисные доступы заводятся на полках отделов.");
+    if (tenant.kind !== "team") throw new Problem(422, "invalid", "Сервисные доступы заводятся на полках отделов.");
     assertScopesFitRole(role, input.scopes);
     const {
       rows: [count],
-    } = await c.query(
-      "SELECT count(*)::int AS n FROM service_principals WHERE tenant_id=$1 AND status<>'disabled'",
-      [actor.tenant],
-    );
+    } = await c.query("SELECT count(*)::int AS n FROM service_principals WHERE tenant_id=$1 AND status<>'disabled'", [
+      actor.tenant,
+    ]);
     if (count.n >= MAX_SERVICE_PRINCIPALS)
       throw new Problem(413, "quota", "Достигнут лимит сервисных доступов на полке.");
     let principal;
@@ -136,8 +145,7 @@ export async function createServicePrincipal(actor: Actor, body: unknown) {
         [actor.tenant, input.name, actor.id],
       ));
     } catch (error: any) {
-      if (error?.code === "23505")
-        throw new Problem(409, "conflict", "Сервисный доступ с таким названием уже есть.");
+      if (error?.code === "23505") throw new Problem(409, "conflict", "Сервисный доступ с таким названием уже есть.");
       throw error;
     }
     const { id, token } = await issueToken(c, principal, actor.id, input.scopes, input.ttlDays);
@@ -196,10 +204,10 @@ export async function listServicePrincipals(actor: Actor) {
 async function lockPrincipal(c: PoolClient, actor: Actor, id: string) {
   const {
     rows: [principal],
-  } = await c.query(
-    "SELECT * FROM service_principals WHERE id=$1 AND tenant_id=$2 AND status<>'disabled' FOR UPDATE",
-    [id, actor.tenant],
-  );
+  } = await c.query("SELECT * FROM service_principals WHERE id=$1 AND tenant_id=$2 AND status<>'disabled' FOR UPDATE", [
+    id,
+    actor.tenant,
+  ]);
   if (!principal) throw missing();
   return principal;
 }
@@ -246,10 +254,7 @@ export async function disableServicePrincipal(actor: Actor, id: string) {
   return transaction(async (c) => {
     await lockShelf(c, actor, "curator");
     await lockPrincipal(c, actor, id);
-    await c.query(
-      "UPDATE service_principals SET status='disabled',disabled_at=clock_timestamp() WHERE id=$1",
-      [id],
-    );
+    await c.query("UPDATE service_principals SET status='disabled',disabled_at=clock_timestamp() WHERE id=$1", [id]);
     await c.query(
       "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE service_principal_id=$1 AND revoked_at IS NULL",
       [id],
@@ -331,8 +336,7 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
       [parentId],
     );
     if (!parent) throw new Problem(401, "unauthorized", "Подключение агента недействительно.");
-    if (parent.parent_id)
-      throw new Problem(403, "forbidden", "Токен для задачи не выдаёт другие токены.");
+    if (parent.parent_id) throw new Problem(403, "forbidden", "Токен для задачи не выдаёт другие токены.");
     const {
       rows: [live],
     } = await c.query(
@@ -364,11 +368,17 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
         parent.service_principal_id,
       ],
     );
-    await audit(c, { id: parent.account_id, tenant: parent.tenant_id, connectionId: parentId }, "service_account.task_token", id, {
-      servicePrincipalId: parent.service_principal_id,
-      ...(input.taskId ? { taskId: input.taskId } : {}),
-      minutes: input.minutes,
-    });
+    await audit(
+      c,
+      { id: parent.account_id, tenant: parent.tenant_id, connectionId: parentId },
+      "service_account.task_token",
+      id,
+      {
+        servicePrincipalId: parent.service_principal_id,
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        minutes: input.minutes,
+      },
+    );
     return {
       token,
       expiresAt: new Date(Date.now() + input.minutes * 60_000).toISOString(), // the app's clock, within seconds of the database's
@@ -377,4 +387,3 @@ export async function createTaskToken(actor: ServiceActor, body: unknown) {
     };
   });
 }
-

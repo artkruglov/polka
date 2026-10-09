@@ -33,8 +33,12 @@ function policy(env: NodeJS.ProcessEnv) {
   const backupRetentionMaxDays = Number(env.BACKUP_RETENTION_MAX_DAYS);
   if (
     !policyVersion ||
-    !Number.isInteger(purgeMaxHours) || purgeMaxHours < 1 || purgeMaxHours > 8760 ||
-    !Number.isInteger(backupRetentionMaxDays) || backupRetentionMaxDays < 0 || backupRetentionMaxDays > 3650
+    !Number.isInteger(purgeMaxHours) ||
+    purgeMaxHours < 1 ||
+    purgeMaxHours > 8760 ||
+    !Number.isInteger(backupRetentionMaxDays) ||
+    backupRetentionMaxDays < 0 ||
+    backupRetentionMaxDays > 3650
   )
     throw new ErasureRefusal(
       "Задайте ACCOUNT_DELETION_POLICY_VERSION, ACCOUNT_PURGE_MAX_HOURS (1–8760) и BACKUP_RETENTION_MAX_DAYS (0–3650): сроки, которые обещает Политика.",

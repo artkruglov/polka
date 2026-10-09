@@ -82,8 +82,15 @@ test("an admin adds colleagues, changes roles, and the shelf keeps an admin", as
   const listed = (await call("GET", "/api/shelves", admin)).json();
   assert.equal(listed.canCreate, true);
   assert.equal((await call("GET", "/api/shelves", author)).json().canCreate, false);
-  for (const [account, role] of [[author, "author"], [other, "author"], [reader, "reader"]] as const) {
-    const added = await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: account.name.toUpperCase(), role });
+  for (const [account, role] of [
+    [author, "author"],
+    [other, "author"],
+    [reader, "reader"],
+  ] as const) {
+    const added = await call("POST", `/api/shelves/${shelf.id}/members`, admin, {
+      who: account.name.toUpperCase(),
+      role,
+    });
     assert.equal(added.statusCode, 200, added.body);
     assert.equal(added.json().role, role);
   }
@@ -107,10 +114,13 @@ test("an admin adds colleagues, changes roles, and the shelf keeps an admin", as
   const renamed = await call("PATCH", `/api/shelves/${shelf.id}`, admin, { name: "Продажи" });
   assert.equal(renamed.json().name, "Продажи");
   const events = (await call("GET", `/api/shelves/${shelf.id}/events`, admin)).json().items;
-  assert.deepEqual(
-    events.map((item: any) => item.action).reverse(),
-    ["shelf_created", "member_added", "member_added", "member_added", "shelf_renamed"],
-  );
+  assert.deepEqual(events.map((item: any) => item.action).reverse(), [
+    "shelf_created",
+    "member_added",
+    "member_added",
+    "member_added",
+    "shelf_renamed",
+  ]);
   assert.equal((await call("GET", `/api/shelves/${shelf.id}/events`, author)).statusCode, 403);
 });
 
@@ -123,7 +133,10 @@ test("members save on the shelf, find each other's works, and change by role", a
   assert.equal(refused.statusCode, 403, refused.body);
   // Everyone on the shelf sees the work and who saved it; nobody's own shelf does.
   const seen = (await call("GET", "/api/artifacts?q=воронка", reader, undefined, shelf.id)).json().items;
-  assert.deepEqual(seen.map((item: any) => [item.id, item.author.name]), [[artifactId, author.name]]);
+  assert.deepEqual(
+    seen.map((item: any) => [item.id, item.author.name]),
+    [[artifactId, author.name]],
+  );
   const own = (await call("GET", "/api/artifacts", author)).json().items;
   assert.ok(!own.some((item: any) => item.id === artifactId));
   assert.equal((await call("GET", `/api/artifacts/${artifactId}`, stranger, undefined, shelf.id)).statusCode, 404);
@@ -147,7 +160,10 @@ test("members save on the shelf, find each other's works, and change by role", a
   const folder = await call("POST", "/api/folders", other, { name: "Отчёты" }, shelf.id);
   assert.equal(folder.statusCode, 200, folder.body);
   const folders = (await call("GET", "/api/folders", reader, undefined, shelf.id)).json();
-  assert.deepEqual(folders.map((item: any) => item.name), ["Отчёты"]);
+  assert.deepEqual(
+    folders.map((item: any) => item.name),
+    ["Отчёты"],
+  );
   // The author puts the work in the trash; it stays on the shelf's trash.
   const work = (await call("GET", `/api/artifacts/${artifactId}`, author, undefined, shelf.id)).json();
   const trashed = await call(
@@ -159,7 +175,10 @@ test("members save on the shelf, find each other's works, and change by role", a
   );
   assert.equal(trashed.statusCode, 200, trashed.body);
   const trash = (await call("GET", "/api/trash", reader, undefined, shelf.id)).json().items;
-  assert.deepEqual(trash.map((item: any) => item.id), [artifactId]);
+  assert.deepEqual(
+    trash.map((item: any) => item.id),
+    [artifactId],
+  );
 });
 
 test("a member who leaves or is removed loses the shelf; the works stay", async () => {
@@ -173,7 +192,10 @@ test("a member who leaves or is removed loses the shelf; the works stay", async 
   const still = (await call("GET", `/api/artifacts/${saved.artifactId}`, admin, undefined, shelf.id)).json();
   assert.equal(still.author.name, other.name);
   const shelves = (await call("GET", "/api/shelves", other)).json().items;
-  assert.deepEqual(shelves.map((item: any) => item.kind), ["personal"]);
+  assert.deepEqual(
+    shelves.map((item: any) => item.kind),
+    ["personal"],
+  );
 });
 
 test("an upload is its uploader's; a curator shares from the shelf and the link answers to the issuer", async () => {
@@ -182,7 +204,14 @@ test("an upload is its uploader's; a curator shares from the shelf and the link 
     "POST",
     "/api/uploads",
     author,
-    { key: randomUUID(), title: "Черновик", filename: "d.txt", mime: "text/plain", size: body.length, sha256: sha256(body) },
+    {
+      key: randomUUID(),
+      title: "Черновик",
+      filename: "d.txt",
+      mime: "text/plain",
+      size: body.length,
+      sha256: sha256(body),
+    },
     shelf.id,
   );
   const uploadId = start.json().uploadId;
@@ -204,7 +233,9 @@ test("an upload is its uploader's; a curator shares from the shelf and the link 
   const shared = await share(admin);
   assert.equal(shared.statusCode, 200, shared.body);
   const link = shared.json().share;
-  const { rows: [row] } = await db.query("SELECT created_by FROM shares WHERE id=$1", [link.id]);
+  const {
+    rows: [row],
+  } = await db.query("SELECT created_by FROM shares WHERE id=$1", [link.id]);
   assert.equal(row.created_by, admin.id);
   const resolve = () =>
     app.inject({
@@ -299,7 +330,9 @@ test("a curator removed from the shelf no longer answers their link's discussion
     await settled();
     // While a curator, the issuer is the shelf's side and gets the letters.
     assert.deepEqual(letters, [email]);
-    const before = (await call("GET", `/api/artifacts/${saved.artifactId}/comments`, admin, undefined, shelf.id)).json();
+    const before = (
+      await call("GET", `/api/artifacts/${saved.artifactId}/comments`, admin, undefined, shelf.id)
+    ).json();
     const byCurator = () => before.shares[0].threads.find((thread: any) => thread.body === "Цифры сверены");
     assert.equal(byCurator().author.owner, true);
     const removed = await call("POST", `/api/shelves/${shelf.id}/members/${curator.id}/revoke`, admin);

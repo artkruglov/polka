@@ -7,19 +7,9 @@
 // distinct stem length (a small constant). Phrases are matched against the
 // last MAX_PHRASE words, pairs against the last position of each group.
 // No regex ever runs over a whole page with unbounded repetition.
-import {
-  filterLists,
-  MAX_PHRASE,
-  thresholds,
-  type Category,
-  type Term,
-} from "./lists.ts";
+import { filterLists, MAX_PHRASE, thresholds, type Category, type Term } from "./lists.ts";
 import { RUN, normalizeText, tokens } from "./normalize.ts";
-import {
-  executableDownload,
-  scanCode,
-  type CodeSignal,
-} from "./code-signals.ts";
+import { executableDownload, scanCode, type CodeSignal } from "./code-signals.ts";
 import { fraudRelevant, fraudScoreOf } from "./fraud-score.ts";
 
 export type CategoryHit = {
@@ -248,8 +238,7 @@ export class ContentScanner {
   css(value: string) {
     if (!value.includes("url(")) return;
     STYLE_URL.lastIndex = 0;
-    for (let match = STYLE_URL.exec(value); match; match = STYLE_URL.exec(value))
-      this.url(match[1]!);
+    for (let match = STYLE_URL.exec(value); match; match = STYLE_URL.exec(value)) this.url(match[1]!);
   }
 
   /** Text inside an element hidden by CSS or the hidden attribute. */
@@ -333,8 +322,7 @@ export class ContentScanner {
     this.position += 1;
     if (this.words < MAX_WORDS_TRACKED) {
       this.words += 1;
-      if ([...token].length >= 4 && !/^\d+$/.test(token))
-        this.counts.set(token, (this.counts.get(token) ?? 0) + 1);
+      if ([...token].length >= 4 && !/^\d+$/.test(token)) this.counts.set(token, (this.counts.get(token) ?? 0) + 1);
       this.fingerprint(token);
     }
     this.recent.push(token);
@@ -350,8 +338,7 @@ export class ContentScanner {
       const n = term.words.length;
       if (n > this.recent.length) continue;
       let ok = true;
-      for (let i = 0; i < n - 1 && ok; i++)
-        ok = wordMatches(term.words[i]!, this.recent[this.recent.length - n + i]!);
+      for (let i = 0; i < n - 1 && ok; i++) ok = wordMatches(term.words[i]!, this.recent[this.recent.length - n + i]!);
       if (ok) this.hit(term);
     }
   }
@@ -365,7 +352,7 @@ export class ContentScanner {
     const { vocabulary, longest } = this.index;
     const chars = [...joined];
     let found = false;
-    for (let at = 0; at < chars.length; ) {
+    for (let at = 0; at < chars.length;) {
       let matched = 0;
       for (let length = Math.min(longest, chars.length - at); length >= 2; length--)
         if (vocabulary.has(chars.slice(at, at + length).join(""))) {
@@ -390,8 +377,7 @@ export class ContentScanner {
     const key = `${term.category}:${term.group}`;
     this.lastGroup.set(key, { position: this.position, id: term.id });
     for (const [ruleIndex, rule] of list.pairs.entries()) {
-      const other =
-        rule.a === term.group ? rule.b : rule.b === term.group ? rule.a : null;
+      const other = rule.a === term.group ? rule.b : rule.b === term.group ? rule.a : null;
       if (!other) continue;
       const last = this.lastGroup.get(`${term.category}:${other}`);
       if (!last || this.position - last.position > rule.window) continue;
@@ -400,12 +386,10 @@ export class ContentScanner {
       // intent: купить, доставка, вступайте), whichever first word it met:
       // five substances next to one «купить» are one sale, while «купить,
       // доставка, закладки» are three signs of one.
-      const [first, second] =
-        rule.a === term.group ? [term.id, last.id] : [last.id, term.id];
+      const [first, second] = rule.a === term.group ? [term.id, last.id] : [last.id, term.id];
       const pairKey = `${term.category}#${ruleIndex}`;
       const pairs = this.pairs.get(pairKey) ?? new Map<string, string>();
-      if (pairs.size < MAX_PAIRS_PER_RULE && !pairs.has(second))
-        pairs.set(second, `${first} + ${second}`);
+      if (pairs.size < MAX_PAIRS_PER_RULE && !pairs.has(second)) pairs.set(second, `${first} + ${second}`);
       this.pairs.set(pairKey, pairs);
     }
   }
@@ -433,8 +417,7 @@ export class ContentScanner {
       const raw = match[0];
       const digits = raw.replace(/\D/g, "");
       let record: string | null = null;
-      if (digits.length === 11 && SNILS_SHAPE.test(raw) && snilsValid(digits))
-        record = `snils:${digits}`;
+      if (digits.length === 11 && SNILS_SHAPE.test(raw) && snilsValid(digits)) record = `snils:${digits}`;
       else if (
         digits.length >= 15 &&
         digits.length <= 19 &&
@@ -443,14 +426,8 @@ export class ContentScanner {
         luhn(digits)
       )
         record = `card:${digits}`;
-      else if (digits.length === 10 && passport && PASSPORT_SHAPE.test(raw))
-        record = `passport:${digits}`;
-      else if (
-        digits.length === 11 &&
-        /^[78]/.test(digits) &&
-        address &&
-        !SNILS_SHAPE.test(raw)
-      )
+      else if (digits.length === 10 && passport && PASSPORT_SHAPE.test(raw)) record = `passport:${digits}`;
+      else if (digits.length === 11 && /^[78]/.test(digits) && address && !SNILS_SHAPE.test(raw))
         record = `contact:${digits.slice(1)}`;
       if (record && this.records.size < 1000) this.records.set(record, 3);
     }
@@ -473,8 +450,7 @@ export class ContentScanner {
         score += pairs.size * rule.weight;
         terms.push(...pairs.values());
       }
-      if (score > 0)
-        hits[list.category] = { score, terms: terms.slice(0, MAX_TERMS) };
+      if (score > 0) hits[list.category] = { score, terms: terms.slice(0, MAX_TERMS) };
     }
     // doxxing: records from the detectors add to the listed phrases.
     if (this.records.size) {
@@ -492,10 +468,7 @@ export class ContentScanner {
       const previous = hits.doxxing ?? { score: 0, terms: [] };
       hits.doxxing = {
         score: previous.score + this.records.size * 3,
-        terms: [
-          ...previous.terms,
-          ...[...kinds].map(([kind, n]) => `${label[kind]} ×${n}`),
-        ].slice(0, MAX_TERMS),
+        terms: [...previous.terms, ...[...kinds].map(([kind, n]) => `${label[kind]} ×${n}`)].slice(0, MAX_TERMS),
       };
     }
     for (const [category, domains] of this.domainHits) {
@@ -526,9 +499,7 @@ export class ContentScanner {
         if (this.simhash[bit]! > 0) low |= 1 << bit;
         if (this.simhash[bit + 32]! > 0) high |= 1 << bit;
       }
-      result.simhash =
-        (high >>> 0).toString(16).padStart(8, "0") +
-        (low >>> 0).toString(16).padStart(8, "0");
+      result.simhash = (high >>> 0).toString(16).padStart(8, "0") + (low >>> 0).toString(16).padStart(8, "0");
     }
     return result;
   }
@@ -555,8 +526,7 @@ export class ContentScanner {
     if (this.words >= 300) {
       let top = 0,
         word = "";
-      for (const [token, count] of this.counts)
-        if (count > top) [top, word] = [count, token];
+      for (const [token, count] of this.counts) if (count > top) [top, word] = [count, token];
       if (top / this.words >= 0.06) {
         score += 4;
         terms.push(`повтор слова «${word.slice(0, 30)}»: ${Math.round((100 * top) / this.words)}%`);
@@ -572,12 +542,10 @@ export class ContentScanner {
  * the channels first, so the operator sees why.
  */
 export function fraudScore(signals: readonly string[]): CategoryHit | null {
-  if (signals.includes("scan:incomplete"))
-    return { score: 6, terms: ["страница не прочитана за отведённое время"] };
+  if (signals.includes("scan:incomplete")) return { score: 6, terms: ["страница не прочитана за отведённое время"] };
   const { score } = fraudScoreOf(signals);
   if (!score) return null;
-  const rank = (signal: string) =>
-    signal.startsWith("channel:") ? 0 : signal.startsWith("lookalike:") ? 1 : 2;
+  const rank = (signal: string) => (signal.startsWith("channel:") ? 0 : signal.startsWith("lookalike:") ? 1 : 2);
   return {
     score,
     terms: fraudRelevant(signals)
@@ -594,9 +562,7 @@ export function scanText(value: string) {
 }
 
 /** Two results of one work (the page and its title) as one. */
-export function mergeResults(
-  ...results: Array<FilterResult | null | undefined>
-): FilterResult {
+export function mergeResults(...results: Array<FilterResult | null | undefined>): FilterResult {
   const merged: FilterResult = { v: 1, hits: {} };
   const domains = new Set<string>();
   for (const result of results) {

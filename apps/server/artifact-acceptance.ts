@@ -29,19 +29,19 @@ export async function acceptRevision(actor: Actor, artifactId: string, body: unk
   const { revisionId } = acceptInput.parse(body);
   return transaction(async (c) => {
     const work = await lockWork(c, actor, artifactId);
-    if ((work.accepted_revision_id ?? null) === revisionId)
-      return { artifactId, acceptedRevisionId: revisionId };
+    if ((work.accepted_revision_id ?? null) === revisionId) return { artifactId, acceptedRevisionId: revisionId };
     if (revisionId) {
-      const found = await c.query(
-        "SELECT 1 FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-        [revisionId, artifactId, actor.tenant],
-      );
+      const found = await c.query("SELECT 1 FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+        revisionId,
+        artifactId,
+        actor.tenant,
+      ]);
       if (!found.rowCount) throw missing();
     }
-    await c.query(
-      "UPDATE artifacts SET accepted_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-      [artifactId, revisionId],
-    );
+    await c.query("UPDATE artifacts SET accepted_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1", [
+      artifactId,
+      revisionId,
+    ]);
     await audit(c, actor, "revision.accepted", artifactId, { artifactId, revisionId });
     return { artifactId, acceptedRevisionId: revisionId };
   });
@@ -52,8 +52,7 @@ export async function setWorkOwner(actor: Actor, artifactId: string, body: unkno
   const { ownerAccountId } = ownerInput.parse(body);
   return transaction(async (c) => {
     const work = await lockWork(c, actor, artifactId);
-    if ((work.owner_account_id ?? null) === ownerAccountId)
-      return { artifactId, ownerAccountId };
+    if ((work.owner_account_id ?? null) === ownerAccountId) return { artifactId, ownerAccountId };
     if (ownerAccountId) {
       const member = await c.query(
         `SELECT 1 FROM tenant_members m JOIN accounts a ON a.id=m.account_id
@@ -61,13 +60,12 @@ export async function setWorkOwner(actor: Actor, artifactId: string, body: unkno
            AND NOT a.disabled AND a.deletion_requested_at IS NULL`,
         [actor.tenant, ownerAccountId],
       );
-      if (!member.rowCount)
-        throw new Problem(422, "invalid", "Ответственным может быть только участник этой полки.");
+      if (!member.rowCount) throw new Problem(422, "invalid", "Ответственным может быть только участник этой полки.");
     }
-    await c.query(
-      "UPDATE artifacts SET owner_account_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-      [artifactId, ownerAccountId],
-    );
+    await c.query("UPDATE artifacts SET owner_account_id=$2,updated_at=clock_timestamp() WHERE id=$1", [
+      artifactId,
+      ownerAccountId,
+    ]);
     await audit(c, actor, "owner.changed", artifactId, { artifactId, ownerAccountId });
     return { artifactId, ownerAccountId };
   });

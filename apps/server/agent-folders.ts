@@ -11,10 +11,7 @@ import {
   moveArtifactsInTransaction,
   renameFolderInTransaction,
 } from "./folders.ts";
-import {
-  type ServiceActor,
-  withServiceActorTransaction,
-} from "./service-auth.ts";
+import { type ServiceActor, withServiceActorTransaction } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 
 /*
@@ -25,17 +22,13 @@ import { sha256 } from "./storage.ts";
  * conflict. The rules themselves are the web's (folders.ts).
  */
 
-const key = uuid.describe(
-  "A fresh UUID per operation; reuse it only to retry the same call.",
-);
+const key = uuid.describe("A fresh UUID per operation; reuse it only to retry the same call.");
 const folderId = uuid.describe("A folder id from polka_list_folders.");
 
 export const agentCreateFolderInputSchema = z
   .object({
     key,
-    name: folderNameSchema.describe(
-      "The folder's name, 1-80 characters, unique on the shelf.",
-    ),
+    name: folderNameSchema.describe("The folder's name, 1-80 characters, unique on the shelf."),
   })
   .strict();
 
@@ -43,15 +36,11 @@ export const agentRenameFolderInputSchema = z
   .object({
     key,
     folderId,
-    name: folderNameSchema.describe(
-      "The new name, 1-80 characters, unique on the shelf.",
-    ),
+    name: folderNameSchema.describe("The new name, 1-80 characters, unique on the shelf."),
   })
   .strict();
 
-export const agentDeleteFolderInputSchema = z
-  .object({ key, folderId })
-  .strict();
+export const agentDeleteFolderInputSchema = z.object({ key, folderId }).strict();
 
 export const agentMoveInputSchema = z
   .object({
@@ -63,29 +52,21 @@ export const agentMoveInputSchema = z
       .refine((ids) => new Set(ids).size === ids.length, {
         message: "Each work once",
       })
-      .describe(
-        `Ids of works on the shelf (polka_list), 1-${MAX_MOVE_BATCH}, each once.`,
-      ),
-    folderId: uuid
-      .nullable()
-      .describe("The destination folder's id, or null for «без папки»."),
+      .describe(`Ids of works on the shelf (polka_list), 1-${MAX_MOVE_BATCH}, each once.`),
+    folderId: uuid.nullable().describe("The destination folder's id, or null for «без папки»."),
   })
   .strict();
 
 type Operation = "folder-create" | "folder-rename" | "folder-delete" | "move";
 
-const operationConflict = () =>
-  new Problem(409, "conflict", "Ключ уже относится к другой операции.");
+const operationConflict = () => new Problem(409, "conflict", "Ключ уже относится к другой операции.");
 
 /** One keyed agent operation: replay it, or apply it and store the result. */
 async function keyed<T extends Record<string, unknown>>(
   actor: ServiceActor,
   operation: Operation,
   request: { key: string } & Record<string, unknown>,
-  apply: (
-    c: PoolClient,
-    owner: { id: string; tenant: string; connectionId: string },
-  ) => Promise<T>,
+  apply: (c: PoolClient, owner: { id: string; tenant: string; connectionId: string }) => Promise<T>,
 ) {
   const requestHash = sha256(JSON.stringify(request));
   return withServiceActorTransaction(actor, "manage", async (c, verified) => {
@@ -98,11 +79,7 @@ async function keyed<T extends Record<string, unknown>>(
       [verified.tenantId, operation, request.key],
     );
     if (old) {
-      if (
-        old.connection_id !== verified.connectionId ||
-        old.request_hash !== requestHash
-      )
-        throw operationConflict();
+      if (old.connection_id !== verified.connectionId || old.request_hash !== requestHash) throw operationConflict();
       return {
         operation,
         key: request.key,
@@ -136,43 +113,24 @@ async function keyed<T extends Record<string, unknown>>(
   });
 }
 
-export async function createFolderFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-) {
+export async function createFolderFromAgent(actor: ServiceActor, body: unknown) {
   const input = agentCreateFolderInputSchema.parse(body);
-  return keyed(
-    actor,
-    "folder-create",
-    { key: input.key, name: input.name },
-    (c, owner) => createFolderInTransaction(c, owner, input.name),
+  return keyed(actor, "folder-create", { key: input.key, name: input.name }, (c, owner) =>
+    createFolderInTransaction(c, owner, input.name),
   );
 }
 
-export async function renameFolderFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-) {
+export async function renameFolderFromAgent(actor: ServiceActor, body: unknown) {
   const input = agentRenameFolderInputSchema.parse(body);
-  return keyed(
-    actor,
-    "folder-rename",
-    { key: input.key, folderId: input.folderId, name: input.name },
-    (c, owner) =>
-      renameFolderInTransaction(c, owner, input.folderId, input.name),
+  return keyed(actor, "folder-rename", { key: input.key, folderId: input.folderId, name: input.name }, (c, owner) =>
+    renameFolderInTransaction(c, owner, input.folderId, input.name),
   );
 }
 
-export async function deleteFolderFromAgent(
-  actor: ServiceActor,
-  body: unknown,
-) {
+export async function deleteFolderFromAgent(actor: ServiceActor, body: unknown) {
   const input = agentDeleteFolderInputSchema.parse(body);
-  return keyed(
-    actor,
-    "folder-delete",
-    { key: input.key, folderId: input.folderId },
-    (c, owner) => deleteFolderInTransaction(c, owner, input.folderId),
+  return keyed(actor, "folder-delete", { key: input.key, folderId: input.folderId }, (c, owner) =>
+    deleteFolderInTransaction(c, owner, input.folderId),
   );
 }
 
@@ -186,7 +144,6 @@ export async function moveFromAgent(actor: ServiceActor, body: unknown) {
       artifactIds: input.artifactIds.map((id) => id.toLowerCase()),
       folderId: input.folderId?.toLowerCase() ?? null,
     },
-    (c, owner) =>
-      moveArtifactsInTransaction(c, owner, input.artifactIds, input.folderId),
+    (c, owner) => moveArtifactsInTransaction(c, owner, input.artifactIds, input.folderId),
   );
 }

@@ -26,9 +26,7 @@ const status = (authorization?: string) =>
 after(async () => {
   mutable.OPS_STATUS_TOKEN = undefined;
   mutable.OPS_BACKUP_BUCKET = undefined;
-  const versions = await s3.send(
-    new ListObjectVersionsCommand({ Bucket: config.S3_BUCKET, Prefix: dumpKey }),
-  );
+  const versions = await s3.send(new ListObjectVersionsCommand({ Bucket: config.S3_BUCKET, Prefix: dumpKey }));
   const objects = (versions.Versions ?? []).map((v) => ({ Key: v.Key!, VersionId: v.VersionId }));
   if (objects.length)
     await s3.send(new DeleteObjectsCommand({ Bucket: config.S3_BUCKET, Delete: { Objects: objects } }));
@@ -77,10 +75,10 @@ test("ops status fails when expired rows show maintenance has stopped", async ()
   mutable.OPS_STATUS_TOKEN = token;
   const account = await createAccount(`ops-${randomBytes(5).toString("hex")}`, randomBytes(24).toString("hex"));
   const hash = sha256(randomBytes(32).toString("base64url"));
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()-interval '1 hour')",
-    [hash, account.id],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()-interval '1 hour')", [
+    hash,
+    account.id,
+  ]);
   try {
     const stalled = await status(`Bearer ${token}`);
     assert.equal(stalled.statusCode, 503, stalled.body);

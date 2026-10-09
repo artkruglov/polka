@@ -22,13 +22,7 @@
  * - html: any other public HTTPS page, downloaded without running its code.
  */
 
-export type LinkRoute =
-  | "extension"
-  | "server-fetch"
-  | "server-try"
-  | "server-api"
-  | "server-render"
-  | "html";
+export type LinkRoute = "extension" | "server-fetch" | "server-try" | "server-api" | "server-render" | "html";
 export type LinkProviderId =
   | "claude"
   | "chatgpt"
@@ -62,9 +56,8 @@ export type LinkProvider = {
   title: (path: string, host: string) => string;
 };
 
-const byPath =
-  (entries: Array<[RegExp, string]>, fallback: string) => (path: string) =>
-    entries.find(([pattern]) => pattern.test(path))?.[1] ?? fallback;
+const byPath = (entries: Array<[RegExp, string]>, fallback: string) => (path: string) =>
+  entries.find(([pattern]) => pattern.test(path))?.[1] ?? fallback;
 const hostTitle = (_path: string, host: string) => host;
 
 export const LINK_PROVIDERS: readonly LinkProvider[] = [

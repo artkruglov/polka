@@ -22,9 +22,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const chrome =
   process.env.CHROME ??
-  (process.platform === "darwin"
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : "google-chrome");
+  (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 const [mode, ...args] = process.argv.slice(2);
 if (!["social", "shot", "links"].includes(mode)) {
   console.error("usage: render-readme-assets.mjs social | shot <url> <out.png> [height] [wait-ms] | links <url>");

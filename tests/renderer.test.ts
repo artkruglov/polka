@@ -11,11 +11,7 @@ import { detectChallenge } from "../apps/renderer/challenge.ts";
 import { createEgressProxy, egressTarget } from "../apps/renderer/egress-proxy.ts";
 import { TITLE_SCAN_CHARS, fetchPage, readTitle, robotsVia } from "../apps/renderer/fetch-page.ts";
 import type { ProxiedAnswer, ProxiedGet } from "../apps/renderer/proxied-fetch.ts";
-import {
-  RENDERER_USER_AGENT,
-  signRenderRequest,
-  verifyRenderRequest,
-} from "../packages/renderer-contract.ts";
+import { RENDERER_USER_AGENT, signRenderRequest, verifyRenderRequest } from "../packages/renderer-contract.ts";
 
 const page = (over: Partial<Parameters<typeof detectChallenge>[0]> = {}) => ({
   url: "https://demo.lovable.app/",
@@ -32,7 +28,11 @@ test("challenge detector: Cloudflare, Turnstile, captcha and consent walls are s
   assert.equal(detectChallenge(page({ title: "Just a moment..." })), "cloudflare_challenge");
   assert.equal(detectChallenge(page({ headers: { "cf-mitigated": "challenge" } })), "cloudflare_challenge");
   assert.equal(
-    detectChallenge(page({ frameUrls: ["https://demo.lovable.app/", "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/x"] })),
+    detectChallenge(
+      page({
+        frameUrls: ["https://demo.lovable.app/", "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/x"],
+      }),
+    ),
     "cloudflare_turnstile",
   );
   assert.equal(
@@ -41,9 +41,18 @@ test("challenge detector: Cloudflare, Turnstile, captcha and consent walls are s
   );
   assert.equal(detectChallenge(page({ url: "https://consent.google.com/ml?continue=x" })), "consent_wall");
   // Gemini: the banner covers the page but the conversation is in the DOM — kept, nothing clicked.
-  assert.equal(detectChallenge(page({ url: "https://gemini.google.com/share/abc", title: "Before you continue to Google" })), null);
   assert.equal(
-    detectChallenge(page({ url: "https://gemini.google.com/share/abc", title: "Before you continue to Google", text: "Accept all Reject all" })),
+    detectChallenge(page({ url: "https://gemini.google.com/share/abc", title: "Before you continue to Google" })),
+    null,
+  );
+  assert.equal(
+    detectChallenge(
+      page({
+        url: "https://gemini.google.com/share/abc",
+        title: "Before you continue to Google",
+        text: "Accept all Reject all",
+      }),
+    ),
     "consent_wall",
   );
   assert.equal(detectChallenge(page({ status: 403, text: "Forbidden" })), "http_403");
@@ -83,7 +92,10 @@ test("render requests are signed over time, method, path and body; 60 s of skew"
   assert.equal(verifyRenderRequest(secret, headers, "POST", "/other", body, now), false);
   assert.equal(verifyRenderRequest("t".repeat(40), headers, "POST", "/render", body, now), false);
   assert.equal(verifyRenderRequest(secret, {}, "POST", "/render", body, now), false);
-  assert.equal(verifyRenderRequest(secret, { ...headers, "x-polka-signature": "zz" }, "POST", "/render", body, now), false);
+  assert.equal(
+    verifyRenderRequest(secret, { ...headers, "x-polka-signature": "zz" }, "POST", "/render", body, now),
+    false,
+  );
   assert.equal(RENDERER_USER_AGENT, "PolkaRenderer/1.0 (+https://polochka.app/bot)");
 });
 
@@ -166,8 +178,16 @@ test("the proxy refuses CONNECT to internal targets and plain HTTP, and tunnels 
 test("/fetch: allowlist, robots.txt first, redirects only within the allowlist, bot checks, one attempt", async () => {
   const SHARE = "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed";
   const answers: Record<string, ProxiedAnswer> = {
-    "https://chatgpt.com/robots.txt": { status: 200, headers: {}, body: Buffer.from("User-agent: *\nDisallow: /\nAllow: /share/\nAllow: /canvas/shared/\n") },
-    [SHARE]: { status: 200, headers: { "content-type": "text/html; charset=utf-8" }, body: Buffer.from("<title>ChatGPT - x</title>" + "y".repeat(6000)) },
+    "https://chatgpt.com/robots.txt": {
+      status: 200,
+      headers: {},
+      body: Buffer.from("User-agent: *\nDisallow: /\nAllow: /share/\nAllow: /canvas/shared/\n"),
+    },
+    [SHARE]: {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+      body: Buffer.from("<title>ChatGPT - x</title>" + "y".repeat(6000)),
+    },
   };
   const asked: string[] = [];
   const get: ProxiedGet = async (url) => {
@@ -180,23 +200,35 @@ test("/fetch: allowlist, robots.txt first, redirects only within the allowlist, 
   const ok = await fetchPage(get, robots, SHARE);
   assert.ok("html" in ok && ok.finalUrl === SHARE && ok.status === 200);
   assert.deepEqual(asked, ["https://chatgpt.com/robots.txt", SHARE]);
-  assert.deepEqual(await fetchPage(get, robots, "https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed"), { error: "not_allowed" });
+  assert.deepEqual(await fetchPage(get, robots, "https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed"), {
+    error: "not_allowed",
+  });
   assert.deepEqual(await fetchPage(get, robots, "https://example.com/share/x"), { error: "not_allowed" });
   // A redirect out of the allowlist (a login page) is refused, not followed.
   const MOVED = "https://chatgpt.com/share/6aa18924-7ee8-83ee-a6d3-46731e8b1f6b";
   answers[MOVED] = { status: 302, headers: { location: "/auth/login" }, body: Buffer.alloc(0) };
   assert.deepEqual(await fetchPage(get, robots, MOVED), { error: "not_allowed", detail: "redirect" });
   const BLOCKED = "https://chatgpt.com/share/6a2c4eab-b7f0-83eb-99d3-7875da25e53f";
-  answers[BLOCKED] = { status: 403, headers: { "cf-mitigated": "challenge", "content-type": "text/html" }, body: Buffer.from("<title>Just a moment...</title>") };
+  answers[BLOCKED] = {
+    status: 403,
+    headers: { "cf-mitigated": "challenge", "content-type": "text/html" },
+    body: Buffer.from("<title>Just a moment...</title>"),
+  };
   const before = asked.length;
   assert.equal(((await fetchPage(get, robots, BLOCKED)) as any).error, "source_blocked");
   assert.equal(asked.length - before, 1, "no retry after a challenge (robots.txt came from the cache)");
   const GONE = "https://chatgpt.com/share/6ab33cb3-73ec-83e8-90a4-2a1b8ff99a08";
-  answers[GONE] = { status: 404, headers: { "content-type": "text/html" }, body: Buffer.from("<title>Not found</title>" + "z".repeat(6000)) };
+  answers[GONE] = {
+    status: 404,
+    headers: { "content-type": "text/html" },
+    body: Buffer.from("<title>Not found</title>" + "z".repeat(6000)),
+  };
   assert.deepEqual(await fetchPage(get, robots, GONE), { error: "navigation_failed", detail: "http_404" });
   // robots.txt that closes the page, or cannot be read, stops the fetch before it.
   const closed = robotsVia(async (url) =>
-    url.endsWith("/robots.txt") ? { status: 200, headers: {}, body: Buffer.from("User-agent: PolkaRenderer\nDisallow: /share/") } : answers[SHARE],
+    url.endsWith("/robots.txt")
+      ? { status: 200, headers: {}, body: Buffer.from("User-agent: PolkaRenderer\nDisallow: /share/") }
+      : answers[SHARE],
   );
   assert.deepEqual(await fetchPage(get, closed, SHARE), { error: "robots_disallowed" });
   const down = robotsVia(async () => ({ status: 503, headers: {}, body: Buffer.alloc(0) }));

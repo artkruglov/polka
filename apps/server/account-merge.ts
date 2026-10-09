@@ -45,9 +45,7 @@ export type ObjectMover = {
 export const s3Mover: ObjectMover = {
   copy: copyVersion,
   async remove(key, version) {
-    await s3.send(
-      new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }),
-    );
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
   },
 };
 
@@ -65,16 +63,9 @@ export type MergeAccount = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** An account by its id, address or login. */
-export async function findMergeAccount(
-  ref: string,
-  q: Queryable = db,
-): Promise<MergeAccount | null> {
+export async function findMergeAccount(ref: string, q: Queryable = db): Promise<MergeAccount | null> {
   const value = ref.trim();
-  const column = UUID.test(value)
-    ? "a.id::text"
-    : value.includes("@")
-      ? "a.email"
-      : "a.name";
+  const column = UUID.test(value) ? "a.id::text" : value.includes("@") ? "a.email" : "a.name";
   const {
     rows: [row],
   } = await q.query(
@@ -136,10 +127,7 @@ export type MergeReport = {
 async function lockPair(c: PoolClient, from: MergeAccount, into: MergeAccount) {
   // Tenant, then account, as everywhere else; two of each in id order so
   // two merges (or a merge and a sign-in) never wait on each other in turn.
-  await c.query(
-    "SELECT id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE",
-    [[from.tenant, into.tenant]],
-  );
+  await c.query("SELECT id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [[from.tenant, into.tenant]]);
   const { rows } = await c.query(
     `SELECT id,name,email,display_name,disabled,
             deletion_requested_at IS NOT NULL AS deleting,
@@ -151,12 +139,8 @@ async function lockPair(c: PoolClient, from: MergeAccount, into: MergeAccount) {
   const check = (account: MergeAccount, role: string) => {
     const row = current.get(account.id);
     const owner = rows.length === 2 && row;
-    if (!owner)
-      throw new MergeRefusal(`${role}: аккаунт не найден.`);
-    if (row.disabled || row.deleting)
-      throw new MergeRefusal(
-        `${role} (${row.name}): аккаунт отключён или удаляется.`,
-      );
+    if (!owner) throw new MergeRefusal(`${role}: аккаунт не найден.`);
+    if (row.disabled || row.deleting) throw new MergeRefusal(`${role} (${row.name}): аккаунт отключён или удаляется.`);
     return {
       ...account,
       email: row.email,
@@ -192,21 +176,14 @@ async function refuseUnsafeSource(c: Queryable, from: MergeAccount) {
     throw new MergeRefusal(
       "В источнике есть заблокированное содержимое. Объединение запрещено: сначала разберите блокировку (moderation:events).",
     );
-  if (row.editorial)
-    throw new MergeRefusal(
-      "У источника есть публикации в «Открытиях». Объединение не переносит их.",
-    );
+  if (row.editorial) throw new MergeRefusal("У источника есть публикации в «Открытиях». Объединение не переносит их.");
   if (row.uploads || row.imports || row.builds)
     throw new MergeRefusal(
       "В источнике идёт загрузка, импорт или сборка. Повторите через несколько минут (или после npm run maintenance).",
     );
 }
 
-async function count(
-  c: Queryable,
-  from: MergeAccount,
-  into: MergeAccount,
-): Promise<MergeCounts> {
+async function count(c: Queryable, from: MergeAccount, into: MergeAccount): Promise<MergeCounts> {
   const {
     rows: [row],
   } = await c.query(
@@ -261,9 +238,7 @@ async function count(
     activeAgentConnections: n(row.active_connections),
     refreshTokens: n(row.refresh_tokens),
     identities: identities.filter((item) => !item.kept).length,
-    identitiesKept: identities
-      .filter((item) => item.kept)
-      .map((item) => item.provider as string),
+    identitiesKept: identities.filter((item) => item.kept).map((item) => item.provider as string),
     libraryMemberships: n(row.memberships),
     analyticsEvents: n(row.analytics),
     sessionsEnded: n(row.sessions),
@@ -315,11 +290,7 @@ const SHELF_RANK = { reader: 1, author: 2, curator: 3, admin: 4 } as const;
  * the target's, the higher of the two where both are members. The source's
  * own rows are revoked by the trigger on its deletion request (migration 044).
  */
-async function moveShelfMemberships(
-  c: PoolClient,
-  from: MergeAccount,
-  into: MergeAccount,
-) {
+async function moveShelfMemberships(c: PoolClient, from: MergeAccount, into: MergeAccount) {
   const { rows } = await c.query(
     `SELECT s.tenant_id,s.role,t.role AS target_role,t.state AS target_state
        FROM tenant_members s
@@ -342,10 +313,11 @@ async function moveShelfMemberships(
         [row.tenant_id, into.id, role],
       );
     else if (SHELF_RANK[role] > SHELF_RANK[target])
-      await c.query(
-        "UPDATE tenant_members SET role=$3 WHERE tenant_id=$1 AND account_id=$2",
-        [row.tenant_id, into.id, role],
-      );
+      await c.query("UPDATE tenant_members SET role=$3 WHERE tenant_id=$1 AND account_id=$2", [
+        row.tenant_id,
+        into.id,
+        role,
+      ]);
     await c.query(
       `INSERT INTO tenant_member_events(tenant_id,actor_id,action,target_account_id,old_role,new_role)
        VALUES($1,$2,'member_added',$2,$3,$4)`,
@@ -355,11 +327,7 @@ async function moveShelfMemberships(
   return rows.length;
 }
 
-async function moveMemberships(
-  c: PoolClient,
-  from: MergeAccount,
-  into: MergeAccount,
-) {
+async function moveMemberships(c: PoolClient, from: MergeAccount, into: MergeAccount) {
   const { rows } = await c.query(
     `SELECT s.library_id,s.role,t.role AS target_role
        FROM template_library_members s
@@ -392,10 +360,7 @@ async function moveMemberships(
       [row.library_id, from.id],
     );
   }
-  await c.query(
-    "UPDATE template_libraries SET created_by=$2 WHERE created_by=$1",
-    [from.id, into.id],
-  );
+  await c.query("UPDATE template_libraries SET created_by=$2 WHERE created_by=$1", [from.id, into.id]);
   return rows.length;
 }
 
@@ -414,20 +379,13 @@ async function moveAnalytics(c: Queryable, from: string, into: string) {
             EXISTS(SELECT 1 FROM analytics_optouts WHERE actor=$2) AS target`,
     [source, target],
   );
-  if (optouts.source)
-    await c.query(
-      "INSERT INTO analytics_optouts(actor) VALUES($1) ON CONFLICT DO NOTHING",
-      [target],
-    );
+  if (optouts.source) await c.query("INSERT INTO analytics_optouts(actor) VALUES($1) ON CONFLICT DO NOTHING", [target]);
   if (optouts.source || optouts.target) {
     await c.query("DELETE FROM analytics_events WHERE actor=$1", [source]);
     await c.query("DELETE FROM analytics_active_days WHERE actor=$1", [source]);
     return;
   }
-  await c.query(
-    "DELETE FROM analytics_events WHERE actor=$1 AND name='signup_completed'",
-    [source],
-  );
+  await c.query("DELETE FROM analytics_events WHERE actor=$1 AND name='signup_completed'", [source]);
   await c.query(
     `WITH moved AS (
        DELETE FROM analytics_events WHERE actor=$1 RETURNING *
@@ -458,9 +416,7 @@ export const WEB_MERGE_MAX_OBJECTS = 100;
 
 const newKey = (key: string, from: string, into: string) => {
   if (!key.startsWith(`${from}/`))
-    throw new MergeRefusal(
-      "Объект хранилища лежит вне пространства источника. Объединение остановлено.",
-    );
+    throw new MergeRefusal("Объект хранилища лежит вне пространства источника. Объединение остановлено.");
   return `${into}/${key.slice(from.length + 1)}`;
 };
 
@@ -493,14 +449,10 @@ export async function mergeAccounts(input: {
       "Укажите --proof <номер обращения>: чем подтверждено, что обе полки принадлежат одному человеку.",
     );
   const mover = input.mover ?? s3Mover;
-  const [fromFound, intoFound] = await Promise.all([
-    findMergeAccount(input.from),
-    findMergeAccount(input.into),
-  ]);
+  const [fromFound, intoFound] = await Promise.all([findMergeAccount(input.from), findMergeAccount(input.into)]);
   if (!fromFound) throw new MergeRefusal(`Источник не найден: ${input.from}`);
   if (!intoFound) throw new MergeRefusal(`Получатель не найден: ${input.into}`);
-  if (fromFound.id === intoFound.id)
-    throw new MergeRefusal("Источник и получатель — один и тот же аккаунт.");
+  if (fromFound.id === intoFound.id) throw new MergeRefusal("Источник и получатель — один и тот же аккаунт.");
 
   const copies: Array<{ key: string; version: string }> = [];
   const originals: Array<{ key: string; version: string }> = [];
@@ -511,9 +463,7 @@ export async function mergeAccounts(input: {
       // «Объединить» on /claim moves a provisional shelf only: one claimed
       // in another tab meanwhile is a real shelf and is left alone.
       if (input.actor === "signup" && !from.provisional)
-        throw new MergeRefusal(
-          "Временная полка уже закреплена. Обновите страницу.",
-        );
+        throw new MergeRefusal("Временная полка уже закреплена. Обновите страницу.");
       await refuseUnsafeSource(c, from);
       const counts = await count(c, from, into);
       const notes: string[] = [];
@@ -536,17 +486,8 @@ export async function mergeAccounts(input: {
       if (input.dryRun) return summary;
 
       // The same rows a deletion request locks, in the same order.
-      for (const table of [
-        "agent_connections",
-        "uploads",
-        "artifacts",
-        "shares",
-        "revision_derivatives",
-      ])
-        await c.query(
-          `SELECT id FROM ${table} WHERE tenant_id=$1 ORDER BY id FOR UPDATE`,
-          [from.tenant],
-        );
+      for (const table of ["agent_connections", "uploads", "artifacts", "shares", "revision_derivatives"])
+        await c.query(`SELECT id FROM ${table} WHERE tenant_id=$1 ORDER BY id FOR UPDATE`, [from.tenant]);
 
       // Connections the person did not pick are closed before they move.
       if (input.keepConnections && input.keepConnections !== "all") {
@@ -560,10 +501,7 @@ export async function mergeAccounts(input: {
             WHERE tenant_id=$1 AND NOT (connection_id = ANY($2::uuid[]))`,
           [from.tenant, input.keepConnections],
         );
-        counts.activeAgentConnections = Math.max(
-          0,
-          counts.activeAgentConnections - (closed.rowCount ?? 0),
-        );
+        counts.activeAgentConnections = Math.max(0, counts.activeAgentConnections - (closed.rowCount ?? 0));
       }
 
       // 1. Copies under the target's prefix (the originals stay until commit).
@@ -711,14 +649,9 @@ export async function mergeAccounts(input: {
                 (SELECT count(*) FROM moved_blocks) AS blocks`,
         [from.tenant, into.tenant, from.id, into.id, objectMap],
       );
-      const stillThere = await c.query(
-        "SELECT 1 FROM revisions WHERE tenant_id=$1 LIMIT 1",
-        [from.tenant],
-      );
+      const stillThere = await c.query("SELECT 1 FROM revisions WHERE tenant_id=$1 LIMIT 1", [from.tenant]);
       if (stillThere.rowCount)
-        throw new MergeRefusal(
-          "Не все версии нашли свои объекты хранилища. Объединение отменено.",
-        );
+        throw new MergeRefusal("Не все версии нашли свои объекты хранилища. Объединение отменено.");
 
       // 3. Agents and receipts: connection, then everything that names it
       // with (connection, tenant, account), again in one statement.
@@ -795,14 +728,8 @@ export async function mergeAccounts(input: {
          SELECT id,tenant_id,artifact_id,share_id,revision_id,$2,anchor_sig,anchor,emoji,created_at FROM old`,
         [from.id, into.id],
       );
-      await c.query(
-        "UPDATE comments SET author_account_id=$2 WHERE author_account_id=$1",
-        [from.id, into.id],
-      );
-      await c.query(
-        "UPDATE comments SET resolved_by=$2 WHERE resolved_by=$1",
-        [from.id, into.id],
-      );
+      await c.query("UPDATE comments SET author_account_id=$2 WHERE author_account_id=$1", [from.id, into.id]);
+      await c.query("UPDATE comments SET resolved_by=$2 WHERE resolved_by=$1", [from.id, into.id]);
       await moveMemberships(c, from, into);
       await moveShelfMemberships(c, from, into);
       await c.query(
@@ -817,15 +744,13 @@ export async function mergeAccounts(input: {
       if (from.email && !into.email) {
         const {
           rows: [moved],
-        } = await c.query(
-          "SELECT email,email_verified_at FROM accounts WHERE id=$1",
-          [from.id],
-        );
+        } = await c.query("SELECT email,email_verified_at FROM accounts WHERE id=$1", [from.id]);
         await c.query("UPDATE accounts SET email=NULL WHERE id=$1", [from.id]);
-        await c.query(
-          "UPDATE accounts SET email=$2,email_verified_at=$3 WHERE id=$1",
-          [into.id, moved.email, moved.email_verified_at],
-        );
+        await c.query("UPDATE accounts SET email=$2,email_verified_at=$3 WHERE id=$1", [
+          into.id,
+          moved.email,
+          moved.email_verified_at,
+        ]);
       }
       await moveAnalytics(c, from.id, into.id);
 
@@ -836,16 +761,10 @@ export async function mergeAccounts(input: {
            FROM tenants s WHERE t.id=$2 AND s.id=$1`,
         [from.tenant, into.tenant],
       );
-      await c.query(
-        "UPDATE tenants SET used_bytes=0,derivative_used_bytes=0 WHERE id=$1",
-        [from.tenant],
-      );
+      await c.query("UPDATE tenants SET used_bytes=0,derivative_used_bytes=0 WHERE id=$1", [from.tenant]);
       const {
         rows: [quota],
-      } = await c.query(
-        "SELECT used_bytes>quota_bytes AS over FROM tenants WHERE id=$1",
-        [into.tenant],
-      );
+      } = await c.query("SELECT used_bytes>quota_bytes AS over FROM tenants WHERE id=$1", [into.tenant]);
       if (quota?.over)
         notes.push(
           "Получатель теперь занимает больше своей квоты хранения: новые сохранения будут отклоняться, пока место не освободится или квоту не увеличат.",
@@ -888,18 +807,14 @@ export async function mergeAccounts(input: {
             WHERE id=$1`,
           [from.id],
         );
-        notes.push(
-          "Источник закрыт как удалённый: почта, имя и оставшиеся привязки стёрты.",
-        );
+        notes.push("Источник закрыт как удалённый: почта, имя и оставшиеся привязки стёрты.");
       }
       await audit(c, { id: into.id, tenant: into.tenant }, "account.merged", from.id);
       return summary;
     });
   } catch (error) {
     // Nothing points at the copies: remove them.
-    await Promise.allSettled(
-      copies.map((copy) => mover.remove(copy.key, copy.version)),
-    );
+    await Promise.allSettled(copies.map((copy) => mover.remove(copy.key, copy.version)));
     throw error;
   }
   if (!report.dryRun) {
@@ -918,9 +833,7 @@ export async function mergeAccounts(input: {
 export function formatMergeReport(report: MergeReport) {
   const c = report.counts;
   const lines = [
-    report.dryRun
-      ? "Пробный прогон: ничего не изменено."
-      : "Объединение выполнено.",
+    report.dryRun ? "Пробный прогон: ничего не изменено." : "Объединение выполнено.",
     `Из: ${report.from.name} (${report.from.id})`,
     `В:  ${report.into.name} (${report.into.id})`,
     `Папки: ${c.folders} (из них слиты по имени: ${c.foldersJoined})`,
@@ -934,11 +847,7 @@ export function formatMergeReport(report: MergeReport) {
     `Сеансы источника будут закрыты: ${c.sessionsEnded}`,
     `Объём: ${c.sourceBytes} Б исходников, ${c.derivativeBytes} Б подготовленных версий`,
     ...report.notes.map((note) => `Внимание: ${note}`),
-    ...report.leftovers.map(
-      (item) =>
-        `Не удалось удалить старый объект: ${item.key} (версия ${item.version})`,
-    ),
+    ...report.leftovers.map((item) => `Не удалось удалить старый объект: ${item.key} (версия ${item.version})`),
   ];
   return lines.join("\n");
 }
-

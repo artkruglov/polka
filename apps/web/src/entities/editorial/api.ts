@@ -1,13 +1,13 @@
-import {
-  editorialPublicResponseSchema,
-  type EditorialPublicResponse,
-} from "../../../../../packages/editorial.ts";
+import { editorialPublicResponseSchema, type EditorialPublicResponse } from "../../../../../packages/editorial.ts";
 import { z } from "zod";
 import { ApiError, send } from "../../shared/api/client.ts";
 
 const editorialListSchema = z.object({ items: z.array(editorialPublicResponseSchema).max(20) }).strict();
 
-const slugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80);
+const slugSchema = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .max(80);
 
 export function parseEditorialSlug(pathname: string): string | null {
   if (!pathname.startsWith("/discover/")) return null;
@@ -55,10 +55,7 @@ export async function fetchEditorial(signal?: AbortSignal): Promise<EditorialPub
   }
 }
 
-export async function fetchEditorialItem(
-  slug: string,
-  signal?: AbortSignal,
-): Promise<EditorialPublicResponse | null> {
+export async function fetchEditorialItem(slug: string, signal?: AbortSignal): Promise<EditorialPublicResponse | null> {
   let response: Response;
   try {
     response = await send(`/api/editorial/${encodeURIComponent(slug)}`, { signal });

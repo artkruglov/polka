@@ -184,8 +184,14 @@ export function SessionFacts({ session }: { session: AgentSession }) {
     ["Длительность", formatDuration(sessionDuration(session))],
     ["Запросы", String(session.prompts)],
     ["Вызовы инструментов", String(session.toolCallCount)],
-    ["Токены", `ввод ${compactNumber(session.tokens.input)}, вывод ${compactNumber(session.tokens.output)}, кэш ${compactNumber(session.tokens.cacheRead)}`],
-    ["Стоимость", `${formatCost(session.costUSD)}${session.costEstimated && session.costUSD !== null ? " (оценка по ценам установки)" : ""}`],
+    [
+      "Токены",
+      `ввод ${compactNumber(session.tokens.input)}, вывод ${compactNumber(session.tokens.output)}, кэш ${compactNumber(session.tokens.cacheRead)}`,
+    ],
+    [
+      "Стоимость",
+      `${formatCost(session.costUSD)}${session.costEstimated && session.costUSD !== null ? " (оценка по ценам установки)" : ""}`,
+    ],
     ["Подтверждения", permissionLabel(session.permissionMode)],
   ];
   return (
@@ -266,7 +272,11 @@ export function LinkList({ links }: { links: SessionLink[] }) {
         link.kind === "work" ? (
           <li key={link.target}>
             <FileText aria-hidden="true" />{" "}
-            {link.artifactId ? <a href={`/works/${link.artifactId}`}>{link.title ?? "Работа на полке"}</a> : "Работа удалена"}
+            {link.artifactId ? (
+              <a href={`/works/${link.artifactId}`}>{link.title ?? "Работа на полке"}</a>
+            ) : (
+              "Работа удалена"
+            )}
           </li>
         ) : (
           <li key={link.target}>
@@ -301,7 +311,8 @@ export function ToolCallList({ calls }: { calls: ToolCall[] }) {
             </span>
             <span className="sessions-call-status">
               {STATUS_LABEL[call.status]}
-              {call.exitCode !== null && call.exitCode !== 0 ? ` (код ${call.exitCode})` : ""} · {formatDuration(call.durationMs)}
+              {call.exitCode !== null && call.exitCode !== 0 ? ` (код ${call.exitCode})` : ""} ·{" "}
+              {formatDuration(call.durationMs)}
             </span>
           </li>
         ))}
@@ -422,7 +433,9 @@ export function UsageView({ stats }: { stats: SessionStats }) {
           <ol className="sessions-bars">
             {stats.byDay.map((day) => (
               <li key={day.day}>
-                <span>{new Date(`${day.day}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</span>
+                <span>
+                  {new Date(`${day.day}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
+                </span>
                 <span className="sessions-bar">
                   <span style={{ width: barWidth(day.output, maxDay) }} />
                 </span>
@@ -448,7 +461,8 @@ export function UsageView({ stats }: { stats: SessionStats }) {
                   <span style={{ width: barWidth(model.output, maxModel) }} />
                 </span>
                 <small>
-                  вывод {compactNumber(model.output)}, ввод {compactNumber(model.input)}, кэш {compactNumber(model.cacheRead)}
+                  вывод {compactNumber(model.output)}, ввод {compactNumber(model.input)}, кэш{" "}
+                  {compactNumber(model.cacheRead)}
                 </small>
               </li>
             ))}
@@ -466,7 +480,8 @@ export function UsageView({ stats }: { stats: SessionStats }) {
                 <li key={host.host}>
                   <code>{host.host}</code>
                   <small>
-                    {plural(host.calls, "вызов", "вызова", "вызовов")} в {plural(host.sessions, "сессии", "сессиях", "сессиях")}
+                    {plural(host.calls, "вызов", "вызова", "вызовов")} в{" "}
+                    {plural(host.sessions, "сессии", "сессиях", "сессиях")}
                   </small>
                 </li>
               ))}

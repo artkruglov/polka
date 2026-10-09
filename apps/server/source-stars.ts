@@ -56,26 +56,19 @@ export function createStarCounter({
   async function ask(): Promise<number | null> {
     if (!repository) return null;
     try {
-      const response = await fetch(
-        `https://api.github.com/repos/${repository.owner}/${repository.repo}`,
-        {
-          headers: {
-            accept: "application/vnd.github+json",
-            "user-agent": "polka (source stars)",
-          },
-          signal: AbortSignal.timeout(timeoutMs),
-          redirect: "manual",
+      const response = await fetch(`https://api.github.com/repos/${repository.owner}/${repository.repo}`, {
+        headers: {
+          accept: "application/vnd.github+json",
+          "user-agent": "polka (source stars)",
         },
-      );
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: "manual",
+      });
       if (!response.ok) return null;
       const body: unknown = await response.json();
       const stars =
-        body && typeof body === "object"
-          ? (body as { stargazers_count?: unknown }).stargazers_count
-          : undefined;
-      return typeof stars === "number" && Number.isInteger(stars) && stars >= 0
-        ? stars
-        : null;
+        body && typeof body === "object" ? (body as { stargazers_count?: unknown }).stargazers_count : undefined;
+      return typeof stars === "number" && Number.isInteger(stars) && stars >= 0 ? stars : null;
     } catch {
       return null;
     }

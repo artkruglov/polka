@@ -96,7 +96,9 @@ export async function renderPage(
       return { error: isTimeout(error) ? "timeout" : "navigation_failed" };
     }
     // Let the SPA fetch its data; a page that never goes quiet is taken as it is.
-    await page.waitForLoadState("networkidle", { timeout: Math.min(10_000, Math.max(0, left() - 4_000)) }).catch(() => {});
+    await page
+      .waitForLoadState("networkidle", { timeout: Math.min(10_000, Math.max(0, left() - 4_000)) })
+      .catch(() => {});
     await page.waitForTimeout(Math.min(1_500, Math.max(0, left() - 2_500)));
     // A Claude artifact is drawn into its frame (<uuid>.frame.claudeusercontent.com)
     // after the page loads; wait, within the deadline, until a frame has content.

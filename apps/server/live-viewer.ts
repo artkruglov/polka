@@ -34,19 +34,11 @@ async function grantedProfile(c: PoolClient, derivativeId: string | null) {
   if (!derivativeId) return LIVE_HTML_PROFILE;
   const {
     rows: [row],
-  } = await c.query(
-    "SELECT runtime_profile FROM revision_derivatives WHERE id=$1",
-    [derivativeId],
-  );
+  } = await c.query("SELECT runtime_profile FROM revision_derivatives WHERE id=$1", [derivativeId]);
   return row.runtime_profile as string;
 }
 
-export async function issueOwnerLiveView(
-  actor: Actor,
-  sessionToken: string,
-  revisionId: string,
-  comments = false,
-) {
+export async function issueOwnerLiveView(actor: Actor, sessionToken: string, revisionId: string, comments = false) {
   if (!isLiveRevisionEligible(config, revisionId)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sessionHash = sha256(sessionToken);
@@ -66,10 +58,7 @@ export async function issueOwnerLiveView(
     );
     if (!owner.rowCount) throw missing();
     const revision = (
-      await c.query(
-        "SELECT artifact_id FROM revisions WHERE id=$1 AND tenant_id=$2",
-        [revisionId, actor.tenant],
-      )
+      await c.query("SELECT artifact_id FROM revisions WHERE id=$1 AND tenant_id=$2", [revisionId, actor.tenant])
     ).rows[0];
     if (!revision) throw missing();
     const artifact = await c.query(
@@ -113,10 +102,7 @@ export async function issueOwnerLiveView(
   return liveViewResult(token, grant.expires_at, grant.profile);
 }
 
-export async function issueRecipientLiveView(
-  sourceGrant: string,
-  comments = false,
-) {
+export async function issueRecipientLiveView(sourceGrant: string, comments = false) {
   if (!config.HTML_LIVE_ENABLED || !TOKEN.test(sourceGrant)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sourceGrantHash = sha256(sourceGrant);
@@ -134,18 +120,16 @@ export async function issueRecipientLiveView(
     // Read locks, as in /api/resolve: recipients of one owner's links must
     // not queue behind each other, while trash, revoke, disable and deletion
     // (FOR UPDATE) still serialize with this and are rechecked below.
-    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [
-      candidate.tenant_id,
-    ]);
+    await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR SHARE", [candidate.tenant_id]);
     const artifact = await c.query(
       "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
       [candidate.artifact_id, candidate.tenant_id],
     );
     if (!artifact.rowCount) throw missing();
-    await c.query(
-      "SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR SHARE",
-      [candidate.share_id, candidate.tenant_id],
-    );
+    await c.query("SELECT 1 FROM shares WHERE id=$1 AND tenant_id=$2 FOR SHARE", [
+      candidate.share_id,
+      candidate.tenant_id,
+    ]);
     await assertEditorialShareAccessible(c, candidate.share_id);
     const inserted = (
       await c.query(
@@ -239,8 +223,7 @@ async function authorizedRevision(token: string) {
     [sha256(token)],
   );
   if (revision && !isLiveRevisionEligible(config, revision.id)) return null;
-  if (revision?.authorized_share_id)
-    await assertEditorialShareAccessible(db, revision.authorized_share_id);
+  if (revision?.authorized_share_id) await assertEditorialShareAccessible(db, revision.authorized_share_id);
   return revision ?? null;
 }
 
@@ -265,10 +248,7 @@ export async function createLiveViewerApp() {
     if (req.headers.host !== config.VIEWER_UPSTREAM_HOST) throw missing();
   });
   viewer.setErrorHandler((error: any, _req, reply) => {
-    if (error instanceof Problem)
-      return reply
-        .code(error.status)
-        .send({ code: error.code, message: error.message });
+    if (error instanceof Problem) return reply.code(error.status).send({ code: error.code, message: error.message });
     // Capability paths and stored HTML are intentionally absent from logs.
     console.error(
       JSON.stringify({
@@ -284,11 +264,7 @@ export async function createLiveViewerApp() {
   viewer.get("/document/:token", async (req, reply) => {
     // Browser-only embedding keeps the parent frame-src policy in force.
     // Fetch Metadata is not authentication: non-browser clients can forge it.
-    if (
-      req.headers["sec-fetch-dest"] !== "iframe" ||
-      req.headers["sec-fetch-mode"] !== "navigate"
-    )
-      throw missing();
+    if (req.headers["sec-fetch-dest"] !== "iframe" || req.headers["sec-fetch-mode"] !== "navigate") throw missing();
     const token = (req.params as { token?: string }).token ?? "";
     const revision = await authorizedRevision(token);
     if (!revision) throw missing();
@@ -296,20 +272,11 @@ export async function createLiveViewerApp() {
     // The pinned blob plus the static WebRTC guard (html.ts); never inject
     // capabilities, sessions or API data. The comment overlay only when the
     // shell asked for it when the grant was issued.
-    const bytes = await readBlob(
-      revision.served_object_key,
-      revision.served_object_version,
-    );
-    return revision.comment_overlay
-      ? withLiveOverlay(bytes, config.APP_ORIGIN)
-      : withViewerGuard(bytes);
+    const bytes = await readBlob(revision.served_object_key, revision.served_object_version);
+    return revision.comment_overlay ? withLiveOverlay(bytes, config.APP_ORIGIN) : withViewerGuard(bytes);
   });
   viewer.get("/library-document/:token", async (req, reply) => {
-    if (
-      req.headers["sec-fetch-dest"] !== "iframe" ||
-      req.headers["sec-fetch-mode"] !== "navigate"
-    )
-      throw missing();
+    if (req.headers["sec-fetch-dest"] !== "iframe" || req.headers["sec-fetch-mode"] !== "navigate") throw missing();
     const token = (req.params as { token?: string }).token ?? "";
     const bytes = await readLibraryLiveDocument(token);
     reply.type("text/html; charset=utf-8");

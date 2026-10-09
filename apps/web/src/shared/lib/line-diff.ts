@@ -50,9 +50,7 @@ function editTrace(a: Int32Array, b: Int32Array, maxEdits: number) {
     trace.push(v.slice(offset - d - 1, offset + d + 2));
     for (let k = -d; k <= d; k += 2) {
       let x =
-        k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
-          ? v[offset + k + 1]
-          : v[offset + k - 1] + 1;
+        k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1]) ? v[offset + k + 1] : v[offset + k - 1] + 1;
       let y = x - k;
       while (x < n && y < m && a[x] === b[y]) {
         x++;
@@ -72,25 +70,15 @@ export function diffLines(
 ): Omit<DiffResult, "clipped"> {
   // Common prefix and suffix: the usual edit touches a small middle.
   let start = 0;
-  while (
-    start < oldLines.length &&
-    start < newLines.length &&
-    oldLines[start] === newLines[start]
-  )
-    start++;
+  while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) start++;
   let endOld = oldLines.length,
     endNew = newLines.length;
-  while (
-    endOld > start &&
-    endNew > start &&
-    oldLines[endOld - 1] === newLines[endNew - 1]
-  ) {
+  while (endOld > start && endNew > start && oldLines[endOld - 1] === newLines[endNew - 1]) {
     endOld--;
     endNew--;
   }
   const lines: DiffLine[] = [];
-  for (let i = 0; i < start; i++)
-    lines.push({ kind: "same", text: oldLines[i], a: i + 1, b: i + 1 });
+  for (let i = 0; i < start; i++) lines.push({ kind: "same", text: oldLines[i], a: i + 1, b: i + 1 });
 
   // Intern the middle so the inner loop compares integers.
   const ids = new Map<string, number>();
@@ -137,8 +125,7 @@ export function diffLines(
       const snapshot = trace[d],
         at = (k: number) => snapshot[k + d + 1];
       const k = x - y;
-      const previousK =
-        k === -d || (k !== d && at(k - 1) < at(k + 1)) ? k + 1 : k - 1;
+      const previousK = k === -d || (k !== d && at(k - 1) < at(k + 1)) ? k + 1 : k - 1;
       const previousX = d === 0 ? 0 : at(previousK),
         previousY = d === 0 ? 0 : previousX - previousK;
       while (x > previousX && y > previousY) {
@@ -171,28 +158,17 @@ export function diffLines(
 }
 
 /** Diff two texts within the limits; say when a limit was reached. */
-export function diffTexts(
-  oldText: string,
-  newText: string,
-  limits: DiffLimits = DIFF_LIMITS,
-): DiffResult {
+export function diffTexts(oldText: string, newText: string, limits: DiffLimits = DIFF_LIMITS): DiffResult {
   const oldLines = splitLines(oldText),
     newLines = splitLines(newText);
-  const clipped =
-    oldLines.length > limits.maxLines || newLines.length > limits.maxLines;
+  const clipped = oldLines.length > limits.maxLines || newLines.length > limits.maxLines;
   return {
-    ...diffLines(
-      oldLines.slice(0, limits.maxLines),
-      newLines.slice(0, limits.maxLines),
-      limits.maxEdits,
-    ),
+    ...diffLines(oldLines.slice(0, limits.maxLines), newLines.slice(0, limits.maxLines), limits.maxEdits),
     clipped,
   };
 }
 
-export type DiffRow =
-  | { kind: "line"; line: DiffLine }
-  | { kind: "skip"; count: number };
+export type DiffRow = { kind: "line"; line: DiffLine } | { kind: "skip"; count: number };
 
 /**
  * What to show: changed lines with `context` unchanged lines around them;
@@ -207,12 +183,7 @@ export function collapseDiff(
   const keep = new Uint8Array(lines.length);
   for (let i = 0; i < lines.length; i++)
     if (lines[i].kind !== "same")
-      for (
-        let j = Math.max(0, i - context);
-        j <= Math.min(lines.length - 1, i + context);
-        j++
-      )
-        keep[j] = 1;
+      for (let j = Math.max(0, i - context); j <= Math.min(lines.length - 1, i + context); j++) keep[j] = 1;
   let changed = 0,
     skipped = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -222,8 +193,7 @@ export function collapseDiff(
     }
     if (skipped) rows.push({ kind: "skip", count: skipped });
     skipped = 0;
-    if (lines[i].kind !== "same" && ++changed > maxChanged)
-      return { rows, truncated: true };
+    if (lines[i].kind !== "same" && ++changed > maxChanged) return { rows, truncated: true };
     rows.push({ kind: "line", line: lines[i] });
   }
   if (skipped && rows.length) rows.push({ kind: "skip", count: skipped });

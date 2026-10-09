@@ -19,11 +19,8 @@ const MAX_CHAIN = BUILD_LIMITS.chain;
 const MAX_UNARY_RUN = BUILD_LIMITS.unaryRun;
 
 const dependencyNames = (manifest: Record<string, unknown>) =>
-  ["dependencies", "peerDependencies", "optionalDependencies"].flatMap(
-    (field) =>
-      Object.keys(
-        (manifest[field] as Record<string, string> | undefined) ?? {},
-      ),
+  ["dependencies", "peerDependencies", "optionalDependencies"].flatMap((field) =>
+    Object.keys((manifest[field] as Record<string, string> | undefined) ?? {}),
   );
 
 /**
@@ -44,15 +41,9 @@ export function allowedPackageDirs(root: string, names: readonly string[]) {
   for (const name of names) add(path.join(top, "node_modules", name));
   while (queue.length) {
     const directory = queue.shift()!;
-    const manifest = JSON.parse(
-      readFileSync(path.join(directory, "package.json"), "utf8"),
-    ) as Record<string, unknown>;
+    const manifest = JSON.parse(readFileSync(path.join(directory, "package.json"), "utf8")) as Record<string, unknown>;
     for (const dependency of dependencyNames(manifest)) {
-      for (
-        let current = directory;
-        current.startsWith(top);
-        current = path.dirname(current)
-      ) {
+      for (let current = directory; current.startsWith(top); current = path.dirname(current)) {
         if (path.basename(current) === "node_modules") continue;
         const candidate = path.join(current, "node_modules", dependency);
         if (existsSync(path.join(candidate, "package.json"))) {
@@ -75,9 +66,7 @@ export function isAllowedLibraryFile(file: string, allowed: string[]) {
     return false;
   }
   // Longest match first: a nested package is judged by its own directory.
-  const owner = allowed.find((directory) =>
-    real.startsWith(directory + path.sep),
-  );
+  const owner = allowed.find((directory) => real.startsWith(directory + path.sep));
   if (!owner) return false;
   return !real
     .slice(owner.length + 1)
@@ -86,8 +75,7 @@ export function isAllowedLibraryFile(file: string, allowed: string[]) {
 }
 
 function nextVisible(source: string, from: number) {
-  for (let index = from; index < source.length; index++)
-    if (!" \t\n\r".includes(source[index])) return source[index];
+  for (let index = from; index < source.length; index++) if (!" \t\n\r".includes(source[index])) return source[index];
   return "";
 }
 
@@ -124,8 +112,7 @@ export function withinNestingLimits(source: string) {
   let previous = "";
   for (let index = 0; index < source.length; index++) {
     const char = source[index];
-    if (char === " " || char === "\t" || char === "\n" || char === "\r")
-      continue;
+    if (char === " " || char === "\t" || char === "\n" || char === "\r") continue;
     const next = source[index + 1] ?? "";
     if (/[A-Za-z_$]/.test(char) && !/[\w$]/.test(source[index - 1] ?? "")) {
       let end = index + 1;
@@ -135,11 +122,7 @@ export function withinNestingLimits(source: string) {
       if (PREFIX_KEYWORDS.has(word) && ++keywords > MAX_CHAIN) return false;
       // A label (`name:` right after a statement boundary or another label)
       // nests the next statement; object keys follow "," or "{".
-      if (
-        nextVisible(source, end) === ":" &&
-        (previous === "" || ";}:".includes(previous)) &&
-        ++keywords > MAX_CHAIN
-      )
+      if (nextVisible(source, end) === ":" && (previous === "" || ";}:".includes(previous)) && ++keywords > MAX_CHAIN)
         return false;
       unary = 0;
       previous = source[end - 1];
@@ -156,10 +139,7 @@ export function withinNestingLimits(source: string) {
     } else if (char === ";") chain = 0;
     else if (char === "<") {
       if (next === "/") elements = Math.max(0, elements - 1);
-      else if (
-        /[A-Za-z>]/.test(next) &&
-        (previous === "" || ">({[,?:=&|;".includes(previous))
-      ) {
+      else if (/[A-Za-z>]/.test(next) && (previous === "" || ">({[,?:=&|;".includes(previous))) {
         if (++elements > MAX_NESTING) return false;
       }
     } else if (char === "/" && next === ">") {
@@ -200,8 +180,7 @@ const namesRequire = (member: any) =>
   member.type === "MemberExpression" &&
   (member.computed
     ? staticValue(member.property) === "require"
-    : member.property.type === "Identifier" &&
-      member.property.name === "require");
+    : member.property.type === "Identifier" && member.property.name === "require");
 
 /** The call `callee("plain string")` with nothing else. */
 const plainCall = (call: any, callee: any) =>
@@ -274,46 +253,30 @@ export async function staticImportsOnly(source: string, loader: Loader) {
   } catch {
     return "source could not be checked for imports";
   }
-  const stack: Array<{ node: any; parent: any; key: string }> = [
-    { node: program, parent: null, key: "" },
-  ];
+  const stack: Array<{ node: any; parent: any; key: string }> = [{ node: program, parent: null, key: "" }];
   while (stack.length) {
     const { node, parent, key } = stack.pop()!;
     switch (node.type) {
       case "ImportExpression":
-        if (node.options)
-          return "import attributes (with {...}) are not allowed";
-        if (!staticSpecifier(node.source))
-          return "import() must name a module with a plain string";
+        if (node.options) return "import attributes (with {...}) are not allowed";
+        if (!staticSpecifier(node.source)) return "import() must name a module with a plain string";
         break;
       case "ImportDeclaration":
       case "ExportNamedDeclaration":
       case "ExportAllDeclaration":
-        if (node.attributes?.length)
-          return "import attributes (with {...}) are not allowed";
+        if (node.attributes?.length) return "import attributes (with {...}) are not allowed";
         break;
       case "MemberExpression":
-        if (
-          namesRequire(node) &&
-          !(key === "callee" && plainCall(parent, node))
-        )
-          return PLAIN_REQUIRE;
+        if (namesRequire(node) && !(key === "callee" && plainCall(parent, node))) return PLAIN_REQUIRE;
         break;
       case "Identifier":
         if (node.name !== "require") break;
         // The property of `x.require` is judged with its member expression;
         // a plain object key is not a reference.
-        if (
-          key === "property" &&
-          parent.type === "MemberExpression" &&
-          !parent.computed
-        )
-          break;
+        if (key === "property" && parent.type === "MemberExpression" && !parent.computed) break;
         if (
           key === "key" &&
-          ["Property", "PropertyDefinition", "MethodDefinition"].includes(
-            parent.type,
-          ) &&
+          ["Property", "PropertyDefinition", "MethodDefinition"].includes(parent.type) &&
           !parent.computed
         )
           break;
@@ -324,10 +287,8 @@ export async function staticImportsOnly(source: string, loader: Loader) {
       const value = node[child];
       if (Array.isArray(value)) {
         for (const item of value)
-          if (item && typeof item.type === "string")
-            stack.push({ node: item, parent: node, key: child });
-      } else if (value && typeof value.type === "string")
-        stack.push({ node: value, parent: node, key: child });
+          if (item && typeof item.type === "string") stack.push({ node: item, parent: node, key: child });
+      } else if (value && typeof value.type === "string") stack.push({ node: value, parent: node, key: child });
     }
   }
   return null;

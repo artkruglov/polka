@@ -3,8 +3,7 @@ import { z } from "zod";
 const SHA256 = /^[a-f0-9]{64}$/;
 const COMMIT = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const POSIX_PATH =
-  /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))(?!.*\\)(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+const POSIX_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))(?!.*\\)(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
 
 const nonEmptyText = (max: number) => z.string().trim().min(1).max(max);
 const sha256Schema = z.string().regex(SHA256);
@@ -45,8 +44,7 @@ export const editorialRuntimeProofSchema = z
     checkedAt: timestampSchema,
     evidencePath: z.string().min(1).max(500).regex(POSIX_PATH),
   })
-  .strict()
-  ;
+  .strict();
 
 export const editorialBindingSchema = z
   .object({
@@ -63,12 +61,7 @@ export const editorialBindingSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    const derivativeFields = [
-      value.derivativeId,
-      value.derivativeSha256,
-      value.builderVersion,
-      value.runtimeProfile,
-    ];
+    const derivativeFields = [value.derivativeId, value.derivativeSha256, value.builderVersion, value.runtimeProfile];
     const anyDerivative = derivativeFields.some((field) => field !== null);
     const allDerivative = derivativeFields.every((field) => field !== null);
     if (anyDerivative && !allDerivative) {
@@ -139,10 +132,7 @@ export const editorialPublicationManifestSchema = z
         message: "Binding revision does not match runtime proof",
       });
     }
-    if (
-      value.runtimeProof.derivative === null &&
-      value.binding.derivativeId !== null
-    ) {
+    if (value.runtimeProof.derivative === null && value.binding.derivativeId !== null) {
       ctx.addIssue({
         code: "custom",
         path: ["binding", "derivativeId"],
@@ -191,23 +181,15 @@ export const editorialPublicationManifestSchema = z
 export type EditorialSource = z.infer<typeof editorialSourceSchema>;
 export type EditorialRuntimeProof = z.infer<typeof editorialRuntimeProofSchema>;
 export type EditorialBinding = z.infer<typeof editorialBindingSchema>;
-export type EditorialPublicMetadata = z.infer<
-  typeof editorialPublicMetadataSchema
->;
-export type EditorialPublicResponse = z.infer<
-  typeof editorialPublicResponseSchema
->;
-export type EditorialPublicationManifest = z.infer<
-  typeof editorialPublicationManifestSchema
->;
+export type EditorialPublicMetadata = z.infer<typeof editorialPublicMetadataSchema>;
+export type EditorialPublicResponse = z.infer<typeof editorialPublicResponseSchema>;
+export type EditorialPublicationManifest = z.infer<typeof editorialPublicationManifestSchema>;
 
 export function validateEditorialPublication(input: unknown): EditorialPublicationManifest {
   return editorialPublicationManifestSchema.parse(input);
 }
 
 /** Public projection is explicit and never derives a token, share, or URL. */
-export function toEditorialPublicMetadata(
-  input: EditorialPublicationManifest,
-): EditorialPublicMetadata {
+export function toEditorialPublicMetadata(input: EditorialPublicationManifest): EditorialPublicMetadata {
   return editorialPublicMetadataSchema.parse(input.public);
 }

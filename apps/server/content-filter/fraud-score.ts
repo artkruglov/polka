@@ -26,18 +26,8 @@ export type FraudScore = {
   suspicious: boolean;
 };
 
-const STRONG = new Set([
-  "channel:handover",
-  "channel:transfer",
-  "channel:crypto",
-  "channel:lookalike-login",
-]);
-const WEAK = new Set([
-  "channel:messenger",
-  "channel:phone",
-  "channel:email",
-  "channel:login-link",
-]);
+const STRONG = new Set(["channel:handover", "channel:transfer", "channel:crypto", "channel:lookalike-login"]);
+const WEAK = new Set(["channel:messenger", "channel:phone", "channel:email", "channel:login-link"]);
 /** The fraud list's threshold (lists.ts: fraud.threshold). */
 export const FRAUD_THRESHOLD = 6;
 

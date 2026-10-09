@@ -74,8 +74,8 @@ export function InviteLinksView({
     <section className="shelf-invite-links" aria-label="Приглашение ссылкой">
       <h3>Пригласить ссылкой</h3>
       <p className="shelf-members-lead">
-        Для тех, кто ещё ни разу не входил в Полку. Отправьте ссылку в рабочий чат: кто откроет её и войдёт,
-        окажется на полке с выбранной ролью.
+        Для тех, кто ещё ни разу не входил в Полку. Отправьте ссылку в рабочий чат: кто откроет её и войдёт, окажется на
+        полке с выбранной ролью.
         {inviter === "curator" && " Кураторов приглашает администратор."}
       </p>
       <form
@@ -85,21 +85,40 @@ export function InviteLinksView({
           onCreate({ role, expiresInHours: hours, maxUses: uses });
         }}
       >
-        <SelectField label="Роль" value={role} disabled={busy} onChange={(event) => setRole(event.target.value as InviteRole)}>
+        <SelectField
+          label="Роль"
+          value={role}
+          disabled={busy}
+          onChange={(event) => setRole(event.target.value as InviteRole)}
+        >
           {roles.map((r) => (
             <option key={r} value={r}>
               {ROLE_LABEL[r]} — {ROLE_HINT[r]}
             </option>
           ))}
         </SelectField>
-        <SelectField label="Действует" value={hours} disabled={busy} onChange={(event) => setHours(Number(event.target.value))}>
+        <SelectField
+          label="Действует"
+          value={hours}
+          disabled={busy}
+          onChange={(event) => setHours(Number(event.target.value))}
+        >
           {EXPIRY_CHOICES.map((choice) => (
-            <option key={choice.hours} value={choice.hours}>{choice.label}</option>
+            <option key={choice.hours} value={choice.hours}>
+              {choice.label}
+            </option>
           ))}
         </SelectField>
-        <SelectField label="Для кого" value={uses} disabled={busy} onChange={(event) => setUses(Number(event.target.value))}>
+        <SelectField
+          label="Для кого"
+          value={uses}
+          disabled={busy}
+          onChange={(event) => setUses(Number(event.target.value))}
+        >
           {USES_CHOICES.map((choice) => (
-            <option key={choice.uses} value={choice.uses}>{choice.label}</option>
+            <option key={choice.uses} value={choice.uses}>
+              {choice.label}
+            </option>
           ))}
         </SelectField>
         <Button type="submit" busy={busy}>
@@ -115,23 +134,27 @@ export function InviteLinksView({
       )}
       <ErrorNotice error={error} />
       {items === null ? (
-        <p className="shelf-members-lead" role="status">Загружаем приглашения…</p>
-      ) : active.length > 0 && (
-        <ul className="shelf-invite-list" aria-label="Действующие приглашения">
-          {active.map((item) => (
-            <li key={item.id}>
-              <span>
-                {invitationSummary(item)}
-                {item.inviterName && <small>создал {item.inviterName}</small>}
-              </span>
-              {(inviter === "admin" || item.invitedBy === accountId) && (
-                <Button variant="quiet" disabled={busy} onClick={() => onRevoke(item)}>
-                  Отозвать
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <p className="shelf-members-lead" role="status">
+          Загружаем приглашения…
+        </p>
+      ) : (
+        active.length > 0 && (
+          <ul className="shelf-invite-list" aria-label="Действующие приглашения">
+            {active.map((item) => (
+              <li key={item.id}>
+                <span>
+                  {invitationSummary(item)}
+                  {item.inviterName && <small>создал {item.inviterName}</small>}
+                </span>
+                {(inviter === "admin" || item.invitedBy === accountId) && (
+                  <Button variant="quiet" disabled={busy} onClick={() => onRevoke(item)}>
+                    Отозвать
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
       )}
     </section>
   );

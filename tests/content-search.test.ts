@@ -19,10 +19,7 @@ import { backfillSearch } from "../apps/server/search-backfill.ts";
 import { MCP_AUDIENCE, type ServiceActor } from "../apps/server/service-auth.ts";
 import { searchQuery, titlePattern, SearchText, addScriptText } from "../apps/server/search-text.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
-import {
-  SEARCH_MATCH_END,
-  SEARCH_MATCH_START,
-} from "../packages/contracts/index.ts";
+import { SEARCH_MATCH_END, SEARCH_MATCH_START } from "../packages/contracts/index.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
 
 const app = await createApp();
@@ -53,11 +50,7 @@ async function login(name: string) {
   return `${response.cookies[0].name}=${response.cookies[0].value}`;
 }
 
-async function saveSingle(
-  source: string,
-  patch: Record<string, unknown> = {},
-  mime = "text/html",
-) {
+async function saveSingle(source: string, patch: Record<string, unknown> = {}, mime = "text/html") {
   const bytes = Buffer.from(source);
   const begun = await call("POST", "/api/uploads", {
     key: randomUUID(),
@@ -70,20 +63,14 @@ async function saveSingle(
   });
   assert.equal(begun.statusCode, 200, begun.body);
   const uploadId = begun.json().uploadId as string;
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode,
-    200,
-  );
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes)).statusCode, 200);
   const finalized = await call("POST", `/api/uploads/${uploadId}/finalize`, {});
   assert.equal(finalized.statusCode, 200, finalized.body);
   return finalized.json() as { artifactId: string; revisionId: string };
 }
 
 async function saveBundle(title: string) {
-  const prepared = await prepareCapture(bundleDir, "index.html", [
-    "index.html",
-    "app.js",
-  ]);
+  const prepared = await prepareCapture(bundleDir, "index.html", ["index.html", "app.js"]);
   const begun = await call("POST", "/api/bundle-uploads", {
     key: randomUUID(),
     title,
@@ -106,12 +93,7 @@ async function saveBundle(title: string) {
 }
 
 async function search(q: string, cookie = ownerCookie) {
-  const response = await call(
-    "GET",
-    `/api/artifacts?${new URLSearchParams({ q })}`,
-    undefined,
-    cookie,
-  );
+  const response = await call("GET", `/api/artifacts?${new URLSearchParams({ q })}`, undefined, cookie);
   assert.equal(response.statusCode, 200, response.body);
   return response.json().items as Array<{ id: string; snippet?: string }>;
 }
@@ -195,11 +177,7 @@ test("a bundle is found by its JSX text; class lists are not text", async () => 
 });
 
 test("a text file is found by its text", async () => {
-  const saved = await saveSingle(
-    "Заметки со встречи: переговоры с поставщиком упаковки.",
-    {},
-    "text/plain",
-  );
+  const saved = await saveSingle("Заметки со встречи: переговоры с поставщиком упаковки.", {}, "text/plain");
   assert.ok((await search("поставщик")).some((entry) => entry.id === saved.artifactId));
 });
 
@@ -256,10 +234,7 @@ test("the row goes with the work", async () => {
   const saved = await saveSingle("<!doctype html><p>Временная заметка.</p>");
   await db.query("UPDATE artifacts SET latest_revision_id=NULL WHERE id=$1", [saved.artifactId]);
   await db.query("DELETE FROM revisions WHERE artifact_id=$1", [saved.artifactId]);
-  const { rowCount } = await db.query(
-    "SELECT 1 FROM artifact_search WHERE artifact_id=$1",
-    [saved.artifactId],
-  );
+  const { rowCount } = await db.query("SELECT 1 FROM artifact_search WHERE artifact_id=$1", [saved.artifactId]);
   assert.equal(rowCount, 0);
 });
 
@@ -270,11 +245,7 @@ test("queries and script text: no tsquery syntax gets through", () => {
   assert.equal(searchQuery("it's"), "'it':* & 's':*");
   assert.equal(searchQuery("a b c d e f g h i j")?.split(" & ").length, 8);
   const text = new SearchText();
-  addScriptText(
-    'const cls = "px-4 py-2 rounded"; const t = "Итоги года"; x = a>b?c:{d};',
-    text,
-    "cyrillic",
-  );
+  addScriptText('const cls = "px-4 py-2 rounded"; const t = "Итоги года"; x = a>b?c:{d};', text, "cyrillic");
   assert.equal(text.value(), "Итоги года");
 });
 
@@ -306,7 +277,10 @@ test("an address, an e-mail and a version are found as written", async () => {
     "<!doctype html><p>Код лежит на github.com/polka, пишите на anna@example.ru, версия 3.14.</p>",
   );
   for (const query of ["github.com", "anna@example.ru", "3.14", "githu"])
-    assert.ok((await search(query)).some((entry) => entry.id === saved.artifactId), query);
+    assert.ok(
+      (await search(query)).some((entry) => entry.id === saved.artifactId),
+      query,
+    );
 });
 
 test("a search ranks a title hit above a newer text-only hit and pages exactly", async () => {
@@ -331,9 +305,7 @@ test("a search ranks a title hit above a newer text-only hit and pages exactly",
   );
   assert.equal(new Set(seen).size, seen.length, "no work twice across pages");
   const plain = await listArtifactsForAgent(actor, { limit: 1 });
-  await assert.rejects(
-    listArtifactsForAgent(actor, { query: "зонтик", cursor: plain.nextCursor ?? "x" }),
-  );
+  await assert.rejects(listArtifactsForAgent(actor, { query: "зонтик", cursor: plain.nextCursor ?? "x" }));
   // A ranked cursor from before the new rank scale would skip works: refused.
   const old = Buffer.from(
     JSON.stringify({ state: "active", date: new Date().toISOString(), id: titled.artifactId, rank: 2 }),
@@ -354,15 +326,9 @@ test("quoted phrases: whole words in this order; the title pattern drops the quo
 });
 
 test("a quoted phrase finds the words side by side and in order", async () => {
-  const together = await saveSingle(
-    "<!doctype html><p>Здесь годовой отчёт о продажах филиала Вербены.</p>",
-  );
-  const apart = await saveSingle(
-    "<!doctype html><p>Отчёт филиала Вербены: годовой план выполнен.</p>",
-  );
-  const withStopWord = await saveSingle(
-    "<!doctype html><p>Отчёт за квартал по филиалу Вербены.</p>",
-  );
+  const together = await saveSingle("<!doctype html><p>Здесь годовой отчёт о продажах филиала Вербены.</p>");
+  const apart = await saveSingle("<!doctype html><p>Отчёт филиала Вербены: годовой план выполнен.</p>");
+  const withStopWord = await saveSingle("<!doctype html><p>Отчёт за квартал по филиалу Вербены.</p>");
   const ids = (found: Array<{ id: string }>) => found.map((entry) => entry.id);
   const loose = ids(await search("годовой отчёт вербены"));
   assert.ok(loose.includes(together.artifactId) && loose.includes(apart.artifactId));
@@ -426,8 +392,17 @@ test("a relevance cursor is checked and good for its order only", async () => {
   const cursorOf = (key: string) =>
     Buffer.from(JSON.stringify({ sort: "relevance", key, id: randomUUID() })).toString("base64url");
   const date = "2026-10-09T00:00:00.000000Z";
-  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`1; ${date}`)}`)).statusCode, 400);
-  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date} x`)}`)).statusCode, 400);
-  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date}`)}`)).statusCode, 200);
+  assert.equal(
+    (await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`1; ${date}`)}`)).statusCode,
+    400,
+  );
+  assert.equal(
+    (await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date} x`)}`)).statusCode,
+    400,
+  );
+  assert.equal(
+    (await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date}`)}`)).statusCode,
+    200,
+  );
   assert.equal((await call("GET", `/api/artifacts?sort=new&q=x&cursor=${cursorOf(`5 ${date}`)}`)).statusCode, 400);
 });

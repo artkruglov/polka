@@ -12,11 +12,7 @@ import { mkdir, writeFile, access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { db } from "../apps/server/db.ts";
-import {
-  decideFeedProposal,
-  feedProposalSource,
-  listFeedProposalsForOperator,
-} from "../apps/server/feed-proposals.ts";
+import { decideFeedProposal, feedProposalSource, listFeedProposalsForOperator } from "../apps/server/feed-proposals.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -37,7 +33,12 @@ export async function runFeedProposals(argv: string[], root = process.cwd()) {
   if (command === "export" && id && UUID.test(id) && third && SLUG.test(third) && third.length <= 80) {
     const directory = resolve(root, "content/editorial", third);
     const target = resolve(directory, "index.html");
-    if (await access(target).then(() => true, () => false)) {
+    if (
+      await access(target).then(
+        () => true,
+        () => false,
+      )
+    ) {
       console.error(`${target} exists; pick another slug.`);
       return 1;
     }

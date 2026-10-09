@@ -20,10 +20,7 @@ if (window.top === window) {
   let nonce: string | null = null;
   const post = (message: WithoutEnvelope<ExtensionMessage>) => {
     if (!nonce) return;
-    window.postMessage(
-      { source: EXTENSION_SOURCE, v: 1, nonce, ...message },
-      location.origin,
-    );
+    window.postMessage({ source: EXTENSION_SOURCE, v: 1, nonce, ...message }, location.origin);
   };
 
   window.addEventListener("message", (event) => {
@@ -39,8 +36,7 @@ if (window.top === window) {
         .sendMessage<{ connected: boolean; version: string } | null>({ type: "bridge-status" })
         .then((status) => {
           // null: this Полка is not the one the extension is set up for.
-          if (status)
-            post({ type: "ready", version: status.version, connected: status.connected });
+          if (status) post({ type: "ready", version: status.version, connected: status.connected });
         })
         .catch(() => {});
       return;

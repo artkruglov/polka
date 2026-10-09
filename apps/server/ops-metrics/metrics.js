@@ -38,11 +38,8 @@
     return node;
   };
   const percent = (value) =>
-    value === null || value === undefined
-      ? "—"
-      : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
-  const number = (value) =>
-    typeof value === "number" ? value.toLocaleString("ru-RU") : (value ?? "—");
+    value === null || value === undefined ? "—" : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+  const number = (value) => (typeof value === "number" ? value.toLocaleString("ru-RU") : (value ?? "—"));
 
   function table(headers, rows) {
     const wrap = el("div", null, "table");
@@ -56,9 +53,7 @@
       const tr = el("tr");
       for (const cell of row) {
         const isRate = typeof cell === "object" && cell !== null && "rate" in cell;
-        tr.append(
-          el("td", isRate ? percent(cell.rate) : number(cell), isRate ? "rate" : ""),
-        );
+        tr.append(el("td", isRate ? percent(cell.rate) : number(cell), isRate ? "rate" : ""));
       }
       body.append(tr);
     }
@@ -84,9 +79,7 @@
 
   function render(data) {
     report.replaceChildren();
-    $("generated").textContent = `с ${data.since}, обновлено ${new Date(
-      data.generatedAt,
-    ).toLocaleString("ru-RU")}`;
+    $("generated").textContent = `с ${data.since}, обновлено ${new Date(data.generatedAt).toLocaleString("ru-RU")}`;
     const total = data.funnel.total;
     const kpis = el("div", null, "kpis");
     for (const [label, value] of [
@@ -196,10 +189,7 @@
               "Наж.→рег.",
               "Подск.→рег.",
             ],
-            [
-              ...[...rec.weeks].reverse().map((w) => recRow(w)),
-              recRow(rec.total, "Всего"),
-            ],
+            [...[...rec.weeks].reverse().map((w) => recRow(w)), recRow(rec.total, "Всего")],
           ),
         ),
       );
@@ -230,16 +220,18 @@
         data.definitions.retention,
         table(
           ["Неделя", "Когорта", "D1", "из", "D7", "из", "D30", "из"],
-          [...data.retention].reverse().map((c) => [
-            c.week,
-            c.cohort,
-            r(c.d1.rate),
-            c.d1.eligible,
-            r(c.d7.rate),
-            c.d7.eligible,
-            r(c.d30.rate),
-            c.d30.eligible,
-          ]),
+          [...data.retention]
+            .reverse()
+            .map((c) => [
+              c.week,
+              c.cohort,
+              r(c.d1.rate),
+              c.d1.eligible,
+              r(c.d7.rate),
+              c.d7.eligible,
+              r(c.d30.rate),
+              c.d30.eligible,
+            ]),
         ),
       ),
     );
@@ -260,18 +252,20 @@
             "Заметки",
             "Заявки компаний",
           ],
-          [...data.activity].reverse().map((a) => [
-            a.week,
-            a.activeAccounts,
-            a.pageViews,
-            a.signups,
-            a.agentConnections,
-            a.saves,
-            a.shares,
-            a.sharesOpened,
-            a.notes,
-            a.enterpriseRequests,
-          ]),
+          [...data.activity]
+            .reverse()
+            .map((a) => [
+              a.week,
+              a.activeAccounts,
+              a.pageViews,
+              a.signups,
+              a.agentConnections,
+              a.saves,
+              a.shares,
+              a.sharesOpened,
+              a.notes,
+              a.enterpriseRequests,
+            ]),
         ),
       ),
     );

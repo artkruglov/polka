@@ -42,9 +42,7 @@ const SPACES = /[\u00a0\u2002-\u200a\u202f\u205f\u3000]/;
 /** One character (code point) as the fuzzy match sees it. */
 function normalizeChar(char: string) {
   return [...char.normalize("NFKC")]
-    .map((c) =>
-      QUOTES[c] ?? (DASHES.test(c) ? "-" : SPACES.test(c) ? " " : c),
-    )
+    .map((c) => QUOTES[c] ?? (DASHES.test(c) ? "-" : SPACES.test(c) ? " " : c))
     .join("");
 }
 
@@ -173,9 +171,7 @@ export function applyEdits(content: string, edits: Edit[]): string {
     const current = ordered[i]!;
     if (previous.end > current.start) {
       const [first, second] =
-        previous.index < current.index
-          ? [previous.index, current.index]
-          : [current.index, previous.index];
+        previous.index < current.index ? [previous.index, current.index] : [current.index, previous.index];
       fail({
         editIndex: first,
         otherEditIndex: second,
@@ -187,8 +183,7 @@ export function applyEdits(content: string, edits: Edit[]): string {
   let result = content;
   for (let i = ordered.length - 1; i >= 0; i--) {
     const match = ordered[i]!;
-    result =
-      result.slice(0, match.start) + match.newText + result.slice(match.end);
+    result = result.slice(0, match.start) + match.newText + result.slice(match.end);
   }
   if (result === content)
     fail({

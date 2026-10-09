@@ -70,10 +70,16 @@ test("a link is saved as a work, idempotently, and opens only for its owner", as
   assert.equal(open.statusCode, 303);
   assert.equal(open.headers.location, ARTIFACT);
   assert.equal(open.headers["referrer-policy"], "no-referrer");
-  assert.equal((await call("GET", `/api/revisions/${receipt.revisionId}/open`, undefined, await login(otherName))).statusCode, 404);
+  assert.equal(
+    (await call("GET", `/api/revisions/${receipt.revisionId}/open`, undefined, await login(otherName))).statusCode,
+    404,
+  );
   assert.equal((await call("GET", `/api/revisions/${receipt.revisionId}/open`)).statusCode, 401);
   // A default title from the provider table when none is given.
-  const untitled = await saveLink(owner, { key: randomUUID(), url: "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed" });
+  const untitled = await saveLink(owner, {
+    key: randomUUID(),
+    url: "https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed",
+  });
   assert.equal(untitled.title, "Чат ChatGPT");
   // Not a link: refused.
   for (const url of ["javascript:alert(1)", "ftp://example.com/x", "https://user:pass@example.com/", "not a url"])
@@ -84,8 +90,15 @@ test("a shared link work gives the recipient the address and note, nothing else"
   const name = "links-share-" + randomBytes(5).toString("hex");
   await createAccount(name, password);
   const cookie = await login(name);
-  const saved = (await call("POST", "/api/links", { key: randomUUID(), url: "https://example.org/report", title: "Отчёт" }, cookie)).json();
-  const shared = await call("POST", `/api/artifacts/${saved.artifactId}/share`, { expectedRevisionId: saved.revisionId, expiresInDays: 7 }, cookie);
+  const saved = (
+    await call("POST", "/api/links", { key: randomUUID(), url: "https://example.org/report", title: "Отчёт" }, cookie)
+  ).json();
+  const shared = await call(
+    "POST",
+    `/api/artifacts/${saved.artifactId}/share`,
+    { expectedRevisionId: saved.revisionId, expiresInDays: 7 },
+    cookie,
+  );
   assert.equal(shared.statusCode, 200, shared.body);
   const token = new URL(shared.json().share.url).hash.slice(1);
   const resolved = await call("POST", "/api/resolve", { token });
@@ -100,7 +113,11 @@ test("a shared link work gives the recipient the address and note, nothing else"
 
 test("the content filter reads the address, title and note: listed domains and categories", async () => {
   const owner = await createAccount("links-filter-" + randomBytes(5).toString("hex"), password);
-  const logger = await saveLink(owner, { key: randomUUID(), url: "https://iplogger.org/2abc", title: "Смешные котики" });
+  const logger = await saveLink(owner, {
+    key: randomUUID(),
+    url: "https://iplogger.org/2abc",
+    title: "Смешные котики",
+  });
   const gambling = await saveLink(owner, {
     key: randomUUID(),
     url: "https://example.net/",
@@ -116,7 +133,9 @@ test("the content filter reads the address, title and note: listed domains and c
 
 test("a page's title is read from its top, og:title first, in linear time", () => {
   assert.equal(
-    readPageTitle(`<html><head><title>Plain &amp; simple</title><meta property="og:title" content="The  &quot;OG&quot; one"></head>`),
+    readPageTitle(
+      `<html><head><title>Plain &amp; simple</title><meta property="og:title" content="The  &quot;OG&quot; one"></head>`,
+    ),
     'The "OG" one',
   );
   assert.equal(readPageTitle(`<HEAD><TITLE lang=ru>\n  Заголовок\n</TITLE></HEAD>`), "Заголовок");
@@ -179,7 +198,10 @@ test("an AI chat's link is never opened for its title; agents save links with th
   assert.equal(receipt.title, "Артефакт Claude");
   const {
     rows: [row],
-  } = await db.query("SELECT r.mime,a.tenant_id FROM revisions r JOIN artifacts a ON a.id=r.artifact_id WHERE r.id=$1", [receipt.revisionId]);
+  } = await db.query(
+    "SELECT r.mime,a.tenant_id FROM revisions r JOIN artifacts a ON a.id=r.artifact_id WHERE r.id=$1",
+    [receipt.revisionId],
+  );
   assert.equal(row.mime, LINK_MIME);
   assert.equal(row.tenant_id, owner.tenant);
   const tool = mcpToolCatalog().find((entry) => entry.name === "polka_save_link");
@@ -201,12 +223,20 @@ test("the link card: service badge, title, host, «Открыть» to the origi
   assert.match(card, />Cl</);
   assert.match(card, /План бюджета/);
   assert.match(card, /claude\.ai/);
-  assert.match(card, /href="https:\/\/claude\.ai\/artifact\/F49sUXozTkEFzFawwHGSxo" target="_blank" rel="noopener noreferrer nofollow"/);
+  assert.match(
+    card,
+    /href="https:\/\/claude\.ai\/artifact\/F49sUXozTkEFzFawwHGSxo" target="_blank" rel="noopener noreferrer nofollow"/,
+  );
   assert.match(card, /Открыть/);
   assert.match(card, /если автор включил доступ по ссылке/);
-  assert.match(recipientAccessNote("claude.ai", "claude"), /Получатель откроет страницу из Claude, если автор включил доступ по ссылке/);
+  assert.match(
+    recipientAccessNote("claude.ai", "claude"),
+    /Получатель откроет страницу из Claude, если автор включил доступ по ссылке/,
+  );
   assert.match(recipientAccessNote("example.org", null), /Получатель откроет оригинал на example\.org/);
-  const cover = renderToStaticMarkup(React.createElement(LinkCover, { title: "Отчёт", host: "example.org", service: null }));
+  const cover = renderToStaticMarkup(
+    React.createElement(LinkCover, { title: "Отчёт", host: "example.org", service: null }),
+  );
   assert.match(cover, /Отчёт/);
   assert.match(cover, /example\.org/);
 });

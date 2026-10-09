@@ -69,10 +69,12 @@ export const DEFAULT_RETENTION: Record<Category | "other", Retention> = {
 
 export function parseRetention(value: string) {
   const retention = { ...DEFAULT_RETENTION };
-  for (const part of value.split(",").map((item) => item.trim()).filter(Boolean)) {
+  for (const part of value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)) {
     const [category, setting] = part.split("=").map((item) => item?.trim());
-    if (!category || !(category in retention) || !setting)
-      throw new Error(`MODERATION_RETENTION: «${part}»`);
+    if (!category || !(category in retention) || !setting) throw new Error(`MODERATION_RETENTION: «${part}»`);
     const key = category as Category | "other";
     if (setting === "keep") retention[key] = { isolate: false, days: null };
     else if (setting === "manual") retention[key] = { isolate: true, days: null };
@@ -147,23 +149,16 @@ export const NO_DECISION: ContentDecision = {
  * call failed, or with any finding: false.
  */
 export function autoCheckedClean(filter: unknown): boolean {
-  const stored = (filter as { model?: { state?: unknown; findings?: unknown } } | null)
-    ?.model;
+  const stored = (filter as { model?: { state?: unknown; findings?: unknown } } | null)?.model;
   if (!stored || stored.state !== "checked") return false;
   if (Array.isArray(stored.findings) && stored.findings.length) return false;
   return findingsOf(filter as FilterResult).length === 0;
 }
 
 /** Rules findings and model findings of one work, one per source. */
-export function findingsOf(
-  filter: FilterResult | null | undefined,
-  model: ModelView = NO_MODEL,
-) {
+export function findingsOf(filter: FilterResult | null | undefined, model: ModelView = NO_MODEL) {
   const findings: CategoryFinding[] = [];
-  for (const [category, hit] of Object.entries(filter?.hits ?? {}) as [
-    Category,
-    CategoryHit,
-  ][]) {
+  for (const [category, hit] of Object.entries(filter?.hits ?? {}) as [Category, CategoryHit][]) {
     if (!(CATEGORIES as readonly string[]).includes(category)) continue;
     const level = levelOf(category, hit.score);
     if (level === "none") continue;
@@ -175,7 +170,12 @@ export function findingsOf(
       score: finding.agreed ? 2 : 1,
       // Both models agree: as sure as the rules' high score. One model: a flag.
       level: finding.agreed ? "high" : "flag",
-      terms: [`модель (${finding.source}${finding.agreed ? ", подтверждено второй моделью" : ""}): ${finding.reason}`.slice(0, 300)],
+      terms: [
+        `модель (${finding.source}${finding.agreed ? ", подтверждено второй моделью" : ""}): ${finding.reason}`.slice(
+          0,
+          300,
+        ),
+      ],
       source: "model",
       agreed: finding.agreed,
     });
@@ -218,11 +218,7 @@ export function decideContent(input: {
   if (input.mode === "off") return NO_DECISION;
   const model = input.model ?? NO_MODEL;
   const findings = findingsOf(input.filter, model).filter(
-    (finding) =>
-      finding.category !== "fraud" ||
-      finding.source === "model" ||
-      input.fraud ||
-      input.mode === "strict",
+    (finding) => finding.category !== "fraud" || finding.source === "model" || input.fraud || input.mode === "strict",
   );
   const rulesFound = new Set(
     findings.filter((finding) => finding.source === "rules").map((finding) => finding.category),
@@ -235,8 +231,7 @@ export function decideContent(input: {
   let bestFinding: CategoryFinding | null = null;
   // A model reads (or has read) this work and did not put it in this category.
   const modelClears = (category: Category) =>
-    model.state !== "none" &&
-    !model.findings.some((finding) => finding.category === category);
+    model.state !== "none" && !model.findings.some((finding) => finding.category === category);
   for (const finding of findings) {
     const action = actionFor(finding, input, rulesFound, modelClears(finding.category));
     const better =
@@ -253,16 +248,12 @@ export function decideContent(input: {
         ...best,
         action,
         category: finding.category,
-        freeze:
-          action === "block" &&
-          (finding.category === "csam" || input.mode === "strict"),
+        freeze: action === "block" && (finding.category === "csam" || input.mode === "strict"),
       };
     }
   }
   best.shadow =
-    best.action === "hold" &&
-    best.category === "spam" &&
-    findings.every((finding) => finding.category === "spam");
+    best.action === "hold" && best.category === "spam" && findings.every((finding) => finding.category === "spam");
   return best;
 }
 
@@ -278,33 +269,23 @@ function actionFor(
     if (finding.category === "csam") return "hold";
     // One model alone: the operator is asked, nothing is hidden.
     if (!finding.agreed) return "notify";
-    if (
-      input.autoblock &&
-      (severe || (finding.category === "malicious_code" && rulesFound.has("malicious_code")))
-    )
+    if (input.autoblock && (severe || (finding.category === "malicious_code" && rulesFound.has("malicious_code"))))
       return "block";
     // Malicious code both from the rules and the models blocks regardless.
-    if (finding.category === "malicious_code" && rulesFound.has("malicious_code"))
-      return "block";
+    if (finding.category === "malicious_code" && rulesFound.has("malicious_code")) return "block";
     return "hold";
   }
   if (finding.level === "block") return "block";
   // Code harms the recipient whoever wrote it: a miner, an executable or
   // several escape attempts block; fewer signals wait for review.
-  if (finding.category === "malicious_code")
-    return finding.level === "high" ? "block" : "hold";
+  if (finding.category === "malicious_code") return finding.level === "high" ? "block" : "hold";
   // Phishing or spam found by the rules alone in a trusted author's work,
   // which a model has read without putting it in that category (or will
   // read: its answer decides the open link again and holds it if it
   // confirms). The link works and the operator is told, in either mode. A
   // research page with hundreds of sources, or a product prototype with a
   // sign-in screen, is the owner's ordinary work.
-  if (
-    RULES_ONLY_NOTIFY.has(finding.category) &&
-    input.standing.trusted &&
-    modelClearsCategory
-  )
-    return "notify";
+  if (RULES_ONLY_NOTIFY.has(finding.category) && input.standing.trusted && modelClearsCategory) return "notify";
   if (input.mode === "strict") {
     if (input.autoblock && finding.level === "high") return "block";
     return "hold";
@@ -327,15 +308,9 @@ export function describeFindings(findings: readonly CategoryFinding[]) {
     .map((finding) => {
       const label = CATEGORY_LABEL[finding.category];
       const score =
-        finding.source === "model"
-          ? finding.agreed
-            ? "обе модели согласны"
-            : "одна модель"
-          : `счёт ${finding.score}`;
+        finding.source === "model" ? (finding.agreed ? "обе модели согласны" : "одна модель") : `счёт ${finding.score}`;
       if (finding.category === "csam") return `${label} (${score})`;
-      const terms = finding.terms.length
-        ? `: ${finding.terms.map((term) => `«${term}»`).join(", ")}`
-        : "";
+      const terms = finding.terms.length ? `: ${finding.terms.map((term) => `«${term}»`).join(", ")}` : "";
       return `${label} (${score})${terms}`;
     })
     .join("; ");

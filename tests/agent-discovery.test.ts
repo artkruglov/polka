@@ -24,16 +24,8 @@ import { config } from "../apps/server/config.ts";
 import { connectGuide } from "../apps/server/connect-guide.ts";
 import { db } from "../apps/server/db.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
-import {
-  PUBLISH_FIELD_NOTES,
-  PUBLISH_RESPONSE_NOTES,
-  openApiDocument,
-} from "../apps/server/openapi.ts";
-import {
-  problemSchema,
-  publishResponseSchema,
-  registerPublishApi,
-} from "../apps/server/publish-api.ts";
+import { PUBLISH_FIELD_NOTES, PUBLISH_RESPONSE_NOTES, openApiDocument } from "../apps/server/openapi.ts";
+import { problemSchema, publishResponseSchema, registerPublishApi } from "../apps/server/publish-api.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3 } from "../apps/server/storage.ts";
 
@@ -98,10 +90,7 @@ test("GET /llms.txt: plain text with every section, on APP_ORIGIN", async () => 
     "## Limits",
     "## Presenting the result",
   ])
-    assert.ok(
-      text.includes(`\n${heading}`) || text.startsWith(heading),
-      heading,
-    );
+    assert.ok(text.includes(`\n${heading}`) || text.startsWith(heading), heading);
   assert.ok(text.includes(`${origin}/connect`));
   assert.ok(text.includes(`codex mcp add polka --url ${origin}/mcp`));
   assert.ok(text.includes(`${origin}/openapi.json`));
@@ -112,16 +101,11 @@ test("GET /llms.txt: plain text with every section, on APP_ORIGIN", async () => 
   assert.match(text, /signs in or creates a shelf in their own browser/);
   assert.match(text, /Never print tokens/);
   // AGPL-3.0 § 13: agents can point their users at this installation's source.
-  assert.ok(
-    text.includes(`Source code of this installation (AGPL-3.0): ${config.SOURCE_URL}\n`),
-  );
+  assert.ok(text.includes(`Source code of this installation (AGPL-3.0): ${config.SOURCE_URL}\n`));
   onlyOrigin(text, origin, config.SOURCE_URL);
   // The tools are the ones the MCP server registers, with their scopes.
   for (const tool of mcpToolCatalog())
-    assert.ok(
-      text.includes(`- ${tool.name} [${tool.scopes.join(" or ")}]: `),
-      tool.name,
-    );
+    assert.ok(text.includes(`- ${tool.name} [${tool.scopes.join(" or ")}]: `), tool.name);
   assert.ok(text.includes("- polka_publish [capture]: Save one chat artifact"));
 });
 
@@ -140,8 +124,7 @@ test("the tool list in llms.txt is what tools/list returns for each scope", asyn
       oauth: true,
     });
     const client = new Client({ name: "llms-txt", version: "1" });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     try {
@@ -164,9 +147,7 @@ test("GET /openapi.json: OpenAPI 3.1 from the route schemas", async () => {
   assert.equal(spec.openapi, "3.1.0");
   assert.deepEqual(spec.servers, [{ url: origin }]);
   assert.equal(spec.components.securitySchemes.bearerAuth.scheme, "bearer");
-  assert.deepEqual(spec.paths["/api/v1/publish"].post.security, [
-    { bearerAuth: ["capture"] },
-  ]);
+  assert.deepEqual(spec.paths["/api/v1/publish"].post.security, [{ bearerAuth: ["capture"] }]);
   // Every $ref resolves.
   const refs = response.body.match(/"\$ref":"[^"]+"/g) ?? [];
   assert.ok(refs.length > 0);
@@ -176,30 +157,21 @@ test("GET /openapi.json: OpenAPI 3.1 from the route schemas", async () => {
   }
   // The request schema is the one the route parses, field for field.
   const request = spec.components.schemas.PublishRequest;
-  assert.deepEqual(
-    Object.keys(request.properties).sort(),
-    Object.keys(agentPublishInputSchema.shape).sort(),
-  );
+  assert.deepEqual(Object.keys(request.properties).sort(), Object.keys(agentPublishInputSchema.shape).sort());
   assert.deepEqual(request.required, ["key", "title"]);
   assert.equal(request.additionalProperties, false);
   for (const name of Object.keys(PUBLISH_FIELD_NOTES))
     assert.ok(request.properties[name], `note for unknown field ${name}`);
   for (const name of Object.keys(PUBLISH_RESPONSE_NOTES))
-    assert.ok(
-      spec.components.schemas.PublishResponse.properties[name],
-      `note for unknown response field ${name}`,
-    );
+    assert.ok(spec.components.schemas.PublishResponse.properties[name], `note for unknown response field ${name}`);
   // The generated JSON Schemas are usable, and the examples satisfy both
   // them and the zod schemas the routes are tested against.
   const post = spec.paths["/api/v1/publish"].post;
-  const requestExample =
-    post.requestBody.content["application/json"].examples.html.value;
+  const requestExample = post.requestBody.content["application/json"].examples.html.value;
   agentPublishInputSchema.parse(requestExample);
   z.fromJSONSchema(request).parse(requestExample);
   const published = z.fromJSONSchema(spec.components.schemas.PublishResponse);
-  for (const example of Object.values<any>(
-    post.responses["200"].content["application/json"].examples,
-  )) {
+  for (const example of Object.values<any>(post.responses["200"].content["application/json"].examples)) {
     publishResponseSchema.parse(example.value);
     published.parse(example.value);
   }
@@ -209,9 +181,7 @@ test("GET /openapi.json: OpenAPI 3.1 from the route schemas", async () => {
     ...spec.paths["/api/v1/status/{artifactId}"].get.responses,
   }))
     if (Number(status) >= 400)
-      for (const example of Object.values<any>(
-        operation.content["application/json"].examples,
-      )) {
+      for (const example of Object.values<any>(operation.content["application/json"].examples)) {
         problemSchema.parse(example.value);
         problem.parse(example.value);
       }
@@ -222,10 +192,7 @@ test("every route publish-api.ts registers is in /openapi.json", async () => {
   const probe = Fastify();
   probe.addHook("onRoute", (route) => {
     for (const method of [route.method].flat())
-      if (method !== "HEAD")
-        routes.push(
-          `${method.toLowerCase()} ${route.url.replace(/:(\w+)/g, "{$1}")}`,
-        );
+      if (method !== "HEAD") routes.push(`${method.toLowerCase()} ${route.url.replace(/:(\w+)/g, "{$1}")}`);
   });
   await registerPublishApi(probe);
   await probe.ready();
@@ -239,17 +206,11 @@ test("every route publish-api.ts registers is in /openapi.json", async () => {
 });
 
 test("GET /.well-known/agent-skills: discovery index with a matching digest", async () => {
-  for (const path of [
-    "/.well-known/agent-skills",
-    "/.well-known/agent-skills/index.json",
-  ]) {
+  for (const path of ["/.well-known/agent-skills", "/.well-known/agent-skills/index.json"]) {
     const response = await get(path);
     assertPublic(response, "application/json; charset=utf-8");
     const index = response.json();
-    assert.equal(
-      index.$schema,
-      "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
-    );
+    assert.equal(index.$schema, "https://schemas.agentskills.io/discovery/0.2.0/schema.json");
     assert.deepEqual(
       index.skills.map((entry: any) => entry.name),
       [SKILL_NAME, ORGANIZE_SKILL_NAME],
@@ -257,16 +218,10 @@ test("GET /.well-known/agent-skills: discovery index with a matching digest", as
     for (const entry of index.skills) {
       assert.equal(entry.type, "skill-md");
       assert.ok(entry.description.length <= 1024);
-      assert.equal(
-        entry.url,
-        `${origin}/.well-known/agent-skills/${entry.name}/SKILL.md`,
-      );
+      assert.equal(entry.url, `${origin}/.well-known/agent-skills/${entry.name}/SKILL.md`);
       const skill = await get(new URL(entry.url).pathname);
       assertPublic(skill, "text/markdown; charset=utf-8");
-      assert.equal(
-        entry.digest,
-        `sha256:${createHash("sha256").update(skill.rawPayload).digest("hex")}`,
-      );
+      assert.equal(entry.digest, `sha256:${createHash("sha256").update(skill.rawPayload).digest("hex")}`);
       assert.match(skill.body, new RegExp(`^---\\nname: ${entry.name}\\n`));
       assert.match(skill.body, /## Never/);
       onlyOrigin(skill.body, origin);
@@ -282,19 +237,10 @@ test("GET /.well-known/agent-skills: discovery index with a matching digest", as
 });
 
 test("the polka-organize skill: read all, propose, confirm, move; never delete", async () => {
-  const response = await get(
-    `/.well-known/agent-skills/${ORGANIZE_SKILL_NAME}/SKILL.md`,
-  );
+  const response = await get(`/.well-known/agent-skills/${ORGANIZE_SKILL_NAME}/SKILL.md`);
   const body = response.body;
-  const description = JSON.parse(
-    body.match(/^---\n[\s\S]*?^description: (.*)$/m)![1],
-  );
-  for (const phrase of [
-    "разложи полку",
-    "наведи порядок в папках",
-    "структурируй работы",
-    "organize",
-  ])
+  const description = JSON.parse(body.match(/^---\n[\s\S]*?^description: (.*)$/m)![1]);
+  for (const phrase of ["разложи полку", "наведи порядок в папках", "структурируй работы", "organize"])
     assert.ok(description.includes(phrase), phrase);
   // Every tool the procedure names is one the MCP server registers.
   const tools = new Set(mcpToolCatalog().map((tool) => tool.name));
@@ -313,10 +259,7 @@ test("the polka-organize skill: read all, propose, confirm, move; never delete",
   ])
     assert.ok(body.includes(step), step);
   // It asks before it changes anything, and never trashes or renames works.
-  assert.ok(
-    body.indexOf("Change nothing on the shelf until the owner confirms") <
-      body.indexOf("## 4. Apply"),
-  );
+  assert.ok(body.indexOf("Change nothing on the shelf until the owner confirms") < body.indexOf("## 4. Apply"));
   assert.match(body, /Trash, delete, restore or rename works/);
   assert.doesNotMatch(body, /polka_(trash|delete_folder|rename_folder|update_artifact)/);
 });
@@ -324,11 +267,7 @@ test("the polka-organize skill: read all, propose, confirm, move; never delete",
 test("the skills in skills/ are the generated ones for the hosted origin", () => {
   for (const skill of agentSkills(HOSTED_ORIGIN)) {
     const committed = readFileSync(`skills/${skill.name}/SKILL.md`, "utf8");
-    assert.equal(
-      committed,
-      skill.markdown,
-      `skills/${skill.name}/SKILL.md is stale: run npm run gen:skill`,
-    );
+    assert.equal(committed, skill.markdown, `skills/${skill.name}/SKILL.md is stale: run npm run gen:skill`);
     const front = committed.match(/^---\n([\s\S]*?)\n---\n/)![1];
     assert.match(front, new RegExp(`^name: ${skill.name}$`, "m"));
     const description = JSON.parse(front.match(/^description: (.*)$/m)![1]);
@@ -349,8 +288,7 @@ test("every MCP tool carries a title and a read-only or destructive hint", async
     oauth: true,
   });
   const client = new Client({ name: "annotations", version: "1" });
-  const [clientTransport, serverTransport] =
-    InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
   try {
@@ -360,21 +298,13 @@ test("every MCP tool carries a title and a read-only or destructive hint", async
       assert.ok(tool.title?.trim(), `${tool.name} has no title`);
       const hints = tool.annotations ?? {};
       // ChatGPT's plugin review rejects a tool without all three hints.
-      for (const hint of [
-        "readOnlyHint",
-        "destructiveHint",
-        "openWorldHint",
-      ] as const)
+      for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"] as const)
         assert.equal(typeof hints[hint], "boolean", `${tool.name} has no ${hint}`);
     }
     const byName = new Map(tools.map((tool) => [tool.name, tool.annotations]));
     assert.equal(byName.get("polka_delete_folder")?.destructiveHint, true);
     assert.equal(byName.get("polka_share")?.openWorldHint, true);
-    for (const name of [
-      "polka_create_folder",
-      "polka_rename_folder",
-      "polka_move",
-    ]) {
+    for (const name of ["polka_create_folder", "polka_rename_folder", "polka_move"]) {
       assert.equal(byName.get(name)?.readOnlyHint, false, name);
       assert.equal(byName.get(name)?.destructiveHint, false, name);
       assert.equal(byName.get(name)?.idempotentHint, true, name);

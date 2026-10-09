@@ -69,5 +69,4 @@ export function samplePage(): string {
 `;
 }
 
-export const sampleBlob = () =>
-  new Blob([samplePage()], { type: "text/html" });
+export const sampleBlob = () => new Blob([samplePage()], { type: "text/html" });

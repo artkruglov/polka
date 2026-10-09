@@ -1,10 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import {
-  validateCapture,
-  validateSuccessfulReceipts,
-} from "../scripts/capture-via-mcp.ts";
+import { validateCapture, validateSuccessfulReceipts } from "../scripts/capture-via-mcp.ts";
 
 const ids = {
   uploadId: "11111111-1111-4111-8111-111111111111",
@@ -32,10 +29,7 @@ test("receipt validation rejects malformed and mismatched status", () => {
     state: "saved",
     receipt: capture,
   };
-  assert.deepEqual(
-    validateSuccessfulReceipts(capture, status).captureReceipt,
-    capture,
-  );
+  assert.deepEqual(validateSuccessfulReceipts(capture, status).captureReceipt, capture);
   assert.throws(() =>
     validateSuccessfulReceipts(capture, {
       ...status,
@@ -49,9 +43,7 @@ test("receipt validation rejects malformed and mismatched status", () => {
       receipt: null,
     }),
   );
-  assert.throws(() =>
-    validateSuccessfulReceipts({ ...capture, sha256: "not-a-hash" }, status),
-  );
+  assert.throws(() => validateSuccessfulReceipts({ ...capture, sha256: "not-a-hash" }, status));
 });
 
 test("capture validation preserves exact encoded bytes and capturedAt", () => {
@@ -87,10 +79,7 @@ test("capture validation preserves exact encoded bytes and capturedAt", () => {
   const validated = validateCapture(request);
   assert.equal(validated.files[0].data, encoded);
   assert.equal(validated.manifest.provenance.capturedAt, capturedAt);
-  assert.equal(
-    validated.manifest.files[0].sha256,
-    request.manifest.files[0].sha256,
-  );
+  assert.equal(validated.manifest.files[0].sha256, request.manifest.files[0].sha256);
 
   const secondBytes = Buffer.from("second");
   const duplicateManifest = {

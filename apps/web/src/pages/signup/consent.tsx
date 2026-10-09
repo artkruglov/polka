@@ -9,8 +9,7 @@ import React from "react";
 export function SignupConsent() {
   return (
     <p className="onboard-fine onboard-consent">
-      Продолжая, вы принимаете <a href="/terms">Соглашение</a> и подтверждаете,
-      что прочитали{" "}
+      Продолжая, вы принимаете <a href="/terms">Соглашение</a> и подтверждаете, что прочитали{" "}
       <a href="/privacy">Политику обработки данных</a>.
     </p>
   );

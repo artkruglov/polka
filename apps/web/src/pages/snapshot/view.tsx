@@ -11,14 +11,13 @@ export function localInputValue(date: Date) {
 
 const plural = new Intl.PluralRules("ru");
 const works = (n: number) =>
-  ({ one: "работа", few: "работы", many: "работ" } as Record<string, string>)[plural.select(n)] ?? "работы";
+  (({ one: "работа", few: "работы", many: "работ" }) as Record<string, string>)[plural.select(n)] ?? "работы";
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** What the acceptance was then, and what is true of the work now. */
 function marks(item: SnapshotItem) {
   let accepted: React.ReactNode = null;
-  if (item.acceptedRevisionId === item.revision.id)
-    accepted = <Badge tone="success">Эта версия принята</Badge>;
+  if (item.acceptedRevisionId === item.revision.id) accepted = <Badge tone="success">Эта версия принята</Badge>;
   else if (item.acceptedRevisionId)
     accepted = (
       <Badge tone="accent">

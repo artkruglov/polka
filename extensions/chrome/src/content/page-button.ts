@@ -8,12 +8,7 @@
  * when that button can be found, and floats in the corner of the artifact
  * otherwise.
  */
-import {
-  artifactPanel,
-  findArtifactFrames,
-  findCopyButton,
-  findShareButton,
-} from "../extract/dom.ts";
+import { artifactPanel, findArtifactFrames, findCopyButton, findShareButton } from "../extract/dom.ts";
 import { STYLES } from "./page-button-styles.ts";
 
 type Result =

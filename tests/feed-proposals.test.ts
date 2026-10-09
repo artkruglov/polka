@@ -90,7 +90,11 @@ before(async () => {
   }
   await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [admin.id]);
   shelf = (await call("POST", "/api/shelves", admin, { name: "Отдел продаж" })).json();
-  for (const [account, role] of [[curator, "curator"], [author, "author"], [reader, "reader"]] as const) {
+  for (const [account, role] of [
+    [curator, "curator"],
+    [author, "author"],
+    [reader, "reader"],
+  ] as const) {
     const added = await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: account.name, role });
     assert.equal(added.statusCode, 200, added.body);
   }
@@ -139,7 +143,10 @@ test("a curator proposes a version; authors, readers and strangers cannot; one w
     "SELECT action FROM audit_outbox WHERE tenant_id=$1 AND target_id=$2 AND action LIKE 'feed.%'",
     [shelf.id, work.artifactId],
   );
-  assert.deepEqual(audit.rows.map((row) => row.action), ["feed.proposed"]);
+  assert.deepEqual(
+    audit.rows.map((row) => row.action),
+    ["feed.proposed"],
+  );
 
   // Withdraw: an author cannot, a curator can; then it may be proposed again.
   assert.equal((await call("POST", `${url}/withdraw`, author, {}, shelf.id)).statusCode, 403);
@@ -152,7 +159,13 @@ test("a curator proposes a version; authors, readers and strangers cannot; one w
 
 test("only a page that opens in the ordinary viewer, only from a department shelf", async () => {
   const note = await save(author, "Заметка", "Просто текст", shelf.id, "text/plain");
-  const refused = await call("POST", `/api/artifacts/${note.artifactId}/feed-proposal`, curator, form(note.revisionId), shelf.id);
+  const refused = await call(
+    "POST",
+    `/api/artifacts/${note.artifactId}/feed-proposal`,
+    curator,
+    form(note.revisionId),
+    shelf.id,
+  );
   assert.equal(refused.statusCode, 422, refused.body);
   // A personal shelf proposes nothing: «Лента» takes department works only.
   const own = await save(curator, "Своё", page);
@@ -160,17 +173,26 @@ test("only a page that opens in the ordinary viewer, only from a department shel
   assert.equal(personal.statusCode, 409, personal.body);
   // A revision of another work is not this work's.
   const other = await save(author, "Другая", page, shelf.id);
-  const foreign = await call("POST", `/api/artifacts/${other.artifactId}/feed-proposal`, curator, form(own.revisionId), shelf.id);
+  const foreign = await call(
+    "POST",
+    `/api/artifacts/${other.artifactId}/feed-proposal`,
+    curator,
+    form(own.revisionId),
+    shelf.id,
+  );
   assert.equal(foreign.statusCode, 404, foreign.body);
   // With the flag off a department shelf is not there at all.
   config.TEAM_SHELVES = "off";
   try {
-    const off = await call("POST", `/api/artifacts/${other.artifactId}/feed-proposal`, curator, form(other.revisionId), shelf.id);
-    assert.notEqual(off.statusCode, 200);
-    assert.equal(
-      (await db.query("SELECT 1 FROM feed_proposals WHERE artifact_id=$1", [other.artifactId])).rowCount,
-      0,
+    const off = await call(
+      "POST",
+      `/api/artifacts/${other.artifactId}/feed-proposal`,
+      curator,
+      form(other.revisionId),
+      shelf.id,
     );
+    assert.notEqual(off.statusCode, 200);
+    assert.equal((await db.query("SELECT 1 FROM feed_proposals WHERE artifact_id=$1", [other.artifactId])).rowCount, 0);
   } finally {
     config.TEAM_SHELVES = "on";
   }
@@ -190,7 +212,10 @@ test("the trash withdraws a waiting proposal", async () => {
   );
   assert.equal(trashed.statusCode, 200, trashed.body);
   const { rows } = await db.query("SELECT state FROM feed_proposals WHERE artifact_id=$1", [work.artifactId]);
-  assert.deepEqual(rows.map((row) => row.state), ["withdrawn"]);
+  assert.deepEqual(
+    rows.map((row) => row.state),
+    ["withdrawn"],
+  );
 });
 
 test("the operator lists, exports the exact bytes and decides; the shelf sees the decision", async () => {
@@ -224,5 +249,8 @@ test("the operator lists, exports the exact bytes and decides; the shelf sees th
   const next = (await call("POST", url, curator, form(work.revisionId), shelf.id)).json().proposal;
   assert.deepEqual(await decideFeedProposal(next.id, "published", null), { id: next.id, state: "published" });
   assert.ok(!(await listFeedProposalsForOperator()).some((item) => item.artifactId === work.artifactId));
-  assert.equal((await listFeedProposalsForOperator(true)).filter((item) => item.artifactId === work.artifactId).length, 2);
+  assert.equal(
+    (await listFeedProposalsForOperator(true)).filter((item) => item.artifactId === work.artifactId).length,
+    2,
+  );
 });

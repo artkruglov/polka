@@ -1,14 +1,6 @@
 import { useRef, useState } from "react";
-import type {
-  Artifact,
-  Receipt,
-  UploadInput,
-} from "../../../../../packages/contracts/index.ts";
-import {
-  client,
-  saveUpload,
-  type PendingUpload,
-} from "../../shared/api/client.ts";
+import type { Artifact, Receipt, UploadInput } from "../../../../../packages/contracts/index.ts";
+import { client, saveUpload, type PendingUpload } from "../../shared/api/client.ts";
 
 export type SavedUpload = { receipt: Receipt; work: Artifact | null };
 
@@ -30,18 +22,13 @@ export function useSaveUpload() {
       setSaved({ receipt, work: await client.artifact(receipt.artifactId) });
     } catch (e) {
       setSaved({ receipt, work: null });
-      setError(
-        `Работа сохранена, но показать её не удалось. ${(e as Error).message}`,
-      );
+      setError(`Работа сохранена, но показать её не удалось. ${(e as Error).message}`);
     } finally {
       setStage("");
     }
   };
 
-  const save = async (
-    file: Blob,
-    input: Omit<UploadInput, "key" | "mime" | "size" | "sha256">,
-  ) => {
+  const save = async (file: Blob, input: Omit<UploadInput, "key" | "mime" | "size" | "sha256">) => {
     setError("");
     operation.current ??= { file, key: crypto.randomUUID() };
     let receipt: Receipt;

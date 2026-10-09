@@ -21,8 +21,8 @@ export function ReworkArtifactPanel({
     <Dialog title="Переработать с помощью агента" onClose={onClose}>
       <div className="dialog-body">
         <p>
-          Передайте работу своему агенту и опишите изменения. Сохраните
-          результат новой версией — отправленная ссылка останется прежней.
+          Передайте работу своему агенту и опишите изменения. Сохраните результат новой версией — отправленная ссылка
+          останется прежней.
         </p>
         <CopyText
           label="Текст запроса агенту"
@@ -30,8 +30,8 @@ export function ReworkArtifactPanel({
           buttonVariant="primary"
         />
         <p className="fine">
-          <a href="/settings/agents">Подключить агента через MCP</a>. Если агент
-          не подключён, скачайте оригинал и приложите к сообщению.
+          <a href="/settings/agents">Подключить агента через MCP</a>. Если агент не подключён, скачайте оригинал и
+          приложите к сообщению.
         </p>
       </div>
       <div className="dialog-footer">

@@ -36,9 +36,7 @@ export function ShelfNavigation({
         <a
           href="/"
           key={f.id}
-          className={
-            folderId === f.id && !trashView ? "nav-link active" : "nav-link"
-          }
+          className={folderId === f.id && !trashView ? "nav-link active" : "nav-link"}
           aria-current={folderId === f.id && !trashView ? "page" : undefined}
           onClick={(e) => {
             e.preventDefault();
@@ -49,9 +47,7 @@ export function ShelfNavigation({
           <span title={f.name}>{f.name}</span>
         </a>
       ))}
-      {!folders.length && (
-        <p className="shelf-nav-hint">Соберите работы по проектам и темам.</p>
-      )}
+      {!folders.length && <p className="shelf-nav-hint">Соберите работы по проектам и темам.</p>}
       <div className="shelf-nav-secondary">
         <a
           className={trashView ? "nav-link active" : "nav-link"}

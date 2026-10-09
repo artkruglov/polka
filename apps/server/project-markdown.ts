@@ -8,22 +8,14 @@ import { Marked, type Tokens } from "marked";
 import { awayHref } from "./away-links.ts";
 
 export const escapeHtml = (text: string) =>
-  text.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!,
-  );
+  text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 
 /**
  * Where a reference written in `from` points inside the project: relative to
  * the document, then from the project's root, then by a file name that occurs
  * once. Agents write paths all three ways. Null when no file matches.
  */
-export function resolveProjectPath(
-  paths: ReadonlySet<string>,
-  from: string,
-  reference: string,
-): string | null {
+export function resolveProjectPath(paths: ReadonlySet<string>, from: string, reference: string): string | null {
   const clean = reference.trim().replace(/^\.\//, "");
   if (!clean || /^[a-z][a-z0-9+.-]*:/i.test(clean) || clean.startsWith("//")) return null;
   const candidates = [
@@ -67,11 +59,7 @@ const slug = (text: string) =>
 export type ProjectPage = { title: string; body: string };
 
 /** One document of the project as the body of a page, and its title. */
-export function renderProjectMarkdown(
-  source: string,
-  path: string,
-  paths: ReadonlySet<string>,
-): ProjectPage {
+export function renderProjectMarkdown(source: string, path: string, paths: ReadonlySet<string>): ProjectPage {
   let title = "";
   const seen = new Map<string, number>();
   const marked = new Marked({
@@ -111,8 +99,7 @@ export function renderProjectMarkdown(
         if (/^mailto:/i.test(href))
           return `<span class="polka-mail" title="${escapeHtml(href.slice(7))}">${inner}</span>`;
         const target = resolveProjectPath(paths, path, href);
-        if (!target)
-          return `<span class="polka-outside" title="Этого файла нет в проекте">${inner}</span>`;
+        if (!target) return `<span class="polka-outside" title="Этого файла нет в проекте">${inner}</span>`;
         const suffix = fragment ? `#${encodeURIComponent(fragment)}` : "";
         return `<a href="${escapeHtml(relativeHref(path, target) + suffix)}">${inner}</a>`;
       },
@@ -158,8 +145,7 @@ export async function renderProjectMarkdownBounded(
   }
   let page: ProjectPage;
   if (source.length > MARKDOWN_MAX_CHARS) page = plainPage(source, path);
-  else if (source.length <= MARKDOWN_INLINE_CHARS)
-    page = renderProjectMarkdown(source, path, paths);
+  else if (source.length <= MARKDOWN_INLINE_CHARS) page = renderProjectMarkdown(source, path, paths);
   else {
     const { inWorker } = await import("./html.ts");
     page =

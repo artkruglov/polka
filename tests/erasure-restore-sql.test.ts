@@ -20,12 +20,14 @@ const urls = {
 const endpoint = `${urls.restore.hostname}:${urls.restore.port}`;
 if (
   !/^[a-z0-9]{10,24}$/.test(runId) ||
-  Object.entries(urls).some(([name, url]) =>
-    url.username !== roles[name as keyof typeof roles] ||
-    url.pathname !== `/${expectedDatabase}` ||
-    `${url.hostname}:${url.port}` !== endpoint ||
-    !!url.search || !!url.hash ||
-    !["127.0.0.1", "localhost"].includes(url.hostname)
+  Object.entries(urls).some(
+    ([name, url]) =>
+      url.username !== roles[name as keyof typeof roles] ||
+      url.pathname !== `/${expectedDatabase}` ||
+      `${url.hostname}:${url.port}` !== endpoint ||
+      !!url.search ||
+      !!url.hash ||
+      !["127.0.0.1", "localhost"].includes(url.hostname),
   )
 )
   throw new Error("Restore SQL tests require guarded isolated identities");
@@ -68,10 +70,7 @@ const timeline = {
   metadata: "2020-09-21T10:00:04.000Z",
 };
 
-async function exactIdentity(
-  client: pg.Client,
-  expectedRole: string,
-) {
+async function exactIdentity(client: pg.Client, expectedRole: string) {
   const row = (
     await client.query(
       `SELECT current_user,session_user,current_database(),
@@ -137,46 +136,46 @@ const registerSql = `SELECT register_restored_erasure(
   $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
 ) AS metadata_present`;
 
-async function finishMetadataRestore(
-  deletionId: string,
-  attemptId: string,
-) {
+async function finishMetadataRestore(deletionId: string, attemptId: string) {
   const claim = (
-    await clients.restore.query(
-      "SELECT * FROM claim_restored_account_purge_job($1,$2,$3,$4)",
-      [ids.restoreRun, deletionId, attemptId, ids.ledger],
-    )
+    await clients.restore.query("SELECT * FROM claim_restored_account_purge_job($1,$2,$3,$4)", [
+      ids.restoreRun,
+      deletionId,
+      attemptId,
+      ids.ledger,
+    ])
   ).rows[0];
   assert.equal(claim.deletion_id, deletionId);
   assert.equal(claim.phase, "deleting_source");
-  await clients.restore.query(
-    "SELECT mark_account_purge_source_empty($1,$2,$3)",
-    [deletionId, attemptId, timeline.source],
-  );
-  const mail = (
-    await clients.restore.query("SELECT * FROM lock_account_purge_mail($1,$2)", [
+  await clients.restore.query("SELECT mark_account_purge_source_empty($1,$2,$3)", [
+    deletionId,
+    attemptId,
+    timeline.source,
+  ]);
+  const mail = (await clients.restore.query("SELECT * FROM lock_account_purge_mail($1,$2)", [deletionId, attemptId]))
+    .rows[0];
+  assert.deepEqual(mail.challenges, []);
+  await clients.restore.query("SELECT complete_account_purge_mail($1,$2,$3,$4)", [
+    deletionId,
+    attemptId,
+    timeline.mail,
+    [],
+  ]);
+  const terminal = (
+    await clients.restore.query("SELECT * FROM terminal_erase_account_metadata($1,$2,$3)", [
       deletionId,
       attemptId,
+      `${"8".repeat(32)}:${"9".repeat(128)}`,
     ])
-  ).rows[0];
-  assert.deepEqual(mail.challenges, []);
-  await clients.restore.query(
-    "SELECT complete_account_purge_mail($1,$2,$3,$4)",
-    [deletionId, attemptId, timeline.mail, []],
-  );
-  const terminal = (
-    await clients.restore.query(
-      "SELECT * FROM terminal_erase_account_metadata($1,$2,$3)",
-      [deletionId, attemptId, `${"8".repeat(32)}:${"9".repeat(128)}`],
-    )
   ).rows[0];
   assert.equal(terminal.phase, "metadata_purged");
   assert.equal(
     (
-      await clients.restore.query(
-        "SELECT acknowledge_historic_restored_purge($1,$2,$3) AS value",
-        [ids.restoreRun, deletionId, attemptId],
-      )
+      await clients.restore.query("SELECT acknowledge_historic_restored_purge($1,$2,$3) AS value", [
+        ids.restoreRun,
+        deletionId,
+        attemptId,
+      ])
     ).rows[0].value,
     true,
   );
@@ -196,19 +195,16 @@ before(async () => {
       [ids.revokedAccount, ids.revokedTenant, "revoked"],
       [ids.purgedAccount, ids.purgedTenant, "purged"],
     ]) {
-      await clients.owner.query(
-        "INSERT INTO accounts(id,name,password_hash,email) VALUES($1,$2,$3,$4)",
-        [
-          accountId,
-          `restore-${suffix}-${runId}`,
-          `${"a".repeat(32)}:${"b".repeat(128)}`,
-          `restore-${suffix}-${runId}@example.test`,
-        ],
-      );
-      await clients.owner.query(
-        "INSERT INTO tenants(id,owner_id,used_bytes,derivative_used_bytes) VALUES($1,$2,0,0)",
-        [tenantId, accountId],
-      );
+      await clients.owner.query("INSERT INTO accounts(id,name,password_hash,email) VALUES($1,$2,$3,$4)", [
+        accountId,
+        `restore-${suffix}-${runId}`,
+        `${"a".repeat(32)}:${"b".repeat(128)}`,
+        `restore-${suffix}-${runId}@example.test`,
+      ]);
+      await clients.owner.query("INSERT INTO tenants(id,owner_id,used_bytes,derivative_used_bytes) VALUES($1,$2,0,0)", [
+        tenantId,
+        accountId,
+      ]);
     }
     await clients.owner.query("COMMIT");
   } catch (error) {
@@ -223,18 +219,18 @@ after(async () => {
 
 test("restore identity alone can register historic erasure state", async () => {
   await denied(clients.restore, "SELECT * FROM account_restore_suppressions");
-  await denied(
-    clients.restore,
-    "SELECT * FROM claim_account_purge_job($1,$2)",
-    [randomUUID(), ids.ledger],
-  );
+  await denied(clients.restore, "SELECT * FROM claim_account_purge_job($1,$2)", [randomUUID(), ids.ledger]);
   for (const client of [clients.runtime, clients.purge])
-    await denied(client, registerSql, registerValues({
-      deletionId: ids.absentDeletion,
-      accountId: ids.absentAccount,
-      tenantId: ids.absentTenant,
-      state: "revoked",
-    }));
+    await denied(
+      client,
+      registerSql,
+      registerValues({
+        deletionId: ids.absentDeletion,
+        accountId: ids.absentAccount,
+        tenantId: ids.absentTenant,
+        state: "revoked",
+      }),
+    );
 });
 
 test("restore registration is exact, idempotent and invisible to ordinary purge", async () => {
@@ -248,10 +244,7 @@ test("restore registration is exact, idempotent and invisible to ordinary purge"
   assert.equal((await clients.restore.query(registerSql, revoked)).rows[0].metadata_present, true);
   const nullKey = [...revoked];
   nullKey[11] = null;
-  await assert.rejects(
-    clients.restore.query(registerSql, nullKey),
-    /invalid restore erasure registration/,
-  );
+  await assert.rejects(clients.restore.query(registerSql, nullKey), /invalid restore erasure registration/);
 
   const purged = registerValues({
     deletionId: ids.purgedDeletion,
@@ -262,15 +255,12 @@ test("restore registration is exact, idempotent and invisible to ordinary purge"
   assert.equal((await clients.restore.query(registerSql, purged)).rows[0].metadata_present, true);
   const changedProof = [...purged];
   changedProof[19] = "2020-09-21T10:00:05.000Z";
-  await assert.rejects(
-    clients.restore.query(registerSql, changedProof),
-    /conflicting restore erasure registration/,
-  );
+  await assert.rejects(clients.restore.query(registerSql, changedProof), /conflicting restore erasure registration/);
 
-  const ordinary = await clients.purge.query(
-    "SELECT * FROM claim_account_purge_job($1,$2)",
-    [ids.ordinaryAttempt, ids.ledger],
-  );
+  const ordinary = await clients.purge.query("SELECT * FROM claim_account_purge_job($1,$2)", [
+    ids.ordinaryAttempt,
+    ids.ledger,
+  ]);
   assert.equal(ordinary.rows[0]?.deletion_id ?? null, null);
 });
 
@@ -311,10 +301,10 @@ test("historic completion scrubs restored metadata without rewriting ledger time
   assert.equal(purged.suppression_state, "completed");
   assert.equal(new Date(purged.purged_at).toISOString(), timeline.metadata);
 
-  const ordinary = await clients.purge.query(
-    "SELECT * FROM claim_account_purge_job($1,$2)",
-    [randomUUID(), ids.ledger],
-  );
+  const ordinary = await clients.purge.query("SELECT * FROM claim_account_purge_job($1,$2)", [
+    randomUUID(),
+    ids.ledger,
+  ]);
   assert.equal(ordinary.rows[0]?.deletion_id ?? null, null);
 });
 
@@ -326,17 +316,14 @@ test("metadata-absent journal entry completes only through restore authority", a
     state: "revoked",
   });
   assert.equal((await clients.restore.query(registerSql, values)).rows[0].metadata_present, false);
-  await clients.restore.query(
-    "SELECT complete_absent_restore_suppression($1,$2,$3)",
-    [ids.restoreRun, ids.absentDeletion, timeline.source],
-  );
+  await clients.restore.query("SELECT complete_absent_restore_suppression($1,$2,$3)", [
+    ids.restoreRun,
+    ids.absentDeletion,
+    timeline.source,
+  ]);
   assert.deepEqual(
-    (
-      await clients.restore.query("SELECT * FROM restored_erasure_status($1,$2)", [
-        ids.restoreRun,
-        ids.absentDeletion,
-      ])
-    ).rows[0],
+    (await clients.restore.query("SELECT * FROM restored_erasure_status($1,$2)", [ids.restoreRun, ids.absentDeletion]))
+      .rows[0],
     { state: "completed", metadata_present: false, tenant_id: ids.absentTenant },
   );
 });

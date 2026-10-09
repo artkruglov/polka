@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useLayoutEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useLayoutEffect, useId, useRef, useState } from "react";
 import { Button } from "./controls.tsx";
 export type MenuAction = {
   id: string;
@@ -37,20 +31,13 @@ export function ActionMenu({
     trigger = useRef<HTMLSpanElement>(null),
     last = useRef(false);
   const buttons = () =>
-    Array.from(
-      root.current?.querySelectorAll<HTMLButtonElement>(
-        "[role=menuitem]:not(:disabled)",
-      ) ?? [],
-    );
+    Array.from(root.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)") ?? []);
   useLayoutEffect(() => {
     if (!open) return;
     const menu = root.current?.querySelector<HTMLElement>("[role=menu]");
     if (!menu) return;
     const rect = menu.getBoundingClientRect();
-    const shift = Math.max(
-      8 - rect.left,
-      Math.min(0, window.innerWidth - 8 - rect.right),
-    );
+    const shift = Math.max(8 - rect.left, Math.min(0, window.innerWidth - 8 - rect.right));
     menu.style.transform = `translateX(${shift}px)`;
   }, [open]);
   const close = (restore = false) => {
@@ -74,8 +61,7 @@ export function ActionMenu({
       onBlur={(e) => {
         if (
           !e.currentTarget.contains(e.relatedTarget) ||
-          (e.target.getAttribute("role") === "menuitem" &&
-            trigger.current?.contains(e.relatedTarget))
+          (e.target.getAttribute("role") === "menuitem" && trigger.current?.contains(e.relatedTarget))
         )
           setOpen(false);
       }}
@@ -118,13 +104,10 @@ export function ActionMenu({
               return;
             }
             const options = buttons(),
-              index = options.indexOf(
-                document.activeElement as HTMLButtonElement,
-              );
+              index = options.indexOf(document.activeElement as HTMLButtonElement);
             let next: number | undefined;
             if (e.key === "ArrowDown") next = (index + 1) % options.length;
-            if (e.key === "ArrowUp")
-              next = (index - 1 + options.length) % options.length;
+            if (e.key === "ArrowUp") next = (index - 1 + options.length) % options.length;
             if (e.key === "Home") next = 0;
             if (e.key === "End") next = options.length - 1;
             if (next !== undefined) {

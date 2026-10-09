@@ -21,10 +21,8 @@ const loopback = new Set(["127.0.0.1", "localhost", "::1"]);
 
 function localUrl(value: string, label: string) {
   const url = new URL(value);
-  if (!loopback.has(url.hostname))
-    throw new Error(`${label} must use loopback: the worker runs beside its database`);
-  if (url.search || url.hash)
-    throw new Error(`${label} must not contain routing parameters or fragments`);
+  if (!loopback.has(url.hostname)) throw new Error(`${label} must use loopback: the worker runs beside its database`);
+  if (url.search || url.hash) throw new Error(`${label} must not contain routing parameters or fragments`);
   return url;
 }
 
@@ -36,22 +34,17 @@ function storageUrl(value: string, label: string) {
   const url = new URL(value);
   if (!loopback.has(url.hostname) && url.protocol !== "https:")
     throw new Error(`${label} must use HTTPS unless it is on loopback`);
-  if (url.search || url.hash || url.username || url.password)
-    throw new Error(`${label} must be a plain origin`);
+  if (url.search || url.hash || url.username || url.password) throw new Error(`${label} must be a plain origin`);
   return url;
 }
 
 export function parseAccountPurgeConfig(input: NodeJS.ProcessEnv) {
   const value = schema.parse(input);
   const appDatabase = localUrl(value.DATABASE_URL, "DATABASE_URL");
-  const workerDatabase = localUrl(
-    value.MAINTENANCE_DATABASE_URL,
-    "MAINTENANCE_DATABASE_URL",
-  );
+  const workerDatabase = localUrl(value.MAINTENANCE_DATABASE_URL, "MAINTENANCE_DATABASE_URL");
   storageUrl(value.S3_ENDPOINT, "S3_ENDPOINT");
   storageUrl(value.ERASURE_LEDGER_ENDPOINT, "ERASURE_LEDGER_ENDPOINT");
-  if (!appDatabase.username || !workerDatabase.username)
-    throw new Error("Database URLs must name their login roles");
+  if (!appDatabase.username || !workerDatabase.username) throw new Error("Database URLs must name their login roles");
   if (appDatabase.username === workerDatabase.username)
     throw new Error("Purge worker must use a distinct database role");
   if (

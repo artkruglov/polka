@@ -8,24 +8,13 @@ import { spawnSync } from "node:child_process";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createAccount } from "../apps/server/auth.ts";
-import {
-  beginUpload,
-  finalizeUpload,
-  uploadBytes,
-} from "../apps/server/artifacts.ts";
-import {
-  listTemplates,
-  publishTemplate,
-  sourceForAgent,
-} from "../apps/server/agent-context.ts";
+import { beginUpload, finalizeUpload, uploadBytes } from "../apps/server/artifacts.ts";
+import { listTemplates, publishTemplate, sourceForAgent } from "../apps/server/agent-context.ts";
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-} from "../apps/server/service-auth.ts";
+import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { bucket, s3, sha256 } from "../apps/server/storage.ts";
 
 after(async () => {
@@ -40,18 +29,9 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     "Use scripts/test-isolated.ts; this test creates disposable fixtures",
   );
   const password = randomBytes(24).toString("hex");
-  const owner = await createAccount(
-    `single-source-owner-${randomBytes(5).toString("hex")}`,
-    password,
-  );
-  const reader = await createAccount(
-    `single-source-reader-${randomBytes(5).toString("hex")}`,
-    password,
-  );
-  const outsider = await createAccount(
-    `single-source-outsider-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const owner = await createAccount(`single-source-owner-${randomBytes(5).toString("hex")}`, password);
+  const reader = await createAccount(`single-source-reader-${randomBytes(5).toString("hex")}`, password);
+  const outsider = await createAccount(`single-source-outsider-${randomBytes(5).toString("hex")}`, password);
 
   async function connection(account: typeof owner) {
     const id = randomUUID();
@@ -64,12 +44,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     return authenticateServiceToken(token, MCP_AUDIENCE);
   }
 
-  async function save(
-    title: string,
-    filename: string,
-    mime: "text/plain" | "image/png",
-    bytes: Buffer,
-  ) {
+  async function save(title: string, filename: string, mime: "text/plain" | "image/png", bytes: Buffer) {
     const started = await beginUpload(owner, {
       key: randomUUID(),
       title,
@@ -83,16 +58,8 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
   }
 
   const textBytes = Buffer.from("Точный UTF-8 текст\nsecond line\n");
-  const imageBytes = Buffer.concat([
-    Buffer.from("89504e470d0a1a0a", "hex"),
-    Buffer.from("single-file-image-fixture"),
-  ]);
-  const text = await save(
-    "Hostile original filename",
-    "../../\u0001 отчет 😀.txt",
-    "text/plain",
-    textBytes,
-  );
+  const imageBytes = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.from("single-file-image-fixture")]);
+  const text = await save("Hostile original filename", "../../\u0001 отчет 😀.txt", "text/plain", textBytes);
   const image = await save("Image source", "фото.png", "image/png", imageBytes);
   const ownerAgent = await connection(owner);
   const readerAgent = await connection(reader);
@@ -121,14 +88,8 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     const source = await sourceForAgent(ownerAgent, pins);
     assert.equal(source.context.purpose, "source");
     if (item.mime.startsWith("image/")) {
-      assert.match(
-        source.context.clipboardText,
-        /Визуальный пример: доступны только изображения\./,
-      );
-      assert.match(
-        source.context.clipboardText,
-        /не являются редактируемым стилем или набором ресурсов\./,
-      );
+      assert.match(source.context.clipboardText, /Визуальный пример: доступны только изображения\./);
+      assert.match(source.context.clipboardText, /не являются редактируемым стилем или набором ресурсов\./);
     } else {
       assert.doesNotMatch(source.context.clipboardText, /Визуальный пример/);
     }
@@ -148,15 +109,11 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     assert.equal(source.manifest, null);
     assert.equal(source.manifestSha256, null);
     assert.deepEqual(Buffer.from(source.files[0].data, "base64"), item.bytes);
-    await assert.rejects(
-      sourceForAgent(outsiderAgent, pins),
-      (error: any) => error.status === 404,
-    );
+    await assert.rejects(sourceForAgent(outsiderAgent, pins), (error: any) => error.status === 404);
 
     const mcpServer = createMcpServer(ownerAgent);
     const mcpClient = new Client({ name: "single-source", version: "1" });
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await mcpServer.connect(serverTransport);
     await mcpClient.connect(clientTransport);
     try {
@@ -195,10 +152,10 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
   const libraryId = randomUUID();
   const publicationId = randomUUID();
   await transaction(async (c) => {
-    await c.query(
-      "INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Single files',$2)",
-      [libraryId, owner.id],
-    );
+    await c.query("INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Single files',$2)", [
+      libraryId,
+      owner.id,
+    ]);
     await c.query(
       `INSERT INTO template_library_members(library_id,account_id,role)
        VALUES($1,$2,'admin'),($1,$3,'reader')`,
@@ -208,14 +165,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
       `INSERT INTO template_library_publications(
          id,library_id,release_id,artifact_id,revision_id,publisher_id
        ) VALUES($1,$2,$3,$4,$5,$6)`,
-      [
-        publicationId,
-        libraryId,
-        release.releaseId,
-        text.artifactId,
-        text.revisionId,
-        owner.id,
-      ],
+      [publicationId, libraryId, release.releaseId, text.artifactId, text.revisionId, owner.id],
     );
   });
   const libraryPins = {
@@ -225,15 +175,8 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     publicationId,
   };
   const librarySource = await sourceForAgent(readerAgent, libraryPins);
-  assert.deepEqual(
-    Buffer.from(librarySource.files[0].data, "base64"),
-    textBytes,
-  );
-  assert.equal(
-    (await transaction((c) => listTemplates(c, reader, { libraryId }))).items[0]
-      .mime,
-    "text/plain",
-  );
+  assert.deepEqual(Buffer.from(librarySource.files[0].data, "base64"), textBytes);
+  assert.equal((await transaction((c) => listTemplates(c, reader, { libraryId }))).items[0].mime, "text/plain");
   await assert.rejects(
     sourceForAgent(readerAgent, {
       ...libraryPins,
@@ -251,9 +194,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
       payload: { name: account.name, password },
     });
     assert.equal(result.statusCode, 200, result.body);
-    return result.cookies
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join("; ");
+    return result.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
   };
   try {
     const ownerCookie = await login(owner);
@@ -292,11 +233,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
         assert.equal(parsed.manifest, null);
         assert.equal(parsed.manifestSha256, null);
         assert.equal(parsed.sourceDescriptor.files[0].path, item.path);
-        const zipped = spawnSync("unzip", [
-          "-p",
-          archive,
-          `sources/${item.path}`,
-        ]);
+        const zipped = spawnSync("unzip", ["-p", archive, `sources/${item.path}`]);
         assert.equal(zipped.status, 0, zipped.stderr.toString());
         assert.deepEqual(zipped.stdout, item.bytes);
       } finally {
@@ -334,20 +271,14 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
       ).statusCode,
       404,
     );
-    await assert.rejects(
-      sourceForAgent(readerAgent, libraryPins),
-      (error: any) => error.status === 404,
-    );
+    await assert.rejects(sourceForAgent(readerAgent, libraryPins), (error: any) => error.status === 404);
   } finally {
     await app.close();
   }
 
   const {
     rows: [stored],
-  } = await db.query(
-    "SELECT object_key,object_version FROM revisions WHERE id=$1",
-    [image.revisionId],
-  );
+  } = await db.query("SELECT object_key,object_version FROM revisions WHERE id=$1", [image.revisionId]);
   const corruptVersion = (
     await s3.send(
       new PutObjectCommand({
@@ -370,10 +301,7 @@ test("plain text and image sources preserve exact bytes, pins and ACLs", async (
     ),
     imageBytes,
   );
-  await db.query("UPDATE revisions SET object_version=$2 WHERE id=$1", [
-    image.revisionId,
-    corruptVersion,
-  ]);
+  await db.query("UPDATE revisions SET object_version=$2 WHERE id=$1", [image.revisionId, corruptVersion]);
   await assert.rejects(
     sourceForAgent(ownerAgent, {
       artifactId: image.artifactId,

@@ -116,7 +116,9 @@ export async function runRestoreAuthorities(argv: string[], env = process.env) {
     console.log(`RESTORE_RUN_ID=${result.restoreRunId}`);
     console.log(`RESTORE_BACKUP_SHA256=${result.backupSha256}`);
     console.log(`RESTORE_LEDGER_MANIFEST_SHA256=${result.ledgerManifestSha256}`);
-    console.error(`${result.requests} deletion request(s) in the erasure ledger; the descriptor is ${values.descriptor}.`);
+    console.error(
+      `${result.requests} deletion request(s) in the erasure ledger; the descriptor is ${values.descriptor}.`,
+    );
     return 0;
   } finally {
     client.destroy();

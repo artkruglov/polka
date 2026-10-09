@@ -42,7 +42,14 @@ type PageTitle = (url: URL) => Promise<string | null>;
 export const pageTitle: PageTitle = async (url) => {
   const match = matchLink(url);
   // Only ordinary sites and published SPA hosts: AI chats (Claude, ChatGPT…) and gists are never read for a title.
-  if (!config.URL_IMPORT_ENABLED || !match || !(match.route === "html" || match.route === "server-render") || match.provider?.id === "gemini" || match.closed) return null;
+  if (
+    !config.URL_IMPORT_ENABLED ||
+    !match ||
+    !(match.route === "html" || match.route === "server-render") ||
+    match.provider?.id === "gemini" ||
+    match.closed
+  )
+    return null;
   try {
     const robots = await robotsFor(url);
     if (!robotsAllow(robots, url)) return null;
@@ -100,8 +107,7 @@ export function readPageTitle(source: string): string | null {
       const close = text.indexOf("<", open + 1);
       if (close === -1) break;
       const length = close - open - 1;
-      if (length >= 1 && length <= 300 && startsWithCi(text, close, "</title>"))
-        plain = text.slice(open + 1, close);
+      if (length >= 1 && length <= 300 && startsWithCi(text, close, "</title>")) plain = text.slice(open + 1, close);
       lt = close - 1;
     }
   }
@@ -141,9 +147,17 @@ export async function saveLink(actor: Actor, body: unknown, { title = pageTitle 
 }
 
 /** An agent over MCP (polka_save_link), with the capture scope. */
-export async function saveLinkFromAgent(actor: ServiceActor, body: unknown, { title = pageTitle }: { title?: PageTitle } = {}) {
+export async function saveLinkFromAgent(
+  actor: ServiceActor,
+  body: unknown,
+  { title = pageTitle }: { title?: PageTitle } = {},
+) {
   const prepared = await prepare(body, title);
   return withServiceActorTransaction(actor, "capture", (c, verified) =>
-    saveInTransaction(c, { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId }, prepared),
+    saveInTransaction(
+      c,
+      { id: verified.accountId, tenant: verified.tenantId, connectionId: verified.connectionId },
+      prepared,
+    ),
   );
 }

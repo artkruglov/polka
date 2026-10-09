@@ -16,11 +16,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { registerFrontend } from "../apps/server/frontend.ts";
-import {
-  STATIC_HTML_CSP,
-  withAwayLinks,
-  withNewTabLinks,
-} from "../apps/server/html.ts";
+import { STATIC_HTML_CSP, withAwayLinks, withNewTabLinks } from "../apps/server/html.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const BASE = "https://polochka.page/static/token";
@@ -30,51 +26,30 @@ const marked = (html: string, base = BASE) =>
 
 test("external http(s) links in <a> and <area> go through /away; nothing else changes", () => {
   const cases: [string, string][] = [
-    [
-      '<a href="https://e.com/x">x</a>',
-      '<a href="AWAY(https://e.com/x)">x</a>',
-    ],
+    ['<a href="https://e.com/x">x</a>', '<a href="AWAY(https://e.com/x)">x</a>'],
     ["<a href='http://e.com'>x</a>", '<a href="AWAY(http://e.com/)">x</a>'],
     ["<a href=https://e.com/>x</a>", '<a href="AWAY(https://e.com/)">x</a>'],
     ['<AREA HREF="HTTPS://E.COM/A">', '<AREA HREF="AWAY(https://e.com/A)">'],
     // Character references are resolved as the browser resolves them.
-    [
-      '<a href="https://e.com/?a=1&amp;b=2">x</a>',
-      '<a href="AWAY(https://e.com/?a=1&b=2)">x</a>',
-    ],
-    [
-      '<a href="&#x68;ttps://e.com">x</a>',
-      '<a href="AWAY(https://e.com/)">x</a>',
-    ],
+    ['<a href="https://e.com/?a=1&amp;b=2">x</a>', '<a href="AWAY(https://e.com/?a=1&b=2)">x</a>'],
+    ['<a href="&#x68;ttps://e.com">x</a>', '<a href="AWAY(https://e.com/)">x</a>'],
     ['<a href="&sol;&sol;e.com">x</a>', '<a href="AWAY(https://e.com/)">x</a>'],
     // Scheme-relative and backslash forms leave the origin too.
     ["<a href=//e.com/p>x</a>", '<a href="AWAY(https://e.com/p)">x</a>'],
     ['<a href="/\\e.com">x</a>', '<a href="AWAY(https://e.com/)">x</a>'],
     // Whitespace and control characters browsers strip.
-    [
-      '<a href=" \thtt\nps://e.com ">x</a>',
-      '<a href="AWAY(https://e.com/)">x</a>',
-    ],
+    ['<a href=" \thtt\nps://e.com ">x</a>', '<a href="AWAY(https://e.com/)">x</a>'],
     // A quoted ">" does not end the tag.
-    [
-      '<a title="a > b" href="https://e.com">x</a>',
-      '<a title="a > b" href="AWAY(https://e.com/)">x</a>',
-    ],
+    ['<a title="a > b" href="https://e.com">x</a>', '<a title="a > b" href="AWAY(https://e.com/)">x</a>'],
     // SVG links, both spellings.
     [
       '<svg><a xlink:href="https://e.com"><text>x</text></a><a href="https://f.com"/></svg>',
       '<svg><a xlink:href="AWAY(https://e.com/)"><text>x</text></a><a href="AWAY(https://f.com/)"/></svg>',
     ],
     // The static view runs no scripts, so <noscript> content is markup.
-    [
-      '<noscript><a href="https://e.com">x</a></noscript>',
-      '<noscript><a href="AWAY(https://e.com/)">x</a></noscript>',
-    ],
+    ['<noscript><a href="https://e.com">x</a></noscript>', '<noscript><a href="AWAY(https://e.com/)">x</a></noscript>'],
     // "--!>" ends a comment; a link after it is live.
-    [
-      '<!-- x --!><a href="https://e.com">x</a>',
-      '<!-- x --!><a href="AWAY(https://e.com/)">x</a>',
-    ],
+    ['<!-- x --!><a href="https://e.com">x</a>', '<!-- x --!><a href="AWAY(https://e.com/)">x</a>'],
     ['<!--><a href="https://e.com">', '<!--><a href="AWAY(https://e.com/)">'],
     // In SVG a <style> is an ordinary element, and </svg> ends it.
     [
@@ -82,8 +57,7 @@ test("external http(s) links in <a> and <area> go through /away; nothing else ch
       '<svg><style></svg><a href="AWAY(https://e.com/)">x</a></style>',
     ],
   ];
-  for (const [input, output] of cases)
-    assert.equal(marked(input), output, input);
+  for (const [input, output] of cases) assert.equal(marked(input), output, input);
 
   const untouched = [
     '<a href="mailto:a@e.com">m</a>',
@@ -122,9 +96,7 @@ test("external http(s) links in <a> and <area> go through /away; nothing else ch
   const expected = Buffer.concat([
     Buffer.from("<!doctype html><meta charset=windows-1251><p>"),
     Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2, 0xff, 0xfe]),
-    Buffer.from(
-      '</p><p>Привет</p><a class=x href="AWAY(https://e.com/)">x</a>\r\n',
-    ),
+    Buffer.from('</p><p>Привет</p><a class=x href="AWAY(https://e.com/)">x</a>\r\n'),
   ]);
   assert.deepEqual(
     withAwayLinks(page, BASE, (url) => `AWAY(${url})`),
@@ -138,10 +110,7 @@ test("external http(s) links in <a> and <area> go through /away; nothing else ch
   );
   // On a single-domain install the app origin is the base.
   assert.equal(
-    marked(
-      '<a href="/works">w</a><a href="https://e.com">e</a>',
-      `${config.APP_ORIGIN}/api/view/g/document`,
-    ),
+    marked('<a href="/works">w</a><a href="https://e.com">e</a>', `${config.APP_ORIGIN}/api/view/g/document`),
     '<a href="/works">w</a><a href="AWAY(https://e.com/)">e</a>',
   );
 });
@@ -173,10 +142,7 @@ test("the link rewrite stays linear on hostile pages", () => {
     const started = performance.now();
     withSignedAwayLinks(Buffer.from(page), BASE);
     const elapsed = performance.now() - started;
-    assert.ok(
-      elapsed < 20_000,
-      `${JSON.stringify(page.slice(0, 24))}: ${Math.round(elapsed)} ms`,
-    );
+    assert.ok(elapsed < 20_000, `${JSON.stringify(page.slice(0, 24))}: ${Math.round(elapsed)} ms`);
   }
 });
 
@@ -187,15 +153,9 @@ test("away tokens are signed, expire and name only the signed address", () => {
     url: "https://e.com/path?q=1",
     host: "e.com",
   });
-  assert.equal(
-    awayHref("https://e.com/path?q=1", now),
-    `${config.APP_ORIGIN}/away#${token}`,
-  );
+  assert.equal(awayHref("https://e.com/path?q=1", now), `${config.APP_ORIGIN}/away#${token}`);
   // Expired.
-  assert.equal(
-    verifyAwayToken(token, now + (AWAY_LINK_TTL_SECONDS + 1) * 1000),
-    null,
-  );
+  assert.equal(verifyAwayToken(token, now + (AWAY_LINK_TTL_SECONDS + 1) * 1000), null);
   // Forged signature, swapped payload, truncation, junk.
   const [payload, mac] = token.split(".") as [string, string];
   const flipped = `${mac[0] === "A" ? "B" : "A"}${mac.slice(1)}`;
@@ -208,20 +168,10 @@ test("away tokens are signed, expire and name only the signed address", () => {
   ).toString("base64url");
   assert.equal(verifyAwayToken(`${other}.${mac}`, now), null);
   assert.equal(verifyAwayToken(payload, now), null);
-  for (const junk of [
-    "",
-    ".",
-    "a.b",
-    `${payload}.${mac}x`,
-    42,
-    null,
-    undefined,
-  ])
+  for (const junk of ["", ".", "a.b", `${payload}.${mac}x`, 42, null, undefined])
     assert.equal(verifyAwayToken(junk, now), null, String(junk));
   // A MAC made with LINK_KEY itself, not the derived key, does not verify.
-  const direct = createHmac("sha256", config.LINK_KEY)
-    .update(payload)
-    .digest("base64url");
+  const direct = createHmac("sha256", config.LINK_KEY).update(payload).digest("base64url");
   assert.equal(verifyAwayToken(`${payload}.${direct}`, now), null);
   // Only http(s), no credentials; an unsignable link opens the refusal.
   for (const url of [
@@ -252,30 +202,17 @@ const call = (method: any, url: string, body?: any, withCookie = true) =>
     headers: {
       origin,
       ...(withCookie && cookie ? { cookie } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
 
 before(async () => {
   frontendRoot = await mkdtemp(join(tmpdir(), "polka-away-"));
-  await writeFile(
-    join(frontendRoot, "index.html"),
-    "<!doctype html><div id=root></div>",
-  );
+  await writeFile(join(frontendRoot, "index.html"), "<!doctype html><div id=root></div>");
   await registerFrontend(app, frontendRoot);
-  const account = await createAccount(
-    `away-${randomBytes(5).toString("hex")}`,
-    password,
-  );
-  const login = await call(
-    "POST",
-    "/api/login",
-    { name: account.name, password },
-    false,
-  );
+  const account = await createAccount(`away-${randomBytes(5).toString("hex")}`, password);
+  const login = await call("POST", "/api/login", { name: account.name, password }, false);
   assert.equal(login.statusCode, 200, login.body);
   cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
 });
@@ -289,11 +226,7 @@ after(async () => {
 
 test("/away is a page, never a redirect; /api/away verifies the token", async () => {
   const token = signAwayUrl("https://e.com/landing")!;
-  for (const url of [
-    "/away",
-    `/away?to=https://evil.example`,
-    "/away?url=//evil.example",
-  ]) {
+  for (const url of ["/away", `/away?to=https://evil.example`, "/away?url=//evil.example"]) {
     const page = await call("GET", url, undefined, false);
     assert.equal(page.statusCode, 200, url);
     assert.equal(page.headers.location, undefined, url);
@@ -309,10 +242,7 @@ test("/away is a page, never a redirect; /api/away verifies the token", async ()
   for (const bad of [
     `${token}x`,
     "nonsense",
-    signAwayUrl(
-      "https://e.com/",
-      Date.now() - (AWAY_LINK_TTL_SECONDS + 5) * 1000,
-    )!,
+    signAwayUrl("https://e.com/", Date.now() - (AWAY_LINK_TTL_SECONDS + 5) * 1000)!,
   ]) {
     const refused = await call("POST", "/api/away", { token: bad }, false);
     assert.equal(refused.statusCode, 404, bad);
@@ -326,16 +256,11 @@ test("/away is a page, never a redirect; /api/away verifies the token", async ()
     payload: { token },
   });
   assert.equal(crossSite.statusCode, 403);
-  assert.equal(
-    (await call("GET", `/api/away?token=${token}`, undefined, false))
-      .statusCode,
-    404,
-  );
+  assert.equal((await call("GET", `/api/away?token=${token}`, undefined, false)).statusCode, 404);
 });
 
 test("single-domain install keeps the static view on the app origin, with links through /away", async (t) => {
-  if (config.HTML_LIVE_ENABLED)
-    return t.skip("covered by static-viewer.test.ts");
+  if (config.HTML_LIVE_ENABLED) return t.skip("covered by static-viewer.test.ts");
   const body = Buffer.from(
     '<!doctype html><h1>Page</h1><a href="https://example.org/source">Источник</a><a href="#top">top</a>',
   );
@@ -349,20 +274,11 @@ test("single-domain install keeps the static view on the app origin, with links 
   });
   assert.equal(start.statusCode, 200, start.body);
   const uploadId = start.json().uploadId;
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode,
-    200,
-  );
-  const saved = (
-    await call("POST", `/api/uploads/${uploadId}/finalize`, {})
-  ).json();
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode, 200);
+  const saved = (await call("POST", `/api/uploads/${uploadId}/finalize`, {})).json();
   assert.equal(saved.htmlProfile, "static");
 
-  const where = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/static-view`,
-    {},
-  );
+  const where = await call("POST", `/api/revisions/${saved.revisionId}/static-view`, {});
   assert.equal(where.statusCode, 200, where.body);
   assert.equal(where.json().url, `/api/revisions/${saved.revisionId}/document`);
   const document = await call("GET", where.json().url);
@@ -372,31 +288,17 @@ test("single-domain install keeps the static view on the app origin, with links 
   assert.ok(away, document.body);
   assert.equal(away[1], config.APP_ORIGIN);
   assert.equal(verifyAwayToken(away[2])!.url, "https://example.org/source");
-  assert.equal(
-    document.body.replace(away[0], 'href="https://example.org/source"'),
-    withNewTabLinks(body).toString(),
-  );
+  assert.equal(document.body.replace(away[0], 'href="https://example.org/source"'), withNewTabLinks(body).toString());
   // The app frames its own static view only on a single-domain install.
-  assert.match(
-    document.headers["content-security-policy"] as string,
-    /frame-ancestors 'self'/,
-  );
-  assert.match(
-    where.headers["content-security-policy"] as string,
-    /frame-src 'self';/,
-  );
+  assert.match(document.headers["content-security-policy"] as string, /frame-ancestors 'self'/);
+  assert.match(where.headers["content-security-policy"] as string, /frame-src 'self';/);
 
   const share = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
     expectedRevisionId: saved.revisionId,
     expiresInDays: 1,
   });
   assert.equal(share.statusCode, 200, share.body);
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: new URL(share.json().share.url).hash.slice(1) },
-    false,
-  );
+  const resolved = await call("POST", "/api/resolve", { token: new URL(share.json().share.url).hash.slice(1) }, false);
   const grant = resolved.json().grant;
   const recipient = await app.inject({
     method: "POST",
@@ -410,10 +312,7 @@ test("single-domain install keeps the static view on the app origin, with links 
     url: recipient.json().url,
   });
   assert.equal(recipientDocument.statusCode, 200);
-  assert.match(
-    recipientDocument.body,
-    new RegExp(`href="${config.APP_ORIGIN}/away#`),
-  );
+  assert.match(recipientDocument.body, new RegExp(`href="${config.APP_ORIGIN}/away#`));
   assert.equal(
     (
       await app.inject({

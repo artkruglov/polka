@@ -1,30 +1,12 @@
-import {
-  Button,
-  TextField,
-  SelectField,
-  Notice,
-} from "../../shared/ui/controls.tsx";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Button, TextField, SelectField, Notice } from "../../shared/ui/controls.tsx";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, RefreshCw, X } from "lucide-react";
 import { z } from "zod";
-import {
-  agentScopeSchema,
-  type AgentConnection,
-  type AgentScope,
-} from "../../../../../packages/contracts/index.ts";
+import { agentScopeSchema, type AgentConnection, type AgentScope } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client, request } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
-import {
-  loadIdentities,
-  type AccountIdentities,
-} from "../../entities/account/model/identities.ts";
+import { loadIdentities, type AccountIdentities } from "../../entities/account/model/identities.ts";
 import {
   SAVE_PHRASE,
   clientSetup,
@@ -90,12 +72,8 @@ export const CONNECTION_POLL_MS = 5000;
 
 export function classifyIssueError(
   error: unknown,
-):
-  | { kind: "session" }
-  | { kind: "form"; message: string }
-  | { kind: "ambiguous" } {
-  if (error instanceof ApiError && error.status === 401)
-    return { kind: "session" };
+): { kind: "session" } | { kind: "form"; message: string } | { kind: "ambiguous" } {
+  if (error instanceof ApiError && error.status === 401) return { kind: "session" };
   if (error instanceof ApiError && error.status >= 400 && error.status < 500)
     return {
       kind: "form",
@@ -116,20 +94,14 @@ function formatDate(value: string) {
   });
 }
 
-const isActive = (connection: AgentConnection) =>
-  connection.status === "issued" || connection.status === "seen";
+const isActive = (connection: AgentConnection) => connection.status === "issued" || connection.status === "seen";
 
 const scopeLabels = (ids: readonly AgentScope[]) =>
-  ids
-    .map((id) => scopeOptions.find((scope) => scope.id === id)?.label ?? id)
-    .join(" · ");
+  ids.map((id) => scopeOptions.find((scope) => scope.id === id)?.label ?? id).join(" · ");
 
 /** The choice from the address (?client=…), else the remembered one. */
 function initialClient(): AgentClientId | null {
-  return (
-    parseClientId(new URLSearchParams(location.search).get("client")) ??
-    readStoredClient()
-  );
+  return parseClientId(new URLSearchParams(location.search).get("client")) ?? readStoredClient();
 }
 
 export function AgentConnections() {
@@ -137,9 +109,7 @@ export function AgentConnections() {
   const [connections, setConnections] = useState<AgentConnection[]>([]);
   // Revoked and expired connections are history: shown on request only.
   const [showInactive, setShowInactive] = useState(false);
-  const [listState, setListState] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
+  const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState<string | null>(null);
   const [identities, setIdentities] = useState<AccountIdentities | null>(null);
   const [selected, setSelected] = useState<AgentClientId | null>(initialClient);
@@ -177,9 +147,7 @@ export function AgentConnections() {
     connection: AgentConnection;
   } | null>(null);
   const [showSecret, setShowSecret] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState<AgentConnection | null>(
-    null,
-  );
+  const [confirmRevoke, setConfirmRevoke] = useState<AgentConnection | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const listAbort = useRef<AbortController | null>(null);
   const actionAbort = useRef<AbortController | null>(null);
@@ -209,9 +177,7 @@ export function AgentConnections() {
         setListError(null);
       }
       try {
-        const result = agentConnectionsSchema.parse(
-          await client.agentConnections.list(controller.signal),
-        );
+        const result = agentConnectionsSchema.parse(await client.agentConnections.list(controller.signal));
         if (!mounted.current || controller.signal.aborted) return;
         setConnections(result);
         setListState("ready");
@@ -298,11 +264,7 @@ export function AgentConnections() {
   };
 
   const toggleScope = (scope: AgentScope) => {
-    setScopes((current) =>
-      current.includes(scope)
-        ? current.filter((item) => item !== scope)
-        : [...current, scope],
-    );
+    setScopes((current) => (current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]));
   };
 
   const issue = async (event: React.FormEvent) => {
@@ -381,18 +343,12 @@ export function AgentConnections() {
     setRevokeError(null);
     try {
       const csrf = await client.agentConnections.csrf();
-      await client.agentConnections.setSignInLinks(
-        connection.id,
-        !connection.signInLinks,
-        csrf.csrfToken,
-      );
+      await client.agentConnections.setSignInLinks(connection.id, !connection.signInLinks, csrf.csrfToken);
       if (mounted.current) void refresh();
     } catch (error) {
       if (!mounted.current) return;
       setRevokeError(
-        error instanceof ApiError && error.status < 500
-          ? error.message
-          : "Не удалось сохранить. Повторите попытку.",
+        error instanceof ApiError && error.status < 500 ? error.message : "Не удалось сохранить. Повторите попытку.",
       );
     } finally {
       if (actionRef.current === `links:${connection.id}`) setBusy(null);
@@ -408,11 +364,7 @@ export function AgentConnections() {
     actionAbort.current = controller;
     try {
       const csrf = await client.agentConnections.csrf(controller.signal);
-      await client.agentConnections.revoke(
-        connection.id,
-        csrf.csrfToken,
-        controller.signal,
-      );
+      await client.agentConnections.revoke(connection.id, csrf.csrfToken, controller.signal);
       if (!mounted.current || controller.signal.aborted) return false;
       if (secret?.connection.id === connection.id) setSecret(null);
       if (arrived?.id === connection.id) setArrived(null);
@@ -436,10 +388,8 @@ export function AgentConnections() {
     }
   };
 
-  const endpoint =
-    secret?.connection.audience ?? new URL("/mcp", location.origin).href;
-  const tokenVariable =
-    clientKind === "http" ? "POLKA_TOKEN" : "POLKA_MCP_TOKEN";
+  const endpoint = secret?.connection.audience ?? new URL("/mcp", location.origin).href;
+  const tokenVariable = clientKind === "http" ? "POLKA_TOKEN" : "POLKA_MCP_TOKEN";
   // Placeholders only: the token itself never appears in a snippet.
   const cliCommands = useMemo(
     () =>
@@ -485,35 +435,24 @@ export function AgentConnections() {
   );
 
   // claude.ai and ChatGPT cannot reach an installation on this computer.
-  const setup =
-    selected && reachableFrom(location.origin)(selected)
-      ? clientSetup(location.origin, selected)
-      : null;
+  const setup = selected && reachableFrom(location.origin)(selected) ? clientSetup(location.origin, selected) : null;
   const active = connections.filter(isActive);
-  const method = identities
-    ? signInMethod(identities.identities, identities.email)
-    : null;
+  const method = identities ? signInMethod(identities.identities, identities.email) : null;
 
   return (
-    <AppShell
-      current="connections"
-      account={account}
-      className="agent-connections-page"
-    >
+    <AppShell current="connections" account={account} className="agent-connections-page">
       <main className="agent-connections" id="main">
         <header className="agent-page-heading">
           <h1>Подключите ИИ к Полке</h1>
           <p className="agent-lead">
-            Агент будет сохранять ваши работы на эту полку и давать ссылки на
-            них. Вы разрешаете это один раз, в браузере.
+            Агент будет сохранять ваши работы на эту полку и давать ссылки на них. Вы разрешаете это один раз, в
+            браузере.
           </p>
           {account && (
             <div className="agent-account" role="note">
               <p>
                 Вы вошли как <strong>{account.name}</strong>
-                {identities?.email && identities.email !== account.name
-                  ? ` (${identities.email})`
-                  : ""}
+                {identities?.email && identities.email !== account.name ? ` (${identities.email})` : ""}
                 {method ? ` ${signInMethodLabel(method)}` : ""}.
               </p>
               {isFreshAccount(account.createdAt) && method?.kind !== "login" && (
@@ -521,16 +460,13 @@ export function AgentConnections() {
                   Эта полка создана только что. Уже есть другая полка?{" "}
                   {method?.kind === "provider" ? (
                     <>
-                      Отвяжите {method.name} в{" "}
-                      <a href="#sign-in">«Способах входа»</a>, войдите в ту
-                      полку и привяжите {method.name} там — тогда это будет одна
-                      полка.
+                      Отвяжите {method.name} в <a href="#sign-in">«Способах входа»</a>, войдите в ту полку и привяжите{" "}
+                      {method.name} там — тогда это будет одна полка.
                     </>
                   ) : (
                     <>
-                      Войдите в неё и привяжите Яндекс ID или VK ID в{" "}
-                      <a href="#sign-in">«Способах входа»</a> — тогда это будет
-                      одна полка.
+                      Войдите в неё и привяжите Яндекс ID или VK ID в <a href="#sign-in">«Способах входа»</a> — тогда
+                      это будет одна полка.
                     </>
                   )}
                 </p>
@@ -541,9 +477,7 @@ export function AgentConnections() {
 
         <section
           className="agent-status"
-          data-state={
-            arrived ? "arrived" : active.length ? "connected" : "none"
-          }
+          data-state={arrived ? "arrived" : active.length ? "connected" : "none"}
           aria-labelledby="agent-status-title"
           aria-live="polite"
         >
@@ -555,16 +489,9 @@ export function AgentConnections() {
               <Check aria-hidden="true" />
               <div>
                 <strong>Готово! {arrived.name} подключён.</strong>
-                <p>
-                  Попросите агента: «{SAVE_PHRASE}». Работа появится на вашей
-                  полке.
-                </p>
+                <p>Попросите агента: «{SAVE_PHRASE}». Работа появится на вашей полке.</p>
               </div>
-              <CopyButton
-                value={SAVE_PHRASE}
-                label="Скопировать фразу"
-                successText="Фраза скопирована"
-              />
+              <CopyButton value={SAVE_PHRASE} label="Скопировать фразу" successText="Фраза скопирована" />
             </div>
           ) : listState === "loading" && !connections.length ? (
             <p role="status">Проверяем подключения…</p>
@@ -600,28 +527,19 @@ export function AgentConnections() {
             </ul>
           ) : (
             <p className="agent-status-none">
-              <strong>Пока ничего не подключено</strong> — выберите, где вы
-              работаете с ИИ.
+              <strong>Пока ничего не подключено</strong> — выберите, где вы работаете с ИИ.
             </p>
           )}
         </section>
 
         {(arrived || active.length > 0) && listState !== "error" && (
-          <NextStep
-            client={harvest ?? harvestClient(selected)}
-            onClient={setHarvest}
-          />
+          <NextStep client={harvest ?? harvestClient(selected)} onClient={setHarvest} />
         )}
 
         <section className="agent-where" aria-labelledby="agent-where-title">
           <h2 id="agent-where-title">Где вы работаете с ИИ?</h2>
           <ClientCards selected={selected} onChoose={choose} />
-          {setup && (
-            <SetupPanel
-              setup={setup}
-              waiting={!arrived && listState !== "error"}
-            />
-          )}
+          {setup && <SetupPanel setup={setup} waiting={!arrived && listState !== "error"} />}
         </section>
 
         <details
@@ -634,9 +552,8 @@ export function AgentConnections() {
           </summary>
           <div className="agent-developers-body">
             <p className="agent-help">
-              Токен — ключ для программ, которые не умеют входить через браузер:
-              скрипты, CI, свои агенты. Для ChatGPT, Claude, Codex и Claude Code
-              он не нужен — они входят сами, как описано выше.
+              Токен — ключ для программ, которые не умеют входить через браузер: скрипты, CI, свои агенты. Для ChatGPT,
+              Claude, Codex и Claude Code он не нужен — они входят сами, как описано выше.
             </p>
             <h3 id="new-agent-title">Создать токен</h3>
             <form onSubmit={issue} aria-labelledby="new-agent-title">
@@ -659,11 +576,7 @@ export function AgentConnections() {
                       ["other", "Другой MCP-клиент по токену"],
                     ] as const
                   ).map(([id, label]) => (
-                    <label
-                      key={id}
-                      className="agent-choice"
-                      data-selected={clientKind === id}
-                    >
+                    <label key={id} className="agent-choice" data-selected={clientKind === id}>
                       <input
                         type="radio"
                         name="agent-client"
@@ -711,8 +624,8 @@ export function AgentConnections() {
               <fieldset>
                 <legend>Разрешения</legend>
                 <p className="agent-help">
-                  Разрешения действуют на всю вашу полку, а не на одну папку.
-                  Чтение списка и каждое действие включаются отдельно.
+                  Разрешения действуют на всю вашу полку, а не на одну папку. Чтение списка и каждое действие включаются
+                  отдельно.
                 </p>
                 {clientKind === "http" && !scopes.includes("share") && (
                   <p className="agent-help">
@@ -722,39 +635,38 @@ export function AgentConnections() {
                   </p>
                 )}
                 <div className="agent-scopes">
-                  {scopeOptions.filter((scope) => !scope.oauthOnly).map((scope) => (
-                    <label
-                      key={scope.id}
-                      className="agent-scope"
-                      data-selected={scopes.includes(scope.id)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={
-                          scopes.includes(scope.id) &&
-                          (tokenRole !== "reader" || ["context", "read", "source:read"].includes(scope.id))
-                        }
-                        onChange={() => toggleScope(scope.id)}
-                        disabled={
-                          scope.id === "context" ||
-                          (tokenRole === "reader" && !["context", "read", "source:read"].includes(scope.id)) ||
-                          (!!tokenShelf && scope.id === "share")
-                        }
-                      />
-                      <span>
-                        <strong>{scope.label}</strong>
-                        <small>{scope.description}</small>
-                      </span>
-                    </label>
-                  ))}
+                  {scopeOptions
+                    .filter((scope) => !scope.oauthOnly)
+                    .map((scope) => (
+                      <label key={scope.id} className="agent-scope" data-selected={scopes.includes(scope.id)}>
+                        <input
+                          type="checkbox"
+                          checked={
+                            scopes.includes(scope.id) &&
+                            (tokenRole !== "reader" || ["context", "read", "source:read"].includes(scope.id))
+                          }
+                          onChange={() => toggleScope(scope.id)}
+                          disabled={
+                            scope.id === "context" ||
+                            (tokenRole === "reader" && !["context", "read", "source:read"].includes(scope.id)) ||
+                            (!!tokenShelf && scope.id === "share")
+                          }
+                        />
+                        <span>
+                          <strong>{scope.label}</strong>
+                          <small>{scope.description}</small>
+                        </span>
+                      </label>
+                    ))}
                 </div>
               </fieldset>
               {scopes.includes("read") && teamShelves.filter((shelf) => shelf.id !== tokenShelf).length > 0 && (
                 <fieldset className="agent-search-shelves">
                   <legend>Искать также на полках отделов</legend>
                   <p className="ui-field-hint">
-                    Агент сможет искать работы на отмеченных полках и видеть найденное (названия и
-                    фрагменты), пока вы там участник. Открыть работу с другой полки можно только токеном этой полки. Ничего не отмечено: только выбранная полка.
+                    Агент сможет искать работы на отмеченных полках и видеть найденное (названия и фрагменты), пока вы
+                    там участник. Открыть работу с другой полки можно только токеном этой полки. Ничего не отмечено:
+                    только выбранная полка.
                   </p>
                   {teamShelves
                     .filter((shelf) => shelf.id !== tokenShelf)
@@ -766,7 +678,10 @@ export function AgentConnections() {
                           onChange={(event) =>
                             setSearchShelves((current) =>
                               event.target.checked
-                                ? [...current.filter((id) => teamShelves.some((team) => team.id === id)), shelf.id].slice(0, 10)
+                                ? [
+                                    ...current.filter((id) => teamShelves.some((team) => team.id === id)),
+                                    shelf.id,
+                                  ].slice(0, 10)
                                 : current.filter((id) => id !== shelf.id),
                             )
                           }
@@ -778,27 +693,19 @@ export function AgentConnections() {
               )}
               {formError && <Notice tone="error">{formError}</Notice>}
               {issueNotice && <Notice>{issueNotice}</Notice>}
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={listState !== "ready" || action !== null}
-              >
+              <Button variant="primary" type="submit" disabled={listState !== "ready" || action !== null}>
                 {action === "issue" ? "Создаём…" : "Создать токен"}
               </Button>
             </form>
 
             {secret && (
-              <section
-                className="agent-card agent-secret"
-                aria-labelledby="agent-secret-title"
-              >
+              <section className="agent-card agent-secret" aria-labelledby="agent-secret-title">
                 <div className="agent-card-heading">
                   <div>
                     <h3 id="agent-secret-title">Токен подключения</h3>
                     <p>
-                      Токен показывается только сейчас. После закрытия получить
-                      его повторно нельзя; можно отозвать подключение и создать
-                      новое.
+                      Токен показывается только сейчас. После закрытия получить его повторно нельзя; можно отозвать
+                      подключение и создать новое.
                     </p>
                   </div>
                   <Button
@@ -823,19 +730,12 @@ export function AgentConnections() {
                       readOnly
                       aria-label="Токен подключения"
                     />
-                    <Button
-                      type="button"
-                      onClick={() => setShowSecret((value) => !value)}
-                    >
+                    <Button type="button" onClick={() => setShowSecret((value) => !value)}>
                       {showSecret ? "Скрыть" : "Показать"}
                     </Button>
                   </div>
                 </label>
-                <CopyButton
-                  value={secret.token}
-                  label="Скопировать токен"
-                  successText="Токен скопирован"
-                />
+                <CopyButton value={secret.token} label="Скопировать токен" successText="Токен скопирован" />
                 <dl className="agent-details">
                   <div>
                     <dt>Endpoint</dt>
@@ -854,34 +754,26 @@ export function AgentConnections() {
                 </dl>
                 <h4>Настройка клиента</h4>
                 <p className="agent-help">
-                  Переменная должна быть доступна процессу клиента. Не
-                  вставляйте токен в чат.
+                  Переменная должна быть доступна процессу клиента. Не вставляйте токен в чат.
                 </p>
-                {clientKind === "codex" && (
-                  <InstructionBlock title="Codex CLI" value={codexCommand} />
-                )}
+                {clientKind === "codex" && <InstructionBlock title="Codex CLI" value={codexCommand} />}
                 {clientKind === "claude" && (
-                  <InstructionBlock
-                    title="Claude Code — добавьте в существующий .mcp.json"
-                    value={claudeConfig}
-                  />
+                  <InstructionBlock title="Claude Code — добавьте в существующий .mcp.json" value={claudeConfig} />
                 )}
                 {clientKind === "http" && (
                   <p className="agent-instruction">
-                    Команды для публикации — в блоке «HTTP API и CLI» ниже: CLI
-                    и API читают токен из переменной <code>POLKA_TOKEN</code>.
+                    Команды для публикации — в блоке «HTTP API и CLI» ниже: CLI и API читают токен из переменной{" "}
+                    <code>POLKA_TOKEN</code>.
                   </p>
                 )}
                 {clientKind === "other" && (
                   <p className="agent-instruction">
-                    Используйте Streamable HTTP endpoint и Authorization Bearer
-                    из секрета. Совместимость конкретного клиента проверьте в
-                    его документации.
+                    Используйте Streamable HTTP endpoint и Authorization Bearer из секрета. Совместимость конкретного
+                    клиента проверьте в его документации.
                   </p>
                 )}
                 <p className="agent-instruction">
-                  <code>read -r -s {tokenVariable}</code>, затем вставьте токен
-                  и нажмите Enter; после этого выполните{" "}
+                  <code>read -r -s {tokenVariable}</code>, затем вставьте токен и нажмите Enter; после этого выполните{" "}
                   <code>export {tokenVariable}</code>.{" "}
                   {clientKind === "http"
                     ? "Скрипт запускается из этого же терминала; на сервере положите токен в хранилище секретов."
@@ -889,14 +781,11 @@ export function AgentConnections() {
                 </p>
                 <p className="agent-next-step">
                   {clientKind === "http" ? (
-                    <>
-                      Опубликуйте файл командой ниже — подключение появится в
-                      списке как использованное.
-                    </>
+                    <>Опубликуйте файл командой ниже — подключение появится в списке как использованное.</>
                   ) : (
                     <>
-                      Попросите клиента вызвать <code>polka_context</code> —
-                      подключение появится в списке как использованное.
+                      Попросите клиента вызвать <code>polka_context</code> — подключение появится в списке как
+                      использованное.
                     </>
                   )}
                 </p>
@@ -906,13 +795,10 @@ export function AgentConnections() {
             <section className="agent-http" aria-labelledby="agent-http-title">
               <h3 id="agent-http-title">HTTP API и CLI</h3>
               <p className="agent-help">
-                Для внутренних агентов, CI и скриптов без MCP: один запрос{" "}
-                <code>POST /api/v1/publish</code> сохраняет HTML-страницу и,
-                если подключению разрешено управлять ссылками, возвращает
-                ссылку. Нужен токен с разрешением «
-                {scopeOptions.find((scope) => scope.id === "capture")?.label}» —
-                токен создаётся выше в этом разделе. Токен — только в заголовке
-                Authorization и переменной окружения, не в аргументах и не в
+                Для внутренних агентов, CI и скриптов без MCP: один запрос <code>POST /api/v1/publish</code> сохраняет
+                HTML-страницу и, если подключению разрешено управлять ссылками, возвращает ссылку. Нужен токен с
+                разрешением «{scopeOptions.find((scope) => scope.id === "capture")?.label}» — токен создаётся выше в
+                этом разделе. Токен — только в заголовке Authorization и переменной окружения, не в аргументах и не в
                 чате.
               </p>
               <Tabs
@@ -941,54 +827,40 @@ export function AgentConnections() {
                 )}
               </Tabs>
               <p className="agent-instruction">
-                Ответ: <code>url</code> — ссылка для отправки,{" "}
-                <code>shelfUrl</code> — работа на вашей полке. Повтор с тем же{" "}
-                <code>key</code> возвращает ту же ссылку. Лимит: 5 МБ на
-                страницу, 120 запросов за 10 минут на подключение.
+                Ответ: <code>url</code> — ссылка для отправки, <code>shelfUrl</code> — работа на вашей полке. Повтор с
+                тем же <code>key</code> возвращает ту же ссылку. Лимит: 5 МБ на страницу, 120 запросов за 10 минут на
+                подключение.
               </p>
             </section>
 
             <section className="agent-http" aria-labelledby="agent-sessions-title">
               <h3 id="agent-sessions-title">Сессии агентов</h3>
               <p className="agent-help">
-                История работы Claude Code и Codex на вашей личной полке: команды,
-                обращения в сеть, секреты и расход. Программа{" "}
-                <code>polka-sessions</code> скрывает секреты ещё на компьютере и
-                отправляет сессии с токеном, у которого есть право «
-                {scopeOptions.find((scope) => scope.id === "sessions")?.label}».
-                Как начать — на странице <a href="/sessions">«Сессии агентов»</a>.
+                История работы Claude Code и Codex на вашей личной полке: команды, обращения в сеть, секреты и расход.
+                Программа <code>polka-sessions</code> скрывает секреты ещё на компьютере и отправляет сессии с токеном,
+                у которого есть право «{scopeOptions.find((scope) => scope.id === "sessions")?.label}». Как начать — на
+                странице <a href="/sessions">«Сессии агентов»</a>.
               </p>
             </section>
           </div>
         </details>
 
-        {account && !account.provisional && (
-          <ShelfCardSection canEdit />
-        )}
+        {account && !account.provisional && <ShelfCardSection canEdit />}
 
-        <section
-          className="agent-card agent-existing"
-          aria-labelledby="agent-list-title"
-        >
+        <section className="agent-card agent-existing" aria-labelledby="agent-list-title">
           <div className="agent-card-heading">
             <div>
               <h2 id="agent-list-title">Подключения</h2>
               <p>
-                Кто может обращаться к вашей полке. Запрос от агента ещё не
-                означает, что работа сохранена: результат виден на полке.
+                Кто может обращаться к вашей полке. Запрос от агента ещё не означает, что работа сохранена: результат
+                виден на полке.
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={listState === "loading"}
-            >
+            <Button type="button" onClick={() => void refresh()} disabled={listState === "loading"}>
               <RefreshCw size={16} /> Обновить
             </Button>
           </div>
-          {listState === "loading" && !connections.length && (
-            <p role="status">Загружаем подключения…</p>
-          )}
+          {listState === "loading" && !connections.length && <p role="status">Загружаем подключения…</p>}
           {listState === "error" && (
             <div className="agent-error" role="alert">
               <p>{listError}</p>
@@ -997,14 +869,13 @@ export function AgentConnections() {
               </Button>
             </div>
           )}
-          {listState === "ready" &&
-            !connections.some((connection) => isActive(connection)) && (
-              <div className="agent-empty">
-                <strong>Подключений нет</strong>
-                Ни один агент ещё не получал доступ к этой полке. Выберите выше,
-                где вы работаете с ИИ, — подключение появится здесь.
-              </div>
-            )}
+          {listState === "ready" && !connections.some((connection) => isActive(connection)) && (
+            <div className="agent-empty">
+              <strong>Подключений нет</strong>
+              Ни один агент ещё не получал доступ к этой полке. Выберите выше, где вы работаете с ИИ, — подключение
+              появится здесь.
+            </div>
+          )}
           {connections.length > 0 && (
             <div className="agent-list">
               {connections
@@ -1019,14 +890,10 @@ export function AgentConnections() {
                       <h3>
                         {connection.name}
                         <span className="agent-kind">
-                          {connection.kind === "oauth"
-                            ? "вход через браузер"
-                            : "токен"}
+                          {connection.kind === "oauth" ? "вход через браузер" : "токен"}
                         </span>
                       </h3>
-                      <p className="agent-status-line">
-                        {connectionStatus(connection)}
-                      </p>
+                      <p className="agent-status-line">{connectionStatus(connection)}</p>
                       <p className="agent-meta">
                         {connection.shelf ? `Полка «${connection.shelf.name}» · ` : ""}
                         Может: {scopeLabels(connection.scopes)}
@@ -1035,12 +902,17 @@ export function AgentConnections() {
                       {isActive(connection) &&
                         connectionSections.map(({ id, Component }) => (
                           <div key={id} className="agent-extension">
-                            <Component connection={{ id: connection.id, name: connection.name, kind: connection.kind, shelf: connection.shelf }} />
+                            <Component
+                              connection={{
+                                id: connection.id,
+                                name: connection.name,
+                                kind: connection.kind,
+                                shelf: connection.shelf,
+                              }}
+                            />
                           </div>
                         ))}
-                      {connection.kind === "oauth" &&
-                        isActive(connection) &&
-                        connection.scopes.includes("sign_in") && (
+                      {connection.kind === "oauth" && isActive(connection) && connection.scopes.includes("sign_in") && (
                         <label className="agent-meta agent-sign-in-links">
                           <input
                             type="checkbox"
@@ -1055,9 +927,7 @@ export function AgentConnections() {
                         Подключено {formatDate(connection.createdAt)}
                         {isActive(connection)
                           ? ` · действует до ${formatDate(connection.expiresAt)}${
-                              connection.kind === "oauth"
-                                ? ", продлевается при использовании"
-                                : ""
+                              connection.kind === "oauth" ? ", продлевается при использовании" : ""
                             }`
                           : ""}
                       </p>
@@ -1072,9 +942,7 @@ export function AgentConnections() {
                         }}
                         disabled={action !== null}
                       >
-                        {action === `revoke:${connection.id}`
-                          ? "Отзываем…"
-                          : "Отозвать"}
+                        {action === `revoke:${connection.id}` ? "Отзываем…" : "Отозвать"}
                       </Button>
                     )}
                   </article>
@@ -1082,44 +950,30 @@ export function AgentConnections() {
             </div>
           )}
           {connections.some((connection) => !isActive(connection)) && (
-            <Button
-              type="button"
-              onClick={() => setShowInactive((value) => !value)}
-            >
+            <Button type="button" onClick={() => setShowInactive((value) => !value)}>
               {showInactive
                 ? "Скрыть отозванные и истёкшие"
                 : `Показать отозванные и истёкшие (${connections.filter((connection) => !isActive(connection)).length})`}
             </Button>
           )}
-          <p className="agent-help">
-            Отзыв подключения не отзывает уже выданные ссылки на работы.
-          </p>
+          <p className="agent-help">Отзыв подключения не отзывает уже выданные ссылки на работы.</p>
         </section>
         {account && <SignInMethods />}
         {account && !account.provisional && <MoveShelf origin={location.origin} />}
         {account && !account.provisional && <DeleteShelfSection />}
       </main>
       {confirmRevoke && (
-        <Dialog
-          title="Отозвать доступ?"
-          onClose={() => setConfirmRevoke(null)}
-          busy={action !== null}
-        >
+        <Dialog title="Отозвать доступ?" onClose={() => setConfirmRevoke(null)} busy={action !== null}>
           <div className="dialog-body">
             <p>
-              «{confirmRevoke.name}» больше не сможет обращаться к вашей полке.
-              Вернуть этот доступ нельзя — понадобится новое подключение.
+              «{confirmRevoke.name}» больше не сможет обращаться к вашей полке. Вернуть этот доступ нельзя — понадобится
+              новое подключение.
             </p>
-            <p className="fine">
-              Уже выданные ссылки на работы останутся открытыми.
-            </p>
+            <p className="fine">Уже выданные ссылки на работы останутся открытыми.</p>
             {revokeError && <Notice tone="error">{revokeError}</Notice>}
           </div>
           <div className="dialog-footer">
-            <Button
-              disabled={action !== null}
-              onClick={() => setConfirmRevoke(null)}
-            >
+            <Button disabled={action !== null} onClick={() => setConfirmRevoke(null)}>
               Отмена
             </Button>
             <Button
@@ -1139,36 +993,21 @@ export function AgentConnections() {
 }
 
 /** One human line per connection: what it is doing now. */
-export function connectionStatus(
-  connection: AgentConnection,
-  now = Date.now(),
-) {
+export function connectionStatus(connection: AgentConnection, now = Date.now()) {
   if (connection.status === "revoked") return "Доступ отозван";
   if (connection.status === "expired")
-    return connection.kind === "oauth"
-      ? "Не использовалось 30 дней — подключите заново"
-      : "Срок токена истёк";
-  if (connection.lastSeenAt)
-    return `Работает · последний раз ${relativeTime(connection.lastSeenAt, now)}`;
-  return connection.kind === "oauth"
-    ? "Доступ разрешён · запросов ещё не было"
-    : "Токен выдан · запросов ещё не было";
+    return connection.kind === "oauth" ? "Не использовалось 30 дней — подключите заново" : "Срок токена истёк";
+  if (connection.lastSeenAt) return `Работает · последний раз ${relativeTime(connection.lastSeenAt, now)}`;
+  return connection.kind === "oauth" ? "Доступ разрешён · запросов ещё не было" : "Токен выдан · запросов ещё не было";
 }
 
 /** Connected: the first task, «соберите свои лучшие работы», ready to copy. */
-export function NextStep({
-  client,
-  onClient,
-}: {
-  client: HarvestClientId;
-  onClient: (id: HarvestClientId) => void;
-}) {
+export function NextStep({ client, onClient }: { client: HarvestClientId; onClient: (id: HarvestClientId) => void }) {
   return (
     <section className="agent-next" aria-labelledby="agent-next-title">
       <h2 id="agent-next-title">Что дальше: соберите свои лучшие работы</h2>
       <p className="agent-help">
-        Скопируйте задание агенту: он найдёт 3–5 лучших работ, покажет список и
-        после вашего «да» сохранит их на Полку.
+        Скопируйте задание агенту: он найдёт 3–5 лучших работ, покажет список и после вашего «да» сохранит их на Полку.
       </p>
       <HarvestPrompt client={client} onClient={onClient} />
     </section>

@@ -9,11 +9,7 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  browserExtensionId,
-  validRedirectUri,
-  vettedExtensionName,
-} from "../apps/server/oauth.ts";
+import { browserExtensionId, validRedirectUri, vettedExtensionName } from "../apps/server/oauth.ts";
 import { oauthClientKind } from "../apps/server/analytics.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3 } from "../apps/server/storage.ts";
@@ -24,17 +20,13 @@ const EXTENSION_ID = "abcdefghijklmnopabcdefghijklmnop";
 const OTHER_ID = "ponmlkjihgfedcbaponmlkjihgfedcba";
 const redirectFor = (id: string) => `https://${id}.chromiumapp.org/polka`;
 const password = randomBytes(24).toString("hex");
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; name: string; cookie: string };
 let owner: Owner;
 
 async function newOwner(prefix: string): Promise<Owner> {
-  const account = await createAccount(
-    `${prefix}-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const account = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
   const login = await app.inject({
     method: "POST",
     url: "/api/login",
@@ -49,8 +41,7 @@ async function newOwner(prefix: string): Promise<Owner> {
   };
 }
 
-const form = (params: Record<string, string>) =>
-  new URLSearchParams(params).toString();
+const form = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
 async function registerExtension(id: string, name = "На Полку") {
   const response = await app.inject({
@@ -172,10 +163,7 @@ after(async () => {
 
 test("chromiumapp.org redirects: an extension ID is 32 letters a–p on that host only", () => {
   assert.equal(browserExtensionId(redirectFor(EXTENSION_ID)), EXTENSION_ID);
-  assert.equal(
-    browserExtensionId(`https://${EXTENSION_ID}.chromiumapp.org/`),
-    EXTENSION_ID,
-  );
+  assert.equal(browserExtensionId(`https://${EXTENSION_ID}.chromiumapp.org/`), EXTENSION_ID);
   for (const uri of [
     `http://${EXTENSION_ID}.chromiumapp.org/`,
     `https://${EXTENSION_ID.toUpperCase()}.chromiumapp.org/`,
@@ -189,24 +177,15 @@ test("chromiumapp.org redirects: an extension ID is 32 letters a–p on that hos
     assert.equal(browserExtensionId(uri), null, uri);
   // Registration accepts it as an ordinary https redirect.
   assert.equal(validRedirectUri(redirectFor(EXTENSION_ID)), true);
-  assert.equal(
-    validRedirectUri(`https://${EXTENSION_ID}.chromiumapp.org/cb#x`),
-    false,
-  );
-  assert.equal(
-    oauthClientKind("На Полку", [redirectFor(EXTENSION_ID)]),
-    "browser-extension",
-  );
+  assert.equal(validRedirectUri(`https://${EXTENSION_ID}.chromiumapp.org/cb#x`), false);
+  assert.equal(oauthClientKind("На Полку", [redirectFor(EXTENSION_ID)]), "browser-extension");
 });
 
 test("the name «На Полку» is confirmed only for an official extension ID", () => {
   const saved = [...config.BROWSER_EXTENSION_IDS];
   try {
     config.BROWSER_EXTENSION_IDS.splice(0, Infinity, EXTENSION_ID);
-    assert.equal(
-      vettedExtensionName("На Полку", [redirectFor(EXTENSION_ID)]),
-      "На Полку",
-    );
+    assert.equal(vettedExtensionName("На Полку", [redirectFor(EXTENSION_ID)]), "На Полку");
     for (const [name, uris] of [
       ["На Полку", [redirectFor(OTHER_ID)]],
       ["на  полку!", [redirectFor(OTHER_ID)]],
@@ -214,16 +193,9 @@ test("the name «На Полку» is confirmed only for an official extension I
       ["Na Polku", [redirectFor(OTHER_ID)]],
       ["На Полку", [redirectFor(EXTENSION_ID), "https://evil.example/cb"]],
     ] as const)
-      assert.match(
-        vettedExtensionName(name, [...uris]),
-        /\(имя не подтверждено\)$/,
-        `${name} ${uris.join(" ")}`,
-      );
+      assert.match(vettedExtensionName(name, [...uris]), /\(имя не подтверждено\)$/, `${name} ${uris.join(" ")}`);
     // Other names are left alone, including ones that mention Полка.
-    assert.equal(
-      vettedExtensionName("Claude Code (polka)", ["http://127.0.0.1:3000/cb"]),
-      "Claude Code (polka)",
-    );
+    assert.equal(vettedExtensionName("Claude Code (polka)", ["http://127.0.0.1:3000/cb"]), "Claude Code (polka)");
   } finally {
     config.BROWSER_EXTENSION_IDS.splice(0, Infinity, ...saved);
   }
@@ -251,10 +223,7 @@ test("official extension: consent, PKCE token, refresh, publish with its Origin"
       official: true,
     });
     const redirect = await approve(started);
-    assert.equal(
-      `${redirect.origin}${redirect.pathname}`,
-      redirectFor(EXTENSION_ID),
-    );
+    assert.equal(`${redirect.origin}${redirect.pathname}`, redirectFor(EXTENSION_ID));
     assert.equal(redirect.searchParams.get("state"), started.state);
     const exchange = (params: Record<string, string>) =>
       app.inject({

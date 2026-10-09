@@ -43,14 +43,8 @@ import {
   uploadBytes,
   type Actor,
 } from "../apps/server/artifacts.ts";
-import {
-  buildInlineRevision,
-  getInlineBuildStatus,
-} from "../apps/server/bundle-derivatives.ts";
-import {
-  BUNDLE_RUNTIME_PROFILE,
-  isServedBuilderVersion,
-} from "../apps/server/bundle-runtime-contract.ts";
+import { buildInlineRevision, getInlineBuildStatus } from "../apps/server/bundle-derivatives.ts";
+import { BUNDLE_RUNTIME_PROFILE, isServedBuilderVersion } from "../apps/server/bundle-runtime-contract.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { getEditorial, withdrawEditorial } from "../apps/server/editorial.ts";
@@ -72,16 +66,9 @@ const option = (name: string) => {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
 };
-const print = (value: object) =>
-  process.stdout.write(`${JSON.stringify(value)}\n`);
+const print = (value: object) => process.stdout.write(`${JSON.stringify(value)}\n`);
 
-type Status =
-  | "unchanged"
-  | "published"
-  | "replaced"
-  | "renewed"
-  | "blocked"
-  | "failed";
+type Status = "unchanged" | "published" | "replaced" | "renewed" | "blocked" | "failed";
 type Version = "interactive" | "static";
 
 async function resolveOwner(login: string): Promise<Actor> {
@@ -93,8 +80,7 @@ async function resolveOwner(login: string): Promise<Actor> {
        AND account.deletion_requested_at IS NULL`,
     [login],
   );
-  if (rows.length !== 1)
-    throw new Error("Editorial account not found, disabled or ambiguous");
+  if (rows.length !== 1) throw new Error("Editorial account not found, disabled or ambiguous");
   return { id: rows[0].id, tenant: rows[0].tenant };
 }
 
@@ -193,11 +179,7 @@ async function interactiveRevision(
   bytes: Buffer,
   fresh: boolean,
 ): Promise<SavedRevision> {
-  const existing = await reusableRevision(
-    owner,
-    candidate.interactiveSourceSha256,
-    "bundle",
-  );
+  const existing = await reusableRevision(owner, candidate.interactiveSourceSha256, "bundle");
   if (existing && !fresh) return existing;
   const { uploadId } = await beginBundleUpload(owner, {
     key: randomUUID(),
@@ -263,11 +245,7 @@ async function shareDerivative(shareId: string) {
      WHERE share.id=$1 AND derivative.state='ready'`,
     [shareId],
   );
-  if (
-    !row ||
-    !isServedBuilderVersion(row.builderVersion) ||
-    row.runtimeProfile !== BUNDLE_RUNTIME_PROFILE
-  )
+  if (!row || !isServedBuilderVersion(row.builderVersion) || row.runtimeProfile !== BUNDLE_RUNTIME_PROFILE)
     throw new Error("Catalogue share is not bound to a ready derivative");
   return row as {
     id: string;
@@ -284,16 +262,11 @@ async function seed(
   version: Version,
 ): Promise<Status> {
   const interactive = version === "interactive";
-  const sourcePath = interactive
-    ? candidate.interactiveSourcePath
-    : candidate.sourcePath;
-  const sourceSha256 = interactive
-    ? candidate.interactiveSourceSha256
-    : candidate.sourceSha256;
+  const sourcePath = interactive ? candidate.interactiveSourcePath : candidate.sourcePath;
+  const sourceSha256 = interactive ? candidate.interactiveSourceSha256 : candidate.sourceSha256;
   const bytes = await readFile(resolve(sourcePath));
   if (sha256(bytes) !== sourceSha256) throw new Error("Source hash mismatch");
-  if (!interactive && classifyHtml(bytes.toString("utf8")) !== "static")
-    throw new Error("Snapshot is not static HTML");
+  if (!interactive && classifyHtml(bytes.toString("utf8")) !== "static") throw new Error("Snapshot is not static HTML");
 
   const active = await activePublication(candidate.slug);
   if (active && active.tenant_id !== owner.tenant) return "blocked";
@@ -301,19 +274,13 @@ async function seed(
     active?.source_sha256 === sourceSha256 &&
     (active.derivative_id !== null) === interactive &&
     (await isAvailable(candidate.slug));
-  if (
-    renew &&
-    new Date(active.expires_at).getTime() > Date.now() + renewWithinDays * DAY
-  )
-    return "unchanged";
+  if (renew && new Date(active.expires_at).getTime() > Date.now() + renewWithinDays * DAY) return "unchanged";
 
   const revision = interactive
     ? await interactiveRevision(owner, candidate, bytes, renew)
     : await staticRevision(owner, candidate, bytes, renew);
-  if (revision.sha256 !== sourceSha256)
-    throw new Error("Saved revision is not the editorial source");
-  if (!interactive && revision.htmlProfile !== "static")
-    throw new Error("Saved revision is not the static snapshot");
+  if (revision.sha256 !== sourceSha256) throw new Error("Saved revision is not the editorial source");
+  if (!interactive && revision.htmlProfile !== "static") throw new Error("Saved revision is not the static snapshot");
   if (interactive) await readyDerivative(owner, revision.revisionId);
   const artifact = await enableOwnerShare(owner, revision.artifactId, {
     expectedRevisionId: revision.revisionId,
@@ -347,13 +314,11 @@ async function seed(
       })
     : buildStaticPublishInput({ ...common, binding });
   const result = await publishEditorialOperatorInput(owner, input);
-  if (result.state !== "available")
-    throw new Error("Publication is not available after registration");
+  if (result.state !== "available") throw new Error("Publication is not available after registration");
   return renew ? "renewed" : active ? "replaced" : "published";
 }
 
-const reason = (error: unknown) =>
-  error instanceof Error ? error.message : "rejected";
+const reason = (error: unknown) => (error instanceof Error ? error.message : "rejected");
 
 /** Withdraws this tenant's active publication of each slug; returns failures. */
 async function withdrawSlugs(owner: Actor, slugs: string[]) {
@@ -379,9 +344,7 @@ async function withdrawSlugs(owner: Actor, slugs: string[]) {
 }
 
 if (!args.includes("--confirm-publication")) {
-  process.stderr.write(
-    "Refusing to publish: pass --confirm-publication and --login <editorial account>.\n",
-  );
+  process.stderr.write("Refusing to publish: pass --confirm-publication and --login <editorial account>.\n");
   process.exitCode = 1;
 } else {
   let failures = 0;
@@ -398,25 +361,15 @@ if (!args.includes("--confirm-publication")) {
     } else {
       const only = option("--only")?.split(",");
       const renewWithinDays = Number(option("--renew-within-days") ?? 7);
-      if (
-        !Number.isInteger(renewWithinDays) ||
-        renewWithinDays < 0 ||
-        renewWithinDays >= SHARE_DAYS
-      )
+      if (!Number.isInteger(renewWithinDays) || renewWithinDays < 0 || renewWithinDays >= SHARE_DAYS)
         throw new Error("--renew-within-days must be an integer from 0 to 29");
       const catalogue = staticCandidatesSchema.parse(
         JSON.parse(
-          await readFile(
-            resolve(option("--candidates") ?? "content/editorial/static-candidates.json"),
-            "utf8",
-          ),
+          await readFile(resolve(option("--candidates") ?? "content/editorial/static-candidates.json"), "utf8"),
         ),
       );
       const owner = await resolveOwner(login);
-      const preferred: Version =
-        config.HTML_LIVE_ENABLED && !args.includes("--static-only")
-          ? "interactive"
-          : "static";
+      const preferred: Version = config.HTML_LIVE_ENABLED && !args.includes("--static-only") ? "interactive" : "static";
       // The catalogue lists newest first; publish in reverse so it reads in
       // the candidates' order.
       for (const candidate of [...catalogue.items].reverse()) {
@@ -426,9 +379,7 @@ if (!args.includes("--confirm-publication")) {
         // page bound to a derivative has no static view for the recipient.
         let version: Version =
           preferred === "interactive" &&
-          classifyHtml(
-            await readFile(resolve(candidate.interactiveSourcePath), "utf8"),
-          ) === "static"
+          classifyHtml(await readFile(resolve(candidate.interactiveSourcePath), "utf8")) === "static"
             ? "static"
             : preferred;
         try {
@@ -445,24 +396,18 @@ if (!args.includes("--confirm-publication")) {
           }
         } catch (error) {
           status = "failed";
-          process.stderr.write(
-            `${JSON.stringify({ slug: candidate.slug, reason: reason(error) })}\n`,
-          );
+          process.stderr.write(`${JSON.stringify({ slug: candidate.slug, reason: reason(error) })}\n`);
         }
         if (status === "failed" || status === "blocked") failures++;
         else if (version !== preferred) fallbacks++;
         print({ slug: candidate.slug, status, version });
       }
       if (fallbacks)
-        process.stderr.write(
-          `${JSON.stringify({ event: "editorial.seed.static-fallback", count: fallbacks })}\n`,
-        );
+        process.stderr.write(`${JSON.stringify({ event: "editorial.seed.static-fallback", count: fallbacks })}\n`);
     }
   } catch (error) {
     failures++;
-    process.stderr.write(
-      `${JSON.stringify({ event: "editorial.seed.failed", reason: reason(error) })}\n`,
-    );
+    process.stderr.write(`${JSON.stringify({ event: "editorial.seed.failed", reason: reason(error) })}\n`);
   } finally {
     await db.end();
   }

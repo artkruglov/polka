@@ -28,12 +28,7 @@ import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { missing, Problem } from "./errors.ts";
-import {
-  holdPending,
-  PENDING_TTL_SECONDS,
-  peekPending,
-  takePending,
-} from "./sign-in-pending.ts";
+import { holdPending, PENDING_TTL_SECONDS, peekPending, takePending } from "./sign-in-pending.ts";
 import {
   FLOW_COOKIE,
   FLOW_COOKIE_PATH,
@@ -89,17 +84,12 @@ export function holdCollision(
     method: string;
   },
 ) {
-  reply.setCookie(
-    CLAIM_COOKIE,
-    holdPending({ kind: "collision", ...entry }),
-    pendingCookie(CLAIM_COOKIE_PATH),
-  );
+  reply.setCookie(CLAIM_COOKIE, holdPending({ kind: "collision", ...entry }), pendingCookie(CLAIM_COOKIE_PATH));
 }
 
 function enabledProvider(req: FastifyRequest): ProviderId {
   const parsed = providerParam.safeParse(req.params);
-  if (!parsed.success || !providerEnabled(parsed.data.provider))
-    throw missing();
+  if (!parsed.success || !providerEnabled(parsed.data.provider)) throw missing();
   return parsed.data.provider;
 }
 
@@ -122,11 +112,9 @@ export const LINK_ONLY_MESSAGE =
   "Через Google можно войти только в полку, к которой он уже привязан. Войдите через Яндекс ID, VK ID или по почте и привяжите Google в «Способах входа».";
 
 const IDP_PROBLEMS: Partial<Record<IdpError["code"], string>> = {
-  linked:
-    "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
+  linked: "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
   blocked: "Эта полка заблокирована или удаляется.",
-  signup:
-    "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
+  signup: "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
   domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
   link_only: LINK_ONLY_MESSAGE,
 };
@@ -135,8 +123,7 @@ function idpProblem(error: IdpError) {
   return new Problem(
     error.code === "signup" ? 429 : 409,
     error.code === "signup" ? "quota" : "conflict",
-    IDP_PROBLEMS[error.code] ??
-      "Не удалось завершить вход. Попробуйте ещё раз.",
+    IDP_PROBLEMS[error.code] ?? "Не удалось завершить вход. Попробуйте ещё раз.",
     { reason: error.code },
   );
 }
@@ -166,10 +153,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
   // installation is carried over as `next`.
   app.get("/login", async (req, reply) => {
     const next = safeReturnPath((req.query as Record<string, unknown>)?.next);
-    return reply.redirect(
-      next ? `/signup?${new URLSearchParams({ next })}` : "/signup",
-      303,
-    );
+    return reply.redirect(next ? `/signup?${new URLSearchParams({ next })}` : "/signup", 303);
   });
 
   app.get("/api/auth/idp/:provider/start", async (req, reply) => {
@@ -189,14 +173,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
     const current = await identity(req).catch(() => null);
     const carry = current?.provisional && current.weak ? current.id : null;
     try {
-      const { location, cookie } = await startFlow(
-        provider,
-        next,
-        null,
-        source,
-        known,
-        carry,
-      );
+      const { location, cookie } = await startFlow(provider, next, null, source, known, carry);
       reply.setCookie(FLOW_COOKIE, cookie, {
         ...flowCookie,
         secure: secure(),
@@ -210,44 +187,34 @@ export function registerSignInRoutes(app: FastifyInstance) {
 
   // Linking needs the session and the Origin check (a POST); the browser
   // then leaves for the provider itself.
-  app.post(
-    "/api/auth/idp/:provider/link",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const provider = enabledProvider(req);
-      const actor = await identity(req);
-      assertStrongSession(actor);
-      // A link-only provider never claims a provisional shelf.
-      if (linkOnly(provider) && actor.provisional)
-        throw new Problem(403, "forbidden", LINK_ONLY_MESSAGE, {
-          reason: "link_only",
-        });
-      await limitAttempts(`idp-link:${actor.id}`, 20);
-      try {
-        // Linking claims a provisional shelf (provisional.ts): back to the
-        // shelf with a note, not to the settings.
-        const { location, cookie } = await startFlow(
-          provider,
-          actor.provisional
-            ? "/?claimed=1"
-            : "/settings/agents?linked=1#sign-in",
-          actor.id,
-        );
-        reply.setCookie(FLOW_COOKIE, cookie, {
-          ...flowCookie,
-          secure: secure(),
-          maxAge: FLOW_TTL_SECONDS,
-        });
-        return { location };
-      } catch {
-        throw new Problem(
-          503,
-          "invalid",
-          "Поставщик входа сейчас недоступен. Попробуйте позже.",
-        );
-      }
-    },
-  );
+  app.post("/api/auth/idp/:provider/link", { bodyLimit: 1024 }, async (req, reply) => {
+    const provider = enabledProvider(req);
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    // A link-only provider never claims a provisional shelf.
+    if (linkOnly(provider) && actor.provisional)
+      throw new Problem(403, "forbidden", LINK_ONLY_MESSAGE, {
+        reason: "link_only",
+      });
+    await limitAttempts(`idp-link:${actor.id}`, 20);
+    try {
+      // Linking claims a provisional shelf (provisional.ts): back to the
+      // shelf with a note, not to the settings.
+      const { location, cookie } = await startFlow(
+        provider,
+        actor.provisional ? "/?claimed=1" : "/settings/agents?linked=1#sign-in",
+        actor.id,
+      );
+      reply.setCookie(FLOW_COOKIE, cookie, {
+        ...flowCookie,
+        secure: secure(),
+        maxAge: FLOW_TTL_SECONDS,
+      });
+      return { location };
+    } catch {
+      throw new Problem(503, "invalid", "Поставщик входа сейчас недоступен. Попробуйте позже.");
+    }
+  });
 
   app.get("/api/auth/idp/:provider/callback", async (req, reply) => {
     const provider = enabledProvider(req);
@@ -268,10 +235,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
     }
     let profile: ProviderProfile | null = null;
     try {
-      profile = await finishFlow(
-        flow,
-        (req.query ?? {}) as Record<string, unknown>,
-      );
+      profile = await finishFlow(flow, (req.query ?? {}) as Record<string, unknown>);
       // «Похоже, у вас уже есть полка»: nothing is created yet. The profile
       // waits in memory for ten minutes; the URL carries only `next`.
       if (
@@ -292,17 +256,9 @@ export function registerSignInRoutes(app: FastifyInstance) {
           }),
           pendingCookie(FLOW_COOKIE_PATH),
         );
-        return reply.redirect(
-          `/signup/choose?${new URLSearchParams({ next: flow.next })}`,
-          303,
-        );
+        return reply.redirect(`/signup/choose?${new URLSearchParams({ next: flow.next })}`, 303);
       }
-      const result = await completeProviderSignIn(
-        profile,
-        flow.link,
-        req.ip,
-        flow.source ?? null,
-      );
+      const result = await completeProviderSignIn(profile, flow.link, req.ip, flow.source ?? null);
       // Signed in for real from a provisional shelf opened by an agent's
       // link: the session is held back and /claim asks what to carry over.
       if (flow.carry && result.session && result.accountId !== flow.carry) {
@@ -339,8 +295,7 @@ export function registerSignInRoutes(app: FastifyInstance) {
         if (flow.link) {
           const query = new URLSearchParams({ idp_error: error.code });
           // A claim of a provisional shelf explains itself on /claim.
-          if (flow.next.startsWith("/?claimed=1"))
-            return reply.redirect(`/claim?${query}`, 303);
+          if (flow.next.startsWith("/?claimed=1")) return reply.redirect(`/claim?${query}`, 303);
           return reply.redirect(`/settings/agents?${query}#sign-in`, 303);
         }
         return failure(reply, error.code, failTo);
@@ -361,80 +316,55 @@ export function registerSignInRoutes(app: FastifyInstance) {
     };
   });
   // «Создать новую полку»: what the callback would have done.
-  app.post(
-    "/api/auth/idp/pending/create",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      await limitAttempts(`idp-pending-ip:${req.ip}`, 30);
-      const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
-      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
-      if (!entry) throw pendingGone();
-      let result;
-      try {
-        result = await completeProviderSignIn(
-          entry.profile,
-          null,
-          req.ip,
-          entry.source,
-        );
-      } catch (error) {
-        if (error instanceof IdpError) throw idpProblem(error);
-        throw error;
-      }
-      if (req.cookies.polka_session)
-        await endSession(req.cookies.polka_session);
-      reply.setCookie("polka_session", result.session!, sessionCookie());
-      return { next: entry.next };
-    },
-  );
+  app.post("/api/auth/idp/pending/create", { bodyLimit: 1024 }, async (req, reply) => {
+    await limitAttempts(`idp-pending-ip:${req.ip}`, 30);
+    const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
+    reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+    if (!entry) throw pendingGone();
+    let result;
+    try {
+      result = await completeProviderSignIn(entry.profile, null, req.ip, entry.source);
+    } catch (error) {
+      if (error instanceof IdpError) throw idpProblem(error);
+      throw error;
+    }
+    if (req.cookies.polka_session) await endSession(req.cookies.polka_session);
+    reply.setCookie("polka_session", result.session!, sessionCookie());
+    return { next: entry.next };
+  });
   // «Войти в существующую полку»: after that sign-in, the provider is linked
   // to the shelf this browser is now signed in to. The ordinary link rules
   // apply: a provider account already linked elsewhere is refused.
-  app.post(
-    "/api/auth/idp/pending/link",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const actor = await identity(req);
-      assertStrongSession(actor);
-      await limitAttempts(`idp-link:${actor.id}`, 20);
-      const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
-      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
-      if (!entry) throw pendingGone();
-      try {
-        await completeProviderSignIn(entry.profile, actor.id, req.ip);
-      } catch (error) {
-        if (error instanceof IdpError) throw idpProblem(error);
-        if (error instanceof ClaimCollision)
-          throw idpProblem(new IdpError("linked"));
-        throw error;
-      }
-      return {
-        providerName: PROVIDER_NAMES[entry.profile.provider](),
-        next: entry.next,
-      };
-    },
-  );
-  app.post(
-    "/api/auth/idp/pending/cancel",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      takePending(req.cookies[PENDING_COOKIE], "choice");
-      reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
-      return { ok: true };
-    },
-  );
+  app.post("/api/auth/idp/pending/link", { bodyLimit: 1024 }, async (req, reply) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    await limitAttempts(`idp-link:${actor.id}`, 20);
+    const entry = takePending(req.cookies[PENDING_COOKIE], "choice");
+    reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+    if (!entry) throw pendingGone();
+    try {
+      await completeProviderSignIn(entry.profile, actor.id, req.ip);
+    } catch (error) {
+      if (error instanceof IdpError) throw idpProblem(error);
+      if (error instanceof ClaimCollision) throw idpProblem(new IdpError("linked"));
+      throw error;
+    }
+    return {
+      providerName: PROVIDER_NAMES[entry.profile.provider](),
+      next: entry.next,
+    };
+  });
+  app.post("/api/auth/idp/pending/cancel", { bodyLimit: 1024 }, async (req, reply) => {
+    takePending(req.cookies[PENDING_COOKIE], "choice");
+    reply.clearCookie(PENDING_COOKIE, { path: FLOW_COOKIE_PATH });
+    return { ok: true };
+  });
 
-  app.get("/api/account/identities", async (req) =>
-    listIdentities(await identity(req)),
-  );
-  app.post(
-    "/api/account/identities/:provider/unlink",
-    { bodyLimit: 1024 },
-    async (req) => {
-      const { provider } = providerParam.parse(req.params);
-      const actor = await identity(req);
-      assertStrongSession(actor);
-      return unlinkIdentity(actor, provider);
-    },
-  );
+  app.get("/api/account/identities", async (req) => listIdentities(await identity(req)));
+  app.post("/api/account/identities/:provider/unlink", { bodyLimit: 1024 }, async (req) => {
+    const { provider } = providerParam.parse(req.params);
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return unlinkIdentity(actor, provider);
+  });
 }

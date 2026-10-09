@@ -17,8 +17,7 @@ const app = await createApp();
 let owner: Awaited<ReturnType<typeof createAccount>>;
 let secret = "";
 
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 const counter = (label: string) => `import React, { useState } from "react";
 export default function App() {
@@ -41,22 +40,12 @@ function publish(body: Record<string, unknown>) {
 }
 
 before(async () => {
-  owner = await createAccount(
-    `publish-component-${randomBytes(5).toString("hex")}`,
-    randomBytes(24).toString("hex"),
-  );
+  owner = await createAccount(`publish-component-${randomBytes(5).toString("hex")}`, randomBytes(24).toString("hex"));
   secret = randomBytes(32).toString("base64url");
   await db.query(
     `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
      VALUES($1,$2,$3,$4,'Claude Code',$5,$6,now()+interval '1 day')`,
-    [
-      randomUUID(),
-      owner.tenant,
-      owner.id,
-      sha256(secret),
-      ["context", "capture", "revise", "share"],
-      MCP_AUDIENCE,
-    ],
+    [randomUUID(), owner.tenant, owner.id, sha256(secret), ["context", "capture", "revise", "share"], MCP_AUDIENCE],
   );
 });
 

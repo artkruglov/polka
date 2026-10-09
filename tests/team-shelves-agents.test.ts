@@ -18,8 +18,7 @@ const origin = config.APP_ORIGIN;
 const mcpHost = new URL(MCP_AUDIENCE).host;
 const password = randomBytes(24).toString("hex");
 const teamShelves = config.TEAM_SHELVES;
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 type Account = Awaited<ReturnType<typeof createAccount>> & { cookie: string };
 let admin: Account, author: Account, reader: Account, stranger: Account;
 let shelf: { id: string; name: string };
@@ -111,7 +110,10 @@ before(async () => {
     payload: { name: "Отдел продаж" },
   });
   shelf = created.json();
-  for (const [who, role] of [[author, "author"], [reader, "reader"]] as const) {
+  for (const [who, role] of [
+    [author, "author"],
+    [reader, "reader"],
+  ] as const) {
     const added = await app.inject({
       method: "POST",
       url: `/api/shelves/${shelf.id}/members`,
@@ -136,10 +138,9 @@ test("an author's agent saves to the department shelf and knows where it is", as
   const token = issued.json().token;
   const saved = await publish(token, "Отчёт агента");
   assert.equal(saved.statusCode, 200, saved.body);
-  const { rows: [work] } = await db.query(
-    "SELECT tenant_id,created_by FROM artifacts WHERE id=$1",
-    [saved.json().artifactId],
-  );
+  const {
+    rows: [work],
+  } = await db.query("SELECT tenant_id,created_by FROM artifacts WHERE id=$1", [saved.json().artifactId]);
   assert.deepEqual(work, { tenant_id: shelf.id, created_by: author.id });
   // Colleagues see it on the shelf.
   const listed = await app.inject({
@@ -149,11 +150,16 @@ test("an author's agent saves to the department shelf and knows where it is", as
   });
   assert.ok(listed.json().items.some((item: any) => item.id === saved.json().artifactId));
   // polka_context names the shelf and the role; links and comments are not offered.
-  assert.equal((await mcp(token, "initialize", {
-    protocolVersion: "2025-06-18",
-    capabilities: {},
-    clientInfo: { name: "claude-code", version: "1.0" },
-  })).status, 200);
+  assert.equal(
+    (
+      await mcp(token, "initialize", {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "claude-code", version: "1.0" },
+      })
+    ).status,
+    200,
+  );
   const context = await mcp(token, "tools/call", { name: "polka_context", arguments: {} });
   const result = JSON.parse(context.message.result.content[0].text);
   assert.deepEqual(
@@ -179,10 +185,13 @@ test("an author's agent saves to the department shelf and knows where it is", as
   assert.ok(tools.includes("polka_publish"));
   // An author's agent reads the discussions; links and answers are a curator's.
   assert.ok(tools.includes("polka_comments"));
-  for (const name of ["polka_share", "polka_note", "polka_resolve_comment"])
-    assert.ok(!tools.includes(name), name);
+  for (const name of ["polka_share", "polka_note", "polka_resolve_comment"]) assert.ok(!tools.includes(name), name);
   // The owner's list shows the connection with its shelf.
-  const list = await app.inject({ method: "GET", url: "/api/agent-connections", headers: { origin, cookie: author.cookie } });
+  const list = await app.inject({
+    method: "GET",
+    url: "/api/agent-connections",
+    headers: { origin, cookie: author.cookie },
+  });
   assert.equal(list.json().find((item: any) => item.id === issued.json().connection.id).shelf.name, "Отдел продаж");
 });
 
@@ -192,13 +201,15 @@ test("an admin's agent publishes with a link from the department shelf", async (
   const saved = await publish(issued.json().token, "Отчёт со ссылкой");
   assert.equal(saved.statusCode, 200, saved.body);
   assert.equal(saved.json().state, "shared");
-  const { rows: [share] } = await db.query(
-    "SELECT created_by,tenant_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
-    [saved.json().artifactId],
-  );
+  const {
+    rows: [share],
+  } = await db.query("SELECT created_by,tenant_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [
+    saved.json().artifactId,
+  ]);
   assert.deepEqual(share, { created_by: admin.id, tenant_id: shelf.id });
   // An author's agent asking for a link through the HTTP API is refused.
-  const authorToken = (await issue(author, { scopes: ["context", "capture", "share"], shelfId: shelf.id })).json().token;
+  const authorToken = (await issue(author, { scopes: ["context", "capture", "share"], shelfId: shelf.id })).json()
+    .token;
   const refused = await app.inject({
     method: "POST",
     url: "/api/v1/publish",
@@ -207,7 +218,7 @@ test("an admin's agent publishes with a link from the department shelf", async (
     payload: JSON.stringify({
       key: randomUUID(),
       title: "Без ссылки",
-      html: "<!doctype html><html><head><meta charset=\"utf-8\"><title>x</title></head><body><h1>x</h1><p>Текст отдела.</p></body></html>",
+      html: '<!doctype html><html><head><meta charset="utf-8"><title>x</title></head><body><h1>x</h1><p>Текст отдела.</p></body></html>',
       expiresInDays: 7,
     }),
   });
@@ -280,7 +291,9 @@ test("leaving the shelf ends the agents connected to it, for good", async () => 
     payload: { who: member.name, role: "author" },
   });
   assert.equal((await publish(onShelf.token, "Снова")).statusCode, 401);
-  const { rows: [row] } = await db.query("SELECT revoked_at FROM agent_connections WHERE id=$1", [onShelf.connection.id]);
+  const {
+    rows: [row],
+  } = await db.query("SELECT revoked_at FROM agent_connections WHERE id=$1", [onShelf.connection.id]);
   assert.ok(row.revoked_at);
   assert.equal((await publish(own.token, "На своей полке")).statusCode, 200);
 });

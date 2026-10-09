@@ -14,10 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
-import {
-  SEARCH_MATCH_END,
-  SEARCH_MATCH_START,
-} from "../../../../../packages/contracts/constants.ts";
+import { SEARCH_MATCH_END, SEARCH_MATCH_START } from "../../../../../packages/contracts/constants.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
 import { accessLabel, date, isLinked } from "../../entities/artifact/format.ts";
 import { CardCover, useCover } from "./CardCover.tsx";
@@ -53,9 +50,7 @@ function useNearViewport<T extends Element>() {
 
 /** Where the search found the work in its text (docs/specs/CONTENT_SEARCH.md): the found words marked. */
 function SearchSnippet({ text }: { text: string }) {
-  const parts = text.split(
-    new RegExp(`(${SEARCH_MATCH_START}[^${SEARCH_MATCH_END}]*${SEARCH_MATCH_END})`, "u"),
-  );
+  const parts = text.split(new RegExp(`(${SEARCH_MATCH_START}[^${SEARCH_MATCH_END}]*${SEARCH_MATCH_END})`, "u"));
   return (
     <p className="shelf-card-snippet">
       …
@@ -120,7 +115,13 @@ export function ShelfCard({
     ...(access.changes(a.author)
       ? ([
           { id: "metadata", label: "Название и папка", icon: <FolderIcon />, onSelect: () => open(a.id, "metadata") },
-          { id: "trash", label: "В корзину", icon: <Trash2 />, tone: "danger", onSelect: () => (onTrash ? onTrash(a) : open(a.id, "trash")) },
+          {
+            id: "trash",
+            label: "В корзину",
+            icon: <Trash2 />,
+            tone: "danger",
+            onSelect: () => (onTrash ? onTrash(a) : open(a.id, "trash")),
+          },
         ] satisfies MenuAction[])
       : []),
   ];
@@ -144,7 +145,9 @@ export function ShelfCard({
           </span>
           <span>
             {a.author ? `${a.author.name} · ` : ""}
-            {cardKind(a, cover)} · v{r.number}{a.acceptedRevisionId === r.id ? " принята" : a.acceptedRevisionId ? " · принята другая версия" : ""} · {date(a.updatedAt)}
+            {cardKind(a, cover)} · v{r.number}
+            {a.acceptedRevisionId === r.id ? " принята" : a.acceptedRevisionId ? " · принята другая версия" : ""} ·{" "}
+            {date(a.updatedAt)}
           </span>
         </p>
         {snippet && <SearchSnippet text={snippet} />}

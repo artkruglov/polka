@@ -33,12 +33,19 @@ if (args.includes("--summary")) {
         for (const a of r.resource?.attributes ?? []) resourceKeys.add(a.key);
         for (const s of r.scopeLogs ?? r.scopeMetrics ?? r.scopeSpans ?? []) {
           for (const rec of s.logRecords ?? []) {
-            const name = rec.attributes?.find((a) => a.key === "event.name")?.value?.stringValue ?? rec.eventName ?? rec.body?.stringValue ?? "?";
+            const name =
+              rec.attributes?.find((a) => a.key === "event.name")?.value?.stringValue ??
+              rec.eventName ??
+              rec.body?.stringValue ??
+              "?";
             add(name, rec.attributes);
           }
           for (const m of s.metrics ?? []) {
             const points = m.sum?.dataPoints ?? m.gauge?.dataPoints ?? m.histogram?.dataPoints ?? [];
-            add(m.name, points.flatMap((p) => p.attributes ?? []));
+            add(
+              m.name,
+              points.flatMap((p) => p.attributes ?? []),
+            );
           }
           for (const span of s.spans ?? []) add(span.name, span.attributes);
         }
@@ -46,7 +53,9 @@ if (args.includes("--summary")) {
     }
     summary[signal] = {
       resourceKeys: [...resourceKeys].sort(),
-      names: Object.fromEntries(Object.entries(names).map(([k, v]) => [k, { count: v.count, keys: [...v.keys].sort() }])),
+      names: Object.fromEntries(
+        Object.entries(names).map(([k, v]) => [k, { count: v.count, keys: [...v.keys].sort() }]),
+      ),
     };
   }
   console.log(JSON.stringify(summary, null, 2));

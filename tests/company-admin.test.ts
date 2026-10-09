@@ -76,11 +76,14 @@ test("a leaving employee goes off every department shelf; works stay, agents sto
   // it to them) and an author on another.
   const sales = await shelf(lead, "Продажи", [[employee, "admin"]]);
   await call("POST", `/api/shelves/${sales.id}/members/${lead.id}/revoke`, lead);
-  const legal = await shelf(boss, "Юристы", [[employee, "author"], [other, "reader"]]);
-  const work = await db.query(
-    "INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,'Договоры') RETURNING id",
-    [randomUUID(), legal.id],
-  );
+  const legal = await shelf(boss, "Юристы", [
+    [employee, "author"],
+    [other, "reader"],
+  ]);
+  const work = await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,'Договоры') RETURNING id", [
+    randomUUID(),
+    legal.id,
+  ]);
   assert.equal(work.rowCount, 1);
   const secret = randomBytes(32).toString("base64url");
   await db.query(
@@ -95,8 +98,13 @@ test("a leaving employee goes off every department shelf; works stay, agents sto
   const members = (await call("GET", `/api/company/shelves/${legal.id}/members`, boss)).json().items;
   assert.equal(members.length, 3);
 
-  const found = (await call("GET", `/api/company/people?who=${encodeURIComponent(employee.name.toUpperCase())}`, boss)).json();
-  assert.deepEqual(found.shelves.map((item: any) => [item.name, item.role]).sort(), [["Продажи", "admin"], ["Юристы", "author"]]);
+  const found = (
+    await call("GET", `/api/company/people?who=${encodeURIComponent(employee.name.toUpperCase())}`, boss)
+  ).json();
+  assert.deepEqual(found.shelves.map((item: any) => [item.name, item.role]).sort(), [
+    ["Продажи", "admin"],
+    ["Юристы", "author"],
+  ]);
   assert.equal(found.teamAgents, 1);
 
   const self = await call("POST", `/api/company/people/${boss.id}/offboard`, boss);
@@ -106,43 +114,53 @@ test("a leaving employee goes off every department shelf; works stay, agents sto
 
   const done = await call("POST", `/api/company/people/${employee.id}/offboard`, boss);
   assert.equal(done.statusCode, 200, done.body);
-  assert.deepEqual(done.json().removed.map((item: any) => item.name).sort(), ["Продажи", "Юристы"]);
+  assert.deepEqual(
+    done
+      .json()
+      .removed.map((item: any) => item.name)
+      .sort(),
+    ["Продажи", "Юристы"],
+  );
   // Off both shelves; their agents there are revoked.
-  assert.equal((await db.query(
-    "SELECT 1 FROM tenant_members WHERE account_id=$1 AND state='active' AND role<>'owner'",
-    [employee.id],
-  )).rowCount, 0);
-  const { rows: [agent] } = await db.query("SELECT revoked_at FROM agent_connections WHERE token_hash=$1", [sha256(secret)]);
+  assert.equal(
+    (
+      await db.query("SELECT 1 FROM tenant_members WHERE account_id=$1 AND state='active' AND role<>'owner'", [
+        employee.id,
+      ])
+    ).rowCount,
+    0,
+  );
+  const {
+    rows: [agent],
+  } = await db.query("SELECT revoked_at FROM agent_connections WHERE token_hash=$1", [sha256(secret)]);
   assert.ok(agent.revoked_at);
   // The shelf that had no other admin now has the company admin.
-  const { rows: [salesAdmin] } = await db.query(
-    "SELECT role,state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2",
-    [sales.id, boss.id],
-  );
+  const {
+    rows: [salesAdmin],
+  } = await db.query("SELECT role,state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2", [sales.id, boss.id]);
   assert.deepEqual(salesAdmin, { role: "admin", state: "active" });
   // Works (here a folder) stay with the shelf; the personal shelf stays.
   assert.equal((await db.query("SELECT 1 FROM folders WHERE tenant_id=$1", [legal.id])).rowCount, 1);
   assert.equal((await call("GET", "/api/artifacts", employee)).statusCode, 200);
   // Once more: nothing left to remove.
   assert.deepEqual((await call("POST", `/api/company/people/${employee.id}/offboard`, boss)).json().removed, []);
-  const events = await db.query(
-    "SELECT action FROM tenant_member_events WHERE tenant_id=$1 ORDER BY id",
-    [sales.id],
-  );
+  const events = await db.query("SELECT action FROM tenant_member_events WHERE tenant_id=$1 ORDER BY id", [sales.id]);
   assert.deepEqual(events.rows.map((row) => row.action).slice(-2), ["member_added", "member_revoked"]);
 });
 
 test("a company admin takes over a shelf left without an admin", async () => {
   const design = await shelf(lead, "Дизайн", [[other, "author"]]);
   // Its admin left through the SSO: the membership was revoked by deletion.
-  await db.query(
-    "UPDATE tenant_members SET state='revoked',revoked_at=now() WHERE tenant_id=$1 AND account_id=$2",
-    [design.id, lead.id],
-  );
+  await db.query("UPDATE tenant_members SET state='revoked',revoked_at=now() WHERE tenant_id=$1 AND account_id=$2", [
+    design.id,
+    lead.id,
+  ]);
   const row = (await call("GET", "/api/company/shelves", boss)).json().items.find((item: any) => item.id === design.id);
   assert.deepEqual(row.admins, []);
   const taken = await call("POST", `/api/company/shelves/${design.id}/admin`, boss);
   assert.equal(taken.statusCode, 200, taken.body);
-  const again = (await call("GET", "/api/company/shelves", boss)).json().items.find((item: any) => item.id === design.id);
+  const again = (await call("GET", "/api/company/shelves", boss))
+    .json()
+    .items.find((item: any) => item.id === design.id);
   assert.equal(again.admins.length, 1);
 });

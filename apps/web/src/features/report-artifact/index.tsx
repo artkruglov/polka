@@ -3,10 +3,7 @@ import { Flag } from "lucide-react";
 import { client } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Button, TextAreaField, SelectField } from "../../shared/ui/controls.tsx";
-import {
-  REPORT_REASONS,
-  type ReportReason,
-} from "../../../../../packages/contracts/constants.ts";
+import { REPORT_REASONS, type ReportReason } from "../../../../../packages/contracts/constants.ts";
 
 const reasonLabel: Record<ReportReason, string> = {
   phishing: "Фишинг или обман",
@@ -54,23 +51,12 @@ export function ReportArtifactPanel({
           setReportError("");
           try {
             const payload = JSON.stringify([reportReason, reportComment.trim()]);
-            if (attempt.current?.payload !== payload)
-              attempt.current = { key: crypto.randomUUID(), payload };
-            await client.report(
-              token,
-              reportReason,
-              reportComment,
-              attempt.current.key,
-              commentId,
-            );
+            if (attempt.current?.payload !== payload) attempt.current = { key: crypto.randomUUID(), payload };
+            await client.report(token, reportReason, reportComment, attempt.current.key, commentId);
             onSent();
             onClose();
           } catch (e) {
-            setReportError(
-              e instanceof Error
-                ? e.message
-                : "Не удалось отправить жалобу. Повторите позже.",
-            );
+            setReportError(e instanceof Error ? e.message : "Не удалось отправить жалобу. Повторите позже.");
           } finally {
             sending.current = false;
             setReportBusy(false);
@@ -87,9 +73,7 @@ export function ReportArtifactPanel({
             label="Причина"
             disabled={reportBusy}
             value={reportReason}
-            onChange={(event) =>
-              setReportReason(event.target.value as ReportReason)
-            }
+            onChange={(event) => setReportReason(event.target.value as ReportReason)}
           >
             {REPORT_REASONS.map((reason) => (
               <option key={reason} value={reason}>

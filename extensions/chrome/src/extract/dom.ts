@@ -22,14 +22,11 @@ export const CLAUDE_FRAME_SELECTORS = [
 export function findArtifactFrames(doc: Document): HTMLIFrameElement[] {
   const seen = new Set<HTMLIFrameElement>();
   for (const selector of CLAUDE_FRAME_SELECTORS)
-    for (const frame of doc.querySelectorAll<HTMLIFrameElement>(selector))
-      seen.add(frame);
+    for (const frame of doc.querySelectorAll<HTMLIFrameElement>(selector)) seen.add(frame);
   // The largest one is the open artifact; thumbnails and the hidden 1×1
   // helper frame are small and left out.
   // (Unlaid-out frames, area 0, stay: a tab in the background may report so.)
-  return [...seen]
-    .filter((frame) => area(frame) === 0 || area(frame) >= 100 * 100)
-    .sort((a, b) => area(b) - area(a));
+  return [...seen].filter((frame) => area(frame) === 0 || area(frame) >= 100 * 100).sort((a, b) => area(b) - area(a));
 }
 
 /**
@@ -55,17 +52,13 @@ export function findTitleMenuButton(doc: Document): HTMLElement | null {
   const share = findShareButton(doc);
   if (!share) return null;
   const titled = (button: HTMLElement) =>
-    !button.hasAttribute("aria-label") &&
-    (button.textContent ?? "").trim().length > 0;
+    !button.hasAttribute("aria-label") && (button.textContent ?? "").trim().length > 0;
   // Up from Share to the header that also holds the title button.
   let header: Element | null = share.parentElement;
   for (let depth = 0; header && depth < 6; depth++, header = header.parentElement) {
     const candidates = [...header.querySelectorAll<HTMLElement>("button")].filter(titled);
     if (candidates.length)
-      return (
-        candidates.find((button) => button.getAttribute("aria-haspopup") === "menu") ??
-        candidates[0]
-      );
+      return candidates.find((button) => button.getAttribute("aria-haspopup") === "menu") ?? candidates[0];
   }
   return null;
 }
@@ -104,10 +97,7 @@ export function findCopyButton(root: ParentNode): HTMLElement | null {
   const buttons = [...root.querySelectorAll<HTMLElement>('button, [role="button"]')];
   return (
     buttons.find((button) =>
-      labelOf(button).some(
-        (label) =>
-          COPY_LABEL.test(label) || /^(artifact-)?copy(-button)?$/.test(label),
-      ),
+      labelOf(button).some((label) => COPY_LABEL.test(label) || /^(artifact-)?copy(-button)?$/.test(label)),
     ) ?? null
   );
 }
@@ -116,9 +106,7 @@ export function findCopyButton(root: ParentNode): HTMLElement | null {
 export function artifactTitle(doc: Document, panel: Element | null): string {
   const scopes = panel ? [panel] : [];
   for (const scope of scopes) {
-    const heading = scope.querySelector(
-      '[data-testid*="title" i], h1, h2, h3, header [class*="title" i]',
-    );
+    const heading = scope.querySelector('[data-testid*="title" i], h1, h2, h3, header [class*="title" i]');
     const text = heading?.textContent?.replace(/\s+/g, " ").trim();
     if (text) return text;
   }
@@ -128,8 +116,7 @@ export function artifactTitle(doc: Document, panel: Element | null): string {
 /** CodeMirror 6 keeps one element per line; other viewers use pre/code. */
 function codeText(element: Element): string {
   const lines = element.querySelectorAll(".cm-line");
-  if (lines.length)
-    return [...lines].map((line) => line.textContent ?? "").join("\n");
+  if (lines.length) return [...lines].map((line) => line.textContent ?? "").join("\n");
   return (element as HTMLElement).innerText || element.textContent || "";
 }
 
@@ -148,17 +135,14 @@ function languageOf(element: Element): string | null {
  * The source as shown in a «Code» view: the biggest code block under root
  * (a panel), or null.
  */
-export function codeView(
-  root: ParentNode,
-): { source: string; language: string | null } | null {
-  const blocks = [
-    ...root.querySelectorAll(".cm-content, pre code, pre"),
-  ].filter((element) => !(element.tagName === "PRE" && element.querySelector("code")));
+export function codeView(root: ParentNode): { source: string; language: string | null } | null {
+  const blocks = [...root.querySelectorAll(".cm-content, pre code, pre")].filter(
+    (element) => !(element.tagName === "PRE" && element.querySelector("code")),
+  );
   let best: { source: string; language: string | null } | null = null;
   for (const block of blocks) {
     const source = codeText(block).replace(/\u00a0/g, " ");
-    if (source.trim() && (!best || source.length > best.source.length))
-      best = { source, language: languageOf(block) };
+    if (source.trim() && (!best || source.length > best.source.length)) best = { source, language: languageOf(block) };
   }
   return best;
 }
@@ -205,16 +189,14 @@ export function looksLikeRuntimeShell(doc: Document): boolean {
  * ChatGPT (experimental): an open canvas/code panel, else the last code block
  * of the last assistant message.
  */
-export function chatgptSource(
-  doc: Document,
-): { source: string; language: string | null; title: string } | null {
+export function chatgptSource(doc: Document): { source: string; language: string | null; title: string } | null {
   const panel = doc.querySelector(
     '[data-testid*="canvas" i], [data-testid*="textdoc" i], section[aria-label*="canvas" i]',
   );
   if (panel) {
     const code = codeView(panel);
     if (code) {
-      const heading = panel.querySelector("h1, h2, h3, [data-testid*=\"title\" i]");
+      const heading = panel.querySelector('h1, h2, h3, [data-testid*="title" i]');
       return { ...code, title: heading?.textContent?.trim() || doc.title };
     }
   }

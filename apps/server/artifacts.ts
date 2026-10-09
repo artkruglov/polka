@@ -35,35 +35,13 @@ import {
   verifyObject,
 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-import {
-  inspectHtmlBounded,
-  looksLikeHtml,
-  scanScriptsBounded,
-  scanTextBounded,
-  type HtmlInspection,
-} from "./html.ts";
+import { inspectHtmlBounded, looksLikeHtml, scanScriptsBounded, scanTextBounded, type HtmlInspection } from "./html.ts";
 import { SignalCollector } from "./phishing-signals.ts";
-import {
-  fraudScore,
-  mergeResults,
-  type FilterResult,
-} from "./content-filter/scanner.ts";
+import { fraudScore, mergeResults, type FilterResult } from "./content-filter/scanner.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
-import {
-  mergeSensitive,
-  sensitiveFields,
-  type SensitiveInput,
-} from "./content-filter/sensitive-input.ts";
-import {
-  blockRevisionInTransaction,
-  blockedHash,
-  isolatedObject,
-  queueReview,
-} from "./content-moderation.ts";
-import {
-  createSingleHtmlRevisionManifest,
-  isStaticSingleFileBundle,
-} from "./revision-manifest.ts";
+import { mergeSensitive, sensitiveFields, type SensitiveInput } from "./content-filter/sensitive-input.ts";
+import { blockRevisionInTransaction, blockedHash, isolatedObject, queueReview } from "./content-moderation.ts";
+import { createSingleHtmlRevisionManifest, isStaticSingleFileBundle } from "./revision-manifest.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -75,12 +53,7 @@ import { assertMayChange, lockShelf, type ShelfRole } from "./shelves.ts";
 import { trackWorkSaved, viaFor } from "./analytics.ts";
 import { linkOfRevision, linkText } from "./saved-link-format.ts";
 import { coverDTO, coverSelectSql } from "./covers.ts";
-import {
-  SEARCH_TEXT_CHARS,
-  SearchText,
-  addScriptText,
-  indexRevisionText,
-} from "./search-text.ts";
+import { SEARCH_TEXT_CHARS, SearchText, addScriptText, indexRevisionText } from "./search-text.ts";
 export type Actor = {
   id: string;
   tenant: string;
@@ -109,30 +82,16 @@ export const audit = (
     ],
   );
 /** Analytics: a work was saved (a new one or a version); `first` for the shelf. */
-async function trackSaved(
-  c: PoolClient,
-  actor: Actor,
-  revisionId: string,
-  number: number,
-) {
+async function trackSaved(c: PoolClient, actor: Actor, revisionId: string, number: number) {
   const {
     rows: [earlier],
-  } = await c.query(
-    "SELECT EXISTS(SELECT 1 FROM revisions WHERE tenant_id=$1 AND id<>$2) AS found",
-    [actor.tenant, revisionId],
-  );
-  trackWorkSaved(
-    c,
-    actor.id,
-    viaFor(actor),
-    !earlier.found,
-    number === 1 ? "new" : "revision",
-  );
+  } = await c.query("SELECT EXISTS(SELECT 1 FROM revisions WHERE tenant_id=$1 AND id<>$2) AS found", [
+    actor.tenant,
+    revisionId,
+  ]);
+  trackWorkSaved(c, actor.id, viaFor(actor), !earlier.found, number === 1 ? "new" : "revision");
 }
-export const tokenFor = (id: string) =>
-  createHmac("sha256", config.LINK_KEY)
-    .update(`share:${id}`)
-    .digest("base64url");
+export const tokenFor = (id: string) => createHmac("sha256", config.LINK_KEY).update(`share:${id}`).digest("base64url");
 export const revisionDTO = (r: any): Revision => ({
   manifest: r.manifest ?? null,
   manifestSha256: r.manifest_sha256 ?? null,
@@ -175,13 +134,9 @@ export function shareDTO(s: any, latest: string, opens?: any): Share | null {
     status,
     moderation: s.moderation ?? "none",
     followMode: s.follow_mode === "follows" ? ("follows" as const) : ("pinned" as const),
-    ...(s.moderation === "blocked"
-      ? { appeal: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null }
-      : {}),
+    ...(s.moderation === "blocked" ? { appeal: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null } : {}),
     expiresAt: new Date(s.expires_at).toISOString(),
-    url: ["active", "behind"].includes(status)
-      ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}`
-      : null,
+    url: ["active", "behind"].includes(status) ? `${config.APP_ORIGIN}/s#${tokenFor(s.id)}` : null,
     ...(s.moderation === "held" || s.moderation === "paused"
       ? { reviewSince: new Date(s.moderated_at ?? s.created_at).toISOString() }
       : {}),
@@ -198,10 +153,7 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
   return artifact;
 }
 /** Owner detail for several artifacts in three queries; missing ids are skipped, order is kept. */
-export async function getArtifacts(
-  actor: Actor,
-  ids: string[],
-): Promise<Artifact[]> {
+export async function getArtifacts(actor: Actor, ids: string[]): Promise<Artifact[]> {
   await assertActiveOwner(db, actor);
   if (!ids.length) return [];
   const { rows: artifacts } = await db.query(
@@ -243,10 +195,9 @@ export async function getArtifacts(
     actor.role && actor.role !== "owner"
       ? new Map(
           (
-            await db.query(
-              "SELECT id,COALESCE(display_name,name) AS name FROM accounts WHERE id=ANY($1::uuid[])",
-              [[...new Set(artifacts.map((a) => a.created_by))]],
-            )
+            await db.query("SELECT id,COALESCE(display_name,name) AS name FROM accounts WHERE id=ANY($1::uuid[])", [
+              [...new Set(artifacts.map((a) => a.created_by))],
+            ])
           ).rows.map((row) => [row.id, { id: row.id, name: row.name }]),
         )
       : null;
@@ -309,50 +260,26 @@ export async function beginUploadInTransaction(
   if (!input.artifactId) input = { ...input, folderId: await scopedFolderForSave(c, actor, input.folderId) };
   const {
     rows: [old],
-  } = await c.query(
-    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-    [actor.tenant, input.key],
-  );
-  if (old && old.account_id !== actor.id)
-    throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
+  } = await c.query("SELECT *,expires_at<=now() AS expired FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [
+    actor.tenant,
+    input.key,
+  ]);
+  if (old && old.account_id !== actor.id) throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
   if (old) {
-    if (old.kind !== "single")
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот ключ уже относится к пакетной загрузке.",
-      );
+    if (old.kind !== "single") throw new Problem(409, "conflict", "Этот ключ уже относится к пакетной загрузке.");
     // The same request, whatever the order of its fields (the stored one
     // has folderId where the agent's scope put it, after the rest).
     if (!sameUploadRequest(beginUploadSchema.parse(old.request), input))
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот повтор относится к другому файлу. Начните новую загрузку.",
-      );
+      throw new Problem(409, "conflict", "Этот повтор относится к другому файлу. Начните новую загрузку.");
     // Expiry by the database's clock, the one that set expires_at.
     if (old.aborted || (!old.receipt && old.expired))
-      throw new Problem(
-        410,
-        "expired",
-        "Время загрузки истекло. Выберите файл снова.",
-      );
-    if (!old.receipt)
-      await validateUploadTarget(
-        c,
-        actor,
-        beginUploadSchema.parse(old.request),
-      );
+      throw new Problem(410, "expired", "Время загрузки истекло. Выберите файл снова.");
+    if (!old.receipt) await validateUploadTarget(c, actor, beginUploadSchema.parse(old.request));
     return { uploadId: old.id, receipt: old.receipt };
   }
   if (
     input.folderId &&
-    !(
-      await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [
-        input.folderId,
-        actor.tenant,
-      ])
-    ).rowCount
+    !(await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [input.folderId, actor.tenant])).rowCount
   )
     throw missing();
   // The target and, on a department shelf, the right to change it.
@@ -365,15 +292,8 @@ export async function beginUploadInTransaction(
      FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()`,
     [actor.tenant, actor.id],
   );
-  if (
-    +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
-    tooManyPending(tenant, pending)
-  )
-    throw new Problem(
-      413,
-      "quota",
-      "Достигнут лимит хранения или одновременных загрузок.",
-    );
+  if (+tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes || tooManyPending(tenant, pending))
+    throw new Problem(413, "quota", "Достигнут лимит хранения или одновременных загрузок.");
   const id = randomUUID();
   await c.query(
     "INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,kind) VALUES($1,$2,$3,$4,$5,'single')",
@@ -386,26 +306,16 @@ async function validateBytes(
   input: ReturnType<typeof beginUploadSchema.parse>,
 ): Promise<HtmlInspection | null> {
   if (bytes.length !== input.size || sha256(bytes) !== input.sha256)
-    throw new Problem(
-      422,
-      "invalid",
-      "Файл передан не полностью или изменился. Загрузите его заново.",
-    );
+    throw new Problem(422, "invalid", "Файл передан не полностью или изменился. Загрузите его заново.");
   const valid =
     input.mime === "image/png"
       ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))
       : input.mime === "image/jpeg"
         ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
         : input.mime === "image/webp"
-          ? bytes.toString("ascii", 0, 4) === "RIFF" &&
-            bytes.toString("ascii", 8, 12) === "WEBP"
+          ? bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP"
           : true;
-  if (!valid)
-    throw new Problem(
-      422,
-      "invalid",
-      "Содержимое файла не соответствует выбранному формату.",
-    );
+  if (!valid) throw new Problem(422, "invalid", "Содержимое файла не соответствует выбранному формату.");
   // A link work's file: exactly the small document saveLink writes.
   if (input.mime === LINK_MIME) {
     let document: unknown;
@@ -472,8 +382,7 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
     );
   }
   if (r.storage_kind === "bundle") {
-    if (config.HTML_LIVE_ENABLED && r.derivative_id)
-      return r.derivative_id as string;
+    if (config.HTML_LIVE_ENABLED && r.derivative_id) return r.derivative_id as string;
     // A lone static page is linked like a single upload: static sandbox only.
     if (isStaticSingleFileBundle(r)) return null;
     const single = r.manifest?.files?.length === 1;
@@ -512,10 +421,10 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
 async function lockUpload(c: PoolClient, actor: Actor, id: string) {
   const {
     rows: [u],
-  } = await c.query(
-    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [id, actor.tenant],
-  );
+  } = await c.query("SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [
+    id,
+    actor.tenant,
+  ]);
   return checkedUpload(u, actor);
 }
 /**
@@ -526,10 +435,10 @@ async function lockUpload(c: PoolClient, actor: Actor, id: string) {
 async function readUpload(actor: Actor, id: string) {
   const {
     rows: [u],
-  } = await db.query(
-    "SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2",
-    [id, actor.tenant],
-  );
+  } = await db.query("SELECT *,expires_at<=now() AS expired FROM uploads WHERE id=$1 AND tenant_id=$2", [
+    id,
+    actor.tenant,
+  ]);
   return checkedUpload(u, actor);
 }
 function checkedUpload(u: any, actor: Actor) {
@@ -537,11 +446,7 @@ function checkedUpload(u: any, actor: Actor) {
   if (!u || u.account_id !== actor.id) throw missing();
   // Expiry by the database's clock, the one that set expires_at.
   if (u.aborted || (!u.receipt && u.expired))
-    throw new Problem(
-      410,
-      "expired",
-      "Загрузка отменена или истекла. Выберите файл снова.",
-    );
+    throw new Problem(410, "expired", "Загрузка отменена или истекла. Выберите файл снова.");
   return u;
 }
 /**
@@ -554,12 +459,7 @@ function checkedUpload(u: any, actor: Actor) {
  * upload closed and deletes it here. Nothing is left under a prefix nobody
  * looks at again.
  */
-export async function discardStagedIfClosed(
-  actor: Actor,
-  id: string,
-  key: string,
-  version: string | null,
-) {
+export async function discardStagedIfClosed(actor: Actor, id: string, key: string, version: string | null) {
   if (!version) return version;
   const {
     rows: [state],
@@ -574,14 +474,9 @@ export async function discardStagedIfClosed(
      FOR SHARE OF upload`,
     [id, actor.tenant],
   );
-  if (state && !state.aborted && !state.reconciled && !state.expired && !state.erasing)
-    return version;
+  if (state && !state.aborted && !state.reconciled && !state.expired && !state.erasing) return version;
   await deleteVersion(key, version);
-  throw new Problem(
-    410,
-    "expired",
-    "Загрузка отменена или истекла. Выберите файл снова.",
-  );
+  throw new Problem(410, "expired", "Загрузка отменена или истекла. Выберите файл снова.");
 }
 
 export async function uploadBytes(actor: Actor, id: string, bytes: Buffer) {
@@ -626,10 +521,7 @@ export async function uploadBytesInTransaction(
   if (u.receipt) return { stored: true };
   await validateUploadTarget(c, actor, input);
   const version = staged ?? (await putImmutable(`${actor.tenant}/${id}`, bytes));
-  await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [
-    id,
-    version,
-  ]);
+  await c.query("UPDATE uploads SET object_version=$2 WHERE id=$1", [id, version]);
   return { stored: true };
 }
 /**
@@ -661,11 +553,7 @@ async function screenSavedRevision(
   // CSAM the save goes through and is blocked at once (the author is
   // disabled, the attempt is evidence); anything else is refused.
   if (known && known !== "csam")
-    throw new Problem(
-      403,
-      "forbidden",
-      "Этот файл заблокирован модератором Полки и не может быть сохранён.",
-    );
+    throw new Problem(403, "forbidden", "Этот файл заблокирован модератором Полки и не может быть сохранён.");
   const decision = known
     ? null
     : decideContent({
@@ -679,9 +567,7 @@ async function screenSavedRevision(
   afterCommit(c, () => queueReview(saved.revisionId));
   const category = known ?? (decision?.action === "block" ? decision.category : null);
   if (!category) return;
-  const freeze = known
-    ? known === "csam" || config.CONTENT_FILTER_MODE === "strict"
-    : !!decision?.freeze;
+  const freeze = known ? known === "csam" || config.CONTENT_FILTER_MODE === "strict" : !!decision?.freeze;
   const outcome = await blockRevisionInTransaction(c, {
     tenantId: actor.tenant,
     accountId: actor.id,
@@ -696,9 +582,7 @@ async function screenSavedRevision(
     details: decision
       ? {
           findings: decision.findings.map((finding) =>
-            finding.category === "csam"
-              ? { category: "csam", score: finding.score }
-              : finding,
+            finding.category === "csam" ? { category: "csam", score: finding.score } : finding,
           ),
         }
       : { knownHash: true },
@@ -723,9 +607,7 @@ async function screenSavedRevision(
 
 export async function finalizeUpload(actor: Actor, id: string) {
   const prepared = await prepareUploadFinalize(actor, id);
-  const receipt = await transaction((c) =>
-    finalizeUploadInTransaction(c, actor, id, prepared),
-  );
+  const receipt = await transaction((c) => finalizeUploadInTransaction(c, actor, id, prepared));
   savedEvent(actor, receipt);
   return receipt;
 }
@@ -769,17 +651,10 @@ async function inspectSingleUpload(
         : { v: 1 as const, hits: {} }),
     sensitiveInput: false,
   };
-  let revisionManifest: ReturnType<
-    typeof createSingleHtmlRevisionManifest
-  > | null = null;
+  let revisionManifest: ReturnType<typeof createSingleHtmlRevisionManifest> | null = null;
   if (input.mime === "text/html") {
     if (!htmlProfile) throw new Error("HTML profile invariant failed");
-    revisionManifest = createSingleHtmlRevisionManifest(
-      bytes,
-      htmlProfile,
-      new Date(),
-      input.sourceUrl ?? null,
-    );
+    revisionManifest = createSingleHtmlRevisionManifest(bytes, htmlProfile, new Date(), input.sourceUrl ?? null);
   }
   return { objectVersion, bytes, inspection, htmlProfile, contentFilter, revisionManifest };
 }
@@ -800,8 +675,7 @@ export async function finalizeUploadInTransaction(
   const u = await lockUpload(c, actor, id);
   if (u.kind !== "single") throw missing();
   if (u.receipt) return u.receipt;
-  if (!u.object_version)
-    throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
+  if (!u.object_version) throw new Problem(409, "conflict", "Сначала дождитесь передачи файла.");
   const input = beginUploadSchema.parse(u.request);
   await validateUploadTarget(c, actor, input);
   // Inspected before the lock, unless the bytes were sent again since.
@@ -813,10 +687,7 @@ export async function finalizeUploadInTransaction(
     throw new Problem(413, "quota", "Недостаточно места для этой версии.");
   if (
     !(
-      await c.query(
-        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
-        [actor.id],
-      )
+      await c.query("SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL", [actor.id])
     ).rowCount
   )
     throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
@@ -825,10 +696,10 @@ export async function finalizeUploadInTransaction(
   if (artifactId) {
     const {
       rows: [a],
-    } = await c.query(
-      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
-      [artifactId, actor.tenant],
-    );
+    } = await c.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE", [
+      artifactId,
+      actor.tenant,
+    ]);
     if (!a) throw missing();
     if (a.latest_revision_id !== input.baseRevisionId)
       throw new Problem(
@@ -838,16 +709,17 @@ export async function finalizeUploadInTransaction(
       );
     const {
       rows: [last],
-    } = await c.query("SELECT number FROM revisions WHERE id=$1", [
-      a.latest_revision_id,
-    ]);
+    } = await c.query("SELECT number FROM revisions WHERE id=$1", [a.latest_revision_id]);
     number = last.number + 1;
   } else {
     artifactId = randomUUID();
-    await c.query(
-      "INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)",
-      [artifactId, actor.tenant, actor.id, input.folderId ?? null, input.title],
-    );
+    await c.query("INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)", [
+      artifactId,
+      actor.tenant,
+      actor.id,
+      input.folderId ?? null,
+      input.title,
+    ]);
   }
   const revisionId = randomUUID();
   await c.query(
@@ -878,10 +750,10 @@ export async function finalizeUploadInTransaction(
     sha256: input.sha256,
     filter: contentFilter,
   });
-  await c.query(
-    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-    [artifactId, revisionId],
-  );
+  await c.query("UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1", [
+    artifactId,
+    revisionId,
+  ]);
   await indexRevisionText(
     c,
     artifactId,
@@ -894,10 +766,7 @@ export async function finalizeUploadInTransaction(
           ? linkText(input.title, bytes)
           : null,
   );
-  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
-    actor.tenant,
-    input.size,
-  ]);
+  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [actor.tenant, input.size]);
   const receipt = {
     uploadId: id,
     artifactId,
@@ -905,9 +774,7 @@ export async function finalizeUploadInTransaction(
     number,
     sha256: input.sha256,
     htmlProfile,
-    ...(revisionManifest
-      ? { manifestSha256: revisionManifest.manifestSha256 }
-      : {}),
+    ...(revisionManifest ? { manifestSha256: revisionManifest.manifestSha256 } : {}),
   };
   await c.query("UPDATE uploads SET receipt=$2 WHERE id=$1", [id, receipt]);
   await audit(c, actor, "revision.saved", revisionId, { artifactId, revisionId, number });
@@ -925,19 +792,9 @@ type NormalizedBundleRequest = {
   size: number;
 };
 
-export function normalizeBundleRequest(
-  body: unknown,
-  stored = false,
-): NormalizedBundleRequest {
-  const source =
-    body && typeof body === "object"
-      ? (body as Record<string, unknown>)
-      : ({} as Record<string, unknown>);
-  const parsedBody = stored
-    ? Object.fromEntries(
-        Object.entries(source).filter(([key]) => key !== "size"),
-      )
-    : body;
+export function normalizeBundleRequest(body: unknown, stored = false): NormalizedBundleRequest {
+  const source = body && typeof body === "object" ? (body as Record<string, unknown>) : ({} as Record<string, unknown>);
+  const parsedBody = stored ? Object.fromEntries(Object.entries(source).filter(([key]) => key !== "size")) : body;
   const input = beginBundleUploadSchema.parse(parsedBody);
   const manifest = canonicalizeManifest(input.manifest);
   const normalized = {
@@ -949,8 +806,7 @@ export function normalizeBundleRequest(
     ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
     size: manifest.files.reduce((total, file) => total + file.size, 0),
   };
-  if (stored && source.size !== normalized.size)
-    throw new Error("Stored bundle size mismatch");
+  if (stored && source.size !== normalized.size) throw new Error("Stored bundle size mismatch");
   return normalized;
 }
 
@@ -958,13 +814,8 @@ export function normalizeBundleRequest(
  * Unfinished uploads at once: 8 on one's own shelf; on a department shelf 8
  * per member and 32 for the shelf, so a few members cannot block the rest.
  */
-const tooManyPending = (
-  tenant: { kind?: string },
-  pending: { count: string | number; mine: string | number },
-) =>
-  tenant.kind === "team"
-    ? +pending.mine >= 8 || +pending.count >= 32
-    : +pending.count >= 8;
+const tooManyPending = (tenant: { kind?: string }, pending: { count: string | number; mine: string | number }) =>
+  tenant.kind === "team" ? +pending.mine >= 8 || +pending.count >= 32 : +pending.count >= 8;
 
 async function validateUploadTarget(
   c: PoolClient,
@@ -980,12 +831,7 @@ async function validateUploadTarget(
   else await scopedFolderForSave(c, actor, input.folderId);
   if (
     input.folderId &&
-    !(
-      await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [
-        input.folderId,
-        actor.tenant,
-      ])
-    ).rowCount
+    !(await c.query("SELECT 1 FROM folders WHERE id=$1 AND tenant_id=$2", [input.folderId, actor.tenant])).rowCount
   )
     throw missing();
   if (input.artifactId) {
@@ -998,18 +844,14 @@ async function validateUploadTarget(
     if (!artifact) throw missing();
     const {
       rows: [member],
-    } = await c.query(
-      "SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'",
-      [actor.tenant, actor.id],
-    );
+    } = await c.query("SELECT role FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 AND state='active'", [
+      actor.tenant,
+      actor.id,
+    ]);
     if (!member) throw missing();
     assertMayChange(member.role, artifact.created_by, actor.id);
     if (artifact.latest_revision_id !== input.baseRevisionId)
-      throw new Problem(
-        409,
-        "conflict",
-        "Работа уже изменилась. Откройте текущую версию.",
-      );
+      throw new Problem(409, "conflict", "Работа уже изменилась. Откройте текущую версию.");
   }
 }
 
@@ -1017,47 +859,19 @@ export async function beginBundleUpload(actor: Actor, body: unknown) {
   const input = normalizeBundleRequest(body);
   return transaction((c) => beginBundleUploadInTransaction(c, actor, input));
 }
-export async function beginBundleUploadInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  input: NormalizedBundleRequest,
-) {
+export async function beginBundleUploadInTransaction(c: PoolClient, actor: Actor, input: NormalizedBundleRequest) {
   const { tenant } = await lockShelf(c, actor, "author");
   if (!input.artifactId) input = { ...input, folderId: await scopedFolderForSave(c, actor, input.folderId) };
   const {
     rows: [old],
-  } = await c.query(
-    "SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-    [actor.tenant, input.key],
-  );
-  if (old && old.account_id !== actor.id)
-    throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
+  } = await c.query("SELECT * FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [actor.tenant, input.key]);
+  if (old && old.account_id !== actor.id) throw new Problem(409, "conflict", "Этот ключ загрузки уже занят.");
   if (old) {
-    if (
-      old.kind !== "bundle" ||
-      JSON.stringify(normalizeBundleRequest(old.request, true)) !==
-        JSON.stringify(input)
-    )
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот ключ уже относится к другой загрузке.",
-      );
-    if (
-      old.aborted ||
-      (!old.receipt && new Date(old.expires_at).getTime() <= Date.now())
-    )
-      throw new Problem(
-        410,
-        "expired",
-        "Время загрузки истекло. Начните пакетную загрузку снова.",
-      );
-    if (!old.receipt)
-      await validateUploadTarget(
-        c,
-        actor,
-        normalizeBundleRequest(old.request, true),
-      );
+    if (old.kind !== "bundle" || JSON.stringify(normalizeBundleRequest(old.request, true)) !== JSON.stringify(input))
+      throw new Problem(409, "conflict", "Этот ключ уже относится к другой загрузке.");
+    if (old.aborted || (!old.receipt && new Date(old.expires_at).getTime() <= Date.now()))
+      throw new Problem(410, "expired", "Время загрузки истекло. Начните пакетную загрузку снова.");
+    if (!old.receipt) await validateUploadTarget(c, actor, normalizeBundleRequest(old.request, true));
     return {
       uploadId: old.id,
       receipt: old.receipt,
@@ -1079,15 +893,8 @@ export async function beginBundleUploadInTransaction(
      FROM uploads WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND expires_at>now()`,
     [actor.tenant, actor.id],
   );
-  if (
-    +tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes ||
-    tooManyPending(tenant, pending)
-  )
-    throw new Problem(
-      413,
-      "quota",
-      "Достигнут лимит хранения или одновременных загрузок.",
-    );
+  if (+tenant.used_bytes + +pending.size + input.size > +tenant.quota_bytes || tooManyPending(tenant, pending))
+    throw new Problem(413, "quota", "Достигнут лимит хранения или одновременных загрузок.");
   const uploadId = randomUUID();
   await c.query(
     "INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,kind) VALUES($1,$2,$3,$4,$5,'bundle')",
@@ -1096,58 +903,30 @@ export async function beginBundleUploadInTransaction(
   return { uploadId, receipt: null, manifest: input.manifest };
 }
 
-const bundleFileKey = (
-  tenant: string,
-  uploadId: string,
-  manifest: BundleManifest,
-  index: number,
-) =>
-  manifest.files[index].path === manifest.entrypoint
-    ? `${tenant}/${uploadId}`
-    : `${tenant}/${uploadId}/files/${index}`;
+const bundleFileKey = (tenant: string, uploadId: string, manifest: BundleManifest, index: number) =>
+  manifest.files[index].path === manifest.entrypoint ? `${tenant}/${uploadId}` : `${tenant}/${uploadId}/files/${index}`;
 
-export function validateBundleFileBytes(
-  file: BundleManifest["files"][number],
-  bytes: Buffer,
-) {
+export function validateBundleFileBytes(file: BundleManifest["files"][number], bytes: Buffer) {
   if (bytes.length !== file.size || sha256(bytes) !== file.sha256)
-    throw new Problem(
-      422,
-      "invalid",
-      "Файл пакета передан не полностью или изменился.",
-    );
+    throw new Problem(422, "invalid", "Файл пакета передан не полностью или изменился.");
   const binaryValid =
     file.mime === "image/png"
       ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))
       : file.mime === "image/jpeg"
         ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
         : file.mime === "image/webp"
-          ? bytes.toString("ascii", 0, 4) === "RIFF" &&
-            bytes.toString("ascii", 8, 12) === "WEBP"
+          ? bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP"
           : file.mime === "font/woff2"
             ? bytes.toString("ascii", 0, 4) === "wOF2"
             : true;
-  if (!binaryValid)
-    throw new Problem(
-      422,
-      "invalid",
-      "Содержимое файла пакета не соответствует заявленному формату.",
-    );
-  if (
-    file.mime.startsWith("text/") ||
-    file.mime === "application/json" ||
-    file.mime === "image/svg+xml"
-  ) {
+  if (!binaryValid) throw new Problem(422, "invalid", "Содержимое файла пакета не соответствует заявленному формату.");
+  if (file.mime.startsWith("text/") || file.mime === "application/json" || file.mime === "image/svg+xml") {
     let source: string;
     try {
       source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       if (bytes.includes(0)) throw new Error();
     } catch {
-      throw new Problem(
-        422,
-        "invalid",
-        "Текстовый файл пакета должен быть в UTF-8.",
-      );
+      throw new Problem(422, "invalid", "Текстовый файл пакета должен быть в UTF-8.");
     }
     if (file.mime === "text/html" && !looksLikeHtml(source))
       throw new Problem(422, "invalid", "HTML-файл пакета не похож на HTML.");
@@ -1162,27 +941,15 @@ export function validateBundleFileBytes(
   }
 }
 
-export async function uploadBundleFile(
-  actor: Actor,
-  id: string,
-  index: number,
-  bytes: Buffer,
-) {
+export async function uploadBundleFile(actor: Actor, id: string, index: number, bytes: Buffer) {
   const staged = await stageBundleFile(actor, id, index, bytes);
-  return transaction((c) =>
-    uploadBundleFileInTransaction(c, actor, id, index, bytes, staged),
-  );
+  return transaction((c) => uploadBundleFileInTransaction(c, actor, id, index, bytes, staged));
 }
 /**
  * A bundle file's S3 PUT before its transaction, like stageUploadBytes.
  * Null when there is nothing to store (saved, or this file already sent).
  */
-export async function stageBundleFile(
-  actor: Actor,
-  id: string,
-  index: number,
-  bytes: Buffer,
-) {
+export async function stageBundleFile(actor: Actor, id: string, index: number, bytes: Buffer) {
   const upload = await readUpload(actor, id);
   if (upload.kind !== "bundle") throw missing();
   const input = normalizeBundleRequest(upload.request, true);
@@ -1190,10 +957,7 @@ export async function stageBundleFile(
   if (!expected) throw missing();
   validateBundleFileBytes(expected, bytes);
   if (upload.receipt) return null;
-  const sent = await db.query(
-    "SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2",
-    [id, index],
-  );
+  const sent = await db.query("SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2", [id, index]);
   if (sent.rowCount) return null;
   const key = bundleFileKey(actor.tenant, id, input.manifest, index);
   return discardStagedIfClosed(actor, id, key, await putImmutable(key, bytes));
@@ -1270,10 +1034,7 @@ export async function stageBundleFileCopy(
   if (!input.manifest.files[index]) throw missing();
   if (!from.objectKey.startsWith(`${actor.tenant}/`)) throw missing();
   if (upload.receipt) return null;
-  const sent = await db.query(
-    "SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2",
-    [id, index],
-  );
+  const sent = await db.query("SELECT 1 FROM upload_files WHERE upload_id=$1 AND file_index=$2", [id, index]);
   if (sent.rowCount) return null;
   if (await isolatedObject(from.objectKey))
     throw new Problem(
@@ -1282,12 +1043,7 @@ export async function stageBundleFileCopy(
       "Файл этой версии заблокирован модератором Полки; на её основе новую версию не сохранить.",
     );
   const key = bundleFileKey(actor.tenant, id, input.manifest, index);
-  return discardStagedIfClosed(
-    actor,
-    id,
-    key,
-    await copyVersion(from.objectKey, from.objectVersion, key),
-  );
+  return discardStagedIfClosed(actor, id, key, await copyVersion(from.objectKey, from.objectVersion, key));
 }
 /**
  * Records a bundle file under the shelf lock; `staged` as in
@@ -1315,63 +1071,53 @@ export async function uploadBundleFileInTransaction(
   if (upload.receipt) return { stored: true, index };
   await validateUploadTarget(c, actor, input);
   const existing = (
-    await c.query(
-      "SELECT object_version FROM upload_files WHERE upload_id=$1 AND file_index=$2",
-      [id, index],
-    )
+    await c.query("SELECT object_version FROM upload_files WHERE upload_id=$1 AND file_index=$2", [id, index])
   ).rows[0];
   if (existing) return { stored: true, index };
   const objectKey = bundleFileKey(actor.tenant, id, input.manifest, index);
   const objectVersion = staged ?? (await putImmutable(objectKey, bytes!));
-  await c.query(
-    "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
-    [id, index, objectKey, objectVersion],
-  );
+  await c.query("INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)", [
+    id,
+    index,
+    objectKey,
+    objectVersion,
+  ]);
   return { stored: true, index };
 }
 
-async function lockBundleArtifact(
-  c: PoolClient,
-  actor: Actor,
-  input: NormalizedBundleRequest,
-) {
+async function lockBundleArtifact(c: PoolClient, actor: Actor, input: NormalizedBundleRequest) {
   let artifactId = input.artifactId;
   let number = 1;
   if (artifactId) {
     const {
       rows: [artifact],
-    } = await c.query(
-      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE",
-      [artifactId, actor.tenant],
-    );
+    } = await c.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR UPDATE", [
+      artifactId,
+      actor.tenant,
+    ]);
     if (!artifact) throw missing();
     if (artifact.latest_revision_id !== input.baseRevisionId)
-      throw new Problem(
-        409,
-        "conflict",
-        "Появилась другая версия. Текущая версия не заменена; откройте её заново.",
-      );
+      throw new Problem(409, "conflict", "Появилась другая версия. Текущая версия не заменена; откройте её заново.");
     const {
       rows: [last],
-    } = await c.query("SELECT number FROM revisions WHERE id=$1", [
-      artifact.latest_revision_id,
-    ]);
+    } = await c.query("SELECT number FROM revisions WHERE id=$1", [artifact.latest_revision_id]);
     number = last.number + 1;
   } else {
     artifactId = randomUUID();
-    await c.query(
-      "INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)",
-      [artifactId, actor.tenant, actor.id, input.folderId ?? null, input.title],
-    );
+    await c.query("INSERT INTO artifacts(id,tenant_id,created_by,folder_id,title) VALUES($1,$2,$3,$4,$5)", [
+      artifactId,
+      actor.tenant,
+      actor.id,
+      input.folderId ?? null,
+      input.title,
+    ]);
   }
   return { artifactId, number };
 }
 
 export async function finalizeBundleUpload(actor: Actor, id: string) {
   const prepared = await prepareBundleFinalize(actor, id);
-  const receipt = await transaction((c) =>
-    finalizeBundleUploadInTransaction(c, actor, id, prepared),
-  );
+  const receipt = await transaction((c) => finalizeBundleUploadInTransaction(c, actor, id, prepared));
   savedEvent(actor, receipt);
   return receipt;
 }
@@ -1425,16 +1171,14 @@ export async function finalizeBundleUploadInTransaction(
         prepared.staged[index].object_key === row.object_key &&
         prepared.staged[index].object_version === row.object_version,
     );
-  const { verified, entry, htmlProfile, contentFilter, signals, searchText } =
-    same ? prepared! : await inspectBundle(actor, id, input, staged);
+  const { verified, entry, htmlProfile, contentFilter, signals, searchText } = same
+    ? prepared!
+    : await inspectBundle(actor, id, input, staged);
   if (+tenant.used_bytes + input.size > +tenant.quota_bytes)
     throw new Problem(413, "quota", "Недостаточно места для этого пакета.");
   if (
     !(
-      await c.query(
-        "SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL",
-        [actor.id],
-      )
+      await c.query("SELECT 1 FROM accounts WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL", [actor.id])
     ).rowCount
   )
     throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
@@ -1486,15 +1230,12 @@ export async function finalizeBundleUploadInTransaction(
         stored.object_version,
       ],
     );
-  await c.query(
-    "UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1",
-    [artifactId, revisionId],
-  );
-  await indexRevisionText(c, artifactId, revisionId, searchText);
-  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [
-    actor.tenant,
-    input.size,
+  await c.query("UPDATE artifacts SET latest_revision_id=$2,updated_at=clock_timestamp() WHERE id=$1", [
+    artifactId,
+    revisionId,
   ]);
+  await indexRevisionText(c, artifactId, revisionId, searchText);
+  await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [actor.tenant, input.size]);
   const receipt = {
     uploadId: id,
     artifactId,
@@ -1512,12 +1253,7 @@ export async function finalizeBundleUploadInTransaction(
   return receipt;
 }
 /** Reads and inspects every staged file of a bundle (see prepareBundleFinalize). */
-async function inspectBundle(
-  actor: Actor,
-  id: string,
-  input: NormalizedBundleRequest,
-  staged: StagedFile[],
-) {
+async function inspectBundle(actor: Actor, id: string, input: NormalizedBundleRequest, staged: StagedFile[]) {
   const verified: Array<{
     file: BundleManifest["files"][number];
     object_key: string;
@@ -1537,11 +1273,7 @@ async function inspectBundle(
   // The entry page's visible text and the scripts' phrases, for search.
   const searchText = new SearchText();
   const inspectPage = async (bytes: Buffer, entry = false) => {
-    const inspection = await inspectHtmlBounded(
-      bytes.toString("utf8"),
-      undefined,
-      entry ? { text: true } : {},
-    );
+    const inspection = await inspectHtmlBounded(bytes.toString("utf8"), undefined, entry ? { text: true } : {});
     if (inspection.text) searchText.add(inspection.text);
     for (const signal of inspection.signals) signals.add(signal);
     pageFilters.push(inspection.filter);
@@ -1550,11 +1282,7 @@ async function inspectBundle(
   };
   for (const [index, file] of input.manifest.files.entries()) {
     const stored = staged.find((row) => row.file_index === index);
-    if (
-      !stored ||
-      stored.object_key !==
-        bundleFileKey(actor.tenant, id, input.manifest, index)
-    )
+    if (!stored || stored.object_key !== bundleFileKey(actor.tenant, id, input.manifest, index))
       throw new Error("Bundle staging invariant failed");
     if (isVideoMime(file.mime)) {
       // Too large to read back: the store's record of its size and SHA-256,
@@ -1583,8 +1311,7 @@ async function inspectBundle(
         file.mime === "text/css"
       )
         pageFilters.push(await scanTextBounded(bytes.toString("utf8")));
-      else if (file.mime === "text/javascript")
-        scriptTexts.push(bytes.toString("utf8"));
+      else if (file.mime === "text/javascript") scriptTexts.push(bytes.toString("utf8"));
     } else if (file.path === input.manifest.entrypoint) entryBytes = bytes;
     // Phishing signals of every page and script (a lone entrypoint is read
     // below, in the same walk as its profile).
@@ -1604,9 +1331,7 @@ async function inspectBundle(
     pageFilters.unshift(scripts.filter);
     pageSensitive.push(scripts.sensitive);
   }
-  const entryIndex = input.manifest.files.findIndex(
-    (file) => file.path === input.manifest.entrypoint,
-  );
+  const entryIndex = input.manifest.files.findIndex((file) => file.path === input.manifest.entrypoint);
   const entry = verified[entryIndex];
   if (!entry) throw new Error("Bundle entrypoint invariant failed");
   // A lone HTML entrypoint is classified exactly like a single upload; every
@@ -1620,8 +1345,7 @@ async function inspectBundle(
     : input.manifest.files.length === 1 && entryBytes
       ? await inspectPage(entryBytes, true)
       : "unsupported";
-  if (!project && input.manifest.files.length !== 1 && entryBytes)
-    await inspectPage(entryBytes, true);
+  if (!project && input.manifest.files.length !== 1 && entryBytes) await inspectPage(entryBytes, true);
   for (const source of scriptSources) addScriptText(source.toString("utf8"), searchText);
   // Every page's findings and the scripts' (read by `signals`), with fraud
   // counted once from all the phishing signals together.
@@ -1629,16 +1353,10 @@ async function inspectBundle(
     const { fraud: _fraud, ...hits } = filter.hits;
     return { ...filter, hits };
   };
-  const contentFilter = mergeResults(
-    withoutFraud(signals.content.result()),
-    ...pageFilters.map(withoutFraud),
-  );
+  const contentFilter = mergeResults(withoutFraud(signals.content.result()), ...pageFilters.map(withoutFraud));
   const fraud = fraudScore(signals.list());
   if (fraud) contentFilter.hits.fraud = fraud;
-  Object.assign(
-    contentFilter,
-    sensitiveFields(mergeSensitive(signals.sensitive.result(), ...pageSensitive)),
-  );
+  Object.assign(contentFilter, sensitiveFields(mergeSensitive(signals.sensitive.result(), ...pageSensitive)));
   return {
     staged,
     verified,
@@ -1650,11 +1368,7 @@ async function inspectBundle(
   };
 }
 
-export async function uploadStatus(
-  actor: Actor,
-  id: string,
-  kind: "single" | "bundle",
-) {
+export async function uploadStatus(actor: Actor, id: string, kind: "single" | "bundle") {
   await assertActiveOwner(db, actor);
   const {
     rows: [upload],
@@ -1667,10 +1381,7 @@ export async function uploadStatus(
     Object.assign(upload, {
       manifest: normalizeBundleRequest(upload.request, true).manifest,
       uploaded: (
-        await db.query(
-          "SELECT file_index FROM upload_files WHERE upload_id=$1 ORDER BY file_index",
-          [id],
-        )
+        await db.query("SELECT file_index FROM upload_files WHERE upload_id=$1 ORDER BY file_index", [id])
       ).rows.map((row) => row.file_index),
     });
   delete upload.kind;
@@ -1678,11 +1389,7 @@ export async function uploadStatus(
   return upload;
 }
 
-export async function abortUpload(
-  actor: Actor,
-  id: string,
-  kind: "single" | "bundle",
-) {
+export async function abortUpload(actor: Actor, id: string, kind: "single" | "bundle") {
   return transaction(async (c) => {
     await lockShelf(c, actor, "author");
     const result = await c.query(
@@ -1690,10 +1397,12 @@ export async function abortUpload(
       [id, actor.tenant, kind, actor.id],
     );
     if (!result.rowCount) {
-      const exists = await c.query(
-        "SELECT 1 FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND account_id=$4",
-        [id, actor.tenant, kind, actor.id],
-      );
+      const exists = await c.query("SELECT 1 FROM uploads WHERE id=$1 AND tenant_id=$2 AND kind=$3 AND account_id=$4", [
+        id,
+        actor.tenant,
+        kind,
+        actor.id,
+      ]);
       if (!exists.rowCount) throw missing();
     }
     return { ok: true };
@@ -1704,22 +1413,14 @@ export async function abortUpload(
  * A revision's files as stored, checked against its manifest, without
  * reading their bytes: where each one is, for a copy or a read of one file.
  */
-export async function authorizedRevisionFiles(
-  c: Pick<PoolClient, "query">,
-  revision: any,
-) {
+export async function authorizedRevisionFiles(c: Pick<PoolClient, "query">, revision: any) {
   if (!revision?.manifest || !revision.manifest_sha256) throw missing();
   const manifest = canonicalizeManifest(revision.manifest);
   if (sha256(JSON.stringify(manifest)) !== revision.manifest_sha256)
     throw new Error("Revision manifest checksum mismatch");
   const storedFiles =
     revision.storage_kind === "bundle"
-      ? (
-          await c.query(
-            "SELECT * FROM revision_files WHERE revision_id=$1 ORDER BY file_index",
-            [revision.id],
-          )
-        ).rows
+      ? (await c.query("SELECT * FROM revision_files WHERE revision_id=$1 ORDER BY file_index", [revision.id])).rows
       : [
           {
             file_index: 0,
@@ -1731,8 +1432,7 @@ export async function authorizedRevisionFiles(
             object_version: revision.object_version,
           },
         ];
-  if (storedFiles.length !== manifest.files.length)
-    throw new Error("Revision file count mismatch");
+  if (storedFiles.length !== manifest.files.length) throw new Error("Revision file count mismatch");
   const stored = manifest.files.map((expected, index) => {
     const row = storedFiles[index];
     if (
@@ -1749,10 +1449,7 @@ export async function authorizedRevisionFiles(
   return { manifest, stored };
 }
 
-export async function readAuthorizedRevisionSource(
-  c: Pick<PoolClient, "query">,
-  revision: any,
-) {
+export async function readAuthorizedRevisionSource(c: Pick<PoolClient, "query">, revision: any) {
   const { manifest, stored } = await authorizedRevisionFiles(c, revision);
   // A video is not read into one response (docs/specs/PROJECT_VIDEO.md).
   if (stored.some((file) => isVideoMime(file.mime)))
@@ -1776,8 +1473,7 @@ export async function readAuthorizedRevisionSource(
     totalSize += bytes.length;
     files.push({ ...expected, bytes });
   }
-  const maxTotal =
-    manifest.runtime === PROJECT_RUNTIME ? PROJECT_MAX_BYTES : MAX_BYTES;
+  const maxTotal = manifest.runtime === PROJECT_RUNTIME ? PROJECT_MAX_BYTES : MAX_BYTES;
   if (totalSize !== Number(revision.total_size) || totalSize > maxTotal)
     throw new Error("Revision total size mismatch");
   return {
@@ -1792,17 +1488,11 @@ export async function readRevisionSource(actor: Actor, revisionId: string) {
   await assertActiveOwner(db, actor);
   const {
     rows: [revision],
-  } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
-    revisionId,
-    actor.tenant,
-  ]);
+  } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [revisionId, actor.tenant]);
   return readAuthorizedRevisionSource(db, revision);
 }
 
-export async function exportRevision(
-  actor: Actor,
-  revisionId: string,
-): Promise<BundleExport> {
+export async function exportRevision(actor: Actor, revisionId: string): Promise<BundleExport> {
   const source = await readRevisionSource(actor, revisionId);
   return {
     manifest: source.manifest,

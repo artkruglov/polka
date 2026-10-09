@@ -1,12 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  collapseDiff,
-  diffLines,
-  diffTexts,
-  splitLines,
-  type DiffLine,
-} from "../apps/web/src/shared/lib/line-diff.ts";
+import { collapseDiff, diffLines, diffTexts, splitLines, type DiffLine } from "../apps/web/src/shared/lib/line-diff.ts";
 
 const sides = (lines: DiffLine[]) => ({
   old: lines.filter((l) => l.kind !== "add").map((l) => l.text),
@@ -66,9 +60,18 @@ test("identical, empty and one-sided inputs", () => {
   assert.equal(same.added + same.removed, 0);
   assert.equal(same.lines.length, 2);
   const created = diffLines([], ["a", "b"]);
-  assert.deepEqual(created.lines.map((l) => l.kind), ["add", "add"]);
+  assert.deepEqual(
+    created.lines.map((l) => l.kind),
+    ["add", "add"],
+  );
   const cleared = diffLines(["a", "b"], []);
-  assert.deepEqual(cleared.lines.map((l) => [l.kind, l.a]), [["del", 1], ["del", 2]]);
+  assert.deepEqual(
+    cleared.lines.map((l) => [l.kind, l.a]),
+    [
+      ["del", 1],
+      ["del", 2],
+    ],
+  );
 });
 
 test("random pairs: both texts are reproduced and the edit script is minimal", () => {
@@ -76,9 +79,7 @@ test("random pairs: both texts are reproduced and the edit script is minimal", (
   for (let round = 0; round < 400; round++) {
     const alphabet = 1 + Math.floor(next() * 6);
     const make = () =>
-      Array.from({ length: Math.floor(next() * 30) }, () =>
-        String.fromCharCode(97 + Math.floor(next() * alphabet)),
-      );
+      Array.from({ length: Math.floor(next() * 30) }, () => String.fromCharCode(97 + Math.floor(next() * alphabet)));
     const a = make(),
       b = make();
     const result = diffLines(a, b);
@@ -148,9 +149,19 @@ test("collapseDiff keeps context, folds unchanged runs and caps changed lines", 
   assert.equal(truncated, false);
   const shape = rows.map((r) => (r.kind === "skip" ? `skip${r.count}` : r.line.kind));
   assert.deepEqual(shape, [
-    "same", "same", "del", "add", "same", "same",
+    "same",
+    "same",
+    "del",
+    "add",
+    "same",
+    "same",
     "skip8",
-    "same", "same", "del", "add", "same", "same",
+    "same",
+    "same",
+    "del",
+    "add",
+    "same",
+    "same",
     "skip2",
   ]);
   const capped = collapseDiff(diffLines(a, b).lines, { context: 0, maxChanged: 3 });

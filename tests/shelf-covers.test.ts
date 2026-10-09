@@ -84,26 +84,54 @@ test("the heuristic: a long report with one chart stays text; icons are not draw
   assert.equal(facts.signals.svg, 0);
   assert.equal(facts.signals.canvas, 1);
   // Chart libraries are recognised by address and by call.
-  assert.equal(coverFactsFromHtml('<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>').signals.charts, true);
+  assert.equal(
+    coverFactsFromHtml('<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>').signals.charts,
+    true,
+  );
   assert.equal(coverFactsFromHtml("<script>echarts.init(el)</script>").signals.charts, true);
 });
 
 test("the decision is a pure function of the signals", () => {
   const none = {
-    text: 0, headings: 0, paragraphs: 0, tables: 0, canvas: 0, svg: 0,
-    images: 0, video: 0, controls: 0, charts: false, scripted: false, shell: false,
+    text: 0,
+    headings: 0,
+    paragraphs: 0,
+    tables: 0,
+    canvas: 0,
+    svg: 0,
+    images: 0,
+    video: 0,
+    controls: 0,
+    charts: false,
+    scripted: false,
+    shell: false,
   };
   assert.deepEqual(decideKind({ ...none, text: 5000, headings: 4, paragraphs: 10 }), { kind: "text", genre: "report" });
   assert.deepEqual(decideKind({ ...none, text: 1500, paragraphs: 3 }), { kind: "text", genre: "document" });
   assert.deepEqual(decideKind({ ...none, text: 100, images: 3 }), { kind: "visual", genre: "page" });
-  assert.deepEqual(decideKind({ ...none, text: 50, scripted: true, shell: true, controls: 5 }), { kind: "visual", genre: "app" });
+  assert.deepEqual(decideKind({ ...none, text: 50, scripted: true, shell: true, controls: 5 }), {
+    kind: "visual",
+    genre: "app",
+  });
 });
 
 test("text files: a Markdown heading or the first short line leads", () => {
-  const md = coverFactsFromText("# Ретро спринта 38\n\nСпринт закрыли на **86%**.\n\n## Что получилось\n- Комментарии", "retro.md");
-  assert.deepEqual([md.kind, md.genre, md.heading, md.lead], ["text", "markdown", "Ретро спринта 38", "Спринт закрыли на 86%."]);
-  const note = coverFactsFromText("Созвон 23 сентября\n\nДоговорились обновить прайс.\n— Олег соберёт возражения.", "n.txt");
-  assert.deepEqual([note.genre, note.heading, note.lead], ["note", "Созвон 23 сентября", "Договорились обновить прайс. — Олег соберёт возражения."]);
+  const md = coverFactsFromText(
+    "# Ретро спринта 38\n\nСпринт закрыли на **86%**.\n\n## Что получилось\n- Комментарии",
+    "retro.md",
+  );
+  assert.deepEqual(
+    [md.kind, md.genre, md.heading, md.lead],
+    ["text", "markdown", "Ретро спринта 38", "Спринт закрыли на 86%."],
+  );
+  const note = coverFactsFromText(
+    "Созвон 23 сентября\n\nДоговорились обновить прайс.\n— Олег соберёт возражения.",
+    "n.txt",
+  );
+  assert.deepEqual(
+    [note.genre, note.heading, note.lead],
+    ["note", "Созвон 23 сентября", "Договорились обновить прайс. — Олег соберёт возражения."],
+  );
   // A text without a short first line has no heading; the card uses the title.
   assert.equal(coverFactsFromText("x".repeat(300)).heading, null);
 });
@@ -124,10 +152,15 @@ test("a page too deep to read in time gets a picture, not a stalled request", as
 
 test("the renderer's answer: only a small JPEG or a known outcome", () => {
   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64");
-  assert.deepEqual(parseSnapshotAnswer(200, JSON.stringify({ image: jpeg, blank: false })), { image: jpeg, blank: false });
+  assert.deepEqual(parseSnapshotAnswer(200, JSON.stringify({ image: jpeg, blank: false })), {
+    image: jpeg,
+    blank: false,
+  });
   assert.deepEqual(parseSnapshotAnswer(200, JSON.stringify({ blank: true })), { blank: true });
   assert.deepEqual(parseSnapshotAnswer(503, JSON.stringify({ error: "busy" })), { error: "busy" });
-  assert.throws(() => parseSnapshotAnswer(200, JSON.stringify({ image: Buffer.from("<svg/>").toString("base64"), blank: false })));
+  assert.throws(() =>
+    parseSnapshotAnswer(200, JSON.stringify({ image: Buffer.from("<svg/>").toString("base64"), blank: false })),
+  );
   assert.throws(() => parseSnapshotAnswer(200, JSON.stringify({ error: "weird" })));
   assert.throws(() => parseSnapshotAnswer(200, "not json"));
 });
@@ -137,7 +170,9 @@ test("the card model: series, labels and the repeated title", () => {
   assert.equal(seriesOf("Итоги: сентябрь"), "Итоги");
   assert.equal(seriesOf("Просто заметка"), null);
   assert.equal(seriesOf("· без префикса"), null);
-  const items = ["Y360 Radar · W36", "Y360 Radar · W37", "y360 radar — W38", "Бюджет · 2027"].map((title) => ({ title }));
+  const items = ["Y360 Radar · W36", "Y360 Radar · W37", "y360 radar — W38", "Бюджет · 2027"].map((title) => ({
+    title,
+  }));
   const counts = seriesCounts(items);
   assert.deepEqual([...counts], [["y360 radar", 3]]);
   assert.deepEqual(seriesBadge("Y360 Radar · W36", counts), { name: "Y360 Radar", count: 3 });
@@ -148,7 +183,10 @@ test("the card model: series, labels and the repeated title", () => {
   assert.equal(cardKind({ revision }), "Дашборд");
   assert.equal(cardKind({ revision: { mime: "text/html" } as any }), "Страница");
   // A series shares its colour; a page's own accent wins.
-  assert.equal(coverAccent({ id: "a", title: "Y360 Radar · W36" }, null).color, coverAccent({ id: "b", title: "Y360 Radar · W37" }, null).color);
+  assert.equal(
+    coverAccent({ id: "a", title: "Y360 Radar · W36" }, null).color,
+    coverAccent({ id: "b", title: "Y360 Radar · W37" }, null).color,
+  );
   assert.equal(coverAccent({ id: "a", title: "x" }, { accent: "#e8472b" }).color, "#e8472b");
 });
 
@@ -176,7 +214,9 @@ async function save(cookie: string, title: string, filename: string, mime: strin
   });
   assert.equal(begun.statusCode, 200, begun.body);
   const { uploadId } = begun.json();
-  const put = await call("PUT", `/api/uploads/${uploadId}/bytes`, cookie, bytes, { "content-type": "application/octet-stream" });
+  const put = await call("PUT", `/api/uploads/${uploadId}/bytes`, cookie, bytes, {
+    "content-type": "application/octet-stream",
+  });
   assert.equal(put.statusCode, 200, put.body);
   const done = await call("POST", `/api/uploads/${uploadId}/finalize`, cookie);
   assert.equal(done.statusCode, 200, done.body);
@@ -252,7 +292,12 @@ test("a card asks once per version; the list carries the cover from then on; pic
   await call("GET", `/api/revisions/${busy.revisionId}/cover`, cookie);
   const refuse = async () => ({ error: "busy" as const });
   assert.deepEqual(
-    [await drawCover(busy.revisionId, refuse), await drawCover(busy.revisionId, refuse), await drawCover(busy.revisionId, refuse), await drawCover(busy.revisionId, refuse)],
+    [
+      await drawCover(busy.revisionId, refuse),
+      await drawCover(busy.revisionId, refuse),
+      await drawCover(busy.revisionId, refuse),
+      await drawCover(busy.revisionId, refuse),
+    ],
     ["retry", "retry", "failed", "skipped"],
   );
 
@@ -269,7 +314,8 @@ test("the backfill: --dry-run writes nothing, a run covers every latest version 
   const login = await call("POST", "/api/login", "", { name, password });
   const cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
   const saved = await save(cookie, "Заметка", "n.txt", "text/plain", "Созвон\n\nДоговорились обновить прайс.");
-  const has = async () => (await db.query("SELECT version FROM revision_covers WHERE revision_id=$1", [saved.revisionId])).rows[0];
+  const has = async () =>
+    (await db.query("SELECT version FROM revision_covers WHERE revision_id=$1", [saved.revisionId])).rows[0];
   const dry = await backfillCovers({ dryRun: true });
   assert.ok(dry.scanned >= 1 && dry.covered === 0);
   assert.equal(await has(), undefined);

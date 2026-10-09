@@ -23,10 +23,7 @@ export const BUNDLE_RUNTIME_PROFILE = "bundle-inline-experimental-v1" as const;
 /** A compiled Полка runtime page; the viewer isolation is the same. */
 export const REACT_RUNTIME_PROFILE = "react-runtime-v1" as const;
 /** Runtime profiles a ready derivative may carry to be served. */
-export const SERVED_RUNTIME_PROFILES = [
-  BUNDLE_RUNTIME_PROFILE,
-  REACT_RUNTIME_PROFILE,
-] as const;
+export const SERVED_RUNTIME_PROFILES = [BUNDLE_RUNTIME_PROFILE, REACT_RUNTIME_PROFILE] as const;
 
 /**
  * Every limit of the derivative builder, in one place. The output limit is
@@ -75,8 +72,7 @@ export const BUILD_FAILURE_MESSAGES: Record<BuildFailureCategory, string> = {
     "Сборка не уложилась в отведённое время. Повторите подготовку; если не поможет, упростите страницу или уменьшите её.",
   oom: "Сборке не хватило памяти. Уменьшите страницу (данные, картинки, число библиотек) и повторите.",
   crash: "Сборщик неожиданно остановился. Повторите подготовку.",
-  compiler:
-    "Компилятор страниц временно недоступен. Повторите подготовку через минуту.",
+  compiler: "Компилятор страниц временно недоступен. Повторите подготовку через минуту.",
 };
 
 /** SQL list literal of SERVED_BUILDER_VERSIONS, for `builder_version IN ...`. */

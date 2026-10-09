@@ -31,10 +31,7 @@ async function revisionRow(tenantId: string, revisionId: string) {
 }
 
 /** A saved version of a shelf, or null when there is none (or its work was deleted). */
-export async function revisionForExtension(
-  tenantId: string,
-  revisionId: string,
-): Promise<ExtensionRevision | null> {
+export async function revisionForExtension(tenantId: string, revisionId: string): Promise<ExtensionRevision | null> {
   const row = await revisionRow(tenantId, revisionId);
   if (!row) return null;
   let files: Awaited<ReturnType<typeof storedRevisionFiles>>["files"] = [];
@@ -94,15 +91,10 @@ export function verifyingStream(expected: { size: number; sha256: string }) {
 }
 
 /** One file of the version as a stream, checked against its record. */
-export async function openFileForExtension(
-  tenantId: string,
-  revisionId: string,
-  index: number,
-): Promise<Readable> {
+export async function openFileForExtension(tenantId: string, revisionId: string, index: number): Promise<Readable> {
   const row = await revisionRow(tenantId, revisionId);
   if (!row) throw new Problem(404, "not_found", "Нет такой версии.");
-  if (row.unavailable)
-    throw new Problem(410, "expired", "Эта версия заблокирована модератором и не читается.");
+  if (row.unavailable) throw new Problem(410, "expired", "Эта версия заблокирована модератором и не читается.");
   const file = (await storedRevisionFiles(db, row)).files[index];
   if (!file) throw new Problem(404, "not_found", "Нет такого файла в версии.");
   const read = await readStoredFile(file);

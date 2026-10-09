@@ -1,25 +1,16 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import {
-  runMaintenanceGuard,
-  type MaintenanceClient,
-} from "../scripts/maintenance-guard.ts";
+import { runMaintenanceGuard, type MaintenanceClient } from "../scripts/maintenance-guard.ts";
 
-function fakeClient(options: {
-  locked?: boolean;
-  failOn?: string;
-  calls?: string[];
-}) {
+function fakeClient(options: { locked?: boolean; failOn?: string; calls?: string[] }) {
   const calls = options.calls ?? [];
   let ended = false;
   const client: MaintenanceClient = {
     async query(sql) {
       calls.push(sql);
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: options.locked ?? true }] };
-      if (options.failOn && sql === options.failOn)
-        throw new Error("connection lost");
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: options.locked ?? true }] };
+      if (options.failOn && sql === options.failOn) throw new Error("connection lost");
       return { rows: [] };
     },
     release() {
@@ -45,10 +36,7 @@ test("busy guard skips work and closes the dedicated client", async () => {
   });
   assert.deepEqual(result, { state: "busy" });
   assert.equal(ran, false);
-  assert.deepEqual(current.calls, [
-    "SELECT pg_try_advisory_lock($1) AS locked",
-    "RELEASE",
-  ]);
+  assert.deepEqual(current.calls, ["SELECT pg_try_advisory_lock($1) AS locked", "RELEASE"]);
   assert.equal(current.calls.includes("RELEASE"), true);
 });
 
@@ -139,8 +127,7 @@ test("connection loss aborts an outside wait and rejects subsequent SQL", async 
   const client: MaintenanceClient = {
     async query(sql) {
       calls.push(sql);
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: true }] };
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: true }] };
       return { rows: [] };
     },
     on(event, listener) {
@@ -182,8 +169,7 @@ test("external abort destroys a deferred query before it can continue", async ()
   const client: MaintenanceClient = {
     async query(sql) {
       calls.push(sql);
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: true }] };
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: true }] };
       if (sql === "SELECT deferred") {
         queryStarted = true;
         await new Promise<void>((resolve) => {
@@ -226,8 +212,7 @@ test("a deferred rollback keeps the transaction active and timeout destroys the 
   const client: MaintenanceClient = {
     async query(sql) {
       calls.push(sql);
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: true }] };
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: true }] };
       if (sql === "ROLLBACK") {
         rollbackStarted();
         await new Promise(() => undefined);
@@ -278,8 +263,7 @@ test("a late connection error stays harmless after bounded close times out", asy
   });
   const client: MaintenanceClient = {
     async query(sql) {
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: false }] };
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: false }] };
       return { rows: [] };
     },
     on(event, listener) {
@@ -300,8 +284,6 @@ test("a late connection error stays harmless after bounded close times out", asy
   });
   assert.deepEqual(result, { state: "busy" });
   assert.equal(closeStarted, true);
-  assert.doesNotThrow(() =>
-    events.emit("error", new Error("late socket failure")),
-  );
+  assert.doesNotThrow(() => events.emit("error", new Error("late socket failure")));
   finishClose();
 });

@@ -123,11 +123,7 @@ export async function offboardEmployee(actor: Actor, accountId: string) {
 
 async function offboardInTransaction(actor: Actor, accountId: string) {
   if (accountId === actor.id)
-    throw new Problem(
-      409,
-      "conflict",
-      "Себя так убрать нельзя: сначала назначьте другого администратора компании.",
-    );
+    throw new Problem(409, "conflict", "Себя так убрать нельзя: сначала назначьте другого администратора компании.");
   return transaction(async (c) => {
     await assertCompanyAdmin(c, actor);
     const { rows: candidates } = await c.query(
@@ -143,10 +139,9 @@ async function offboardInTransaction(actor: Actor, accountId: string) {
        ORDER BY id FOR UPDATE`,
       [shelfIds],
     );
-    await c.query(
-      "SELECT id FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE",
-      [[...new Set([actor.id, accountId])]],
-    );
+    await c.query("SELECT id FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [
+      [...new Set([actor.id, accountId])],
+    ]);
     await assertCompanyAdmin(c, actor);
     const removed: { id: string; name: string; role: string }[] = [];
     for (const shelf of shelves) {
@@ -217,18 +212,17 @@ export async function adminCompanyShelf(actor: Actor, shelfId: string) {
     await assertCompanyAdmin(c, actor);
     const {
       rows: [shelf],
-    } = await c.query(
-      `SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`,
-      [shelfId],
-    );
+    } = await c.query(`SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`, [
+      shelfId,
+    ]);
     if (!shelf) throw missing();
     await c.query("SELECT id FROM accounts WHERE id=$1 FOR UPDATE", [actor.id]);
     const {
       rows: [mine],
-    } = await c.query(
-      "SELECT role,state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 FOR UPDATE",
-      [shelfId, actor.id],
-    );
+    } = await c.query("SELECT role,state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2 FOR UPDATE", [
+      shelfId,
+      actor.id,
+    ]);
     if (mine?.state === "active" && mine.role === "admin") return { id: shelf.id, name: shelf.name, role: "admin" };
     await c.query(
       `INSERT INTO tenant_members(tenant_id,account_id,role,invited_by)
@@ -242,7 +236,12 @@ export async function adminCompanyShelf(actor: Actor, shelfId: string) {
     await c.query(
       `INSERT INTO tenant_member_events(tenant_id,actor_id,action,target_account_id,old_role,new_role)
        VALUES($1,$2,$3,$2,$4,'admin')`,
-      [shelfId, actor.id, mine?.state === "active" ? "member_role_changed" : "member_added", mine?.state === "active" ? mine.role : null],
+      [
+        shelfId,
+        actor.id,
+        mine?.state === "active" ? "member_role_changed" : "member_added",
+        mine?.state === "active" ? mine.role : null,
+      ],
     );
     return { id: shelf.id, name: shelf.name, role: "admin" };
   });

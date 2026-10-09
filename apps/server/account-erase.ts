@@ -49,9 +49,7 @@ export async function requestAccountErasure(input: {
   policy: ErasurePolicy;
 }): Promise<ErasureReport> {
   if (!input.dryRun && !input.proof?.trim())
-    throw new ErasureRefusal(
-      "Укажите --proof <номер обращения>: на основании чего удаляется аккаунт.",
-    );
+    throw new ErasureRefusal("Укажите --proof <номер обращения>: на основании чего удаляется аккаунт.");
   const found = await findMergeAccount(input.account);
   if (!found) throw new ErasureRefusal(`Аккаунт не найден: ${input.account}`);
   return transaction(async (c) => {
@@ -59,10 +57,7 @@ export async function requestAccountErasure(input: {
     await c.query("SELECT id FROM tenants WHERE id=$1 FOR UPDATE", [found.tenant]);
     const {
       rows: [account],
-    } = await c.query(
-      "SELECT id,name,disabled,deletion_requested_at FROM accounts WHERE id=$1 FOR UPDATE",
-      [found.id],
-    );
+    } = await c.query("SELECT id,name,disabled,deletion_requested_at FROM accounts WHERE id=$1 FOR UPDATE", [found.id]);
     if (!account) throw new ErasureRefusal(`Аккаунт не найден: ${input.account}`);
     const {
       rows: [existing],
@@ -127,7 +122,14 @@ export async function requestAccountErasure(input: {
     if (input.dryRun) return report;
 
     // The rows a confirmed deletion locks, in the same order (account-deletion.ts).
-    for (const table of ["agent_connections", "uploads", "artifacts", "shares", "revision_derivatives", "editorial_publications"])
+    for (const table of [
+      "agent_connections",
+      "uploads",
+      "artifacts",
+      "shares",
+      "revision_derivatives",
+      "editorial_publications",
+    ])
       await c.query(`SELECT id FROM ${table} WHERE tenant_id=$1 ORDER BY id FOR UPDATE`, [found.tenant]);
     await c.query(
       "UPDATE editorial_publications SET withdrawn_at=clock_timestamp() WHERE tenant_id=$1 AND withdrawn_at IS NULL",
@@ -160,9 +162,6 @@ export async function erasureState(accountId: string) {
   const { db } = await import("./db.ts");
   const {
     rows: [row],
-  } = await db.query(
-    "SELECT state,error_code,purged_at FROM account_deletions WHERE account_id=$1",
-    [accountId],
-  );
+  } = await db.query("SELECT state,error_code,purged_at FROM account_deletions WHERE account_id=$1", [accountId]);
   return row as { state: string; error_code: string | null; purged_at: Date | null } | undefined;
 }

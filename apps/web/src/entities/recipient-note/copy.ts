@@ -18,18 +18,13 @@ export type RecipientNote = {
   details: string;
 };
 
-export const NOTE_UNKNOWN =
-  "Страница пользователя Полки. Не вводите здесь пароли, коды из SMS и данные карт.";
-export const NOTE_ASKS =
-  "Страница пользователя Полки просит пароль, код или данные карты. Не вводите их здесь.";
+export const NOTE_UNKNOWN = "Страница пользователя Полки. Не вводите здесь пароли, коды из SMS и данные карт.";
+export const NOTE_ASKS = "Страница пользователя Полки просит пароль, код или данные карты. Не вводите их здесь.";
 export const NOTE_QUIET = "Поделился пользователь Полки";
-export const CHECKED =
-  "Полка проверила текст и код автоматически; человек страницу не проверял.";
+export const CHECKED = "Полка проверила текст и код автоматически; человек страницу не проверял.";
 export const NOT_CHECKED = "Полка её пока не проверила.";
 
-export function recipientNote(
-  viewer: Pick<Viewer, "publisher" | "sensitiveInput" | "autoChecked">,
-): RecipientNote {
+export function recipientNote(viewer: Pick<Viewer, "publisher" | "sensitiveInput" | "autoChecked">): RecipientNote {
   if (viewer.publisher === "editorial")
     return {
       tone: "editorial",
@@ -38,8 +33,7 @@ export function recipientNote(
     };
   const check = viewer.autoChecked ? CHECKED : NOT_CHECKED;
   const intro = "Эту страницу опубликовал пользователь Полки.";
-  if (viewer.sensitiveInput === false)
-    return { tone: "quiet", line: NOTE_QUIET, details: `${intro} ${check}` };
+  if (viewer.sensitiveInput === false) return { tone: "quiet", line: NOTE_QUIET, details: `${intro} ${check}` };
   return {
     tone: "warning",
     line: viewer.sensitiveInput ? NOTE_ASKS : NOTE_UNKNOWN,

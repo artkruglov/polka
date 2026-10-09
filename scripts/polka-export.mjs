@@ -138,7 +138,8 @@ async function writeBlob(target, response, expected) {
 
 /** Checks one inventory page enough to write files named by it. */
 function checkPage(page) {
-  if (page?.format !== FORMAT) throw new CliError(`Unknown export format ${JSON.stringify(page?.format)}; update polka-export.mjs.`);
+  if (page?.format !== FORMAT)
+    throw new CliError(`Unknown export format ${JSON.stringify(page?.format)}; update polka-export.mjs.`);
   if (!Array.isArray(page.items)) throw new CliError("The inventory page has no items.");
   for (const item of page.items) {
     if (!UUID.test(item.id)) throw new CliError("The inventory has a work without a valid id.");
@@ -147,7 +148,8 @@ function checkPage(page) {
         if (!SHA.test(file.sha256) || !Number.isSafeInteger(file.size) || file.size < 0)
           throw new CliError(`The inventory lists a file with an invalid hash or size in «${item.title}».`);
   }
-  if (page.nextCursor !== null && !UUID.test(page.nextCursor)) throw new CliError("The inventory has an invalid cursor.");
+  if (page.nextCursor !== null && !UUID.test(page.nextCursor))
+    throw new CliError("The inventory has an invalid cursor.");
 }
 
 async function main() {
@@ -214,7 +216,11 @@ async function main() {
       }
       for (const file of revision.files)
         if (!wanted.has(file.sha256))
-          wanted.set(file.sha256, { ...file, revisionId: revision.id, path: `${item.title} v${revision.number}: ${file.path}` });
+          wanted.set(file.sha256, {
+            ...file,
+            revisionId: revision.id,
+            path: `${item.title} v${revision.number}: ${file.path}`,
+          });
     }
   const queue = [...wanted.values()];
   let fetched = 0;
@@ -278,17 +284,27 @@ async function main() {
   };
   if (values.json) console.log(JSON.stringify(result, null, 2));
   else {
-    console.log(`Exported ${items.length} works, ${versions} versions, ${wanted.size} files (${(bytes / 1048576).toFixed(1)} MB) into ${root}`);
+    console.log(
+      `Exported ${items.length} works, ${versions} versions, ${wanted.size} files (${(bytes / 1048576).toFixed(1)} MB) into ${root}`,
+    );
     if (kept) console.log(`${kept} file(s) were already there and were kept.`);
     if (unavailable.length)
-      console.log(`${unavailable.length} version(s) are blocked by moderation and were not downloaded; the import skips their works.`);
-    if (failed.length) console.log(`${failed.length} file(s) failed: ${failed.slice(0, 5).map((f) => `${f.file} (${f.error})`).join("; ")}. Run the command again.`);
+      console.log(
+        `${unavailable.length} version(s) are blocked by moderation and were not downloaded; the import skips their works.`,
+      );
+    if (failed.length)
+      console.log(
+        `${failed.length} file(s) failed: ${failed
+          .slice(0, 5)
+          .map((f) => `${f.file} (${f.error})`)
+          .join("; ")}. Run the command again.`,
+      );
     else console.log("Next, on your installation: npm run shelf:import -- --dir <this folder> --account <email>");
   }
   if (failed.length) process.exitCode = 1;
 }
 
 main().catch((error) => {
-  console.error(error instanceof CliError ? error.message : error?.stack ?? String(error));
+  console.error(error instanceof CliError ? error.message : (error?.stack ?? String(error)));
   process.exitCode = error instanceof CliError ? error.code : 1;
 });

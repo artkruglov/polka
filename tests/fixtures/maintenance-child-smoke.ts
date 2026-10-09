@@ -13,6 +13,4 @@ process.on("SIGTERM", () => {
 
 // Signal readiness only after the shutdown handler is installed.
 console.error("private diagnostic: must not be forwarded");
-console.log(
-  JSON.stringify({ event: "maintenance.started", secret: "must be stripped" }),
-);
+console.log(JSON.stringify({ event: "maintenance.started", secret: "must be stripped" }));

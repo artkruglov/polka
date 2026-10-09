@@ -27,14 +27,8 @@ export function SelectionButton({
 }) {
   const width = 470;
   const below = selection.rect.bottom + 8;
-  const top =
-    below + 48 > window.innerHeight
-      ? Math.max(8, selection.rect.top - 52)
-      : below;
-  const left = Math.min(
-    Math.max(8, selection.rect.left),
-    Math.max(8, window.innerWidth - width - 8),
-  );
+  const top = below + 48 > window.innerHeight ? Math.max(8, selection.rect.top - 52) : below;
+  const left = Math.min(Math.max(8, selection.rect.left), Math.max(8, window.innerWidth - width - 8));
   const anchor = selection.anchor;
   return (
     <div
@@ -50,23 +44,23 @@ export function SelectionButton({
           <button type="button" className="selection-comment" onClick={() => onComment(anchor)}>
             <MessageSquarePlus aria-hidden="true" /> {notes ? "Заметка" : "Комментировать"}
           </button>
-          {!notes && <span className="selection-reactions">
-            {REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                aria-label={`Реакция ${emoji}`}
-                onClick={() => onReact(emoji, anchor)}
-              >
-                {emoji}
-              </button>
-            ))}
-          </span>}
+          {!notes && (
+            <span className="selection-reactions">
+              {REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  aria-label={`Реакция ${emoji}`}
+                  onClick={() => onReact(emoji, anchor)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </span>
+          )}
         </>
       ) : (
-        <span className="selection-too-long">
-          Выделите фрагмент короче {ANCHOR_EXACT_MAX} символов
-        </span>
+        <span className="selection-too-long">Выделите фрагмент короче {ANCHOR_EXACT_MAX} символов</span>
       )}
     </div>
   );

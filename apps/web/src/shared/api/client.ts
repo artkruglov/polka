@@ -76,13 +76,10 @@ type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 /** What the person sees when a proxy or the network answers instead of Полка. */
 function fallbackMessage(status: number) {
-  if (status === 0)
-    return "Нет связи с Полкой. Проверьте подключение и повторите попытку.";
+  if (status === 0) return "Нет связи с Полкой. Проверьте подключение и повторите попытку.";
   if (status === 413) return "Файл слишком большой для сервера.";
-  if (status === 429)
-    return "Слишком много запросов. Подождите немного и повторите.";
-  if (status >= 500)
-    return "Полка временно недоступна. Повторите попытку через минуту.";
+  if (status === 429) return "Слишком много запросов. Подождите немного и повторите.";
+  if (status >= 500) return "Полка временно недоступна. Повторите попытку через минуту.";
   return "Не удалось выполнить запрос.";
 }
 
@@ -191,9 +188,7 @@ export async function send(url: string, init: RequestInit = {}): Promise<Respons
   throw new ApiError(
     res.status,
     typeof code === "string" ? code : "http_error",
-    typeof message === "string" && message
-      ? message
-      : fallbackMessage(res.status),
+    typeof message === "string" && message ? message : fallbackMessage(res.status),
     details,
   );
 }
@@ -217,11 +212,7 @@ async function json<T>(
   try {
     return await res.json();
   } catch {
-    throw new ApiError(
-      res.status,
-      "invalid_response",
-      "Сервер вернул некорректный ответ. Повторите попытку.",
-    );
+    throw new ApiError(res.status, "invalid_response", "Сервер вернул некорректный ответ. Повторите попытку.");
   }
 }
 
@@ -267,7 +258,15 @@ export type SnapshotItem = {
   title: string;
   folderId: string | null;
   /** The version that was the latest at that moment. */
-  revision: { id: string; number: number; filename: string; mime: string; size: number; totalSize: number; createdAt: string };
+  revision: {
+    id: string;
+    number: number;
+    filename: string;
+    mime: string;
+    size: number;
+    totalSize: number;
+    createdAt: string;
+  };
   /** The version accepted at that moment; null: none was. */
   acceptedRevisionId: string | null;
   acceptedRevisionNumber: number | null;
@@ -309,16 +308,14 @@ export type ShelfEvent = {
 export const client = {
   shelves: () => request<{ items: Shelf[]; canCreate: boolean }>("/shelves"),
   createShelf: (name: string) => request<Shelf>("/shelves", { name }),
-  renameShelf: (id: string, name: string) =>
-    request<{ id: string; name: string }>(`/shelves/${id}`, { name }, "PATCH"),
+  renameShelf: (id: string, name: string) => request<{ id: string; name: string }>(`/shelves/${id}`, { name }, "PATCH"),
   shelfMembers: (id: string) =>
     request<{ role: ShelfRole; items: ShelfMember[]; hasMore: boolean }>(`/shelves/${id}/members`),
   addShelfMember: (id: string, who: string, role: ShelfMember["role"]) =>
     request<{ accountId: string; name: string; role: ShelfMember["role"] }>(`/shelves/${id}/members`, { who, role }),
   changeShelfMemberRole: (id: string, accountId: string, role: ShelfMember["role"]) =>
     request(`/shelves/${id}/members/${accountId}`, { role }, "PATCH"),
-  revokeShelfMember: (id: string, accountId: string) =>
-    request(`/shelves/${id}/members/${accountId}/revoke`, {}),
+  revokeShelfMember: (id: string, accountId: string) => request(`/shelves/${id}/members/${accountId}/revoke`, {}),
   shelfInvitations: (id: string) =>
     request<{ items: ShelfInvitation[]; hasMore: boolean }>(`/shelves/${id}/invitations`),
   createShelfInvitation: (
@@ -328,17 +325,14 @@ export const client = {
   revokeShelfInvitation: (id: string, invitationId: string) =>
     request(`/shelves/${id}/invitations/${invitationId}/revoke`, {}),
   acceptShelfInvitation: (id: string, token: string) =>
-    request<{ shelfId: string; name: string; role: ShelfRole; joined: boolean }>(
-      `/shelves/${id}/invitations/accept`,
-      { token },
-    ),
+    request<{ shelfId: string; name: string; role: ShelfRole; joined: boolean }>(`/shelves/${id}/invitations/accept`, {
+      token,
+    }),
   shelfEvents: (id: string) => request<{ items: ShelfEvent[] }>(`/shelves/${id}/events`),
   me: () => request<Account>("/me"),
   /** The signed-in account, or null for a guest (200 either way). */
-  session: () =>
-    request<{ account: Account | null }>("/session").then(({ account }) => account),
-  login: (name: string, password: string) =>
-    request("/login", { name, password }),
+  session: () => request<{ account: Account | null }>("/session").then(({ account }) => account),
+  login: (name: string, password: string) => request("/login", { name, password }),
   logout: () => request("/logout", {}),
   folders: () => request<Folder[]>("/folders"),
   createFolder: (name: string) => request<Folder>("/folders", { name }),
@@ -363,24 +357,21 @@ export const client = {
           token: { scopes: AgentScope[]; expiresAt: string; lastSeenAt: string | null } | null;
         }[];
       }>("/service-accounts"),
-    create: (name: string, scopes: AgentScope[]) =>
-      request<{ token: string }>("/service-accounts", { name, scopes }),
+    create: (name: string, scopes: AgentScope[]) => request<{ token: string }>("/service-accounts", { name, scopes }),
     rotate: (id: string) => request<{ token: string }>(`/service-accounts/${id}/rotate`, {}),
     disable: (id: string) => request<{ ok: true }>(`/service-accounts/${id}/disable`, {}),
     setResponsible: (id: string, accountId: string) =>
       request<{ token: string }>(`/service-accounts/${id}/responsible`, { accountId }, "PUT"),
   },
   shelfCard: () => request<{ cardMd: string | null }>("/shelf/card"),
-  setShelfCard: (cardMd: string | null) =>
-    request<{ cardMd: string | null }>("/shelf/card", { cardMd }, "PUT"),
+  setShelfCard: (cardMd: string | null) => request<{ cardMd: string | null }>("/shelf/card", { cardMd }, "PUT"),
   acceptRevision: (id: string, revisionId: string | null) =>
     request<{ artifactId: string; acceptedRevisionId: string | null }>(
       `/artifacts/${id}/accepted`,
       { revisionId },
       "PUT",
     ),
-  feedProposal: (id: string) =>
-    request<{ proposal: FeedProposal | null }>(`/artifacts/${id}/feed-proposal`),
+  feedProposal: (id: string) => request<{ proposal: FeedProposal | null }>(`/artifacts/${id}/feed-proposal`),
   proposeToFeed: (
     id: string,
     input: { revisionId: string; title: string; summary: string; rights: true; noPersonalData: true },
@@ -388,17 +379,9 @@ export const client = {
   withdrawFeedProposal: (id: string) =>
     request<{ proposal: FeedProposal }>(`/artifacts/${id}/feed-proposal/withdraw`, {}),
   setWorkOwner: (id: string, ownerAccountId: string | null) =>
-    request<{ artifactId: string; ownerAccountId: string | null }>(
-      `/artifacts/${id}/owner`,
-      { ownerAccountId },
-      "PUT",
-    ),
+    request<{ artifactId: string; ownerAccountId: string | null }>(`/artifacts/${id}/owner`, { ownerAccountId }, "PUT"),
   setShareFollow: (shareId: string, followMode: "pinned" | "follows") =>
-    request<{ shareId: string; followMode: string }>(
-      `/shares/${shareId}/follow`,
-      { followMode },
-      "PUT",
-    ),
+    request<{ shareId: string; followMode: string }>(`/shares/${shareId}/follow`, { followMode }, "PUT"),
   /** A page of the shelf; the first page also counts every kind over the whole shelf. */
   shelf: (
     q: string,
@@ -429,30 +412,15 @@ export const client = {
     request<{ cover: RevisionCover | null }>(`/revisions/${revisionId}/cover`, undefined, "GET", signal).then(
       ({ cover }) => cover,
     ),
-  restoreArtifact: (
-    id: string,
-    input: { expectedLifecycleVersion: number; expectedRevisionId: string },
-  ) =>
-    request<{ id: string; trashedAt: string | null; lifecycleVersion: number }>(
-      `/artifacts/${id}/restore`,
-      input,
-    ),
+  restoreArtifact: (id: string, input: { expectedLifecycleVersion: number; expectedRevisionId: string }) =>
+    request<{ id: string; trashedAt: string | null; lifecycleVersion: number }>(`/artifacts/${id}/restore`, input),
   /** Delete a trashed work for good (docs/specs/WORK_DELETION.md). */
-  purgeArtifact: (
-    id: string,
-    input: { expectedLifecycleVersion: number; expectedRevisionId: string },
-  ) => request<{ id: string; purged: true }>(`/artifacts/${id}/purge`, input),
-  trashArtifact: (
-    id: string,
-    input: { expectedLifecycleVersion: number; expectedRevisionId: string },
-  ) =>
-    request<{ id: string; trashedAt: string; lifecycleVersion: number }>(
-      `/artifacts/${id}/trash`,
-      input,
-    ),
+  purgeArtifact: (id: string, input: { expectedLifecycleVersion: number; expectedRevisionId: string }) =>
+    request<{ id: string; purged: true }>(`/artifacts/${id}/purge`, input),
+  trashArtifact: (id: string, input: { expectedLifecycleVersion: number; expectedRevisionId: string }) =>
+    request<{ id: string; trashedAt: string; lifecycleVersion: number }>(`/artifacts/${id}/trash`, input),
   revisions: (id: string) => request<Revision[]>(`/artifacts/${id}/revisions`),
-  begin: (input: UploadInput) =>
-    request<{ uploadId: string; receipt: Receipt | null }>("/uploads", input),
+  begin: (input: UploadInput) => request<{ uploadId: string; receipt: Receipt | null }>("/uploads", input),
   finalize: (id: string) => request<Receipt>(`/uploads/${id}/finalize`, {}),
   enable: (a: Artifact, days: number) =>
     request<Artifact>(`/artifacts/${a.id}/share`, {
@@ -468,19 +436,14 @@ export const client = {
   resolve: (token: string) => request<Resolved>("/resolve", { token }),
   /** One-click moderation from the operator's mail: the token is the capability. */
   moderation: {
-    inspect: (token: string) =>
-      request<ModerationInspection>("/moderation/inspect", { token }),
-    preview: (token: string) =>
-      request<Viewer>("/moderation/preview", { token }),
+    inspect: (token: string) => request<ModerationInspection>("/moderation/inspect", { token }),
+    preview: (token: string) => request<Viewer>("/moderation/preview", { token }),
     act: (token: string, options: { legalHold?: boolean; authority?: string } = {}) =>
-      request<{ action: string; shareId: string; changed: boolean; message: string }>(
-        "/moderation/act",
-        {
-          token,
-          ...(options.legalHold ? { legalHold: true } : {}),
-          ...(options.authority ? { authority: options.authority } : {}),
-        },
-      ),
+      request<{ action: string; shareId: string; changed: boolean; message: string }>("/moderation/act", {
+        token,
+        ...(options.legalHold ? { legalHold: true } : {}),
+        ...(options.authority ? { authority: options.authority } : {}),
+      }),
   },
   report: (
     token: string,
@@ -520,38 +483,25 @@ export const client = {
         resolved,
       }),
     work: (artifactId: string, signal?: AbortSignal) =>
-      request<WorkComments>(
-        `/artifacts/${artifactId}/comments`,
-        undefined,
-        "GET",
-        signal,
-      ),
-    seen: (artifactId: string) =>
-      request<{ ok: true }>(`/artifacts/${artifactId}/comments/seen`, {}),
+      request<WorkComments>(`/artifacts/${artifactId}/comments`, undefined, "GET", signal),
+    seen: (artifactId: string) => request<{ ok: true }>(`/artifacts/${artifactId}/comments/seen`, {}),
     ownerCreate: (artifactId: string, shareId: string, input: NewComment) =>
       request<{ id: string }>(`/artifacts/${artifactId}/comments`, {
         shareId,
         ...input,
       }),
-    ownerReact: (
-      artifactId: string,
-      shareId: string,
-      emoji: Reaction,
-      anchor: CommentAnchor | null,
-    ) =>
+    ownerReact: (artifactId: string, shareId: string, emoji: Reaction, anchor: CommentAnchor | null) =>
       request<{ active: boolean }>(`/artifacts/${artifactId}/reactions`, {
         shareId,
         emoji,
         anchor,
       }),
-    ownerRemove: (commentId: string) =>
-      request<{ ok: true }>(`/comments/${commentId}/delete`, {}),
+    ownerRemove: (commentId: string) => request<{ ok: true }>(`/comments/${commentId}/delete`, {}),
     ownerResolve: (commentId: string, resolved: boolean) =>
       request<{ ok: true }>(`/comments/${commentId}/resolve`, { resolved }),
     settings: (input: { displayName?: string; commentMail?: boolean }) =>
       request<unknown>("/account/comment-settings", input),
-    mailOff: (token: string) =>
-      request<{ ok: true }>("/comment-mail/off", { token }),
+    mailOff: (token: string) => request<{ ok: true }>("/comment-mail/off", { token }),
   },
   /** «Удалить аккаунт»: csrf → plan → confirm, then the receipt by its capability. */
   accountDeletion: {
@@ -571,24 +521,12 @@ export const client = {
         undefined,
         csrfToken,
       ),
-    status: (capability: string) =>
-      request<AccountDeletionReceipt>("/account/deletion-status", { capability }),
+    status: (capability: string) => request<AccountDeletionReceipt>("/account/deletion-status", { capability }),
   },
   agentConnections: {
-    list: (signal?: AbortSignal) =>
-      request<AgentConnection[]>(
-        "/agent-connections",
-        undefined,
-        "GET",
-        signal,
-      ),
+    list: (signal?: AbortSignal) => request<AgentConnection[]>("/agent-connections", undefined, "GET", signal),
     csrf: (signal?: AbortSignal) =>
-      request<{ csrfToken: string; expiresAt: string }>(
-        "/agent-connections/csrf",
-        {},
-        "POST",
-        signal,
-      ),
+      request<{ csrfToken: string; expiresAt: string }>("/agent-connections/csrf", {}, "POST", signal),
     issue: (
       input: {
         name: string;
@@ -603,21 +541,9 @@ export const client = {
       csrfToken: string,
       signal?: AbortSignal,
     ) =>
-      request<{ connection: AgentConnection; token: string }>(
-        "/agent-connections",
-        input,
-        "POST",
-        signal,
-        csrfToken,
-      ),
+      request<{ connection: AgentConnection; token: string }>("/agent-connections", input, "POST", signal, csrfToken),
     revoke: (id: string, csrfToken: string, signal?: AbortSignal) =>
-      request<{ ok: true }>(
-        `/agent-connections/${id}/revoke`,
-        {},
-        "POST",
-        signal,
-        csrfToken,
-      ),
+      request<{ ok: true }>(`/agent-connections/${id}/revoke`, {}, "POST", signal, csrfToken),
     /** «Может выдавать ссылки для входа» (OAuth connections). */
     setSignInLinks: (id: string, enabled: boolean, csrfToken: string) =>
       request<{ ok: true; signInLinks: boolean }>(
@@ -645,31 +571,13 @@ export const oauthConsent = {
       | { request: string; decision: "deny" },
     csrfToken: string,
     signal?: AbortSignal,
-  ) =>
-    json<{ redirectTo: string }>(
-      "/oauth/authorize/decision",
-      input,
-      "POST",
-      signal,
-      csrfToken,
-    ),
+  ) => json<{ redirectTo: string }>("/oauth/authorize/decision", input, "POST", signal, csrfToken),
   /** «Начать без регистрации»: a provisional shelf for this browser. */
-  startProvisional: (
-    requestId: string,
-    source: { ref?: string; referrer?: string } | null,
-  ) =>
-    json<{ ok: true }>(
-      "/oauth/authorize/provisional",
-      { request: requestId, ...(source ? { source } : {}) },
-      "POST",
-    ),
+  startProvisional: (requestId: string, source: { ref?: string; referrer?: string } | null) =>
+    json<{ ok: true }>("/oauth/authorize/provisional", { request: requestId, ...(source ? { source } : {}) }, "POST"),
 };
 
-export async function bytes(
-  path: string,
-  grant?: string,
-  signal?: AbortSignal,
-) {
+export async function bytes(path: string, grant?: string, signal?: AbortSignal) {
   const response = await send(`/api${path}`, {
     headers: grant ? { Authorization: `Bearer ${grant}` } : {},
     signal,
@@ -687,28 +595,19 @@ export async function staticView(
   signal?: AbortSignal,
   options: { comments?: boolean } = {},
 ) {
-  const response = await send(
-    grant
-      ? "/api/view/static-view"
-      : `/api/revisions/${revisionId}/static-view`,
-    {
-      method: "POST",
-      headers: {
-        ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
-        // The comment overlay rides on the grant; see staticHtmlCsp.
-        ...(options.comments ? { "Content-Type": "application/json" } : {}),
-      },
-      body: options.comments ? JSON.stringify({ comments: true }) : undefined,
-      signal,
+  const response = await send(grant ? "/api/view/static-view" : `/api/revisions/${revisionId}/static-view`, {
+    method: "POST",
+    headers: {
+      ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
+      // The comment overlay rides on the grant; see staticHtmlCsp.
+      ...(options.comments ? { "Content-Type": "application/json" } : {}),
     },
-  );
+    body: options.comments ? JSON.stringify({ comments: true }) : undefined,
+    signal,
+  });
   const result = (await response.json()) as { url?: unknown };
   if (typeof result.url !== "string" || !result.url)
-    throw new ApiError(
-      response.status,
-      "invalid_response",
-      "Сервер вернул некорректный ответ. Повторите попытку.",
-    );
+    throw new ApiError(response.status, "invalid_response", "Сервер вернул некорректный ответ. Повторите попытку.");
   return result.url;
 }
 
@@ -716,26 +615,15 @@ export async function staticView(
  * A project's view (docs/specs/PROJECTS.md): the viewer address of the whole
  * project for up to 30 minutes. The owner's session, or a recipient's grant.
  */
-export async function projectView(
-  revisionId: string,
-  grant?: string,
-  signal?: AbortSignal,
-) {
-  const response = await send(
-    grant ? "/api/view/project-view" : `/api/revisions/${revisionId}/project-view`,
-    {
-      method: "POST",
-      headers: grant ? { Authorization: `Bearer ${grant}` } : {},
-      signal,
-    },
-  );
+export async function projectView(revisionId: string, grant?: string, signal?: AbortSignal) {
+  const response = await send(grant ? "/api/view/project-view" : `/api/revisions/${revisionId}/project-view`, {
+    method: "POST",
+    headers: grant ? { Authorization: `Bearer ${grant}` } : {},
+    signal,
+  });
   const result = (await response.json()) as { url?: unknown; expiresAt?: unknown };
   if (typeof result.url !== "string" || typeof result.expiresAt !== "string")
-    throw new ApiError(
-      response.status,
-      "invalid_response",
-      "Сервер вернул некорректный ответ. Повторите попытку.",
-    );
+    throw new ApiError(response.status, "invalid_response", "Сервер вернул некорректный ответ. Повторите попытку.");
   return { url: result.url, expiresAt: result.expiresAt };
 }
 
@@ -760,11 +648,8 @@ export async function saveUpload(
   stage: (label: string) => void,
 ): Promise<Receipt> {
   stage("Подготавливаем файл…");
-  const sha = Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest("SHA-256", await op.file.arrayBuffer()),
-    ),
-    (b) => b.toString(16).padStart(2, "0"),
+  const sha = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await op.file.arrayBuffer())), (b) =>
+    b.toString(16).padStart(2, "0"),
   ).join("");
   if (!op.id) {
     const started = await client.begin({

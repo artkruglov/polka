@@ -9,18 +9,9 @@ import { sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
 import { moderationUrl, type ModerationAction } from "./moderation-tokens.ts";
 import { describeSignals } from "./phishing-signals.ts";
-import {
-  CATEGORY_LABEL,
-  describeFindings,
-  findingsOf,
-  type ContentDecision,
-} from "./content-filter/policy.ts";
+import { CATEGORY_LABEL, describeFindings, findingsOf, type ContentDecision } from "./content-filter/policy.ts";
 import { modelView } from "./content-moderation.ts";
-import {
-  authorStanding,
-  SIGNED_UP_SQL,
-  type ModerationNotice,
-} from "./share-moderation.ts";
+import { authorStanding, SIGNED_UP_SQL, type ModerationNotice } from "./share-moderation.ts";
 
 const REPORT_REASON: Record<string, string> = {
   phishing: "фишинг или выдаёт себя за другого",
@@ -50,17 +41,14 @@ function holdReason(reason: string | null) {
   if (HOLD_REASON[reason]) return HOLD_REASON[reason];
   const [kind, category] = reason.split(":");
   const label = CATEGORY_LABEL[category as keyof typeof CATEGORY_LABEL] ?? category;
-  if (kind === "spam")
-    return `похоже на спам (${label}): автор видит «на проверке», получатели — ничего`;
+  if (kind === "spam") return `похоже на спам (${label}): автор видит «на проверке», получатели — ничего`;
   if (kind === "content") return `фильтр содержимого: ${label}`;
   return reason;
 }
 
 /** What the filter found: from the decision, or read back from the revision. */
 function contentLine(content: ContentDecision | undefined, facts: any) {
-  const findings =
-    content?.findings ??
-    findingsOf(facts.content_filter, modelView(facts.content_filter));
+  const findings = content?.findings ?? findingsOf(facts.content_filter, modelView(facts.content_filter));
   return findings.length ? describeFindings(findings) : "";
 }
 
@@ -96,13 +84,7 @@ const PROFILE: Record<string, string> = {
 };
 
 const escape = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (ch) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        ch
-      ]!,
-  );
+  value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
 function accountAge(createdAt: Date | null) {
   if (!createdAt) return "создан до 23.09.2026 (дата не записана)";
@@ -148,17 +130,10 @@ type Letter = {
   actions: ModerationAction[];
 };
 
-async function letterFor(
-  notice: Exclude<ModerationNotice, { kind: "blocked" }>,
-  facts: any,
-): Promise<Letter> {
+async function letterFor(notice: Exclude<ModerationNotice, { kind: "blocked" }>, facts: any): Promise<Letter> {
   const signals = describeSignals(facts.phishing_signals ?? []);
-  const content =
-    notice.kind === "report" ? contentLine(undefined, facts) : contentLine(notice.content, facts);
-  const found = [
-    signals ? `Признаки: ${signals}` : "",
-    content ? `Фильтр содержимого: ${content}` : "",
-  ]
+  const content = notice.kind === "report" ? contentLine(undefined, facts) : contentLine(notice.content, facts);
+  const found = [signals ? `Признаки: ${signals}` : "", content ? `Фильтр содержимого: ${content}` : ""]
     .filter(Boolean)
     .join(". ");
   if (notice.kind === "held")
@@ -179,16 +154,11 @@ async function letterFor(
     };
   const {
     rows: [report],
-  } = await db.query(
-    "SELECT reason,comment,created_at FROM share_reports WHERE id=$1",
-    [notice.reportId],
-  );
+  } = await db.query("SELECT reason,comment,created_at FROM share_reports WHERE id=$1", [notice.reportId]);
   const complaint = `жалоба: ${REPORT_REASON[report?.reason] ?? report?.reason ?? "—"}${
     report?.comment ? ` — «${clean(report.comment, 500)}»` : ""
   }. Разных жалобщиков за 7 дней: ${facts.reporters}${
-    config.MODERATION_AUTOPAUSE_REPORTS
-      ? ` (пауза с ${config.MODERATION_AUTOPAUSE_REPORTS})`
-      : ""
+    config.MODERATION_AUTOPAUSE_REPORTS ? ` (пауза с ${config.MODERATION_AUTOPAUSE_REPORTS})` : ""
   }`;
   if (notice.paused)
     return {
@@ -211,11 +181,7 @@ async function letterFor(
   };
 }
 
-function compose(
-  notice: Exclude<ModerationNotice, { kind: "blocked" }>,
-  facts: any,
-  letter: Letter,
-) {
+function compose(notice: Exclude<ModerationNotice, { kind: "blocked" }>, facts: any, letter: Letter) {
   const csam = csamSignal("content" in notice ? notice.content : undefined, facts);
   // A CSAM signal: nothing of the work reaches the letter, and no preview.
   const title = csam ? "скрыто (сигнал CSAM)" : clean(facts.title, 120) || "Без названия";
@@ -233,8 +199,8 @@ function compose(
       facts.runtime === "project-v1"
         ? `проект, ${facts.file_count} файлов (документы и страницы)`
         : facts.mime === "text/html"
-        ? `${kindOf(facts.mime)}, ${PROFILE[facts.html_profile] ?? facts.html_profile}${facts.storage_kind === "bundle" ? ", пакет файлов" : ""}`
-        : kindOf(facts.mime),
+          ? `${kindOf(facts.mime)}, ${PROFILE[facts.html_profile] ?? facts.html_profile}${facts.storage_kind === "bundle" ? ", пакет файлов" : ""}`
+          : kindOf(facts.mime),
     ],
     ["Автор", `${author}; ${accountAge(facts.standing.createdAt)}; ${standing}`],
     ["Причина", letter.reason],
@@ -252,9 +218,10 @@ function compose(
     ],
   ];
   if (facts.editorial) rows.push(["Каталог", "это материал «Ленты»"]);
-  const links = (
-    [...(csam ? [] : ["preview"]), ...letter.actions] as ModerationAction[]
-  ).map((action) => [ACTION_LABEL[action], moderationUrl(action, notice.shareId)]);
+  const links = ([...(csam ? [] : ["preview"]), ...letter.actions] as ModerationAction[]).map((action) => [
+    ACTION_LABEL[action],
+    moderationUrl(action, notice.shareId),
+  ]);
   const text = [
     letter.lead,
     "",
@@ -277,9 +244,7 @@ function compose(
     .map(
       ([label, url], index) =>
         `<a href="${escape(url)}" style="display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:8px;text-decoration:none;${
-          index === 0
-            ? "border:1px solid #1d1d1f;color:#1d1d1f"
-            : "background:#1d1d1f;color:#fff"
+          index === 0 ? "border:1px solid #1d1d1f;color:#1d1d1f" : "background:#1d1d1f;color:#fff"
         }">${escape(label)}</a>`,
     )
     .join("")}</p>
@@ -330,10 +295,7 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
           ["Работа", `«${clean(row.title, 120) || "Без названия"}», версия ${row.number}`],
           ["Найдено", contentLine(notice.content, { content_filter: row.content_filter }) || "—"],
         ] as Array<[string, string]>)),
-    [
-      "Автор",
-      `${row.signed_up ? "аккаунт" : "логин"} ${clean(row.name, 60)}${notice.frozen ? " — отключён" : ""}`,
-    ],
+    ["Автор", `${row.signed_up ? "аккаунт" : "логин"} ${clean(row.name, 60)}${notice.frozen ? " — отключён" : ""}`],
     ["Содержимое", deleted],
     [
       "Идентификаторы",
@@ -350,15 +312,11 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
     "",
     `Снять блокировку: npm run moderation:unblock -- ${row.id}`,
     `Сохранить доказательства (legal hold): npm run moderation:hold -- ${row.id} --authority "…"`,
-    ...(notice.frozen
-      ? [`Вернуть доступ автору: npm run moderation:enable -- ${clean(row.name, 60)}`]
-      : []),
+    ...(notice.frozen ? [`Вернуть доступ автору: npm run moderation:enable -- ${clean(row.name, 60)}`] : []),
     `Журнал: npm run moderation:events -- ${row.artifact_id}`,
   ];
   return {
-    subject: csam
-      ? "Полка: сигнал CSAM — работа заблокирована"
-      : `Полка: заблокировано (${label})`,
+    subject: csam ? "Полка: сигнал CSAM — работа заблокирована" : `Полка: заблокировано (${label})`,
     text: lines.join("\n"),
     html: `<!doctype html><html lang="ru"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1d1d1f">${lines
       .map((line) => (line ? `<p style="margin:4px 0">${escape(line)}</p>` : "<br>"))
@@ -383,10 +341,7 @@ export async function sendModerationNotice(notice: ModerationNotice) {
       JSON.stringify({
         event: "moderation.mail_failed",
         kind: notice.kind,
-        code:
-          typeof (error as { code?: unknown }).code === "string"
-            ? (error as { code: string }).code
-            : "internal",
+        code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
       }),
     );
     return null;
@@ -398,7 +353,5 @@ export async function sendModerationNotice(notice: ModerationNotice) {
  * The returned promise settles when every letter is written or given up.
  */
 export function dispatchModerationNotices(notices: ModerationNotice[]) {
-  return inBackground(
-    Promise.all(notices.map(sendModerationNotice)).then(() => undefined),
-  );
+  return inBackground(Promise.all(notices.map(sendModerationNotice)).then(() => undefined));
 }

@@ -1,42 +1,205 @@
 /* Where a person works with AI, and the steps for that place (the agents page and the landing). */
-.agent-client-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-.agent-client-card { display: grid; gap: 4px; align-content: start; min-height: 88px; padding: 14px 14px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--canvas); text-align: left; font: inherit; color: var(--ink); cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.agent-client-card:hover { border-color: #c9d2e0; box-shadow: var(--shadow-sm); }
-.agent-client-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.agent-client-card strong { font-size: var(--text-lg); font-weight: 600; letter-spacing: -.01em; }
-.agent-client-card small { color: var(--muted); font-size: var(--text-sm); line-height: 1.4; }
-.agent-client-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
-.agent-client-card[aria-pressed="true"] strong { color: var(--accent-ink); }
-.agent-setup { margin-top: 16px; padding: 24px 28px 22px; border: 1px solid var(--accent-ring); border-radius: var(--radius-lg); background: var(--canvas); }
-.agent-setup h3 { margin-bottom: 6px; font-size: var(--text-xl); letter-spacing: -.02em; }
-.agent-setup-intro { color: var(--muted); font-size: var(--text-base); line-height: 1.55; }
-.agent-setup-steps { display: grid; gap: 18px; margin: 20px 0 0; padding: 0; list-style: none; }
-.agent-setup-steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
-.agent-setup-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font: 600 var(--text-sm) / 1 var(--font-sans); }
-.agent-setup-body { display: grid; gap: 10px; min-width: 0; padding-top: 4px; }
-.agent-setup-body > p { color: var(--ink); font-size: var(--text-md); line-height: 1.55; }
-.agent-setup-note { color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-.agent-setup-waiting { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: var(--muted); font-size: var(--text-sm); }
-.agent-setup-waiting::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: agent-pulse 1.6s ease-in-out infinite; }
-@keyframes agent-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .agent-setup-waiting::before { animation: none; } }
+.agent-client-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.agent-client-card {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-height: 88px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.agent-client-card:hover {
+  border-color: #c9d2e0;
+  box-shadow: var(--shadow-sm);
+}
+.agent-client-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.agent-client-card strong {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.agent-client-card small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.agent-client-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.agent-client-card[aria-pressed="true"] strong {
+  color: var(--accent-ink);
+}
+.agent-setup {
+  margin-top: 16px;
+  padding: 24px 28px 22px;
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+}
+.agent-setup h3 {
+  margin-bottom: 6px;
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+}
+.agent-setup-intro {
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+.agent-setup-steps {
+  display: grid;
+  gap: 18px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-setup-steps li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+}
+.agent-setup-number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font: 600 var(--text-sm) / 1 var(--font-sans);
+}
+.agent-setup-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 4px;
+}
+.agent-setup-body > p {
+  color: var(--ink);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.agent-setup-note {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.agent-setup-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.agent-setup-waiting::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: agent-pulse 1.6s ease-in-out infinite;
+}
+@keyframes agent-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-setup-waiting::before {
+    animation: none;
+  }
+}
 /* What to copy: the address, the phrase or the command, with its one button. */
-.agent-copy { display: grid; gap: 6px; }
-.agent-copy-lead { color: var(--muted); font-size: var(--text-sm); }
-.agent-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.agent-copy-row > code { flex: 1 1 260px; min-width: 0; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--soft-3); font-size: var(--text-base); line-height: 1.45; overflow-wrap: anywhere; user-select: all; }
-.agent-copy[data-kind="phrase"] .agent-copy-row > code { font-family: var(--font-sans); font-weight: 500; color: var(--ink); }
-.agent-copy[data-kind="command"] .agent-copy-row > code { font-size: var(--text-sm); }
-.agent-copy-row .field-note { flex-basis: 100%; }
+.agent-copy {
+  display: grid;
+  gap: 6px;
+}
+.agent-copy-lead {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.agent-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.agent-copy-row > code {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--soft-3);
+  font-size: var(--text-base);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.agent-copy[data-kind="phrase"] .agent-copy-row > code {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--ink);
+}
+.agent-copy[data-kind="command"] .agent-copy-row > code {
+  font-size: var(--text-sm);
+}
+.agent-copy-row .field-note {
+  flex-basis: 100%;
+}
 @media (max-width: 940px) {
-  .agent-client-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .agent-client-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 760px) {
-  .agent-client-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .agent-client-card { min-height: 0; padding: 12px; }
-  .agent-client-card:last-child { grid-column: 1 / -1; }
-  .agent-setup { padding: 18px 16px; }
-  .agent-setup-steps li { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
-  .agent-setup-number { width: 26px; height: 26px; }
-  .agent-copy-row .ui-button { width: 100%; }
+  .agent-client-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .agent-client-card {
+    min-height: 0;
+    padding: 12px;
+  }
+  .agent-client-card:last-child {
+    grid-column: 1 / -1;
+  }
+  .agent-setup {
+    padding: 18px 16px;
+  }
+  .agent-setup-steps li {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .agent-setup-number {
+    width: 26px;
+    height: 26px;
+  }
+  .agent-copy-row .ui-button {
+    width: 100%;
+  }
 }

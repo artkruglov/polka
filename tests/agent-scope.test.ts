@@ -51,7 +51,11 @@ async function mcp(secret: string, name: string, args: Record<string, unknown> =
     payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
   });
   const text = String(response.headers["content-type"]).startsWith("text/event-stream")
-    ? response.body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("")
+    ? response.body
+        .split("\n")
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => line.slice(6))
+        .join("")
     : response.body;
   const result = JSON.parse(text).result;
   const raw = result.content[0].text as string;
@@ -71,7 +75,11 @@ before(async () => {
   owner = await createAccount(`scope-${randomBytes(5).toString("hex")}`, randomBytes(24).toString("hex"));
   reports = randomUUID();
   other = randomUUID();
-  await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$3,'Отчёты'),($2,$3,'Личное')", [reports, other, owner.tenant]);
+  await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$3,'Отчёты'),($2,$3,'Личное')", [
+    reports,
+    other,
+    owner.tenant,
+  ]);
   for (const connection of [limited, whole])
     await db.query(
       `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
@@ -109,25 +117,47 @@ after(async () => {
 
 test("an agent limited to a folder saves there, sees only it and does not manage folders", async () => {
   // The unlimited agent keeps a work in «Личное».
-  const personal = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "Личное", html: page("Личное"), folderId: other });
+  const personal = await mcp(whole.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "Личное",
+    html: page("Личное"),
+    folderId: other,
+  });
   assert.equal(personal.error, false, JSON.stringify(personal.value));
   // The limited agent saves without a folder: the work goes to «Отчёты».
   const saved = await mcp(limited.secret, "polka_publish", { key: randomUUID(), title: "Отчёт", html: page("Отчёт") });
   assert.equal(saved.error, false, JSON.stringify(saved.value));
-  const { rows: [work] } = await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [saved.value.artifactId]);
+  const {
+    rows: [work],
+  } = await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [saved.value.artifactId]);
   assert.equal(work.folder_id, reports);
   // Into another folder: refused.
-  const elsewhere = await mcp(limited.secret, "polka_publish", { key: randomUUID(), title: "Туда", html: page("Туда"), folderId: other });
+  const elsewhere = await mcp(limited.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "Туда",
+    html: page("Туда"),
+    folderId: other,
+  });
   assert.equal(elsewhere.error, true);
   // It sees only «Отчёты» and its works.
   const listed = await mcp(limited.secret, "polka_list", {});
-  assert.deepEqual(listed.value.items.map((item: any) => item.title), ["Отчёт"]);
+  assert.deepEqual(
+    listed.value.items.map((item: any) => item.title),
+    ["Отчёт"],
+  );
   const folders = await mcp(limited.secret, "polka_list_folders", {});
-  assert.deepEqual(folders.value.items.map((item: any) => item.name), ["Отчёты"]);
+  assert.deepEqual(
+    folders.value.items.map((item: any) => item.name),
+    ["Отчёты"],
+  );
   const hidden = await mcp(limited.secret, "polka_status", { artifactId: personal.value.artifactId });
   assert.equal(hidden.error, true);
   // Nor move its work out, nor manage folders.
-  const moved = await mcp(limited.secret, "polka_move", { key: randomUUID(), artifactIds: [saved.value.artifactId], folderId: other });
+  const moved = await mcp(limited.secret, "polka_move", {
+    key: randomUUID(),
+    artifactIds: [saved.value.artifactId],
+    folderId: other,
+  });
   assert.equal(moved.error, true);
   const created = await mcp(limited.secret, "polka_create_folder", { key: randomUUID(), name: "Новая" });
   assert.equal(created.error, true);
@@ -137,8 +167,18 @@ test("an agent limited to a folder saves there, sees only it and does not manage
 });
 
 test("a limited agent lists templates of its folders only", async () => {
-  const inside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "Шаблон отчёта", html: page("Шаблон отчёта"), folderId: reports });
-  const outside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "Личный шаблон", html: page("Личный шаблон"), folderId: other });
+  const inside = await mcp(whole.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "Шаблон отчёта",
+    html: page("Шаблон отчёта"),
+    folderId: reports,
+  });
+  const outside = await mcp(whole.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "Личный шаблон",
+    html: page("Личный шаблон"),
+    folderId: other,
+  });
   for (const saved of [inside, outside]) {
     assert.equal(saved.error, false, JSON.stringify(saved.value));
     await db.query(
@@ -148,7 +188,10 @@ test("a limited agent lists templates of its folders only", async () => {
   }
   const limitedList = await mcp(limited.secret, "polka_list_templates", {});
   assert.equal(limitedList.error, false, JSON.stringify(limitedList.value));
-  assert.deepEqual(limitedList.value.items.map((item: any) => item.title), ["Шаблон отчёта"]);
+  assert.deepEqual(
+    limitedList.value.items.map((item: any) => item.title),
+    ["Шаблон отчёта"],
+  );
   const wholeList = await mcp(whole.secret, "polka_list_templates", {});
   assert.deepEqual(wholeList.value.items.map((item: any) => item.title).sort(), ["Личный шаблон", "Шаблон отчёта"]);
 });
@@ -185,7 +228,8 @@ test("every MCP tool answers a failure as a structured error, never with the raw
   pg.Client.prototype.query = function (this: pg.Client, ...args: unknown[]) {
     const text = typeof args[0] === "string" ? args[0] : (args[0] as { text?: string } | undefined)?.text;
     // The folder list meets a real database error (42P01, naming a relation).
-    if (text?.includes("FROM folders")) args = ["SELECT * FROM internal_secret", ...args.slice(1).filter((arg) => typeof arg === "function")];
+    if (text?.includes("FROM folders"))
+      args = ["SELECT * FROM internal_secret", ...args.slice(1).filter((arg) => typeof arg === "function")];
     return (query as (...rest: unknown[]) => unknown).apply(this, args);
   } as typeof query;
   let failed;
@@ -199,9 +243,7 @@ test("every MCP tool answers a failure as a structured error, never with the raw
   assert.equal(failed.value.code, "internal");
   assert.match(failed.value.message, /Не удалось завершить действие/);
   assert.doesNotMatch(JSON.stringify(failed.value), /internal_secret|relation/);
-  const entry = errors
-    .map((line) => JSON.parse(line))
-    .find((item) => item.event === "mcp.tool.failed");
+  const entry = errors.map((line) => JSON.parse(line)).find((item) => item.event === "mcp.tool.failed");
   assert.deepEqual(
     { tool: entry?.tool, code: entry?.code, sqlstate: entry?.sqlstate },
     { tool: "polka_list_folders", code: "internal", sqlstate: "42P01" },
@@ -223,12 +265,24 @@ test("a limited agent's events feed holds the events of its folders only", async
     expiresAt: Math.floor(Date.now() / 1000) + 3600,
   });
   const tail = await listEventsForAgent(actorOf(limited.id), {});
-  const inside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "События внутри", html: page("в"), folderId: reports });
-  const outside = await mcp(whole.secret, "polka_publish", { key: randomUUID(), title: "События снаружи", html: page("с"), folderId: other });
+  const inside = await mcp(whole.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "События внутри",
+    html: page("в"),
+    folderId: reports,
+  });
+  const outside = await mcp(whole.secret, "polka_publish", {
+    key: randomUUID(),
+    title: "События снаружи",
+    html: page("с"),
+    folderId: other,
+  });
   assert.equal(inside.error || outside.error, false);
   let seen: string[] = [];
   for (let tries = 0; tries < 60 && !seen.length; tries++) {
-    seen = (await listEventsForAgent(actorOf(limited.id), { after: tail.nextCursor })).events.map((event) => event.artifactId);
+    seen = (await listEventsForAgent(actorOf(limited.id), { after: tail.nextCursor })).events.map(
+      (event) => event.artifactId,
+    );
     if (!seen.length) await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.deepEqual(seen, [inside.value.artifactId]);

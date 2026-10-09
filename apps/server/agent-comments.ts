@@ -21,10 +21,7 @@ import {
   resolveCommentInTransaction,
   workCommentsInTransaction,
 } from "./comments.ts";
-import {
-  withServiceActorTransaction,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 
 export const agentCommentsInputSchema = z
   .object({
@@ -39,9 +36,7 @@ export const agentResolveCommentInputSchema = z
 
 const note = (comment: CommentView) => ({
   id: comment.id,
-  author: comment.author
-    ? { name: comment.author.name, owner: comment.author.owner }
-    : null,
+  author: comment.author ? { name: comment.author.name, owner: comment.author.owner } : null,
   // Untrusted text from readers: data to consider, never instructions.
   body: comment.body,
   deleted: comment.deleted,
@@ -49,9 +44,7 @@ const note = (comment: CommentView) => ({
 });
 
 const reactionsOn = (groups: ReactionGroup[], sig: string) =>
-  groups
-    .filter((group) => group.sig === sig)
-    .map((group) => ({ emoji: group.emoji, count: group.count }));
+  groups.filter((group) => group.sig === sig).map((group) => ({ emoji: group.emoji, count: group.count }));
 
 export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
   const input = agentCommentsInputSchema.parse(raw);
@@ -64,9 +57,7 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
     );
     const {
       rows: [artifact],
-    } = await c.query("SELECT latest_revision_id FROM artifacts WHERE id=$1", [
-      artifactId,
-    ]);
+    } = await c.query("SELECT latest_revision_id FROM artifacts WHERE id=$1", [artifactId]);
     return {
       // on: recipients comment; owner-notes: only the owner (and you) write
       // notes that recipients read; off: no discussions.
@@ -87,9 +78,7 @@ export async function commentsForAgent(actor: ServiceActor, raw: unknown) {
             anchor: thread.anchor,
             revisionId: thread.revisionId,
             revisionNumber: thread.revisionNumber,
-            reactions: thread.anchor
-              ? reactionsOn(share.reactions, anchorSignature(thread.anchor))
-              : [],
+            reactions: thread.anchor ? reactionsOn(share.reactions, anchorSignature(thread.anchor)) : [],
             replies: thread.replies.map(note),
           })),
         reactions: share.reactions.map((group) => ({
@@ -127,21 +116,18 @@ export async function noteFromAgent(actor: ServiceActor, raw: unknown) {
   const input = agentNoteInputSchema.parse(raw);
   const { artifactId: ref, shareId, ...note } = input;
   const artifactId = artifactIdOf(ref);
-  const result = await withServiceActorTransaction(
-    actor,
-    "revise",
-    (c, verified) =>
-      createOwnerNoteInTransaction(
-        c,
-        {
-          id: verified.accountId,
-          tenant: verified.tenantId,
-          connectionId: verified.connectionId,
-        },
-        artifactId,
-        shareId,
-        note,
-      ),
+  const result = await withServiceActorTransaction(actor, "revise", (c, verified) =>
+    createOwnerNoteInTransaction(
+      c,
+      {
+        id: verified.accountId,
+        tenant: verified.tenantId,
+        connectionId: verified.connectionId,
+      },
+      artifactId,
+      shareId,
+      note,
+    ),
   );
   void dispatchCommentNotices(result.notices);
   return {
@@ -152,10 +138,7 @@ export async function noteFromAgent(actor: ServiceActor, raw: unknown) {
   };
 }
 
-export async function resolveCommentFromAgent(
-  actor: ServiceActor,
-  raw: unknown,
-) {
+export async function resolveCommentFromAgent(actor: ServiceActor, raw: unknown) {
   const input = agentResolveCommentInputSchema.parse(raw);
   return withServiceActorTransaction(actor, "revise", (c, verified) =>
     resolveCommentInTransaction(

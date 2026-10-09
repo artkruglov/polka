@@ -31,8 +31,7 @@ async function pending() {
   return { owner, id: begun.uploadId as string, key: `${owner.tenant}/${begun.uploadId}` };
 }
 
-const gone = (key: string, version: string) =>
-  assert.rejects(readBlob(key, version), "the version is deleted");
+const gone = (key: string, version: string) => assert.rejects(readBlob(key, version), "the version is deleted");
 
 test("an open upload keeps the version it stored", async () => {
   const { owner, id, key } = await pending();

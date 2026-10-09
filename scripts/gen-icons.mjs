@@ -6,8 +6,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const chrome =
-  process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const chrome = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const src = "apps/web/icons";
 const out = "apps/web/public";
 const work = mkdtempSync(join(tmpdir(), "polka-icons-"));
@@ -21,12 +20,22 @@ async function render(svg, size, file) {
     `<!doctype html><style>html,body{margin:0;background:transparent}img{display:block;width:${size}px;height:${size}px}</style><img src="data:image/svg+xml;base64,${readFileSync(join(src, svg)).toString("base64")}">`,
   );
   rmSync(file, { force: true });
-  const child = spawn(chrome, [
-    "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-    "--force-device-scale-factor=1", "--default-background-color=00000000",
-    `--user-data-dir=${join(work, `profile-${size}`)}`, `--window-size=${size},${size}`,
-    `--screenshot=${file}`, `file://${page}`,
-  ], { stdio: "ignore" });
+  const child = spawn(
+    chrome,
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--hide-scrollbars",
+      "--no-first-run",
+      "--force-device-scale-factor=1",
+      "--default-background-color=00000000",
+      `--user-data-dir=${join(work, `profile-${size}`)}`,
+      `--window-size=${size},${size}`,
+      `--screenshot=${file}`,
+      `file://${page}`,
+    ],
+    { stdio: "ignore" },
+  );
   try {
     for (let i = 0; i < 300; i++) {
       if (existsSync(file) && statSync(file).size > 0) {

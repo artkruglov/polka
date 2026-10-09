@@ -169,12 +169,10 @@ const VALUES: Array<{
       "Claude.ai и ChatGPT — коннектор MCP с входом через OAuth.",
       "Claude Code и Codex — одна команда, без токена.",
       <>
-        Скрипты и внутренние агенты — HTTP API <code>POST /api/v1/publish</code>
-        .
+        Скрипты и внутренние агенты — HTTP API <code>POST /api/v1/publish</code>.
       </>,
       <>
-        Справка для агентов — <code>/llms.txt</code> и{" "}
-        <code>/openapi.json</code>.
+        Справка для агентов — <code>/llms.txt</code> и <code>/openapi.json</code>.
       </>,
       "Папку со связанными страницами — README, документы, экраны со своими стилями, картинки — агент сохраняет одним проектом: до 400 файлов, дерево страниц и рабочие ссылки между ними.",
       "У каждого сотрудника свой аккаунт и своё подключение с выбранными правами.",
@@ -303,10 +301,9 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Где хранятся данные?",
     a: (
       <>
-        На polochka.app — в России, в Yandex Cloud: база, файлы и резервные
-        копии. Подробно — в <a href="/privacy">Политике обработки данных</a>. На
-        своей установке данные лежат там, где вы её развернули: Полка сама
-        никуда их не отправляет.
+        На polochka.app — в России, в Yandex Cloud: база, файлы и резервные копии. Подробно — в{" "}
+        <a href="/privacy">Политике обработки данных</a>. На своей установке данные лежат там, где вы её развернули:
+        Полка сама никуда их не отправляет.
       </>
     ),
   },
@@ -314,17 +311,11 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Можно поставить Полку у себя?",
     a: (
       <>
-        Да. Нужны Docker, PostgreSQL и S3-совместимое хранилище с
-        версионированием. Есть{" "}
-        <a
-          href={`${SOURCE_URL}/blob/main/deploy/hosted/README.md`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        Да. Нужны Docker, PostgreSQL и S3-совместимое хранилище с версионированием. Есть{" "}
+        <a href={`${SOURCE_URL}/blob/main/deploy/hosted/README.md`} target="_blank" rel="noopener noreferrer">
           инструкция для одной виртуальной машины
         </a>
-        . Это не отказоустойчивая конфигурация: если она нужна, обсудим в
-        заявке.
+        . Это не отказоустойчивая конфигурация: если она нужна, обсудим в заявке.
       </>
     ),
   },
@@ -332,17 +323,11 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     q: "Что с лицензией?",
     a: (
       <>
-        Код открыт под {SOURCE_LICENSE}. Лицензия не нужна, если вы запускаете
-        Полку без изменений или публикуете свои изменения на тех же условиях.
-        Коммерческая лицензия нужна, чтобы не публиковать изменения в установке,
-        которой пользуются другие, или встроить Полку в закрытый продукт.
-        Коммерческая редакция для организаций — отдельное расширение ядра по
-        договору, оно включается ключом лицензии; само ядро ключа не требует.{" "}
-        <a
-          href={`${SOURCE_URL}/blob/main/COMMERCIAL.md`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        Код открыт под {SOURCE_LICENSE}. Лицензия не нужна, если вы запускаете Полку без изменений или публикуете свои
+        изменения на тех же условиях. Коммерческая лицензия нужна, чтобы не публиковать изменения в установке, которой
+        пользуются другие, или встроить Полку в закрытый продукт. Коммерческая редакция для организаций — отдельное
+        расширение ядра по договору, оно включается ключом лицензии; само ядро ключа не требует.{" "}
+        <a href={`${SOURCE_URL}/blob/main/COMMERCIAL.md`} target="_blank" rel="noopener noreferrer">
           Условия
         </a>
         .
@@ -377,9 +362,7 @@ export function EnterpriseContent({
 }: {
   search?: string;
 }) {
-  const [interest, setInterest] = useState<EnterpriseInterest | "">(() =>
-    initialInterest(search),
-  );
+  const [interest, setInterest] = useState<EnterpriseInterest | "">(() => initialInterest(search));
   const choose = (value: EnterpriseInterest) => () => setInterest(value);
   return (
     <>
@@ -388,19 +371,13 @@ export function EnterpriseContent({
           <span className="eyebrow">Полка для компаний</span>
           <h1>Разложите ИИ по&nbsp;полочкам</h1>
           <p>
-            Сотрудники работают в ChatGPT, Claude, Codex и Claude Code. Агент
-            каждого кладёт работу на общую Полку — страницу, прототип, дашборд
-            или целую папку проекта. Там она открывается и работает, команда её
-            обсуждает и продолжает в любом агенте. Каждая сессия агента
-            хранится, а служба ИБ видит, что агенты делали. Всё на вашем
+            Сотрудники работают в ChatGPT, Claude, Codex и Claude Code. Агент каждого кладёт работу на общую Полку —
+            страницу, прототип, дашборд или целую папку проекта. Там она открывается и работает, команда её обсуждает и
+            продолжает в любом агенте. Каждая сессия агента хранится, а служба ИБ видит, что агенты делали. Всё на вашем
             сервере, код открыт.
           </p>
           <div className="enterprise-hero-actions">
-            <LinkButton
-              variant="primary"
-              href="#request"
-              onClick={choose("commercial-license")}
-            >
+            <LinkButton variant="primary" href="#request" onClick={choose("commercial-license")}>
               Попросить пилот <ArrowDown size={18} />
             </LinkButton>
             <LinkButton href="#pillars">Как это устроено</LinkButton>
@@ -442,11 +419,7 @@ export function EnterpriseContent({
         </figure>
       </section>
 
-      <section
-        id="pillars"
-        className="enterprise-values"
-        aria-labelledby="enterprise-pillars-title"
-      >
+      <section id="pillars" className="enterprise-values" aria-labelledby="enterprise-pillars-title">
         <h2 id="enterprise-pillars-title">У каждой работы ИИ — своё место</h2>
         <div className="enterprise-grid">
           {PILLARS.map((pillar) => (
@@ -467,11 +440,7 @@ export function EnterpriseContent({
         </div>
       </section>
 
-      <section
-        id="control"
-        className="enterprise-values"
-        aria-labelledby="enterprise-control-title"
-      >
+      <section id="control" className="enterprise-values" aria-labelledby="enterprise-control-title">
         <h2 id="enterprise-control-title">Сессии и контроль: что видит компания</h2>
         <div className="enterprise-grid">
           {CONTROL.map((item) => (
@@ -503,11 +472,7 @@ export function EnterpriseContent({
         </ol>
       </section>
 
-      <section
-        id="disk"
-        className="enterprise-values"
-        aria-labelledby="enterprise-values-title"
-      >
+      <section id="disk" className="enterprise-values" aria-labelledby="enterprise-values-title">
         <h2 id="enterprise-values-title">Работы агентов — на полках компании</h2>
         <div className="enterprise-grid">
           {VALUES.map((value) => (
@@ -526,24 +491,19 @@ export function EnterpriseContent({
         </div>
       </section>
 
-      <section
-        className="enterprise-next"
-        aria-labelledby="enterprise-next-title"
-      >
+      <section className="enterprise-next" aria-labelledby="enterprise-next-title">
         <h2 id="enterprise-next-title">Коммерческая редакция</h2>
         <p className="enterprise-next-lead">
-          Всё выше — открытое ядро, бесплатно. Для организаций есть
-          коммерческая редакция: расширение ядра по договору и с ключом
-          лицензии. Облако polochka.app работает на открытом ядре.{" "}
-          <a href="#request">Напишите в заявке</a>, что нужно вам.
+          Всё выше — открытое ядро, бесплатно. Для организаций есть коммерческая редакция: расширение ядра по договору и
+          с ключом лицензии. Облако polochka.app работает на открытом ядре. <a href="#request">Напишите в заявке</a>,
+          что нужно вам.
         </p>
         <div className="enterprise-grid">
           {NEXT.map((item) => (
             <article key={item.title}>
               <span className="enterprise-icon">{item.icon}</span>
               <h3>
-                {item.title}{" "}
-                {item.ready ? <Badge tone="success">есть</Badge> : <InProgress />}
+                {item.title} {item.ready ? <Badge tone="success">есть</Badge> : <InProgress />}
               </h3>
               <ul>
                 {item.points.map((point) => (
@@ -555,11 +515,7 @@ export function EnterpriseContent({
         </div>
       </section>
 
-      <section
-        id="deploy"
-        className="enterprise-deploy"
-        aria-labelledby="enterprise-deploy-title"
-      >
+      <section id="deploy" className="enterprise-deploy" aria-labelledby="enterprise-deploy-title">
         <h2 id="enterprise-deploy-title">Как развернуть</h2>
         <div className="enterprise-plans">
           <article>
@@ -567,12 +523,10 @@ export function EnterpriseContent({
               <Cloud />
             </span>
             <h3>Облако polochka.app</h3>
-            <strong className="enterprise-price">
-              Бесплатно на время пилота
-            </strong>
+            <strong className="enterprise-price">Бесплатно на время пилота</strong>
             <p>
-              Ничего не нужно устанавливать. Данные хранятся в России, работа —
-              по пользовательскому соглашению и политике обработки данных.
+              Ничего не нужно устанавливать. Данные хранятся в России, работа — по пользовательскому соглашению и
+              политике обработки данных.
             </p>
             <div className="enterprise-plan-actions">
               <LinkButton href="#request" onClick={choose("cloud")}>
@@ -586,23 +540,16 @@ export function EnterpriseContent({
               <Server />
             </span>
             <h3>Своя установка</h3>
-            <strong className="enterprise-price">
-              Бесплатно по {SOURCE_LICENSE}
-            </strong>
+            <strong className="enterprise-price">Бесплатно по {SOURCE_LICENSE}</strong>
             <p>
-              Docker-образ, PostgreSQL и S3-совместимое хранилище на ваших
-              серверах или в российском облаке. Отдельный домен просмотра для
-              интерактивных страниц.
+              Docker-образ, PostgreSQL и S3-совместимое хранилище на ваших серверах или в российском облаке. Отдельный
+              домен просмотра для интерактивных страниц.
             </p>
             <div className="enterprise-plan-actions">
               <LinkButton href="#request" onClick={choose("self-hosted")}>
                 Оставить заявку
               </LinkButton>
-              <a
-                href={`${SOURCE_URL}/blob/main/deploy/hosted/README.md`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={`${SOURCE_URL}/blob/main/deploy/hosted/README.md`} target="_blank" rel="noopener noreferrer">
                 Инструкция
               </a>
             </div>
@@ -614,40 +561,26 @@ export function EnterpriseContent({
             <h3>Коммерческая редакция</h3>
             <strong className="enterprise-price">По договору</strong>
             <p>
-              Открытое ядро и расширение для организаций: центр управления
-              агентами, контроль ссылок и агентов, журнал для SIEM. С
-              поддержкой и SLA. Коммерческая
-              лицензия на ядро — если нужно не публиковать изменения или
+              Открытое ядро и расширение для организаций: центр управления агентами, контроль ссылок и агентов, журнал
+              для SIEM. С поддержкой и SLA. Коммерческая лицензия на ядро — если нужно не публиковать изменения или
               встроить Полку в закрытый продукт.
             </p>
             <div className="enterprise-plan-actions">
-              <LinkButton
-                variant="primary"
-                href="#request"
-                onClick={choose("commercial-license")}
-              >
+              <LinkButton variant="primary" href="#request" onClick={choose("commercial-license")}>
                 Оставить заявку
               </LinkButton>
-              <a
-                href={`${SOURCE_URL}/blob/main/COMMERCIAL.md`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={`${SOURCE_URL}/blob/main/COMMERCIAL.md`} target="_blank" rel="noopener noreferrer">
                 Условия
               </a>
             </div>
           </article>
         </div>
         <p className="enterprise-fine">
-          Чем отличаются варианты и кому нужна лицензия —{" "}
-          <a href="/pricing">на странице вариантов</a>.
+          Чем отличаются варианты и кому нужна лицензия — <a href="/pricing">на странице вариантов</a>.
         </p>
       </section>
 
-      <section
-        className="enterprise-faq"
-        aria-labelledby="enterprise-faq-title"
-      >
+      <section className="enterprise-faq" aria-labelledby="enterprise-faq-title">
         <h2 id="enterprise-faq-title">Вопросы</h2>
         <div>
           {FAQ.map((item) => (
@@ -659,26 +592,14 @@ export function EnterpriseContent({
         </div>
       </section>
 
-      <section
-        id="request"
-        className="enterprise-request"
-        aria-labelledby="enterprise-request-title"
-      >
+      <section id="request" className="enterprise-request" aria-labelledby="enterprise-request-title">
         <div className="enterprise-request-lead">
           <h2 id="enterprise-request-title">Попросить пилот</h2>
-          <p>
-            Оставьте почту или Telegram — напишем, покажем Полку на демо-данных
-            и договоримся о пилоте у вас.
-          </p>
+          <p>Оставьте почту или Telegram — напишем, покажем Полку на демо-данных и договоримся о пилоте у вас.</p>
           <p className="enterprise-contact">
             Или напишите напрямую: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
           </p>
-          <a
-            className="enterprise-source"
-            href={SOURCE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a className="enterprise-source" href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
             Код Полки на GitHub <ArrowUpRight size={16} />
           </a>
         </div>

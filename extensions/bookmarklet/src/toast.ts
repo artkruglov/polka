@@ -10,11 +10,7 @@ type Style = Partial<Record<keyof CSSStyleDeclaration, string>>;
 
 const HOST_ID = "polka-bookmarklet-toast";
 
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  style: Style,
-  text?: string,
-): HTMLElementTagNameMap[K] {
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, style: Style, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   Object.assign(node.style, style);
   if (text !== undefined) node.textContent = text;
@@ -53,16 +49,20 @@ export function toast(): Toast {
   });
   card.setAttribute("role", "status");
   card.setAttribute("aria-live", "polite");
-  const mark = element("span", {
-    flex: "0 0 auto",
-    width: "22px",
-    height: "22px",
-    borderRadius: "6px",
-    background: "#2f5bd3",
-    color: "#fff",
-    font: "700 13px/22px system-ui, sans-serif",
-    textAlign: "center",
-  }, "П");
+  const mark = element(
+    "span",
+    {
+      flex: "0 0 auto",
+      width: "22px",
+      height: "22px",
+      borderRadius: "6px",
+      background: "#2f5bd3",
+      color: "#fff",
+      font: "700 13px/22px system-ui, sans-serif",
+      textAlign: "center",
+    },
+    "П",
+  );
   const body = element("div", { flex: "1 1 auto", minWidth: "0" });
   const title = element("div", { fontWeight: "600" }, "На Полку");
   const text = element("div", { marginTop: "2px", color: "#3d4450", overflowWrap: "anywhere" });
@@ -79,15 +79,19 @@ export function toast(): Toast {
   button.type = "button";
   actions.append(button);
   body.append(title, text, actions);
-  const close = element("button", {
-    flex: "0 0 auto",
-    cursor: "pointer",
-    border: "0",
-    background: "transparent",
-    color: "#6b7280",
-    font: "400 18px/1 system-ui, sans-serif",
-    padding: "0 2px",
-  }, "×");
+  const close = element(
+    "button",
+    {
+      flex: "0 0 auto",
+      cursor: "pointer",
+      border: "0",
+      background: "transparent",
+      color: "#6b7280",
+      font: "400 18px/1 system-ui, sans-serif",
+      padding: "0 2px",
+    },
+    "×",
+  );
   close.type = "button";
   close.setAttribute("aria-label", "Закрыть");
   card.append(mark, body, close);

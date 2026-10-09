@@ -16,10 +16,7 @@ export async function lockActiveOwnerTenant(
   lock: "UPDATE" | "SHARE" = "UPDATE",
 ) {
   const tenant = (
-    await c.query(
-      `SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR ${lock}`,
-      [actor.tenant, actor.id],
-    )
+    await c.query(`SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR ${lock}`, [actor.tenant, actor.id])
   ).rows[0];
   if (!tenant) throw denied();
   const account = (
@@ -39,10 +36,7 @@ export async function lockActiveOwnerTenant(
  * active member of (any role; docs/specs/TEAM_SHELVES.md). On a personal
  * shelf the owner is its one member, so this is the owner check it was.
  */
-export async function assertActiveOwner(
-  c: Pick<PoolClient, "query">,
-  actor: Actor,
-) {
+export async function assertActiveOwner(c: Pick<PoolClient, "query">, actor: Actor) {
   const active = await c.query(
     `SELECT 1 FROM tenant_members member
      JOIN tenants tenant ON tenant.id=member.tenant_id
@@ -52,8 +46,7 @@ export async function assertActiveOwner(
        AND NOT account.disabled AND account.deletion_requested_at IS NULL`,
     [actor.tenant, actor.id, config.TEAM_SHELVES === "on"],
   );
-  if (!active.rowCount)
-    throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
+  if (!active.rowCount) throw new Problem(403, "forbidden", "Доступ к аккаунту закрыт.");
 }
 
 /**
@@ -69,10 +62,9 @@ export async function lockAnsweringAccount(
   lock: "UPDATE" | "SHARE" = "UPDATE",
 ) {
   const tenant = (
-    await c.query(
-      `SELECT kind,owner_id FROM tenants WHERE id=$1 AND ${linkShelfOpenSql("tenants")} FOR ${lock}`,
-      [answering.tenant],
-    )
+    await c.query(`SELECT kind,owner_id FROM tenants WHERE id=$1 AND ${linkShelfOpenSql("tenants")} FOR ${lock}`, [
+      answering.tenant,
+    ])
   ).rows[0];
   if (!tenant || (tenant.kind === "personal" && tenant.owner_id !== answering.id)) return false;
   const account = await c.query(
@@ -95,6 +87,4 @@ export const answeringAccountSql = (tenant = "tenant", share = "share") =>
 
 /** Links out of department shelves open only while TEAM_SHELVES is on. */
 export const linkShelfOpenSql = (tenant = "tenant") =>
-  config.TEAM_SHELVES === "on"
-    ? `${tenant}.state='active'`
-    : `${tenant}.state='active' AND ${tenant}.kind='personal'`;
+  config.TEAM_SHELVES === "on" ? `${tenant}.state='active'` : `${tenant}.state='active' AND ${tenant}.kind='personal'`;

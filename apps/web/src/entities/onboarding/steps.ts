@@ -1,7 +1,4 @@
-import type {
-  AgentConnection,
-  Artifact,
-} from "../../../../../packages/contracts/index.ts";
+import type { AgentConnection, Artifact } from "../../../../../packages/contracts/index.ts";
 
 export type FirstRunStepId = "agent" | "save" | "share";
 
@@ -37,8 +34,7 @@ const linkable = (a: Artifact) =>
   a.revision.htmlProfile === "limited" ||
   a.revision.inlineBuild?.state === "ready";
 
-const isActive = (c: AgentConnection) =>
-  c.status === "issued" || c.status === "seen";
+const isActive = (c: AgentConnection) => c.status === "issued" || c.status === "seen";
 
 /**
  * The three first-run steps, derived only from what the API already returns:

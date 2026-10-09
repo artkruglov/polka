@@ -64,10 +64,7 @@ export function useBookmarkletMessage(nonce: string | null, waitMs = 20_000): Re
     if (!nonce) return;
     let done = false;
     const reply = (event: MessageEvent, body: Record<string, unknown>) =>
-      (event.source as Window | null)?.postMessage(
-        { type: BOOKMARKLET_MESSAGE, nonce, ...body },
-        event.origin,
-      );
+      (event.source as Window | null)?.postMessage({ type: BOOKMARKLET_MESSAGE, nonce, ...body }, event.origin);
     const onMessage = (event: MessageEvent) => {
       if (done) return;
       const accepted = acceptBookmarkletEvent(event, { opener: window.opener, nonce });

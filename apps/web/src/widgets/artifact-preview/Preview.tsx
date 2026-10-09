@@ -2,18 +2,9 @@ import React, { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import type { LinkDocument, Revision } from "../../../../../packages/contracts/index.ts";
 import { LINK_MIME, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
-import {
-  LinkCard,
-  LinkCover,
-  OWNER_LINK_HINT,
-  recipientAccessNote,
-} from "../../entities/link/index.tsx";
+import { LinkCard, LinkCover, OWNER_LINK_HINT, recipientAccessNote } from "../../entities/link/index.tsx";
 import { bytes, staticView, withShelf } from "../../shared/api/client.ts";
-import {
-  isImage,
-  isStaticSingleFileBundle,
-  size,
-} from "../../entities/artifact/format.ts";
+import { isImage, isStaticSingleFileBundle, size } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
 import { ProjectView, filesLabel } from "./ProjectView.tsx";
 import { TextCover } from "./TextCover.tsx";
@@ -53,15 +44,10 @@ export function Preview({
     let url: string | undefined;
     setContent({});
     setError("");
-    if (revision.mime === "text/html" || revision.storageKind === "bundle")
-      return () => abort.abort();
+    if (revision.mime === "text/html" || revision.storageKind === "bundle") return () => abort.abort();
     // A link's cover needs only its host and service, which the revision carries.
     if (revision.mime === LINK_MIME && compact) return () => abort.abort();
-    bytes(
-      grant ? "/view/bytes" : `/revisions/${revision.id}/bytes`,
-      grant,
-      abort.signal,
-    )
+    bytes(grant ? "/view/bytes" : `/revisions/${revision.id}/bytes`, grant, abort.signal)
       .then(async (blob) => {
         if (abort.signal.aborted) return;
         if (isImage(revision)) {
@@ -103,7 +89,11 @@ export function Preview({
         // The owner goes through Полка (no referrer); a recipient straight to the original.
         href={grant ? document.url : withShelf(`/api/revisions/${revision.id}/open`)}
         note={document.note}
-        hint={grant ? recipientAccessNote(link.host, link.service, "recipient") : `${OWNER_LINK_HINT} ${recipientAccessNote(link.host, link.service)}`}
+        hint={
+          grant
+            ? recipientAccessNote(link.host, link.service, "recipient")
+            : `${OWNER_LINK_HINT} ${recipientAccessNote(link.host, link.service)}`
+        }
       />
     );
   }
@@ -121,10 +111,7 @@ export function Preview({
       <ProjectView key={revision.id} revision={revision} grant={grant} />
     );
   // A lone static page saved as a bundle is shown like a single HTML upload.
-  if (
-    revision.storageKind === "bundle" &&
-    !isStaticSingleFileBundle(revision)
-  ) {
+  if (revision.storageKind === "bundle" && !isStaticSingleFileBundle(revision)) {
     const fallback = (
       <StatusPanel
         title="Копия сохранена"
@@ -132,19 +119,13 @@ export function Preview({
         action={
           !compact &&
           !grant && (
-            <a
-              className="ui-button"
-              href={withShelf(`/api/revisions/${revision.id}/export`)}
-              download
-            >
+            <a className="ui-button" href={withShelf(`/api/revisions/${revision.id}/export`)} download>
               Скачать весь пакет
             </a>
           )
         }
       >
-        {revision.inlineBuild?.state === "ready"
-          ? "Интерактивная версия готова."
-          : "Просмотр пакета ещё недоступен."}{" "}
+        {revision.inlineBuild?.state === "ready" ? "Интерактивная версия готова." : "Просмотр пакета ещё недоступен."}{" "}
         Размер: {size(revision.totalSize)}.
       </StatusPanel>
     );
@@ -200,8 +181,7 @@ export function Preview({
         />
         {revision.htmlProfile === "limited" && (
           <p className="html-preview-note">
-            Интерактивные действия отключены в безопасном просмотре; показана
-            сохранённая версия страницы.
+            Интерактивные действия отключены в безопасном просмотре; показана сохранённая версия страницы.
           </p>
         )}
       </div>
@@ -231,11 +211,7 @@ export function Preview({
         className={compact ? "cover-image" : "work-image"}
         src={content.url}
         alt={compact ? "" : revision.filename}
-        onError={() =>
-          setError(
-            "Не удалось показать изображение. Оригинал сохранён и доступен для скачивания.",
-          )
-        }
+        onError={() => setError("Не удалось показать изображение. Оригинал сохранён и доступен для скачивания.")}
       />
     );
   if (content.text !== undefined)
@@ -289,8 +265,7 @@ function SandboxFrame({
   }, [revisionId, grant, !!overlay]);
   // The overlay is the one script of a static view, and only on the viewer's
   // own domain: a same-origin frame (single-domain install) gets none.
-  const scripted =
-    !!overlay && !!src && new URL(src, location.href).origin !== location.origin;
+  const scripted = !!overlay && !!src && new URL(src, location.href).origin !== location.origin;
   if (error) return <div className="preview-error">{error}</div>;
   return (
     <div className="html-preview-frame" data-loaded={loaded || undefined}>
@@ -332,8 +307,7 @@ function ReadingText({ text, title }: { text: string; title: string }) {
       .trim();
   const hasHeading = normalize(blocks[0] || "") === normalize(title);
   const heading = hasHeading ? blocks.shift()! : title;
-  const lead =
-    hasHeading && blocks[0]?.length < 120 ? blocks.shift() : undefined;
+  const lead = hasHeading && blocks[0]?.length < 120 ? blocks.shift() : undefined;
   return (
     <article className="reading-article">
       <span className="reading-eyebrow">Заметка</span>

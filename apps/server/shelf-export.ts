@@ -16,9 +16,7 @@ import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
 import { unavailableSql } from "./revision-availability.ts";
 import { readStoredFile, storedRevisionFiles } from "./work-files.ts";
 
-const POLKA_VERSION: string = JSON.parse(
-  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
-).version;
+const POLKA_VERSION: string = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
 
 export const shelfExportInputSchema = z
   .object({
@@ -30,7 +28,6 @@ export const shelfExportInputSchema = z
 
 /** A page stops adding works past this many versions (a work always comes whole). */
 export const EXPORT_PAGE_REVISIONS = 1000;
-
 
 /**
  * The token may export: read and source:read, the whole personal shelf (not
@@ -45,8 +42,7 @@ async function exporter(actor: ServiceActor) {
     tenant: verified.tenantId,
     connectionId: verified.connectionId,
   });
-  if (scope)
-    throw new Problem(403, "forbidden", "Токен ограничен папками: для переноса нужна вся полка.");
+  if (scope) throw new Problem(403, "forbidden", "Токен ограничен папками: для переноса нужна вся полка.");
   const {
     rows: [shelf],
   } = await db.query(
@@ -55,8 +51,7 @@ async function exporter(actor: ServiceActor) {
       WHERE tenant.id=$1 AND tenant.owner_id=$2 AND owner.deletion_requested_at IS NULL`,
     [verified.tenantId, verified.accountId],
   );
-  if (!shelf || shelf.kind !== "personal")
-    throw new Problem(403, "forbidden", "Переносится только своя личная полка.");
+  if (!shelf || shelf.kind !== "personal") throw new Problem(403, "forbidden", "Переносится только своя личная полка.");
   return { verified, shelf };
 }
 
@@ -144,10 +139,7 @@ export async function shelfExportForAgent(
       revisions: out,
     });
   }
-  const { rows: folders } = await db.query(
-    "SELECT id,name FROM folders WHERE tenant_id=$1 ORDER BY name,id",
-    [tenant],
-  );
+  const { rows: folders } = await db.query("SELECT id,name FROM folders WHERE tenant_id=$1 ORDER BY name,id", [tenant]);
   await countAgentRead(tenant, verified.principal);
   return {
     format: SHELF_EXPORT_FORMAT,
@@ -177,8 +169,7 @@ export async function exportFileForAgent(actor: ServiceActor, revisionId: string
     [revisionId, verified.tenantId],
   );
   if (!revision) throw missing();
-  if (revision.unavailable)
-    throw new Problem(410, "expired", "Эта версия заблокирована модератором и не выгружается.");
+  if (revision.unavailable) throw new Problem(410, "expired", "Эта версия заблокирована модератором и не выгружается.");
   const file = (await storedRevisionFiles(db, revision)).files[index];
   if (!file) throw missing();
   return readStoredFile(file);

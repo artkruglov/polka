@@ -19,11 +19,7 @@ declare namespace chrome {
     function openOptionsPage(): Promise<void>;
     const onMessage: {
       addListener(
-        callback: (
-          message: any,
-          sender: MessageSender,
-          sendResponse: (response?: unknown) => void,
-        ) => boolean | void,
+        callback: (message: any, sender: MessageSender, sendResponse: (response?: unknown) => void) => boolean | void,
       ): void;
     };
     const onInstalled: { addListener(callback: () => void): void };
@@ -38,16 +34,11 @@ declare namespace chrome {
     };
     const local: StorageArea;
     const session: StorageArea & {
-      setAccessLevel(options: {
-        accessLevel: "TRUSTED_CONTEXTS" | "TRUSTED_AND_UNTRUSTED_CONTEXTS";
-      }): Promise<void>;
+      setAccessLevel(options: { accessLevel: "TRUSTED_CONTEXTS" | "TRUSTED_AND_UNTRUSTED_CONTEXTS" }): Promise<void>;
     };
     const onChanged: {
       addListener(
-        callback: (
-          changes: Record<string, { oldValue?: unknown; newValue?: unknown }>,
-          area: string,
-        ) => void,
+        callback: (changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, area: string) => void,
       ): void;
     };
   }
@@ -61,26 +52,13 @@ declare namespace chrome {
       active: boolean;
       windowId: number;
     };
-    function query(query: {
-      active?: boolean;
-      currentWindow?: boolean;
-    }): Promise<Tab[]>;
+    function query(query: { active?: boolean; currentWindow?: boolean }): Promise<Tab[]>;
     function get(tabId: number): Promise<Tab>;
-    function create(properties: {
-      url: string;
-      active?: boolean;
-      openerTabId?: number;
-    }): Promise<Tab>;
+    function create(properties: { url: string; active?: boolean; openerTabId?: number }): Promise<Tab>;
     function remove(tabId: number): Promise<void>;
-    function sendMessage(
-      tabId: number,
-      message: unknown,
-      options?: { frameId?: number },
-    ): Promise<unknown>;
+    function sendMessage(tabId: number, message: unknown, options?: { frameId?: number }): Promise<unknown>;
     const onUpdated: {
-      addListener(
-        callback: (tabId: number, info: { status?: string; url?: string }, tab: Tab) => void,
-      ): void;
+      addListener(callback: (tabId: number, info: { status?: string; url?: string }, tab: Tab) => void): void;
       removeListener(callback: (...args: any[]) => void): void;
     };
     const onRemoved: {
@@ -112,21 +90,14 @@ declare namespace chrome {
       allFrames?: boolean;
       persistAcrossSessions?: boolean;
     };
-    function registerContentScripts(
-      scripts: RegisteredContentScript[],
-    ): Promise<void>;
+    function registerContentScripts(scripts: RegisteredContentScript[]): Promise<void>;
     function unregisterContentScripts(filter?: { ids?: string[] }): Promise<void>;
-    function getRegisteredContentScripts(filter?: {
-      ids?: string[];
-    }): Promise<RegisteredContentScript[]>;
+    function getRegisteredContentScripts(filter?: { ids?: string[] }): Promise<RegisteredContentScript[]>;
   }
 
   namespace identity {
     function getRedirectURL(path?: string): string;
-    function launchWebAuthFlow(details: {
-      url: string;
-      interactive: boolean;
-    }): Promise<string | undefined>;
+    function launchWebAuthFlow(details: { url: string; interactive: boolean }): Promise<string | undefined>;
   }
 
   namespace permissions {

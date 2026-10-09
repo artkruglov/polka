@@ -24,9 +24,7 @@ import {
 } from "../apps/web/src/entities/recipient-note/copy.ts";
 
 const page = (body: string) => {
-  const inspection = inspectHtml(
-    `<!doctype html><html><head><title>t</title></head><body>${body}</body></html>`,
-  );
+  const inspection = inspectHtml(`<!doctype html><html><head><title>t</title></head><body>${body}</body></html>`);
   assert.equal(inspection.filter.sensitiveInput, inspection.sensitive!.sensitive);
   return inspection.sensitive!;
 };
@@ -36,15 +34,9 @@ test("a password field, autocomplete tokens and named fields are found", () => {
   assert.deepEqual(page("<input type=PASSWORD name=x>").signals, ["password-field"]);
   assert.deepEqual(page('<input autocomplete="cc-number">').signals, ["autocomplete-card"]);
   assert.deepEqual(page('<input autocomplete="cc-exp">').signals, ["autocomplete-card"]);
-  assert.deepEqual(page('<input autocomplete="one-time-code" inputmode="numeric">').signals, [
-    "autocomplete-otp",
-  ]);
-  assert.deepEqual(page('<input autocomplete="section-a current-password">').signals, [
-    "autocomplete-password",
-  ]);
-  assert.deepEqual(page('<input autocomplete="new-password" type="text">').signals, [
-    "autocomplete-password",
-  ]);
+  assert.deepEqual(page('<input autocomplete="one-time-code" inputmode="numeric">').signals, ["autocomplete-otp"]);
+  assert.deepEqual(page('<input autocomplete="section-a current-password">').signals, ["autocomplete-password"]);
+  assert.deepEqual(page('<input autocomplete="new-password" type="text">').signals, ["autocomplete-password"]);
   const positives: Array<[string, string]> = [
     ['<input name="userPassword">', "password"],
     ['<input placeholder="Пароль">', "password"],
@@ -126,7 +118,10 @@ test("scripts that build fields at run time: JSX, createElement, HTML strings", 
   assert.ok(scriptSensitiveInput(`<label>Номер карты</label><input />`).signals.includes("card-number"));
   assert.ok(scriptSensitiveInput(`const code = prompt("Введите код из SMS");`).signals.includes("prompt"));
   // An inline script of a page counts as well.
-  assert.equal(page(`<div id=root></div><script>document.body.innerHTML='<input type="password">'</script>`).sensitive, true);
+  assert.equal(
+    page(`<div id=root></div><script>document.body.innerHTML='<input type="password">'</script>`).sensitive,
+    true,
+  );
   // And a bundle's script through the collector (artifacts.ts).
   const collector = new SignalCollector();
   scanScript(`<input name="password" />`, collector);
@@ -190,12 +185,19 @@ test("verdicts merge; stored fields; old revisions are unknown", () => {
 });
 
 test("autoChecked: the models answered and nobody found anything", () => {
-  const clean = { v: 1, hits: {}, model: { state: "checked", findings: [], answers: [{ source: "text", answer: "none" }] } };
+  const clean = {
+    v: 1,
+    hits: {},
+    model: { state: "checked", findings: [], answers: [{ source: "text", answer: "none" }] },
+  };
   assert.equal(autoCheckedClean(clean), true);
   assert.equal(autoCheckedClean({ v: 1, hits: {} }), false);
   assert.equal(autoCheckedClean({ ...clean, model: { state: "unchecked", findings: [] } }), false);
   assert.equal(
-    autoCheckedClean({ ...clean, model: { state: "checked", findings: [{ category: "spam", agreed: false, source: "text", reason: "x" }] } }),
+    autoCheckedClean({
+      ...clean,
+      model: { state: "checked", findings: [{ category: "spam", agreed: false, source: "text", reason: "x" }] },
+    }),
     false,
   );
   // A rules finding at the flag level.

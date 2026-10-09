@@ -17,12 +17,8 @@ test("restore drill identities require exact synthetic prefixes and separation",
   const targetDatabase = databaseName(id, "target");
   const sourceBucket = bucketName(id, "source");
   const targetBucket = bucketName(id, "target");
-  assert.doesNotThrow(() =>
-    assertDrillIdentity(id, "source", sourceDatabase, sourceBucket),
-  );
-  assert.doesNotThrow(() =>
-    assertDrillIdentity(id, "target", targetDatabase, targetBucket),
-  );
+  assert.doesNotThrow(() => assertDrillIdentity(id, "source", sourceDatabase, sourceBucket));
+  assert.doesNotThrow(() => assertDrillIdentity(id, "target", targetDatabase, targetBucket));
   assert.doesNotThrow(() =>
     assertSeparatedIdentities({
       workingDatabase: "polka",
@@ -51,24 +47,11 @@ test("restore drill identities require exact synthetic prefixes and separation",
 });
 
 test("restore drill rejects URL query routing overrides before writes", () => {
-  assert.doesNotThrow(() =>
-    assertPlainLoopbackUrl(
-      new URL("postgresql://polka@127.0.0.1:54388/polka"),
-      "database",
-    ),
-  );
+  assert.doesNotThrow(() => assertPlainLoopbackUrl(new URL("postgresql://polka@127.0.0.1:54388/polka"), "database"));
   assert.throws(() =>
-    assertPlainLoopbackUrl(
-      new URL("postgresql://localuser@127.0.0.1:5432/polka?host=example.test"),
-      "database",
-    ),
+    assertPlainLoopbackUrl(new URL("postgresql://localuser@127.0.0.1:5432/polka?host=example.test"), "database"),
   );
-  assert.throws(() =>
-    assertPlainLoopbackUrl(
-      new URL("http://127.0.0.1:9038?endpoint=example.test"),
-      "S3",
-    ),
-  );
+  assert.throws(() => assertPlainLoopbackUrl(new URL("http://127.0.0.1:9038?endpoint=example.test"), "S3"));
 });
 
 test("restore drill secret escrow is authenticated and never stores plaintext", () => {

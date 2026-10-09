@@ -28,14 +28,16 @@ const common = {
 } as const;
 
 const revokeSchema = z.object({ ...common, event: z.literal("revoke") }).strict();
-const purgedSchema = z.object({
-  ...common,
-  event: z.literal("purged"),
-  revokeSha256: sha256,
-  sourceEmptyVerifiedAt: timestamp,
-  localMailClearedAt: timestamp,
-  metadataPurgedAt: timestamp,
-}).strict();
+const purgedSchema = z
+  .object({
+    ...common,
+    event: z.literal("purged"),
+    revokeSha256: sha256,
+    sourceEmptyVerifiedAt: timestamp,
+    localMailClearedAt: timestamp,
+    metadataPurgedAt: timestamp,
+  })
+  .strict();
 const recordSchema = z.discriminatedUnion("event", [revokeSchema, purgedSchema]);
 
 export type RevokeRecord = z.infer<typeof revokeSchema>;
@@ -53,12 +55,14 @@ export type ErasureEntry = {
 function canonicalValue(value: unknown): string {
   if (Array.isArray(value)) throw new Error("arrays are not allowed");
   if (value === null || typeof value !== "object") {
-    if (typeof value === "undefined" || typeof value === "function")
-      throw new Error("unsupported JSON value");
+    if (typeof value === "undefined" || typeof value === "function") throw new Error("unsupported JSON value");
     return JSON.stringify(value);
   }
   const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map((key) => `${JSON.stringify(key)}:${canonicalValue(object[key])}`).join(",")}}`;
+  return `{${Object.keys(object)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((key) => `${JSON.stringify(key)}:${canonicalValue(object[key])}`)
+    .join(",")}}`;
 }
 
 function canonicalBytes(record: ErasureRecord): Uint8Array {
@@ -132,7 +136,14 @@ export function decodeErasureRecord(
 }
 
 function commonOf(record: ErasureRecord) {
-  const { event: _event, revokeSha256: _hash, sourceEmptyVerifiedAt: _source, localMailClearedAt: _mail, metadataPurgedAt: _metadata, ...value } = record as ErasureRecord & Partial<PurgedRecord>;
+  const {
+    event: _event,
+    revokeSha256: _hash,
+    sourceEmptyVerifiedAt: _source,
+    localMailClearedAt: _mail,
+    metadataPurgedAt: _metadata,
+    ...value
+  } = record as ErasureRecord & Partial<PurgedRecord>;
   return value;
 }
 
@@ -140,14 +151,26 @@ export function validateErasurePair(revokeInput: unknown, purgedInput?: unknown)
   const revoke = parseRecord(revokeInput);
   if (revoke.event !== "revoke") throw new Error("revoke record required");
   if (purgedInput === undefined)
-    return { requestId: revoke.requestId, accountId: revoke.accountId, tenantId: revoke.tenantId, state: "revoked", revoke };
+    return {
+      requestId: revoke.requestId,
+      accountId: revoke.accountId,
+      tenantId: revoke.tenantId,
+      state: "revoked",
+      revoke,
+    };
   const purged = parseRecord(purgedInput);
   if (purged.event !== "purged") throw new Error("purged record required");
   if (JSON.stringify(commonOf(revoke)) !== JSON.stringify(commonOf(purged)))
     throw new Error("common ledger fields mismatch");
-  if (purged.revokeSha256 !== encodeErasureRecord(revoke).sha256)
-    throw new Error("revoke hash mismatch");
-  return { requestId: revoke.requestId, accountId: revoke.accountId, tenantId: revoke.tenantId, state: "purged", revoke, purged };
+  if (purged.revokeSha256 !== encodeErasureRecord(revoke).sha256) throw new Error("revoke hash mismatch");
+  return {
+    requestId: revoke.requestId,
+    accountId: revoke.accountId,
+    tenantId: revoke.tenantId,
+    state: "purged",
+    revoke,
+    purged,
+  };
 }
 
 export function validateErasureLedger(recordsInput: readonly unknown[], expectedLedgerId: string): ErasureEntry[] {

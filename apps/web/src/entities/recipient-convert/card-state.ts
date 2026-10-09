@@ -41,9 +41,7 @@ export function markCardShown(storage: StorageLike | null = browserStorage()): b
 }
 
 /** Returns false when the choice could not be remembered. */
-export function markCardDismissed(
-  storage: StorageLike | null = browserStorage(),
-): boolean {
+export function markCardDismissed(storage: StorageLike | null = browserStorage()): boolean {
   try {
     if (!storage) return false;
     storage.setItem(CARD_DISMISSED_KEY, "1");

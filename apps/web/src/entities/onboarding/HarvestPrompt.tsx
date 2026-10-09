@@ -1,11 +1,7 @@
 import React from "react";
 import { Segmented } from "../../shared/ui/controls.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
-import {
-  harvestClients,
-  harvestPrompt,
-  type HarvestClientId,
-} from "./agent-setup.ts";
+import { harvestClients, harvestPrompt, type HarvestClientId } from "./agent-setup.ts";
 
 /**
  * «Скопировать задание агенту»: the harvest task for one client, with tabs

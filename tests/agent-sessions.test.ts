@@ -64,7 +64,12 @@ const web = (method: "GET" | "DELETE", url: string, cookieHeader: string) =>
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
 async function upload(secret: string, file: { source: "claude-code" | "codex"; path: string; id: string }) {
-  const key = await app.inject({ method: "GET", url: "/api/v1/sessions/key", remoteAddress: address(), headers: bearer(secret) });
+  const key = await app.inject({
+    method: "GET",
+    url: "/api/v1/sessions/key",
+    remoteAddress: address(),
+    headers: bearer(secret),
+  });
   assert.equal(key.statusCode, 200, key.body);
   const prepared = await prepareSession(file, Buffer.from(key.json().key, "hex"));
   const saved = await app.inject({
@@ -108,10 +113,13 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
   const person = await owner("sessions");
   const secret = await token(person);
   // A work of this shelf the session saved through Полка's tools.
-  const { rows: [work] } = await db.query(
-    `INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Report') RETURNING id`,
-    [randomUUID(), person.tenant, person.id],
-  );
+  const {
+    rows: [work],
+  } = await db.query(`INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Report') RETURNING id`, [
+    randomUUID(),
+    person.tenant,
+    person.id,
+  ]);
   const file = await sessionFile(work.id);
   const { saved, prepared } = await upload(secret, file);
   assert.equal(saved.statusCode, 200, saved.body);
@@ -126,10 +134,18 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
 
   // The audit event names the session, never its content.
   const { rows: events } = await db.query(`SELECT action, payload FROM audit_outbox WHERE target_id=$1`, [body.id]);
-  assert.deepEqual(events.map((e) => e.action), ["session.saved"]);
+  assert.deepEqual(
+    events.map((e) => e.action),
+    ["session.saved"],
+  );
   assert.ok(!JSON.stringify(events).includes("demo-app"));
   // The rules that fired ride along, so the SIEM worker needs not the session (#43).
-  assert.deepEqual(events[0].payload.alerts.split(",").sort(), ["destructive_command", "no_approvals", "pipe_to_shell", "secret_sent_out"]);
+  assert.deepEqual(events[0].payload.alerts.split(",").sort(), [
+    "destructive_command",
+    "no_approvals",
+    "pipe_to_shell",
+    "secret_sent_out",
+  ]);
 
   const own = await cookie(person);
   const list = await web("GET", "/api/sessions", own);
@@ -148,7 +164,10 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
   assert.ok(links.some((l: { kind: string; target: string }) => l.kind === "pr" && l.target.endsWith("/pull/7")));
   assert.ok(links.some((l: { artifactId: string; title: string }) => l.artifactId === work.id && l.title === "Report"));
   const ofWork = await web("GET", `/api/artifacts/${work.id}/sessions`, own);
-  assert.deepEqual(ofWork.json().sessions.map((s: { id: string }) => s.id), [body.id]);
+  assert.deepEqual(
+    ofWork.json().sessions.map((s: { id: string }) => s.id),
+    [body.id],
+  );
 
   const transcript = await web("GET", `/api/sessions/${body.id}/transcript?limit=3`, own);
   assert.equal(transcript.statusCode, 200, transcript.body);
@@ -176,14 +195,26 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
   assert.equal(again.saved.json().id, body.id);
   assert.equal(again.saved.json().created, false);
   assert.equal(again.saved.json().transcriptNeeded, false);
-  const { rows: [{ count }] } = await db.query(`SELECT count(*)::int FROM agent_sessions WHERE tenant_id=$1`, [person.tenant]);
+  const {
+    rows: [{ count }],
+  } = await db.query(`SELECT count(*)::int FROM agent_sessions WHERE tenant_id=$1`, [person.tenant]);
   assert.equal(count, 1);
 
   const removed = await web("DELETE", `/api/sessions/${body.id}`, own);
   assert.equal(removed.statusCode, 200, removed.body);
-  const { rows: [tenant] } = await db.query(`SELECT session_used_bytes FROM tenants WHERE id=$1`, [person.tenant]);
+  const {
+    rows: [tenant],
+  } = await db.query(`SELECT session_used_bytes FROM tenants WHERE id=$1`, [person.tenant]);
   assert.equal(Number(tenant.session_used_bytes), 0);
-  assert.equal((await db.query(`SELECT 1 FROM agent_session_tool_calls c JOIN agent_sessions s ON s.id=c.session_id WHERE s.tenant_id=$1`, [person.tenant])).rowCount, 0);
+  assert.equal(
+    (
+      await db.query(
+        `SELECT 1 FROM agent_session_tool_calls c JOIN agent_sessions s ON s.id=c.session_id WHERE s.tenant_id=$1`,
+        [person.tenant],
+      )
+    ).rowCount,
+    0,
+  );
 });
 
 test("needs the sessions permission, an enabled shelf and room", async () => {
@@ -191,9 +222,19 @@ test("needs the sessions permission, an enabled shelf and room", async () => {
   const file = await sessionFile();
   const withoutScope = await upload(await token(person, ["context", "capture"]), file).catch((error) => ({ error }));
   assert.ok("error" in withoutScope);
-  const key = await app.inject({ method: "GET", url: "/api/v1/sessions/key", remoteAddress: address(), headers: bearer(await token(person, ["context", "capture"])) });
+  const key = await app.inject({
+    method: "GET",
+    url: "/api/v1/sessions/key",
+    remoteAddress: address(),
+    headers: bearer(await token(person, ["context", "capture"])),
+  });
   assert.equal(key.statusCode, 403, key.body);
-  const off = await app.inject({ method: "GET", url: "/api/v1/sessions/key", remoteAddress: address(), headers: bearer(await token(person)) });
+  const off = await app.inject({
+    method: "GET",
+    url: "/api/v1/sessions/key",
+    remoteAddress: address(),
+    headers: bearer(await token(person)),
+  });
   assert.equal(off.statusCode, 403);
   assert.equal(off.json().reason, "sessions_disabled");
   assert.equal((await web("GET", "/api/sessions", await cookie(person))).json().enabled, false);
@@ -233,7 +274,9 @@ test("erasing the account erases its sessions", async () => {
   // The rename is the erasure's own step (030), which fires the trigger of 065.
   await db.query(`UPDATE accounts SET name='deleted-'||id WHERE id=$1`, [person.id]);
   assert.equal((await db.query(`SELECT 1 FROM agent_sessions WHERE account_id=$1`, [person.id])).rowCount, 0);
-  const { rows: [tenant] } = await db.query(`SELECT session_used_bytes, session_fingerprint_key FROM tenants WHERE id=$1`, [person.tenant]);
+  const {
+    rows: [tenant],
+  } = await db.query(`SELECT session_used_bytes, session_fingerprint_key FROM tenants WHERE id=$1`, [person.tenant]);
   assert.equal(Number(tenant.session_used_bytes), 0);
   assert.equal(tenant.session_fingerprint_key, null);
   // The journal keeps one account.erased, without personal data, for extensions' derived data (#44).
@@ -244,7 +287,10 @@ test("erasing the account erases its sessions", async () => {
   assert.deepEqual(erased[0]!.payload, {});
   // Renaming again (a retried purge) adds nothing.
   await db.query(`UPDATE accounts SET name='deleted-'||id WHERE id=$1`, [person.id]);
-  assert.equal((await db.query(`SELECT 1 FROM audit_outbox WHERE action='account.erased' AND target_id=$1`, [person.id])).rowCount, 1);
+  assert.equal(
+    (await db.query(`SELECT 1 FROM audit_outbox WHERE action='account.erased' AND target_id=$1`, [person.id])).rowCount,
+    1,
+  );
 });
 
 test("pages of sessions that started at the same moment lose none and repeat none (#45)", async () => {
@@ -261,7 +307,10 @@ test("pages of sessions that started at the same moment lose none and repeat non
   const seen: string[] = [];
   let before: string | null = null;
   for (let pages = 0; pages < 10; pages++) {
-    const page = await sessionsForExtension.list({ accounts: [person.id] }, { limit: 2, ...(before ? { before } : {}) });
+    const page = await sessionsForExtension.list(
+      { accounts: [person.id] },
+      { limit: 2, ...(before ? { before } : {}) },
+    );
     seen.push(...page.sessions.map((s) => s.id));
     before = page.next;
     if (!before) break;
@@ -277,7 +326,9 @@ test("agents read sessions through MCP with the sessions permission", async () =
   const secret = await token(person, ["context", "read", "sessions"]);
   assert.equal((await upload(secret, await sessionFile())).saved.statusCode, 200);
   const actor = await authenticateServiceToken(secret, MCP_AUDIENCE);
-  const server = createMcpServer(actor) as unknown as { _registeredTools: Record<string, { callback?: Function; handler?: Function }> };
+  const server = createMcpServer(actor) as unknown as {
+    _registeredTools: Record<string, { callback?: Function; handler?: Function }>;
+  };
   const tools = server._registeredTools;
   assert.ok(tools.polka_sessions && tools.polka_session_stats);
   const call = tools.polka_sessions!.callback ?? tools.polka_sessions!.handler;
@@ -286,7 +337,9 @@ test("agents read sessions through MCP with the sessions permission", async () =
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].secrets, "sent_out");
   assert.ok(sessions[0].alerts.includes("destructive_command"));
-  const withoutScope = createMcpServer(await authenticateServiceToken(await token(person, ["context", "read"]), MCP_AUDIENCE)) as unknown as { _registeredTools: Record<string, unknown> };
+  const withoutScope = createMcpServer(
+    await authenticateServiceToken(await token(person, ["context", "read"]), MCP_AUDIENCE),
+  ) as unknown as { _registeredTools: Record<string, unknown> };
   assert.equal(withoutScope._registeredTools.polka_sessions, undefined);
 });
 
@@ -310,13 +363,32 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     });
     assert.equal(code, 0, err.join(""));
     assert.match(err.join(""), /secrets: sent_out/);
-    const { rows: [row] } = await db.query(`SELECT transcript_key, transcript_bytes FROM agent_sessions WHERE tenant_id=$1`, [person.tenant]);
+    const {
+      rows: [row],
+    } = await db.query(`SELECT transcript_key, transcript_bytes FROM agent_sessions WHERE tenant_id=$1`, [
+      person.tenant,
+    ]);
     assert.ok(row.transcript_key?.startsWith(`${person.tenant}/sessions/`));
     assert.ok(Number(row.transcript_bytes) > 0);
     // Never as an argument.
-    assert.equal(await main(["sync", "--token", secret], { env: {}, stderr: { write: () => true }, stdout: { write: () => true } }), 2);
+    assert.equal(
+      await main(["sync", "--token", secret], {
+        env: {},
+        stderr: { write: () => true },
+        stdout: { write: () => true },
+      }),
+      2,
+    );
     // The hook does nothing unless the person turned it on.
-    assert.equal(await main(["hook"], { env: {}, stdin: async () => "{}", stdout: { write: () => true }, stderr: { write: () => true } }), 0);
+    assert.equal(
+      await main(["hook"], {
+        env: {},
+        stdin: async () => "{}",
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+      }),
+      0,
+    );
     // Turned on, it hands the session to a detached upload and notes what it said;
     // Claude Code's own settings directory counts.
     const claudeConfig = join(home, "claude-config");
@@ -324,9 +396,15 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     await mkdir(dirname(ended), { recursive: true });
     await copyFile(file.path, ended);
     process.env.CLAUDE_CONFIG_DIR = claudeConfig;
-    const hookEnv = { HOME: home, POLKA_SESSIONS: "on", POLKA_TOKEN: secret, POLKA_ENDPOINT: `http://127.0.0.1:${port}` };
+    const hookEnv = {
+      HOME: home,
+      POLKA_SESSIONS: "on",
+      POLKA_TOKEN: secret,
+      POLKA_ENDPOINT: `http://127.0.0.1:${port}`,
+    };
     const quiet = { stdout: { write: () => true }, stderr: { write: () => true } };
-    const hookInput = (path: string) => async () => JSON.stringify({ hook_event_name: "SessionEnd", reason: "exit", transcript_path: path });
+    const hookInput = (path: string) => async () =>
+      JSON.stringify({ hook_event_name: "SessionEnd", reason: "exit", transcript_path: path });
     assert.equal(await main(["hook"], { env: hookEnv, stdin: hookInput(ended), ...quiet }), 0);
     const log = join(home, ".polka", "sessions-hook.log");
     let said = "";
@@ -341,7 +419,10 @@ test("the CLI sends a session end to end and the server hands it out with its ad
     assert.equal((await readFile(log, "utf8")).match(/\.jsonl\n/g)?.length, 1);
     const cli = await server.inject({ method: "GET", url: "/api/v1/cli/polka-sessions.mjs" });
     assert.equal(cli.statusCode, 200);
-    assert.match(cli.body, new RegExp(`const DEFAULT_ENDPOINT = ${JSON.stringify(origin).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")};`));
+    assert.match(
+      cli.body,
+      new RegExp(`const DEFAULT_ENDPOINT = ${JSON.stringify(origin).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")};`),
+    );
   } finally {
     process.env.HOME = previousHome;
     delete process.env.CLAUDE_CONFIG_DIR;
@@ -354,7 +435,9 @@ test("a company reads every person's sessions: one fingerprint per secret, a not
   const fingerprints = async (secret: string) => {
     const { saved } = await upload(secret, await sessionFile());
     assert.equal(saved.statusCode, 200, saved.body);
-    const { rows } = await db.query(`SELECT fingerprint FROM agent_session_secrets WHERE session_id=$1 ORDER BY 1`, [saved.json().id]);
+    const { rows } = await db.query(`SELECT fingerprint FROM agent_session_secrets WHERE session_id=$1 ORDER BY 1`, [
+      saved.json().id,
+    ]);
     return { id: saved.json().id as string, prints: rows.map((r) => r.fingerprint as string) };
   };
   // By default a shelf has its own key: the same secret differs between people.
@@ -366,20 +449,34 @@ test("a company reads every person's sessions: one fingerprint per secret, a not
   config.AGENT_SESSION_NOTICE = "Сессии читает служба ИБ компании.";
   try {
     const [c, d] = [await owner("company-c"), await owner("company-d")];
-    const key = await app.inject({ method: "GET", url: "/api/v1/sessions/key", remoteAddress: address(), headers: bearer(await token(c)) });
+    const key = await app.inject({
+      method: "GET",
+      url: "/api/v1/sessions/key",
+      remoteAddress: address(),
+      headers: bearer(await token(c)),
+    });
     assert.equal(key.json().scope, "installation");
     assert.equal(key.json().notice, "Сессии читает служба ИБ компании.");
     assert.ok(!key.body.includes(config.LINK_KEY));
     const [fromC, fromD] = [await fingerprints(await token(c)), await fingerprints(await token(d))];
     assert.deepEqual(fromC.prints, fromD.prints);
-    assert.equal((await web("GET", "/api/sessions", await cookie(c))).json().notice, "Сессии читает служба ИБ компании.");
+    assert.equal(
+      (await web("GET", "/api/sessions", await cookie(c))).json().notice,
+      "Сессии читает служба ИБ компании.",
+    );
 
     // context.sessions: across people, or some of them.
     const both = { accounts: [c.id, d.id] };
     const list = await sessionsForExtension.list(both);
     assert.deepEqual(new Set(list.sessions.map((s) => s.accountId)), new Set([c.id, d.id]));
-    assert.deepEqual((await sessionsForExtension.list({ accounts: [d.id] })).sessions.map((s) => s.id), [fromD.id]);
-    const stats = (await sessionsForExtension.stats(both, { days: 30 })) as { people: Array<{ accountId: string }>; fingerprints: Array<{ people: number }> };
+    assert.deepEqual(
+      (await sessionsForExtension.list({ accounts: [d.id] })).sessions.map((s) => s.id),
+      [fromD.id],
+    );
+    const stats = (await sessionsForExtension.stats(both, { days: 30 })) as {
+      people: Array<{ accountId: string }>;
+      fingerprints: Array<{ people: number }>;
+    };
     assert.equal(stats.people.length, 2);
     assert.ok(stats.fingerprints.some((f) => f.people === 2));
     const detail = await sessionsForExtension.get(fromC.id);
@@ -393,7 +490,13 @@ test("a company reads every person's sessions: one fingerprint per secret, a not
 
     // The company keeps sessions: the person's delete is refused with its word.
     useExtensions([
-      { name: "keeper", policies: { sessionDelete: async (input) => (input.actor.id === c.id ? { allow: false, message: "Компания хранит сессии 90 дней." } : { allow: true }) } },
+      {
+        name: "keeper",
+        policies: {
+          sessionDelete: async (input) =>
+            input.actor.id === c.id ? { allow: false, message: "Компания хранит сессии 90 дней." } : { allow: true },
+        },
+      },
     ]);
     const refused = await web("DELETE", `/api/sessions/${fromC.id}`, await cookie(c));
     assert.equal(refused.statusCode, 403, refused.body);
@@ -409,20 +512,43 @@ test("a company reads every person's sessions: one fingerprint per secret, a not
 
 test("managed settings send every session through the hook", async () => {
   const { managedSettings } = await import("../scripts/polka-sessions.mjs");
-  const settings = managedSettings({ script: "/Library/Application Support/Polka/polka-sessions.mjs", origin: "https://polka.example.com" });
+  const settings = managedSettings({
+    script: "/Library/Application Support/Polka/polka-sessions.mjs",
+    origin: "https://polka.example.com",
+  });
   assert.deepEqual(settings.env, { POLKA_SESSIONS: "on", POLKA_ENDPOINT: "https://polka.example.com" });
-  assert.equal(settings.hooks.SessionEnd[0].hooks[0].command, '"node" "/Library/Application Support/Polka/polka-sessions.mjs" hook');
+  assert.equal(
+    settings.hooks.SessionEnd[0].hooks[0].command,
+    '"node" "/Library/Application Support/Polka/polka-sessions.mjs" hook',
+  );
   // Above SessionEnd's 1.5 s default: a hook in settings that asks for more raises the budget.
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10);
   const out: string[] = [];
-  assert.equal(await main(["managed-settings", "--script", "/opt/polka/polka-sessions.mjs", "--endpoint", "https://polka.example.com/x"], { env: {}, stdout: { write: (t: string) => out.push(t) }, stderr: { write: () => true } }), 0);
+  assert.equal(
+    await main(
+      ["managed-settings", "--script", "/opt/polka/polka-sessions.mjs", "--endpoint", "https://polka.example.com/x"],
+      { env: {}, stdout: { write: (t: string) => out.push(t) }, stderr: { write: () => true } },
+    ),
+    0,
+  );
   assert.equal(JSON.parse(out.join("")).env.POLKA_ENDPOINT, "https://polka.example.com");
 });
 
 test("a cost of 0 from Claude Code with tokens spent is no figure, not a free session", async () => {
   const { sessionCost } = await import("../apps/server/agent-sessions.ts");
-  const base = { models: { "claude-x": { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 } }, tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 0 } };
+  const base = {
+    models: { "claude-x": { input: 10, output: 5, cacheRead: 0, cacheWrite: 0 } },
+    tokens: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
+  };
   assert.deepEqual(sessionCost({ ...base, costUSD: 0 } as never), { cost: null, estimated: false });
   assert.deepEqual(sessionCost({ ...base, costUSD: 1.5 } as never), { cost: 1.5, estimated: false });
-  assert.deepEqual(sessionCost({ ...base, models: {}, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, costUSD: 0 } as never), { cost: 0, estimated: false });
+  assert.deepEqual(
+    sessionCost({
+      ...base,
+      models: {},
+      tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
+      costUSD: 0,
+    } as never),
+    { cost: 0, estimated: false },
+  );
 });

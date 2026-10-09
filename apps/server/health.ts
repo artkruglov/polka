@@ -31,8 +31,7 @@ export function createHealthCoordinator(options: ReadinessOptions) {
     if (stopping) return Promise.resolve(false);
     // A timed-out probe can still be unwinding. Never launch overlapping I/O.
     if (running) return running.result;
-    if (cached && performance.now() - cached.at < cacheMs)
-      return Promise.resolve(cached.ready);
+    if (cached && performance.now() - cached.at < cacheMs) return Promise.resolve(cached.ready);
 
     const controller = new AbortController();
     const startedAt = performance.now();
@@ -48,8 +47,7 @@ export function createHealthCoordinator(options: ReadinessOptions) {
       clearTimeout(timer);
       const expired = performance.now() - startedAt >= deadlineMs;
       if (expired) controller.abort();
-      const accepted =
-        value && !expired && !stopping && !controller.signal.aborted;
+      const accepted = value && !expired && !stopping && !controller.signal.aborted;
       cached = { ready: accepted, at: performance.now() };
       resolve(accepted);
     };
@@ -61,21 +59,12 @@ export function createHealthCoordinator(options: ReadinessOptions) {
     }, deadlineMs);
     const probe = (fn: ReadinessProbe) =>
       Promise.resolve().then(() =>
-        stopping ||
-        controller.signal.aborted ||
-        performance.now() - startedAt >= deadlineMs
+        stopping || controller.signal.aborted || performance.now() - startedAt >= deadlineMs
           ? false
           : fn(controller.signal),
       );
-    void Promise.allSettled([
-      probe(options.database),
-      probe(options.storage),
-    ]).then((results) => {
-      finish(
-        results.every(
-          (item) => item.status === "fulfilled" && item.value === true,
-        ),
-      );
+    void Promise.allSettled([probe(options.database), probe(options.storage)]).then((results) => {
+      finish(results.every((item) => item.status === "fulfilled" && item.value === true));
       if (running === attempt) running = null;
     });
     return result;

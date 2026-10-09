@@ -10,7 +10,11 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const manifest = (path: string): string[] => JSON.parse(read(path));
 
 /** Runners with their own setup; each names the files it runs. */
-const DEDICATED = ["scripts/test-runtime-grants-isolated.ts", "scripts/test-url-import-runtime.ts", "scripts/test-account-deletion-isolated.ts"];
+const DEDICATED = [
+  "scripts/test-runtime-grants-isolated.ts",
+  "scripts/test-url-import-runtime.ts",
+  "scripts/test-account-deletion-isolated.ts",
+];
 
 test("every tests/*.test.ts is run by a suite or a dedicated runner", () => {
   const files = readdirSync(new URL("./", import.meta.url))

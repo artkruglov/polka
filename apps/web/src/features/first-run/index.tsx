@@ -1,11 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { savedWorkHref } from "../../shared/api/client.ts";
 import { ArrowUpRight, Bot, Check, Link2, Upload } from "lucide-react";
-import type {
-  Account,
-  Artifact,
-  Receipt,
-} from "../../../../../packages/contracts/index.ts";
+import type { Account, Artifact, Receipt } from "../../../../../packages/contracts/index.ts";
 import { Button, LinkButton } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
@@ -27,11 +23,7 @@ import { HarvestPrompt } from "../../entities/onboarding/HarvestPrompt.tsx";
 import { arrivedFromShare } from "../../entities/onboarding/arrival.ts";
 import { writeDismissed } from "../../entities/onboarding/dismissal.ts";
 import { useFirstRun } from "../../entities/onboarding/useFirstRun.ts";
-import {
-  SAMPLE_FILENAME,
-  SAMPLE_TITLE,
-  sampleBlob,
-} from "../../entities/onboarding/sample-page.ts";
+import { SAMPLE_FILENAME, SAMPLE_TITLE, sampleBlob } from "../../entities/onboarding/sample-page.ts";
 import { useSaveUpload } from "../../entities/artifact/useSaveUpload.ts";
 
 type Status = "loading" | "ready" | "error";
@@ -215,11 +207,7 @@ export function FirstRunSteps({
 
               {step.id === "save" && !step.done && (
                 <>
-                  <HarvestPrompt
-                    client={client}
-                    onClient={onClient}
-                    primary={model.next === "save"}
-                  />
+                  <HarvestPrompt client={client} onClient={onClient} primary={model.next === "save"} />
                   <div className="first-run-action">
                     {onUpload ? (
                       <Button onClick={onUpload}>
@@ -266,10 +254,7 @@ export function FirstRunSteps({
                       <Link2 /> Поделиться
                     </Button>
                   ) : (
-                    <LinkButton
-                      variant={tone("share")}
-                      href={savedWorkHref(model.shareTarget.id, "?panel=share")}
-                    >
+                    <LinkButton variant={tone("share")} href={savedWorkHref(model.shareTarget.id, "?panel=share")}>
                       <Link2 /> Поделиться
                     </LinkButton>
                   )}
@@ -277,9 +262,7 @@ export function FirstRunSteps({
                 </div>
               )}
               {step.id === "share" && !step.done && !model.shareTarget && (
-                <p className="first-run-note">
-                  {step.note ?? "Появится после первой работы."}
-                </p>
+                <p className="first-run-note">{step.note ?? "Появится после первой работы."}</p>
               )}
             </div>
           </li>
@@ -318,31 +301,22 @@ export function FirstRunChecklist({
 }) {
   const data = useFirstRun({ accountId: account.id, provided: works });
   // Read once: the tab's source does not change while the shelf is open.
-  const [arrival] = useState<"share" | undefined>(() =>
-    arrivedFromShare() ? "share" : undefined,
-  );
+  const [arrival] = useState<"share" | undefined>(() => (arrivedFromShare() ? "share" : undefined));
   // The client chosen on the agents page; switching here remembers it too.
-  const [client, setClient] = useState<HarvestClientId>(() =>
-    harvestClient(readStoredClient()),
-  );
+  const [client, setClient] = useState<HarvestClientId>(() => harvestClient(readStoredClient()));
   const upload = useSaveUpload();
   const model = deriveFirstRun({
     connections: data.connections.value,
     works: data.works.value,
   });
   const [announcement, setAnnouncement] = useState("");
-  const settled =
-    data.connections.status !== "loading" && data.works.status !== "loading";
+  const settled = data.connections.status !== "loading" && data.works.status !== "loading";
   const previous = useRef<Record<FirstRunStepId, boolean> | null>(null);
   useEffect(() => {
     if (!settled) return;
-    const current = Object.fromEntries(
-      model.steps.map((s) => [s.id, s.done]),
-    ) as Record<FirstRunStepId, boolean>;
+    const current = Object.fromEntries(model.steps.map((s) => [s.id, s.done])) as Record<FirstRunStepId, boolean>;
     if (previous.current) {
-      const finished = model.steps.filter(
-        (s) => s.done && !previous.current![s.id],
-      );
+      const finished = model.steps.filter((s) => s.done && !previous.current![s.id]);
       if (finished.length)
         setAnnouncement(
           model.complete
@@ -390,9 +364,7 @@ export function FirstRunChecklist({
         stage: upload.stage,
         error: upload.error,
         retrying: upload.retrying,
-        saved: upload.saved
-          ? { id: upload.saved.receipt.artifactId, title: SAMPLE_TITLE }
-          : null,
+        saved: upload.saved ? { id: upload.saved.receipt.artifactId, title: SAMPLE_TITLE } : null,
         save: saveSample,
       }}
       announcement={announcement}

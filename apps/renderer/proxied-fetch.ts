@@ -13,7 +13,10 @@ import { RENDERER_USER_AGENT } from "../../packages/renderer-contract.ts";
  */
 
 export type ProxiedAnswer = { status: number; headers: Record<string, string | string[] | undefined>; body: Buffer };
-export type ProxiedGet = (url: string, options?: { maxBytes?: number; timeoutMs?: number; accept?: string }) => Promise<ProxiedAnswer>;
+export type ProxiedGet = (
+  url: string,
+  options?: { maxBytes?: number; timeoutMs?: number; accept?: string },
+) => Promise<ProxiedAnswer>;
 
 // No parameter properties: the image runs this file with Node's type stripping.
 export class FetchFailure extends Error {
@@ -25,14 +28,30 @@ export class FetchFailure extends Error {
 }
 
 export function proxiedGet(proxyPort: number, { insecure = false }: { insecure?: boolean } = {}): ProxiedGet {
-  return (input, { maxBytes = 5 * 1024 * 1024, timeoutMs = 15_000, accept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5" } = {}) =>
+  return (
+    input,
+    { maxBytes = 5 * 1024 * 1024, timeoutMs = 15_000, accept = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5" } = {},
+  ) =>
     new Promise<ProxiedAnswer>((resolve, reject) => {
       const url = new URL(input);
       if (url.protocol !== "https:") return reject(new FetchFailure("refused", "https only"));
       const port = Number(url.port || 443);
       const signal = AbortSignal.timeout(timeoutMs);
-      const fail = (error: unknown) => reject(error instanceof FetchFailure ? error : signal.aborted ? new FetchFailure("timeout") : new FetchFailure("network"));
-      const tunnel = httpRequest({ host: "127.0.0.1", port: proxyPort, method: "CONNECT", path: `${url.hostname}:${port}`, signal });
+      const fail = (error: unknown) =>
+        reject(
+          error instanceof FetchFailure
+            ? error
+            : signal.aborted
+              ? new FetchFailure("timeout")
+              : new FetchFailure("network"),
+        );
+      const tunnel = httpRequest({
+        host: "127.0.0.1",
+        port: proxyPort,
+        method: "CONNECT",
+        path: `${url.hostname}:${port}`,
+        signal,
+      });
       tunnel.on("error", fail);
       tunnel.on("connect", (res, socket) => {
         if (res.statusCode !== 200) {
@@ -57,7 +76,13 @@ export function proxiedGet(proxyPort: number, { insecure = false }: { insecure?:
           (answer) => {
             const encoding = String(answer.headers["content-encoding"] ?? "identity").toLowerCase();
             const stream: Readable =
-              encoding === "gzip" ? answer.pipe(createGunzip()) : encoding === "deflate" ? answer.pipe(createInflate()) : encoding === "br" ? answer.pipe(createBrotliDecompress()) : answer;
+              encoding === "gzip"
+                ? answer.pipe(createGunzip())
+                : encoding === "deflate"
+                  ? answer.pipe(createInflate())
+                  : encoding === "br"
+                    ? answer.pipe(createBrotliDecompress())
+                    : answer;
             const chunks: Buffer[] = [];
             let size = 0;
             stream.on("data", (chunk: Buffer) => {

@@ -2,28 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type {
-  AgentConnection,
-  Artifact,
-  Revision,
-} from "../packages/contracts/index.ts";
+import type { AgentConnection, Artifact, Revision } from "../packages/contracts/index.ts";
 import { looksLikeHtml, MAX_BYTES } from "../packages/contracts/index.ts";
 import { classifyHtml } from "../apps/server/html.ts";
 import { connectGuide } from "../apps/server/connect-guide.ts";
 import { deriveFirstRun } from "../apps/web/src/entities/onboarding/steps.ts";
-import {
-  dismissalKey,
-  readDismissed,
-  writeDismissed,
-} from "../apps/web/src/entities/onboarding/dismissal.ts";
-import {
-  SAMPLE_TITLE,
-  samplePage,
-} from "../apps/web/src/entities/onboarding/sample-page.ts";
-import {
-  clientHints,
-  connectPhrase,
-} from "../apps/web/src/entities/onboarding/connect-phrase.ts";
+import { dismissalKey, readDismissed, writeDismissed } from "../apps/web/src/entities/onboarding/dismissal.ts";
+import { SAMPLE_TITLE, samplePage } from "../apps/web/src/entities/onboarding/sample-page.ts";
+import { clientHints, connectPhrase } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
 import { FirstRunSteps } from "../apps/web/src/features/first-run/index.tsx";
 
 const revision: Revision = {
@@ -67,7 +53,11 @@ test("an empty shelf without connections has three pending steps, the agent firs
   const model = deriveFirstRun({ connections: [], works: [] });
   assert.deepEqual(
     model.steps.map((s) => [s.id, s.done]),
-    [["agent", false], ["save", false], ["share", false]],
+    [
+      ["agent", false],
+      ["save", false],
+      ["share", false],
+    ],
   );
   assert.equal(model.done, 0);
   assert.equal(model.next, "agent");
@@ -129,7 +119,14 @@ test("any share ever created completes the link step; the note reflects its stat
     connections: [],
     works: [
       work({
-        share: { id: "s", revisionId: "r1", number: 1, status: "active", url: "http://x/s#t", expiresAt: "2026-10-01T00:00:00Z" },
+        share: {
+          id: "s",
+          revisionId: "r1",
+          number: 1,
+          status: "active",
+          url: "http://x/s#t",
+          expiresAt: "2026-10-01T00:00:00Z",
+        },
       }),
     ],
   });
@@ -140,7 +137,14 @@ test("any share ever created completes the link step; the note reflects its stat
     connections: [],
     works: [
       work({
-        share: { id: "s", revisionId: "r1", number: 1, status: "revoked", url: null, expiresAt: "2026-10-01T00:00:00Z" },
+        share: {
+          id: "s",
+          revisionId: "r1",
+          number: 1,
+          status: "revoked",
+          url: null,
+          expiresAt: "2026-10-01T00:00:00Z",
+        },
       }),
     ],
   });
@@ -153,7 +157,14 @@ test("everything done: complete, no next step, and a used connection with works 
     connections: [connection({ status: "seen", lastSeenAt: "2026-09-22T09:00:00Z" })],
     works: [
       work({
-        share: { id: "s", revisionId: "r1", number: 1, status: "behind", url: "http://x/s#t", expiresAt: "2026-10-01T00:00:00Z" },
+        share: {
+          id: "s",
+          revisionId: "r1",
+          number: 1,
+          status: "behind",
+          url: "http://x/s#t",
+          expiresAt: "2026-10-01T00:00:00Z",
+        },
       }),
     ],
   });
@@ -178,9 +189,15 @@ test("the dismissal is per account and survives a storage that throws", () => {
   assert.equal(writeDismissed("u1", false, storage), true);
   assert.equal(readDismissed("u1", storage), false);
   const broken = {
-    getItem: () => { throw new Error("blocked"); },
-    setItem: () => { throw new Error("blocked"); },
-    removeItem: () => { throw new Error("blocked"); },
+    getItem: () => {
+      throw new Error("blocked");
+    },
+    setItem: () => {
+      throw new Error("blocked");
+    },
+    removeItem: () => {
+      throw new Error("blocked");
+    },
   };
   assert.equal(readDismissed("u1", broken), false);
   assert.equal(writeDismissed("u1", true, broken), false);
@@ -213,10 +230,7 @@ test("the phrase and the client hints match what GET /connect tells the agent", 
   assert.ok(guide.includes("Developer mode → Create"));
 });
 
-function markup(
-  model: ReturnType<typeof deriveFirstRun>,
-  over: Partial<Parameters<typeof FirstRunSteps>[0]> = {},
-) {
+function markup(model: ReturnType<typeof deriveFirstRun>, over: Partial<Parameters<typeof FirstRunSteps>[0]> = {}) {
   return renderToStaticMarkup(
     React.createElement(FirstRunSteps, {
       model,
@@ -250,10 +264,9 @@ test("the checklist shows the phrase, marks the current step and keeps a live re
 });
 
 test("a done step is announced as done and the share step links the first work", () => {
-  const html = markup(
-    deriveFirstRun({ connections: [connection({ status: "seen" })], works: [work()] }),
-    { announcement: "Шаг выполнен: Сохраните первые работы. 2 из 3." },
-  );
+  const html = markup(deriveFirstRun({ connections: [connection({ status: "seen" })], works: [work()] }), {
+    announcement: "Шаг выполнен: Сохраните первые работы. 2 из 3.",
+  });
   assert.match(html, /2 из 3/);
   assert.match(html, /Выполнено: <\/span>Подключите агента/);
   assert.match(html, /href="\/works\/a1\?panel=share"/);
@@ -268,7 +281,14 @@ test("the page variant has no dismiss button and the complete state says what co
       connections: [connection()],
       works: [
         work({
-          share: { id: "s", revisionId: "r1", number: 1, status: "active", url: "http://x/s#t", expiresAt: "2026-10-01T00:00:00Z" },
+          share: {
+            id: "s",
+            revisionId: "r1",
+            number: 1,
+            status: "active",
+            url: "http://x/s#t",
+            expiresAt: "2026-10-01T00:00:00Z",
+          },
         }),
       ],
     }),

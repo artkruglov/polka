@@ -18,8 +18,4 @@ export class Problem extends Error {
   }
 }
 export const missing = () =>
-  new Problem(
-    404,
-    "not_found",
-    "Работа недоступна. Ссылка могла измениться или доступ был закрыт.",
-  );
+  new Problem(404, "not_found", "Работа недоступна. Ссылка могла измениться или доступ был закрыт.");

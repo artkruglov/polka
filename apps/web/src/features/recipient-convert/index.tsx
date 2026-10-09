@@ -3,21 +3,11 @@ import { ArrowUpRight, Check, Copy, Sparkles, WandSparkles, X } from "lucide-rea
 import type { Revision } from "../../../../../packages/contracts/index.ts";
 import { Button, IconButton } from "../../shared/ui/controls.tsx";
 import { useCopy } from "../../shared/ui/CopyText.tsx";
-import {
-  trackRecipientCta,
-  type RecipientCtaAction,
-  type RecipientCtaPage,
-} from "../../shared/api/recipient-cta.ts";
+import { trackRecipientCta, type RecipientCtaAction, type RecipientCtaPage } from "../../shared/api/recipient-cta.ts";
 import { setVisitSourceRef } from "../../shared/lib/visit-source.ts";
-import {
-  rememberShareForSignIn,
-  SHARE_RETURN_PATH,
-} from "../../shared/lib/share-return.ts";
+import { rememberShareForSignIn, SHARE_RETURN_PATH } from "../../shared/lib/share-return.ts";
 import { connectPhrase } from "../../entities/onboarding/connect-phrase.ts";
-import {
-  markCardDismissed,
-  markCardShown,
-} from "../../entities/recipient-convert/card-state.ts";
+import { markCardDismissed, markCardShown } from "../../entities/recipient-convert/card-state.ts";
 import { remixPrompt } from "../../entities/recipient-convert/remix-prompt.ts";
 import { rememberConvertReturn } from "../../entities/recipient-convert/return.ts";
 
@@ -60,11 +50,7 @@ const rememberReturn = (back: ConvertReturn) => {
  * Just before the browser leaves for a sign-in provider from the card: the
  * press is counted and the way back kept (a share's token never in the URL).
  */
-export function leaveForProvider(
-  back: ConvertReturn,
-  variant: ConvertVariant,
-  page: ConvertPage = "share",
-) {
+export function leaveForProvider(back: ConvertReturn, variant: ConvertVariant, page: ConvertPage = "share") {
   setVisitSourceRef(variantRef(variant, page));
   trackRecipientCta({ event: "click", action: "yandex", page });
   rememberReturn(back);
@@ -76,13 +62,7 @@ export function leaveForProvider(
  * that holds the work; the frame inside it takes focus when touched, which
  * the window sees as its own blur.
  */
-export function useRecipientConvert({
-  enabled,
-  page = "share",
-}: {
-  enabled: boolean;
-  page?: ConvertPage;
-}) {
+export function useRecipientConvert({ enabled, page = "share" }: { enabled: boolean; page?: ConvertPage }) {
   const [card, setCard] = useState<CardRequest | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
 
@@ -141,15 +121,9 @@ export function ConvertBar({
       <span className="convert-bar-icon" aria-hidden="true">
         <Sparkles />
       </span>
-      <p className="convert-bar-text">
-        Эту страницу сделали с ИИ и сохранили на Полку
-      </p>
+      <p className="convert-bar-text">Эту страницу сделали с ИИ и сохранили на Полку</p>
       <div className="convert-bar-actions">
-        <Button
-          variant="primary"
-          className="convert-bar-try"
-          onClick={(event) => onTry(event.currentTarget)}
-        >
+        <Button variant="primary" className="convert-bar-try" onClick={(event) => onTry(event.currentTarget)}>
           Попробовать бесплатно
         </Button>
         <Button
@@ -190,8 +164,7 @@ function CopyLine({
           await copy();
         }}
       >
-        {state === "copied" ? <Check /> : <Copy />}{" "}
-        {state === "copied" ? "Скопировано" : label}
+        {state === "copied" ? <Check /> : <Copy />} {state === "copied" ? "Скопировано" : label}
       </Button>
       {state === "failed" && (
         <span className="field-note" role="status">
@@ -282,11 +255,7 @@ export function ConvertCard({
               onCopied={count("copy_phrase")}
             />
           </div>
-          {!remix && (
-            <small>
-              Агент выполнит одну команду, Полка откроется в браузере, вы нажмёте «Разрешить».
-            </small>
-          )}
+          {!remix && <small>Агент выполнит одну команду, Полка откроется в браузере, вы нажмёте «Разрешить».</small>}
         </li>
         {signIn && (
           <li className="convert-path">
@@ -324,8 +293,7 @@ export function SignedInFromShare({
   return (
     <div className="convert-welcome" role="status">
       <div className="convert-welcome-text">
-        <strong>{created ? "Полка создана." : "Вы вошли в Полку."}</strong>{" "}
-        Подключите агента одной фразой:
+        <strong>{created ? "Полка создана." : "Вы вошли в Полку."}</strong> Подключите агента одной фразой:
         <code className="convert-welcome-phrase">{phrase}</code>
       </div>
       <div className="convert-welcome-actions">

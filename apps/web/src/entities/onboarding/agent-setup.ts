@@ -8,13 +8,7 @@
  */
 import { connectPhrase } from "./connect-phrase.ts";
 
-export const AGENT_CLIENT_IDS = [
-  "chatgpt",
-  "claude-ai",
-  "claude-code",
-  "codex",
-  "other",
-] as const;
+export const AGENT_CLIENT_IDS = ["chatgpt", "claude-ai", "claude-code", "codex", "other"] as const;
 export type AgentClientId = (typeof AGENT_CLIENT_IDS)[number];
 
 export type AgentClientCard = {
@@ -49,12 +43,7 @@ export const agentClients: readonly AgentClientCard[] = [
 ];
 
 /** The four clients the shelf's hero switches between; ChatGPT and scripts live on the agents page. */
-export const HERO_CLIENT_IDS = [
-  "claude-ai",
-  "claude-code",
-  "codex",
-  "other",
-] as const;
+export const HERO_CLIENT_IDS = ["claude-ai", "claude-code", "codex", "other"] as const;
 export type HeroClientId = (typeof HERO_CLIENT_IDS)[number];
 export const heroClientNames: Record<HeroClientId, string> = {
   "claude-ai": "Claude",
@@ -122,13 +111,12 @@ export const SKILL_INDEX_PATH = "/.well-known/agent-skills";
  * text (apps/server/connect-guide.ts); a test keeps them equal.
  */
 export type HarvestClientId = "claude-code" | "codex" | "claude-ai" | "chatgpt";
-export const harvestClients: readonly { id: HarvestClientId; name: string }[] =
-  [
-    { id: "claude-code", name: "Claude Code" },
-    { id: "codex", name: "Codex" },
-    { id: "claude-ai", name: "Claude.ai" },
-    { id: "chatgpt", name: "ChatGPT" },
-  ];
+export const harvestClients: readonly { id: HarvestClientId; name: string }[] = [
+  { id: "claude-code", name: "Claude Code" },
+  { id: "codex", name: "Codex" },
+  { id: "claude-ai", name: "Claude.ai" },
+  { id: "chatgpt", name: "ChatGPT" },
+];
 const HARVEST_REST =
   "Найди 3–5 самых интересных работ, которые мы делали: исследования, статьи, презентации, дашборды, прототипы. Пропусти личное (здоровье, финансы, переписка) и материалы работодателя или клиентов. Покажи мне список с одной строкой о каждой. После моего «да» сохрани каждую на Полку отдельной работой (polka_publish; HTML или React как есть), с понятным названием, и пришли ссылки.";
 export const harvestPrompts = {
@@ -137,16 +125,12 @@ export const harvestPrompts = {
 } as const;
 
 export function harvestPrompt(id: HarvestClientId): string {
-  return id === "claude-ai" || id === "chatgpt"
-    ? harvestPrompts.chat
-    : harvestPrompts.terminal;
+  return id === "claude-ai" || id === "chatgpt" ? harvestPrompts.chat : harvestPrompts.terminal;
 }
 
 /** The tab for the remembered choice; «Другое» and no choice read like a terminal agent. */
 export function harvestClient(id: AgentClientId | null): HarvestClientId {
-  return id === "codex" || id === "claude-ai" || id === "chatgpt"
-    ? id
-    : "claude-code";
+  return id === "codex" || id === "claude-ai" || id === "chatgpt" ? id : "claude-code";
 }
 
 const url = (value: string): SetupCopy => ({
@@ -173,8 +157,7 @@ const command = (value: string, lead?: string): SetupCopy => ({
 export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
   const mcp = `${origin}/mcp`;
   const say = connectPhrase(origin);
-  const allow =
-    "Откроется Полка: войдите (или создайте полку через Яндекс ID или почту) и нажмите «Разрешить».";
+  const allow = "Откроется Полка: войдите (или создайте полку через Яндекс ID или почту) и нажмите «Разрешить».";
   const ask = `Попросите: «${SAVE_PHRASE}».`;
   switch (id) {
     case "chatgpt":
@@ -234,10 +217,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
         steps: [
           {
             text: "Выполните в терминале:",
-            copies: [
-              command(CLAUDE_PLUGIN_INSTALL),
-              phrase(say, "или скажите Claude Code — он выполнит команду сам:"),
-            ],
+            copies: [command(CLAUDE_PLUGIN_INSTALL), phrase(say, "или скажите Claude Code — он выполнит команду сам:")],
             note: `Уже в сессии Claude Code? Введите /plugin marketplace add artkruglov/polka-plugin, затем /plugin install polka@polka. Если плагин не ставится (облачная сессия, нет доступа к GitHub): claude mcp add --transport http --scope user polka ${mcp}, затем /mcp → polka → Authenticate.`,
           },
           {
@@ -257,10 +237,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
         steps: [
           {
             text: "Выполните в терминале:",
-            copies: [
-              command(CODEX_PLUGIN_INSTALL),
-              phrase(say, "или скажите Codex — он выполнит команду сам:"),
-            ],
+            copies: [command(CODEX_PLUGIN_INSTALL), phrase(say, "или скажите Codex — он выполнит команду сам:")],
             note: `Без плагина: codex mcp add polka --url ${mcp}, скилл — ${SKILL_INSTALL}.`,
           },
           {
@@ -346,20 +323,14 @@ export function heroClient(id: AgentClientId | null): HeroClientId {
   return "claude-ai";
 }
 
-export function parseClientId(
-  value: string | null | undefined,
-): AgentClientId | null {
-  return (AGENT_CLIENT_IDS as readonly string[]).includes(value ?? "")
-    ? (value as AgentClientId)
-    : null;
+export function parseClientId(value: string | null | undefined): AgentClientId | null {
+  return (AGENT_CLIENT_IDS as readonly string[]).includes(value ?? "") ? (value as AgentClientId) : null;
 }
 
 export const CLIENT_STORAGE_KEY = "polka.agents.client";
 
 /** The remembered choice; browsers without storage (private mode) just forget. */
-export function readStoredClient(
-  storage: Pick<Storage, "getItem"> | null = safeStorage(),
-): AgentClientId | null {
+export function readStoredClient(storage: Pick<Storage, "getItem"> | null = safeStorage()): AgentClientId | null {
   try {
     return parseClientId(storage?.getItem(CLIENT_STORAGE_KEY));
   } catch {
@@ -425,10 +396,7 @@ export function relativeTime(iso: string, now = Date.now()): string {
 }
 
 /** A shelf opened less than a day ago: maybe not the one the person meant. */
-export function isFreshAccount(
-  createdAt: string | null | undefined,
-  now = Date.now(),
-) {
+export function isFreshAccount(createdAt: string | null | undefined, now = Date.now()) {
   if (!createdAt) return false;
   const time = Date.parse(createdAt);
   return Number.isFinite(time) && now - time < DAY;
@@ -457,19 +425,13 @@ export function signInMethod(
       const used = Date.parse(item.lastUsedAt ?? item.linkedAt);
       return Number.isFinite(used) && now - used < 7 * DAY;
     })
-    .sort(
-      (a, b) =>
-        Date.parse(b.lastUsedAt ?? b.linkedAt) -
-        Date.parse(a.lastUsedAt ?? a.linkedAt),
-    )[0];
+    .sort((a, b) => Date.parse(b.lastUsedAt ?? b.linkedAt) - Date.parse(a.lastUsedAt ?? a.linkedAt))[0];
   if (recent) return { kind: "provider", name: recent.name };
   if (email) return { kind: "email" };
   return { kind: "login" };
 }
 
-export function signInMethodLabel(
-  method: ReturnType<typeof signInMethod>,
-): string {
+export function signInMethodLabel(method: ReturnType<typeof signInMethod>): string {
   if (method.kind === "provider") return `через ${method.name}`;
   if (method.kind === "email") return "через почту";
   return "по логину";

@@ -35,9 +35,7 @@ export const db = new pg.Pool({
 });
 // An idle connection can disappear during a database restart. The pool replaces
 // it on the next checkout; do not turn its error event into a process crash.
-db.on("error", () =>
-  console.error(JSON.stringify({ event: "database.connection_lost" })),
-);
+db.on("error", () => console.error(JSON.stringify({ event: "database.connection_lost" })));
 const committed = new WeakMap<pg.PoolClient, Array<() => unknown>>();
 
 /**
@@ -66,11 +64,7 @@ function runLater(work: () => unknown) {
   return inBackground(
     Promise.resolve()
       .then(work)
-      .catch((error) =>
-        console.error(
-          JSON.stringify({ event: "database.after_commit_failed", ...errorFacts(error) }),
-        ),
-      ),
+      .catch((error) => console.error(JSON.stringify({ event: "database.after_commit_failed", ...errorFacts(error) }))),
   );
 }
 
@@ -99,9 +93,7 @@ export async function settled() {
   }
 }
 
-export async function transaction<T>(
-  fn: (c: pg.PoolClient) => Promise<T>,
-): Promise<T> {
+export async function transaction<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
   const c = await db.connect();
   let broken = false;
   const queue: Array<() => unknown> = [];

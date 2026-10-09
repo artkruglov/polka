@@ -24,10 +24,7 @@ const schema = z.object({
 
 function plainUrl(value: string, label: string) {
   const url = new URL(value);
-  if (url.search || url.hash)
-    throw new Error(
-      `${label} must not contain routing parameters or fragments`,
-    );
+  if (url.search || url.hash) throw new Error(`${label} must not contain routing parameters or fragments`);
   return url;
 }
 
@@ -45,35 +42,23 @@ export function parseRestoreTargetConfig(input: NodeJS.ProcessEnv) {
     runtime.protocol !== restore.protocol ||
     runtime.hostname !== restore.hostname ||
     (runtime.port || "5432") !== (restore.port || "5432") ||
-    decodeURIComponent(runtime.pathname) !==
-      decodeURIComponent(restore.pathname)
+    decodeURIComponent(runtime.pathname) !== decodeURIComponent(restore.pathname)
   )
-    throw new Error(
-      "Restore worker must target the runtime database endpoint and name",
-    );
+    throw new Error("Restore worker must target the runtime database endpoint and name");
   if (value.S3_BUCKET === value.ERASURE_LEDGER_BUCKET)
-    throw new Error(
-      "Erasure ledger bucket must be separate from content storage",
-    );
+    throw new Error("Erasure ledger bucket must be separate from content storage");
   if (value.S3_ACCESS_KEY === value.ERASURE_LEDGER_ACCESS_KEY)
     throw new Error("Erasure ledger must use separate read-only credentials");
-  if (
-    !isAbsolute(value.RESTORE_BACKUP_DESCRIPTOR) ||
-    !isAbsolute(value.RESTORE_RECEIPT_PATH)
-  )
+  if (!isAbsolute(value.RESTORE_BACKUP_DESCRIPTOR) || !isAbsolute(value.RESTORE_RECEIPT_PATH))
     throw new Error("Restore descriptor and receipt paths must be absolute");
   const backupDirectory = resolve(dirname(value.RESTORE_BACKUP_DESCRIPTOR));
   const receipt = resolve(value.RESTORE_RECEIPT_PATH);
   const withinBackup = relative(backupDirectory, receipt);
   if (
     withinBackup === "" ||
-    (!isAbsolute(withinBackup) &&
-      withinBackup !== ".." &&
-      !withinBackup.startsWith(`..${sep}`))
+    (!isAbsolute(withinBackup) && withinBackup !== ".." && !withinBackup.startsWith(`..${sep}`))
   )
-    throw new Error(
-      "Restore receipt must be stored outside the backup directory",
-    );
+    throw new Error("Restore receipt must be stored outside the backup directory");
   return Object.freeze(value);
 }
 

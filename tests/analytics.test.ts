@@ -25,17 +25,8 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db, transaction } from "../apps/server/db.ts";
 import { registerFrontend } from "../apps/server/frontend.ts";
-import {
-  addDays,
-  funnelWeeks,
-  metricsReport,
-  retentionCohorts,
-  weekOf,
-} from "../apps/server/metrics.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-} from "../apps/server/service-auth.ts";
+import { addDays, funnelWeeks, metricsReport, retentionCohorts, weekOf } from "../apps/server/metrics.ts";
+import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { eraseDeletedAccountsAnalytics } from "../scripts/maintenance-cleanup.ts";
 import { formatReport, runMetricsCli } from "../scripts/metrics.ts";
@@ -54,8 +45,7 @@ const app = await createApp();
 const origin = config.APP_ORIGIN;
 let root = "";
 const run = randomBytes(4).toString("hex");
-const address = () =>
-  `2001:db8:a7::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:a7::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 const HUMAN =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
@@ -105,26 +95,18 @@ async function person(label: string): Promise<Person> {
      VALUES($1,$2,'unused',$3,$4,now(),now())`,
     [id, `email-${id}`, email, label],
   );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-    tenant,
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
+  const token = randomBytes(32).toString("base64url");
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
     id,
   ]);
-  const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), id],
-  );
   remember(id, tenant, email, token, `email-${id}`);
   actors.add(actorKey(id));
   return { id, tenant, cookie: `polka_session=${token}`, email };
 }
 
-function call(
-  method: "GET" | "POST" | "HEAD",
-  url: string,
-  body?: unknown,
-  headers: Record<string, string> = {},
-) {
+function call(method: "GET" | "POST" | "HEAD", url: string, body?: unknown, headers: Record<string, string> = {}) {
   return app.inject({
     method,
     url,
@@ -159,9 +141,7 @@ async function upload(owner: Person, artifact?: { id: string; base: string }) {
       mime: "text/html",
       size: bytes.length,
       sha256: sha256(bytes),
-      ...(artifact
-        ? { artifactId: artifact.id, baseRevisionId: artifact.base }
-        : {}),
+      ...(artifact ? { artifactId: artifact.id, baseRevisionId: artifact.base } : {}),
     },
     { cookie: owner.cookie },
   );
@@ -180,9 +160,14 @@ async function upload(owner: Person, artifact?: { id: string; base: string }) {
   });
   assert.equal(put.statusCode, 200, put.body);
   const finalize = () =>
-    call("POST", `/api/uploads/${uploadId}/finalize`, {}, {
-      cookie: owner.cookie,
-    });
+    call(
+      "POST",
+      `/api/uploads/${uploadId}/finalize`,
+      {},
+      {
+        cookie: owner.cookie,
+      },
+    );
   const done = await finalize();
   assert.equal(done.statusCode, 200, done.body);
   // A retried finalize returns the same receipt and records nothing new.
@@ -247,8 +232,7 @@ test("a landing page load is counted server-side: path, ref, referrer host; not 
   assert.match(shown.body, /<div id=root>/);
   // The same visitor profile as a bot, a preview, a prefetch, a HEAD request
   // and a signed-in person: nothing.
-  for (const agent of BOTS)
-    await call("GET", `/pricing?ref=${ref}`, undefined, { "user-agent": agent });
+  for (const agent of BOTS) await call("GET", `/pricing?ref=${ref}`, undefined, { "user-agent": agent });
   await call("GET", `/pricing?ref=${ref}`, undefined, {
     "user-agent": HUMAN,
     "sec-purpose": "prefetch",
@@ -308,8 +292,7 @@ test("a landing page load is counted server-side: path, ref, referrer host; not 
     [other],
   );
   assert.equal(dropped.rows.length, 3);
-  for (const row of dropped.rows)
-    assert.deepEqual(row.props, { path: "/signup", referrer: other });
+  for (const row of dropped.rows) assert.deepEqual(row.props, { path: "/signup", referrer: other });
 });
 
 test("sign-ups: one event per new account and method, with the tab's source; none for a returning person", async () => {
@@ -336,14 +319,7 @@ test("sign-ups: one event per new account and method, with the tab's source; non
     await db.query(
       `INSERT INTO login_challenges(id,email,code_hash,browser_hash,delivery,expires_at)
        VALUES($1,$2,$3,$4,'local',now()+interval '10 minutes')`,
-      [
-        id,
-        email,
-        createHmac("sha256", config.LINK_KEY)
-          .update(`email:${id}:${code}`)
-          .digest("hex"),
-        sha256(browser),
-      ],
+      [id, email, createHmac("sha256", config.LINK_KEY).update(`email:${id}:${code}`).digest("hex"), sha256(browser)],
     );
     const response = await call(
       "POST",
@@ -390,10 +366,9 @@ test("sign-ups: one event per new account and method, with the tab's source; non
     [{ method: "yandex", referrer: "vk.com" }],
   );
   // A sign-up is also the account's first active day.
-  const active = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1",
-    [actorKey(first.accountId)],
-  );
+  const active = await db.query("SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1", [
+    actorKey(first.accountId),
+  ]);
   assert.equal(active.rows[0].n, 1);
 });
 
@@ -427,8 +402,7 @@ test("saves, links, openings and notes: once each, with via and first", async ()
     call("POST", "/api/resolve", { token: link.token }, headers);
   assert.equal((await resolve({ cookie: owner.cookie })).statusCode, 200);
   assert.equal((await events(owner.id, "share_opened")).length, 0);
-  for (let view = 0; view < 3; view++)
-    assert.equal((await resolve()).statusCode, 200);
+  for (let view = 0; view < 3; view++) assert.equal((await resolve()).statusCode, 200);
   const opened = await events(owner.id, "share_opened");
   assert.equal(opened.length, 1);
   assert.equal(opened[0].subject, shareKey(link.shareId));
@@ -455,10 +429,7 @@ test("saves, links, openings and notes: once each, with via and first", async ()
   else assert.fail(`note: ${note.statusCode} ${note.body}`);
 
   // Any signed-in action marks the day as active, once.
-  const days = await db.query(
-    "SELECT day::text FROM analytics_active_days WHERE actor=$1",
-    [actorKey(owner.id)],
-  );
+  const days = await db.query("SELECT day::text FROM analytics_active_days WHERE actor=$1", [actorKey(owner.id)]);
   assert.deepEqual(
     days.rows.map((row) => row.day),
     [new Date().toISOString().slice(0, 10)],
@@ -521,27 +492,12 @@ test("agents: a token's first call connects it (HTTP or MCP); saves say api or a
 });
 
 test("OAuth clients are told apart by their return address and name", () => {
-  assert.equal(
-    oauthClientKind("Claude", ["https://claude.ai/api/mcp/auth_callback"]),
-    "claude-ai",
-  );
-  assert.equal(
-    oauthClientKind("ChatGPT", ["https://chatgpt.com/connector_platform_oauth_redirect"]),
-    "chatgpt",
-  );
-  assert.equal(
-    oauthClientKind("Codex", ["http://127.0.0.1:43123/callback"]),
-    "codex",
-  );
-  assert.equal(
-    oauthClientKind("Claude Code (polka)", ["http://localhost:5555/callback"]),
-    "claude-code",
-  );
+  assert.equal(oauthClientKind("Claude", ["https://claude.ai/api/mcp/auth_callback"]), "claude-ai");
+  assert.equal(oauthClientKind("ChatGPT", ["https://chatgpt.com/connector_platform_oauth_redirect"]), "chatgpt");
+  assert.equal(oauthClientKind("Codex", ["http://127.0.0.1:43123/callback"]), "codex");
+  assert.equal(oauthClientKind("Claude Code (polka)", ["http://localhost:5555/callback"]), "claude-code");
   // A name alone cannot claim a vendor's web client.
-  assert.equal(
-    oauthClientKind("Claude", ["https://evil.example/callback"]),
-    "other",
-  );
+  assert.equal(oauthClientKind("Claude", ["https://evil.example/callback"]), "other");
   assert.equal(oauthClientKind(null, ["not a url"]), "other");
 });
 
@@ -557,15 +513,10 @@ test("a company request is counted once, without who sent it", async () => {
     interest: "self-hosted",
     policyRead: true,
   };
-  const before = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_events WHERE name='enterprise_request'",
-  );
+  const before = await db.query("SELECT count(*)::int AS n FROM analytics_events WHERE name='enterprise_request'");
   const first = await call("POST", "/api/enterprise-requests", body);
   assert.equal(first.statusCode, 200, first.body);
-  assert.equal(
-    (await call("POST", "/api/enterprise-requests", body)).statusCode,
-    200,
-  );
+  assert.equal((await call("POST", "/api/enterprise-requests", body)).statusCode, 200);
   await flushAnalytics();
   const { rows } = await db.query(
     `SELECT * FROM analytics_events WHERE name='enterprise_request'
@@ -573,9 +524,7 @@ test("a company request is counted once, without who sent it", async () => {
   );
   // Other files may send requests too: at least ours, and ours has no identity.
   assert.ok(rows.length >= before.rows[0].n + 1);
-  const ours = rows.filter(
-    (row) => row.props.interest === "self-hosted" && row.props.teamSize === "11-50",
-  );
+  const ours = rows.filter((row) => row.props.interest === "self-hosted" && row.props.teamSize === "11-50");
   assert.ok(ours.length >= 1);
   for (const row of rows) {
     assert.equal(row.actor, null);
@@ -602,14 +551,7 @@ test("stored rows hold no personal data: fixed columns, keys only, enumerated pr
     "subject",
     "props",
   ]);
-  assert.deepEqual(await columns("analytics_daily"), [
-    "day",
-    "name",
-    "path",
-    "source",
-    "detail",
-    "count",
-  ]);
+  assert.deepEqual(await columns("analytics_daily"), ["day", "name", "path", "source", "detail", "count"]);
   assert.deepEqual(await columns("analytics_active_days"), ["actor", "day"]);
   assert.deepEqual(await columns("analytics_optouts"), ["actor", "created_at"]);
   const allowed = new Set([
@@ -625,18 +567,13 @@ test("stored rows hold no personal data: fixed columns, keys only, enumerated pr
     "interest",
     "teamSize",
   ]);
-  const { rows } = await db.query(
-    "SELECT * FROM analytics_events WHERE actor=ANY($1::text[])",
-    [[...actors]],
-  );
+  const { rows } = await db.query("SELECT * FROM analytics_events WHERE actor=ANY($1::text[])", [[...actors]]);
   assert.ok(rows.length >= 10, String(rows.length));
   for (const row of rows) {
     assert.match(row.actor, /^[A-Za-z0-9_-]{43}$/);
-    for (const key of Object.keys(row.props))
-      assert.ok(allowed.has(key), `unexpected prop ${key}`);
+    for (const key of Object.keys(row.props)) assert.ok(allowed.has(key), `unexpected prop ${key}`);
     const text = JSON.stringify(row);
-    for (const secret of secrets)
-      assert.ok(!text.includes(secret), `${row.name} holds an identifier`);
+    for (const secret of secrets) assert.ok(!text.includes(secret), `${row.name} holds an identifier`);
     assert.doesNotMatch(text, /2001:db8|127\.0\.0\.1|@example\.test/);
   }
 });
@@ -651,10 +588,7 @@ test("the operator report: token-gated like /api/ops/status, with the funnel, so
   mutable.OPS_STATUS_TOKEN = token;
   assert.equal((await get("/api/ops/metrics")).statusCode, 404);
   assert.equal((await get("/api/ops/metrics", `Bearer ${token}x`)).statusCode, 404);
-  assert.equal(
-    (await get("/api/ops/metrics?weeks=100", `Bearer ${token}`)).statusCode,
-    400,
-  );
+  assert.equal((await get("/api/ops/metrics?weeks=100", `Bearer ${token}`)).statusCode, 400);
   const answer = await get("/api/ops/metrics?weeks=4", `Bearer ${token}`);
   assert.equal(answer.statusCode, 200, answer.body);
   const report = answer.json();
@@ -685,7 +619,17 @@ test("the operator report: token-gated like /api/ops/status, with the funnel, so
     "shareOpened",
   ]);
   const week = report.funnel.weeks.at(-1);
-  for (const key of ["week", "visitors", "signups", "agentConnected", "firstSave", "firstShare", "shareOpened", "reached", "conversion"])
+  for (const key of [
+    "week",
+    "visitors",
+    "signups",
+    "agentConnected",
+    "firstSave",
+    "firstShare",
+    "shareOpened",
+    "reached",
+    "conversion",
+  ])
     assert.ok(key in week, key);
   assert.ok(week.signups >= 3);
   assert.ok(report.funnel.total.visitors >= 2);
@@ -765,12 +709,7 @@ test("funnel and retention on a synthetic cohort", () => {
     ["c", new Set(["firstSave", "firstShare"])], // saved from the web, no agent
     ["e", new Set(["agentConnected"])],
   ]);
-  const funnel = funnelWeeks(
-    weeks,
-    signups,
-    reached,
-    new Map([["2026-08-03", 40]]),
-  );
+  const funnel = funnelWeeks(weeks, signups, reached, new Map([["2026-08-03", 40]]));
   const first = funnel.weeks[0]!;
   assert.equal(first.visitors, 40);
   assert.equal(first.signups, 4);
@@ -793,13 +732,10 @@ test("funnel and retention on a synthetic cohort", () => {
 });
 
 test("maintenance keeps raw events and active days 13 months; the daily counters stay", async () => {
-  const source = await readFile(
-    new URL("../scripts/maintenance-cleanup.ts", import.meta.url),
-    "utf8",
+  const source = await readFile(new URL("../scripts/maintenance-cleanup.ts", import.meta.url), "utf8");
+  const statements = [...source.matchAll(/"(DELETE FROM analytics_[a-z_]+ WHERE [^"]+13 months[^"]+)"/g)].map(
+    (match) => match[1]!,
   );
-  const statements = [
-    ...source.matchAll(/"(DELETE FROM analytics_[a-z_]+ WHERE [^"]+13 months[^"]+)"/g),
-  ].map((match) => match[1]!);
   assert.equal(statements.length, 2);
   assert.doesNotMatch(source, /DELETE FROM analytics_daily/);
   const actor = actorKey(randomUUID());
@@ -823,15 +759,9 @@ test("maintenance keeps raw events and active days 13 months; the daily counters
     [day],
   );
   for (const sql of statements) await db.query(sql);
-  const left = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_events WHERE actor=$1",
-    [actor],
-  );
+  const left = await db.query("SELECT count(*)::int AS n FROM analytics_events WHERE actor=$1", [actor]);
   assert.equal(left.rows[0].n, 1);
-  const days = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1",
-    [actor],
-  );
+  const days = await db.query("SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1", [actor]);
   assert.equal(days.rows[0].n, 1);
   const kept = await db.query(
     "SELECT count::int FROM analytics_daily WHERE day=$1::date AND name='page_view' AND path=''",
@@ -848,10 +778,9 @@ test("an objection (metrics forget) deletes the account's events and stops new o
   const message = await runMetricsCli(["forget", who.email]);
   assert.match(message, /^Deleted \d+ events and \d+ active days/);
   assert.equal((await events(who.id)).length, 0);
-  const days = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1",
-    [actorKey(who.id)],
-  );
+  const days = await db.query("SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1", [
+    actorKey(who.id),
+  ]);
   assert.equal(days.rows[0].n, 0);
   // New actions are no longer recorded for this account.
   await upload(who);
@@ -859,10 +788,9 @@ test("an objection (metrics forget) deletes the account's events and stops new o
   assert.equal((await events(who.id)).length, 0);
   await call("GET", "/api/me", undefined, { cookie: who.cookie });
   await flushAnalytics();
-  const after = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1",
-    [actorKey(who.id)],
-  );
+  const after = await db.query("SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1", [
+    actorKey(who.id),
+  ]);
   assert.equal(after.rows[0].n, 0);
   await assert.rejects(runMetricsCli(["forget", `nobody-${run}@example.test`]), /No such account/);
 });
@@ -873,10 +801,7 @@ test("a deleted account's events go: maintenance sweeps every deletion request (
   await upload(leaving);
   await upload(staying);
   assert.ok((await events(leaving.id)).length >= 1);
-  await db.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1",
-    [leaving.id],
-  );
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [leaving.id]);
   const client = await db.connect();
   try {
     await eraseDeletedAccountsAnalytics(client, actorKey);
@@ -884,10 +809,9 @@ test("a deleted account's events go: maintenance sweeps every deletion request (
     client.release();
   }
   assert.equal((await events(leaving.id)).length, 0);
-  const days = await db.query(
-    "SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1",
-    [actorKey(leaving.id)],
-  );
+  const days = await db.query("SELECT count(*)::int AS n FROM analytics_active_days WHERE actor=$1", [
+    actorKey(leaving.id),
+  ]);
   assert.equal(days.rows[0].n, 0);
   assert.ok((await events(staying.id)).length >= 1);
 });

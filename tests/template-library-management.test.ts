@@ -39,9 +39,7 @@ async function login(name: string) {
 
 async function release(cookie: string, title: string, plain = false) {
   const bytes = Buffer.from(
-    plain
-      ? title
-      : `<!doctype html><html><body><h1>${title}</h1><p>Template source</p></body></html>`,
+    plain ? title : `<!doctype html><html><body><h1>${title}</h1><p>Template source</p></body></html>`,
   );
   const begin = await call(
     "POST",
@@ -69,12 +67,7 @@ async function release(cookie: string, title: string, plain = false) {
     payload: bytes,
   });
   assert.equal(upload.statusCode, 200, upload.body);
-  const saved = await call(
-    "POST",
-    `/api/uploads/${uploadId}/finalize`,
-    {},
-    cookie,
-  );
+  const saved = await call("POST", `/api/uploads/${uploadId}/finalize`, {}, cookie);
   assert.equal(saved.statusCode, 200, saved.body);
   const pinned = await call(
     "POST",
@@ -110,22 +103,11 @@ after(async () => {
 
 test("HTTP library management preserves membership and owned-release boundaries", async () => {
   assert.equal(
-    (
-      await call(
-        "POST",
-        "/api/template-libraries",
-        { name: "Wrong origin" },
-        ownerCookie,
-        "https://attacker.invalid",
-      )
-    ).statusCode,
+    (await call("POST", "/api/template-libraries", { name: "Wrong origin" }, ownerCookie, "https://attacker.invalid"))
+      .statusCode,
     403,
   );
-  assert.equal(
-    (await call("POST", "/api/template-libraries", { name: "Anonymous" }, ""))
-      .statusCode,
-    401,
-  );
+  assert.equal((await call("POST", "/api/template-libraries", { name: "Anonymous" }, "")).statusCode, 401);
 
   const created = await call("POST", "/api/template-libraries", {
     name: "Brand team",
@@ -133,61 +115,27 @@ test("HTTP library management preserves membership and owned-release boundaries"
   assert.equal(created.statusCode, 200, created.body);
   const libraryId = created.json().id as string;
   assert.equal(created.json().role, "admin");
-  assert.equal(
-    (await call("GET", "/api/template-libraries")).json().items[0].id,
-    libraryId,
-  );
-  assert.equal(
-    (
-      await call("GET", "/api/template-libraries", undefined, outsiderCookie)
-    ).json().items.length,
-    0,
-  );
+  assert.equal((await call("GET", "/api/template-libraries")).json().items[0].id, libraryId);
+  assert.equal((await call("GET", "/api/template-libraries", undefined, outsiderCookie)).json().items.length, 0);
 
-  await db.query(
-    "INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'reader')",
-    [libraryId, curator.id],
-  );
-  const members = await call(
-    "GET",
-    `/api/template-libraries/${libraryId}/members`,
-    undefined,
-    curatorCookie,
-  );
+  await db.query("INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'reader')", [
+    libraryId,
+    curator.id,
+  ]);
+  const members = await call("GET", `/api/template-libraries/${libraryId}/members`, undefined, curatorCookie);
   assert.equal(members.statusCode, 200, members.body);
   assert.equal(members.json().items.length, 2);
   assert.equal(JSON.stringify(members.json()).includes("email"), false);
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/members`,
-        undefined,
-        outsiderCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/template-libraries/${libraryId}/members`, undefined, outsiderCookie)).statusCode,
     404,
   );
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/events`,
-        undefined,
-        curatorCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/template-libraries/${libraryId}/events`, undefined, curatorCookie)).statusCode,
     404,
   );
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/events`,
-        undefined,
-        outsiderCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/template-libraries/${libraryId}/events`, undefined, outsiderCookie)).statusCode,
     404,
   );
 
@@ -202,21 +150,13 @@ test("HTTP library management preserves membership and owned-release boundaries"
     ).statusCode,
     404,
   );
-  const promoted = await call(
-    "PATCH",
-    `/api/template-libraries/${libraryId}/members/${curator.id}`,
-    { role: "curator" },
-  );
+  const promoted = await call("PATCH", `/api/template-libraries/${libraryId}/members/${curator.id}`, {
+    role: "curator",
+  });
   assert.equal(promoted.statusCode, 200, promoted.body);
   assert.equal(promoted.json().role, "curator");
   assert.equal(
-    (
-      await call(
-        "PATCH",
-        `/api/template-libraries/${libraryId}/members/${owner.id}`,
-        { role: "reader" },
-      )
-    ).statusCode,
+    (await call("PATCH", `/api/template-libraries/${libraryId}/members/${owner.id}`, { role: "reader" })).statusCode,
     409,
   );
 
@@ -260,14 +200,8 @@ test("HTTP library management preserves membership and owned-release boundaries"
   );
   assert.equal(retried.json().id, published.json().id);
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/publications`,
-        undefined,
-        ownerCookie,
-      )
-    ).json().items[0].revisionId,
+    (await call("GET", `/api/template-libraries/${libraryId}/publications`, undefined, ownerCookie)).json().items[0]
+      .revisionId,
     curatorRelease.revisionId,
   );
 
@@ -300,17 +234,9 @@ test("HTTP library management preserves membership and owned-release boundaries"
     ).statusCode,
     200,
   );
-  assert.equal(
-    (
-      await call("GET", `/api/template-libraries/${libraryId}/publications`)
-    ).json().items.length,
-    0,
-  );
+  assert.equal((await call("GET", `/api/template-libraries/${libraryId}/publications`)).json().items.length, 0);
 
-  const firstEvents = await call(
-    "GET",
-    `/api/template-libraries/${libraryId}/events?limit=2`,
-  );
+  const firstEvents = await call("GET", `/api/template-libraries/${libraryId}/events?limit=2`);
   assert.equal(firstEvents.statusCode, 200, firstEvents.body);
   assert.equal(firstEvents.json().items.length, 2);
   assert.ok(firstEvents.json().nextBefore);
@@ -319,10 +245,7 @@ test("HTTP library management preserves membership and owned-release boundaries"
     `/api/template-libraries/${libraryId}/events?limit=2&before=${firstEvents.json().nextBefore}`,
   );
   assert.equal(secondEvents.statusCode, 200, secondEvents.body);
-  const beforeRevoke = [
-    ...firstEvents.json().items,
-    ...secondEvents.json().items,
-  ];
+  const beforeRevoke = [...firstEvents.json().items, ...secondEvents.json().items];
   assert.deepEqual(
     beforeRevoke.map((event: any) => event.action),
     [
@@ -343,55 +266,22 @@ test("HTTP library management preserves membership and owned-release boundaries"
     beforeRevoke.every((event: any) => event.libraryId === libraryId),
     true,
   );
-  assert.equal(
-    (await call("GET", `/api/template-libraries/${libraryId}/events?limit=101`))
-      .statusCode,
-    400,
-  );
+  assert.equal((await call("GET", `/api/template-libraries/${libraryId}/events?limit=101`)).statusCode, 400);
 
-  const revoked = await call(
-    "POST",
-    `/api/template-libraries/${libraryId}/members/${curator.id}/revoke`,
-    {},
-  );
+  const revoked = await call("POST", `/api/template-libraries/${libraryId}/members/${curator.id}/revoke`, {});
   assert.equal(revoked.statusCode, 200, revoked.body);
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/template-libraries/${libraryId}/members/${curator.id}/revoke`,
-        {},
-      )
-    ).statusCode,
+    (await call("POST", `/api/template-libraries/${libraryId}/members/${curator.id}/revoke`, {})).statusCode,
     200,
   );
+  assert.equal((await call("GET", "/api/template-libraries", undefined, curatorCookie)).json().items.length, 0);
   assert.equal(
-    (
-      await call("GET", "/api/template-libraries", undefined, curatorCookie)
-    ).json().items.length,
-    0,
-  );
-  assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/events`,
-        undefined,
-        curatorCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/template-libraries/${libraryId}/events`, undefined, curatorCookie)).statusCode,
     404,
   );
-  const finalEvents = (
-    await call("GET", `/api/template-libraries/${libraryId}/events`)
-  ).json().items;
+  const finalEvents = (await call("GET", `/api/template-libraries/${libraryId}/events`)).json().items;
   assert.equal(finalEvents[0].action, "template_library.member_revoked");
-  assert.equal(
-    finalEvents.filter(
-      (event: any) => event.action === "template_library.member_revoked",
-    ).length,
-    1,
-  );
+  assert.equal(finalEvents.filter((event: any) => event.action === "template_library.member_revoked").length, 1);
   assert.equal(
     Number(
       (
@@ -411,27 +301,17 @@ test("disabled administrators do not satisfy the last-active-admin guard", async
     name: "Admin guard",
   });
   const libraryId = created.json().id as string;
-  await db.query(
-    "INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'admin')",
-    [libraryId, outsider.id],
-  );
-  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [
+  await db.query("INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'admin')", [
+    libraryId,
     outsider.id,
   ]);
+  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [outsider.id]);
   try {
     assert.equal(
-      (
-        await call(
-          "PATCH",
-          `/api/template-libraries/${libraryId}/members/${owner.id}`,
-          { role: "reader" },
-        )
-      ).statusCode,
+      (await call("PATCH", `/api/template-libraries/${libraryId}/members/${owner.id}`, { role: "reader" })).statusCode,
       409,
     );
   } finally {
-    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [
-      outsider.id,
-    ]);
+    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [outsider.id]);
   }
 });

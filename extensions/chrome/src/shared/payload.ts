@@ -8,12 +8,7 @@ import { htmlTitle, sourceBody } from "../../../../packages/artifact-source.ts";
 export type Provider = "claude" | "chatgpt";
 
 /** How a source was obtained, best first. Shown in the result as a hint. */
-export type Via =
-  | "download"
-  | "copy-button"
-  | "frame-source"
-  | "code-view"
-  | "frame-rendered";
+export type Via = "download" | "copy-button" | "frame-source" | "code-view" | "frame-rendered";
 
 export type Extracted = {
   provider: Provider;
@@ -26,12 +21,7 @@ export type Extracted = {
 
 // How a source is read (kind, page around it) is shared with the server's
 // ChatGPT import: packages/artifact-source.ts.
-export {
-  detectKind,
-  escapeHtml,
-  htmlTitle,
-  type SourceKind,
-} from "../../../../packages/artifact-source.ts";
+export { detectKind, escapeHtml, htmlTitle, type SourceKind } from "../../../../packages/artifact-source.ts";
 
 export type PublishBody =
   | { key: string; title: string; html: string }
@@ -71,9 +61,7 @@ export function publishBody(extracted: Extracted, key: string): PublishBody {
 /** Candidates in order of trust; the first non-empty one wins. */
 export function pickBest(candidates: (Extracted | null | undefined)[]) {
   const order: Via[] = ["download", "copy-button", "frame-source", "code-view", "frame-rendered"];
-  const usable = candidates.filter(
-    (item): item is Extracted => !!item && item.source.trim().length > 0,
-  );
+  const usable = candidates.filter((item): item is Extracted => !!item && item.source.trim().length > 0);
   usable.sort((a, b) => order.indexOf(a.via) - order.indexOf(b.via));
   return usable[0] ?? null;
 }

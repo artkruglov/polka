@@ -48,8 +48,7 @@ const ComponentCatalog = import.meta.env.DEV
   : null;
 
 function Route({ path }: { path: string }) {
-  if (path === "/dev/components" && ComponentCatalog)
-    return <ComponentCatalog />;
+  if (path === "/dev/components" && ComponentCatalog) return <ComponentCatalog />;
   // The same list the server serves the shell for (packages/contracts/app-routes.ts).
   if (!isAppPage(path)) return <NotFound />;
   if (path === "/templates") return <Templates />;
@@ -71,8 +70,7 @@ function Route({ path }: { path: string }) {
   if (path === "/enterprise") return <Enterprise />;
   if (path === "/start") return <FirstSave />;
   // «Настройки»: agents, sign-in methods, deleting the shelf.
-  if (path === "/settings" || path === "/settings/agents" || path === "/connections")
-    return <AgentConnections />;
+  if (path === "/settings" || path === "/settings/agents" || path === "/connections") return <AgentConnections />;
   if (path === "/settings/company") return <CompanyAdmin />;
   // Agent sessions: the list, «Секреты», «Расход» and one session.
   if (path === "/sessions" || path.startsWith("/sessions/")) return <AgentSessions />;

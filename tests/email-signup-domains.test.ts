@@ -32,8 +32,7 @@ after(async () => {
   s3.destroy();
 });
 
-const address = () =>
-  `2001:db8:5d::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:5d::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 /** Asks for a code; returns the answer and whether a challenge was stored. */
 async function askCode(email: string) {
@@ -44,9 +43,7 @@ async function askCode(email: string) {
     headers: { origin },
     payload: { email },
   });
-  const stored = (
-    await db.query("SELECT 1 FROM login_challenges WHERE email=$1", [email])
-  ).rowCount;
+  const stored = (await db.query("SELECT 1 FROM login_challenges WHERE email=$1", [email])).rowCount;
   return { response, stored: !!stored };
 }
 
@@ -76,15 +73,10 @@ test("ru-only is the curated Russian list plus the installation's domain", () =>
     [...RU_MAIL_DOMAINS, "company.ru"].sort(),
   );
   assert.deepEqual(installationDomains("http://127.0.0.1:4390"), []);
-  assert.throws(() =>
-    parseSignupDomains("any,ru-only", "https://polochka.app"),
-  );
-  assert.throws(() =>
-    parseSignupDomains("not a domain", "https://polochka.app"),
-  );
+  assert.throws(() => parseSignupDomains("any,ru-only", "https://polochka.app"));
+  assert.throws(() => parseSignupDomains("not a domain", "https://polochka.app"));
   // Organisation rules may never name a public mail service.
-  for (const domain of ["gmail.com", "yandex.ru", "mail.ru"])
-    assert.ok(PUBLIC_MAIL_DOMAINS.includes(domain));
+  for (const domain of ["gmail.com", "yandex.ru", "mail.ru"]) assert.ok(PUBLIC_MAIL_DOMAINS.includes(domain));
 });
 
 test("a new shelf opens only on allowed domains; the answer looks the same", async () => {
@@ -98,18 +90,13 @@ test("a new shelf opens only on allowed domains; the answer looks the same", asy
   const outside = await askCode(`new-${tag}@foreign.test`);
   assert.equal(outside.response.statusCode, 200, outside.response.body);
   assert.equal(outside.stored, false);
-  assert.deepEqual(
-    Object.keys(outside.response.json()).sort(),
-    Object.keys(allowed.response.json()).sort(),
-  );
+  assert.deepEqual(Object.keys(outside.response.json()).sort(), Object.keys(allowed.response.json()).sort());
   // An operator's invitation opens a shelf outside the list.
   config.EMAIL_SIGNUP_ALLOW = [`invited-${tag}@foreign.test`];
   assert.equal((await askCode(`invited-${tag}@foreign.test`)).stored, true);
   config.EMAIL_SIGNUP_ALLOW = [];
   // The interface learns the rule from capabilities.
-  const capabilities = (
-    await app.inject({ method: "GET", url: "/api/capabilities" })
-  ).json();
+  const capabilities = (await app.inject({ method: "GET", url: "/api/capabilities" })).json();
   assert.deepEqual(capabilities.emailSignupDomains, ["allowed.test"]);
   assert.equal(capabilities.emailLoginDomains, "any");
 });
@@ -118,14 +105,12 @@ test("an existing account outside the list keeps its code unless EMAIL_LOGIN_DOM
   config.EMAIL_SIGNUP_DOMAINS = ["allowed.test"];
   const email = `old-${randomUUID().slice(0, 8)}@foreign.test`;
   const id = randomUUID();
-  await db.query(
-    "INSERT INTO accounts(id,name,password_hash,email) VALUES($1,$2,'unused',$3)",
-    [id, `email-${id}`, email],
-  );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-    randomUUID(),
+  await db.query("INSERT INTO accounts(id,name,password_hash,email) VALUES($1,$2,'unused',$3)", [
     id,
+    `email-${id}`,
+    email,
   ]);
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [randomUUID(), id]);
   config.EMAIL_LOGIN_DOMAINS = "any";
   assert.equal((await askCode(email)).stored, true);
   await db.query("DELETE FROM login_challenges WHERE email=$1", [email]);
@@ -150,15 +135,11 @@ test("a code issued before the rule changed opens no new shelf", async () => {
     payload: { email },
   });
   assert.equal(asked.statusCode, 200, asked.body);
-  const browser = asked.cookies.find(
-    (cookie) => cookie.name === "polka_email_challenge",
-  )!.value;
+  const browser = asked.cookies.find((cookie) => cookie.name === "polka_email_challenge")!.value;
   const { readFile } = await import("node:fs/promises");
   const { LOCAL_MAIL_DIRECTORY } = await import("../apps/server/mailer.ts");
   const { id } = asked.json();
-  const letter = JSON.parse(
-    await readFile(`${LOCAL_MAIL_DIRECTORY}/${id}.json`, "utf8"),
-  );
+  const letter = JSON.parse(await readFile(`${LOCAL_MAIL_DIRECTORY}/${id}.json`, "utf8"));
   config.EMAIL_SIGNUP_DOMAINS = ["allowed.test"];
   try {
     const verify = await app.inject({
@@ -169,11 +150,7 @@ test("a code issued before the rule changed opens no new shelf", async () => {
       payload: { id, code: letter.code },
     });
     assert.equal(verify.statusCode, 401);
-    assert.equal(
-      (await db.query("SELECT 1 FROM accounts WHERE email=$1", [email]))
-        .rowCount,
-      0,
-    );
+    assert.equal((await db.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount, 0);
   } finally {
     config.EMAIL_SIGNUP_DOMAINS = "any";
   }

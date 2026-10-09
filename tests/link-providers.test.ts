@@ -66,7 +66,13 @@ test("the renderer allowlist is exact: lookalikes, bare suffixes and closed path
   // The plain fetch is only for ChatGPT's public pages robots.txt allows.
   assert.equal(fetchable("https://chatgpt.com/share/68063082-c2d8-8012-8d45-fa674aa1c1ed"), true);
   assert.equal(fetchable("https://chatgpt.com/canvas/shared/68d0334db1c08191b91094c29bee3c78"), true);
-  for (const url of ["https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed", "https://chatgpt.com/", "https://chatgpt.com/share/", "https://my-app.lovable.app/", "https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo"])
+  for (const url of [
+    "https://chatgpt.com/c/68063082-c2d8-8012-8d45-fa674aa1c1ed",
+    "https://chatgpt.com/",
+    "https://chatgpt.com/share/",
+    "https://my-app.lovable.app/",
+    "https://claude.ai/artifact/F49sUXozTkEFzFawwHGSxo",
+  ])
     assert.equal(fetchable(url), false, url);
   // g.co outside the Gemini share path is an ordinary short link, not Gemini.
   assert.equal(matchLink("https://g.co/kgs/abc")?.provider, null);

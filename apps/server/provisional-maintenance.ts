@@ -7,10 +7,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 type Client = {
-  query: (
-    sql: string,
-    values?: unknown[],
-  ) => Promise<{ rows?: Array<Record<string, any>>; rowCount?: number | null }>;
+  query: (sql: string, values?: unknown[]) => Promise<{ rows?: Array<Record<string, any>>; rowCount?: number | null }>;
 };
 
 export type ProvisionalRetirementPolicy = {
@@ -57,10 +54,7 @@ export async function retireProvisionalShelf(
   shelf: { id: string; tenant: string },
   policy: ProvisionalRetirementPolicy,
 ) {
-  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [
-    shelf.tenant,
-    shelf.id,
-  ]);
+  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [shelf.tenant, shelf.id]);
   const still = await c.query(
     `SELECT a.id FROM accounts a JOIN tenants t ON t.owner_id=a.id
       WHERE a.id=$2 AND ${IDLE} FOR UPDATE OF a`,
@@ -82,12 +76,8 @@ export async function requestDeletionRows(
   policy: Omit<ProvisionalRetirementPolicy, "idleDays">,
   auditAction: string,
 ) {
-  const capability = createHash("sha256")
-    .update(randomBytes(32))
-    .digest("hex");
-  const {
-    rows: [planned] = [],
-  } = await c.query(
+  const capability = createHash("sha256").update(randomBytes(32)).digest("hex");
+  const { rows: [planned] = [] } = await c.query(
     `INSERT INTO account_deletions(
        id,account_id,tenant_id,state,status_capability_hash,plan_expires_at,
        artifact_count,revision_count,source_bytes,derivative_bytes,
@@ -121,17 +111,12 @@ export async function requestDeletionRows(
     ],
   );
   if (!planned) return false;
-  const {
-    rows: [{ now }] = [{ now: new Date() }],
-  } = await c.query("SELECT clock_timestamp() AS now");
-  await c.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=$2 WHERE id=$1",
-    [shelf.id, now],
-  );
-  await c.query(
-    "UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1",
-    [shelf.tenant, now],
-  );
+  const { rows: [{ now }] = [{ now: new Date() }] } = await c.query("SELECT clock_timestamp() AS now");
+  await c.query("UPDATE accounts SET disabled=true,deletion_requested_at=$2 WHERE id=$1", [shelf.id, now]);
+  await c.query("UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1", [
+    shelf.tenant,
+    now,
+  ]);
   await c.query(
     `UPDATE oauth_refresh_tokens SET revoked_at=COALESCE(revoked_at,$2)
       WHERE tenant_id=$1`,
@@ -147,13 +132,8 @@ export async function requestDeletionRows(
       WHERE issued.share_id=share.id AND share.tenant_id=$1`,
     [shelf.tenant],
   );
-  await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [
-    shelf.tenant,
-  ]);
-  await c.query(
-    "UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL",
-    [shelf.tenant],
-  );
+  await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [shelf.tenant]);
+  await c.query("UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL", [shelf.tenant]);
   await c.query(
     `UPDATE revision_derivatives
         SET attempt_expires_at=LEAST(attempt_expires_at,$2),updated_at=$2
@@ -173,11 +153,7 @@ export async function requestDeletionRows(
        backup_retention_policy_deadline=$2::timestamptz+backup_retention_max_days*interval '1 day',
        confirmation_session_hash=$3
      WHERE id=$1`,
-    [
-      planned.id,
-      now,
-      createHash("sha256").update(randomBytes(32)).digest("hex"),
-    ],
+    [planned.id, now, createHash("sha256").update(randomBytes(32)).digest("hex")],
   );
   await c.query("DELETE FROM sessions WHERE account_id=$1", [shelf.id]);
   return true;
@@ -191,15 +167,8 @@ export async function requestDeletionRows(
 // has blocked content (evidence), is only closed and left to the operator.
 
 /** Step 1: close the shelf. False when it is no longer idle or not simple. */
-export async function closeProvisionalShelf(
-  c: Client,
-  shelf: { id: string; tenant: string },
-  idleDays: number,
-) {
-  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [
-    shelf.tenant,
-    shelf.id,
-  ]);
+export async function closeProvisionalShelf(c: Client, shelf: { id: string; tenant: string }, idleDays: number) {
+  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [shelf.tenant, shelf.id]);
   const still = await c.query(
     `SELECT a.id,
             (a.email IS NULL
@@ -217,38 +186,24 @@ export async function closeProvisionalShelf(
   );
   const row = still.rows?.[0];
   if (!row) return { closed: false, erase: false };
-  const {
-    rows: [{ now }] = [{ now: new Date() }],
-  } = await c.query("SELECT clock_timestamp() AS now");
-  await c.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=$2 WHERE id=$1",
-    [shelf.id, now],
-  );
-  await c.query(
-    "UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1",
-    [shelf.tenant, now],
-  );
-  await c.query(
-    "UPDATE oauth_refresh_tokens SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1",
-    [shelf.tenant, now],
-  );
-  await c.query(
-    "UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL",
-    [shelf.tenant],
-  );
+  const { rows: [{ now }] = [{ now: new Date() }] } = await c.query("SELECT clock_timestamp() AS now");
+  await c.query("UPDATE accounts SET disabled=true,deletion_requested_at=$2 WHERE id=$1", [shelf.id, now]);
+  await c.query("UPDATE agent_connections SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1", [
+    shelf.tenant,
+    now,
+  ]);
+  await c.query("UPDATE oauth_refresh_tokens SET revoked_at=COALESCE(revoked_at,$2) WHERE tenant_id=$1", [
+    shelf.tenant,
+    now,
+  ]);
+  await c.query("UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL", [shelf.tenant]);
   await c.query("DELETE FROM sessions WHERE account_id=$1", [shelf.id]);
   return { closed: true, erase: !!row.simple };
 }
 
 /** Step 3 (after the objects are gone): the shelf's rows. */
-export async function eraseProvisionalShelfRows(
-  c: Client,
-  shelf: { id: string; tenant: string },
-) {
-  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [
-    shelf.tenant,
-    shelf.id,
-  ]);
+export async function eraseProvisionalShelfRows(c: Client, shelf: { id: string; tenant: string }) {
+  await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [shelf.tenant, shelf.id]);
   for (const sql of [
     "DELETE FROM agent_operations WHERE tenant_id=$1",
     "DELETE FROM url_import_jobs WHERE tenant_id=$1",

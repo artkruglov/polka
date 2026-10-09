@@ -10,10 +10,7 @@ import { snippetBesideTitle } from "../apps/web/src/widgets/shelf-card/cover-mod
 import { DeleteShelf } from "../apps/web/src/pages/agents/delete-shelf.tsx";
 import { MoveShelf } from "../apps/web/src/pages/agents/move-shelf.tsx";
 import { AgentHeroView } from "../apps/web/src/features/agent-hero/index.tsx";
-import {
-  clientHints,
-  isLoopbackOrigin,
-} from "../apps/web/src/entities/onboarding/connect-phrase.ts";
+import { clientHints, isLoopbackOrigin } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
 import { categoryOf } from "../apps/web/src/entities/artifact/format.ts";
 import { APP_PAGES, isAppPage, isMachinePath } from "../packages/contracts/app-routes.ts";
 import { SEARCH_MATCH_END as E, SEARCH_MATCH_START as S } from "../packages/contracts/constants.ts";
@@ -34,8 +31,7 @@ test("one list of pages for the server and the router", () => {
   assert.ok(isAppPage("/discover/collections"));
   for (const path of ["/nope", "/works/abc", "/pricing/", "/settingz", "/discover/A"])
     assert.ok(!isAppPage(path), path);
-  for (const path of ["/api", "/api/x", "/mcp", "/oauth/token", "/.well-known/x"])
-    assert.ok(isMachinePath(path), path);
+  for (const path of ["/api", "/api/x", "/mcp", "/oauth/token", "/.well-known/x"]) assert.ok(isMachinePath(path), path);
   for (const path of ["/apis", "/mcpx", "/oauthorize"]) assert.ok(!isMachinePath(path), path);
 });
 
@@ -88,7 +84,10 @@ test("the settings say how to delete the shelf, with the configured address", ()
 test("the settings say how to move the shelf to another installation", () => {
   const html = render(React.createElement(MoveShelf, { origin: "https://polochka.app" }));
   assert.match(html, /<h2 id="move-shelf-title">Перенести полку<\/h2>/);
-  assert.match(html, /curl -fsSLo polka-export\.mjs &#x27;https:\/\/polochka\.app\/api\/v1\/cli\/polka-export\.mjs&#x27;/);
+  assert.match(
+    html,
+    /curl -fsSLo polka-export\.mjs &#x27;https:\/\/polochka\.app\/api\/v1\/cli\/polka-export\.mjs&#x27;/,
+  );
   assert.match(html, /npm run shelf:import/);
   assert.match(render(React.createElement(DeleteShelf, { contact: null })), /href="#move-shelf"/);
 });

@@ -39,13 +39,20 @@ function purgedFrom(base = revoke) {
 
 test("canonical bytes and fixed hash vector are stable", () => {
   const encoded = encodeErasureRecord(revoke);
-  const expected = '{"accountId":"00000000-0000-4000-8000-000000000003","backupRetentionPolicyDeadline":"2026-02-01T00:00:00.000Z","event":"revoke","ledgerId":"00000000-0000-4000-8000-000000000001","policyVersion":"r17.v1","requestId":"00000000-0000-4000-8000-000000000002","requestedAt":"2026-01-01T00:00:00.000Z","revokedAt":"2026-01-01T00:01:00.000Z","schemaVersion":1,"tenantId":"00000000-0000-4000-8000-000000000004","workingDataPolicyDeadline":"2026-01-02T00:00:00.000Z"}';
+  const expected =
+    '{"accountId":"00000000-0000-4000-8000-000000000003","backupRetentionPolicyDeadline":"2026-02-01T00:00:00.000Z","event":"revoke","ledgerId":"00000000-0000-4000-8000-000000000001","policyVersion":"r17.v1","requestId":"00000000-0000-4000-8000-000000000002","requestedAt":"2026-01-01T00:00:00.000Z","revokedAt":"2026-01-01T00:01:00.000Z","schemaVersion":1,"tenantId":"00000000-0000-4000-8000-000000000004","workingDataPolicyDeadline":"2026-01-02T00:00:00.000Z"}';
   assert.equal(new TextDecoder().decode(encoded.bytes), expected);
   assert.equal(encoded.sha256, "cdb1fd04053c265ef0e757b0a7ac632bcd22359a76ea2f6f24384cf320b7239b");
   assert.equal(encoded.key, `erasure/v1/${ledgerId}/${requestId}/revoke.json`);
   assert.deepEqual(decodeErasureRecord(encoded.bytes, encoded.key, ledgerId), revoke);
-  assert.throws(() => decodeErasureRecord(encoded.bytes, encoded.key.replace("revoke", "purged"), ledgerId), /key mismatch/);
-  assert.throws(() => decodeErasureRecord(encoded.bytes, encoded.key, "00000000-0000-4000-8000-000000000099"), /key mismatch/);
+  assert.throws(
+    () => decodeErasureRecord(encoded.bytes, encoded.key.replace("revoke", "purged"), ledgerId),
+    /key mismatch/,
+  );
+  assert.throws(
+    () => decodeErasureRecord(encoded.bytes, encoded.key, "00000000-0000-4000-8000-000000000099"),
+    /key mismatch/,
+  );
 });
 
 test("rejects fatal UTF-8, duplicate keys, unknown fields, oversize and noncanonical dates", () => {

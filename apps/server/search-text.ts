@@ -1,8 +1,5 @@
 import type { PoolClient } from "pg";
-import {
-  SEARCH_MATCH_END,
-  SEARCH_MATCH_START,
-} from "../../packages/contracts/index.ts";
+import { SEARCH_MATCH_END, SEARCH_MATCH_START } from "../../packages/contracts/index.ts";
 import { scriptStrings } from "./phishing-signals.ts";
 
 /**
@@ -54,11 +51,7 @@ const MAX_PHRASE = 4096;
  * whose English messages are not the work's text: there only Cyrillic
  * literals count. The same linear pass as the phishing scan (scriptStrings).
  */
-export function addScriptText(
-  source: string,
-  into: SearchText,
-  literals: "phrases" | "cyrillic" = "phrases",
-) {
+export function addScriptText(source: string, into: SearchText, literals: "phrases" | "cyrillic" = "phrases") {
   scriptStrings(source, (text, kind) => {
     // A reader's phrase is short; a long literal is data or a library.
     if (into.full || text.length > MAX_PHRASE) return;
@@ -89,9 +82,7 @@ export async function indexRevisionText(
 ) {
   const body = text?.replace(MARKERS, "").trim().slice(0, SEARCH_TEXT_CHARS);
   if (!body) {
-    await c.query("DELETE FROM artifact_search WHERE artifact_id=$1", [
-      artifactId,
-    ]);
+    await c.query("DELETE FROM artifact_search WHERE artifact_id=$1", [artifactId]);
     return;
   }
   await c.query(
@@ -142,9 +133,7 @@ export function titlePattern(q: string): string | null {
 
 /** A fragment for an agent: the found words between «…». */
 export function plainSnippet(snippet: string | null | undefined) {
-  return snippet
-    ? snippet.replaceAll(MATCH_START, "«").replaceAll(MATCH_END, "»")
-    : undefined;
+  return snippet ? snippet.replaceAll(MATCH_START, "«").replaceAll(MATCH_END, "»") : undefined;
 }
 
 /** ts_headline's options: one fragment of up to 24 words, found words marked. */

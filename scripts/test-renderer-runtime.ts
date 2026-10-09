@@ -51,8 +51,25 @@ async function render(base: string, url: string, secret = SECRET, path: "/render
 
 // ---- part 1: the renderer with a local fixture ----
 const dir = mkdtempSync(join(tmpdir(), "polka-renderer-"));
-execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=fixture.test",
-  "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem")], { stdio: "ignore" });
+execFileSync(
+  "openssl",
+  [
+    "req",
+    "-x509",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-days",
+    "1",
+    "-subj",
+    "/CN=fixture.test",
+    "-keyout",
+    join(dir, "key.pem"),
+    "-out",
+    join(dir, "cert.pem"),
+  ],
+  { stdio: "ignore" },
+);
 const tls = { key: readFileSync(join(dir, "key.pem")), cert: readFileSync(join(dir, "cert.pem")) };
 let canaryHits = 0;
 const canary = createHttps(tls, (_req, res) => {
@@ -98,7 +115,9 @@ const fixture = createHttps(tls, (req, res) => {
     `);
   }
   res.writeHead(200, { "content-type": "text/html" });
-  res.end('<!doctype html><html><head><title>Loading…</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
+  res.end(
+    '<!doctype html><html><head><title>Loading…</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>',
+  );
 });
 await new Promise<void>((resolve) => fixture.listen(0, "127.0.0.1", resolve));
 const fixturePort = (fixture.address() as AddressInfo).port;
@@ -140,14 +159,28 @@ try {
   assert.match(spa.body.html, /Rendered by the SPA/);
   assert.match(spa.body.html, /\.card \{ color: rgb\(1, 2, 3\); \}/, "CSSOM-only rules are serialized");
   pass("SPA fixture rendered: DOM and CSS-in-JS rules in the snapshot");
-  for (const [name, value] of [["websocket", "undefined"], ["rtc", "undefined"], ["serviceworker", "undefined"]])
+  for (const [name, value] of [
+    ["websocket", "undefined"],
+    ["rtc", "undefined"],
+    ["serviceworker", "undefined"],
+  ])
     assert.match(spa.body.html, new RegExp(`${name}:${value}`), name);
   pass("WebSocket, WebRTC and service workers are unavailable to the page");
   for (const name of ["metadata", "loopback", "canary-name", "private-name"])
-    assert.match(spa.body.html, new RegExp(`${name}:blocked`), `${name} must be blocked: ${spa.body.html.match(/<ul id="probes">.*?<\/ul>/)?.[0]}`);
+    assert.match(
+      spa.body.html,
+      new RegExp(`${name}:blocked`),
+      `${name} must be blocked: ${spa.body.html.match(/<ul id="probes">.*?<\/ul>/)?.[0]}`,
+    );
   assert.equal(canaryHits, 0, "the loopback canary saw no request");
-  assert.ok(refused.some((r) => r.startsWith("169.254.169.254")), refused.join());
-  assert.ok(refused.some((r) => r === "internal.fixture.test:address"), refused.join());
+  assert.ok(
+    refused.some((r) => r.startsWith("169.254.169.254")),
+    refused.join(),
+  );
+  assert.ok(
+    refused.some((r) => r === "internal.fixture.test:address"),
+    refused.join(),
+  );
   pass("egress: 169.254.169.254, 127.0.0.1 and private names refused by the proxy; canary untouched");
   const challenge = await render(base, `${origin}/challenge`);
   assert.equal(challenge.body.error, "source_blocked");
@@ -188,9 +221,14 @@ try {
   assert.ok(jpeg[0] === 0xff && jpeg[1] === 0xd8 && jpeg.length < 256 * 1024, "a small JPEG");
   assert.equal(canaryHits, hitsBefore, "the snapshot page reached no server");
   pass("/snapshot: a JPEG of the first screen; the page's requests go nowhere");
-  const empty = await snapshot(`<!doctype html><div id="root"></div><script src="https://cdn.example/app.js"></script>`);
+  const empty = await snapshot(
+    `<!doctype html><div id="root"></div><script src="https://cdn.example/app.js"></script>`,
+  );
   assert.deepEqual(empty.body, { blank: true });
-  const unsigned = await fetch(`${base}/snapshot`, { method: "POST", body: JSON.stringify({ html: "<p>x</p>", script: false }) });
+  const unsigned = await fetch(`${base}/snapshot`, {
+    method: "POST",
+    body: JSON.stringify({ html: "<p>x</p>", script: false }),
+  });
   assert.equal(unsigned.status, 401);
   pass("/snapshot: a shell that needed the network → blank; unsigned → 401");
 
@@ -210,9 +248,15 @@ try {
   assert.equal(printed.status, 200, JSON.stringify(printed.body));
   const pdf = Buffer.from(printed.body.pdf, "base64");
   assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-", "a PDF");
-  assert.ok((pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length > 1, "a long page prints on several pages");
+  assert.ok(
+    (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length > 1,
+    "a long page prints on several pages",
+  );
   assert.equal(canaryHits, pdfHitsBefore, "the printed page reached no server");
-  const pdfUnsigned = await fetch(`${base}/pdf`, { method: "POST", body: JSON.stringify({ html: "<p>x</p>", script: false }) });
+  const pdfUnsigned = await fetch(`${base}/pdf`, {
+    method: "POST",
+    body: JSON.stringify({ html: "<p>x</p>", script: false }),
+  });
   assert.equal(pdfUnsigned.status, 401);
   pass("/pdf: the whole page as a multi-page A4 PDF; the page's requests go nowhere; unsigned → 401");
 } finally {
@@ -227,23 +271,58 @@ try {
 // ---- part 2: the Docker image ----
 const docker = spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { encoding: "utf8" });
 if (docker.status !== 0) {
-  console.log("skip Docker part: Docker is not available. Run it on a machine with Docker (deploy/renderer/README.md, «Проверка»).");
+  console.log(
+    "skip Docker part: Docker is not available. Run it on a machine with Docker (deploy/renderer/README.md, «Проверка»).",
+  );
 } else {
   const name = `polka-renderer-test-${process.pid}`;
   const run = (args: string[]) => execFileSync("docker", args, { encoding: "utf8" }).trim();
   run(["build", "-q", "-f", "apps/renderer/Dockerfile", "-t", "polka-renderer:test", "."]);
-  run(["run", "-d", "--name", name, "--read-only", "--tmpfs", "/tmp:rw,nosuid,size=256m", "--shm-size", "256m",
-    "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--memory", "1536m", "--pids-limit", "256",
-    "-e", `RENDERER_SECRET=${SECRET}`, "-p", "127.0.0.1::4395", "polka-renderer:test"]);
+  run([
+    "run",
+    "-d",
+    "--name",
+    name,
+    "--read-only",
+    "--tmpfs",
+    "/tmp:rw,nosuid,size=256m",
+    "--shm-size",
+    "256m",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges:true",
+    "--memory",
+    "1536m",
+    "--pids-limit",
+    "256",
+    "-e",
+    `RENDERER_SECRET=${SECRET}`,
+    "-p",
+    "127.0.0.1::4395",
+    "polka-renderer:test",
+  ]);
   try {
-    const gateway = run(["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}", name]) || "172.17.0.1";
+    const gateway =
+      run(["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}", name]) || "172.17.0.1";
     const port = run(["port", name, "4395/tcp"]).split(":").pop();
     const dockerBase = `http://127.0.0.1:${port}`;
     for (let i = 0; i < 40; i++) {
-      if (await fetch(`${dockerBase}/healthz`).then((r) => r.ok, () => false)) break;
+      if (
+        await fetch(`${dockerBase}/healthz`).then(
+          (r) => r.ok,
+          () => false,
+        )
+      )
+        break;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    const probe = run(["exec", name, "node", "-e", `
+    const probe = run([
+      "exec",
+      name,
+      "node",
+      "-e",
+      `
       const net = require("net");
       const targets = ["169.254.169.254:443", "${gateway}:443", "127.0.0.1:443", "127.0.0.1:4395", "[::1]:443"];
       (async () => { const out = {};
@@ -252,7 +331,8 @@ if (docker.status !== 0) {
           let d = ""; s.on("data", (c) => { d += c; if (d.includes("\\r\\n\\r\\n")) { s.destroy(); done(d.split("\\r\\n")[0]); } });
           s.on("error", (e) => done("error " + e.message)); setTimeout(() => { s.destroy(); done("timeout"); }, 8000);
         });
-        console.log(JSON.stringify(out)); })();`]);
+        console.log(JSON.stringify(out)); })();`,
+    ]);
     const verdicts = JSON.parse(probe) as Record<string, string>;
     for (const [target, line] of Object.entries(verdicts)) assert.match(line, /^HTTP\/1\.1 403/, `${target}: ${line}`);
     pass(`docker egress: proxy refuses 169.254.169.254, the docker gateway ${gateway} and 127.0.0.1`);

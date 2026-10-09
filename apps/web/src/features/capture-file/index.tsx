@@ -2,30 +2,13 @@ import "./styles.css";
 import { useFolders } from "../../entities/folder/useFolders.ts";
 import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  ArrowUpRight,
-  Check,
-  CircleAlert,
-  FileUp,
-  Link2,
-  LockKeyhole,
-  LogIn,
-} from "lucide-react";
-import type {
-  Artifact,
-  Receipt,
-  Revision,
-} from "../../../../../packages/contracts/index.ts";
+import { ArrowUpRight, Check, CircleAlert, FileUp, Link2, LockKeyhole, LogIn } from "lucide-react";
+import type { Artifact, Receipt, Revision } from "../../../../../packages/contracts/index.ts";
 import { client, savedWorkHref } from "../../shared/api/client.ts";
 import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { DEFAULT_LINK_DAYS, date, profileView, size } from "../../entities/artifact/format.ts";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
-import {
-  UPLOAD_ACCEPT,
-  UPLOAD_FORMATS,
-  uploadBlob,
-  uploadProblem,
-} from "../../entities/artifact/upload.ts";
+import { UPLOAD_ACCEPT, UPLOAD_FORMATS, uploadBlob, uploadProblem } from "../../entities/artifact/upload.ts";
 import { useSaveUpload } from "../../entities/artifact/useSaveUpload.ts";
 import { SavedReceipt } from "../../entities/artifact/SavedReceipt.tsx";
 import { Button, LinkButton, TextField } from "../../shared/ui/controls.tsx";
@@ -74,16 +57,14 @@ export function FileSave({
     setTitle(fallback);
     // HTML pages usually name themselves; replace the file name unless the author already typed.
     void suggestTitle(f).then((suggested) => {
-      if (picked.current === f)
-        setTitle((current) => (current === fallback ? suggested : current));
+      if (picked.current === f) setTitle((current) => (current === fallback ? suggested : current));
     });
     const problem = uploadProblem(uploadBlob(f));
     if (problem) upload.setError(problem);
   };
 
   const save = async () => {
-    if (!file || !title.trim())
-      return upload.setError("Выберите файл и укажите название.");
+    if (!file || !title.trim()) return upload.setError("Выберите файл и укажите название.");
     const blob = uploadBlob(file);
     const problem = uploadProblem(blob);
     if (problem) return upload.setError(problem);
@@ -104,12 +85,7 @@ export function FileSave({
   const saved = upload.saved;
 
   return (
-    <section
-      className="file-save"
-      id="file"
-      ref={card}
-      aria-labelledby="file-save-title"
-    >
+    <section className="file-save" id="file" ref={card} aria-labelledby="file-save-title">
       {saved?.work ? (
         <SavedWork
           receipt={saved.receipt}
@@ -134,9 +110,8 @@ export function FileSave({
             <h2 id="file-save-title">Загрузить файл</h2>
           </div>
           <p className="file-save-hint">
-            HTML из чата, заметка или изображение. Сначала откроется
-            сохранённый вид; интерактивный просмотр, если он доступен,
-            запускается отдельно.
+            HTML из чата, заметка или изображение. Сначала откроется сохранённый вид; интерактивный просмотр, если он
+            доступен, запускается отдельно.
           </p>
           <label
             className={dragging ? "file-field dragging" : "file-field"}
@@ -154,12 +129,8 @@ export function FileSave({
           >
             {file ? <Check /> : <FileUp />}
             <span>
-              <strong>
-                {file ? file.name : "Перетащите файл или нажмите, чтобы выбрать"}
-              </strong>
-              <small>
-                {file ? `${size(file.size)} · ещё не сохранено` : UPLOAD_FORMATS}
-              </small>
+              <strong>{file ? file.name : "Перетащите файл или нажмите, чтобы выбрать"}</strong>
+              <small>{file ? `${size(file.size)} · ещё не сохранено` : UPLOAD_FORMATS}</small>
             </span>
             <input
               type="file"
@@ -203,9 +174,15 @@ export function FileSave({
                   : "Сохранение идёт на вашу полку, поэтому сначала нужен вход. После входа вернём сюда."}
               </p>
               <div className="bring-actions">
-                <LinkButton variant="primary" href={initialFolderId ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}` : FILE_SAVE_LOGIN}>
-                  <LogIn />{" "}
-                  {file ? "Войти, чтобы продолжить" : "Войти, чтобы сохранить"}
+                <LinkButton
+                  variant="primary"
+                  href={
+                    initialFolderId
+                      ? `/signup?next=${encodeURIComponent(`/bring?folder=${encodeURIComponent(initialFolderId)}#file`)}`
+                      : FILE_SAVE_LOGIN
+                  }
+                >
+                  <LogIn /> {file ? "Войти, чтобы продолжить" : "Войти, чтобы сохранить"}
                 </LinkButton>
               </div>
             </div>
@@ -222,15 +199,8 @@ export function FileSave({
             )
           ) : (
             <div className="bring-actions">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={save}
-                disabled={!file || busy}
-              >
-                <LockKeyhole />{" "}
-                {upload.stage ||
-                  (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
+              <Button type="button" variant="primary" onClick={save} disabled={!file || busy}>
+                <LockKeyhole /> {upload.stage || (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
               </Button>
             </div>
           )}
@@ -309,20 +279,13 @@ export function SavedWork({
         </div>
         <div>
           <dt>Как откроется</dt>
-          <dd data-profile={work.revision.htmlProfile ?? "file"}>
-            {view.label}
-          </dd>
+          <dd data-profile={work.revision.htmlProfile ?? "file"}>{view.label}</dd>
         </div>
       </dl>
-      <p
-        className={view.linkable ? "next-note" : "next-note warn"}
-        role="note"
-      >
+      <p className={view.linkable ? "next-note" : "next-note warn"} role="note">
         {view.linkable ? <Check /> : <CircleAlert />} {view.text}
       </p>
-      <div className="file-save-preview">
-        {renderPreview(work.revision, !view.linkable)}
-      </div>
+      <div className="file-save-preview">{renderPreview(work.revision, !view.linkable)}</div>
       {link?.url ? (
         <div className="share-ready" role="status">
           <div>
@@ -330,11 +293,7 @@ export function SavedWork({
             <code>{link.url}</code>
           </div>
           <div className="share-ready-actions">
-            <CopyButton
-              value={link.url}
-              variant="primary"
-              label="Скопировать ссылку"
-            />
+            <CopyButton value={link.url} variant="primary" label="Скопировать ссылку" />
             <LinkButton href={link.url} target="_blank" rel="noopener">
               Открыть как получатель <ArrowUpRight />
             </LinkButton>
@@ -350,14 +309,8 @@ export function SavedWork({
           {restartLabel}
         </Button>
         {view.linkable && !link && (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={share}
-            disabled={busy}
-          >
-            <Link2 />{" "}
-            {sharing ? "Создаём ссылку…" : "Создать ссылку на 7 дней"}
+          <Button type="button" variant="primary" onClick={share} disabled={busy}>
+            <Link2 /> {sharing ? "Создаём ссылку…" : "Создать ссылку на 7 дней"}
           </Button>
         )}
       </div>

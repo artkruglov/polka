@@ -167,10 +167,7 @@ test("channel details: look-alike domains, crypto, warnings and sign-in buttons"
   // Look-alikes by letters: IDN with Cyrillic letters, digits for letters.
   const cyrillic = "уаndex.com"; // «у» and «а» are Cyrillic
   for (const host of [cyrillic, domainToASCII(cyrillic)])
-    assert.ok(
-      signals(`<a href="https://${host}/login">Вход</a>`).includes("channel:lookalike-login"),
-      host,
-    );
+    assert.ok(signals(`<a href="https://${host}/login">Вход</a>`).includes("channel:lookalike-login"), host);
   assert.ok(signals('<a href="https://app1e-id.com/verify">Verify</a>').includes("channel:lookalike-login"));
   assert.ok(signals("<p>Откройте apple-id-verify.com и войдите.</p>").includes("channel:lookalike-login"));
   // Official domains and relative files are not look-alikes.
@@ -182,10 +179,16 @@ test("channel details: look-alike domains, crypto, warnings and sign-in buttons"
     '<a href="https://storage.yandexcloud.net/bucket/login.png">Картинка</a>',
     "<p>Yandex.Market и Yandex.Cloud — сервисы.</p>",
   ])
-    assert.equal(signals(html).some((signal) => signal.startsWith("lookalike:")), false, html);
+    assert.equal(
+      signals(html).some((signal) => signal.startsWith("lookalike:")),
+      false,
+      html,
+    );
   // A wallet with a request to send to it.
   assert.ok(
-    signals("<p>Send 0.05 BTC to bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh to unlock your account</p>").includes("channel:crypto"),
+    signals("<p>Send 0.05 BTC to bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh to unlock your account</p>").includes(
+      "channel:crypto",
+    ),
   );
   // Warnings and sign-in buttons are no request.
   for (const html of [
@@ -222,9 +225,15 @@ test("a research page's sources are no look-alikes and no sign-in links (product
     "https://docs.github.com/en/authentication/connecting-to-github-with-ssh",
     "https://id.atlassian.com/manage-profile/security",
   ];
-  const html = page(`<h1>Исследование</h1><ol>${sources.map((url) => `<li><a href="${url}">${url}</a></li>`).join("")}</ol>`);
+  const html = page(
+    `<h1>Исследование</h1><ol>${sources.map((url) => `<li><a href="${url}">${url}</a></li>`).join("")}</ol>`,
+  );
   const signals = inspectHtml(html).signals;
-  assert.equal(signals.some((signal) => signal.startsWith("lookalike:") || signal.startsWith("channel:")), false, signals.join());
+  assert.equal(
+    signals.some((signal) => signal.startsWith("lookalike:") || signal.startsWith("channel:")),
+    false,
+    signals.join(),
+  );
   // The rules still see real ones: a trailing digit, and a sign-in form elsewhere.
   const found = (link: string) => inspectHtml(page(`<a href="${link}">Войти</a>`)).signals;
   assert.ok(found("https://google1-login.ru/verify").includes("channel:lookalike-login"));
@@ -233,13 +242,19 @@ test("a research page's sources are no look-alikes and no sign-in links (product
 
 test("policy: rules-only spam of a trusted author opens once a model reads the work", () => {
   // Hundreds of links to a hundred sites: a research page's sources.
-  const filter: FilterResult = { v: 1, hits: { spam: { score: 7, terms: ["внешних ссылок: 287", "разных сайтов в ссылках: 122"] } } };
+  const filter: FilterResult = {
+    v: 1,
+    hits: { spam: { score: 7, terms: ["внешних ссылок: 287", "разных сайтов в ссылках: 122"] } },
+  };
   const run = (standing: typeof standingTrusted, model: ModelView) =>
     decideContent({ filter, model, standing, mode: "strict", autoblock: false, fraud: true }).action;
   assert.equal(run(standingTrusted, { state: "checked", findings: [] }), "notify");
   assert.equal(run(standingFresh, { state: "checked", findings: [] }), "hold");
   assert.equal(
-    run(standingTrusted, { state: "checked", findings: [{ category: "spam", agreed: true, source: "text", reason: "спам" }] }),
+    run(standingTrusted, {
+      state: "checked",
+      findings: [{ category: "spam", agreed: true, source: "text", reason: "спам" }],
+    }),
     "hold",
   );
 });
@@ -259,7 +274,8 @@ test("policy: rules-only fraud of a trusted author is reported once a model read
   assert.equal(run(standingTrusted, checked, "balanced"), "notify");
   // With autoblock too: rules-only fraud of a trusted author is not blocked.
   assert.equal(
-    decideContent({ filter, model: checked, standing: standingTrusted, mode: "strict", autoblock: true, fraud: true }).action,
+    decideContent({ filter, model: checked, standing: standingTrusted, mode: "strict", autoblock: true, fraud: true })
+      .action,
     "notify",
   );
   // No model at all: strict still holds.
@@ -285,7 +301,16 @@ test("policy: rules-only fraud of a trusted author is reported once a model read
 test("approval carry-over: the same or fewer signals pass, new ones hold", () => {
   const approved = new Set(["channel:handover", "channel:phone", "secret:password", "brand:sber"]);
   assert.equal(approvedSignalsCover(approved, ["channel:handover", "secret:password"]), true);
-  assert.equal(approvedSignalsCover(approved, ["channel:handover", "channel:phone", "secret:password", "brand:sber", "link:address"]), true);
+  assert.equal(
+    approvedSignalsCover(approved, [
+      "channel:handover",
+      "channel:phone",
+      "secret:password",
+      "brand:sber",
+      "link:address",
+    ]),
+    true,
+  );
   assert.equal(approvedSignalsCover(approved, ["channel:handover", "channel:transfer"]), false);
   assert.equal(approvedSignalsCover(approved, ["channel:handover", "brand:yandex"]), false);
   assert.equal(approvedSignalsCover(approved, ["channel:handover", "scan:incomplete"]), false);
@@ -295,8 +320,7 @@ test("approval carry-over: the same or fewer signals pass, new ones hold", () =>
 // ---------------------------------------------------------------------------
 // With the database.
 
-const address = () =>
-  `2001:db8:f::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:f::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 type Owner = { id: string; tenant: string; cookie: string };
 
 async function signedUp(trusted = false): Promise<Owner> {
@@ -309,10 +333,10 @@ async function signedUp(trusted = false): Promise<Owner> {
   );
   await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
   const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), id],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
+    id,
+  ]);
   return { id, tenant, cookie: `polka_session=${token}` };
 }
 
@@ -403,10 +427,7 @@ test("an operator's approval carries over to later versions with the same or few
   const approval = await approveShareAsOperator(shareId);
   assert.equal(approval.changed, true);
   const event = (
-    await db.query(
-      "SELECT details FROM moderation_events WHERE share_id=$1 AND action='share.approved'",
-      [shareId],
-    )
+    await db.query("SELECT details FROM moderation_events WHERE share_id=$1 AND action='share.approved'", [shareId])
   ).rows[0];
   assert.ok(event.details.approvedSignals.includes("channel:handover"), JSON.stringify(event.details));
   // A new version with the same signals: the link moves to it and stays open.
@@ -495,7 +516,8 @@ test("recheck --fraud: held links are decided again under the current rules, ide
   // A dry run changes nothing.
   assert.equal((await shareRow(prototypeShare)).moderation, "held");
   assert.deepEqual(
-    (await db.query("SELECT phishing_signals FROM revisions WHERE id=$1", [prototype.revisionId])).rows[0].phishing_signals,
+    (await db.query("SELECT phishing_signals FROM revisions WHERE id=$1", [prototype.revisionId])).rows[0]
+      .phishing_signals,
     oldSignals,
   );
 
@@ -520,7 +542,10 @@ test("recheck --fraud: held links are decided again under the current rules, ide
   assert.deepEqual(events, ["revision.rescanned", "share.released"]);
   // Again: nothing more to release, no new journal entries.
   const again = await recheckFraudHolds(false, [owner.tenant]);
-  assert.deepEqual(again.results.map((result) => result.outcome), ["kept"]);
+  assert.deepEqual(
+    again.results.map((result) => result.outcome),
+    ["kept"],
+  );
   const count = (
     await db.query(
       "SELECT count(*)::int AS n FROM moderation_events WHERE revision_id=$1 AND action='revision.rescanned'",

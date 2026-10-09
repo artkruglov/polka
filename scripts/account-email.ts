@@ -16,8 +16,7 @@ if (!name || !email.success) {
     const {
       rows: [owner],
     } = await db.query("SELECT name FROM accounts WHERE email=$1", [address]);
-    if (owner && owner.name !== name)
-      throw new Error(`${address} already belongs to another account`);
+    if (owner && owner.name !== name) throw new Error(`${address} already belongs to another account`);
     const updated = await db.query(
       `UPDATE accounts SET email=$2,
          email_verified_at=CASE WHEN email=$2 THEN email_verified_at END

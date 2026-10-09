@@ -23,11 +23,7 @@ export function AskAgentHint({
       <span>
         {lead} <strong>«{OPEN_SHELF_PHRASE}»</strong> {tail}
       </span>
-      <CopyButton
-        value={OPEN_SHELF_PHRASE}
-        label="Скопировать фразу"
-        variant="quiet"
-      />
+      <CopyButton value={OPEN_SHELF_PHRASE} label="Скопировать фразу" variant="quiet" />
     </p>
   );
 }

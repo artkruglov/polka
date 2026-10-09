@@ -74,8 +74,7 @@ export function clip(value: string, max: number) {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:—–-]+$/, "")}…`;
 }
 
-const attr = (node: Node, name: string) =>
-  node.attrs?.find((item) => item.name.toLowerCase() === name)?.value;
+const attr = (node: Node, name: string) => node.attrs?.find((item) => item.name.toLowerCase() === name)?.value;
 
 const size = (value: string | undefined) => {
   const match = /^\s*(\d+(?:\.\d+)?)\s*(px)?\s*$/.exec(value ?? "");
@@ -109,7 +108,10 @@ function drawing(node: Node) {
   const width = size(attr(node, "width"));
   const height = size(attr(node, "height"));
   if ((width !== null && width >= 80) || (height !== null && height >= 80)) return true;
-  const box = (attr(node, "viewbox") ?? "").trim().split(/[\s,]+/).map(Number);
+  const box = (attr(node, "viewbox") ?? "")
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
   if (box.length === 4 && box[2]! >= 120 && box[3]! >= 80 && (width === null || width >= 80)) return true;
   let elements = 0;
   const stack: Node[] = [...(node.childNodes ?? [])];
@@ -189,10 +191,7 @@ export function decideKind(s: CoverSignals): { kind: CoverKind; genre: CoverGenr
     (s.shell ? 5 : 0) +
     (s.text < 300 ? 3 : 0);
   const textual =
-    Math.min(s.text / 700, 6) +
-    Math.min(s.headings, 4) * 0.5 +
-    Math.min(s.paragraphs, 8) * 0.5 +
-    (s.tables ? 1 : 0);
+    Math.min(s.text / 700, 6) + Math.min(s.headings, 4) * 0.5 + Math.min(s.paragraphs, 8) * 0.5 + (s.tables ? 1 : 0);
   if (visual > textual) {
     const genre: CoverGenre =
       s.charts || s.canvas || s.svg
@@ -257,8 +256,7 @@ export function coverFactsFromHtml(source: string): CoverFacts {
         signals.scripted = true;
         const src = attr(node, "src") ?? "";
         const code = src ? "" : textOf(node, 64 * 1024);
-        if (CHART_LIBRARY.test(src) || CHART_LIBRARY.test(code) || CHART_CALL.test(code))
-          signals.charts = true;
+        if (CHART_LIBRARY.test(src) || CHART_LIBRARY.test(code) || CHART_CALL.test(code)) signals.charts = true;
         // Colours set from script (inline styles of React apps) count too.
         if (code) addCss(code);
       } else if (!hidden) {
@@ -290,10 +288,7 @@ export function coverFactsFromHtml(source: string): CoverFacts {
   }
   signals.shell = signals.scripted && signals.text < 200;
   const { kind, genre } = decideKind(signals);
-  const top =
-    headings.find((h) => h.level === 1) ??
-    headings.find((h) => h.level === 2) ??
-    headings[0];
+  const top = headings.find((h) => h.level === 1) ?? headings.find((h) => h.level === 2) ?? headings[0];
   const heading = top?.text || title || paragraphs[0]?.text || "";
   const lead =
     paragraphs.find((p) => (top ? p.order > top.order : true) && p.text !== heading) ??
@@ -320,15 +315,17 @@ const plain = (line: string) =>
 /** A text file: always a text cover. A Markdown «#» heading or the first short line leads. */
 export function coverFactsFromText(source: string, filename = ""): CoverFacts {
   const lines = source.slice(0, 64 * 1024).split(/\r?\n/);
-  const markdown =
-    /\.(md|markdown)$/i.test(filename) || lines.some((line) => /^#{1,3}\s+\S/.test(line));
+  const markdown = /\.(md|markdown)$/i.test(filename) || lines.some((line) => /^#{1,3}\s+\S/.test(line));
   const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
   const hashHeading = lines.findIndex((line) => /^#{1,2}\s+\S/.test(line));
   let heading: string | null = null;
   let rest: string[];
   if (hashHeading >= 0) {
     heading = plain(lines[hashHeading]!);
-    rest = lines.slice(hashHeading + 1).map((line) => line.trim()).filter(Boolean);
+    rest = lines
+      .slice(hashHeading + 1)
+      .map((line) => line.trim())
+      .filter(Boolean);
   } else if (nonEmpty[0] && nonEmpty[0].length <= 120) {
     heading = plain(nonEmpty[0]);
     rest = nonEmpty.slice(1);

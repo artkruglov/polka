@@ -80,17 +80,13 @@ export type SignupDomains = "any" | readonly string[];
  * EMAIL_SIGNUP_DOMAINS: `any`, `ru-only`, or a comma/space list in which
  * `ru-only` may stand for the curated list. Returns the allowed domains.
  */
-export function parseSignupDomains(
-  value: string,
-  appOrigin: string,
-): SignupDomains {
+export function parseSignupDomains(value: string, appOrigin: string): SignupDomains {
   const entries = value
     .split(/[\s,]+/)
     .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
     .filter(Boolean);
   if (!entries.length || entries.includes("any")) {
-    if (entries.length > 1)
-      throw new Error("EMAIL_SIGNUP_DOMAINS: `any` stands alone");
+    if (entries.length > 1) throw new Error("EMAIL_SIGNUP_DOMAINS: `any` stands alone");
     return "any";
   }
   const domains = new Set<string>();
@@ -98,8 +94,7 @@ export function parseSignupDomains(
     if (entry === "ru-only") {
       RU_MAIL_DOMAINS.forEach((domain) => domains.add(domain));
       installationDomains(appOrigin).forEach((domain) => domains.add(domain));
-    } else if (/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry))
-      domains.add(entry);
+    } else if (/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry)) domains.add(entry);
     else throw new Error(`EMAIL_SIGNUP_DOMAINS: not a domain: ${entry}`);
   }
   return Object.freeze([...domains].sort());
