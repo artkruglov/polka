@@ -178,7 +178,7 @@ You need Node.js ≥ 22.16, npm and a running Docker.
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
 npm run local:setup              # .env with unique secrets and the local interactive viewer (HTML_LIVE_MODE=local)
-npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1
+npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1; the first run builds MinIO from source, ~10 min
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket and a capability check
 npm run account:create -- demo --generate   # login and password in .local/demo-account.txt

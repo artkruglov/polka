@@ -176,7 +176,7 @@ flowchart LR
 git clone https://github.com/artkruglov/polka.git && cd polka
 npm ci
 npm run local:setup              # .env с уникальными секретами и локальным интерактивным просмотром (HTML_LIVE_MODE=local)
-npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1
+npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1; первый раз MinIO собирается из исходников, ~10 минут
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket и проверка его возможностей
 npm run account:create -- demo --generate   # логин и пароль в .local/demo-account.txt
