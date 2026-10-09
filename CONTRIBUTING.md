@@ -29,7 +29,7 @@ npm run dev                      # http://127.0.0.1:4390
 ## Checks before a pull request
 
 ```bash
-npm run check          # frontend layers, formatting (Prettier) + TypeScript; npm run format fixes the formatting
+npm run check          # frontend layers, formatting (Prettier), lint (oxlint, .oxlintrc.json) + TypeScript; npm run format fixes the formatting
 npm run build
 npm test               # throwaway database and bucket, removed after the run
 npm test -- --live     # the files in tests/live-suite.json, with the viewer on
