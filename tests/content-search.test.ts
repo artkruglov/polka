@@ -1,6 +1,7 @@
 // Search over the text of works (docs/specs/CONTENT_SEARCH.md): what a save
 // indexes (a page's visible text, a bundle's JSX, a text file), prefix
-// matches and snippets on the shelf and in polka_list, the latest version
+// matches, quoted phrases, ranking and snippets on the shelf and in
+// polka_list, the latest version
 // only, the owner only, text hidden while a moderation block holds, and the
 // backfill of works saved before.
 import { after, before, test } from "node:test";
@@ -16,7 +17,7 @@ import { db } from "../apps/server/db.ts";
 import { listArtifactsForAgent } from "../apps/server/agent-management.ts";
 import { backfillSearch } from "../apps/server/search-backfill.ts";
 import { MCP_AUDIENCE, type ServiceActor } from "../apps/server/service-auth.ts";
-import { prefixQuery, SearchText, addScriptText } from "../apps/server/search-text.ts";
+import { searchQuery, titlePattern, SearchText, addScriptText } from "../apps/server/search-text.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import {
   SEARCH_MATCH_END,
@@ -263,11 +264,11 @@ test("the row goes with the work", async () => {
 });
 
 test("queries and script text: no tsquery syntax gets through", () => {
-  assert.equal(prefixQuery("  "), null);
-  assert.equal(prefixQuery("Скидки & | ! (ритейл):*"), "'скидки':* & 'ритейл':*");
-  assert.equal(prefixQuery("github.com anna@example.ru 3.14."), "'github.com':* & 'anna@example.ru':* & '3.14':*");
-  assert.equal(prefixQuery("it's"), "'it':* & 's':*");
-  assert.equal(prefixQuery("a b c d e f g h i j")?.split(" & ").length, 8);
+  assert.equal(searchQuery("  "), null);
+  assert.equal(searchQuery("Скидки & | ! (ритейл):*"), "'скидки':* & 'ритейл':*");
+  assert.equal(searchQuery("github.com anna@example.ru 3.14."), "'github.com':* & 'anna@example.ru':* & '3.14':*");
+  assert.equal(searchQuery("it's"), "'it':* & 's':*");
+  assert.equal(searchQuery("a b c d e f g h i j")?.split(" & ").length, 8);
   const text = new SearchText();
   addScriptText(
     'const cls = "px-4 py-2 rounded"; const t = "Итоги года"; x = a>b?c:{d};',
@@ -313,7 +314,8 @@ test("a search ranks a title hit above a newer text-only hit and pages exactly",
     title: "Ранжирование зонтик",
   });
   const textOnly = await saveSingle("<!doctype html><p>Про зонтик в тексте.</p>");
-  const another = await saveSingle("<!doctype html><p>Ещё зонтик в тексте.</p>");
+  // The same text: an equal text rank, so the newer comes first.
+  const another = await saveSingle("<!doctype html><p>Про зонтик в тексте.</p>");
   const actor = await agent(owner);
   const ids = [titled, textOnly, another].map((saved) => saved.artifactId);
   const seen: string[] = [];
@@ -332,4 +334,100 @@ test("a search ranks a title hit above a newer text-only hit and pages exactly",
   await assert.rejects(
     listArtifactsForAgent(actor, { query: "зонтик", cursor: plain.nextCursor ?? "x" }),
   );
+  // A ranked cursor from before the new rank scale would skip works: refused.
+  const old = Buffer.from(
+    JSON.stringify({ state: "active", date: new Date().toISOString(), id: titled.artifactId, rank: 2 }),
+  ).toString("base64url");
+  await assert.rejects(listArtifactsForAgent(actor, { query: "зонтик", cursor: old }));
+});
+
+test("quoted phrases: whole words in this order; the title pattern drops the quotes", () => {
+  assert.equal(searchQuery('"Годовой отчёт" скид'), "('годовой' <-> 'отчёт') & 'скид':*");
+  assert.equal(searchQuery("«отчёт за квартал»"), "('отчёт' <-> 'за' <-> 'квартал')");
+  // One quoted word is a whole word, not a prefix; an unclosed quote runs to the end.
+  assert.equal(searchQuery('"скидки" "план найма'), "'скидки' & ('план' <-> 'найма')");
+  assert.equal(searchQuery('""  «»'), null);
+  assert.equal(searchQuery('"a b c d e" f g h i j')?.match(/'/g)?.length, 16, "eight words in all");
+  assert.equal(searchQuery(`"x' <-> 'y" :*`), "('x' <-> 'y')");
+  assert.equal(titlePattern(' "Годовой   отчёт" 50% '), "%Годовой отчёт 50\\%%");
+  assert.equal(titlePattern('""'), null);
+});
+
+test("a quoted phrase finds the words side by side and in order", async () => {
+  const together = await saveSingle(
+    "<!doctype html><p>Здесь годовой отчёт о продажах филиала Вербены.</p>",
+  );
+  const apart = await saveSingle(
+    "<!doctype html><p>Отчёт филиала Вербены: годовой план выполнен.</p>",
+  );
+  const withStopWord = await saveSingle(
+    "<!doctype html><p>Отчёт за квартал по филиалу Вербены.</p>",
+  );
+  const ids = (found: Array<{ id: string }>) => found.map((entry) => entry.id);
+  const loose = ids(await search("годовой отчёт вербены"));
+  assert.ok(loose.includes(together.artifactId) && loose.includes(apart.artifactId));
+  const phrase = ids(await search('"годовой отчёт" вербены'));
+  assert.ok(phrase.includes(together.artifactId));
+  assert.ok(!phrase.includes(apart.artifactId), "the same words apart are not the phrase");
+  // Another form of the same words still matches (the russian stemmer).
+  assert.ok(ids(await search("«годового отчёта» вербены")).includes(together.artifactId));
+  // A stop word inside a phrase keeps its place.
+  assert.ok(ids(await search('"отчёт за квартал" вербены')).includes(withStopWord.artifactId));
+  assert.ok(!ids(await search('"отчёт квартал" вербены')).includes(withStopWord.artifactId));
+  const found = (await search('"годовой отчёт" вербены')).find((entry) => entry.id === together.artifactId);
+  assert.ok(found?.snippet?.includes(`${SEARCH_MATCH_START}годовой${SEARCH_MATCH_END}`), String(found?.snippet));
+  const listed = await listArtifactsForAgent(await agent(owner), { query: '"годовой отчёт" вербены' });
+  assert.ok(listed.items.some((entry) => entry.id === together.artifactId));
+  assert.ok(!listed.items.some((entry) => entry.id === apart.artifactId));
+});
+
+test("a search ranks by title, then by how close the words stand, and pages exactly", async () => {
+  const filler = "Строка без нужных слов про погоду и обед. ".repeat(40);
+  const far = await saveSingle(`<!doctype html><p>Магнолия в начале. ${filler} Тюльпан в конце.</p>`);
+  const close = await saveSingle("<!doctype html><p>Магнолия и тюльпан рядом.</p>");
+  // Newer than both, but the words are far apart again.
+  const newestFar = await saveSingle(`<!doctype html><p>Тюльпан в начале. ${filler} Магнолия в конце.</p>`);
+  const titleWords = await saveSingle("<!doctype html><p>Пусто.</p>", { title: "Тюльпан, потом магнолия" });
+  const titleTyped = await saveSingle("<!doctype html><p>Пусто.</p>", { title: "Магнолия тюльпан" });
+  const best = [titleTyped, titleWords, close].map((saved) => saved.artifactId);
+  const fars = [far, newestFar].map((saved) => saved.artifactId);
+  // The agent's search is ranked as it is.
+  const actor = await agent(owner);
+  const agentSeen: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listArtifactsForAgent(actor, { query: "магнолия тюльпан", limit: 2, cursor });
+    agentSeen.push(...page.items.map((entry) => entry.id));
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  assert.deepEqual(agentSeen.slice(0, 3), best);
+  assert.deepEqual(new Set(agentSeen.slice(3)), new Set(fars));
+  assert.equal(new Set(agentSeen).size, agentSeen.length, "no work twice across pages");
+  // The shelf ranks with sort=relevance, in the same order.
+  const shelfSeen: string[] = [];
+  let next: string | null = null;
+  do {
+    const response = await call(
+      "GET",
+      `/api/artifacts?${new URLSearchParams({ q: "магнолия тюльпан", sort: "relevance", ...(next ? { cursor: next } : {}) })}`,
+    );
+    assert.equal(response.statusCode, 200, response.body);
+    shelfSeen.push(...response.json().items.map((entry: { id: string }) => entry.id));
+    next = response.json().nextCursor;
+  } while (next);
+  assert.deepEqual(shelfSeen, agentSeen);
+  // Newest first stays newest first.
+  const newest = (await search("магнолия тюльпан")).map((entry) => entry.id);
+  assert.equal(newest[0], titleTyped.artifactId);
+  assert.ok(newest.indexOf(newestFar.artifactId) < newest.indexOf(close.artifactId));
+});
+
+test("a relevance cursor is checked and good for its order only", async () => {
+  const cursorOf = (key: string) =>
+    Buffer.from(JSON.stringify({ sort: "relevance", key, id: randomUUID() })).toString("base64url");
+  const date = "2026-10-09T00:00:00.000000Z";
+  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`1; ${date}`)}`)).statusCode, 400);
+  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date} x`)}`)).statusCode, 400);
+  assert.equal((await call("GET", `/api/artifacts?sort=relevance&q=x&cursor=${cursorOf(`5 ${date}`)}`)).statusCode, 200);
+  assert.equal((await call("GET", `/api/artifacts?sort=new&q=x&cursor=${cursorOf(`5 ${date}`)}`)).statusCode, 400);
 });

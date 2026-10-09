@@ -58,7 +58,7 @@ import {
 import "./styles.css";
 const params = new URLSearchParams(location.search);
 /** The shelf's order as GET /api/artifacts names it. */
-const SORT_PARAM = { newest: "new", oldest: "old", title: "title" } as const;
+const SORT_PARAM = { relevant: "relevance", newest: "new", oldest: "old", title: "title" } as const;
 function resume(next: string) {
   const intent = params.get("intent");
   location.replace(
@@ -79,7 +79,8 @@ export function App() {
     [cursor, setCursor] = useState<string | null>(null),
     [query, setQuery] = useState(() => params.get("q") ?? ""),
     [view, setView] = useState<"grid" | "list">("grid"),
-    [sort, setSort] = useState<ShelfSort>("newest"),
+    // «Сначала подходящие» until another order is picked; it needs a query.
+    [pickedSort, setSort] = useState<ShelfSort>("relevant"),
     [kind, setKind] = useState<Category | null>(null),
     [acceptedOnly, setAcceptedOnly] = useState(false),
     [counts, setCounts] = useState<ShelfCounts | null>(null),
@@ -134,6 +135,7 @@ export function App() {
     [notice, setNotice] = useState(""),
     [trashBusy, setTrashBusy] = useState(false),
     [trashActionError, setTrashActionError] = useState("");
+  const sort: ShelfSort = pickedSort === "relevant" && !query.trim() ? "newest" : pickedSort;
   const stageRef = useRef<HTMLElement>(null);
   // The reader's tab lives in the address too (replaced, not pushed).
   const setHistory = (value: boolean) => {

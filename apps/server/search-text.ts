@@ -102,20 +102,42 @@ export async function indexRevisionText(
   );
 }
 
-/**
- * A search box's words as a prefix tsquery: letters and digits only (no
- * tsquery syntax can get through), at most eight words, all required.
- * Null when there is nothing to search for.
- */
-export function prefixQuery(q: string): string | null {
-  // Words as Postgres's parser keeps them: an address (github.com), an
-  // e-mail or a version (3.14) is one lexeme, so it stays one quoted term.
-  // Letters, digits and . _ @ - only: no tsquery syntax can get through.
-  const words = (q.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}._@-]*/gu) ?? [])
+// Words as Postgres's parser keeps them: an address (github.com), an e-mail
+// or a version (3.14) is one lexeme, so it stays one quoted term. Letters,
+// digits and . _ @ - only: no tsquery syntax can get through.
+const wordsOf = (text: string) =>
+  (text.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}._@-]*/gu) ?? [])
     .map((word) => word.replace(/[._@-]+$/, ""))
-    .filter(Boolean)
-    .slice(0, 8);
-  return words.length ? words.map((word) => `'${word}':*`).join(" & ") : null;
+    .filter(Boolean);
+// "…" or «…»; an unclosed quote runs to the end, as in websearch_to_tsquery.
+const QUOTES = /["«»„“”]/;
+
+/**
+ * A search box as a tsquery: a word is a prefix (`скид` finds «скидки»), a
+ * quoted phrase is its words in this order, each a whole word. At most eight
+ * words in all; every word and phrase is required. Built here, not by
+ * websearch_to_tsquery: that one has no prefixes. Null when there is nothing
+ * to search for.
+ */
+export function searchQuery(q: string): string | null {
+  const terms: string[] = [];
+  let left = 8;
+  q.split(QUOTES).forEach((part, index) => {
+    const words = wordsOf(part).slice(0, left);
+    left -= words.length;
+    if (!words.length) return;
+    // Odd parts are inside quotes.
+    if (index % 2 === 0) terms.push(...words.map((word) => `'${word}':*`));
+    else if (words.length === 1) terms.push(`'${words[0]}'`);
+    else terms.push(`(${words.map((word) => `'${word}'`).join(" <-> ")})`);
+  });
+  return terms.length ? terms.join(" & ") : null;
+}
+
+/** The ILIKE pattern of a title search: the query as typed, quotes aside. */
+export function titlePattern(q: string): string | null {
+  const text = q.split(QUOTES).join(" ").replace(/\s+/g, " ").trim();
+  return text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : null;
 }
 
 /** A fragment for an agent: the found words between «…». */
@@ -139,19 +161,41 @@ export const searchJoin = (artifact: string) =>
                      WHERE b.revision_id=s.revision_id AND b.released_at IS NULL)`;
 
 /**
- * Matches by title ($title, an ILIKE pattern) or by text ($query, a
- * prefixQuery). The text is matched in a subquery the GIN index can serve;
- * a row of artifact_search is always its work's latest version.
+ * Matches by title ($title, a titlePattern; or the words of $query in any
+ * order) or by text ($query, a searchQuery). The text is matched in a
+ * subquery the GIN index can serve; a row of artifact_search is always its
+ * work's latest version. A title is short and the shelf is one tenant's, so
+ * its words are parsed in place, with no index of their own.
  */
 export const searchMatch = (artifact: string, title: string, query: string) =>
   `((${title}::text IS NULL AND ${query}::text IS NULL)
     OR ${artifact}.title ILIKE ${title} ESCAPE '\\'
+    OR to_tsvector('russian',${artifact}.title) @@ to_tsquery('russian',${query}::text)
     OR ${artifact}.id IN (
       SELECT found.artifact_id FROM artifact_search found
       WHERE ${query}::text IS NOT NULL
         AND found.document @@ to_tsquery('russian',${query}::text)
         AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                         WHERE b.revision_id=found.revision_id AND b.released_at IS NULL)))`;
+
+/** Text relevance fills the places below one title tier. */
+export const SEARCH_RANK_TIER = 1_000_000;
+
+/**
+ * How well a work answers a search, as a whole number so a page cursor stays
+ * exact (keyset): the title tier (2 the query as typed, 1 its words in any
+ * order) times SEARCH_RANK_TIER, plus the text's cover density (ts_rank_cd:
+ * found words close together; normalized by the text's length and scaled
+ * below one tier). Needs `s` from searchJoin.
+ */
+export const searchRank = (artifact: string, title: string, query: string) =>
+  `((CASE WHEN ${artifact}.title ILIKE ${title} ESCAPE '\\' THEN 2
+          WHEN to_tsvector('russian',${artifact}.title) @@ to_tsquery('russian',${query}::text) THEN 1
+          ELSE 0 END) * ${SEARCH_RANK_TIER}
+    + CASE WHEN s.document @@ to_tsquery('russian',${query}::text)
+        THEN 1 + floor(ts_rank_cd(s.document,to_tsquery('russian',${query}::text),1|32)
+                       * ${SEARCH_RANK_TIER - 2})::int
+        ELSE 0 END)`;
 
 /** The fragment of the text around the found words, when the text matched. */
 export const searchSnippet = (query: string, options: string) =>
