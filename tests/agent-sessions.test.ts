@@ -384,7 +384,8 @@ test("a company reads every person's sessions: one fingerprint per secret, a not
     assert.ok(stats.fingerprints.some((f) => f.people === 2));
     const detail = await sessionsForExtension.get(fromC.id);
     assert.equal(detail.session.accountId, c.id);
-    assert.ok(detail.secrets.some((s) => s.sessions === 2));
+    // Installation-wide: other test files may upload the same fixture secret into this database.
+    assert.ok(detail.secrets.some((s) => Number(s.sessions) >= 2));
     await assert.rejects(sessionsForExtension.get(fromC.id, { accounts: [d.id] }), /не найдена/);
     await assert.rejects(sessionsForExtension.get("not-a-session"));
     assert.equal((await sessionsForExtension.transcript(fromC.id)).total, 0);
