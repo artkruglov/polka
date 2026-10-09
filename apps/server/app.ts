@@ -17,10 +17,12 @@ import { readShelfCard, setShelfCard } from "./shelf-card.ts";
 import { checkLinkOpen, extensions, extensionsConfigured, isExtensionMachinePath, loadExtensions, redactForExtension } from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
-  prefixQuery,
   searchJoin,
   searchMatch,
+  searchQuery,
+  searchRank,
   searchSnippet,
+  titlePattern,
 } from "./search-text.ts";
 import { registerAgentContext } from "./agent-context.ts";
 import { registerAgentSessions, sessionsForExtension } from "./agent-sessions.ts";
@@ -221,6 +223,7 @@ const shelfKindSql = (revision: string) =>
          WHEN ${revision}.mime IN ('text/plain','text/markdown') THEN 'documents'
          WHEN ${revision}.mime='text/html' THEN 'pages'
          ELSE 'other' END)`;
+const SHELF_RANK = searchRank("artifact", "$3", "$6");
 const UPDATED_KEY = `to_char(artifact.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 /** The shelf's orders: the key a page ends on, the ORDER BY, and «after the key». */
 const SHELF_ORDER = {
@@ -242,10 +245,18 @@ const SHELF_ORDER = {
     after: (key: string, id: string) =>
       `(lower(artifact.title),artifact.id)>(${key},${id})`,
   },
+  // A search, best answers first (searchRank over $3 and $6 of the shelf's
+  // query), then newest. The key is «rank date»; without a query, newest first.
+  relevance: {
+    key: `${SHELF_RANK}::text||' '||${UPDATED_KEY}`,
+    by: `${SHELF_RANK} DESC,artifact.updated_at DESC,artifact.id DESC`,
+    after: (key: string, id: string) =>
+      `(${SHELF_RANK},artifact.updated_at,artifact.id)<(split_part(${key},' ',1)::int,split_part(${key},' ',2)::timestamptz,${id})`,
+  },
 } as const;
 type ShelfOrder = keyof typeof SHELF_ORDER;
 const listCursor = z.object({
-  sort: z.enum(["new", "old", "title"]),
+  sort: z.enum(["new", "old", "title", "relevance"]),
   key: z.string().max(600),
   id: uuid,
 });
@@ -259,7 +270,11 @@ function decodeListCursor(value: string | undefined, sort: ShelfOrder) {
       ? { sort: "new" as const, key: legacy.data.date, id: legacy.data.id }
       : listCursor.parse(raw);
     if (cursor.sort !== sort) throw Error("another order");
-    if (sort !== "title") z.string().datetime().parse(cursor.key);
+    if (sort === "relevance") {
+      const [rank, date, ...rest] = cursor.key.split(" ");
+      if (!/^\d{1,8}$/.test(rank) || rest.length) throw Error("a rank and a date");
+      z.string().datetime().parse(date);
+    } else if (sort !== "title") z.string().datetime().parse(cursor.key);
     return cursor;
   } catch {
     throw new Problem(400, "invalid", "Обновите список: указатель страницы некорректен.");
@@ -959,7 +974,7 @@ export async function createApp() {
         folderId: uuid.optional(),
         cursor: z.string().max(800).optional(),
         // The whole shelf in this order and of this kind, not the loaded page.
-        sort: z.enum(["new", "old", "title"]).default("new"),
+        sort: z.enum(["new", "old", "title", "relevance"]).default("new"),
         kind: z.enum(SHELF_KINDS).optional(),
         // Only works with a version a curator accepted.
         accepted: z.literal("1").optional(),
@@ -969,7 +984,7 @@ export async function createApp() {
     const cursor = decodeListCursor(q.cursor, q.sort);
     // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
     const text = q.q.trim();
-    const title = text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : null;
+    const title = titlePattern(text);
     const { rows } = await db.query(
       `SELECT artifact.id,${order.key} AS cursor_key,
               ${searchSnippet("$6", "$7")}
@@ -989,7 +1004,7 @@ export async function createApp() {
         title,
         cursor?.key ?? null,
         cursor?.id ?? null,
-        prefixQuery(text),
+        searchQuery(text),
         HEADLINE_OPTIONS,
         q.kind ?? null,
         q.accepted === "1",
@@ -1011,7 +1026,7 @@ export async function createApp() {
             AND ${searchMatch("artifact", "$3", "$4")}
             AND ($5::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)
           GROUP BY 1`,
-        [actor.tenant, q.folderId ?? null, title, prefixQuery(text), q.accepted === "1"],
+        [actor.tenant, q.folderId ?? null, title, searchQuery(text), q.accepted === "1"],
       );
       for (const { kind, count } of kinds as { kind: ShelfKind; count: number }[]) {
         counts[kind] += count;

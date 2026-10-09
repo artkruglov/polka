@@ -404,7 +404,7 @@ export const client = {
     q: string,
     folderId: string | null,
     cursor?: string,
-    order: { sort?: "new" | "old" | "title"; kind?: ShelfKind | null; accepted?: boolean } = {},
+    order: { sort?: "new" | "old" | "title" | "relevance"; kind?: ShelfKind | null; accepted?: boolean } = {},
   ) =>
     request<{ items: Artifact[]; nextCursor: string | null; counts?: ShelfCounts }>(
       `/artifacts?${new URLSearchParams({

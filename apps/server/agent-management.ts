@@ -3,10 +3,13 @@ import { countAgentRead } from "./agent-read-counter.ts";
 import {
   HEADLINE_OPTIONS,
   plainSnippet,
-  prefixQuery,
+  SEARCH_RANK_TIER,
   searchJoin,
   searchMatch,
+  searchQuery,
+  searchRank,
   searchSnippet,
+  titlePattern,
 } from "./search-text.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -37,8 +40,8 @@ const datedCursorSchema = z
     state: stateSchema,
     date: z.string().datetime({ offset: true }),
     id: uuid,
-    /** Only in a ranked search: 2 title, +1 text. */
-    rank: z.number().int().min(0).max(3).optional(),
+    /** Only in a ranked search: searchRank. */
+    rank: z.number().int().min(0).max(3 * SEARCH_RANK_TIER).optional(),
   })
   .strict();
 const legacyCursorSchema = z
@@ -287,23 +290,18 @@ export async function listArtifactsForAgent(
     tenants = rows.map((row) => row.id as string);
     if (!tenants.length) return { items: [], nextCursor: null };
   }
-  // A search of the shelf ranks a title hit above a text-only hit, then newest
-  // first. The rank is a whole number, so the cursor stays exact (keyset).
+  // A search of the shelf ranks title hits first, then by how well the text
+  // answers, then newest first (searchRank).
   const ranked = Boolean(input.query) && input.state === "active";
   const cursor = decodeArtifactCursor(input.cursor, input.state, ranked);
-  const query = input.query
-    ? `%${input.query.replace(/[\\%_]/g, "\\$&")}%`
-    : null;
+  const query = input.query ? titlePattern(input.query) : null;
   const timestamp =
     input.state === "active" ? "artifact.updated_at" : "artifact.trashed_at";
   const statePredicate =
     input.state === "active"
       ? "artifact.trashed_at IS NULL AND artifact.purged_at IS NULL"
       : "artifact.trashed_at IS NOT NULL AND artifact.purged_at IS NULL";
-  const rank = ranked
-    ? `(CASE WHEN artifact.title ILIKE $4 ESCAPE '\\' THEN 2 ELSE 0 END
-        + CASE WHEN s.document @@ to_tsquery('russian',$8::text) THEN 1 ELSE 0 END)`
-    : "0";
+  const rank = ranked ? searchRank("artifact", "$4", "$8") : "0";
   // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
   const { rows } = await db.query(
     `SELECT ${artifactColumns},
@@ -332,7 +330,7 @@ export async function listArtifactsForAgent(
       cursor?.id ?? null,
       input.limit + 1,
       // The trash is found by title only, as the spec says.
-      input.query && input.state === "active" ? prefixQuery(input.query) : null,
+      input.query && input.state === "active" ? searchQuery(input.query) : null,
       HEADLINE_OPTIONS,
       scope,
       input.since ?? null,

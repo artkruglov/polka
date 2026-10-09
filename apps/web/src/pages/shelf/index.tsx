@@ -22,7 +22,7 @@ import type { Shelf, ShelfCounts } from "../../shared/api/client.ts";
 import { ROLE_LABEL, atLeast } from "../../entities/shelf/model.ts";
 import { categoryLabel, type Category } from "../../entities/artifact/format.ts";
 
-export type ShelfSort = "newest" | "oldest" | "title";
+export type ShelfSort = "relevant" | "newest" | "oldest" | "title";
 export type { CardAction };
 type Props = {
   account: Account;
@@ -152,6 +152,7 @@ export function ShelfPage({
             <label className="shelf-sort">
               <span className="sr-only">Порядок</span>
               <select value={sort} onChange={(e) => setSort(e.target.value as ShelfSort)}>
+                {query.trim() && <option value="relevant">Сначала подходящие</option>}
                 <option value="newest">Сначала новые</option>
                 <option value="oldest">Сначала старые</option>
                 <option value="title">По названию</option>
