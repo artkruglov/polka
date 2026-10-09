@@ -8,8 +8,8 @@
     // `const { omitted, ...rest } = value` drops a field on purpose.
     "no-unused-vars": ["error", { "ignoreRestSiblings": true }],
     // The React compiler-style rules need a browser check per screen before each effect is changed.
-    "react/set-state-in-effect": "warn",
-    "react/refs": "warn",
-    "react-hooks/exhaustive-deps": "warn"
+    "react/set-state-in-effect": "error",
+    "react/refs": "error",
+    "react-hooks/exhaustive-deps": "error"
   }
 }
