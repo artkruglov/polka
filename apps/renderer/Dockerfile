@@ -4,7 +4,7 @@
 # The official Playwright image, pinned by digest (v1.63.0-noble, multi-arch):
 # Chromium 1243 matching playwright-core 1.63.0 in package.json, Node 24 which
 # runs these TypeScript files directly (type stripping, no build step).
-FROM mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+FROM mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
 
 ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
