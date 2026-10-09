@@ -84,8 +84,9 @@ const steps = [
       "--rm",
       "-v",
       `${process.cwd()}:/repo`,
-      // zricethezav/gitleaks:v8.24.2
-      "zricethezav/gitleaks@sha256:b5918eb91b8d2473cec722f066abb4352e4ffdc4ec9f4283ec143aba9ec9ebc4",
+      // ghcr.io/gitleaks/gitleaks:v8.24.2 (the same digest as zricethezav/gitleaks on Docker Hub,
+      // which is not in mirror.gcr.io and hits Docker Hub's pull limit on CI)
+      "ghcr.io/gitleaks/gitleaks@sha256:b5918eb91b8d2473cec722f066abb4352e4ffdc4ec9f4283ec143aba9ec9ebc4",
       "git",
       "/repo",
       "--config",
