@@ -31,11 +31,17 @@
    docker build -t polka:<short-commit> .
    ```
 
-4. Заполнить `hosted.env`: пароли `openssl rand -hex 24`, `LINK_KEY` `openssl rand -hex 32`, S3-ключи и **`POLKA_IMAGE=polka:<short-commit>`** (тег из шага 3).
+4. Создать `hosted.env` одной командой: она берёт `hosted.env.example`, сама генерирует пароли БД, `LINK_KEY` и `OPS_STATUS_TOKEN`, подставляет адреса, S3 и образ из шага 3 и пишет файл с правами 600. S3-ключи передаются через окружение, чтобы не попасть в историю оболочки; секреты команда не печатает. В конце она перечисляет, что ещё не заполнено.
 
    ```sh
-   cp deploy/hosted/hosted.env.example deploy/hosted/hosted.env && chmod 600 deploy/hosted/hosted.env
+   S3_ACCESS_KEY=… S3_SECRET_KEY=… BACKUP_S3_ACCESS_KEY=… BACKUP_S3_SECRET_KEY=… \
+   npm run hosted:setup -- --app-host polka.company.ru --viewer-host polka-view.company.net \
+     --s3-endpoint https://storage.yandexcloud.net --s3-region ru-central1 \
+     --s3-bucket company-polka-objects --backup-bucket company-polka-backups \
+     --image polka:<short-commit> --live
    ```
+
+   Любую другую настройку из примера можно задать сразу: `--set TEAM_SHELVES=on`. Существующий файл команда не трогает без `--force`. Сохраните копию `LINK_KEY` в менеджере секретов: без него перестают работать все ссылки. Заполнить вручную тоже можно: `cp deploy/hosted/hosted.env.example deploy/hosted/hosted.env && chmod 600 deploy/hosted/hosted.env`, пароли `openssl rand -hex 24`, `LINK_KEY` `openssl rand -hex 32`.
 
 5. Запустить:
 

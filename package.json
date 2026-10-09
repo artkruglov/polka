@@ -58,6 +58,7 @@
     "search:backfill": "tsx --env-file=.env scripts/search-backfill.ts",
     "editorial:content-scan": "tsx scripts/editorial-content-scan.ts",
     "local:setup": "node scripts/local-setup.mjs",
+    "hosted:setup": "node scripts/hosted-setup.mjs",
     "infra:up": "docker compose --env-file=.env -f deploy/compose.local.yml up -d --wait",
     "infra:stop": "docker compose --env-file=.env -f deploy/compose.local.yml stop",
     "maintenance": "tsx --env-file=.env scripts/maintenance.ts",
