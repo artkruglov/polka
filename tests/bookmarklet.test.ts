@@ -420,8 +420,8 @@ after(async () => {
   await app?.close();
   await db?.end();
   s3?.destroy();
-  // Chrome's helpers may still write to the profile for a moment after the kill.
-  if (scratch) rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
+  if (scratch) try { rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
 });
 
 const REMEMBER_ORIGINALS = `window.__originals = [
