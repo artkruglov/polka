@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Приёмка управления работами настоящим агентом** ([AGENT_MANAGE_ACCEPTANCE](docs/dev/AGENT_MANAGE_ACCEPTANCE.md), #47): `scripts/agent-manage-acceptance.ts` даёт Claude Code или Codex с правами `context`, `read`, `manage` переименовать работу, перенести, убрать в корзину и вернуть без веба, затем проверяет результат и журнал. Прогон 09.10.2026: оба агента прошли. В `connect-agents.md` добавлено, что Codex в `exec` останавливается перед `polka_trash` и `polka_restore`, пока их не одобрить.
+
 ## [0.13.0] — 2026-10-09
 
 ### Added
