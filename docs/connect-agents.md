@@ -129,6 +129,8 @@ read -r -s POLKA_MCP_TOKEN && export POLKA_MCP_TOKEN
 codex mcp add polka --url https://polochka.app/mcp --bearer-token-env-var POLKA_MCP_TOKEN
 ```
 
+Перед `polka_trash` и `polka_restore` Codex спрашивает человека: эти инструменты помечены как разрушительные. В `codex exec` (CI, скрипты) спросить некого, и агент останавливается. Если такой агент должен убирать работы в корзину, одобрите только эти инструменты: `-c 'mcp_servers.polka.tools.polka_trash.approval_mode="approve"'`, то же для `polka_restore`. Проверено на Codex CLI 0.153.4 ([приёмка](dev/AGENT_MANAGE_ACCEPTANCE.md)).
+
 **Claude Code** (`.mcp.json` проекта; переменная подставляется из окружения)
 
 ```json
