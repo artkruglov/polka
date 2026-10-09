@@ -12,6 +12,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { sessionsForExtension } from "../apps/server/agent-sessions.ts";
+import { readAuditFeed } from "../apps/server/extension-feed.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { MCP_AUDIENCE, authenticateServiceToken } from "../apps/server/service-auth.ts";
@@ -127,6 +128,8 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
   const { rows: events } = await db.query(`SELECT action, payload FROM audit_outbox WHERE target_id=$1`, [body.id]);
   assert.deepEqual(events.map((e) => e.action), ["session.saved"]);
   assert.ok(!JSON.stringify(events).includes("demo-app"));
+  // The rules that fired ride along, so the SIEM worker needs not the session (#43).
+  assert.deepEqual(events[0].payload.alerts.split(",").sort(), ["destructive_command", "no_approvals", "pipe_to_shell", "secret_sent_out"]);
 
   const own = await cookie(person);
   const list = await web("GET", "/api/sessions", own);
@@ -233,6 +236,40 @@ test("erasing the account erases its sessions", async () => {
   const { rows: [tenant] } = await db.query(`SELECT session_used_bytes, session_fingerprint_key FROM tenants WHERE id=$1`, [person.tenant]);
   assert.equal(Number(tenant.session_used_bytes), 0);
   assert.equal(tenant.session_fingerprint_key, null);
+  // The journal keeps one account.erased, without personal data, for extensions' derived data (#44).
+  const feed = await readAuditFeed(null, { actions: ["account.erased"], limit: 500 });
+  const erased = feed.items.filter((item) => item.targetId === person.id);
+  assert.equal(erased.length, 1);
+  assert.equal(erased[0]!.tenantId, person.tenant);
+  assert.deepEqual(erased[0]!.payload, {});
+  // Renaming again (a retried purge) adds nothing.
+  await db.query(`UPDATE accounts SET name='deleted-'||id WHERE id=$1`, [person.id]);
+  assert.equal((await db.query(`SELECT 1 FROM audit_outbox WHERE action='account.erased' AND target_id=$1`, [person.id])).rowCount, 1);
+});
+
+test("pages of sessions that started at the same moment lose none and repeat none (#45)", async () => {
+  const person = await owner("sessions-cursor");
+  const secret = await token(person);
+  const ids: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const { saved } = await upload(secret, await sessionFile());
+    assert.equal(saved.statusCode, 200, saved.body);
+    ids.push(saved.json().id);
+  }
+  // Same start, to the microsecond: what a page boundary by time alone skipped.
+  await db.query(`UPDATE agent_sessions SET started_at='2026-10-01T10:00:00.123456Z' WHERE account_id=$1`, [person.id]);
+  const seen: string[] = [];
+  let before: string | null = null;
+  for (let pages = 0; pages < 10; pages++) {
+    const page = await sessionsForExtension.list({ accounts: [person.id] }, { limit: 2, ...(before ? { before } : {}) });
+    seen.push(...page.sessions.map((s) => s.id));
+    before = page.next;
+    if (!before) break;
+  }
+  assert.deepEqual(seen.sort(), [...ids].sort());
+  // A bare time from before 0.13 still pages by time.
+  const old = await sessionsForExtension.list({ accounts: [person.id] }, { before: "2026-10-01T10:00:01.000Z" });
+  assert.equal(old.sessions.length, 5);
 });
 
 test("agents read sessions through MCP with the sessions permission", async () => {

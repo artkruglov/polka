@@ -138,7 +138,7 @@ export type SessionListQuery = {
   project?: string;
   secrets?: "clean" | "seen" | "used" | "sent_out" | "any";
   alerts?: "any";
-  /** An ISO time: sessions that started before it (the previous page's next). */
+  /** The previous page's next, passed back as is (a start time and an id). */
   before?: string;
   limit?: number;
 };

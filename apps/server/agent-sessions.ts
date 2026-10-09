@@ -350,7 +350,13 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
       );
     await c.query(`UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1`, [verified.tenantId, delta]);
     // Ids and counts only, never content.
-    await audit(c, agentActor(verified), "session.saved", id, { source: body.source, toolCalls: body.toolCalls.length, secrets: status });
+    await audit(c, agentActor(verified), "session.saved", id, {
+      source: body.source,
+      toolCalls: body.toolCalls.length,
+      secrets: status,
+      // The rules that fired, so a reader of the journal (SIEM alerts) needs not the session itself.
+      alerts: alerts.map((alert) => alert.rule).join(","),
+    });
     return {
       id,
       created: !existing,
@@ -432,7 +438,12 @@ const listQuery = z.object({
   project: z.string().max(200).optional(),
   secrets: z.enum(["clean", "seen", "used", "sent_out", "any"]).optional(),
   alerts: z.enum(["any"]).optional(),
-  before: z.iso.datetime().optional(),
+  // The previous page's next: "<start, µs>~<id>". A bare ISO time (before 0.13) still works.
+  before: z
+    .string()
+    .max(80)
+    .regex(/^\d{4}-\d\d-\d\dT[\d:.]+Z(~[0-9a-f-]{36})?$/)
+    .optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
@@ -442,18 +453,26 @@ export async function listSessions(person: Person, query: unknown) {
 
 export async function listSessionsIn(scope: SessionScope, query: unknown) {
   const q = listQuery.parse(query ?? {});
+  const [beforeAt, beforeId] = q.before?.split("~") ?? [];
+  // Pages by (start, id): sessions that started at the same moment never fall between two pages.
   const { rows } = await db.query(
-    `SELECT ${SESSION_COLUMNS} FROM agent_sessions s
+    `SELECT ${SESSION_COLUMNS},
+            to_char(COALESCE(s.started_at, s.uploaded_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at
+       FROM agent_sessions s
       WHERE ${IN_SCOPE}
         AND ($3::text IS NULL OR s.source=$3) AND ($4::text IS NULL OR s.project_label=$4)
         AND ($5::text IS NULL OR ($5='any' AND s.secrets_status<>'clean') OR s.secrets_status=$5)
         AND ($6::text IS NULL OR jsonb_array_length(s.alerts) > 0)
-        AND ($7::timestamptz IS NULL OR COALESCE(s.started_at, s.uploaded_at) < $7)
+        AND ($7::timestamptz IS NULL OR COALESCE(s.started_at, s.uploaded_at) < $7
+             OR ($9::uuid IS NOT NULL AND COALESCE(s.started_at, s.uploaded_at) = $7 AND s.id > $9))
       ORDER BY COALESCE(s.started_at, s.uploaded_at) DESC, s.id LIMIT $8`,
-    [...scopeParams(scope), q.source ?? null, q.project ?? null, q.secrets ?? null, q.alerts ?? null, q.before ?? null, q.limit + 1],
+    [
+      ...scopeParams(scope), q.source ?? null, q.project ?? null, q.secrets ?? null, q.alerts ?? null,
+      beforeAt ?? null, q.limit + 1, beforeId ?? null,
+    ],
   );
-  const page = rows.slice(0, q.limit);
-  const last = page.at(-1);
+  const page = rows.slice(0, q.limit).map(({ cursor_at: _, ...session }) => session);
+  const last = rows[q.limit - 1];
   const { rows: projects } = await db.query(
     `SELECT s.project_label AS label, count(*)::int AS sessions FROM agent_sessions s WHERE ${IN_SCOPE} AND s.project_label IS NOT NULL
       GROUP BY 1 ORDER BY 2 DESC LIMIT 50`,
@@ -462,7 +481,7 @@ export async function listSessionsIn(scope: SessionScope, query: unknown) {
   return {
     sessions: page,
     projects,
-    next: rows.length > q.limit && last ? new Date(last.startedAt ?? last.uploadedAt).toISOString() : null,
+    next: rows.length > q.limit && last ? `${last.cursor_at}~${last.id}` : null,
   };
 }
 
