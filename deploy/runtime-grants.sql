@@ -213,7 +213,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public.agent_sessions, public.agent_session_tool_calls,
   public.agent_session_secrets, public.agent_session_links
 TO :"runtime_role";
--- Proposals to «Лента» from a department shelf (067): the application
+-- Proposals to «Лента» from a department shelf (068): the application
 -- creates them and changes their state (withdrawn, or the operator's
 -- decision); rows go with their shelf (ON DELETE CASCADE), never DELETE.
 GRANT SELECT, INSERT, UPDATE ON TABLE public.feed_proposals TO :"runtime_role";
