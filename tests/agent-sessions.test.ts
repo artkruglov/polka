@@ -12,7 +12,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { sessionsForExtension } from "../apps/server/agent-sessions.ts";
-import { readAuditFeed } from "../apps/server/extension-feed.ts";
+import { auditFeedHead, readAuditFeed } from "../apps/server/extension-feed.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { MCP_AUDIENCE, authenticateServiceToken } from "../apps/server/service-auth.ts";
@@ -271,6 +271,7 @@ test("erasing the account erases its sessions", async () => {
   const secret = await token(person);
   const { saved, prepared } = await upload(secret, await sessionFile());
   assert.equal((await putTranscript(secret, saved.json().id, prepared.transcriptGz)).statusCode, 200);
+  const head = await auditFeedHead();
   // The rename is the erasure's own step (030), which fires the trigger of 065.
   await db.query(`UPDATE accounts SET name='deleted-'||id WHERE id=$1`, [person.id]);
   assert.equal((await db.query(`SELECT 1 FROM agent_sessions WHERE account_id=$1`, [person.id])).rowCount, 0);
@@ -280,8 +281,13 @@ test("erasing the account erases its sessions", async () => {
   assert.equal(Number(tenant.session_used_bytes), 0);
   assert.equal(tenant.session_fingerprint_key, null);
   // The journal keeps one account.erased, without personal data, for extensions' derived data (#44).
-  const feed = await readAuditFeed(null, { actions: ["account.erased"], limit: 500 });
-  const erased = feed.items.filter((item) => item.targetId === person.id);
+  // The feed shows a row once no running transaction can precede it; another test file's may.
+  let erased: Awaited<ReturnType<typeof readAuditFeed>>["items"] = [];
+  for (let tries = 0; erased.length === 0 && tries < 100; tries++) {
+    if (tries) await new Promise((resolve) => setTimeout(resolve, 100));
+    const feed = await readAuditFeed(head, { actions: ["account.erased"], limit: 500 });
+    erased = feed.items.filter((item) => item.targetId === person.id);
+  }
   assert.equal(erased.length, 1);
   assert.equal(erased[0]!.tenantId, person.tenant);
   assert.deepEqual(erased[0]!.payload, {});

@@ -424,6 +424,9 @@ async function untilEvents(actor: ServiceActor, after: string, count: number) {
 }
 
 test("the events feed shows works' events by cursor, only its own shelf, without noise", async () => {
+  // A shelf of its own: the earlier tests' events of `owner` may still be unsettled
+  // (a transaction of another test file holds the snapshot back) and would land after the tail.
+  const owner = await createAccount(`manage-events-${randomBytes(5).toString("hex")}`, password);
   const actor = await connection(owner, ["context", "read"]);
   const mine = await artifact(owner, "Events work");
   const theirs = await artifact(other, "Foreign events work");
