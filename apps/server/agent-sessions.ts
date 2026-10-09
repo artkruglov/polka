@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
@@ -10,7 +10,7 @@ import { assertStrongSession, identity } from "./auth.ts";
 import { config } from "./config.ts";
 import { afterCommit, db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
-import { checkSessionDelete } from "./extensions.ts";
+import { checkSessionDelete, installationFingerprintKey } from "./extensions.ts";
 import { bearerActor } from "./publish-api.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { lockShelf } from "./shelves.ts";
@@ -230,7 +230,7 @@ export async function fingerprintKey(actor: ServiceActor) {
     if (!shelf.quota) throw disabled();
     const notice = sessionNotice();
     if (config.AGENT_SESSION_FINGERPRINTS === "installation")
-      return { key: createHmac("sha256", config.LINK_KEY).update("polka/session-fingerprints/v1").digest("hex"), scope: "installation", notice };
+      return { key: installationFingerprintKey(), scope: "installation", notice };
     const {
       rows: [row],
     } = await c.query(

@@ -1,6 +1,7 @@
 // Extensions of the open core (docs/specs/EXTENSIONS.md): modules named in
 // POLKA_EXTENSIONS, loaded once at start. Each hook is a no-op without them,
 // so an installation without extensions behaves exactly as the core alone.
+import { createHmac } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { isAbsolute, resolve } from "node:path";
 import type { PoolClient } from "pg";
@@ -11,9 +12,12 @@ import type {
   LinkOpenDecision,
   PolkaEvent,
   PolkaExtension,
+  RedactResult,
   SessionDelete,
   SessionDeleteDecision,
 } from "../../packages/extension-api/index.ts";
+import { createRedactor } from "../../scripts/polka-sessions.mjs";
+import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
 
 let loaded: PolkaExtension[] = [];
@@ -39,6 +43,10 @@ export async function loadExtensions(list: string | undefined) {
     const extension = (module.default ?? module) as PolkaExtension;
     if (!extension || typeof extension !== "object" || !NAME.test(extension.name ?? ""))
       throw new Error(`POLKA_EXTENSIONS: ${specifier} does not export a Полка extension`);
+    const own = `/api/ext/${extension.name}/`;
+    for (const path of extension.machinePaths ?? [])
+      if (typeof path !== "string" || !path.startsWith(own) || !/^[\w/.-]+$/.test(path) || path.includes(".."))
+        throw new Error(`POLKA_EXTENSIONS: ${extension.name}'s machine path ${String(path)} is not under ${own}`);
     if (extensions.some((other) => other.name === extension.name))
       throw new Error(`POLKA_EXTENSIONS: ${extension.name} is loaded twice`);
     extensions.push(extension);
@@ -55,6 +63,15 @@ export function useExtensions(extensions: PolkaExtension[]) {
 }
 
 export const extensions = () => loaded;
+
+/**
+ * An extension's machine route (machinePaths): bearer only, so the browser
+ * Origin rule does not apply. Only paths under the extension's own prefix count.
+ */
+export const isExtensionMachinePath = (pathname: string) =>
+  loaded.some((extension) =>
+    extension.machinePaths?.some((path) => path === pathname && path.startsWith(`/api/ext/${extension.name}/`)),
+  );
 
 /** The first refusal wins: any extension may forbid a link. */
 export async function checkLinkIssue(issue: LinkIssue, c: PoolClient) {
@@ -105,4 +122,24 @@ export function emitEvent(event: PolkaEvent) {
         ),
       );
   }
+}
+
+/**
+ * The installation's key for secret fingerprints (hex), derived from LINK_KEY
+ * one way: what GET /api/v1/sessions/key hands the machines under
+ * AGENT_SESSION_FINGERPRINTS=installation.
+ */
+export const installationFingerprintKey = () =>
+  createHmac("sha256", config.LINK_KEY).update("polka/session-fingerprints/v1").digest("hex");
+
+/**
+ * context.redact: the CLI's own redactor (scripts/polka-sessions.mjs) keyed as
+ * the CLI keys it, so a secret gets the marker and fingerprint an uploaded
+ * session gives it under AGENT_SESSION_FINGERPRINTS=installation.
+ */
+export function redactForExtension(text: string): RedactResult {
+  if (typeof text !== "string") throw new TypeError("context.redact takes a string");
+  const redactor = createRedactor(Buffer.from(installationFingerprintKey(), "hex"));
+  const out = redactor.redact(text);
+  return { text: out, secrets: redactor.findings().map((f) => ({ type: f.type, fingerprint: f.fp })) };
 }
