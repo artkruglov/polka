@@ -267,6 +267,20 @@ export type ShelfMember = {
   role: Exclude<ShelfRole, "owner">;
   joinedAt: string;
 };
+/** A link that brings a colleague onto a department shelf (TEAM_SHELVES.md). */
+export type ShelfInvitation = {
+  id: string;
+  role: "reader" | "author" | "curator";
+  maxUses: number;
+  uses: number;
+  status: "active" | "used" | "expired" | "revoked";
+  createdAt: string;
+  expiresAt: string;
+  invitedBy?: string | null;
+  inviterName?: string | null;
+  /** Only in the answer that created the link: the secret is not kept. */
+  invitationUrl?: string;
+};
 export type ShelfEvent = {
   id: string;
   action: string;
@@ -290,6 +304,19 @@ export const client = {
     request(`/shelves/${id}/members/${accountId}`, { role }, "PATCH"),
   revokeShelfMember: (id: string, accountId: string) =>
     request(`/shelves/${id}/members/${accountId}/revoke`, {}),
+  shelfInvitations: (id: string) =>
+    request<{ items: ShelfInvitation[]; hasMore: boolean }>(`/shelves/${id}/invitations`),
+  createShelfInvitation: (
+    id: string,
+    input: { role: ShelfInvitation["role"]; expiresInHours: number; maxUses: number },
+  ) => request<ShelfInvitation & { invitationUrl: string }>(`/shelves/${id}/invitations`, input),
+  revokeShelfInvitation: (id: string, invitationId: string) =>
+    request(`/shelves/${id}/invitations/${invitationId}/revoke`, {}),
+  acceptShelfInvitation: (id: string, token: string) =>
+    request<{ shelfId: string; name: string; role: ShelfRole; joined: boolean }>(
+      `/shelves/${id}/invitations/accept`,
+      { token },
+    ),
   shelfEvents: (id: string) => request<{ items: ShelfEvent[] }>(`/shelves/${id}/events`),
   me: () => request<Account>("/me"),
   /** The signed-in account, or null for a guest (200 either way). */

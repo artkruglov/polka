@@ -176,6 +176,12 @@ import {
   renameShelf,
   revokeShelfMember,
 } from "./shelf-members.ts";
+import {
+  acceptShelfInvitation,
+  createShelfInvitation,
+  listShelfInvitations,
+  revokeShelfInvitation,
+} from "./shelf-invitations.ts";
 import { createFolderInTransaction, folderNameSchema } from "./folders.ts";
 import { createStarCounter } from "./source-stars.ts";
 
@@ -899,6 +905,26 @@ export async function createApp() {
     const actor = await identity(req);
     assertStrongSession(actor);
     return revokeShelfMember(actor, shelfId(req), uuid.parse((req.params as any).accountId));
+  });
+  // Invitation links (shelf-invitations.ts): issued by the admin or a
+  // curator, accepted by whoever opens the link signed in.
+  app.get("/api/shelves/:shelfId/invitations", async (req) =>
+    listShelfInvitations(await identity(req), shelfId(req)),
+  );
+  app.post("/api/shelves/:shelfId/invitations", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return createShelfInvitation(actor, shelfId(req), req.body);
+  });
+  app.post("/api/shelves/:shelfId/invitations/:invitationId/revoke", async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return revokeShelfInvitation(actor, shelfId(req), uuid.parse((req.params as any).invitationId));
+  });
+  app.post("/api/shelves/:shelfId/invitations/accept", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req);
+    assertStrongSession(actor);
+    return acceptShelfInvitation(actor, shelfId(req), req.body);
   });
   app.patch("/api/shelves/:shelfId", { bodyLimit: 2048 }, async (req) => {
     const actor = await identity(req);

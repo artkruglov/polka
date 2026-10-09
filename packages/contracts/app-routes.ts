@@ -32,6 +32,7 @@ export const APP_PAGES = [
   "/trash",
   "/templates",
   "/library-invite",
+  "/shelf-invite",
   "/oauth/consent",
   "/moderation",
   "/sessions",

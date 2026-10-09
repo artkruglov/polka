@@ -1,0 +1,4 @@
+.shelf-invite-page { display: grid; gap: 16px; justify-items: start; width: 100%; max-width: 560px; margin: 0 auto; padding: 64px var(--gutter) 96px; }
+.shelf-invite-page h1 { font-size: clamp(30px, 3.4vw, 40px); }
+.shelf-invite-page p { color: var(--ink-2); font-size: var(--text-md); line-height: 1.6; }
+@media (max-width: 760px) { .shelf-invite-page { padding: 32px var(--gutter-mobile) 48px; } }
