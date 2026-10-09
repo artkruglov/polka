@@ -92,7 +92,7 @@ export function ShelfSnapshotPage() {
                   className="ui-input"
                   type="datetime-local"
                   value={moment}
-                  max={localInputValue(new Date())}
+                  onFocus={(e) => (e.currentTarget.max = localInputValue(new Date()))}
                   onChange={(e) => setMoment(e.target.value)}
                   required
                 />
