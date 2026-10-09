@@ -18,13 +18,13 @@
 
 Миграция 006 добавляет nullable manifest/manifest_sha256; старые записи не переписываются. Non-HTML остаётся без manifest. Новый HTML receipt содержит manifestSha256; повтор finalize/begin возвращает прежний receipt и не меняет capturedAt/hash. DTO версии передаёт manifest и manifestSha256, null для старых данных.
 
-## Реализовано локально: multi-file capture
+## Multi-file capture
 
 1. beginBundle(actor, key/title/target/baseRevision/folder/manifest): transport body ≤64 KiB; канонизация, quota reservation под tenant lock; сервер возвращает канонический порядок files и uploadId. Индексы последующих запросов относятся именно к этому порядку.
 2. putBundleFile(actor, uploadId, index, bytes): server-generated storage key, проверка размера/hash/UTF-8 для текста, immutable blob version и повтор без замены содержимого. Не доверять MIME для исполнения.
 3. finalizeBundle: все файлы присутствуют; account/tenant/quota/CAS перепроверены; одна revision и receipt на пакет. Обрыв не создаёт половину пакета. Cleanup учитывает все staged blobs.
 4. revision сохраняет entrypoint hash отдельно от manifest hash, суммарный размер и immutable object versions ресурсов. Нельзя создавать отдельную revision каждого файла существующим finalizeUpload.
-5. Export возвращает пакет и manifest; viewer принимает только реально поддержанный профиль. Пока multi-file runtime не принят, сохранённый пакет получает фактический preserved-only режим; это не закрывает конечную задачу автономного просмотра.
+5. Export возвращает пакет и manifest; viewer принимает только реально поддержанный профиль. Живой просмотр пакета идёт через готовое inline-производное ([BUNDLE_INLINE_SPEC](../BUNDLE_INLINE_SPEC.md)); без него пакет остаётся только сохранённым.
 
 ZIP — возможный транспорт позднее, а не обязательная архитектура. Его добавление потребует ограничений распаковки/traversal/symlinks. Внешние CDN/модули, fetch и server-side приложения не начинают работать от одного добавления manifest. Bundler/importer должны сохранить ресурсы и согласованно изменить ссылки либо явно сообщить неполноту.
 
@@ -34,9 +34,5 @@ ZIP — возможный транспорт позднее, а не обяза
 - upload_files хранит staged object versions; revision_files — закреплённые ресурсы. revision.size/sha256/object_key/object_version продолжают описывать entrypoint. total_size — весь пакет и расход квоты, storage_kind отличает транспорт.
 - begin/put/finalize на /api/bundle-uploads; status сообщает полученные индексы, abort сохраняет tombstone. Single и bundle endpoints отклоняют чужой kind.
 - /api/revisions/:id/export возвращает владельцу attachment JSON с manifest/hash и base64 bytes всех файлов. /bytes остаётся только entrypoint; UI не должен называть его полным пакетом.
-- До runtime-приёмки bundle не выдаёт share/live capability. Повторное чтение live также проверяет storage_kind, а не полагается только на выдачу.
+- Share/live capability для bundle выдаётся только при готовом inline-производном. Повторное чтение live также проверяет storage_kind и производное, а не полагается только на выдачу.
 - Cleanup перечисляет все ожидаемые server-generated keys, включая файл после S3 success/DB rollback; защищает revisions/revision_files и не помечает неполный проход завершённым.
-
-## Следующий пакет разработки
-
-Begin/put/finalize, status/abort, полный JSON export и cleanup реализованы и проверены локально. Доказательства. Следующий шаг — воспроизводимое inline-производное для живого просмотра закреплённого bundle, затем importer/MCP. Хранение пакета не означает runtime-приёмку.

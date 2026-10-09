@@ -64,17 +64,17 @@ Read-only resources: `polka://guides/capture-v1`, `polka://guides/html-inline-v1
 
 ## Реализация mutations: один service, одна транзакция на шаг
 
-Контракт следующего пакета (не реализовано). В `artifacts.ts` вынести тела begin/put/finalize/status/abort для single и bundle в функции `...InTransaction(c, context, input)`. Они используют только переданный `PoolClient`, не вызывают `transaction`, `db.query` или публичный wrapper. Существующие web-функции остаются wrappers с прежними аргументами/DTO. MCP adapter вызывает те же тела через `withServiceActorTransaction`, а не оборачивает существующий transaction-owning service. Share/публикацию/отзыв аналогично вынести из `app.ts` в общий service; HTTP handlers только parse/auth/call/serialize.
+В `artifacts.ts` тела begin/put/finalize для single и bundle — функции `...InTransaction(c, actor, input)`. Они используют только переданный `PoolClient`, не вызывают `transaction`, `db.query` или публичный wrapper. Web-функции — wrappers с прежними аргументами/DTO. MCP adapter вызывает те же тела через `withServiceActorTransaction`, а не оборачивает transaction-owning service. Share/публикация/отзыв — общий service в `shares.ts`; HTTP handlers только parse/auth/call/serialize.
 
 `MutationContext` создаётся сервером: owner Actor, заблокированная tenant row, nullable connectionId и актуальные scopes. Для web wrapper сначала блокирует tenant; для MCP существующий helper блокирует tenant → connection, проверяет enabled owner, audience, expiry/revoke и scope, затем передаёт context. Общие тела далее блокируют upload → artifact → share по необходимости. PUT, abort и web share также переходят на этот порядок. Для publish/revoke можно сначала прочитать artifactId из share без lock, затем заблокировать artifact и перечитать share `FOR UPDATE` с повторной tenant/ID проверкой. Не брать tenant после upload/share. Revoke подключения остаётся tenant → connection. S3 PUT выполняется внутри защищённого upload шага до COMMIT; worker build сюда не включать.
 
-**Привязка upload.** Добавить nullable `uploads.connection_id` и composite FK `(connection_id,tenant_id,account_id)` к соответствующему UNIQUE в agent_connections; существующие web uploads остаются NULL, backfill нет. Begin записывает connectionId в той же транзакции, что reservation. Tenant-wide `(tenant_id,idempotency_key)` сохраняется: если ключ существует у другого connection или web upload, MCP получает conflict без receipt/metadata; нельзя присвоить существующий upload новому подключению. Только затем сравнивается нормализованный request. PUT/finalize/abort/status повторно проверяют connectionId до возврата любого receipt. Owner web может управлять своими agent uploads; это не даёт другому service connection такого права.
+**Привязка upload.** Миграция 010: nullable `uploads.connection_id` и composite FK `(connection_id,tenant_id,account_id)` к соответствующему UNIQUE в agent_connections; существующие web uploads остаются NULL, backfill нет. Begin записывает connectionId в той же транзакции, что reservation. Tenant-wide `(tenant_id,idempotency_key)` сохраняется: если ключ существует у другого connection или web upload, MCP получает conflict без receipt/metadata; нельзя присвоить существующий upload новому подключению. Только затем сравнивается нормализованный request. PUT/finalize/abort/status повторно проверяют connectionId до возврата любого receipt. Owner web может управлять своими agent uploads; это не даёт другому service connection такого права.
 
 Scope определяется действием: begin capture запрещает artifactId/baseRevisionId, revise требует оба; после lock upload PUT/finalize/abort проверяют `capture` либо `revise` по сохранённому request, а не по произвольному параметру клиента. Helper можно разделить на проверку connection и `requireScope(context, scope)`, но scope должен быть проверен в той же транзакции до bytes/receipt/изменений. `polka_status` требует context, ищет key/uploadId только в своём connection и возвращает upload progress/receipt и build outcome его revision, без share URL и без запуска работы. Все status-запросы и staged-file reads используют тот же c. Missing/foreign → одинаковый not found.
 
 **Capture/revise orchestration.** Проверить весь payload/manifest/decoded limits до begin. Затем отдельные короткие транзакции: begin → каждый PUT → finalize, с повторной авторизацией на каждом шаге. Не держать внешнюю транзакцию на весь bundle и не запускать шаги параллельно под одним c. Разрыв/revoke между шагами оставляет durable upload для действующего retry либо maintenance; не стирать reservation при неизвестном результате S3. Существующие quota/CAS/pinned hashes/receipt и GC tombstones сохраняются. Audit получает nullable connection_id с FK; actor_id остаётся owner, agent attribution определяется connection_id, без содержимого файлов или токенов.
 
-**Атомарный share receipt.** Добавить `agent_operations` с tenant/account/connection binding, operation=`share`, key, canonical request/hash и immutable result; UNIQUE `(tenant_id,operation,key)`, отдельное от upload namespace. Под tenant → connection сначала проверить scope и существующий receipt: другой connection или изменённый request → conflict. Новый запрос блокирует artifact, проверяет expectedRevisionId и использует общий share service, затем пишет receipt в той же транзакции. Result фиксирует shareId, revisionId, derivativeId и expiresAt; URL вычисляется из shareId только в ответе авторизованного share-вызова. Не вычислять result через последующий `getArtifact`, который может увидеть уже другую версию.
+**Атомарный share receipt.** Миграция 012: `agent_operations` с tenant/account/connection binding, operation=`share`, key, canonical request/hash и immutable result; UNIQUE `(tenant_id,operation,key)`, отдельное от upload namespace. Под tenant → connection сначала проверить scope и существующий receipt: другой connection или изменённый request → conflict. Новый запрос блокирует artifact, проверяет expectedRevisionId и использует общий share service, затем пишет receipt в той же транзакции. Result фиксирует shareId, revisionId, derivativeId и expiresAt; URL вычисляется из shareId только в ответе авторизованного share-вызова. Не вычислять result через последующий `getArtifact`, который может увидеть уже другую версию.
 
 Если активная share уже указывает на expected revision, зафиксировать её в receipt; если она указывает на другую версию, вернуть conflict и не публиковать молча новую. MCP v1 revise не переключает share; отдельный publish tool пока не добавлять (позже добавлен `polka_publish`, см. [MCP_CONNECTOR](../MCP_CONNECTOR.md)). Retry прежнего share key не создаёт и не открывает новую ссылку после её revoke/expiry: возвращает исходные идентификаторы и актуальное closed состояние, URL=null. `polka_status` не раскрывает share receipts; повтор `polka_share` снова требует share scope. Отзыв share идемпотентен и использует общий service, без удаления operation tombstone.
 
@@ -88,21 +88,18 @@ Scope определяется действием: begin capture запреща�
 
 ## Реализованный foundation-срез
 
-Миграция009 и `apps/server/service-auth.ts`: `POST /api/agent-connections/csrf`, `POST /api/agent-connections`, `GET /api/agent-connections`, `POST /api/agent-connections/:id/revoke`. Mutations сохраняют web Origin-check; issue/revoke дополнительно требуют session-bound `x-polka-csrf`. Максимум20 active, все видны независимо от длины истории; возвращается до100 завершённых. TTL default7/max30, token32 random bytes хранится только hash. Audience сейчас ровно APP_ORIGIN/mcp. Helper перепроверяет actor в транзакции tenant→connection. Transport ещё отсутствует: следующие tools должны использовать этот helper, а не обходить его через существующие web routes.
+Миграция009 и `apps/server/service-auth.ts`: `POST /api/agent-connections/csrf`, `POST /api/agent-connections`, `GET /api/agent-connections`, `POST /api/agent-connections/:id/revoke`. Mutations сохраняют web Origin-check; issue/revoke дополнительно требуют session-bound `x-polka-csrf`. Максимум20 active, все видны независимо от длины истории; возвращается до100 завершённых. TTL default7/max30, token32 random bytes хранится только hash. Audience сейчас ровно APP_ORIGIN/mcp. Helper перепроверяет actor в транзакции tenant→connection. MCP tools используют этот helper, а не обходят его через web routes.
 
-## Management follow-up R09
+## Управление работами через MCP (R09)
 
-Требование пользователя: полноценное управление работами через MCP, без
-обязательного ручного подтверждения в web UI. Текущий server/UI пакет
-[TRASH_SPEC.md](TRASH_SPEC.md) временно реализует owner routes первым; отсутствие
-management tools после него — явный незавершённый долг, а не принятая human-only
-граница продукта. Ближайший отдельный пакет добавляет rename/move/trash/restore
-через агента; не заменять его инструкцией «откройте Полку и нажмите кнопку».
+Агент с правом `manage` переименовывает, переносит, отправляет в корзину и
+восстанавливает работы без ручного подтверждения в web UI. Это не permanent
+deletion и не account lifecycle R17.
 
-- Добавить отдельный `manage` scope в contracts, DB scopes constraint, token
-  issue/list UI и guides. Старые токены не расширять автоматически. Уполномоченный
-  токен с этим scope не требует нового human approval на каждый вызов.
-- Tools `polka_update_artifact`, `polka_trash`, `polka_restore` используют общие
+- Отдельный `manage` scope в contracts, DB scopes constraint, выдаче токенов и
+  guides. Старые токены не расширяются автоматически. Токен с этим scope не
+  требует нового human approval на каждый вызов.
+- `polka_update_artifact`, `polka_trash`, `polka_restore` используют общие
   InTransaction services. Tenant→connection recheck перед каждым изменением и
   replay, затем существующие upload/artifact locks. Actor берётся из token,
   не из аргументов. Expiry/revoke/disabled account → отказ до mutation.
@@ -110,28 +107,19 @@ management tools после него — явный незавершённый �
   expectedLifecycleVersion/expectedRevisionId и точный retry из TRASH_SPEC.
   На 409 агент перечитывает состояние и принимает решение; скрытого retry с
   обновлённым CAS нет. Audit отличает agent/connection от human actor.
-- `polka_list` получает явный фильтр `active|trashed`, по умолчанию active;
+- `polka_list` принимает фильтр `active|trashed`, по умолчанию active;
   trash discovery требует `read`, изменение — `manage`. Scope context/status не
   становится обходом tenant/connection доступа. Trash/restore не выдаёт share URL,
   не запускает preview, не отзывает connection и не восстанавливает старые shares.
-- Acceptance: native клиент с `read+manage` находит, переименовывает/перемещает,
-  отправляет в корзину и восстанавливает работу через tools без web действий;
-  нет manage, чужой tenant, stale CAS, revoked/expired token и ABA retry дают
-  корректный отказ без изменений. После restore old share/grants всё ещё закрыты,
-  версии/bytes/quota сохранены. Выпуск новой ссылки по-прежнему требует `share`.
 
-Это продолжение R09 management, не добавление permanent deletion или account
-lifecycle R17. Пока пакет не реализован и не проверен реальным клиентом, не
-объявлять полный MCP management завершённым.
+### Контракт инструментов управления
 
-### Implementation contract следующего пакета
-
-Уточнение 21.09.2026 после принятия trash backend: использовать существующие
-`updateArtifactMetadataInTransaction` и `transitionArtifactLifecycleInTransaction`;
-web wrappers не вызывать из внешней transaction. Подтверждение человеком на
-каждую mutation не требуется. `manage` не подразумевает `read`, `capture`,
+Tools вызывают `updateArtifactMetadataInTransaction` и
+`transitionArtifactLifecycleInTransaction`; web wrappers из внешней transaction
+не вызываются. Подтверждение человеком на каждую mutation не требуется. `manage` не подразумевает `read`, `capture`,
 `revise` или `share`; для самостоятельного поиска и изменения выдать
-`context+read+manage`. Default выдачи остаётся context+capture; manage opt-in.
+`context+read+manage`. Токен на странице «Агенты» по умолчанию — context+capture,
+manage выбирается явно; на странице согласия OAuth отмечены все права, любое можно снять.
 
 | Tool | Scope | Strict input / результат |
 |---|---|---|
@@ -169,7 +157,7 @@ tenant dumps ради списка. Новые metadata reads можно вын�
 snapshot без audit, а последующий ABA переход оставляет старый запрос409. Не
 обходить эту проверку бессрочным operation receipt. Rename/move, напротив, требуют
 key: после успеха expectedTitle уже изменился и обычный повтор CAS дал бы409.
-Расширить `agent_operations.operation` значением `metadata`; прочие columns/FK и
+Миграция 014 расширяет `agent_operations.operation` значением `metadata`; прочие columns/FK и
 unique `(tenant_id,operation,idempotency_key)` сохраняются.
 
 Metadata transaction: `withServiceActorTransaction(actor,'manage',...)` → поиск
@@ -194,23 +182,12 @@ DB scopes, даже если tools/list был получен до revoke. Manag
 readOnlyHint false; trash destructiveHint true (отзывает доступ), restore и
 metadata false; hints не заменяют авторизацию.
 
-Следующая свободная migration меняет только named scopes CHECK (max6 и allowlist
-с manage; позже с `source:read` scopes стало 7) и operation CHECK. Без UPDATE scopes существующих connections. Catalog
-миграций обновляется вместе с migration. `polka_context` добавляет management
-capability, readOnly учитывает manage. Tool visibility зависит от scope; resource
+Миграция 014 меняет только named scopes CHECK (max6 и allowlist с manage; позже
+с `source:read` scopes стало 7) и operation CHECK, без UPDATE scopes существующих
+connections. `polka_context` сообщает management capability, readOnly учитывает
+manage. Tool visibility зависит от scope; resource
 `polka://guides/management-v1` объясняет CAS, receipt vs current state, trash quota
-и неизменность старых ссылок. Token issue UI явно показывает manage и не выбирает
-его автоматически. Старый локальный z.enum scopes в AgentConnections обновить.
-
-Разрешённые файлы backend: новая migration, packages/migrations.ts,
-packages/contracts/index.ts, apps/server/agent-management.ts, mcp-server.ts,
-service-auth.ts только при необходимости типа scope, tests/agent-management.test.ts,
-tests/mcp-transport.test.ts, migrations.test.ts и точечное подключение tests в
-package.json. `scripts/restore-drill.ts` — только синхронизация schema catalog/
-проверяемой generation с новой migration, без расширения restore сценария.
-Общие metadata/trash services менять только для необходимого reuse,
-не копировать их реализации. UI scopeOptions/schema в AgentConnections.tsx и
-guide copy — отдельный согласованный пакет; app/main/health не затрагивать.
+и неизменность старых ссылок. Выдача токена показывает manage отдельным правом.
 
 Acceptance: tools/list видимость read/manage отдельно; read-only старый token
 не меняет данные после migration; metadata atomic receipt/replay/changed input/
@@ -219,6 +196,4 @@ lifecycle exact retry/ABA и старые links/grants closed после restore
 expiry, disabled account перед service call и replay дают отказ без mutations;
 agent audit identity; list/get/folders не возвращают share secrets; active/trash
 pagination одинаковых timestamps с microseconds и state mismatch. Проверить
-оригиналы/версии/quota неизменными и старые web tests. После SDK/service tests
-отдельно native CLI с read+manage выполняет get→rename/move→trash→list trash→restore
-без web действия. Это не закрывает всё ещё отдельную приёмку второго клиента.
+оригиналы/версии/quota неизменными и старые web tests (`tests/agent-management.test.ts`).

@@ -21,7 +21,7 @@
   grants также не оживают. Уже доставленные браузеру bytes отозвать невозможно;
   гарантируется отказ новым запросам после commit, а не удаление полученной копии.
 
-Добавить следующую свободную migration (не фиксировать номер до merge):
+Миграция 013:
 `artifacts.trashed_at timestamptz NULL`,
 `artifacts.lifecycle_version integer NOT NULL DEFAULT 0 CHECK (...>=0)`.
 Это отдельный CAS счётчик переходов active↔trash, не номер revision.
@@ -29,6 +29,8 @@
 и trash list `(tenant_id,trashed_at DESC,id DESC) WHERE trashed_at IS NOT NULL`.
 DTO Artifact получает `trashedAt: string|null`, `lifecycleVersion: number`.
 Не менять immutable revision/derivative schema и не добавлять cascade delete.
+Переходы — `transitionArtifactLifecycleInTransaction` в `apps/server/artifact-trash.ts`
+с переданным PoolClient/Actor; HTTP routes и MCP tools вызывают её, а не копируют.
 
 ## API и переходы
 
@@ -112,12 +114,10 @@ fresh capture без artifactId создаёт новую active работу. `
 сохраняет connection binding и receipt для восстановления после потерянного
 ответа; добавить artifactState (`active`/`trashed`) для saved receipt и не
 показывать trash preview как доступный. `mcp-server.ts` list active-only;
-prepare/share для trash отказывают. Новые MCP management tools и `manage` scope
-не входят только в текущий server/UI пакет. Это временная граница реализации,
-не human-only политика: полное управление через агента остаётся требованием.
-Ближайший follow-up описан в [MCP_IMPLEMENTATION_SPEC.md](MCP_IMPLEMENTATION_SPEC.md#management-follow-up-r09).
-Авторизованный агент выполняет rename/move/trash/restore без обязательного
-подтверждения человеком, через те же tenant/CAS services.
+prepare/share для trash отказывают. Агент с правом `manage` выполняет
+rename/move/trash/restore (`polka_update_artifact`, `polka_move`, `polka_trash`,
+`polka_restore`) без обязательного подтверждения человеком, через те же
+tenant/CAS services; контракт — [MCP_IMPLEMENTATION_SPEC.md](MCP_IMPLEMENTATION_SPEC.md#управление-работами-через-mcp-r09).
 
 ## UI и acceptance
 
@@ -154,19 +154,7 @@ prepare/share для trash отказывают. Новые MCP management tools
 ## Принятые продуктовые решения и оставшиеся границы
 
 R09 не задаёт owner-download policy в корзине: этот контракт разрешает export
-ради R17, но запрещает выполнение preview до restore. Папки сейчас не удаляются,
-поэтому исходный folder_id сохраняется; будущая folder deletion требует отдельной
-политики. Корзина не освобождает quota и не имеет срока хранения. Эти решения
+ради R17, но запрещает выполнение preview до restore. Restore возвращает исходный
+folder_id; удалить можно только папку без работ на полке, и работы из неё в корзине
+после restore оказываются «без папки». Корзина не освобождает quota и не имеет срока хранения. Эти решения
 нужно отражать в интерфейсе, а не выдавать за завершённый account deletion R17.
-
-## Следующий backend пакет после restore drill
-
-Сначала migration/DTO и `artifact-trash.ts`: общие InTransaction переходы с
-переданным PoolClient/Actor и owner wrappers. Не делать service, который требует
-session cookie внутри business logic: следующий MCP adapter передаст проверенный
-ServiceActor через существующий transaction runner и запишет agent audit identity.
-Затем последовательно закрыть upload/share/build/grant access paths из этого
-контракта, добавить thin HTTP handlers/list и integration assertions 1–5.
-Выпуск кнопок UI зависит от прохождения backend доступа/гонок, а не наоборот.
-Общая auth/transaction логика не копируется в будущие MCP tools. Реализацию не
-начинать до завершения отдельного restore пакета и назначения root.
