@@ -1,3 +1,4 @@
+import { shelfSnapshotForAgent } from "./shelf-snapshot.ts";
 import { agentFolderScope } from "./agent-scope.ts";
 import { issueProjectUploadToken } from "./project-upload.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
@@ -541,6 +542,23 @@ export function createMcpServer(actor: ServiceActor) {
         annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       },
       async (input) => asToolResult(await listArtifactsForAgent(actor, input)),
+    );
+    server.registerTool(
+      "polka_snapshot",
+      {
+        title: "The shelf at a moment",
+        description:
+          "The shelf as it stood at a past moment (at: ISO 8601 with a zone, not in the future): the works that existed and were not in the trash then, each with the version that was latest then (revision: id, number, filename, mime, size, createdAt) and the version accepted then (acceptedRevisionId; null: none was accepted by then). Title and folder are the current ones: they are not versioned. Up to 100 per call (limit, default 50), then pass nextCursor as cursor. For a report take a moment at least a minute ago; read a version's content with polka_read_source by revision.id. Same as GET /api/v1/snapshot.",
+        inputSchema: z
+          .object({
+            at: z.string().min(1).max(64),
+            limit: z.number().int().min(1).max(100).optional(),
+            cursor: uuid.optional(),
+          })
+          .strict(),
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      },
+      async (input) => asToolResult(await shelfSnapshotForAgent(actor, input)),
     );
     server.registerTool(
       "polka_get_artifact",

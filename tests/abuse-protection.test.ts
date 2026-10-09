@@ -855,11 +855,11 @@ test("classify workers wait for a slot, and the wait is not part of the deadline
   const before = workerSlots().limit;
   workerSlots(1);
   try {
-    // Just over the inline limit, with the 150 ms deadline of the start test
-    // above: a page waiting for the one slot behind two others would miss it
-    // if the wait counted.
+    // Just over the inline limit, with the deadline of the start test above:
+    // a page waiting for the one slot behind two others (each starting its
+    // worker) would miss it if the wait counted.
     const page = `<!doctype html><title>Отчёт</title><p>${"Обычный абзац отчёта. ".repeat(760)}</p>`;
-    const reads = [0, 1, 2].map(() => inspectHtmlBounded(page, 150));
+    const reads = [0, 1, 2].map(() => inspectHtmlBounded(page, 1_000));
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(workerSlots(), { limit: 1, running: 1, waiting: 2 });
     for (const read of await Promise.all(reads))

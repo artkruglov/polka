@@ -1,3 +1,4 @@
+import { shelfSnapshotForMember } from "./shelf-snapshot.ts";
 import { readFile } from "node:fs/promises";
 import {
   createServicePrincipal,
@@ -1042,6 +1043,10 @@ export async function createApp() {
   });
   app.get("/api/artifacts/:id", async (req) =>
     getArtifact(await identity(req, SHELF), id(req)),
+  );
+  // «Полка на дату» (docs/specs/SHELF_SNAPSHOT.md): the shelf the page shows, read-only.
+  app.get("/api/snapshot", async (req) =>
+    shelfSnapshotForMember(await identity(req, SHELF), (req.query ?? {}) as never),
   );
   app.get("/api/trash", async (req) => {
     const actor = await identity(req, SHELF);

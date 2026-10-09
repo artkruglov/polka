@@ -94,7 +94,7 @@ const SHELF_KEY = "polka:shelf";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Only the shelf's own pages follow it: «Сохранить», templates and the rest
 // work with the account's own shelf, as their pages say.
-const SHELF_PAGES = /^\/(?:$|trash$|works\/)/;
+const SHELF_PAGES = /^\/(?:$|trash$|snapshot$|works\/)/;
 let shelf: string | null = (() => {
   if (typeof location === "undefined" || !SHELF_PAGES.test(location.pathname)) return null;
   const fromUrl = new URLSearchParams(location.search).get("shelf");
@@ -261,6 +261,20 @@ export type ShelfKind = "pages" | "documents" | "images" | "other";
 export type ShelfCounts = Record<ShelfKind | "all", number>;
 export type ShelfRole = "owner" | "admin" | "curator" | "author" | "reader";
 export type Shelf = { id: string; kind: "personal" | "team"; name: string | null; role: ShelfRole };
+/** One work of «Полка на дату» (docs/specs/SHELF_SNAPSHOT.md). */
+export type SnapshotItem = {
+  id: string;
+  title: string;
+  folderId: string | null;
+  /** The version that was the latest at that moment. */
+  revision: { id: string; number: number; filename: string; mime: string; size: number; totalSize: number; createdAt: string };
+  /** The version accepted at that moment; null: none was. */
+  acceptedRevisionId: string | null;
+  acceptedRevisionNumber: number | null;
+  /** What is true of the work now. */
+  now: { latestRevisionNumber: number | null; trashed: boolean };
+};
+export type ShelfSnapshot = { at: string; items: SnapshotItem[]; nextCursor: string | null };
 export type ShelfMember = {
   accountId: string;
   name: string;
@@ -402,6 +416,9 @@ export const client = {
         ...(order.accepted ? { accepted: "1" } : {}),
       })}`,
     ),
+  /** The open shelf as it stood at a moment, read-only. */
+  snapshot: (at: string, cursor?: string) =>
+    request<ShelfSnapshot>(`/snapshot?${new URLSearchParams({ at, limit: "50", ...(cursor ? { cursor } : {}) })}`),
   trash: (cursor?: string) =>
     request<{ items: Artifact[]; nextCursor: string | null }>(
       `/trash${cursor ? `?${new URLSearchParams({ cursor })}` : ""}`,
