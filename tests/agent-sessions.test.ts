@@ -412,6 +412,8 @@ test("managed settings send every session through the hook", async () => {
   const settings = managedSettings({ script: "/Library/Application Support/Polka/polka-sessions.mjs", origin: "https://polka.example.com" });
   assert.deepEqual(settings.env, { POLKA_SESSIONS: "on", POLKA_ENDPOINT: "https://polka.example.com" });
   assert.equal(settings.hooks.SessionEnd[0].hooks[0].command, '"node" "/Library/Application Support/Polka/polka-sessions.mjs" hook');
+  // Above SessionEnd's 1.5 s default: a hook in settings that asks for more raises the budget.
+  assert.equal(settings.hooks.SessionEnd[0].hooks[0].timeout, 10);
   const out: string[] = [];
   assert.equal(await main(["managed-settings", "--script", "/opt/polka/polka-sessions.mjs", "--endpoint", "https://polka.example.com/x"], { env: {}, stdout: { write: (t: string) => out.push(t) }, stderr: { write: () => true } }), 0);
   assert.equal(JSON.parse(out.join("")).env.POLKA_ENDPOINT, "https://polka.example.com");
