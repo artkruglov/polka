@@ -7,12 +7,11 @@
   </a>
 </p>
 
-<h3 align="center">Сделали с агентом — покажите другим.</h3>
+<h3 align="center">Разложите ИИ по полочкам.</h3>
 
 <p align="center">
-  Полка хранит отчёты, страницы и прототипы, сделанные с Claude, ChatGPT, Claude&nbsp;Code или Codex,<br>
-  и открывает их по ссылке: получателю не нужен аккаунт в Claude или ChatGPT.<br>
-  Агент работает с папкой на Полке между чатами: перечисляет файлы, правит их и сохраняет версию; другие чаты и агенты находят её по тексту.
+  Общее место для всего, что люди делают с ИИ-агентами: Claude, ChatGPT, Claude&nbsp;Code, Codex.<br>
+  Агент кладёт работу на Полку — она открывается по ссылке, команда её обсуждает, другой агент продолжает.
 </p>
 
 <p align="center">
@@ -20,33 +19,24 @@
   <a href="https://polochka.app/discover">Лента</a> ·
   <a href="docs/README.md">Документация</a> ·
   <a href="https://polochka.app/enterprise">Для компаний</a> ·
-  <a href="README_EN.md">English</a>
+  <a href="README_EN.md"><b>English</b></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/artkruglov/polka/actions/workflows/verify.yml"><img src="https://github.com/artkruglov/polka/actions/workflows/verify.yml/badge.svg" alt="Проверки CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-1f4fff" alt="Лицензия AGPL-3.0"></a>
-  <a href="COMMERCIAL.md"><img src="https://img.shields.io/badge/коммерческая_лицензия-есть-1f4fff" alt="Есть коммерческая лицензия"></a>
-  <a href="https://github.com/artkruglov/polka/tags"><img src="https://img.shields.io/github/v/tag/artkruglov/polka?sort=semver&label=версия&color=0f1420" alt="Последняя версия"></a>
+  <a href="https://github.com/artkruglov/polka/releases/latest"><img src="https://img.shields.io/github/v/release/artkruglov/polka?label=версия&color=0f1420" alt="Последняя версия"></a>
   <a href="docs/status.md"><img src="https://img.shields.io/badge/статус-prerelease-f59e0b" alt="Статус: prerelease"></a>
   <a href="docs/connect-agents.md"><img src="https://img.shields.io/badge/MCP-Streamable_HTTP-0f1420" alt="MCP"></a>
-  <a href="https://polochka.app/llms.txt"><img src="https://img.shields.io/badge/llms.txt-есть-0f1420" alt="llms.txt"></a>
 </p>
 
 <p align="center">
-  <a href="https://polochka.app"><img src="docs/screenshots/landing.png" alt="Главная Полки: «Сделали с агентом. Покажите другим.» и фраза для агента" width="880"></a>
+  <a href="https://polochka.app"><img src="docs/screenshots/landing.png" alt="Главная Полки и фраза для агента" width="880"></a>
 </p>
 
-## Рабочее место для агентов
-
-Работа-проект — папка с версиями, которую агент берёт, правит и сохраняет следующей версией, а человек открывает по ссылке без аккаунта. Позиционирование — [POSITIONING](docs/specs/POSITIONING.md), состав — [AGENT_WORKSPACE](docs/specs/AGENT_WORKSPACE.md) и [AGENT_ACCESS_AND_MEMORY](docs/specs/AGENT_ACCESS_AND_MEMORY.md).
-
-- **Папка по MCP, без сети:** `polka_list_files`, `polka_read_file`, `polka_change_files` (добавить, заменить, удалить файлы; остальные копирует сервер); по HTTP `GET /api/v1/works/:id/file`, `POST /api/v1/works/:id/changes`; из терминала `polka pull/push`.
-
-- **Принятая версия и ответственный** у работы: пункт «Принятая версия» в меню работы. Сама отметка ссылку не двигает, а новая версия отметку не снимает.
-- **Агенты читают полку:** `GET /api/v1/works` (поиск по тексту с ранжированием, `since` — что изменилось), `GET /api/v1/events` (лента изменений для опроса), `polka_list` с теми же параметрами; заметка полки «как у нас принято» приходит в `polka_context`. [PUBLISH_API](docs/PUBLISH_API.md#чтение-полки-get-apiv1works-get-apiv1worksartifactid-get-apiv1events).
-- **Режим ссылки:** агент без человека (сервисный доступ) не двигает закреплённую ссылку, пока куратор не включил «следует за новыми версиями». Агент с вашим токеном работает как раньше.
-- **На своей установке** (`TEAM_SHELVES=on`, `SERVICE_ACCOUNTS=on`): поиск по нескольким полкам отделов, сервисные доступы с ответственным человеком и короткие токены задач для cron и CI.
+- **Полка для работ агентов.** Страница, прототип, дашборд или целая папка проекта — агент сохраняет её одной фразой. Работа открывается по ссылке без аккаунта и работает в песочнице; каждая правка — новая неизменяемая версия; другой чат или агент находит работу по словам из текста и продолжает.
+- **Память сессий.** На своей установке сессии Claude Code и Codex уходят на Полку: что делал агент, какие команды запускал, к какому пулл-реквесту пришёл. Секреты скрываются ещё на машине ([AGENT_SESSIONS](docs/specs/AGENT_SESSIONS.md)).
+- **Для компаний.** Своя установка на одной VM, полки отделов с ролями, вход через IdP. Коммерческая редакция добавляет центр управления агентами для службы ИБ: секреты, адреса и MCP-серверы, опасные команды, расход ([COMMERCIAL.md](COMMERCIAL.md)).
 
 ## Быстрый старт
 
@@ -214,7 +204,7 @@ npm run verify         # всё перед push; то же проверяет Gi
 |---|---|---|---|
 | Цена | Бесплатно на время пилота | Бесплатно по AGPL-3.0 | По договору |
 | Где данные | Yandex Cloud, Россия | На ваших серверах | На ваших серверах |
-| Что есть | Открытое ядро; полки отделов выключены до пилота (`TEAM_SHELVES=off`) | Всё открытое ядро: полки отделов, роли, агенты по полкам, администратор компании, вход через IdP | Ядро и закрытое расширение для организаций: ссылки только для сотрудников, политика ссылок, агент только к папке, журнал агентов с выгрузкой в SIEM; дальше — интеграции, SAML и SCIM, установка без интернета |
+| Что есть | Открытое ядро; полки отделов выключены до пилота (`TEAM_SHELVES=off`) | Всё открытое ядро: полки отделов, роли, агенты по полкам, администратор компании, вход через IdP | Ядро и закрытое расширение для организаций: центр управления агентами (сессии сотрудников, секреты, адреса и MCP, опасные команды, расход), ссылки только для сотрудников, политика ссылок, агент только к папке, журнал агентов с выгрузкой в SIEM, комментарии в Jira и Битрикс24, выгрузка принятых версий; дальше — SAML и SCIM, установка без интернета |
 | Свои изменения кода | — | Даёте пользоваться изменённой Полкой — публикуете их по AGPL-3.0 | Можно не публиковать |
 | Поддержка и SLA | — | — | По договору |
 
