@@ -165,7 +165,7 @@ cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 
 ## Восстановление из дампа
 
-Для этой формы установки восстановление — это дамп БД из `BACKUP_BUCKET` плюс versioned-бакет объектов `S3_BUCKET` как есть. [deploy/RESTORE.md](../RESTORE.md) описывает отдельный guarded-режим с erasure ledger; к hosted-форме он пока не применим.
+Для этой формы установки восстановление — это дамп БД из `BACKUP_BUCKET` плюс versioned-бакет объектов `S3_BUCKET` как есть. Если после дампа кого-то удаляли, журнал стираний применяется к восстановленной базе (шаг 5 ниже, `restore-reconcile`); общий контракт — [deploy/RESTORE.md](../RESTORE.md).
 
 Ключ бэкапа только пишет, поэтому для скачивания нужен ключ с правом чтения `BACKUP_BUCKET`. AWS CLI есть в локальном образе `polka-backup:local`. Ниже `<S3_ENDPOINT>` и `<BACKUP_BUCKET>` — значения из `hosted.env`.
 
