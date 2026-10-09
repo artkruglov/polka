@@ -150,7 +150,7 @@ export function isHumanAgent(userAgent: unknown): boolean {
   return (
     typeof userAgent === "string" &&
     userAgent.length <= 1024 &&
-    /^Mozilla\/5\.0 \(/.test(userAgent) &&
+    userAgent.startsWith("Mozilla/5.0 (") &&
     !BOT.test(userAgent)
   );
 }
@@ -214,7 +214,7 @@ export async function flushAnalytics() {
   for (let round = 0; round < 20; round++) {
     await new Promise((resolve) => setImmediate(resolve));
     if (!pending.size) return;
-    await Promise.all([...pending]);
+    await Promise.all(pending);
   }
 }
 
@@ -276,7 +276,7 @@ export function trackSignup(c: PoolClient, accountId: string, method: SignupMeth
     c,
     event("signup_completed", {
       actor: actorKey(accountId),
-      props: { method, ...(clean ?? {}) },
+      props: { method, ...clean },
       source: sourceLabel(clean),
       detail: method,
     }),

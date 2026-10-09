@@ -279,7 +279,7 @@ export type HeroSetup = {
   id: HeroClientId;
   lead: string;
   copies: SetupCopy[];
-  then: string;
+  next: string;
 };
 
 export function heroSetup(origin: string, id: HeroClientId): HeroSetup {
@@ -291,28 +291,28 @@ export function heroSetup(origin: string, id: HeroClientId): HeroSetup {
         id,
         lead: "В claude.ai или Claude Desktop: Settings → Connectors → Add custom connector. Вставьте адрес:",
         copies: [url(mcp)],
-        then: `Нажмите Add, затем Connect — ${allow}`,
+        next: `Нажмите Add, затем Connect — ${allow}`,
       };
     case "claude-code":
       return {
         id,
         lead: "Одна команда в терминале ставит подключение и скилл Полки:",
         copies: [command(CLAUDE_PLUGIN_INSTALL)],
-        then: `Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate — ${allow}`,
+        next: `Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate — ${allow}`,
       };
     case "codex":
       return {
         id,
         lead: "Одна команда в терминале ставит подключение и скилл Полки:",
         copies: [command(CODEX_PLUGIN_INSTALL)],
-        then: `Затем ${CODEX_LOGIN} — ${allow}`,
+        next: `Затем ${CODEX_LOGIN} — ${allow}`,
       };
     case "other":
       return {
         id,
         lead: "Адрес MCP-сервера (Streamable HTTP, вход через OAuth):",
         copies: [url(mcp), command(SKILL_INSTALL, "Скилл Полки для агента:")],
-        then: `При подключении ${allow}`,
+        next: `При подключении ${allow}`,
       };
   }
 }

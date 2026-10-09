@@ -87,7 +87,7 @@ export function FirstRunSteps({
   const hints = clientHints(origin);
   const busy = connections.status === "loading" || works.status === "loading";
   const titleId = "first-run-title";
-  const [agent, save, share] = model.steps;
+  const [agent] = model.steps;
   const tone = (id: FirstRunStepId) => (model.next === id ? "primary" : "secondary");
   const fromShare = arrival === "share" && !agent.done;
   return (

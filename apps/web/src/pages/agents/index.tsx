@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Check, RefreshCw, X } from "lucide-react";
 import { z } from "zod";
 import { agentScopeSchema, type AgentConnection, type AgentScope } from "../../../../../packages/contracts/index.ts";
-import { ApiError, client, request } from "../../shared/api/client.ts";
+import { ApiError, client } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 import { loadIdentities, type AccountIdentities } from "../../entities/account/model/identities.ts";

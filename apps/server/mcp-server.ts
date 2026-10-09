@@ -31,7 +31,7 @@ import {
   shareFromAgent,
 } from "./shares.ts";
 import { editsSchema } from "../../packages/contracts/comments.ts";
-import { agentChangeFilesInputSchema, agentChangeFilesObject, changeFiles, reviseWithEdits } from "./agent-edits.ts";
+import { agentChangeFilesObject, changeFiles, reviseWithEdits } from "./agent-edits.ts";
 import { readWorkFileByPath, workFilesForAgent } from "./work-files.ts";
 import {
   agentCommentsInputSchema,

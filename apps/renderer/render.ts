@@ -140,7 +140,7 @@ export async function renderPage(
       return false;
     };
     for (const frame of page.frames().slice(1, 9)) {
-      if (!(/^https:/.test(frame.url()) || artifactFrame(frame)) || left() < 1_000) continue;
+      if (!(frame.url().startsWith("https:") || artifactFrame(frame)) || left() < 1_000) continue;
       const content = await frame.content().catch(() => null);
       if (!content || frameBytes + Buffer.byteLength(content) > RENDER_MAX_HTML) continue;
       frameBytes += Buffer.byteLength(content);

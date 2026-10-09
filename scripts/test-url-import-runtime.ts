@@ -139,6 +139,7 @@ try {
       "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1) OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=$2) AS found",
       [name, runtimeRole],
     );
+    // oxlint-disable-next-line no-unsafe-finally -- residue left behind must fail the run, like a failed DROP above
     if (remains.rows[0].found) throw new Error("Synthetic database/role cleanup incomplete");
     console.log(
       JSON.stringify({

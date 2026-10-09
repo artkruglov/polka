@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { currentShelf, withShelf } from "../../shared/api/client.ts";
+import { withShelf } from "../../shared/api/client.ts";
 import { shelfAccess, useTeamShelf } from "../../entities/shelf/model.ts";
 import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import "./styles.css";

@@ -9,6 +9,7 @@
 
 // Zero-width, soft hyphen, combining grapheme joiner, bidi controls, variation
 // selectors, Hangul fillers: invisible characters that split a word.
+// oxlint-disable-next-line no-misleading-character-class -- each mark is matched alone, never as part of a sequence
 const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]/g;
 const MARKS = /\p{Mn}/gu;
 

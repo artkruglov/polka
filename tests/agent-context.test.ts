@@ -13,7 +13,7 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { captureFromAgent } from "../apps/server/agent-capture.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
-import { sourceForAgent, buildAgentContext, publishTemplate, listTemplates } from "../apps/server/agent-context.ts";
+import { sourceForAgent, publishTemplate, listTemplates } from "../apps/server/agent-context.ts";
 import { createApp } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { zipFiles } from "../apps/server/zip-files.ts";

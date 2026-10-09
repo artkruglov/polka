@@ -157,7 +157,7 @@ test("with a bot configured, a request also goes to the operator's Telegram chat
     assert.equal(sent[0].body.parse_mode, undefined, "plain text, nothing interpreted");
     assert.match(
       sent[0].body.text,
-      new RegExp(`^Заявка «Для компаний»\nКонтакт: @tg_${marker} — https://t\.me/tg_${marker}\n`),
+      new RegExp(`^Заявка «Для компаний»\nКонтакт: @tg_${marker} — https://t\\.me/tg_${marker}\n`),
     );
     assert.match(sent[0].body.text, new RegExp(`Пилот на 30 человек ${marker}$`));
     // Telegram failing never fails the request.

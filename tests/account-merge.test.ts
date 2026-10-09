@@ -4,7 +4,7 @@
 // a second shelf opened by Яндекс ID with works, links, folders, a note, an
 // agent token and an OAuth connector, a library membership and analytics.
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, test } from "node:test";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";

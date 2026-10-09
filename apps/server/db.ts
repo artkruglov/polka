@@ -88,7 +88,7 @@ export async function settled() {
   // A request's after-commit work is queued a tick after its response.
   await new Promise((resolve) => setImmediate(resolve));
   while (pending.size) {
-    await Promise.allSettled([...pending]);
+    await Promise.allSettled(pending);
     await new Promise((resolve) => setImmediate(resolve));
   }
 }

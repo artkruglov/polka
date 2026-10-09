@@ -999,7 +999,7 @@ async function dockerPostgresContainer() {
   return names[0];
 }
 
-function runCapture(
+async function runCapture(
   command: string,
   args: string[],
   options: {
@@ -1008,9 +1008,10 @@ function runCapture(
     env?: NodeJS.ProcessEnv;
   } = {},
 ) {
-  return new Promise<string>(async (resolve, reject) => {
-    const input = options.stdinFile ? await open(options.stdinFile, "r") : null;
-    const output = options.stdoutFile ? await open(options.stdoutFile, "w", 0o600) : null;
+  // Opened before the promise: a failed open rejects instead of leaving it pending.
+  const input = options.stdinFile ? await open(options.stdinFile, "r") : null;
+  const output = options.stdoutFile ? await open(options.stdoutFile, "w", 0o600) : null;
+  return new Promise<string>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: options.env ?? process.env,
@@ -1703,6 +1704,7 @@ const admin = new pg.Client({ connectionString: adminUrl });
 await admin.connect();
 let report: Record<string, unknown> | null = null;
 let syntheticResidueRemoved = false;
+const cleanupErrors: string[] = [];
 try {
   if ((await databaseExists(admin, names.sourceDatabase)) || (await databaseExists(admin, names.targetDatabase)))
     throw new Error("Synthetic database collision before writes");
@@ -1795,7 +1797,7 @@ try {
     productionRestoreProven: false,
   };
 } finally {
-  const cleanupErrors: string[] = [];
+  /* oxlint-disable no-unsafe-finally -- these throws are caught just below and collected */
   if (created.ledgerBucket)
     try {
       const sentinel = await s3.send(
@@ -1832,6 +1834,7 @@ try {
     } catch (error) {
       cleanupErrors.push(error instanceof Error ? error.message : String(error));
     }
+  /* oxlint-enable no-unsafe-finally */
   for (const role of ["target", "source"] as const) {
     if (created[`${role}Bucket`])
       try {
@@ -1859,8 +1862,10 @@ try {
   await admin.end();
   s3.destroy();
   await rm(directory, { recursive: true, force: true });
-  if (cleanupErrors.length) throw new Error(`Synthetic cleanup failed: ${cleanupErrors.join("; ")}`);
+  // A failed drill keeps its own error; the cleanup failure is reported beside it.
+  if (cleanupErrors.length && !report) console.error(`Synthetic cleanup failed: ${cleanupErrors.join("; ")}`);
 }
+if (cleanupErrors.length) throw new Error(`Synthetic cleanup failed: ${cleanupErrors.join("; ")}`);
 if (!report) throw new Error("Restore drill did not produce a report");
 report.syntheticResidueRemoved = syntheticResidueRemoved;
 process.stdout.write(`${JSON.stringify(report)}\n`);

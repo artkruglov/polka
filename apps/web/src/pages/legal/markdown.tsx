@@ -24,7 +24,7 @@ function inline(text: string, key = ""): React.ReactNode[] {
     if (bold !== undefined) out.push(<strong key={id}>{inline(bold, `${id}-`)}</strong>);
     else if (code !== undefined) out.push(<code key={id}>{code}</code>);
     else if (label !== undefined) {
-      const target = LOCAL_LINKS[href] ?? (/^https:\/\//.test(href) ? href : null);
+      const target = LOCAL_LINKS[href] ?? (href.startsWith("https://") ? href : null);
       out.push(
         target ? (
           <a key={id} href={target}>

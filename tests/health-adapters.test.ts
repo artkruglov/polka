@@ -79,7 +79,7 @@ test("database adapter returns false on an aborted probe and closes the pool", a
   const adapter = createDatabaseHealthAdapter(databaseConfig, {
     createPool: () => ({
       connect: async () => ({
-        query: async (query) => {
+        query: async () => {
           queryStarted = true;
           await new Promise((resolve) => setTimeout(resolve, 10));
           return { rows: [] };

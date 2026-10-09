@@ -30,7 +30,7 @@ async function web(path: string, init: RequestInit = {}, includeOrigin = true) {
     headers: {
       ...(includeOrigin ? { origin: config.APP_ORIGIN } : {}),
       ...(cookie ? { cookie } : {}),
-      ...(init.headers ?? {}),
+      ...init.headers,
     },
   });
 }

@@ -51,7 +51,7 @@ export class RateLimiter {
           if (released) return;
           released = true;
           this.active--;
-          for (const wake of [...this.waiters]) wake();
+          for (const wake of this.waiters) wake();
         };
       }
       if (until > deadline || now >= deadline) return null;

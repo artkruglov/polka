@@ -9,7 +9,7 @@
 // The letter names no signal or finding, only that a person looks at it.
 import { config } from "./config.ts";
 import { limitAttempts } from "./auth.ts";
-import { db, transaction } from "./db.ts";
+import { transaction } from "./db.ts";
 import { sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
 
