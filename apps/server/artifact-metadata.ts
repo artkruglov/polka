@@ -1,7 +1,7 @@
 import { assertArtifactInAgentScope, assertFolderInAgentScope } from "./agent-scope.ts";
 import type { PoolClient } from "pg";
 import { updateArtifactMetadataSchema } from "../../packages/contracts/index.ts";
-import { db, transaction } from "./db.ts";
+import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { audit, getArtifact, type Actor } from "./artifacts.ts";
 import { assertMayChange, lockShelf } from "./shelves.ts";

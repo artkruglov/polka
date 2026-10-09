@@ -91,7 +91,7 @@ test("each client's hero step is the command /connect gives the agent", () => {
   }
   assert.equal(heroSetup(origin, "claude-code").copies[0].value, CLAUDE_PLUGIN_INSTALL);
   assert.equal(heroSetup(origin, "codex").copies[0].value, CODEX_PLUGIN_INSTALL);
-  assert.ok(heroSetup(origin, "codex").then.includes(CODEX_LOGIN));
+  assert.ok(heroSetup(origin, "codex").next.includes(CODEX_LOGIN));
   assert.ok(guide.includes(CODEX_LOGIN));
   const other = heroSetup(origin, "other").copies.map((copy) => copy.value);
   assert.deepEqual(other, [`${origin}/mcp`, SKILL_INSTALL]);

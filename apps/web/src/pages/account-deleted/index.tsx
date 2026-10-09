@@ -101,6 +101,7 @@ export function AccountDeleted() {
             {receipt.purgeAvailable
               ? `Данные с серверов удалятся не позже ${day(receipt.workingDataPolicyDeadline)}, из резервных копий исчезнут до ${day(receipt.backupRetentionPolicyDeadline)}.`
               : `Данные удалит оператор этой установки не позже ${day(receipt.workingDataPolicyDeadline)}.`}{" "}
+            {/* oxlint-disable-next-line react/purity -- the page re-renders on every poll, so the clock is fresh enough */}
             {receipt.workingDataPolicyDeadline && new Date(receipt.workingDataPolicyDeadline).getTime() < Date.now()
               ? "Срок уже прошёл: напишите оператору, он увидит сбой в журнале. "
               : ""}

@@ -56,7 +56,7 @@ async function saveText(title: string, text: string) {
 
 async function readAll(stream: Readable) {
   const chunks: Buffer[] = [];
-  await pipeline(stream, async function* (source) {
+  await pipeline(stream, async function (source) {
     for await (const chunk of source) chunks.push(chunk as Buffer);
   });
   return Buffer.concat(chunks);

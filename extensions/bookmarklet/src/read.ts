@@ -103,6 +103,7 @@ export function snapshotDocument(doc: Document): string {
   ))
     node.remove();
   for (const node of copy.querySelectorAll("*"))
+    // oxlint-disable-next-line no-useless-spread -- a copy: node.attributes is live and the loop removes from it
     for (const attribute of [...node.attributes]) {
       const name = attribute.name.toLowerCase();
       if (

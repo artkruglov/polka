@@ -276,7 +276,7 @@ before(async () => {
         .then(() => frameSessions.push(sessionId))
         .catch(() => {});
     }
-    for (const waiter of [...waiters]) waiter(message);
+    for (const waiter of waiters) waiter(message);
   });
   await send("Page.enable");
   await send("Runtime.enable");

@@ -62,7 +62,7 @@ function inlineInto(nodes: Tree.Element[], stored: Map<string, { mime: string; b
       for (const child of node.childNodes)
         if (child.nodeName === "#text") (child as Tree.TextNode).value = inlineCss((child as Tree.TextNode).value);
   }
-  for (const key of [...stored.keys()]) stored.delete(key);
+  stored.clear();
 }
 export class HtmlCaptureError extends Error {
   constructor(
@@ -181,6 +181,7 @@ export async function captureHtmlDocument(
   }
   walk(doc);
   if (stripScripts)
+    // oxlint-disable-next-line no-useless-spread -- a copy: the loop splices nodes
     for (const node of [...nodes]) {
       if (node.tagName === "script" || node.tagName === "noscript") {
         detach(node);

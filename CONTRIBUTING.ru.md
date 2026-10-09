@@ -29,7 +29,7 @@ npm run dev                      # http://127.0.0.1:4390
 ## Проверки перед pull request
 
 ```bash
-npm run check          # слои frontend, форматирование (Prettier) и TypeScript; npm run format исправляет форматирование
+npm run check          # слои frontend, форматирование (Prettier), линтер (oxlint, .oxlintrc.json) и TypeScript; npm run format исправляет форматирование
 npm run build
 npm test               # временные БД и bucket, после прогона удаляются
 npm test -- --live     # файлы из tests/live-suite.json с включённым viewer

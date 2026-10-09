@@ -330,7 +330,7 @@ export async function blockRevisionInTransaction(c: PoolClient, input: BlockInpu
       reason: input.reason,
       authority: input.authority ?? null,
       details: {
-        ...(input.details ?? {}),
+        ...input.details,
         evidence: await evidenceOf(c, input.revisionId),
         legalHold: !!input.legalHold,
         // Why and for how long the content is kept (152-FZ purpose record).
@@ -416,7 +416,7 @@ export async function blockCommentInTransaction(
     commentId: input.commentId,
     reason: input.reason,
     details: {
-      ...(input.details ?? {}),
+      ...input.details,
       evidence: { sha256: comment.sha256, length: Number(comment.length) },
     },
   });

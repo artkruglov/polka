@@ -47,7 +47,6 @@ import { beginEmailLogin, verifyEmailLogin } from "./email-auth.ts";
 import Fastify, { type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import { z } from "zod";
-import { randomBytes, randomUUID } from "node:crypto";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { assertStrongSession, identity, limitAttempts, signIn } from "./auth.ts";
@@ -85,12 +84,7 @@ import {
 } from "./artifacts.ts";
 import { readBlob, sha256 } from "./storage.ts";
 import { buildInlineRevision, getInlineBuildStatus, inlineBuildSelect } from "./bundle-derivatives.ts";
-import {
-  SERVED_BUILDER_VERSIONS_SQL,
-  SERVED_RUNTIME_PROFILES_SQL,
-  isServedBuilderVersion,
-  isServedRuntimeProfile,
-} from "./bundle-runtime-contract.ts";
+import { SERVED_BUILDER_VERSIONS_SQL, SERVED_RUNTIME_PROFILES_SQL } from "./bundle-runtime-contract.ts";
 import { LINK_MIME, MAX_BYTES, MIME, uuid } from "../../packages/contracts/index.ts";
 import { saveLink } from "./saved-links.ts";
 import { coverFor, coverImage } from "./covers.ts";
@@ -123,7 +117,7 @@ import {
   createAccountDeletionPlan,
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
-import { answeringAccountSql, linkShelfOpenSql, lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
+import { answeringAccountSql, linkShelfOpenSql, lockAnsweringAccount } from "./owner-state.ts";
 import {
   adminCompanyShelf,
   findEmployee,

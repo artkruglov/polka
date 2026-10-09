@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react"],
+  "categories": { "correctness": "error" },
+  "rules": {
+    // Sanitizers and header / CR-LF guards match control characters on purpose.
+    "no-control-regex": "off",
+    // `const { omitted, ...rest } = value` drops a field on purpose.
+    "no-unused-vars": ["error", { "ignoreRestSiblings": true }],
+    // The React compiler-style rules need a browser check per screen before each effect is changed.
+    "react/set-state-in-effect": "warn",
+    "react/refs": "warn",
+    "react-hooks/exhaustive-deps": "warn"
+  }
+}

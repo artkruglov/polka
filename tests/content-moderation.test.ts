@@ -30,7 +30,6 @@ import {
   setContentModels,
   spend,
   spentToday,
-  type ModelAnswer,
   type ModelClient,
 } from "../apps/server/content-filter/model.ts";
 import { setCodeReviewer } from "../apps/server/content-filter/code-model.ts";
@@ -183,9 +182,6 @@ const DRUGS = page(
   "<p>Мефедрон, альфа-пвп — купить с доставкой! Закладки по всему городу, в наличии, оптом. Прайс в боте.</p>",
 );
 const CSAM = page("<p>Скачать детское порно бесплатно, архив pthc, смотреть</p>", "Архив");
-const GAMBLING = page(
-  "<p>Онлайн казино Вулкан: фриспины за регистрацию, бонус на депозит, рабочее зеркало. Играть на деньги!</p>",
-);
 
 type Letter = { to: string; subject: string; text: string; html?: string };
 async function lettersWith(needle: string, count = 1) {

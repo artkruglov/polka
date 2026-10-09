@@ -144,7 +144,7 @@ export function cdnRole(reference: string | undefined): CdnRole | null {
   if (BABEL_PACKAGES.includes(cdn.name) || DROPPED_PACKAGES.includes(cdn.name)) return { kind: "drop" };
   const library = cdnLibrary(cdn.name);
   if (!library) return null;
-  if (library.name === "three" && /^examples\//.test(cdn.file)) {
+  if (library.name === "three" && cdn.file.startsWith("examples/")) {
     const addon = threeAddon(cdn.file);
     return addon?.module
       ? { kind: "addon", module: addon.module, name: addon.name }
@@ -183,7 +183,7 @@ export function vendoredSpecifier(reference: string) {
 
 function walk(node: Node, visit: (node: Node) => void) {
   visit(node);
-  for (const child of [...(node.childNodes ?? [])]) walk(child, visit);
+  for (const child of node.childNodes ?? []) walk(child, visit);
 }
 
 function remove(node: Node) {

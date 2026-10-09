@@ -9,7 +9,7 @@ const sides = (lines: DiffLine[]) => ({
 
 /** Length of the longest common subsequence, by dynamic programming. */
 function lcs(a: string[], b: string[]) {
-  const row = new Array(b.length + 1).fill(0);
+  const row = Array.from({ length: b.length + 1 }, () => 0);
   for (let i = 1; i <= a.length; i++) {
     let diagonal = 0;
     for (let j = 1; j <= b.length; j++) {

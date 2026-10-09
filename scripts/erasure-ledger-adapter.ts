@@ -1,7 +1,6 @@
 import {
   decodeErasureRecord,
   encodeErasureRecord,
-  erasureKey,
   validateErasureLedger,
   type ErasureEntry,
   type ErasureRecord,

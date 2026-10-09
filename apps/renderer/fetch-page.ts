@@ -21,7 +21,7 @@ export function robotsVia(get: ProxiedGet): RobotsSource {
       let answer;
       try {
         answer = await get(url, { maxBytes: 512 * 1024, timeoutMs: 8_000, accept: "text/plain" });
-      } catch (error) {
+      } catch {
         // Too large: RFC 9309 reads the first 500 KiB; here it counts as unreachable.
         return robotsFromAnswer(null, "");
       }

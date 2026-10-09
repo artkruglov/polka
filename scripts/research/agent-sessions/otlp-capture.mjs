@@ -68,7 +68,7 @@ createServer((req, res) => {
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
   req.on("end", () => {
-    const signal = (/\/v1\/(logs|metrics|traces)/.exec(req.url ?? "") ?? [, "other"])[1];
+    const signal = /\/v1\/(logs|metrics|traces)/.exec(req.url ?? "")?.[1] ?? "other";
     let body = Buffer.concat(chunks);
     if (req.headers["content-encoding"] === "gzip") body = gunzipSync(body);
     const json = String(req.headers["content-type"] ?? "").includes("json");

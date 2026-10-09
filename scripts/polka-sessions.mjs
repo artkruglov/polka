@@ -492,7 +492,7 @@ export async function parseClaude(file, redactor, { transcript = null, thinking 
       case "pr-link":
         if (
           typeof record.prUrl === "string" &&
-          /^https:\/\//.test(record.prUrl) &&
+          record.prUrl.startsWith("https://") &&
           !index.links.prs.includes(record.prUrl) &&
           index.links.prs.length < 100
         )

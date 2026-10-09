@@ -11,7 +11,7 @@ import { transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
-import { answeringAccountSql, lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
+import { answeringAccountSql, lockAnsweringAccount } from "./owner-state.ts";
 import { lockShelf } from "./shelves.ts";
 import { trackShareCreated, viaFor } from "./analytics.ts";
 import { dispatchModerationNotices } from "./moderation-mail.ts";
@@ -68,13 +68,6 @@ async function lockArtifact(c: PoolClient, actor: Actor, artifactId: string, req
   );
   if (!artifact) throw missing();
   return artifact;
-}
-
-async function revisionSignals(c: PoolClient, revisionId: string) {
-  const {
-    rows: [row],
-  } = await c.query("SELECT phishing_signals FROM revisions WHERE id=$1", [revisionId]);
-  return (row?.phishing_signals ?? []) as string[];
 }
 
 /** Where an owner appeals a block. */

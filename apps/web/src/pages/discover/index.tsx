@@ -187,13 +187,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
               onClose={() => setWelcome(false)}
             />
           )}
-          <main
-            ref={(node) => {
-              convert.stageRef.current = node;
-            }}
-            className="feed-stage"
-            aria-label={item.title}
-          >
+          <main ref={convert.stageRef} className="feed-stage" aria-label={item.title}>
             {!token ? (
               <p className="feed-state" role="alert">
                 Ссылка на материал недоступна.

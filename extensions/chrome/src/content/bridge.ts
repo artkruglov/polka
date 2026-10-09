@@ -1,3 +1,4 @@
+// oxlint-disable-next-line triple-slash-reference -- chrome.d.ts is a global script; the root tsconfig reaches this file through tests
 /// <reference path="../chrome.d.ts" />
 /*
  * Runs only on the user's Полка (registered for that origin alone, top frame).

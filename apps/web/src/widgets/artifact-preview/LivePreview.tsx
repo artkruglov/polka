@@ -84,7 +84,7 @@ export function LivePreview({
 
   useEffect(() => {
     const abort = new AbortController();
-    const currentGeneration = ++generation.current;
+    ++generation.current;
     launchAbort.current?.abort();
     launchAbort.current = null;
     setCapability("loading");

@@ -219,7 +219,7 @@ async function fetchJson(value: string, init: RequestInit = {}): Promise<Record<
       ...init,
       redirect: "error",
       signal: AbortSignal.timeout(10_000),
-      headers: { accept: "application/json", ...(init.headers ?? {}) },
+      headers: { accept: "application/json", ...init.headers },
     });
   } catch (error) {
     if (error instanceof IdpError) throw error;

@@ -143,6 +143,7 @@ test("rejects malformed pages and a paused body within the configured deadline",
     client: client(async () => ({
       VersionId: "v1",
       Body: {
+        // oxlint-disable-next-line require-yield -- a body that never sends a byte
         async *[Symbol.asyncIterator]() {
           await new Promise(() => undefined);
         },

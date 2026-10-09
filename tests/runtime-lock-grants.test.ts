@@ -30,7 +30,7 @@ function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (name === "node_modules") return [];
-    return statSync(path).isDirectory() ? sources(path) : /\.ts$/.test(name) ? [path] : [];
+    return statSync(path).isDirectory() ? sources(path) : name.endsWith(".ts") ? [path] : [];
   });
 }
 

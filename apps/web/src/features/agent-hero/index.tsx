@@ -198,7 +198,7 @@ export function AgentHeroView({
             </div>
           </div>
         ))}
-        <p className="agent-hero-then">{setup.then}</p>
+        <p className="agent-hero-then">{setup.next}</p>
       </div>
       <div className="agent-hero-foot">
         <a className="agent-hero-link" href={`/settings/agents?client=${selected}`}>

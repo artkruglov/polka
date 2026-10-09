@@ -179,6 +179,7 @@ try {
   );
   process.exitCode = 1;
 } finally {
+  /* oxlint-disable no-unsafe-finally -- these throws are caught just below, inside the finally */
   try {
     if (bucketCreated) {
       // This bucket was created by this invocation, never reused or supplied by a user.
@@ -210,6 +211,7 @@ try {
     console.error("Scratch bucket cleanup failed.");
     process.exitCode = 1;
   }
+  /* oxlint-enable no-unsafe-finally */
   try {
     if (databaseCreated) {
       await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);

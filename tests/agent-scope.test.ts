@@ -8,7 +8,6 @@ import pg from "pg";
 import type { PolkaExtension } from "../packages/extension-api/index.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createAccount } from "../apps/server/auth.ts";
-import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { listEventsForAgent } from "../apps/server/agent-events.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";

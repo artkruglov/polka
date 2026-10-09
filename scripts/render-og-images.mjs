@@ -63,7 +63,8 @@ try {
     if (message.id && pending.has(message.id)) {
       const { ok, fail } = pending.get(message.id);
       pending.delete(message.id);
-      message.error ? fail(new Error(message.error.message)) : ok(message.result);
+      if (message.error) fail(new Error(message.error.message));
+      else ok(message.result);
     } else if (message.method) events.get(message.method)?.();
   };
   const send = (method, params = {}) =>

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
-import { canonicalizeManifest, type BundleManifest } from "../packages/contracts/bundle.ts";
+import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { buildInlineBundle } from "../apps/server/bundle-inline.ts";
 
 const root = new URL("./fixtures/bundle-corpus/team-report/", import.meta.url);
