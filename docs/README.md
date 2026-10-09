@@ -1,5 +1,7 @@
 # Документация Полки
 
+*English: developer documentation is in [docs/en/](en/README.md).*
+
 Если вы здесь впервые, начните с [README](../README.md), затем прочитайте [архитектуру](architecture.md) и [состояние](status.md).
 
 ## Пользователю

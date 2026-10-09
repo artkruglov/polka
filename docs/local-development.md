@@ -1,5 +1,7 @@
 # Локальная разработка
 
+*English: [docs/en/local-development.md](en/local-development.md).*
+
 Нужны Node.js ≥ 22.16, npm и запущенный Docker. Все команды выполняются из корня репозитория.
 
 ## Первый запуск
