@@ -77,8 +77,8 @@ export function useCover(a: Artifact, near: boolean) {
       live = false;
       clearTimeout(timer);
     };
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- follows the picture's state, not each cover object the server returns
-  }, [near, isLink, a.revision.id, cover?.image]);
+    // Each answer is a new object, so a second "pending" asks again.
+  }, [near, isLink, a.revision.id, cover]);
   return cover;
 }
 
