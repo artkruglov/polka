@@ -8,6 +8,7 @@ import {
 } from "./service-principals.ts";
 import { setShareFollowMode } from "./share-follow.ts";
 import { acceptRevision, setWorkOwner } from "./artifact-acceptance.ts";
+import { proposeToFeed, readFeedProposal, withdrawFeedProposal } from "./feed-proposals.ts";
 import { openFileForExtension, revisionForExtension } from "./extension-content.ts";
 import { auditFeedHead, readAuditFeed } from "./extension-feed.ts";
 import { pdfConfigured, pdfForExtension } from "./renderer-pdf.ts";
@@ -1102,6 +1103,20 @@ export async function createApp() {
     const actor = await identity(req, SHELF);
     assertStrongSession(actor);
     return acceptRevision(actor, id(req), req.body);
+  });
+  // Proposals to «Лента» from a department shelf (feed-proposals.ts).
+  app.get("/api/artifacts/:id/feed-proposal", async (req) =>
+    readFeedProposal(await identity(req, SHELF), id(req)),
+  );
+  app.post("/api/artifacts/:id/feed-proposal", { bodyLimit: 2048 }, async (req) => {
+    const actor = await identity(req, SHELF);
+    assertStrongSession(actor);
+    return proposeToFeed(actor, id(req), req.body);
+  });
+  app.post("/api/artifacts/:id/feed-proposal/withdraw", async (req) => {
+    const actor = await identity(req, SHELF);
+    assertStrongSession(actor);
+    return withdrawFeedProposal(actor, id(req));
   });
   app.put("/api/artifacts/:id/owner", { bodyLimit: 1024 }, async (req) => {
     const actor = await identity(req, SHELF);

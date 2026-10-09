@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Bot,
   Check,
+  Newspaper,
   ChevronDown,
   Clock3,
   Download,
@@ -42,7 +43,7 @@ import {
 } from "../../entities/artifact/format.ts";
 
 export type ReaderAction =
-  "share" | "version" | "metadata" | "accept" | "trash" | "rework" | "agent-context";
+  "share" | "version" | "metadata" | "accept" | "feed" | "trash" | "rework" | "agent-context";
 /** The reader's views; «versions» is kept in the address as ?tab=versions. */
 export type ReaderTab = "work" | "versions";
 export const readerTabFromSearch = (search: string): ReaderTab =>
@@ -96,14 +97,15 @@ export function workMenu({
   setPanel,
   onDownload,
   onCopyForAgent,
-  access = { own: true, change: true, curate: true },
+  access = { own: true, change: true, curate: true, feed: false },
 }: Pick<Props, "work" | "shown" | "setPanel" | "onDownload"> & {
   onCopyForAgent: () => void;
   /**
    * own: one's own shelf (agent phrases resolve there); change: the role
-   * lets the account change this work (docs/specs/TEAM_SHELVES.md).
+   * lets the account change this work (docs/specs/TEAM_SHELVES.md); feed:
+   * a curator of a department shelf may propose it to «Лента» (DISCOVER_V2.md).
    */
-  access?: { own: boolean; change: boolean; curate: boolean };
+  access?: { own: boolean; change: boolean; curate: boolean; feed?: boolean };
 }): MenuAction[] {
   const download: MenuAction = {
     id: "download",
@@ -115,7 +117,7 @@ export function workMenu({
     onSelect: onDownload,
   };
   if (work.trashedAt) return [download];
-  const items: (MenuAction & { needs?: "own" | "change" | "curate" })[] = [
+  const items: (MenuAction & { needs?: "own" | "change" | "curate" | "feed" })[] = [
     {
       needs: "own",
       id: "copy-for-agent",
@@ -160,6 +162,13 @@ export function workMenu({
       onSelect: () => setPanel("accept"),
     },
     {
+      needs: "feed",
+      id: "feed",
+      label: "Предложить в Ленту",
+      icon: <Newspaper />,
+      onSelect: () => setPanel("feed"),
+    },
+    {
       needs: "change",
       id: "trash",
       label: "В корзину",
@@ -169,7 +178,7 @@ export function workMenu({
     },
   ];
   return items
-    .filter((item) => !item.needs || access[item.needs])
+    .filter((item) => !item.needs || !!access[item.needs])
     .map(({ needs: _needs, ...item }) => item);
 }
 
@@ -399,7 +408,12 @@ export function ArtifactReader({
               setPanel,
               onDownload,
               onCopyForAgent: () => void copyForAgent(),
-              access: { own: access.own, change: access.changes(work.author), curate: access.curate },
+              access: {
+                own: access.own,
+                change: access.changes(work.author),
+                curate: access.curate,
+                feed: !access.own && access.curate,
+              },
             })}
           />
         </div>

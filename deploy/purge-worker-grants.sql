@@ -58,10 +58,10 @@ BEGIN
     RAISE EXCEPTION 'Require a dedicated public schema and objects owned by schema_owner';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>67
+     OR (SELECT count(*) FROM public.schema_migrations)<>68
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>67 THEN
-    RAISE EXCEPTION 'Purge grants require exactly migrations 001 through 067';
+     OR (SELECT max(version) FROM public.schema_migrations)<>68 THEN
+    RAISE EXCEPTION 'Purge grants require exactly migrations 001 through 068';
   END IF;
 END $$;
 
