@@ -12,6 +12,9 @@ runs:
       run: |
         config=/etc/docker/daemon.json
         current=$(sudo cat "$config" 2>/dev/null || echo '{}')
-        echo "$current" | jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' | sudo tee "$config" >/dev/null
+        echo "$current" | jq '. + {"registry-mirrors": ["https://mirror.gcr.io"], "debug": true}' | sudo tee "$config" >/dev/null
         sudo systemctl restart docker
-        docker info --format '{{json .RegistryConfig.Mirrors}}'
+        docker version --format 'server {{.Server.Version}}'
+        docker info --format '{{json .RegistryConfig.Mirrors}} {{.Driver}} {{json .DriverStatus}}'
+        docker pull -q postgres:16-alpine@sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3 || true
+        sudo journalctl -u docker --since "-3min" --no-pager | grep -iE "mirror|registry-1|endpoint|Trying to pull|error" | tail -25 || true
