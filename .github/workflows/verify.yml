@@ -31,7 +31,6 @@ jobs:
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/docker-mirror
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -56,7 +55,10 @@ jobs:
             docker compose --env-file=.env -f deploy/compose.local.yml build objects
             docker save --output /tmp/minio-image.tar polka-local-minio:RELEASE.2025-04-22T22-12-26Z
           fi
-      - run: npm run infra:up
+      - name: PostgreSQL and MinIO
+        # Docker Hub's anonymous pull limit and its 5xx are shared by GitHub's
+        # runners and pass: a pull that fails is tried again after a pause.
+        run: for attempt in 1 2 3; do npm run infra:up && exit 0; sleep $((attempt * 60)); done; exit 1
       - name: Types and frontend layers
         run: node scripts/verify.mjs --only=check
       - name: Markdown links
@@ -82,7 +84,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/docker-mirror
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -94,12 +95,12 @@ jobs:
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/docker-mirror
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Application and backup images build
-        run: node scripts/verify.mjs --only=image,backup-image
+        # Base images come from Docker Hub; see the pause-and-retry note above.
+        run: for attempt in 1 2 3; do node scripts/verify.mjs --only=image,backup-image && exit 0; sleep $((attempt * 60)); done; exit 1
       # Interpolation errors in the shipped compose files surface here, not on
       # an operator's server. Placeholders stand in for the secrets.
       - name: Hosted compose file renders
@@ -124,7 +125,10 @@ jobs:
             docker compose --env-file=.env -f deploy/compose.local.yml build objects
             docker save --output /tmp/minio-image.tar polka-local-minio:RELEASE.2025-04-22T22-12-26Z
           fi
-      - run: npm run infra:up
+      - name: PostgreSQL and MinIO
+        # Docker Hub's anonymous pull limit and its 5xx are shared by GitHub's
+        # runners and pass: a pull that fails is tried again after a pause.
+        run: for attempt in 1 2 3; do npm run infra:up && exit 0; sleep $((attempt * 60)); done; exit 1
       # Migrations as the schema owner, the app as an unprivileged runtime
       # role; /healthz, /readyz and the front page must answer.
       - name: Image smoke (runtime role)
