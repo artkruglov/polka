@@ -28,7 +28,7 @@ export const RUNTIME_LIBRARIES = [
   },
   {
     name: "lucide-react",
-    version: "1.45.0",
+    version: "1.52.0",
     license: "ISC",
     imports: ["lucide-react"],
     global: "LucideReact",
@@ -60,7 +60,7 @@ export const RUNTIME_LIBRARIES = [
   },
   {
     name: "three",
-    version: "0.186.0",
+    version: "0.186.1",
     license: "MIT",
     imports: ["three", "three/addons/*", "three/examples/jsm/*"],
     global: "THREE",
