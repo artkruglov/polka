@@ -40,10 +40,7 @@ export class RateLimiter {
     for (;;) {
       const now = this.now();
       this.starts = this.starts.filter((at) => now - at < 60_000);
-      const byRate =
-        this.rpm && this.starts.length >= this.rpm
-          ? this.starts[0]! + 60_000
-          : 0;
+      const byRate = this.rpm && this.starts.length >= this.rpm ? this.starts[0]! + 60_000 : 0;
       const until = Math.max(byRate, this.pausedUntil);
       const busy = !!this.concurrency && this.active >= this.concurrency;
       if (until <= now && !busy) {
@@ -64,10 +61,7 @@ export class RateLimiter {
           this.waiters.delete(done);
           resolve();
         };
-        const timer = setTimeout(
-          done,
-          Math.max(1, (until > now ? until : deadline) - now),
-        );
+        const timer = setTimeout(done, Math.max(1, (until > now ? until : deadline) - now));
         this.waiters.add(done);
       });
     }
@@ -82,9 +76,7 @@ export class RateLimiter {
 // One limiter per endpoint (its URL and key: a plan's limits are per key),
 // shared by the roles that use it; the stricter limits win.
 const limiters = new Map<string, RateLimiter>();
-export function limiterFor(
-  endpoint: Pick<ModelEndpoint, "url" | "key" | "rpm" | "concurrency">,
-) {
+export function limiterFor(endpoint: Pick<ModelEndpoint, "url" | "key" | "rpm" | "concurrency">) {
   const id = `${endpoint.url}\n${endpoint.key ?? ""}`;
   const existing = limiters.get(id);
   const stricter = (a: number, b: number) => (!a ? b : !b ? a : Math.min(a, b));
@@ -103,28 +95,18 @@ export function resetLimiters() {
   limiters.clear();
 }
 
-export type ChatResult =
-  | { ok: true; body: any }
-  | { ok: false; failed: "rate_limited" | "timeout" | "error" };
+export type ChatResult = { ok: true; body: any } | { ok: false; failed: "rate_limited" | "timeout" | "error" };
 
 /** A 429's Retry-After in ms (seconds or a date), 10 s by default, at most a minute. */
 export function retryAfterMs(value: string | null) {
   const seconds = Number(value);
-  const ms =
-    value && Number.isFinite(seconds)
-      ? seconds * 1000
-      : value
-        ? Date.parse(value) - Date.now()
-        : NaN;
+  const ms = value && Number.isFinite(seconds) ? seconds * 1000 : value ? Date.parse(value) - Date.now() : NaN;
   return Math.min(60_000, Math.max(1000, Number.isFinite(ms) ? ms : 10_000));
 }
 
 /** POST one request to an endpoint within its limits. */
 export async function postChat(
-  endpoint: Pick<
-    ModelEndpoint,
-    "provider" | "url" | "key" | "rpm" | "concurrency"
-  >,
+  endpoint: Pick<ModelEndpoint, "provider" | "url" | "key" | "rpm" | "concurrency">,
   body: Record<string, unknown>,
   timeoutMs: number,
   doFetch: typeof fetch = fetch,
@@ -150,8 +132,7 @@ export async function postChat(
     const name = (error as Error)?.name;
     return {
       ok: false,
-      failed:
-        name === "TimeoutError" || name === "AbortError" ? "timeout" : "error",
+      failed: name === "TimeoutError" || name === "AbortError" ? "timeout" : "error",
     };
   } finally {
     release();

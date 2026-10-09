@@ -17,8 +17,7 @@ const PROVIDER_ORIGINS = new Set(["https://claude.ai", "https://chatgpt.com"]);
 type Reply = (response?: unknown) => void;
 
 const own = (sender: chrome.runtime.MessageSender) =>
-  sender.id === chrome.runtime.id &&
-  !!sender.url?.startsWith(chrome.runtime.getURL(""));
+  sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL(""));
 
 async function status() {
   const settings = await getSettings();
@@ -43,8 +42,7 @@ async function doConnect() {
 }
 
 function handle(message: any, sender: chrome.runtime.MessageSender): Promise<unknown> | null {
-  if (!message || typeof message.type !== "string" || sender.id !== chrome.runtime.id)
-    return null;
+  if (!message || typeof message.type !== "string" || sender.id !== chrome.runtime.id) return null;
 
   if (own(sender)) {
     switch (message.type) {
@@ -53,7 +51,9 @@ function handle(message: any, sender: chrome.runtime.MessageSender): Promise<unk
       case "connect":
         return doConnect();
       case "disconnect":
-        return getSettings().then((settings) => disconnect(settings.polkaOrigin)).then(() => ({ ok: true }));
+        return getSettings()
+          .then((settings) => disconnect(settings.polkaOrigin))
+          .then(() => ({ ok: true }));
       case "save-tab":
         return typeof message.tabId === "number" ? saveTab(message.tabId) : null;
       case "settings":
@@ -89,9 +89,7 @@ function handle(message: any, sender: chrome.runtime.MessageSender): Promise<unk
           message: "Эту ссылку расширение не открывает.",
         } satisfies SaveResult;
       return importUrl(artifact.url, (stage) => {
-        chrome.tabs
-          .sendMessage(tabId, { type: "bridge-progress", requestId, stage }, { frameId: 0 })
-          .catch(() => {});
+        chrome.tabs.sendMessage(tabId, { type: "bridge-progress", requestId, stage }, { frameId: 0 }).catch(() => {});
       });
     }
     return null;

@@ -4,34 +4,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { inspectHtml } from "../apps/server/html.ts";
-import {
-  canonicalToken,
-  normalizeText,
-  tokens,
-} from "../apps/server/content-filter/normalize.ts";
-import {
-  CATEGORIES,
-  filterLists,
-  parseList,
-  type Category,
-} from "../apps/server/content-filter/lists.ts";
-import {
-  levelOf,
-  scanText,
-  type FilterResult,
-} from "../apps/server/content-filter/scanner.ts";
-import {
-  SEVERE,
-  decideContent,
-  parseRetention,
-  type ModelView,
-} from "../apps/server/content-filter/policy.ts";
-import {
-  costOf,
-  normalizeForModel,
-  parseAnswer,
-  userMessage,
-} from "../apps/server/content-filter/model.ts";
+import { canonicalToken, normalizeText, tokens } from "../apps/server/content-filter/normalize.ts";
+import { CATEGORIES, filterLists, parseList, type Category } from "../apps/server/content-filter/lists.ts";
+import { levelOf, scanText, type FilterResult } from "../apps/server/content-filter/scanner.ts";
+import { SEVERE, decideContent, parseRetention, type ModelView } from "../apps/server/content-filter/policy.ts";
+import { costOf, normalizeForModel, parseAnswer, userMessage } from "../apps/server/content-filter/model.ts";
 import { parseCodeReview } from "../apps/server/content-filter/code-model.ts";
 import { disposableEmail, subnetOf } from "../apps/server/signup-guards.ts";
 
@@ -53,7 +30,10 @@ test("normalisation: case, ё, compatibility forms, invisible characters", () =>
   assert.equal(canonicalToken("1488"), "1488");
   // Spaced letters come as one more item.
   const words = [...tokens(normalizeText("к у п и т ь сейчас"))];
-  assert.ok(words.some((word) => word.endsWith("купить")), words.join("|"));
+  assert.ok(
+    words.some((word) => word.endsWith("купить")),
+    words.join("|"),
+  );
 });
 
 test("every list parses; stems are long enough; pairs name real groups", () => {
@@ -156,15 +136,16 @@ test("malicious code: miners and executables are high, a minified bundle is noth
   assert.equal(levelOf("malicious_code", miner.filter.hits.malicious_code!.score), "high");
   const exe = inspectHtml(`<a href="data:application/octet-stream;base64,TVqQ" download="setup.exe">Скачать</a>`);
   assert.equal(levelOf("malicious_code", exe.filter.hits.malicious_code!.score), "high");
-  const escape = inspectHtml(`<script>top.location = "https://x.example"; new RTCPeerConnection(); new WebSocket("wss://c2.example"); document.cookie = "a=b"</script>`);
+  const escape = inspectHtml(
+    `<script>top.location = "https://x.example"; new RTCPeerConnection(); new WebSocket("wss://c2.example"); document.cookie = "a=b"</script>`,
+  );
   assert.equal(levelOf("malicious_code", escape.filter.hits.malicious_code!.score), "high");
   // A typical minified React-style bundle: loops, long strings, one fetch to
   // its own API (relative), postMessage to a known origin.
   const bundle = `<script>!function(){for(;;){break}var e="${"a".repeat(5000)}";function t(n){return n&&n.__esModule?n:{default:n}}fetch("/api/data").then(r=>r.json());window.parent.postMessage({h:1},"https://polochka.app");while(!0){break}}();</script>`;
   const clean = inspectHtml(bundle);
   assert.ok(
-    !clean.filter.hits.malicious_code ||
-      levelOf("malicious_code", clean.filter.hits.malicious_code.score) === "none",
+    !clean.filter.hits.malicious_code || levelOf("malicious_code", clean.filter.hits.malicious_code.score) === "none",
     JSON.stringify(clean.filter.hits),
   );
 });
@@ -226,10 +207,7 @@ test("policy: balanced, strict, autoblock", () => {
   assert.equal(decide(hit("gambling", 6), fresh).action, "hold");
   assert.equal(decide(hit("gambling", 6), trusted).action, "notify");
   assert.equal(decide(hit("gambling", 12), trusted).action, "hold");
-  assert.equal(
-    decide(hit("gambling", 12), { trusted: true, operatorCreated: true }).action,
-    "notify",
-  );
+  assert.equal(decide(hit("gambling", 12), { trusted: true, operatorCreated: true }).action, "notify");
   // strict: anything flagged waits; high blocks only with autoblock.
   assert.equal(decide(hit("gambling", 6), trusted, "strict").action, "hold");
   assert.equal(decide(hit("drugs", 12), trusted, "strict").action, "hold");
@@ -276,10 +254,12 @@ test("retention: defaults per category and overrides", () => {
 });
 
 test("model answers: schema, refusals, categories; normalisation; cost", () => {
-  assert.deepEqual(
-    parseAnswer('{"category":"fraud_phishing","confidence":0.9,"reason":"фишинг"}', "stop", "m", 0.1),
-    { category: "fraud", reason: "фишинг", model: "m", costRub: 0.1 },
-  );
+  assert.deepEqual(parseAnswer('{"category":"fraud_phishing","confidence":0.9,"reason":"фишинг"}', "stop", "m", 0.1), {
+    category: "fraud",
+    reason: "фишинг",
+    model: "m",
+    costRub: 0.1,
+  });
   assert.equal((parseAnswer('{"category":"safe","confidence":1,"reason":""}', "stop", "m", 0) as any).category, "none");
   assert.equal((parseAnswer("Я не могу обсуждать эту тему.", "stop", "m", 0) as any).failed, "refusal");
   assert.equal((parseAnswer('{"category":"weather"}', "stop", "m", 0) as any).failed, "unparseable");
@@ -288,7 +268,12 @@ test("model answers: schema, refusals, categories; normalisation; cost", () => {
   assert.match(userMessage("к а з и н о"), /<content>\nк а з и н о\n\[нормализовано: казино\]\n<\/content>/);
   // Unknown prices count as the dearest (1.2 ₽ per 1000 tokens by default).
   assert.equal(costOf("some-model", { prompt_tokens: 1000, completion_tokens: 0 }), 1.2);
-  assert.equal(parseCodeReview('{"verdict":"malicious","category":"malicious_code","reasons":["майнер"]}', 0).hasOwnProperty("verdict"), true);
+  assert.equal(
+    parseCodeReview('{"verdict":"malicious","category":"malicious_code","reasons":["майнер"]}', 0).hasOwnProperty(
+      "verdict",
+    ),
+    true,
+  );
 });
 
 test("sign-up guards: throwaway mail and networks", () => {

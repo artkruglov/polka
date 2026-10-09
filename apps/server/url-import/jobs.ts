@@ -25,8 +25,7 @@ export async function authorizeImport(c: PoolClient, actor: Actor) {
       `SELECT id FROM agent_connections WHERE id=$1 AND tenant_id=$2 AND account_id=$3 AND audience=$4 AND revoked_at IS NULL AND expires_at>now() AND 'capture'=ANY(scopes) FOR UPDATE`,
       [actor.connectionId, actor.tenant, actor.id, MCP_AUDIENCE],
     );
-    if (!result.rowCount)
-      throw new Problem(403, "forbidden", "Подключению недоступен импорт.");
+    if (!result.rowCount) throw new Problem(403, "forbidden", "Подключению недоступен импорт.");
   }
 }
 export function importJobView(row: any) {
@@ -41,18 +40,13 @@ export function importJobView(row: any) {
   };
 }
 /** All methods run within the caller's DB transaction. Never expose prepared bytes or raw URLs. */
-export async function createImportJob(
-  c: PoolClient,
-  actor: Actor,
-  body: unknown,
-) {
+export async function createImportJob(c: PoolClient, actor: Actor, body: unknown) {
   const input = importRequestSchema.parse(body);
   let url: string;
   try {
     url = publicUrl(input.url).href;
   } catch (error) {
-    if (error instanceof ImportFetchError)
-      throw new Problem(400, "invalid", error.message);
+    if (error instanceof ImportFetchError) throw new Problem(400, "invalid", error.message);
     throw error;
   }
   const request = {
@@ -61,53 +55,33 @@ export async function createImportJob(
     // An agent limited to folders imports into them (agent-scope.ts).
     folderId: (await scopedFolderForSave(c, actor, input.folderId)) ?? null,
   };
-  const hash = createHash("sha256")
-    .update(JSON.stringify(request))
-    .digest("hex");
+  const hash = createHash("sha256").update(JSON.stringify(request)).digest("hex");
   await authorizeImport(c, actor);
   const old = (
-    await c.query(
-      "SELECT * FROM url_import_jobs WHERE tenant_id=$1 AND idempotency_key=$2 FOR UPDATE",
-      [actor.tenant, input.key],
-    )
+    await c.query("SELECT * FROM url_import_jobs WHERE tenant_id=$1 AND idempotency_key=$2 FOR UPDATE", [
+      actor.tenant,
+      input.key,
+    ])
   ).rows[0];
   if (old) {
-    if (
-      old.account_id !== actor.id ||
-      old.connection_id !== (actor.connectionId ?? null) ||
-      old.request_hash !== hash
-    )
+    if (old.account_id !== actor.id || old.connection_id !== (actor.connectionId ?? null) || old.request_hash !== hash)
       throw new Problem(409, "conflict", "Ключ относится к другому импорту.");
     return importJobView(old);
   }
   if (
     input.folderId &&
-    !(
-      await c.query("SELECT id FROM folders WHERE id=$1 AND tenant_id=$2", [
-        input.folderId,
-        actor.tenant,
-      ])
-    ).rowCount
+    !(await c.query("SELECT id FROM folders WHERE id=$1 AND tenant_id=$2", [input.folderId, actor.tenant])).rowCount
   )
     throw missing();
   const pending = await c.query(
     "SELECT count(*)::integer n FROM url_import_jobs WHERE tenant_id=$1 AND state IN ('queued','fetching','rendering','prepared','saving','previewing') AND expires_at>now()",
     [actor.tenant],
   );
-  if (pending.rows[0].n >= 5)
-    throw new Problem(429, "quota", "Дождитесь завершения текущих импортов.");
+  if (pending.rows[0].n >= 5) throw new Problem(429, "quota", "Дождитесь завершения текущих импортов.");
   const row = (
     await c.query(
       "INSERT INTO url_import_jobs(id,tenant_id,account_id,connection_id,idempotency_key,request,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-      [
-        randomUUID(),
-        actor.tenant,
-        actor.id,
-        actor.connectionId ?? null,
-        input.key,
-        request,
-        hash,
-      ],
+      [randomUUID(), actor.tenant, actor.id, actor.connectionId ?? null, input.key, request, hash],
     )
   ).rows[0];
   return importJobView(row);
@@ -125,11 +99,7 @@ export async function getImportJob(c: PoolClient, actor: Actor, id: string) {
 }
 export async function cancelImportJob(c: PoolClient, actor: Actor, id: string) {
   const row = await getImportJob(c, actor, id);
-  if (
-    row.receipt ||
-    ["ready", "partial", "failed", "cancelled"].includes(row.state)
-  )
-    return importJobView(row);
+  if (row.receipt || ["ready", "partial", "failed", "cancelled"].includes(row.state)) return importJobView(row);
   const updated = (
     await c.query(
       "UPDATE url_import_jobs SET state='cancelled',prepared=NULL,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1 RETURNING *",
@@ -154,22 +124,13 @@ export async function claimImportJob(c: PoolClient) {
     )
   ).rows[0];
 }
-export async function requireImportLease(
-  c: PoolClient,
-  id: string,
-  token: string,
-) {
+export async function requireImportLease(c: PoolClient, id: string, token: string) {
   const row = (
     await c.query(
       "SELECT * FROM url_import_jobs WHERE id=$1 AND lease_token=$2 AND lease_until>now() AND expires_at>now() AND state IN ('fetching','rendering','prepared','saving','previewing') FOR UPDATE",
       [id, token],
     )
   ).rows[0];
-  if (!row)
-    throw new Problem(
-      409,
-      "conflict",
-      "Задание отменено или передано другому исполнителю.",
-    );
+  if (!row) throw new Problem(409, "conflict", "Задание отменено или передано другому исполнителю.");
   return row;
 }

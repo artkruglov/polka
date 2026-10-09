@@ -28,22 +28,10 @@ import {
   Upload,
   WandSparkles,
 } from "lucide-react";
-import type {
-  Artifact,
-  Revision,
-} from "../../../../../packages/contracts/index.ts";
-import {
-  date,
-  dateTime,
-  size,
-  status,
-  kindOf,
-  isImage,
-  profileView,
-} from "../../entities/artifact/format.ts";
+import type { Artifact, Revision } from "../../../../../packages/contracts/index.ts";
+import { date, dateTime, size, status, kindOf, isImage, profileView } from "../../entities/artifact/format.ts";
 
-export type ReaderAction =
-  "share" | "version" | "metadata" | "accept" | "feed" | "trash" | "rework" | "agent-context";
+export type ReaderAction = "share" | "version" | "metadata" | "accept" | "feed" | "trash" | "rework" | "agent-context";
 /** The reader's views; «versions» is kept in the address as ?tab=versions. */
 export type ReaderTab = "work" | "versions";
 export const readerTabFromSearch = (search: string): ReaderTab =>
@@ -109,10 +97,7 @@ export function workMenu({
 }): MenuAction[] {
   const download: MenuAction = {
     id: "download",
-    label:
-      shown.storageKind === "bundle"
-        ? "Скачать весь пакет"
-        : "Скачать оригинал",
+    label: shown.storageKind === "bundle" ? "Скачать весь пакет" : "Скачать оригинал",
     icon: <Download />,
     onSelect: onDownload,
   };
@@ -177,9 +162,7 @@ export function workMenu({
       onSelect: () => setPanel("trash"),
     },
   ];
-  return items
-    .filter((item) => !item.needs || !!access[item.needs])
-    .map(({ needs: _needs, ...item }) => item);
+  return items.filter((item) => !item.needs || !!access[item.needs]).map(({ needs: _needs, ...item }) => item);
 }
 
 /**
@@ -259,17 +242,11 @@ export function ArtifactReader({
               ...revisions.map((r) => ({
                 id: r.id,
                 label: `Версия ${r.number} · ${date(r.createdAt)}${
-                  work.share?.revisionId === r.id &&
-                  ["active", "behind"].includes(work.share.status)
+                  work.share?.revisionId === r.id && ["active", "behind"].includes(work.share.status)
                     ? " · по ссылке"
                     : ""
                 }${work.acceptedRevisionId === r.id ? " · принята" : ""}`,
-                icon:
-                  shown.id === r.id ? (
-                    <Check />
-                  ) : (
-                    <span className="work-version-blank" />
-                  ),
+                icon: shown.id === r.id ? <Check /> : <span className="work-version-blank" />,
                 onSelect: () => {
                   setViewed(r.id === work.revision.id ? null : r);
                   setHistory(false);
@@ -322,22 +299,14 @@ export function ArtifactReader({
               onClick={comments.onToggle}
             >
               <MessageCircle /> {comments.count}
-              {comments.unread > 0 && (
-                <span className="work-bar-unread">+{comments.unread}</span>
-              )}
+              {comments.unread > 0 && <span className="work-bar-unread">+{comments.unread}</span>}
             </Button>
           )}
           <Popover label="О работе" icon={<Info />} className="work-info">
             <dl className="work-info-list">
               <div>
                 <dt>Вид</dt>
-                <dd>
-                  {work.trashedAt
-                    ? "В корзине"
-                    : shown.mime === "text/html"
-                      ? profile.label
-                      : kindOf(shown)}
-                </dd>
+                <dd>{work.trashedAt ? "В корзине" : shown.mime === "text/html" ? profile.label : kindOf(shown)}</dd>
               </div>
               <div>
                 <dt>Доступ</dt>
@@ -371,17 +340,10 @@ export function ArtifactReader({
                 <dd>{folderName}</dd>
               </div>
             </dl>
-            {!work.trashedAt && (
-              <p className="work-info-note">{profile.text}</p>
-            )}
+            {!work.trashedAt && <p className="work-info-note">{profile.text}</p>}
           </Popover>
           {!work.trashedAt && onFullscreen && (
-            <IconButton
-              label="На весь экран"
-              size="sm"
-              className="work-bar-fullscreen"
-              onClick={onFullscreen}
-            >
+            <IconButton label="На весь экран" size="sm" className="work-bar-fullscreen" onClick={onFullscreen}>
               <Maximize2 />
             </IconButton>
           )}
@@ -419,20 +381,10 @@ export function ArtifactReader({
         </div>
       </header>
       {notices}
-      <div
-        className="work-panel"
-        role="tabpanel"
-        id={panelId}
-        aria-labelledby={tabId(ids, tab)}
-        tabIndex={0}
-      >
+      <div className="work-panel" role="tabpanel" id={panelId} aria-labelledby={tabId(ids, tab)} tabIndex={0}>
         {history && (
           <div className="work-versions">
-            <div
-              className="reader-versions"
-              role="group"
-              aria-label="Выбор версии"
-            >
+            <div className="reader-versions" role="group" aria-label="Выбор версии">
               {revisions.map((r) => (
                 <Button
                   key={r.id}
@@ -444,13 +396,10 @@ export function ArtifactReader({
                 >
                   <span>
                     Версия {r.number}
-                    {work.share?.revisionId === r.id &&
-                      ["active", "behind"].includes(work.share.status) && (
-                        <small>по ссылке</small>
-                      )}
-                    {work.acceptedRevisionId === r.id && (
-                      <small className="reader-version-accepted">принята</small>
+                    {work.share?.revisionId === r.id && ["active", "behind"].includes(work.share.status) && (
+                      <small>по ссылке</small>
                     )}
+                    {work.acceptedRevisionId === r.id && <small className="reader-version-accepted">принята</small>}
                   </span>
                   <small>{date(r.createdAt)}</small>
                   {shown.id === r.id && <Check />}
@@ -464,8 +413,7 @@ export function ArtifactReader({
         )}
         {viewed && viewed.id !== work.revision.id && (
           <p className="history-note" role="status">
-            Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не
-            изменяются.
+            Вы смотрите версию {viewed.number}. Новые сохранения и ссылка не изменяются.
             <Button variant="quiet" onClick={() => setViewed(null)}>
               К текущей версии
             </Button>
@@ -477,25 +425,14 @@ export function ArtifactReader({
           ref={stageRef}
           hidden={history}
           aria-label={work.title}
-          data-kind={
-            shown.mime === "text/plain"
-              ? "text"
-              : isImage(shown)
-                ? "image"
-                : "page"
-          }
+          data-kind={shown.mime === "text/plain" ? "text" : isImage(shown) ? "image" : "page"}
         >
           {work.trashedAt ? (
             <div className="preview-error">
-              <p>
-                Работа в корзине. Просмотр отключён; версии и оригиналы доступны
-                для скачивания.
-              </p>
+              <p>Работа в корзине. Просмотр отключён; версии и оригиналы доступны для скачивания.</p>
               <Button onClick={onDownload}>
                 <Download />
-                {shown.storageKind === "bundle"
-                  ? "Скачать весь пакет"
-                  : "Скачать оригинал"}
+                {shown.storageKind === "bundle" ? "Скачать весь пакет" : "Скачать оригинал"}
               </Button>
             </div>
           ) : (

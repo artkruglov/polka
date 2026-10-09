@@ -19,10 +19,7 @@ test("request preserves status for empty and JSON error responses", async () => 
     await assert.rejects(
       request("/agent-connections", {}, "POST"),
       (error: unknown) =>
-        error instanceof ApiError &&
-        error.status === 403 &&
-        error.code === "forbidden" &&
-        error.message === "csrf",
+        error instanceof ApiError && error.status === 403 && error.code === "forbidden" && error.message === "csrf",
     );
     globalThis.fetch = async () => new Response("not-json", { status: 200 });
     await assert.rejects(request("/agent-connections", undefined, "GET"));
@@ -39,10 +36,7 @@ test("proxy error pages and network failures become friendly Russian errors", as
         status: 502,
         headers: { "content-type": "text/html" },
       });
-    for (const call of [
-      () => request("/me"),
-      () => bytes("/revisions/r/bytes"),
-    ])
+    for (const call of [() => request("/me"), () => bytes("/revisions/r/bytes")])
       await assert.rejects(
         call(),
         (error: unknown) =>
@@ -56,10 +50,7 @@ test("proxy error pages and network failures become friendly Russian errors", as
     };
     await assert.rejects(
       request("/me"),
-      (error: unknown) =>
-        error instanceof ApiError &&
-        error.status === 0 &&
-        /Нет связи/.test(error.message),
+      (error: unknown) => error instanceof ApiError && error.status === 0 && /Нет связи/.test(error.message),
     );
   } finally {
     globalThis.fetch = originalFetch;

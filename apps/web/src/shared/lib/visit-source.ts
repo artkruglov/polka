@@ -13,30 +13,19 @@ function clean(value: unknown): VisitSource | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const ref = typeof raw.ref === "string" && REF.test(raw.ref) ? raw.ref : null;
-  const referrer =
-    typeof raw.referrer === "string" && HOST.test(raw.referrer)
-      ? raw.referrer
-      : null;
-  return ref || referrer
-    ? { ...(ref ? { ref } : {}), ...(referrer ? { referrer } : {}) }
-    : null;
+  const referrer = typeof raw.referrer === "string" && HOST.test(raw.referrer) ? raw.referrer : null;
+  return ref || referrer ? { ...(ref ? { ref } : {}), ...(referrer ? { referrer } : {}) } : null;
 }
 
 /** On the first page of a visit: remember its ref and referrer host. */
 export function rememberVisitSource() {
   try {
     if (typeof window === "undefined" || sessionStorage.getItem(KEY)) return;
-    const ref = new URLSearchParams(location.search)
-      .get("ref")
-      ?.trim()
-      .toLowerCase();
+    const ref = new URLSearchParams(location.search).get("ref")?.trim().toLowerCase();
     let referrer: string | undefined;
     if (document.referrer) {
-      const host = new URL(document.referrer).hostname
-        .toLowerCase()
-        .replace(/^www\./, "");
-      if (host && host !== location.hostname.replace(/^www\./, ""))
-        referrer = host;
+      const host = new URL(document.referrer).hostname.toLowerCase().replace(/^www\./, "");
+      if (host && host !== location.hostname.replace(/^www\./, "")) referrer = host;
     }
     const source = clean({ ref, referrer });
     if (source) sessionStorage.setItem(KEY, JSON.stringify(source));
@@ -54,10 +43,7 @@ export function setVisitSourceRef(ref: string): boolean {
   try {
     if (typeof window === "undefined" || !REF.test(ref)) return false;
     const current = visitSource();
-    sessionStorage.setItem(
-      KEY,
-      JSON.stringify({ ...(current?.referrer ? { referrer: current.referrer } : {}), ref }),
-    );
+    sessionStorage.setItem(KEY, JSON.stringify({ ...(current?.referrer ? { referrer: current.referrer } : {}), ref }));
     return true;
   } catch {
     return false;

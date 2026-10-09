@@ -25,14 +25,9 @@ export function EditorialCatalog({
   const [topic, setTopic] = useState<string | null>(null);
   const topics = [...new Set(items.map((item) => item.topic))];
   const activeTopic = topic && topics.includes(topic) ? topic : null;
-  const visibleItems = activeTopic
-    ? items.filter((item) => item.topic === activeTopic)
-    : items;
+  const visibleItems = activeTopic ? items.filter((item) => item.topic === activeTopic) : items;
   return (
-    <section
-      className="editorial-catalog"
-      aria-labelledby="editorial-catalog-title"
-    >
+    <section className="editorial-catalog" aria-labelledby="editorial-catalog-title">
       <div className="editorial-catalog-heading">
         <div>
           <Heading id="editorial-catalog-title">Лента</Heading>
@@ -51,10 +46,7 @@ export function EditorialCatalog({
       )}
 
       {!loading && error && (
-        <div
-          className="editorial-catalog-state editorial-catalog-error"
-          role="alert"
-        >
+        <div className="editorial-catalog-state editorial-catalog-error" role="alert">
           <p>{error}</p>
           {onRetry && (
             <Button type="button" onClick={onRetry}>
@@ -70,9 +62,8 @@ export function EditorialCatalog({
           <div className="editorial-catalog-empty-body">
             <h3>Пока здесь пусто</h3>
             <p>
-              В «Ленте» появляются материалы, которые авторы опубликовали
-              после проверки. Ваши работы сюда не попадают сами: по умолчанию
-              их видите только вы.
+              В «Ленте» появляются материалы, которые авторы опубликовали после проверки. Ваши работы сюда не попадают
+              сами: по умолчанию их видите только вы.
             </p>
             <div className="editorial-catalog-empty-actions">
               <LinkButton variant="primary" href="/bring#file">
@@ -90,11 +81,7 @@ export function EditorialCatalog({
         <div className="editorial-topics" role="group" aria-label="Темы материалов">
           <div className="ui-chips">
             {[null, ...topics].map((value) => (
-              <Chip
-                key={value ?? "all"}
-                pressed={activeTopic === value}
-                onClick={() => setTopic(value)}
-              >
+              <Chip key={value ?? "all"} pressed={activeTopic === value} onClick={() => setTopic(value)}>
                 {value ?? "Всё"}
               </Chip>
             ))}
@@ -109,12 +96,7 @@ export function EditorialCatalog({
             return (
               <article className="editorial-catalog-card" key={item.slug}>
                 {recipientUrl ? (
-                  <a
-                    className="editorial-cover"
-                    href={recipientUrl}
-                    aria-label={`Открыть ${item.title}`}
-                    tabIndex={-1}
-                  >
+                  <a className="editorial-cover" href={recipientUrl} aria-label={`Открыть ${item.title}`} tabIndex={-1}>
                     <EditorialArtwork item={item} />
                   </a>
                 ) : (
@@ -123,13 +105,7 @@ export function EditorialCatalog({
                   </div>
                 )}
                 <div className="editorial-catalog-card-body">
-                  <h3>
-                    {recipientUrl ? (
-                      <a href={recipientUrl}>{item.title}</a>
-                    ) : (
-                      item.title
-                    )}
-                  </h3>
+                  <h3>{recipientUrl ? <a href={recipientUrl}>{item.title}</a> : item.title}</h3>
                   <span className="editorial-catalog-card-meta" title={`${item.license} · ${item.action}`}>
                     {item.topic} · {item.author}
                   </span>

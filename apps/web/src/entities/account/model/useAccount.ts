@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Account } from "../../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../../shared/api/client.ts";
-import {
-  knownShelf,
-  markFreshShelfNote,
-  rememberKnownShelf,
-} from "../../../shared/lib/known-shelf.ts";
+import { knownShelf, markFreshShelfNote, rememberKnownShelf } from "../../../shared/lib/known-shelf.ts";
 
 // One /session request per page load, shared by every consumer. A guest is
 // a 200 with no account (no 401 in the console on every page); a network or
@@ -25,12 +21,7 @@ function remember(account: Account | null) {
   const created = account.createdAt ? Date.parse(account.createdAt) : NaN;
   // An account the operator made (login and password) was not opened by
   // this sign-in: «Уже есть полка?» would only confuse.
-  if (
-    first &&
-    knownShelf()?.method !== "password" &&
-    Number.isFinite(created) &&
-    Date.now() - created < 30 * 60_000
-  )
+  if (first && knownShelf()?.method !== "password" && Number.isFinite(created) && Date.now() - created < 30 * 60_000)
     markFreshShelfNote();
 }
 
@@ -80,10 +71,7 @@ export function useAccountState(): AccountState {
           live &&
           setState({
             account: undefined,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Не удалось проверить вход.",
+            error: error instanceof Error ? error.message : "Не удалось проверить вход.",
           }),
       );
     listeners.add(read);

@@ -96,8 +96,7 @@ async function blobHash(path: string) {
 /** Why a work cannot be moved as a whole, or null. */
 function unmovable(item: ShelfExportItem) {
   const blocked = item.revisions.find((revision) => revision.unavailable);
-  if (blocked)
-    return `версия ${blocked.number} заблокирована модератором на исходной установке, её файлы не выгружены`;
+  if (blocked) return `версия ${blocked.number} заблокирована модератором на исходной установке, её файлы не выгружены`;
   for (const [index, revision] of item.revisions.entries())
     if (revision.number !== index + 1) return "номера версий идут не подряд";
   return null;
@@ -117,7 +116,9 @@ function versionFiles(revision: ShelfExportRevision) {
     manifest.files.length !== revision.files.length ||
     manifest.files.some(
       (file, index) =>
-        revision.files[index].path !== file.path || revision.files[index].sha256 !== file.sha256 || revision.files[index].size !== file.size,
+        revision.files[index].path !== file.path ||
+        revision.files[index].sha256 !== file.sha256 ||
+        revision.files[index].size !== file.size,
     )
   )
     throw new ImportRefusal(`Версия ${revision.id}: файлы не совпадают с манифестом.`);
@@ -138,9 +139,7 @@ export async function importShelf(options: {
   // 0. The export, checked whole before anything is written.
   let exported: ShelfExportFile;
   try {
-    exported = shelfExportFileSchema.parse(
-      JSON.parse(await readFile(join(options.dir, "polka-export.json"), "utf8")),
-    );
+    exported = shelfExportFileSchema.parse(JSON.parse(await readFile(join(options.dir, "polka-export.json"), "utf8")));
   } catch (error) {
     throw new ImportRefusal(
       `Не читается ${join(options.dir, "polka-export.json")}: ${error instanceof Error ? error.message.slice(0, 300) : error}`,
@@ -171,9 +170,7 @@ export async function importShelf(options: {
       continue;
     }
     // The same request the save will send, so a limit of this installation shows in --dry-run.
-    const refused = item.revisions
-      .map((revision) => acceptedHere(item, revision))
-      .find((problem) => problem);
+    const refused = item.revisions.map((revision) => acceptedHere(item, revision)).find((problem) => problem);
     if (refused) {
       skipped.push({ sourceId: item.id, title: item.title, reason: refused });
       continue;
@@ -247,7 +244,12 @@ export async function importShelf(options: {
     bytesNeeded,
     quota: { used, total },
     foldersCreated: newFolders.map((folder) => folder.name),
-    card: exported.shelf.cardMd && (!tenant.card_md || options.replaceCard) ? "set" : exported.shelf.cardMd ? "kept" : "none",
+    card:
+      exported.shelf.cardMd && (!tenant.card_md || options.replaceCard)
+        ? "set"
+        : exported.shelf.cardMd
+          ? "kept"
+          : "none",
     imported: [],
     skipped,
     incomplete: false,
@@ -291,7 +293,15 @@ export async function importShelf(options: {
           report.incomplete = true;
           break;
         }
-        previous = await saveVersion(actor, join(options.dir, "blobs"), exported.exportId, item, revision, previous, folderFor);
+        previous = await saveVersion(
+          actor,
+          join(options.dir, "blobs"),
+          exported.exportId,
+          item,
+          revision,
+          previous,
+          folderFor,
+        );
         budget--;
         saved++;
         progress({ event: "version", title: item.title, number: revision.number });
@@ -322,7 +332,9 @@ export async function importShelf(options: {
       progress({ event: "work", title: item.title, versions: item.revisions.length });
     } catch (error) {
       // The account was disabled meanwhile (the content filter): nothing more is saved.
-      const { rows: [state] } = await db.query("SELECT disabled FROM accounts WHERE id=$1", [actor.id]);
+      const {
+        rows: [state],
+      } = await db.query("SELECT disabled FROM accounts WHERE id=$1", [actor.id]);
       if (!state || state.disabled) throw error;
       if (!(error instanceof Problem) && !(error instanceof ImportRefusal) && !(error instanceof z.ZodError))
         throw error;
@@ -368,7 +380,8 @@ async function saveVersion(
 type Target = { artifactId: string; baseRevisionId: string } | { folderId: string | null };
 
 const singleInput = (key: string, item: ShelfExportItem, revision: ShelfExportRevision, target: Target) => {
-  const provenance = (revision.manifest as { provenance?: { kind?: string; sourceUrl?: string | null } } | null)?.provenance;
+  const provenance = (revision.manifest as { provenance?: { kind?: string; sourceUrl?: string | null } } | null)
+    ?.provenance;
   return beginUploadSchema.parse({
     key,
     title: item.title,
@@ -403,7 +416,14 @@ function acceptedHere(item: ShelfExportItem, revision: ShelfExportRevision) {
   }
 }
 
-async function saveSingle(actor: Actor, blobs: string, key: string, item: ShelfExportItem, revision: ShelfExportRevision, target: Target) {
+async function saveSingle(
+  actor: Actor,
+  blobs: string,
+  key: string,
+  item: ShelfExportItem,
+  revision: ShelfExportRevision,
+  target: Target,
+) {
   const input = singleInput(key, item, revision, target);
   const begun = await transaction((c) => beginUploadInTransaction(c, actor, input));
   if (begun.receipt) return begun.receipt as Receipt;
@@ -418,7 +438,14 @@ async function saveSingle(actor: Actor, blobs: string, key: string, item: ShelfE
   });
 }
 
-async function saveBundle(actor: Actor, blobs: string, key: string, item: ShelfExportItem, revision: ShelfExportRevision, target: Target) {
+async function saveBundle(
+  actor: Actor,
+  blobs: string,
+  key: string,
+  item: ShelfExportItem,
+  revision: ShelfExportRevision,
+  target: Target,
+) {
   const input = bundleInput(key, item, revision, target);
   const begun = await transaction((c) => beginBundleUploadInTransaction(c, actor, input));
   if (begun.receipt) return begun.receipt as Receipt;
@@ -454,7 +481,9 @@ async function saveBundle(actor: Actor, blobs: string, key: string, item: ShelfE
  */
 async function restoreVersion(c: PoolClient, receipt: Receipt, revision: ShelfExportRevision) {
   if (receipt.number !== revision.number)
-    throw new ImportRefusal(`Версия ${revision.number} сохранилась под номером ${receipt.number}: у работы уже есть другие версии.`);
+    throw new ImportRefusal(
+      `Версия ${revision.number} сохранилась под номером ${receipt.number}: у работы уже есть другие версии.`,
+    );
   await c.query("UPDATE revisions SET created_at=$2 WHERE id=$1", [receipt.revisionId, revision.createdAt]);
   if (revision.storageKind !== "single" || !revision.manifest) return;
   const {

@@ -25,11 +25,26 @@ const call = (method: any, url: string, body?: unknown) =>
 
 async function sharedWork(title: string) {
   const bytes = Buffer.from(`<!doctype html><title>${title}</title><p>${randomUUID()}</p>`);
-  const begun = await call("POST", "/api/uploads", { key: randomUUID(), title, filename: "index.html", mime: "text/html", size: bytes.length, sha256: sha256(bytes) });
+  const begun = await call("POST", "/api/uploads", {
+    key: randomUUID(),
+    title,
+    filename: "index.html",
+    mime: "text/html",
+    size: bytes.length,
+    sha256: sha256(bytes),
+  });
   const uploadId = begun.json().uploadId as string;
-  await app.inject({ method: "PUT", url: `/api/uploads/${uploadId}/bytes`, headers: { origin, cookie, "content-type": "application/octet-stream" }, payload: bytes });
+  await app.inject({
+    method: "PUT",
+    url: `/api/uploads/${uploadId}/bytes`,
+    headers: { origin, cookie, "content-type": "application/octet-stream" },
+    payload: bytes,
+  });
   const done = (await call("POST", `/api/uploads/${uploadId}/finalize`, {})).json();
-  const shared = await call("POST", `/api/artifacts/${done.artifactId}/share`, { expectedRevisionId: done.revisionId, expiresInDays: 7 });
+  const shared = await call("POST", `/api/artifacts/${done.artifactId}/share`, {
+    expectedRevisionId: done.revisionId,
+    expiresInDays: 7,
+  });
   assert.equal(shared.statusCode, 200, shared.body);
   return { artifactId: done.artifactId as string, shareId: shared.json().share.id as string };
 }
@@ -41,8 +56,16 @@ const setState = (shareId: string, moderation: string, minutesAgo: number, reaso
 
 before(async () => {
   owner = await createAccount(`review-${randomBytes(5).toString("hex")}`, password);
-  await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [owner.id, `author-${randomBytes(4).toString("hex")}@example.test`]);
-  const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: owner.name, password } });
+  await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [
+    owner.id,
+    `author-${randomBytes(4).toString("hex")}@example.test`,
+  ]);
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: owner.name, password },
+  });
   cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
   setReviewMailTransport(async (mail) => (sent.push(mail), true));
 });

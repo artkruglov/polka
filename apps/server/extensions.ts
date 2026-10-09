@@ -36,9 +36,7 @@ export async function loadExtensions(list: string | undefined) {
   const extensions: PolkaExtension[] = [];
   for (const specifier of specifiers) {
     const target =
-      specifier.startsWith(".") || isAbsolute(specifier)
-        ? pathToFileURL(resolve(specifier)).href
-        : specifier;
+      specifier.startsWith(".") || isAbsolute(specifier) ? pathToFileURL(resolve(specifier)).href : specifier;
     const module = await import(target);
     const extension = (module.default ?? module) as PolkaExtension;
     if (!extension || typeof extension !== "object" || !NAME.test(extension.name ?? ""))

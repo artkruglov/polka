@@ -27,29 +27,17 @@ import { HOSTED_MAIL_SITE } from "./mail-templates/login-code.ts";
 // lets readers of the same library run side by side.
 type RowLock = "UPDATE" | "SHARE";
 
-async function lockActorAndAccounts(
-  c: PoolClient,
-  actor: Actor,
-  accountIds: string[] = [],
-  lock: RowLock = "UPDATE",
-) {
+async function lockActorAndAccounts(c: PoolClient, actor: Actor, accountIds: string[] = [], lock: RowLock = "UPDATE") {
   // Discovering target tenants grants nothing. Both tenant ownership and every
   // account predicate are rechecked after the ordered locks are acquired.
-  const discovered = await c.query(
-    "SELECT id,owner_id FROM tenants WHERE owner_id=ANY($1::uuid[])",
-    [[actor.id, ...accountIds]],
-  );
+  const discovered = await c.query("SELECT id,owner_id FROM tenants WHERE owner_id=ANY($1::uuid[])", [
+    [actor.id, ...accountIds],
+  ]);
   const tenantIds = [...new Set(discovered.rows.map((row) => row.id))];
-  const tenants = await c.query(
-    `SELECT id,owner_id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR ${lock}`,
-    [tenantIds],
-  );
-  if (
-    !tenants.rows.some(
-      (row) => row.id === actor.tenant && row.owner_id === actor.id,
-    )
-  )
-    throw missing();
+  const tenants = await c.query(`SELECT id,owner_id FROM tenants WHERE id=ANY($1::uuid[]) ORDER BY id FOR ${lock}`, [
+    tenantIds,
+  ]);
+  if (!tenants.rows.some((row) => row.id === actor.tenant && row.owner_id === actor.id)) throw missing();
 
   const ids = [...new Set([actor.id, ...accountIds])];
   const accounts = await c.query(
@@ -58,20 +46,13 @@ async function lockActorAndAccounts(
     [ids],
   );
   const activeActor = accounts.rows.find(
-    (row) =>
-      row.id === actor.id &&
-      !row.disabled &&
-      row.deletion_requested_at === null,
+    (row) => row.id === actor.id && !row.disabled && row.deletion_requested_at === null,
   );
   if (!activeActor) throw missing();
   return { tenants: tenants.rows, accounts: accounts.rows };
 }
 
-async function lockLibrary(
-  c: PoolClient,
-  libraryId: string,
-  lock: RowLock = "UPDATE",
-) {
+async function lockLibrary(c: PoolClient, libraryId: string, lock: RowLock = "UPDATE") {
   const library = (
     await c.query(
       `SELECT id,name,created_at FROM template_libraries
@@ -83,12 +64,7 @@ async function lockLibrary(
   return library;
 }
 
-async function lockMembers(
-  c: PoolClient,
-  libraryId: string,
-  accountIds: string[],
-  lock: RowLock = "UPDATE",
-) {
+async function lockMembers(c: PoolClient, libraryId: string, accountIds: string[], lock: RowLock = "UPDATE") {
   return (
     await c.query(
       `SELECT * FROM template_library_members
@@ -102,31 +78,13 @@ async function lockMembers(
 // An account keeps its revoked memberships next to the current one (one row
 // per membership epoch), so every check looks for the active row.
 function requireMember(rows: any[], actorId: string) {
-  if (
-    !rows.some(
-      (row) =>
-        row.account_id === actorId &&
-        row.state === "active" &&
-        row.revoked_at === null,
-    )
-  )
+  if (!rows.some((row) => row.account_id === actorId && row.state === "active" && row.revoked_at === null))
     throw missing();
 }
 
 function requireAdmin(rows: any[], actorId: string) {
-  const member = rows.find(
-    (row) =>
-      row.account_id === actorId &&
-      row.state === "active" &&
-      row.revoked_at === null,
-  );
-  if (
-    !member ||
-    member.state !== "active" ||
-    member.revoked_at !== null ||
-    member.role !== "admin"
-  )
-    throw missing();
+  const member = rows.find((row) => row.account_id === actorId && row.state === "active" && row.revoked_at === null);
+  if (!member || member.state !== "active" || member.revoked_at !== null || member.role !== "admin") throw missing();
 }
 
 async function libraryEvent(
@@ -149,11 +107,7 @@ async function libraryEvent(
   );
 }
 
-async function ensureAnotherActiveAdmin(
-  c: PoolClient,
-  libraryId: string,
-  targetId: string,
-) {
+async function ensureAnotherActiveAdmin(c: PoolClient, libraryId: string, targetId: string) {
   const another = await c.query(
     `SELECT 1 FROM template_library_members member
        JOIN accounts account ON account.id=member.account_id
@@ -163,12 +117,7 @@ async function ensureAnotherActiveAdmin(
       LIMIT 1`,
     [libraryId, targetId],
   );
-  if (!another.rowCount)
-    throw new Problem(
-      409,
-      "conflict",
-      "Сначала назначьте другого активного администратора.",
-    );
+  if (!another.rowCount) throw new Problem(409, "conflict", "Сначала назначьте другого активного администратора.");
 }
 
 export async function createTemplateLibrary(actor: Actor, body: unknown) {
@@ -177,33 +126,18 @@ export async function createTemplateLibrary(actor: Actor, body: unknown) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
     const id = randomUUID();
-    await c.query(
-      "INSERT INTO template_libraries(id,name,created_by) VALUES($1,$2,$3)",
-      [id, input.name, actor.id],
-    );
-    await c.query(
-      "INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'admin')",
-      [id, actor.id],
-    );
+    await c.query("INSERT INTO template_libraries(id,name,created_by) VALUES($1,$2,$3)", [id, input.name, actor.id]);
+    await c.query("INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'admin')", [
+      id,
+      actor.id,
+    ]);
     await audit(c, actor, "template_library.created", id);
-    await libraryEvent(
-      c,
-      actor,
-      id,
-      "template_library.created",
-      "library",
-      id,
-      null,
-      "admin",
-    );
+    await libraryEvent(c, actor, id, "template_library.created", "library", id, null, "admin");
     return { id, name: input.name, role: "admin" as const };
   });
 }
 
-export async function listTemplateLibrariesInTransaction(
-  c: PoolClient,
-  actor: Actor,
-) {
+export async function listTemplateLibrariesInTransaction(c: PoolClient, actor: Actor) {
   const rows = (
     await c.query(
       `SELECT library.id,library.name,member.role,library.created_at AS "createdAt"
@@ -228,17 +162,11 @@ export async function listTemplateLibraries(actor: Actor) {
   });
 }
 
-export async function listTemplateLibraryMembers(
-  actor: Actor,
-  libraryId: string,
-) {
+export async function listTemplateLibraryMembers(actor: Actor, libraryId: string) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor, [], "SHARE");
     await lockLibrary(c, libraryId, "SHARE");
-    requireMember(
-      await lockMembers(c, libraryId, [actor.id], "SHARE"),
-      actor.id,
-    );
+    requireMember(await lockMembers(c, libraryId, [actor.id], "SHARE"), actor.id);
     const rows = (
       await c.query(
         `SELECT member.account_id AS "accountId",
@@ -256,19 +184,12 @@ export async function listTemplateLibraryMembers(
   });
 }
 
-export async function listTemplateLibraryEvents(
-  actor: Actor,
-  libraryId: string,
-  query: unknown,
-) {
+export async function listTemplateLibraryEvents(actor: Actor, libraryId: string, query: unknown) {
   const input = listTemplateLibraryEventsInput.parse(query);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor, [], "SHARE");
     await lockLibrary(c, libraryId, "SHARE");
-    requireAdmin(
-      await lockMembers(c, libraryId, [actor.id], "SHARE"),
-      actor.id,
-    );
+    requireAdmin(await lockMembers(c, libraryId, [actor.id], "SHARE"), actor.id);
     const rows = (
       await c.query(
         `SELECT id,actor_id,action,target_type,target_object_id,target_account_id,
@@ -286,12 +207,8 @@ export async function listTemplateLibraryEvents(
       action: row.action,
       target: {
         type: row.target_type,
-        id:
-          row.target_type === "account"
-            ? row.target_account_id
-            : row.target_object_id,
-        deleted:
-          row.target_type === "account" && row.target_account_id === null,
+        id: row.target_type === "account" ? row.target_account_id : row.target_object_id,
+        deleted: row.target_type === "account" && row.target_account_id === null,
       },
       oldRole: row.old_role,
       newRole: row.new_role,
@@ -317,16 +234,11 @@ export async function changeTemplateLibraryMemberRole(
     const rows = await lockMembers(c, libraryId, [actor.id, accountId]);
     requireAdmin(rows, actor.id);
     const target = rows.find(
-      (row) =>
-        row.account_id === accountId &&
-        row.state === "active" &&
-        row.revoked_at === null,
+      (row) => row.account_id === accountId && row.state === "active" && row.revoked_at === null,
     );
-    if (!target || target.state !== "active" || target.revoked_at !== null)
-      throw missing();
+    if (!target || target.state !== "active" || target.revoked_at !== null) throw missing();
     if (target.role === input.role) return { accountId, role: input.role };
-    if (target.role === "admin" && input.role !== "admin")
-      await ensureAnotherActiveAdmin(c, libraryId, accountId);
+    if (target.role === "admin" && input.role !== "admin") await ensureAnotherActiveAdmin(c, libraryId, accountId);
     await c.query(
       `UPDATE template_library_members SET role=$3
         WHERE library_id=$1 AND account_id=$2 AND state='active' AND revoked_at IS NULL`,
@@ -347,35 +259,21 @@ export async function changeTemplateLibraryMemberRole(
   });
 }
 
-export async function revokeTemplateLibraryMember(
-  actor: Actor,
-  libraryId: string,
-  accountId: string,
-) {
+export async function revokeTemplateLibraryMember(actor: Actor, libraryId: string, accountId: string) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor, [accountId]);
     await lockLibrary(c, libraryId);
     const rows = await lockMembers(c, libraryId, [actor.id, accountId]);
     requireAdmin(rows, actor.id);
     const target = rows.find(
-      (row) =>
-        row.account_id === accountId &&
-        row.state === "active" &&
-        row.revoked_at === null,
+      (row) => row.account_id === accountId && row.state === "active" && row.revoked_at === null,
     );
     if (!target) {
-      if (
-        rows.some(
-          (row) => row.account_id === accountId && row.state === "revoked",
-        )
-      )
-        return { ok: true };
+      if (rows.some((row) => row.account_id === accountId && row.state === "revoked")) return { ok: true };
       throw missing();
     }
-    if (target.state !== "active" || target.revoked_at !== null)
-      throw missing();
-    if (target.role === "admin")
-      await ensureAnotherActiveAdmin(c, libraryId, accountId);
+    if (target.state !== "active" || target.revoked_at !== null) throw missing();
+    if (target.role === "admin") await ensureAnotherActiveAdmin(c, libraryId, accountId);
     await c.query(
       `UPDATE template_library_members
           SET state='revoked',revoked_at=clock_timestamp()
@@ -384,25 +282,12 @@ export async function revokeTemplateLibraryMember(
       [libraryId, accountId],
     );
     await audit(c, actor, "template_library.member_revoked", accountId);
-    await libraryEvent(
-      c,
-      actor,
-      libraryId,
-      "template_library.member_revoked",
-      "account",
-      accountId,
-      target.role,
-      null,
-    );
+    await libraryEvent(c, actor, libraryId, "template_library.member_revoked", "account", accountId, target.role, null);
     return { ok: true };
   });
 }
 
-export async function createTemplateLibraryInvitation(
-  actor: Actor,
-  libraryId: string,
-  body: unknown,
-) {
+export async function createTemplateLibraryInvitation(actor: Actor, libraryId: string, body: unknown) {
   await assertClaimed(db, actor.id);
   const input = createTemplateLibraryInvitationInput.parse(body);
   const created = await transaction(async (c) => {
@@ -416,12 +301,7 @@ export async function createTemplateLibraryInvitation(
         LIMIT 1`,
       [libraryId, input.email],
     );
-    if (existingMember.rowCount)
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот аккаунт уже состоит в библиотеке.",
-      );
+    if (existingMember.rowCount) throw new Problem(409, "conflict", "Этот аккаунт уже состоит в библиотеке.");
 
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
@@ -434,32 +314,13 @@ export async function createTemplateLibraryInvitation(
          SELECT $1,$2,$3,$4,$5,$6,value,value+make_interval(hours=>$7)
            FROM timestamp
          RETURNING expires_at`,
-        [
-          id,
-          libraryId,
-          input.email,
-          input.role,
-          sha256(token),
-          actor.id,
-          input.expiresInHours,
-        ],
+        [id, libraryId, input.email, input.role, sha256(token), actor.id, input.expiresInHours],
       )
     ).rows[0];
     await audit(c, actor, "template_library.invitation_created", id);
-    await libraryEvent(
-      c,
-      actor,
-      libraryId,
-      "template_library.invitation_created",
-      "invitation",
-      id,
-      null,
-      input.role,
-    );
+    await libraryEvent(c, actor, libraryId, "template_library.invitation_created", "invitation", id, null, input.role);
     const fragment = new URLSearchParams({ token, libraryId }).toString();
-    const inviter = (
-      await c.query("SELECT name FROM accounts WHERE id=$1", [actor.id])
-    ).rows[0]?.name as string;
+    const inviter = (await c.query("SELECT name FROM accounts WHERE id=$1", [actor.id])).rows[0]?.name as string;
     return {
       invitation: {
         id,
@@ -504,20 +365,21 @@ async function sendInvitationMail(
   }
   const hosted = config.APP_ORIGIN === HOSTED_MAIL_SITE.origin;
   try {
-    await sendMail({
-      to: invitation.email,
-      ...libraryInviteMail({
-        libraryName: created.libraryName,
-        inviter: created.inviter,
-        role: invitation.role,
-        url: invitation.invitationUrl,
-        expiresAt: new Date(invitation.expiresAt),
-        origin: config.APP_ORIGIN,
-        contact: hosted
-          ? HOSTED_MAIL_SITE.contact
-          : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
-      }),
-    }, LOCAL_INVITATION_MAIL_DIRECTORY);
+    await sendMail(
+      {
+        to: invitation.email,
+        ...libraryInviteMail({
+          libraryName: created.libraryName,
+          inviter: created.inviter,
+          role: invitation.role,
+          url: invitation.invitationUrl,
+          expiresAt: new Date(invitation.expiresAt),
+          origin: config.APP_ORIGIN,
+          contact: hosted ? HOSTED_MAIL_SITE.contact : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
+        }),
+      },
+      LOCAL_INVITATION_MAIL_DIRECTORY,
+    );
     return "sent";
   } catch {
     console.error(JSON.stringify({ event: "template_library.invitation_mail_failed" }));
@@ -528,17 +390,11 @@ async function sendInvitationMail(
 /** Invitation letters in local mail mode. */
 export const LOCAL_INVITATION_MAIL_DIRECTORY = ".local/mail/invitations";
 
-export async function listTemplateLibraryInvitations(
-  actor: Actor,
-  libraryId: string,
-) {
+export async function listTemplateLibraryInvitations(actor: Actor, libraryId: string) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor, [], "SHARE");
     await lockLibrary(c, libraryId, "SHARE");
-    requireAdmin(
-      await lockMembers(c, libraryId, [actor.id], "SHARE"),
-      actor.id,
-    );
+    requireAdmin(await lockMembers(c, libraryId, [actor.id], "SHARE"), actor.id);
     const rows = (
       await c.query(
         `SELECT id,email,role,
@@ -555,11 +411,7 @@ export async function listTemplateLibraryInvitations(
   });
 }
 
-export async function revokeTemplateLibraryInvitation(
-  actor: Actor,
-  libraryId: string,
-  invitationId: string,
-) {
+export async function revokeTemplateLibraryInvitation(actor: Actor, libraryId: string, invitationId: string) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
     await lockLibrary(c, libraryId);
@@ -573,12 +425,7 @@ export async function revokeTemplateLibraryInvitation(
     ).rows[0];
     if (!invitation) throw missing();
     if (invitation.state === "revoked") return { ok: true };
-    if (invitation.state !== "pending")
-      throw new Problem(
-        409,
-        "conflict",
-        "Принятое приглашение нельзя отозвать.",
-      );
+    if (invitation.state !== "pending") throw new Problem(409, "conflict", "Принятое приглашение нельзя отозвать.");
     await c.query(
       `UPDATE template_library_invitations
           SET state='revoked',revoked_at=clock_timestamp(),token_hash=NULL
@@ -600,11 +447,7 @@ export async function revokeTemplateLibraryInvitation(
   });
 }
 
-export async function acceptTemplateLibraryInvitation(
-  actor: Actor,
-  libraryId: string,
-  body: unknown,
-) {
+export async function acceptTemplateLibraryInvitation(actor: Actor, libraryId: string, body: unknown) {
   const input = acceptTemplateLibraryInvitationInput.parse(body);
   return transaction(async (c) => {
     // Discover the issuer only to acquire the established account-before-library
@@ -617,11 +460,7 @@ export async function acceptTemplateLibraryInvitation(
       )
     ).rows[0];
     if (!discovered) throw missing();
-    await lockActorAndAccounts(
-      c,
-      actor,
-      discovered.invited_by ? [discovered.invited_by] : [],
-    );
+    await lockActorAndAccounts(c, actor, discovered.invited_by ? [discovered.invited_by] : []);
     await lockLibrary(c, libraryId);
     const invitation = (
       await c.query(
@@ -645,17 +484,11 @@ export async function acceptTemplateLibraryInvitation(
         [invitation.id, libraryId, actor.id],
       );
       if (!epoch.rowCount)
-        throw new Problem(
-          409,
-          "conflict",
-          "Это приглашение уже было использовано, а доступ отозван.",
-        );
+        throw new Problem(409, "conflict", "Это приглашение уже было использовано, а доступ отозван.");
       return { libraryId, role: epoch.rows[0].role };
     }
-    if (invitation.state !== "pending")
-      throw new Problem(409, "conflict", "Приглашение уже недействительно.");
-    if (!invitation.fresh)
-      throw new Problem(409, "conflict", "Срок действия приглашения истёк.");
+    if (invitation.state !== "pending") throw new Problem(409, "conflict", "Приглашение уже недействительно.");
+    if (!invitation.fresh) throw new Problem(409, "conflict", "Срок действия приглашения истёк.");
     const account = (
       await c.query(
         `SELECT email,email_verified_at FROM accounts
@@ -664,17 +497,9 @@ export async function acceptTemplateLibraryInvitation(
       )
     ).rows[0];
     if (!account || account.email !== invitation.email)
-      throw new Problem(
-        403,
-        "forbidden",
-        "Приглашение предназначено для другого подтверждённого адреса.",
-      );
+      throw new Problem(403, "forbidden", "Приглашение предназначено для другого подтверждённого адреса.");
     if (!account.email_verified_at)
-      throw new Problem(
-        403,
-        "forbidden",
-        "Сначала подтвердите адрес электронной почты аккаунта.",
-      );
+      throw new Problem(403, "forbidden", "Сначала подтвердите адрес электронной почты аккаунта.");
     const issuer = await c.query(
       `SELECT 1 FROM template_library_members member
          JOIN accounts account ON account.id=member.account_id
@@ -684,18 +509,13 @@ export async function acceptTemplateLibraryInvitation(
       [libraryId, invitation.invited_by],
     );
     if (!issuer.rowCount)
-      throw new Problem(
-        409,
-        "conflict",
-        "Администратор, создавший приглашение, больше не может выдавать доступ.",
-      );
+      throw new Problem(409, "conflict", "Администратор, создавший приглашение, больше не может выдавать доступ.");
     const active = await c.query(
       `SELECT 1 FROM template_library_members
         WHERE library_id=$1 AND account_id=$2 AND state='active' AND revoked_at IS NULL`,
       [libraryId, actor.id],
     );
-    if (active.rowCount)
-      throw new Problem(409, "conflict", "Аккаунт уже состоит в библиотеке.");
+    if (active.rowCount) throw new Problem(409, "conflict", "Аккаунт уже состоит в библиотеке.");
     await c.query(
       `INSERT INTO template_library_members(library_id,account_id,role)
        VALUES($1,$2,$3)`,
@@ -712,12 +532,7 @@ export async function acceptTemplateLibraryInvitation(
         WHERE id=$1`,
       [invitation.id, actor.id, libraryId],
     );
-    await audit(
-      c,
-      actor,
-      "template_library.invitation_accepted",
-      invitation.id,
-    );
+    await audit(c, actor, "template_library.invitation_accepted", invitation.id);
     await libraryEvent(
       c,
       actor,
@@ -732,18 +547,9 @@ export async function acceptTemplateLibraryInvitation(
   });
 }
 
-async function requirePublisher(
-  c: PoolClient,
-  libraryId: string,
-  actorId: string,
-) {
+async function requirePublisher(c: PoolClient, libraryId: string, actorId: string) {
   const rows = await lockMembers(c, libraryId, [actorId]);
-  const member = rows.find(
-    (row) =>
-      row.account_id === actorId &&
-      row.state === "active" &&
-      row.revoked_at === null,
-  );
+  const member = rows.find((row) => row.account_id === actorId && row.state === "active" && row.revoked_at === null);
   if (
     !member ||
     member.state !== "active" ||
@@ -754,11 +560,7 @@ async function requirePublisher(
   return member;
 }
 
-export async function publishTemplateLibraryRelease(
-  actor: Actor,
-  libraryId: string,
-  body: unknown,
-) {
+export async function publishTemplateLibraryRelease(actor: Actor, libraryId: string, body: unknown) {
   const input = publishTemplateLibraryReleaseInput.parse(body);
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor);
@@ -780,10 +582,10 @@ export async function publishTemplateLibraryRelease(
     ).rows[0];
     if (!release) throw missing();
     const existing = (
-      await c.query(
-        "SELECT * FROM template_library_publications WHERE library_id=$1 AND release_id=$2 FOR UPDATE",
-        [libraryId, input.releaseId],
-      )
+      await c.query("SELECT * FROM template_library_publications WHERE library_id=$1 AND release_id=$2 FOR UPDATE", [
+        libraryId,
+        input.releaseId,
+      ])
     ).rows[0];
     if (existing) {
       if (existing.state === "active" && existing.withdrawn_at === null)
@@ -792,11 +594,7 @@ export async function publishTemplateLibraryRelease(
           releaseId: existing.release_id,
           state: "active" as const,
         };
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот выпуск уже был отозван из библиотеки.",
-      );
+      throw new Problem(409, "conflict", "Этот выпуск уже был отозван из библиотеки.");
     }
 
     const id = randomUUID();
@@ -804,24 +602,10 @@ export async function publishTemplateLibraryRelease(
       `INSERT INTO template_library_publications(
          id,library_id,release_id,artifact_id,revision_id,publisher_id
        ) VALUES($1,$2,$3,$4,$5,$6)`,
-      [
-        id,
-        libraryId,
-        release.id,
-        release.artifact_id,
-        release.revision_id,
-        actor.id,
-      ],
+      [id, libraryId, release.id, release.artifact_id, release.revision_id, actor.id],
     );
     await audit(c, actor, "template_library.release_published", id);
-    await libraryEvent(
-      c,
-      actor,
-      libraryId,
-      "template_library.release_published",
-      "publication",
-      id,
-    );
+    await libraryEvent(c, actor, libraryId, "template_library.release_published", "publication", id);
     return { id, releaseId: release.id, state: "active" as const };
   });
 }
@@ -847,47 +631,26 @@ export async function withdrawTemplateLibraryPublication(
     ).rows[0];
     if (!publication) throw missing();
     // Curators withdraw only their own publications; admins withdraw any.
-    if (publisher.role !== "admin" && publication.publisher_id !== actor.id)
-      throw missing();
-    if (publication.state === "withdrawn" && publication.withdrawn_at !== null)
-      return { ok: true };
-    if (publication.state !== "active" || publication.withdrawn_at !== null)
-      throw missing();
+    if (publisher.role !== "admin" && publication.publisher_id !== actor.id) throw missing();
+    if (publication.state === "withdrawn" && publication.withdrawn_at !== null) return { ok: true };
+    if (publication.state !== "active" || publication.withdrawn_at !== null) throw missing();
     await c.query(
       `UPDATE template_library_publications
           SET state='withdrawn',withdrawn_at=clock_timestamp(),withdrawal_reason=$2
         WHERE id=$1`,
       [publicationId, input.reason],
     );
-    await audit(
-      c,
-      actor,
-      "template_library.publication_withdrawn",
-      publicationId,
-    );
-    await libraryEvent(
-      c,
-      actor,
-      libraryId,
-      "template_library.publication_withdrawn",
-      "publication",
-      publicationId,
-    );
+    await audit(c, actor, "template_library.publication_withdrawn", publicationId);
+    await libraryEvent(c, actor, libraryId, "template_library.publication_withdrawn", "publication", publicationId);
     return { ok: true };
   });
 }
 
-export async function listTemplateLibraryPublications(
-  actor: Actor,
-  libraryId: string,
-) {
+export async function listTemplateLibraryPublications(actor: Actor, libraryId: string) {
   return transaction(async (c) => {
     await lockActorAndAccounts(c, actor, [], "SHARE");
     await lockLibrary(c, libraryId, "SHARE");
-    requireMember(
-      await lockMembers(c, libraryId, [actor.id], "SHARE"),
-      actor.id,
-    );
+    requireMember(await lockMembers(c, libraryId, [actor.id], "SHARE"), actor.id);
     const rows = (
       await c.query(
         `SELECT publication.id,publication.release_id AS "releaseId",
@@ -936,10 +699,10 @@ export async function joinLibraryByOrganisation(
     )
   ).rows[0];
   if (!library) return false;
-  const ever = await c.query(
-    "SELECT 1 FROM template_library_members WHERE library_id=$1 AND account_id=$2 LIMIT 1",
-    [libraryId, actor.id],
-  );
+  const ever = await c.query("SELECT 1 FROM template_library_members WHERE library_id=$1 AND account_id=$2 LIMIT 1", [
+    libraryId,
+    actor.id,
+  ]);
   if (ever.rowCount) return false;
   await c.query(
     `INSERT INTO template_library_members(library_id,account_id,role)
@@ -947,15 +710,6 @@ export async function joinLibraryByOrganisation(
     [libraryId, actor.id, role],
   );
   await audit(c, actor, "template_library.domain_joined", libraryId);
-  await libraryEvent(
-    c,
-    actor,
-    libraryId,
-    "template_library.domain_joined",
-    "account",
-    actor.id,
-    null,
-    role,
-  );
+  await libraryEvent(c, actor, libraryId, "template_library.domain_joined", "account", actor.id, null, role);
   return true;
 }

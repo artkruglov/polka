@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import {
-  client,
-  type AccountDeletionPlan,
-} from "../../shared/api/client.ts";
+import { client, type AccountDeletionPlan } from "../../shared/api/client.ts";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { Button, Notice, TextField } from "../../shared/ui/controls.tsx";
 

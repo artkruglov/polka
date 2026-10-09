@@ -2,9 +2,7 @@ import type { Revision } from "../../../../../packages/contracts/index.ts";
 import type { BundleExport } from "../../../../../packages/contracts/bundle.ts";
 
 /** The source of one revision as text, or why it cannot be compared. */
-export type RevisionSource =
-  | { text: string; files: Map<string, string> | null }
-  | { unavailable: string };
+export type RevisionSource = { text: string; files: Map<string, string> | null } | { unavailable: string };
 
 /** Why a revision cannot be compared line by line before fetching it, if it cannot. */
 export function unavailableReason(revision: Revision): string | null {
@@ -28,24 +26,18 @@ export function decodeText(bytes: Uint8Array): string | null {
   }
 }
 
-const fromBase64 = (data: string) =>
-  Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+const fromBase64 = (data: string) => Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
 
 /**
  * Read what the owner downloads (the original, or the bundle export) and
  * pick the text to compare: the file itself, or the bundle's entry point.
  */
-export async function readSource(
-  revision: Revision,
-  download: Blob,
-): Promise<RevisionSource> {
+export async function readSource(revision: Revision, download: Blob): Promise<RevisionSource> {
   const early = unavailableReason(revision);
   if (early) return { unavailable: early };
   if (revision.storageKind === "bundle") {
     const bundle = JSON.parse(await download.text()) as BundleExport;
-    const entry = bundle.files.find(
-      (file) => file.path === bundle.manifest.entrypoint,
-    );
+    const entry = bundle.files.find((file) => file.path === bundle.manifest.entrypoint);
     const text = entry ? decodeText(fromBase64(entry.data)) : null;
     if (text === null)
       return {
@@ -65,14 +57,9 @@ export async function readSource(
 }
 
 /** Which files of a bundle were added, removed or changed between two versions. */
-export function fileChanges(
-  before: Map<string, string>,
-  after: Map<string, string>,
-) {
+export function fileChanges(before: Map<string, string>, after: Map<string, string>) {
   const added = [...after.keys()].filter((path) => !before.has(path));
   const removed = [...before.keys()].filter((path) => !after.has(path));
-  const changed = [...after.keys()].filter(
-    (path) => before.has(path) && before.get(path) !== after.get(path),
-  );
+  const changed = [...after.keys()].filter((path) => before.has(path) && before.get(path) !== after.get(path));
   return { added, removed, changed };
 }

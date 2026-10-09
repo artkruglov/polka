@@ -16,12 +16,9 @@ export const contextInput = z
     publicationId: uuid.optional(),
     purpose: contextPurpose.optional(),
   })
-  .refine(
-    (value) => Boolean(value.libraryId) === Boolean(value.publicationId),
-    {
-      message: "libraryId and publicationId must be supplied together",
-    },
-  )
+  .refine((value) => Boolean(value.libraryId) === Boolean(value.publicationId), {
+    message: "libraryId and publicationId must be supplied together",
+  })
   .strict();
 export const templateReleaseInput = z
   .object({

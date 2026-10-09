@@ -24,8 +24,7 @@ export function useFolders(accountId?: string) {
           setResult({
             accountId,
             items: [],
-            error:
-              "Не удалось загрузить папки. Можно сохранить без папки или повторить загрузку.",
+            error: "Не удалось загрузить папки. Можно сохранить без папки или повторить загрузку.",
             loading: false,
           });
       });
@@ -33,9 +32,6 @@ export function useFolders(accountId?: string) {
       current = false;
     };
   }, [accountId, attempt]);
-  const state =
-    result.accountId === accountId
-      ? result
-      : { items: [], error: "", loading: !!accountId };
+  const state = result.accountId === accountId ? result : { items: [], error: "", loading: !!accountId };
   return { ...state, retry: () => setAttempt((value) => value + 1) };
 }

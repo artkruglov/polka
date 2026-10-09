@@ -6,11 +6,7 @@ import { Problem } from "./errors.ts";
 import { config } from "./config.ts";
 import { isSuspicious, SCAN_INCOMPLETE } from "./phishing-signals.ts";
 import { fraudRelevant } from "./content-filter/fraud-score.ts";
-import {
-  NO_DECISION,
-  contentReason,
-  type ContentDecision,
-} from "./content-filter/policy.ts";
+import { NO_DECISION, contentReason, type ContentDecision } from "./content-filter/policy.ts";
 import type { Category } from "./content-filter/lists.ts";
 
 type Queryable = Pick<PoolClient | Pool, "query">;
@@ -131,17 +127,14 @@ export async function authorStanding(
         row.approved ||
         (row.aged &&
           !row.open_reports &&
-          (config.SHARE_MODERATION !== "auto" ||
-            row.clean_saves >= config.TRUST_MIN_CLEAN_SAVES))),
+          (config.SHARE_MODERATION !== "auto" || row.clean_saves >= config.TRUST_MIN_CLEAN_SAVES))),
   };
 }
 
 /** Why the author is not trusted, as the end of a sentence for them. */
 function untrustedBecause(standing: AuthorStanding) {
-  if (standing.blockedContent)
-    return "пока одна из ваших работ заблокирована модератором Полки";
-  if (standing.pausedLinks)
-    return "пока одна из ваших ссылок приостановлена и ждёт решения модератора Полки";
+  if (standing.blockedContent) return "пока одна из ваших работ заблокирована модератором Полки";
+  if (standing.pausedLinks) return "пока одна из ваших ссылок приостановлена и ждёт решения модератора Полки";
   if (standing.aged && standing.openReports)
     return "пока на ваши ссылки есть жалобы, которые модератор ещё не рассмотрел";
   return `первые ${config.NEW_ACCOUNT_DAYS} ${daysWord(config.NEW_ACCOUNT_DAYS)} после регистрации, пока модератор не одобрит одну из ваших ссылок`;
@@ -282,11 +275,7 @@ function decideLegacy(
   if (mode === "auto") {
     // Nobody reviews authors by hand. Images are the one thing rules cannot
     // read: without an image model, a young account's images wait.
-    const young =
-      !standing.operatorCreated &&
-      !standing.approved &&
-      !standing.identityVerified &&
-      !standing.aged;
+    const young = !standing.operatorCreated && !standing.approved && !standing.identityVerified && !standing.aged;
     const unchecked = images && young;
     return {
       hold: unchecked ? "image-unchecked" : null,
@@ -349,8 +338,7 @@ export async function approvedSignals(c: Queryable, artifactId: string) {
   const approved = new Set<string>();
   for (const row of rows)
     if (Array.isArray(row.signals))
-      for (const signal of row.signals)
-        if (typeof signal === "string") approved.add(signal);
+      for (const signal of row.signals) if (typeof signal === "string") approved.add(signal);
   return approved;
 }
 
@@ -358,10 +346,7 @@ export async function approvedSignals(c: Queryable, artifactId: string) {
  * The fraud signals of a version are all among the approved ones. A page
  * that could not be read is never covered: nobody saw what it holds.
  */
-export function approvedSignalsCover(
-  approved: ReadonlySet<string>,
-  signals: readonly string[],
-) {
+export function approvedSignalsCover(approved: ReadonlySet<string>, signals: readonly string[]) {
   if (!approved.size || signals.includes(SCAN_INCOMPLETE)) return false;
   return fraudRelevant(signals).every((signal) => approved.has(signal));
 }

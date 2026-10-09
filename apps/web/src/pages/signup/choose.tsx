@@ -10,8 +10,7 @@ import { SignupConsent } from "./consent.tsx";
 
 type Pending = { provider: string; providerName: string; next: string };
 
-const GONE =
-  "Вход не завершён: прошло больше 10 минут или он открыт в другом браузере. Войдите ещё раз.";
+const GONE = "Вход не завершён: прошло больше 10 минут или он открыт в другом браузере. Войдите ещё раз.";
 
 /**
  * /signup/choose (docs/specs/SIGN_IN_PROVIDERS.md § 1): a provider sign-in
@@ -29,26 +28,19 @@ export function SignupChoose() {
   useEffect(() => {
     request<Pending>("/auth/idp/pending")
       .then(setPending)
-      .catch((e) =>
-        setError(e instanceof ApiError && e.status === 410 ? GONE : (e as Error).message),
-      );
+      .catch((e) => setError(e instanceof ApiError && e.status === 410 ? GONE : (e as Error).message));
   }, []);
   const provider = pending?.providerName ?? "этот вход";
   const how = methodLabel(hint?.method ?? null);
   const signInExisting = () => {
     const linked = `/signup/linked?${new URLSearchParams({ next })}`;
-    location.assign(
-      `/signup?${new URLSearchParams({ link: "pending", next: linked })}`,
-    );
+    location.assign(`/signup?${new URLSearchParams({ link: "pending", next: linked })}`);
   };
   const createNew = async () => {
     setBusy(true);
     setError("");
     try {
-      const created = await request<{ next: string }>(
-        "/auth/idp/pending/create",
-        {},
-      );
+      const created = await request<{ next: string }>("/auth/idp/pending/create", {});
       location.assign(safeNext(created.next) || "/start");
     } catch (e) {
       setError(e instanceof ApiError && e.status === 410 ? GONE : (e as Error).message);
@@ -63,14 +55,9 @@ export function SignupChoose() {
           <Link2 />
         </div>
         <span className="eyebrow">Одна полка — один человек</span>
-        <h1>
-          {hint
-            ? `Похоже, у вас уже есть полка «${hint.displayName}».`
-            : "Похоже, у вас уже есть полка."}
-        </h1>
+        <h1>{hint ? `Похоже, у вас уже есть полка «${hint.displayName}».` : "Похоже, у вас уже есть полка."}</h1>
         <p>
-          Войдите в неё — и мы привяжем {provider} к ней: дальше {provider}{" "}
-          будет открывать ту же полку.
+          Войдите в неё — и мы привяжем {provider} к ней: дальше {provider} будет открывать ту же полку.
           {how ? ` В прошлый раз вы входили ${how}.` : ""}
         </p>
         {error && <Notice tone="error">{error}</Notice>}
@@ -150,10 +137,7 @@ export function SignupLinked() {
         {state.kind === "error" && <Notice tone="error">{state.message}</Notice>}
         {state.kind !== "busy" && (
           <div className="shelf-choice">
-            <Button
-              variant="primary"
-              onClick={() => location.assign(state.kind === "done" ? state.next : next)}
-            >
+            <Button variant="primary" onClick={() => location.assign(state.kind === "done" ? state.next : next)}>
               Продолжить
             </Button>
           </div>

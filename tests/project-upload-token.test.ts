@@ -16,8 +16,7 @@ const app = await createApp();
 const origin = config.APP_ORIGIN;
 const mcpHost = new URL(MCP_AUDIENCE).host;
 const password = randomBytes(24).toString("hex");
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 let owner: Awaited<ReturnType<typeof createAccount>>;
 let cookie = "";
 
@@ -98,7 +97,13 @@ const beginProject = (bearer: string) =>
           sha256: createHash("sha256").update(readme).digest("hex"),
         },
       ],
-      provenance: { kind: "file", sourceUrl: null, capturedAt: new Date().toISOString(), attribution: "unknown", license: "unknown" },
+      provenance: {
+        kind: "file",
+        sourceUrl: null,
+        capturedAt: new Date().toISOString(),
+        attribution: "unknown",
+        license: "unknown",
+      },
       dependencies: { status: "unknown", unresolved: [] },
     },
   });
@@ -135,7 +140,9 @@ test("an agent gets a token and the command, and the token uploads a project", a
   assert.equal(put.statusCode, 200, put.body);
   const done = await api(issued.token, "POST", `/api/v1/projects/${uploadId}/finalize`);
   assert.equal(done.statusCode, 200, done.body);
-  const { rows: [work] } = await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [done.json().artifactId]);
+  const {
+    rows: [work],
+  } = await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [done.json().artifactId]);
   assert.equal(work.tenant_id, owner.tenant);
   // One page or component from disk goes through the same token
   // (polka-publish.mjs), so the agent never pastes a file into a tool call.
@@ -169,7 +176,10 @@ test("a connection that reads sources gets a token that pulls too", async () => 
   const done = (await api(issued.token, "POST", `/api/v1/projects/${uploadId}/finalize`)).json();
   const listed = await api(issued.token, "GET", `/api/v1/works/${done.artifactId}/files`);
   assert.equal(listed.statusCode, 200, listed.body);
-  assert.deepEqual(listed.json().files.map((file: any) => file.path), ["README.md"]);
+  assert.deepEqual(
+    listed.json().files.map((file: any) => file.path),
+    ["README.md"],
+  );
   const bytes = await api(issued.token, "GET", `/api/v1/works/${done.artifactId}/revisions/${done.revisionId}/files/0`);
   assert.equal(bytes.statusCode, 200, bytes.body);
   assert.deepEqual(bytes.rawPayload, readme);
@@ -198,7 +208,14 @@ test("a read-only connection is not offered the tool; the database keeps tokens 
     db.query(
       `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,parent_id)
        VALUES($1,$2,$3,$4,'x',ARRAY['capture'],$5,now()+interval '2 hours',$6)`,
-      [randomUUID(), owner.tenant, owner.id, sha256(randomBytes(32).toString("base64url")), `${origin}/api/v1/projects`, parent.id],
+      [
+        randomUUID(),
+        owner.tenant,
+        owner.id,
+        sha256(randomBytes(32).toString("base64url")),
+        `${origin}/api/v1/projects`,
+        parent.id,
+      ],
     ),
     /agent_connections_child_shape/,
   );

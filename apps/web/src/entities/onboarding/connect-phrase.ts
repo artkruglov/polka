@@ -15,10 +15,7 @@ export function isLoopbackOrigin(origin: string) {
   try {
     const host = new URL(origin).hostname;
     return (
-      host === "localhost" ||
-      host.endsWith(".localhost") ||
-      host === "[::1]" ||
-      /^127(?:\.\d{1,3}){3}$/.test(host)
+      host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(host)
     );
   } catch {
     return false;
@@ -27,8 +24,7 @@ export function isLoopbackOrigin(origin: string) {
 
 /** Web chats connect from the provider's servers: only to a public address. */
 const WEB_CHATS = new Set(["claude-ai", "chatgpt"]);
-export const reachableFrom = (origin: string) => (id: string) =>
-  !isLoopbackOrigin(origin) || !WEB_CHATS.has(id);
+export const reachableFrom = (origin: string) => (id: string) => !isLoopbackOrigin(origin) || !WEB_CHATS.has(id);
 
 export type ClientHint = {
   id: "codex" | "claude-code" | "claude-ai" | "chatgpt";
@@ -40,32 +36,32 @@ export type ClientHint = {
 
 export function clientHints(origin: string): ClientHint[] {
   const mcp = `${origin}/mcp`;
-  return ([
-    {
-      id: "codex",
-      client: "Codex",
-      command:
-        "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
-      note: "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka.",
-    },
-    {
-      id: "claude-code",
-      client: "Claude Code",
-      command:
-        "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka",
-      note: "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate.",
-    },
-    {
-      id: "claude-ai",
-      client: "Claude.ai и Claude Desktop",
-      command: null,
-      note: `Settings → Connectors → Add custom connector, адрес ${mcp}.`,
-    },
-    {
-      id: "chatgpt",
-      client: "ChatGPT",
-      command: null,
-      note: `Settings → Apps & Connectors → Developer mode → Create, адрес ${mcp}, Authentication: OAuth.`,
-    },
-  ] satisfies ClientHint[]).filter((hint) => reachableFrom(origin)(hint.id));
+  return (
+    [
+      {
+        id: "codex",
+        client: "Codex",
+        command: "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
+        note: "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka.",
+      },
+      {
+        id: "claude-code",
+        client: "Claude Code",
+        command: "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka",
+        note: "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate.",
+      },
+      {
+        id: "claude-ai",
+        client: "Claude.ai и Claude Desktop",
+        command: null,
+        note: `Settings → Connectors → Add custom connector, адрес ${mcp}.`,
+      },
+      {
+        id: "chatgpt",
+        client: "ChatGPT",
+        command: null,
+        note: `Settings → Apps & Connectors → Developer mode → Create, адрес ${mcp}, Authentication: OAuth.`,
+      },
+    ] satisfies ClientHint[]
+  ).filter((hint) => reachableFrom(origin)(hint.id));
 }

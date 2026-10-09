@@ -4,11 +4,7 @@ import { ApiError, request } from "../../shared/api/client.ts";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
-import {
-  OPEN_SHELF_PHRASE,
-  rememberEnteredByAgent,
-  rememberSignInMethod,
-} from "../../shared/lib/known-shelf.ts";
+import { OPEN_SHELF_PHRASE, rememberEnteredByAgent, rememberSignInMethod } from "../../shared/lib/known-shelf.ts";
 
 type Preview = {
   shelfName: string;
@@ -27,9 +23,7 @@ type Preview = {
 export function Enter() {
   const ways = useSignInWays();
   const token = useRef("");
-  const [state, setState] = useState<
-    "busy" | "ready" | "entering" | "stale" | "error"
-  >("busy");
+  const [state, setState] = useState<"busy" | "ready" | "entering" | "stale" | "error">("busy");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -46,8 +40,7 @@ export function Enter() {
         setState("ready");
       })
       .catch((e) => {
-        if (e instanceof ApiError && (e.status === 410 || e.status === 400))
-          setState("stale");
+        if (e instanceof ApiError && (e.status === 410 || e.status === 400)) setState("stale");
         else {
           setMessage((e as Error).message);
           setState("error");
@@ -58,10 +51,10 @@ export function Enter() {
     setState("entering");
     try {
       rememberSignInMethod("agent");
-      const { clientName } = await request<{ clientName: string }>(
-        "/auth/enter",
-        { token: token.current, replace: !!preview?.current },
-      );
+      const { clientName } = await request<{ clientName: string }>("/auth/enter", {
+        token: token.current,
+        replace: !!preview?.current,
+      });
       rememberEnteredByAgent(clientName);
       location.replace("/");
     } catch (e) {
@@ -89,25 +82,14 @@ export function Enter() {
           <>
             <h1>Открыть временную полку «{preview.shelfName}»?</h1>
             <p>
-              Ссылку дал агент <strong>{preview.clientName}</strong>. Открывайте,
-              только если вы сами попросили его об этом. По этой ссылке полку
-              можно смотреть; закрепить её, подключить агентов или удалить —
-              только после входа {ways.via}.
+              Ссылку дал агент <strong>{preview.clientName}</strong>. Открывайте, только если вы сами попросили его об
+              этом. По этой ссылке полку можно смотреть; закрепить её, подключить агентов или удалить — только после
+              входа {ways.via}.
             </p>
-            {preview.current && (
-              <Notice>
-                Этот браузер уже вошёл в полку «{preview.current.name}».
-              </Notice>
-            )}
+            {preview.current && <Notice>Этот браузер уже вошёл в полку «{preview.current.name}».</Notice>}
             <div className="shelf-choice">
-              <Button
-                variant="primary"
-                busy={state === "entering"}
-                onClick={() => void enter()}
-              >
-                {preview.current
-                  ? `Перейти в «${preview.shelfName}»`
-                  : `Открыть «${preview.shelfName}»`}
+              <Button variant="primary" busy={state === "entering"} onClick={() => void enter()}>
+                {preview.current ? `Перейти в «${preview.shelfName}»` : `Открыть «${preview.shelfName}»`}
               </Button>
               {preview.current ? (
                 <a className="ui-button ui-button--secondary" href="/">
@@ -125,8 +107,8 @@ export function Enter() {
           <>
             <h1>Ссылка устарела.</h1>
             <p>
-              Ссылка для входа действует 5 минут и открывает полку один раз.
-              Попросите агента новую: «{OPEN_SHELF_PHRASE}».
+              Ссылка для входа действует 5 минут и открывает полку один раз. Попросите агента новую: «
+              {OPEN_SHELF_PHRASE}».
             </p>
             <a className="onboard-legacy" href="/signup">
               Войти другим способом

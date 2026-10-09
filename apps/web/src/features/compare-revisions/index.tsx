@@ -25,9 +25,7 @@ type State =
 
 const download = (revision: Revision, signal: AbortSignal) =>
   bytes(
-    revision.storageKind === "bundle"
-      ? `/revisions/${revision.id}/export`
-      : `/revisions/${revision.id}/bytes`,
+    revision.storageKind === "bundle" ? `/revisions/${revision.id}/export` : `/revisions/${revision.id}/bytes`,
     undefined,
     signal,
   );
@@ -48,9 +46,12 @@ export function CompareRevisions({
 }) {
   const pick = (id: string) => revisions.find((r) => r.id === id);
   const defaults = () => {
-    const at = Math.max(0, revisions.findIndex((r) => r.id === shown.id));
+    const at = Math.max(
+      0,
+      revisions.findIndex((r) => r.id === shown.id),
+    );
     const older = revisions[at + 1] ?? revisions[at];
-    const newer = revisions[at + 1] ? revisions[at] : revisions[at - 1] ?? revisions[at];
+    const newer = revisions[at + 1] ? revisions[at] : (revisions[at - 1] ?? revisions[at]);
     return { from: older?.id ?? "", to: newer?.id ?? "" };
   };
   const [fromId, setFromId] = useState(() => defaults().from);
@@ -69,11 +70,7 @@ export function CompareRevisions({
   }, [key]);
 
   if (revisions.length < 2)
-    return (
-      <p className="revision-compare-empty">
-        Сравнивать пока не с чем: у работы одна версия.
-      </p>
-    );
+    return <p className="revision-compare-empty">Сравнивать пока не с чем: у работы одна версия.</p>;
 
   const run = async () => {
     const from = pick(fromId),
@@ -92,10 +89,7 @@ export function CompareRevisions({
       if ("unavailable" in before || "unavailable" in after)
         return setState({
           status: "unavailable",
-          message:
-            "unavailable" in before
-              ? before.unavailable
-              : (after as { unavailable: string }).unavailable,
+          message: "unavailable" in before ? before.unavailable : (after as { unavailable: string }).unavailable,
         });
       const result = await diffInWorker(before.text, after.text, controller.signal);
       if (controller.signal.aborted) return;
@@ -104,17 +98,13 @@ export function CompareRevisions({
         from,
         to,
         result,
-        files:
-          before.files && after.files ? fileChanges(before.files, after.files) : null,
+        files: before.files && after.files ? fileChanges(before.files, after.files) : null,
       });
     } catch (error) {
       if (controller.signal.aborted) return;
       setState({
         status: "error",
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : "Не удалось сравнить версии.",
+        message: error instanceof Error && error.message ? error.message : "Не удалось сравнить версии.",
       });
     }
   };
@@ -127,33 +117,18 @@ export function CompareRevisions({
   return (
     <section className="revision-compare" aria-label="Сравнение версий">
       <div className="revision-compare-bar">
-        <SelectField
-          label="Было"
-          value={fromId}
-          onChange={(event) => setFromId(event.target.value)}
-        >
+        <SelectField label="Было" value={fromId} onChange={(event) => setFromId(event.target.value)}>
           {revisions.map(option)}
         </SelectField>
-        <SelectField
-          label="Стало"
-          value={toId}
-          onChange={(event) => setToId(event.target.value)}
-        >
+        <SelectField label="Стало" value={toId} onChange={(event) => setToId(event.target.value)}>
           {revisions.map(option)}
         </SelectField>
-        <Button
-          variant="secondary"
-          onClick={run}
-          busy={state.status === "busy"}
-          disabled={fromId === toId}
-        >
+        <Button variant="secondary" onClick={run} busy={state.status === "busy"} disabled={fromId === toId}>
           <GitCompareArrows />
           {state.status === "busy" ? "Сравниваем…" : "Сравнить"}
         </Button>
       </div>
-      {fromId === toId && (
-        <p className="revision-compare-hint">Выберите две разные версии.</p>
-      )}
+      {fromId === toId && <p className="revision-compare-hint">Выберите две разные версии.</p>}
       {(state.status === "unavailable" || state.status === "error") && (
         <p
           className={`revision-compare-hint${state.status === "error" ? " revision-compare-hint--error" : ""}`}
@@ -168,11 +143,7 @@ export function CompareRevisions({
           to={state.to.number}
           result={state.result}
           files={state.files}
-          entry={
-            state.to.storageKind === "bundle"
-              ? (state.to.manifest?.entrypoint ?? undefined)
-              : undefined
-          }
+          entry={state.to.storageKind === "bundle" ? (state.to.manifest?.entrypoint ?? undefined) : undefined}
         />
       )}
     </section>

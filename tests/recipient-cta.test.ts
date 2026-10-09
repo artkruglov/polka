@@ -16,8 +16,7 @@ const app = await createApp();
 const origin = config.APP_ORIGIN;
 const HUMAN =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
-const address = () =>
-  `2001:db8:c7::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:c7::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 after(async () => {
   await flushAnalytics();
@@ -61,10 +60,7 @@ test("a guest's view and press are counted anonymously; bots, signed-in viewers 
   }
   // A bot's load, a signed-in viewer's load: 204, nothing written.
   assert.equal((await post({ event: "view", surface: "bar" }, { "user-agent": "curl/8.7.1" })).statusCode, 204);
-  assert.equal(
-    (await post({ event: "view", surface: "bar" }, { cookie: "polka_session=whatever" })).statusCode,
-    204,
-  );
+  assert.equal((await post({ event: "view", surface: "bar" }, { cookie: "polka_session=whatever" })).statusCode, 204);
   // Anything beyond the two enumerated words is refused.
   for (const bad of [
     { event: "view", surface: "modal" },
@@ -76,10 +72,7 @@ test("a guest's view and press are counted anonymously; bots, signed-in viewers 
   ])
     assert.equal((await post(bad)).statusCode, 400, JSON.stringify(bad));
   // A browser POST from elsewhere is refused before anything is counted.
-  assert.equal(
-    (await post({ event: "view", surface: "bar" }, { origin: "https://attacker.invalid" })).statusCode,
-    403,
-  );
+  assert.equal((await post({ event: "view", surface: "bar" }, { origin: "https://attacker.invalid" })).statusCode, 403);
   assert.equal(await counted("recipient_cta_view", "bar"), before.bar + 1);
   assert.equal(await counted("recipient_cta_view", "card"), before.card + 1);
   assert.equal(await counted("recipient_cta_click", "remix"), before.remix + 1);

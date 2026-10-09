@@ -27,40 +27,22 @@ const nameTaken = (name: string, folderId: string) =>
 async function folderNamed(c: PoolClient, tenant: string, name: string) {
   const {
     rows: [row],
-  } = await c.query("SELECT id FROM folders WHERE tenant_id=$1 AND name=$2", [
-    tenant,
-    name,
-  ]);
+  } = await c.query("SELECT id FROM folders WHERE tenant_id=$1 AND name=$2", [tenant, name]);
   return row?.id as string | undefined;
 }
 
-export async function createFolderInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  rawName: string,
-) {
+export async function createFolderInTransaction(c: PoolClient, actor: Actor, rawName: string) {
   const name = folderNameSchema.parse(rawName);
   await lockShelf(c, actor, "curator");
   await refuseFolderManagement(c, actor);
   const {
     rows: [{ count }],
-  } = await c.query("SELECT count(*) FROM folders WHERE tenant_id=$1", [
-    actor.tenant,
-  ]);
-  if (Number(count) >= MAX_FOLDERS)
-    throw new Problem(
-      413,
-      "quota",
-      `В этой сборке доступно до ${MAX_FOLDERS} папок.`,
-    );
+  } = await c.query("SELECT count(*) FROM folders WHERE tenant_id=$1", [actor.tenant]);
+  if (Number(count) >= MAX_FOLDERS) throw new Problem(413, "quota", `В этой сборке доступно до ${MAX_FOLDERS} папок.`);
   const existing = await folderNamed(c, actor.tenant, name);
   if (existing) throw nameTaken(name, existing);
   const folder = { id: randomUUID(), name };
-  await c.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [
-    folder.id,
-    actor.tenant,
-    folder.name,
-  ]);
+  await c.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [folder.id, actor.tenant, folder.name]);
   await audit(c, actor, "folder.created", folder.id);
   return folder;
 }
@@ -68,20 +50,12 @@ export async function createFolderInTransaction(
 async function lockFolder(c: PoolClient, tenant: string, folderId: string) {
   const {
     rows: [folder],
-  } = await c.query(
-    "SELECT id,name FROM folders WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [folderId, tenant],
-  );
+  } = await c.query("SELECT id,name FROM folders WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [folderId, tenant]);
   if (!folder) throw missing();
   return folder as { id: string; name: string };
 }
 
-export async function renameFolderInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  folderId: string,
-  rawName: string,
-) {
+export async function renameFolderInTransaction(c: PoolClient, actor: Actor, folderId: string, rawName: string) {
   const name = folderNameSchema.parse(rawName);
   await lockShelf(c, actor, "curator");
   await refuseFolderManagement(c, actor);
@@ -99,11 +73,7 @@ export async function renameFolderInTransaction(
  * were in it lose the folder (restored, they come back «без папки»); works on
  * the shelf are never moved implicitly: the refusal counts them.
  */
-export async function deleteFolderInTransaction(
-  c: PoolClient,
-  actor: Actor,
-  folderId: string,
-) {
+export async function deleteFolderInTransaction(c: PoolClient, actor: Actor, folderId: string) {
   await lockShelf(c, actor, "curator");
   await refuseFolderManagement(c, actor);
   const folder = await lockFolder(c, actor.tenant, folderId);
@@ -128,10 +98,7 @@ export async function deleteFolderInTransaction(
      WHERE tenant_id=$1 AND folder_id=$2 AND trashed_at IS NOT NULL`,
     [actor.tenant, folder.id],
   );
-  await c.query("DELETE FROM folders WHERE id=$1 AND tenant_id=$2", [
-    folder.id,
-    actor.tenant,
-  ]);
+  await c.query("DELETE FROM folders WHERE id=$1 AND tenant_id=$2", [folder.id, actor.tenant]);
   await audit(c, actor, "folder.deleted", folder.id);
   return {
     id: folder.id,
@@ -155,11 +122,7 @@ export async function moveArtifactsInTransaction(
 ) {
   const ids = [...new Set(artifactIds.map((id) => id.toLowerCase()))];
   if (!ids.length || ids.length > MAX_MOVE_BATCH)
-    throw new Problem(
-      400,
-      "invalid",
-      `За один раз можно перенести от 1 до ${MAX_MOVE_BATCH} работ.`,
-    );
+    throw new Problem(400, "invalid", `За один раз можно перенести от 1 до ${MAX_MOVE_BATCH} работ.`);
   await lockShelf(c, actor, "curator");
   // An agent limited to folders moves only its works, only between its folders.
   for (const id of ids) await assertArtifactInAgentScope(c, actor, id);
@@ -173,22 +136,19 @@ export async function moveArtifactsInTransaction(
   );
   if (rows.length !== ids.length) {
     const found = new Set(rows.map((row) => row.id));
-    throw new Problem(
-      404,
-      "not_found",
-      "Некоторых работ нет на полке (или они в корзине). Ничего не перенесено.",
-      { reason: "works_missing", missing: ids.filter((id) => !found.has(id)) },
-    );
+    throw new Problem(404, "not_found", "Некоторых работ нет на полке (или они в корзине). Ничего не перенесено.", {
+      reason: "works_missing",
+      missing: ids.filter((id) => !found.has(id)),
+    });
   }
   const target = folder?.id ?? null;
-  const moved = rows
-    .filter((row) => row.folder_id !== target)
-    .map((row) => row.id as string);
+  const moved = rows.filter((row) => row.folder_id !== target).map((row) => row.id as string);
   if (moved.length) {
-    await c.query(
-      "UPDATE artifacts SET folder_id=$3 WHERE tenant_id=$1 AND id=ANY($2::uuid[])",
-      [actor.tenant, moved, target],
-    );
+    await c.query("UPDATE artifacts SET folder_id=$3 WHERE tenant_id=$1 AND id=ANY($2::uuid[])", [
+      actor.tenant,
+      moved,
+      target,
+    ]);
     for (const id of moved) await audit(c, actor, "artifact.moved", id);
   }
   const movedSet = new Set(moved);

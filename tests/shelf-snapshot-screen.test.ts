@@ -82,11 +82,16 @@ async function mcp(secret: string, name: string, args: Record<string, unknown>) 
     payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
   });
   const text = String(response.headers["content-type"]).startsWith("text/event-stream")
-    ? response.body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("")
+    ? response.body
+        .split("\n")
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => line.slice(6))
+        .join("")
     : response.body;
   const answer = JSON.parse(text);
   // An unknown tool is a JSON-RPC error, not a tool result.
-  if (answer.error) return { isError: true, structuredContent: null, content: [{ text: answer.error.message as string }] };
+  if (answer.error)
+    return { isError: true, structuredContent: null, content: [{ text: answer.error.message as string }] };
   return answer.result as { isError?: boolean; structuredContent: any; content: { text: string }[] };
 }
 
@@ -97,7 +102,12 @@ before(async () => {
   reader = await createAccount(`snap-reader-${suffix}`, password);
   stranger = await createAccount(`snap-stranger-${suffix}`, password);
   for (const account of [owner, reader, stranger]) {
-    const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: account.name, password } });
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/login",
+      headers: { origin },
+      payload: { name: account.name, password },
+    });
     assert.equal(login.statusCode, 200, login.body);
     sessions.set(account.name, login.cookies[0].value);
   }
@@ -121,7 +131,15 @@ test("polka_snapshot answers what GET /api/v1/snapshot answers, page by page; th
   await db.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,storage_kind,total_size,created_at)
      VALUES($1,$2,$3,2,$4,'note.txt','text/plain',4,$5,$6,'version','single',4,$7)`,
-    [second, owner.tenant, twoVersions.artifactId, owner.id, sha256("v2"), `${owner.tenant}/snapshot/${second}`, day(5)],
+    [
+      second,
+      owner.tenant,
+      twoVersions.artifactId,
+      owner.id,
+      sha256("v2"),
+      `${owner.tenant}/snapshot/${second}`,
+      day(5),
+    ],
   );
   await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [twoVersions.artifactId, second]);
   const journal = (action: string, artifactId: string, daysAgo: number, payload: object | null = null) =>
@@ -129,14 +147,22 @@ test("polka_snapshot answers what GET /api/v1/snapshot answers, page by page; th
       "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,payload,created_at) VALUES($1,$2,$3,$4,$5,$6)",
       [owner.tenant, owner.id, action, artifactId, payload, day(daysAgo)],
     );
-  await journal("revision.accepted", twoVersions.artifactId, 8, { artifactId: twoVersions.artifactId, revisionId: twoVersions.revisionId });
+  await journal("revision.accepted", twoVersions.artifactId, 8, {
+    artifactId: twoVersions.artifactId,
+    revisionId: twoVersions.revisionId,
+  });
   await journal("artifact.trashed", trashedLater.artifactId, 1);
   await db.query("UPDATE artifacts SET trashed_at=$2 WHERE id=$1", [trashedLater.artifactId, day(1)]);
 
   const secret = await token(owner, ["context", "read"]);
   const at = day(3);
   const http = (qs: string) =>
-    app.inject({ method: "GET", url: `/api/v1/snapshot?${qs}`, remoteAddress: address(), headers: { authorization: `Bearer ${secret}` } });
+    app.inject({
+      method: "GET",
+      url: `/api/v1/snapshot?${qs}`,
+      remoteAddress: address(),
+      headers: { authorization: `Bearer ${secret}` },
+    });
   const whole = await http(new URLSearchParams({ at, limit: "100" }).toString());
   assert.equal(whole.statusCode, 200, whole.body);
   const tool = await mcp(secret, "polka_snapshot", { at, limit: 100 });
@@ -148,8 +174,13 @@ test("polka_snapshot answers what GET /api/v1/snapshot answers, page by page; th
   const firstTool = (await mcp(secret, "polka_snapshot", { at, limit: 1 })).structuredContent;
   assert.deepEqual(firstTool, firstHttp);
   assert.ok(firstHttp.nextCursor);
-  const nextHttp = (await http(new URLSearchParams({ at, limit: "1", cursor: firstHttp.nextCursor }).toString())).json();
-  assert.deepEqual((await mcp(secret, "polka_snapshot", { at, limit: 1, cursor: firstHttp.nextCursor })).structuredContent, nextHttp);
+  const nextHttp = (
+    await http(new URLSearchParams({ at, limit: "1", cursor: firstHttp.nextCursor }).toString())
+  ).json();
+  assert.deepEqual(
+    (await mcp(secret, "polka_snapshot", { at, limit: 1, cursor: firstHttp.nextCursor })).structuredContent,
+    nextHttp,
+  );
   // The tool refuses what the route refuses, and needs read.
   assert.ok((await mcp(secret, "polka_snapshot", { at: new Date(Date.now() + 3_600_000).toISOString() })).isError);
   assert.ok((await mcp(secret, "polka_snapshot", { at: "yesterday" })).isError);
@@ -175,7 +206,11 @@ test("polka_snapshot answers what GET /api/v1/snapshot answers, page by page; th
   assert.equal(trashed.acceptedRevisionNumber, null);
   // Before anything was saved the shelf was empty; the future, a bad moment and no session are refused.
   assert.equal((await call("GET", `/api/snapshot?at=${encodeURIComponent(day(30))}`, owner)).json().items.length, 0);
-  assert.equal((await call("GET", `/api/snapshot?at=${encodeURIComponent(new Date(Date.now() + 3_600_000).toISOString())}`, owner)).statusCode, 400);
+  assert.equal(
+    (await call("GET", `/api/snapshot?at=${encodeURIComponent(new Date(Date.now() + 3_600_000).toISOString())}`, owner))
+      .statusCode,
+    400,
+  );
   assert.equal((await call("GET", "/api/snapshot?at=yesterday", owner)).statusCode, 400);
   assert.equal((await call("GET", `/api/snapshot?at=${encodeURIComponent(at)}`, null)).statusCode, 401);
 });
@@ -189,11 +224,17 @@ test("on a department shelf any member sees «Полка на дату»; others
   const at = new Date(Date.now()).toISOString();
   const seen = await call("GET", `/api/snapshot?${new URLSearchParams({ at })}`, reader, undefined, shelf.id);
   assert.equal(seen.statusCode, 200, seen.body);
-  assert.deepEqual(seen.json().items.map((item: any) => item.id), [work.artifactId]);
+  assert.deepEqual(
+    seen.json().items.map((item: any) => item.id),
+    [work.artifactId],
+  );
   // The reader's own shelf does not hold the department's work.
   const own = await call("GET", `/api/snapshot?${new URLSearchParams({ at })}`, reader);
   assert.ok(!own.json().items.some((item: any) => item.id === work.artifactId));
-  assert.equal((await call("GET", `/api/snapshot?${new URLSearchParams({ at })}`, stranger, undefined, shelf.id)).statusCode, 404);
+  assert.equal(
+    (await call("GET", `/api/snapshot?${new URLSearchParams({ at })}`, stranger, undefined, shelf.id)).statusCode,
+    404,
+  );
 });
 
 test("the screen lists each work's version then, the acceptance then and what changed since", () => {
@@ -201,7 +242,15 @@ test("the screen lists each work's version then, the acceptance then and what ch
     id: randomUUID(),
     title: "Отчёт",
     folderId: null,
-    revision: { id: "r2", number: 2, filename: "a.html", mime: "text/html", size: 1, totalSize: 1, createdAt: "2026-10-01T09:00:00.000Z" },
+    revision: {
+      id: "r2",
+      number: 2,
+      filename: "a.html",
+      mime: "text/html",
+      size: 1,
+      totalSize: 1,
+      createdAt: "2026-10-01T09:00:00.000Z",
+    },
     acceptedRevisionId: null,
     acceptedRevisionNumber: null,
     now: { latestRevisionNumber: 2, trashed: false },
@@ -212,7 +261,12 @@ test("the screen lists each work's version then, the acceptance then and what ch
       at: "2026-10-02T09:00:00.000Z",
       items: [
         item({ title: "План <продаж>", acceptedRevisionId: "r2", acceptedRevisionNumber: 2 }),
-        item({ title: "Бриф", acceptedRevisionId: "r1", acceptedRevisionNumber: 1, now: { latestRevisionNumber: 4, trashed: true } }),
+        item({
+          title: "Бриф",
+          acceptedRevisionId: "r1",
+          acceptedRevisionNumber: 1,
+          now: { latestRevisionNumber: 4, trashed: true },
+        }),
         item({ title: "Черновик" }),
       ],
       nextCursor: "c",
@@ -231,7 +285,13 @@ test("the screen lists each work's version then, the acceptance then and what ch
   // Read-only: nothing on the screen changes the shelf.
   assert.doesNotMatch(html, /В корзину|Восстановить|Принять/);
   const empty = renderToStaticMarkup(
-    React.createElement(SnapshotList, { at: "2026-10-02T09:00:00.000Z", items: [], nextCursor: null, onMore: () => {}, hrefFor: () => "" }),
+    React.createElement(SnapshotList, {
+      at: "2026-10-02T09:00:00.000Z",
+      items: [],
+      nextCursor: null,
+      onMore: () => {},
+      hrefFor: () => "",
+    }),
   );
   assert.match(empty, /В этот момент полка была пуста/);
   assert.equal(localInputValue(new Date(2026, 0, 5, 7, 3)), "2026-01-05T07:03");

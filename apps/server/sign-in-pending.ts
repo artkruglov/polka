@@ -14,11 +14,7 @@
 // person simply starts again.
 import { randomBytes } from "node:crypto";
 import type { VisitSource } from "./analytics.ts";
-import {
-  openValue,
-  sealValue,
-  type ProviderProfile,
-} from "./sign-in-providers.ts";
+import { openValue, sealValue, type ProviderProfile } from "./sign-in-providers.ts";
 
 export const PENDING_TTL_SECONDS = 600;
 const MAX_ENTRIES = 5000;
@@ -50,8 +46,7 @@ type Kind = Entry["kind"];
 const entries = new Map<string, Entry>();
 
 function prune(now: number) {
-  for (const [id, entry] of entries)
-    if (entry.expires <= now) entries.delete(id);
+  for (const [id, entry] of entries) if (entry.expires <= now) entries.delete(id);
   // Oldest first (a Map keeps insertion order): memory stays bounded even
   // under a flood of abandoned sign-ins.
   while (entries.size >= MAX_ENTRIES) {
@@ -77,10 +72,7 @@ export function holdPending(entry: ChoiceEntry | CollisionEntry) {
 }
 
 function find<K extends Kind>(cookie: string | undefined, kind: K) {
-  const sealed = openValue<{ id: string; expires: number }>(
-    cookie,
-    labels[kind],
-  );
+  const sealed = openValue<{ id: string; expires: number }>(cookie, labels[kind]);
   if (!sealed) return null;
   const entry = entries.get(sealed.id);
   if (!entry || entry.kind !== kind || entry.expires <= Date.now()) {
@@ -94,18 +86,12 @@ function find<K extends Kind>(cookie: string | undefined, kind: K) {
 }
 
 /** The entry the cookie names, left in place. */
-export function peekPending<K extends Kind>(
-  cookie: string | undefined,
-  kind: K,
-) {
+export function peekPending<K extends Kind>(cookie: string | undefined, kind: K) {
   return find(cookie, kind)?.entry ?? null;
 }
 
 /** The entry the cookie names, removed: it is used once. */
-export function takePending<K extends Kind>(
-  cookie: string | undefined,
-  kind: K,
-) {
+export function takePending<K extends Kind>(cookie: string | undefined, kind: K) {
   const found = find(cookie, kind);
   if (!found) return null;
   entries.delete(found.id);

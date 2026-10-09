@@ -8,11 +8,7 @@ import { config } from "./config.ts";
 import { indexable } from "./indexing.ts";
 
 const escape = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 // Link previews (Telegram, Slack, WhatsApp read these). A share link is
 // /s#<token>: the fragment never reaches the server or a crawler, so the /s
@@ -21,16 +17,14 @@ const escape = (value: string) =>
 const CARDS = {
   share: {
     title: "Полка — вам отправили страницу",
-    description:
-      "Страницу сохранили на Полке и поделились ею с вами. Откройте ссылку, чтобы посмотреть.",
+    description: "Страницу сохранили на Полке и поделились ею с вами. Откройте ссылку, чтобы посмотреть.",
     image: "/og/share.png",
     alt: "Полка: вам отправили страницу",
     path: "/s",
   },
   default: {
     title: "Полка — место для работ, сделанных с ИИ",
-    description:
-      "Сохраняйте страницы, отчёты и файлы, сделанные с ИИ, и делитесь ими по ссылке.",
+    description: "Сохраняйте страницы, отчёты и файлы, сделанные с ИИ, и делитесь ими по ссылке.",
     image: "/og/default.png",
     alt: "Полка: место для работ, сделанных с ИИ",
     path: "/",
@@ -70,9 +64,7 @@ export function staticCacheControl(path: string) {
 
 /** Whether a request no route matched is a person opening a page. */
 const wantsPage = (method: string, path: string, accept: string | undefined) =>
-  (method === "GET" || method === "HEAD") &&
-  !isMachinePath(path) &&
-  /\btext\/html\b/.test(accept ?? "");
+  (method === "GET" || method === "HEAD") && !isMachinePath(path) && /\btext\/html\b/.test(accept ?? "");
 
 export async function registerFrontend(app: FastifyInstance, root: string) {
   // The app shell with this path's link-preview tags. Read per request: a
@@ -98,9 +90,7 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
     wildcard: true,
     index: false,
     setHeaders(reply, file) {
-      const policy = staticCacheControl(
-        "/" + relative(root, file).split(sep).join("/"),
-      );
+      const policy = staticCacheControl("/" + relative(root, file).split(sep).join("/"));
       if (policy) reply.header("cache-control", policy);
     },
   });
@@ -120,10 +110,7 @@ export async function registerFrontend(app: FastifyInstance, root: string) {
       trackPageView(req, path);
       return shell(path, reply);
     }
-    if (wantsPage(req.method, path, req.headers.accept))
-      return shell(path, reply, 404);
-    return reply
-      .code(404)
-      .send({ code: "not_found", message: "Действие недоступно." });
+    if (wantsPage(req.method, path, req.headers.accept)) return shell(path, reply, 404);
+    return reply.code(404).send({ code: "not_found", message: "Действие недоступно." });
   });
 }

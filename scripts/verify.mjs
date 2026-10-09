@@ -95,13 +95,7 @@ const steps = [
     ],
     true,
   ],
-  [
-    "image",
-    "application image builds",
-    "docker",
-    ["build", "-q", "-t", "polka:verify", "."],
-    true,
-  ],
+  ["image", "application image builds", "docker", ["build", "-q", "-t", "polka:verify", "."], true],
   [
     "backup-image",
     "backup image builds",
@@ -112,8 +106,7 @@ const steps = [
 ];
 
 if (process.argv.includes("--print-steps")) {
-  for (const [id, label, , , full] of steps)
-    console.log(`${id}\t${label}${full ? " (full pass only)" : ""}`);
+  for (const [id, label, , , full] of steps) console.log(`${id}\t${label}${full ? " (full pass only)" : ""}`);
   process.exit(0);
 }
 const unknown = only?.filter((id) => !steps.some((step) => step[0] === id));

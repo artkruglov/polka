@@ -3,13 +3,9 @@ import { uuid } from "./index.ts";
 
 export const templateLibraryRole = z.enum(["reader", "curator", "admin"]);
 
-export const createTemplateLibraryInput = z
-  .object({ name: z.string().trim().min(1).max(120) })
-  .strict();
+export const createTemplateLibraryInput = z.object({ name: z.string().trim().min(1).max(120) }).strict();
 
-export const changeTemplateLibraryRoleInput = z
-  .object({ role: templateLibraryRole })
-  .strict();
+export const changeTemplateLibraryRoleInput = z.object({ role: templateLibraryRole }).strict();
 
 export const createTemplateLibraryInvitationInput = z
   .object({
@@ -19,25 +15,16 @@ export const createTemplateLibraryInvitationInput = z
   })
   .strict();
 
-export const acceptTemplateLibraryInvitationInput = z
-  .object({ token: z.string().min(32).max(512) })
-  .strict();
+export const acceptTemplateLibraryInvitationInput = z.object({ token: z.string().min(32).max(512) }).strict();
 
-export const publishTemplateLibraryReleaseInput = z
-  .object({ releaseId: uuid })
-  .strict();
+export const publishTemplateLibraryReleaseInput = z.object({ releaseId: uuid }).strict();
 
-export const withdrawTemplateLibraryPublicationInput = z
-  .object({ reason: z.string().trim().min(1).max(500) })
-  .strict();
+export const withdrawTemplateLibraryPublicationInput = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
 
 const eventCursor = z
   .string()
   .regex(/^[1-9]\d*$/)
-  .refine(
-    (value) => BigInt(value) <= 9_223_372_036_854_775_807n,
-    "Invalid event cursor",
-  );
+  .refine((value) => BigInt(value) <= 9_223_372_036_854_775_807n, "Invalid event cursor");
 
 export const listTemplateLibraryEventsInput = z
   .object({

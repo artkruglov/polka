@@ -51,15 +51,11 @@ async function optionalViewer(req: FastifyRequest): Promise<Viewer | null> {
 // fragment for the same reason). Every POST passes the app's Origin check.
 export function registerCommentRoutes(app: FastifyInstance) {
   const options = { bodyLimit: BODY_LIMIT };
-  const id = (req: FastifyRequest) =>
-    uuid.parse((req.params as { id?: string }).id);
+  const id = (req: FastifyRequest) => uuid.parse((req.params as { id?: string }).id);
 
   app.post("/api/shared/comments", options, async (req) => {
     const { token } = sharedCommentsSchema.parse(req.body);
-    await limitAttempts(
-      `shared-comments:ip:${req.ip}`,
-      SHARED_COMMENTS_READS_PER_IP,
-    );
+    await limitAttempts(`shared-comments:ip:${req.ip}`, SHARED_COMMENTS_READS_PER_IP);
     return sharedComments(token, await optionalViewer(req));
   });
   app.post("/api/shared/comments/create", options, async (req) => {
@@ -68,35 +64,19 @@ export function registerCommentRoutes(app: FastifyInstance) {
   });
   app.post("/api/shared/comments/react", options, async (req) => {
     const input = sharedReactSchema.parse(req.body);
-    return reactShared(
-      input.token,
-      await optionalViewer(req),
-      input.emoji,
-      input.anchor,
-    );
+    return reactShared(input.token, await optionalViewer(req), input.emoji, input.anchor);
   });
   app.post("/api/shared/comments/delete", options, async (req) => {
     const input = sharedCommentActionSchema.parse(req.body);
-    return deleteSharedComment(
-      input.token,
-      await optionalViewer(req),
-      input.commentId,
-    );
+    return deleteSharedComment(input.token, await optionalViewer(req), input.commentId);
   });
   app.post("/api/shared/comments/resolve", options, async (req) => {
     const input = sharedResolveSchema.parse(req.body);
-    return resolveSharedComment(
-      input.token,
-      await optionalViewer(req),
-      input.commentId,
-      input.resolved,
-    );
+    return resolveSharedComment(input.token, await optionalViewer(req), input.commentId, input.resolved);
   });
 
   // The owner: every link of the work.
-  app.get("/api/artifacts/:id/comments", async (req) =>
-    workComments(await identity(req, { shelf: true }), id(req)),
-  );
+  app.get("/api/artifacts/:id/comments", async (req) => workComments(await identity(req, { shelf: true }), id(req)));
   app.post("/api/artifacts/:id/comments/seen", options, async (req) =>
     markCommentsSeen(await identity(req, { shelf: true }), id(req)),
   );
@@ -119,10 +99,7 @@ export function registerCommentRoutes(app: FastifyInstance) {
   );
   // The name under one's comments, and letters about them on or off.
   app.post("/api/account/comment-settings", options, async (req) =>
-    updateCommentSettings(
-      await identity(req),
-      commentSettingsSchema.parse(req.body),
-    ),
+    updateCommentSettings(await identity(req), commentSettingsSchema.parse(req.body)),
   );
   // «Не присылать такие письма» from a letter: the signed token is the
   // capability (no session); repeating it changes nothing.
@@ -136,16 +113,10 @@ export function registerCommentRoutes(app: FastifyInstance) {
         "not_found",
         "Ссылка устарела или повреждена. Письма можно отключить в панели комментариев любой работы на Полке.",
       );
-    await db.query("UPDATE accounts SET comment_mail=false WHERE id=$1", [
-      accountId,
-    ]);
+    await db.query("UPDATE accounts SET comment_mail=false WHERE id=$1", [accountId]);
     return { ok: true };
   });
   app.post("/api/comments/:id/resolve", options, async (req) =>
-    resolveOwnerComment(
-      await identity(req, { shelf: true }),
-      id(req),
-      resolveSchema.parse(req.body ?? {}).resolved,
-    ),
+    resolveOwnerComment(await identity(req, { shelf: true }), id(req), resolveSchema.parse(req.body ?? {}).resolved),
   );
 }

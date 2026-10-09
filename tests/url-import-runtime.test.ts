@@ -5,10 +5,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { db, transaction } from "../apps/server/db.ts";
 import { config } from "../apps/server/config.ts";
 import { s3, readBlob } from "../apps/server/storage.ts";
-import {
-  createImportJob,
-  getImportJob,
-} from "../apps/server/url-import/jobs.ts";
+import { createImportJob, getImportJob } from "../apps/server/url-import/jobs.ts";
 import { captureHtmlUrl } from "../apps/server/url-import/html-capture.ts";
 import { runImportOnce } from "../apps/server/url-import/worker.ts";
 import { buildInlineRevision } from "../apps/server/bundle-derivatives.ts";
@@ -16,9 +13,7 @@ import { createApp } from "../apps/server/app.ts";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 if (!new URL(config.DATABASE_URL).pathname.startsWith("/polka_import_test_"))
-  throw new Error(
-    "Run through scripts/test-url-import-runtime.ts in a disposable database.",
-  );
+  throw new Error("Run through scripts/test-url-import-runtime.ts in a disposable database.");
 after(async () => {
   try {
     // Only exact versions referenced by this freshly created test database.
@@ -51,37 +46,22 @@ test(
     ).rows[0];
     assert.equal(identity.current, process.env.URL_IMPORT_EXPECT_RUNTIME_ROLE);
     assert.equal(identity.session, identity.current);
-    for (const field of [
-      "rolsuper",
-      "rolcreatedb",
-      "rolcreaterole",
-      "rolbypassrls",
-    ])
+    for (const field of ["rolsuper", "rolcreatedb", "rolcreaterole", "rolbypassrls"])
       assert.equal(identity[field], false);
     for (const sql of [
       "CREATE TABLE public.forbidden_probe(id int)",
       "UPDATE schema_migrations SET version=version",
       "TRUNCATE url_import_jobs",
     ]) {
-      await assert.rejects(
-        db.query(sql),
-        (error: any) => error.code === "42501",
-      );
+      await assert.rejects(db.query(sql), (error: any) => error.code === "42501");
     }
   },
 );
 
 test("durable worker saves a real bundle and builds source-independent interactive HTML", async () => {
-  const owner = await createAccount(
-    "runtime-" + randomBytes(6).toString("hex"),
-    randomBytes(24).toString("hex"),
-  );
+  const owner = await createAccount("runtime-" + randomBytes(6).toString("hex"), randomBytes(24).toString("hex"));
   const folderId = randomUUID();
-  await db.query("INSERT INTO folders VALUES($1,$2,$3)", [
-    folderId,
-    owner.tenant,
-    "Imported reports",
-  ]);
+  await db.query("INSERT INTO folders VALUES($1,$2,$3)", [folderId, owner.tenant, "Imported reports"]);
   const input = {
     key: randomUUID(),
     url: "https://example.org/report",
@@ -118,11 +98,7 @@ test("durable worker saves a real bundle and builds source-independent interacti
   assert.equal(saved.state, "previewing", saved.error_code);
   assert.ok(saved.receipt.revisionId);
   assert.equal(
-    (
-      await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [
-        saved.receipt.artifactId,
-      ])
-    ).rows[0].folder_id,
+    (await db.query("SELECT folder_id FROM artifacts WHERE id=$1", [saved.receipt.artifactId])).rows[0].folder_id,
     folderId,
   );
   assert.equal(saved.prepared, null);
@@ -137,12 +113,7 @@ test("durable worker saves a real bundle and builds source-independent interacti
   const duplicate = await transaction((c) => createImportJob(c, owner, input));
   assert.deepEqual(duplicate.receipt, saved.receipt);
   assert.equal(
-    (
-      await db.query(
-        "SELECT count(*)::int n FROM artifacts WHERE tenant_id=$1",
-        [owner.tenant],
-      )
-    ).rows[0].n,
+    (await db.query("SELECT count(*)::int n FROM artifacts WHERE tenant_id=$1", [owner.tenant])).rows[0].n,
     1,
   );
   // Simulate an unavailable source: build reads only stored revision files.
@@ -155,9 +126,7 @@ test("durable worker saves a real bundle and builds source-independent interacti
       [saved.receipt.revisionId],
     )
   ).rows[0];
-  const html = (
-    await readBlob(derivative.object_key, derivative.object_version)
-  ).toString();
+  const html = (await readBlob(derivative.object_key, derivative.object_version)).toString();
   assert.match(html, /getElementById\('counter'\)/);
   assert.match(html, /rgb\(24,24,24\)/);
   assert.doesNotMatch(html, /src="report.js"|href="report.css"/);
@@ -188,13 +157,24 @@ test("enabled HTTP gateway authenticates, deduplicates and cancels jobs", async 
     const payload = { key: randomUUID(), url: "https://example.org/report" };
     const other = await createAccount("folder-other-" + randomBytes(6).toString("hex"), password);
     const foreignFolder = randomUUID();
-    await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [foreignFolder, other.tenant, "private folder"]);
+    await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [
+      foreignFolder,
+      other.tenant,
+      "private folder",
+    ]);
     for (const folderId of [foreignFolder, randomUUID()]) {
-      const rejected = await app.inject({method: "POST", url: "/api/imports", headers,
-        payload: {...payload, folderId}});
+      const rejected = await app.inject({
+        method: "POST",
+        url: "/api/imports",
+        headers,
+        payload: { ...payload, folderId },
+      });
       assert.equal(rejected.statusCode, 404, rejected.body);
       assert.equal(rejected.body.includes("private folder"), false);
-      const queued = await db.query("SELECT count(*)::int n FROM url_import_jobs WHERE tenant_id=$1 AND idempotency_key=$2", [owner.tenant, payload.key]);
+      const queued = await db.query(
+        "SELECT count(*)::int n FROM url_import_jobs WHERE tenant_id=$1 AND idempotency_key=$2",
+        [owner.tenant, payload.key],
+      );
       assert.equal(queued.rows[0].n, 0, "Unavailable destination must not silently enqueue a root import");
     }
 
@@ -248,10 +228,7 @@ test("enabled HTTP gateway authenticates, deduplicates and cancels jobs", async 
 });
 
 test("preview failure preserves the saved receipt instead of reporting lost import", async () => {
-  const owner = await createAccount(
-    "quota-" + randomBytes(6).toString("hex"),
-    randomBytes(24).toString("hex"),
-  );
+  const owner = await createAccount("quota-" + randomBytes(6).toString("hex"), randomBytes(24).toString("hex"));
   const job = await transaction((c) =>
     createImportJob(c, owner, {
       key: randomUUID(),
@@ -269,9 +246,7 @@ test("preview failure preserves the saved receipt instead of reporting lost impo
   await runImportOnce({ prepare });
   const saved = await transaction((c) => getImportJob(c, owner, job.id));
   assert.equal(saved.state, "previewing");
-  await db.query("UPDATE tenants SET derivative_quota_bytes=0 WHERE id=$1", [
-    owner.tenant,
-  ]);
+  await db.query("UPDATE tenants SET derivative_quota_bytes=0 WHERE id=$1", [owner.tenant]);
   await runImportOnce({
     prepare: async () => {
       throw Error("must not download again");
@@ -284,8 +259,7 @@ test("preview failure preserves the saved receipt instead of reporting lost impo
 });
 
 test("MCP transport exposes scoped URL import and reports the saved interactive copy", async () => {
-  const { Client, StreamableHTTPClientTransport } =
-    await import("@modelcontextprotocol/client");
+  const { Client, StreamableHTTPClientTransport } = await import("@modelcontextprotocol/client");
   const { MCP_AUDIENCE } = await import("../apps/server/service-auth.ts");
   const password = randomBytes(24).toString("hex");
   const name = "mcp-url-" + randomBytes(6).toString("hex");
@@ -334,17 +308,11 @@ test("MCP transport exposes scoped URL import and reports the saved interactive 
     };
     const reader = await connect(["read"]);
     assert.equal(
-      (await reader.client.listTools()).tools.some(
-        (t) => t.name === "polka_import_url",
-      ),
+      (await reader.client.listTools()).tools.some((t) => t.name === "polka_import_url"),
       false,
     );
     const agent = await connect(["capture"]);
-    assert.ok(
-      (await agent.client.listTools()).tools.some(
-        (t) => t.name === "polka_import_url",
-      ),
-    );
+    assert.ok((await agent.client.listTools()).tools.some((t) => t.name === "polka_import_url"));
     const liveSource = process.env.URL_IMPORT_PUBLIC_SOURCE_CHECK === "true";
     const input = {
       key: randomUUID(),
@@ -371,10 +339,7 @@ test("MCP transport exposes scoped URL import and reports the saved interactive 
         }),
       });
       // Supply a deterministic downloaded snapshot; transport and persistence are real.
-      await db.query(
-        "UPDATE url_import_jobs SET state='prepared',prepared=$2 WHERE id=$1",
-        [job.id, prepared],
-      );
+      await db.query("UPDATE url_import_jobs SET state='prepared',prepared=$2 WHERE id=$1", [job.id, prepared]);
       await runImportOnce({
         prepare: async () => {
           throw Error("snapshot should be used");
@@ -399,21 +364,19 @@ test("MCP transport exposes scoped URL import and reports the saved interactive 
     assert.deepEqual((retry.structuredContent as any).receipt, result.receipt);
     if (liveSource) {
       const revision = (
+        await db.query("SELECT object_key,object_version,manifest FROM revisions WHERE id=$1", [
+          result.receipt.revisionId,
+        ])
+      ).rows[0];
+      const bytes = await readBlob(revision.object_key, revision.object_version);
+      assert.match(bytes.toString(), /Change color/);
+      assert.equal(revision.manifest.provenance.sourceUrl, input.url);
+      const derivative = (
         await db.query(
-          "SELECT object_key,object_version,manifest FROM revisions WHERE id=$1",
+          "SELECT object_key,object_version FROM revision_derivatives WHERE revision_id=$1 AND state='ready'",
           [result.receipt.revisionId],
         )
       ).rows[0];
-      const bytes = await readBlob(
-        revision.object_key,
-        revision.object_version,
-      );
-      assert.match(bytes.toString(), /Change color/);
-      assert.equal(revision.manifest.provenance.sourceUrl, input.url);
-      const derivative = (await db.query(
-        "SELECT object_key,object_version FROM revision_derivatives WHERE revision_id=$1 AND state='ready'",
-        [result.receipt.revisionId],
-      )).rows[0];
       assert.ok(derivative, "Public import must persist a ready viewer derivative");
       const viewerHtml = (await readBlob(derivative.object_key, derivative.object_version)).toString();
       assert.match(viewerHtml, /Change color/);
@@ -449,12 +412,7 @@ test("MCP transport exposes scoped URL import and reports the saved interactive 
     });
     assert.equal((cancelled.structuredContent as any).state, "ready");
     assert.equal(
-      (
-        await db.query(
-          "SELECT count(*)::int n FROM artifacts WHERE tenant_id=$1",
-          [owner.tenant],
-        )
-      ).rows[0].n,
+      (await db.query("SELECT count(*)::int n FROM artifacts WHERE tenant_id=$1", [owner.tenant])).rows[0].n,
       1,
     );
   } finally {

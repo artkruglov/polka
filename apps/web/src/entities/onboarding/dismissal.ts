@@ -5,8 +5,7 @@
  */
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-export const dismissalKey = (accountId: string) =>
-  `polka:first-run:dismissed:${accountId}`;
+export const dismissalKey = (accountId: string) => `polka:first-run:dismissed:${accountId}`;
 
 const browserStorage = (): StorageLike | null => {
   try {
@@ -16,10 +15,7 @@ const browserStorage = (): StorageLike | null => {
   }
 };
 
-export function readDismissed(
-  accountId: string,
-  storage: StorageLike | null = browserStorage(),
-): boolean {
+export function readDismissed(accountId: string, storage: StorageLike | null = browserStorage()): boolean {
   try {
     return storage?.getItem(dismissalKey(accountId)) === "1";
   } catch {
@@ -27,17 +23,13 @@ export function readDismissed(
   }
 }
 
-export const agentSeenKey = (accountId: string) =>
-  `polka:agent-connected:${accountId}`;
+export const agentSeenKey = (accountId: string) => `polka:agent-connected:${accountId}`;
 
 /**
  * Whether this browser last saw an agent connected to the shelf: the hero
  * starts in that shape, so the shelf does not jump once the check answers.
  */
-export function readAgentSeen(
-  accountId: string,
-  storage: StorageLike | null = browserStorage(),
-): boolean {
+export function readAgentSeen(accountId: string, storage: StorageLike | null = browserStorage()): boolean {
   try {
     return storage?.getItem(agentSeenKey(accountId)) === "1";
   } catch {
@@ -45,11 +37,7 @@ export function readAgentSeen(
   }
 }
 
-export function writeAgentSeen(
-  accountId: string,
-  connected: boolean,
-  storage: StorageLike | null = browserStorage(),
-) {
+export function writeAgentSeen(accountId: string, connected: boolean, storage: StorageLike | null = browserStorage()) {
   try {
     if (connected) storage?.setItem(agentSeenKey(accountId), "1");
     else storage?.removeItem(agentSeenKey(accountId));

@@ -10,7 +10,11 @@ import {
 export type ErasureLedgerTransport = {
   putIfAbsent: (key: string, bytes: Uint8Array, signal: AbortSignal) => Promise<{ versionId: string }>;
   read: (key: string, signal: AbortSignal) => Promise<{ bytes: Uint8Array; versionId: string }>;
-  list: (prefix: string, cursor: string | undefined, signal: AbortSignal) => Promise<{
+  list: (
+    prefix: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ) => Promise<{
     items: Array<{ key: string; bytes: Uint8Array; versionId: string }>;
     nextCursor?: string;
   }>;
@@ -26,9 +30,7 @@ export type ErasureLedgerAdapterErrorCode =
   | "cursor_cycle"
   | "aborted";
 
-export type ErasureLedgerTransportErrorCode =
-  | "conditional_conflict"
-  | "unknown_write_outcome";
+export type ErasureLedgerTransportErrorCode = "conditional_conflict" | "unknown_write_outcome";
 
 export class ErasureLedgerTransportError extends Error {
   constructor(
@@ -90,9 +92,10 @@ async function verifyExisting(
   try {
     existing = await transport.read(key, signal);
   } catch (error) {
-    if (signal.aborted)
-      throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
-    throw new ErasureLedgerAdapterError("unknown_write_outcome", "write outcome could not be verified", { cause: error });
+    if (signal.aborted) throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
+    throw new ErasureLedgerAdapterError("unknown_write_outcome", "write outcome could not be verified", {
+      cause: error,
+    });
   }
   assertActive(signal);
   if (!validVersion(existing.versionId))
@@ -105,10 +108,13 @@ async function verifyExisting(
     if (encoded.sha256 !== expectedSha256 || !bytesEqual(encoded.bytes, expectedBytes))
       throw new Error("hash mismatch");
   } catch (error) {
-    if (signal.aborted)
-      throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
+    if (signal.aborted) throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
     if (error instanceof ErasureLedgerAdapterError) throw error;
-    throw new ErasureLedgerAdapterError("malformed_remote_record", "remote record is not the expected canonical record", { cause: error });
+    throw new ErasureLedgerAdapterError(
+      "malformed_remote_record",
+      "remote record is not the expected canonical record",
+      { cause: error },
+    );
   }
   return { versionId: existing.versionId };
 }
@@ -131,11 +137,11 @@ export async function appendErasureRecord(
   try {
     const result = await transport.putIfAbsent(encoded.key, encoded.bytes, signal);
     assertActive(signal);
-    if (!validVersion(result.versionId)) throw new ErasureLedgerAdapterError("invalid_version", "write returned no version id");
+    if (!validVersion(result.versionId))
+      throw new ErasureLedgerAdapterError("invalid_version", "write returned no version id");
     return { key: encoded.key, sha256: encoded.sha256, versionId: result.versionId };
   } catch (error) {
-    if (signal.aborted)
-      throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
+    if (signal.aborted) throw new ErasureLedgerAdapterError("aborted", "operation aborted", { cause: error });
     if (error instanceof ErasureLedgerAdapterError) throw error;
     if (!isConditionalConflict(error) && !isUnknownOutcome(error)) throw error;
     return {
@@ -180,8 +186,10 @@ export async function readErasureLedger(
     }
     assertActive(signal);
     for (const item of page.items) {
-      if (!item.key.startsWith(prefix)) throw new ErasureLedgerAdapterError("namespace_mismatch", "listed key is outside ledger namespace");
-      if (!validVersion(item.versionId)) throw new ErasureLedgerAdapterError("invalid_version", "listed record has no version id");
+      if (!item.key.startsWith(prefix))
+        throw new ErasureLedgerAdapterError("namespace_mismatch", "listed key is outside ledger namespace");
+      if (!validVersion(item.versionId))
+        throw new ErasureLedgerAdapterError("invalid_version", "listed record has no version id");
       try {
         const record = decodeErasureRecord(item.bytes, item.key, ledgerId);
         const encoded = encodeErasureRecord(record);
@@ -196,6 +204,9 @@ export async function readErasureLedger(
       throw new ErasureLedgerAdapterError("cursor_cycle", "ledger listing cursor repeated");
     cursor = page.nextCursor;
   }
-  const entries = validateErasureLedger(records.map((item) => item.record), ledgerId);
+  const entries = validateErasureLedger(
+    records.map((item) => item.record),
+    ledgerId,
+  );
   return { entries, records, acknowledgements };
 }

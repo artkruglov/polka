@@ -57,8 +57,7 @@ export function checkOrigin(origin: string): string {
   } catch {
     throw new Error(`Not an origin: ${origin}`);
   }
-  if (url.origin !== origin || !/^https?:$/.test(url.protocol))
-    throw new Error(`Not an origin: ${origin}`);
+  if (url.origin !== origin || !/^https?:$/.test(url.protocol)) throw new Error(`Not an origin: ${origin}`);
   return origin;
 }
 

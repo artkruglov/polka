@@ -112,14 +112,12 @@ export function runtimeLibraryFor(specifier: string): RuntimeLibrary | null {
 }
 
 /** Human list for guidance and refusals: `react, react-dom/client, ...`. */
-export const RUNTIME_IMPORT_LIST = RUNTIME_LIBRARIES.flatMap(
-  (library) => library.imports as readonly string[],
-).join(", ");
+export const RUNTIME_IMPORT_LIST = RUNTIME_LIBRARIES.flatMap((library) => library.imports as readonly string[]).join(
+  ", ",
+);
 
 /** Short list for build refusals, which are stored up to 300 characters. */
-export const RUNTIME_LIBRARY_NAMES = RUNTIME_LIBRARIES.map(
-  (library) => library.name,
-).join(", ");
+export const RUNTIME_LIBRARY_NAMES = RUNTIME_LIBRARIES.map((library) => library.name).join(", ");
 
 /** Source file extensions the runtime compiles, with their syntax. */
 export const RUNTIME_MODULE_LOADERS = {
@@ -138,13 +136,7 @@ export const RUNTIME_MODULE_LOADERS = {
 export const RUNTIME_TAILWIND_META = "polka-tailwind" as const;
 
 const escapeHtml = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        char
-      ]!,
-  );
+  value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 
 /**
  * The HTML entrypoint Полка stores next to a component published as source:

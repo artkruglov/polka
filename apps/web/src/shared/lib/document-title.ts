@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 
 /** «<name> — Полка», or «Полка» alone. */
-export const pageTitle = (name?: string | null) =>
-  name ? `${name} — Полка` : "Полка";
+export const pageTitle = (name?: string | null) => (name ? `${name} — Полка` : "Полка");
 
 /**
  * The browser tab's title for this page. The server's index.html keeps the

@@ -83,7 +83,18 @@ function signedCall(
   };
 }
 
-const ERRORS = new Set(["source_blocked", "robots_disallowed", "robots_unavailable", "timeout", "not_allowed", "navigation_failed", "too_large", "busy", "bad_request", "unauthorized"]);
+const ERRORS = new Set([
+  "source_blocked",
+  "robots_disallowed",
+  "robots_unavailable",
+  "timeout",
+  "not_allowed",
+  "navigation_failed",
+  "too_large",
+  "busy",
+  "bad_request",
+  "unauthorized",
+]);
 
 function errorAnswer(value: any): { error: any; detail?: string } | null {
   if (!value || typeof value.error !== "string") return null;
@@ -100,7 +111,12 @@ export function parseFetchAnswer(status: number, text: string): FetchResult {
   }
   const failed = errorAnswer(value);
   if (failed) return failed;
-  if (status !== 200 || typeof value?.finalUrl !== "string" || typeof value.html !== "string" || typeof value.status !== "number")
+  if (
+    status !== 200 ||
+    typeof value?.finalUrl !== "string" ||
+    typeof value.html !== "string" ||
+    typeof value.status !== "number"
+  )
     throw new Error("renderer answered an unexpected shape");
   if (Buffer.byteLength(value.html) > RENDER_MAX_HTML) return { error: "too_large" };
   return { finalUrl: value.finalUrl, status: value.status, html: value.html };

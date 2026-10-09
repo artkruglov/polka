@@ -6,11 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { EditorialPublicResponse } from "../../../../../packages/editorial.ts";
 import type { Resolved, Viewer } from "../../../../../packages/contracts/index.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
-import {
-  fetchEditorialItem,
-  parseEditorialSlug,
-  safeEditorialRecipientUrl,
-} from "../../entities/editorial/api.ts";
+import { fetchEditorialItem, parseEditorialSlug, safeEditorialRecipientUrl } from "../../entities/editorial/api.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { ArrowLeft, ArrowUpRight, Maximize2 } from "lucide-react";
@@ -40,9 +36,7 @@ export function editorialShareToken(recipientUrl: string | null): string | null 
 }
 
 type WorkState =
-  | { status: "loading" }
-  | { status: "ready"; viewer: Viewer }
-  | { status: "unavailable"; message: string };
+  { status: "loading" } | { status: "ready"; viewer: Viewer } | { status: "unavailable"; message: string };
 
 /**
  * A feed material, document first: a thin header («Лента», the title, the
@@ -50,20 +44,10 @@ type WorkState =
  * sees, filling the rest of the viewport. A guest gets the same way in as
  * on a shared work (features/recipient-convert, page "feed").
  */
-function Detail({
-  slug,
-  retry,
-  onRetry,
-}: {
-  slug: string;
-  retry: number;
-  onRetry: () => void;
-}) {
+function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry: () => void }) {
   const account = useAccount();
   const [item, setItem] = useState<EditorialPublicResponse | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">(
-    "loading",
-  );
+  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -78,11 +62,7 @@ function Detail({
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setState("error");
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "Не удалось загрузить материал.",
-        );
+        setError(reason instanceof Error ? reason.message : "Не удалось загрузить материал.");
       });
     return () => controller.abort();
   }, [retry, slug]);
@@ -106,8 +86,7 @@ function Detail({
       })
       .catch((e: unknown) => {
         if (!live) return;
-        const unreachable =
-          !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
+        const unreachable = !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
         setWork({
           status: "unavailable",
           message: unreachable
@@ -126,9 +105,7 @@ function Detail({
   const convert = useRecipientConvert({ enabled: guest && shown !== null, page: "feed" });
   const capabilities = useCapabilities();
   const yandex =
-    capabilities.status === "ready"
-      ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex")
-      : [];
+    capabilities.status === "ready" ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex") : [];
   const [welcome, setWelcome] = useState(() => takeConvertReturn(path));
 
   // The card floats above the bar: its height goes into a CSS variable.
@@ -143,8 +120,7 @@ function Detail({
       host.style.removeProperty("--convert-bar-height");
       return;
     }
-    const measure = () =>
-      host.style.setProperty("--convert-bar-height", `${node.offsetHeight}px`);
+    const measure = () => host.style.setProperty("--convert-bar-height", `${node.offsetHeight}px`);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -167,10 +143,7 @@ function Detail({
             </div>
           )}
           {state === "error" && (
-            <div
-              className="editorial-catalog-state editorial-catalog-error"
-              role="alert"
-            >
+            <div className="editorial-catalog-state editorial-catalog-error" role="alert">
               <p>{error}</p>
               <Button type="button" onClick={onRetry}>
                 Повторить
@@ -288,14 +261,7 @@ export function EditorialPage() {
   const [retry, setRetry] = useState(0);
   const slug = parseEditorialSlug(location.pathname);
   useDocumentTitle(slug ? undefined : "Лента");
-  if (slug)
-    return (
-      <Detail
-        slug={slug}
-        retry={retry}
-        onRetry={() => setRetry((value) => value + 1)}
-      />
-    );
+  if (slug) return <Detail slug={slug} retry={retry} onRetry={() => setRetry((value) => value + 1)} />;
   if (location.pathname.startsWith("/discover/")) {
     return (
       <AppShell current="discover" account={account}>
@@ -307,13 +273,7 @@ export function EditorialPage() {
       </AppShell>
     );
   }
-  return (
-    <CatalogRoute
-      account={account}
-      retry={retry}
-      onRetry={() => setRetry((value) => value + 1)}
-    />
-  );
+  return <CatalogRoute account={account} retry={retry} onRetry={() => setRetry((value) => value + 1)} />;
 }
 
 function CatalogRoute({

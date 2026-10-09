@@ -14,15 +14,9 @@ test("signup shows the terms and privacy links under the email form", () => {
   const html = render(React.createElement(SignupConsent));
   assert.match(html, /Продолжая, вы принимаете <a href="\/terms">Соглашение<\/a>/);
   // The policy is read, not "accepted": no consent is bundled with the terms.
-  assert.match(
-    html,
-    /подтверждаете,\s+что прочитали <a href="\/privacy">Политику обработки данных<\/a>/,
-  );
+  assert.match(html, /подтверждаете,\s+что прочитали <a href="\/privacy">Политику обработки данных<\/a>/);
   const page = readFileSync("apps/web/src/pages/signup/index.tsx", "utf8");
-  assert.ok(
-    page.indexOf("<SignupConsent />") > page.indexOf("</form>"),
-    "consent line follows the email form",
-  );
+  assert.ok(page.indexOf("<SignupConsent />") > page.indexOf("</form>"), "consent line follows the email form");
 });
 
 test("every page shell links to the policy and the terms", () => {
@@ -63,8 +57,7 @@ test("links between the texts point at the site routes", () => {
 test("markdown renderer never emits raw HTML or unsafe links", () => {
   const html = render(
     React.createElement(Markdown, {
-      source:
-        '# T <img src=x onerror="alert(1)">\n\n[click](javascript:void) [ok](https://example.org)',
+      source: '# T <img src=x onerror="alert(1)">\n\n[click](javascript:void) [ok](https://example.org)',
     }),
   );
   assert.doesNotMatch(html, /<img|href="javascript/);

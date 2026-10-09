@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import {
-  AGENT_SCOPES,
-  MAX_BYTES,
-  type AgentScope,
-} from "../../packages/contracts/index.ts";
+import { AGENT_SCOPES, MAX_BYTES, type AgentScope } from "../../packages/contracts/index.ts";
 import { config } from "./config.ts";
 import { SKILL_INSTALL, SKILL_REPO, harvestPrompts } from "./connect-guide.ts";
 import { createMcpServer } from "./mcp-server.ts";
@@ -35,11 +31,9 @@ export { SKILL_INSTALL, SKILL_REPO };
  * the agent resolves it with polka_get_artifact by that address.
  */
 export const ownerPhrases = {
-  improve: (title: string, url: string) =>
-    `Открой на Полке работу «${title}» (${url}) и помоги её улучшить.`,
+  improve: (title: string, url: string) => `Открой на Полке работу «${title}» (${url}) и помоги её улучшить.`,
   update: (title: string, url: string) => `Обнови работу «${title}» (${url}).`,
-  notes: (title: string, url: string) =>
-    `Поправь работу «${title}» (${url}) по моим заметкам на Полке.`,
+  notes: (title: string, url: string) => `Поправь работу «${title}» (${url}) по моим заметкам на Полке.`,
 } as const;
 
 function ownerPhrasesText(origin: string) {
@@ -79,33 +73,23 @@ function registeredTools(scopes: AgentScope[]): RegisteredTools {
   return tools;
 }
 
-const firstSentence = (text: string) =>
-  (text.split("\n")[0].match(/^.*?[.!?](?=\s|$)/)?.[0] ?? text).trim();
+const firstSentence = (text: string) => (text.split("\n")[0].match(/^.*?[.!?](?=\s|$)/)?.[0] ?? text).trim();
 
 /**
  * Each tool this installation registers, the scopes that make it appear
  * (any one of them is enough) and the first sentence of its description.
  */
 export function mcpToolCatalog() {
-  const byScope = new Map(
-    AGENT_SCOPES.map((scope) => [scope, registeredTools([scope])]),
-  );
-  return Object.entries(registeredTools([...AGENT_SCOPES])).map(
-    ([name, tool]) => {
-      const scopes = AGENT_SCOPES.filter(
-        (scope) => name in byScope.get(scope)!,
-      );
-      if (!scopes.length)
-        throw new Error(
-          `${name} needs a scope combination llms.txt cannot state`,
-        );
-      return {
-        name,
-        scopes,
-        summary: firstSentence(tool.description ?? tool.title ?? name),
-      };
-    },
-  );
+  const byScope = new Map(AGENT_SCOPES.map((scope) => [scope, registeredTools([scope])]));
+  return Object.entries(registeredTools([...AGENT_SCOPES])).map(([name, tool]) => {
+    const scopes = AGENT_SCOPES.filter((scope) => name in byScope.get(scope)!);
+    if (!scopes.length) throw new Error(`${name} needs a scope combination llms.txt cannot state`);
+    return {
+      name,
+      scopes,
+      summary: firstSentence(tool.description ?? tool.title ?? name),
+    };
+  });
 }
 
 /** How the discussion of a link works here (COMMENTS_MODE). */
@@ -120,9 +104,7 @@ function commentsIntro() {
 export function llmsText(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
   const tools = mcpToolCatalog()
-    .map(
-      (tool) => `- ${tool.name} [${tool.scopes.join(" or ")}]: ${tool.summary}`,
-    )
+    .map((tool) => `- ${tool.name} [${tool.scopes.join(" or ")}]: ${tool.summary}`)
     .join("\n");
   return `# Полка (Polka)
 
@@ -424,24 +406,13 @@ export function registerAgentDiscovery(app: FastifyInstance) {
   const openapi = JSON.stringify(openApiDocument(origin));
   const skills = agentSkills(origin);
   const index = JSON.stringify(agentSkillsIndex(origin));
-  app.get("/llms.txt", async (_req, reply) =>
-    reply.headers(TEXT_HEADERS).type("text/plain; charset=utf-8").send(llms),
-  );
+  app.get("/llms.txt", async (_req, reply) => reply.headers(TEXT_HEADERS).type("text/plain; charset=utf-8").send(llms));
   app.get("/openapi.json", async (_req, reply) =>
-    reply
-      .headers(TEXT_HEADERS)
-      .type("application/json; charset=utf-8")
-      .send(openapi),
+    reply.headers(TEXT_HEADERS).type("application/json; charset=utf-8").send(openapi),
   );
-  for (const path of [
-    "/.well-known/agent-skills",
-    "/.well-known/agent-skills/index.json",
-  ])
+  for (const path of ["/.well-known/agent-skills", "/.well-known/agent-skills/index.json"])
     app.get(path, async (_req, reply) =>
-      reply
-        .headers(TEXT_HEADERS)
-        .type("application/json; charset=utf-8")
-        .send(index),
+      reply.headers(TEXT_HEADERS).type("application/json; charset=utf-8").send(index),
     );
   const challenge = config.OPENAI_APPS_CHALLENGE;
   if (challenge)
@@ -449,12 +420,7 @@ export function registerAgentDiscovery(app: FastifyInstance) {
       reply.headers(TEXT_HEADERS).type("text/plain").send(challenge),
     );
   for (const skill of skills)
-    app.get(
-      `/.well-known/agent-skills/${skill.name}/SKILL.md`,
-      async (_req, reply) =>
-        reply
-          .headers(TEXT_HEADERS)
-          .type("text/markdown; charset=utf-8")
-          .send(skill.markdown),
+    app.get(`/.well-known/agent-skills/${skill.name}/SKILL.md`, async (_req, reply) =>
+      reply.headers(TEXT_HEADERS).type("text/markdown; charset=utf-8").send(skill.markdown),
     );
 }

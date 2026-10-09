@@ -7,23 +7,13 @@ import {
   ErasureLedgerAdapterError,
   type ErasureLedgerTransport,
 } from "./erasure-ledger-adapter.ts";
-import type {
-  MaintenanceObjectStore,
-  MaintenanceScope,
-} from "./maintenance-cleanup.ts";
+import type { MaintenanceObjectStore, MaintenanceScope } from "./maintenance-cleanup.ts";
 
 const uuid = z.string().uuid();
-const phase = z.enum([
-  "awaiting_revoke_ledger",
-  "deleting_source",
-  "source_empty",
-  "metadata_purged",
-]);
+const phase = z.enum(["awaiting_revoke_ledger", "deleting_source", "source_empty", "metadata_purged"]);
 const mailSnapshot = z.object({
   account_email: z.string().nullable(),
-  challenges: z.array(
-    z.object({ id: uuid, delivery: z.enum(["local", "smtp"]) }).strict(),
-  ),
+  challenges: z.array(z.object({ id: uuid, delivery: z.enum(["local", "smtp"]) }).strict()),
 });
 
 type PurgePhase = z.infer<typeof phase>;
@@ -88,10 +78,18 @@ function snapshot(row: Record<string, unknown>): PurgeSnapshot | null {
     phase: phase.parse(row.phase),
     requestedAt: iso(row.requested_at),
     revokedAt: iso(row.revoked_at),
-    policyVersion: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/).parse(row.policy_version),
+    policyVersion: z
+      .string()
+      .regex(/^[A-Za-z0-9._-]{1,80}$/)
+      .parse(row.policy_version),
     workingDataPolicyDeadline: iso(row.working_data_policy_deadline),
     backupRetentionPolicyDeadline: iso(row.backup_retention_policy_deadline),
-    revokeSha256: row.revoke_sha256 ? z.string().regex(/^[a-f0-9]{64}$/).parse(row.revoke_sha256) : null,
+    revokeSha256: row.revoke_sha256
+      ? z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .parse(row.revoke_sha256)
+      : null,
     sourceEmptyVerifiedAt: nullableIso(row.source_empty_verified_at),
     localMailClearedAt: nullableIso(row.local_mail_cleared_at),
     metadataPurgedAt: nullableIso(row.metadata_purged_at),
@@ -118,12 +116,7 @@ function revokeRecord(job: PurgeSnapshot): RevokeRecord {
 }
 
 function purgedRecord(job: PurgeSnapshot): PurgedRecord {
-  if (
-    !job.revokeSha256 ||
-    !job.sourceEmptyVerifiedAt ||
-    !job.localMailClearedAt ||
-    !job.metadataPurgedAt
-  )
+  if (!job.revokeSha256 || !job.sourceEmptyVerifiedAt || !job.localMailClearedAt || !job.metadataPurgedAt)
     throw new Error("Terminal purge proof is incomplete");
   return {
     ...commonRecord(job),
@@ -176,9 +169,7 @@ async function claim(
       restore
         ? "SELECT * FROM claim_restored_account_purge_job($1,$2,$3,$4)"
         : "SELECT * FROM claim_account_purge_job($1,$2)",
-      restore
-        ? [restore.runId, restore.deletionId, attemptId, ledgerId]
-        : [attemptId, ledgerId],
+      restore ? [restore.runId, restore.deletionId, attemptId, ledgerId] : [attemptId, ledgerId],
     );
     return snapshot(result.rows?.[0] ?? {});
   });
@@ -191,10 +182,13 @@ async function acknowledgeRevoke(
   acknowledgement: { key: string; sha256: string; versionId: string },
 ) {
   await scope.transaction(async (c) => {
-    await c.query(
-      "SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)",
-      [job.deletionId, attemptId, acknowledgement.key, acknowledgement.sha256, acknowledgement.versionId],
-    );
+    await c.query("SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)", [
+      job.deletionId,
+      attemptId,
+      acknowledgement.key,
+      acknowledgement.sha256,
+      acknowledgement.versionId,
+    ]);
   });
   job.phase = "deleting_source";
   job.revokeSha256 = acknowledgement.sha256;
@@ -222,10 +216,7 @@ async function deleteSourceBatch(
   }
   if (!candidates.length && page.truncated) throw new AccountPurgeStorageFailure();
   if (candidates.length) {
-    const remaining = await content.listVersions(
-      { prefix, maxKeys: 1 },
-      scope.signal,
-    );
+    const remaining = await content.listVersions({ prefix, maxKeys: 1 }, scope.signal);
     assertActive(scope.signal);
     if (remaining.versions.length || remaining.deleteMarkers.length)
       return { deleted: candidates.length, empty: false };
@@ -233,11 +224,7 @@ async function deleteSourceBatch(
   }
   const verifiedAt = now().toISOString();
   await scope.transaction(async (c) => {
-    await c.query("SELECT mark_account_purge_source_empty($1,$2,$3)", [
-      job.deletionId,
-      attemptId,
-      verifiedAt,
-    ]);
+    await c.query("SELECT mark_account_purge_source_empty($1,$2,$3)", [job.deletionId, attemptId, verifiedAt]);
   });
   job.phase = "source_empty";
   job.sourceEmptyVerifiedAt = verifiedAt;
@@ -252,10 +239,7 @@ async function clearLocalMail(
   removeLocalMail: (path: string) => Promise<void>,
 ) {
   return scope.transaction(async (c) => {
-    const result = await c.query("SELECT * FROM lock_account_purge_mail($1,$2)", [
-      job.deletionId,
-      attemptId,
-    ]);
+    const result = await c.query("SELECT * FROM lock_account_purge_mail($1,$2)", [job.deletionId, attemptId]);
     const mail = mailSnapshot.parse(result.rows?.[0]);
     for (const challenge of mail.challenges) {
       assertActive(scope.signal);
@@ -263,8 +247,7 @@ async function clearLocalMail(
       try {
         await removeLocalMail(`.local/mail/${challenge.id}.json`);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-          throw new AccountPurgeMailFailure();
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw new AccountPurgeMailFailure();
       }
       assertActive(scope.signal);
     }
@@ -279,38 +262,20 @@ async function clearLocalMail(
   });
 }
 
-async function terminalErase(
-  scope: MaintenanceScope,
-  job: PurgeSnapshot,
-  attemptId: string,
-  passwordHash: string,
-) {
+async function terminalErase(scope: MaintenanceScope, job: PurgeSnapshot, attemptId: string, passwordHash: string) {
   const result = await scope.transaction(async (c) =>
-    c.query(
-      "SELECT * FROM terminal_erase_account_metadata($1,$2,$3)",
-      [job.deletionId, attemptId, passwordHash],
-    ),
+    c.query("SELECT * FROM terminal_erase_account_metadata($1,$2,$3)", [job.deletionId, attemptId, passwordHash]),
   );
   const updated = snapshot(result.rows?.[0] ?? {});
-  if (!updated || updated.phase !== "metadata_purged")
-    throw new Error("Terminal erase returned an invalid snapshot");
+  if (!updated || updated.phase !== "metadata_purged") throw new Error("Terminal erase returned an invalid snapshot");
   return updated;
 }
 
-async function markFailure(
-  scope: MaintenanceScope,
-  deletionId: string,
-  attemptId: string,
-  code: string,
-) {
+async function markFailure(scope: MaintenanceScope, deletionId: string, attemptId: string, code: string) {
   if (scope.signal.aborted) return;
   try {
     await scope.transaction(async (c) => {
-      await c.query("SELECT fail_account_purge_attempt($1,$2,$3)", [
-        deletionId,
-        attemptId,
-        code,
-      ]);
+      await c.query("SELECT fail_account_purge_attempt($1,$2,$3)", [deletionId, attemptId, code]);
     });
   } catch {
     // A stale attempt or lost guard is already non-authoritative.
@@ -326,8 +291,7 @@ export async function runAccountPurge(
   const attemptId = (dependencies.attemptId ?? randomUUID)();
   const now = dependencies.now ?? (() => new Date());
   const removeLocalMail = dependencies.removeLocalMail ?? unlink;
-  const replacementPasswordHash =
-    dependencies.replacementPasswordHash ?? randomPasswordHash;
+  const replacementPasswordHash = dependencies.replacementPasswordHash ?? randomPasswordHash;
   if ((dependencies.restoreRunId === undefined) !== (dependencies.restoreDeletionId === undefined))
     throw new Error("Restore purge identity is incomplete");
   const job = await claim(
@@ -355,20 +319,11 @@ export async function runAccountPurge(
 
     if (job.phase === "deleting_source") {
       stage = "storage";
-      const source = await deleteSourceBatch(
-        scope,
-        dependencies.content,
-        job,
-        attemptId,
-        now,
-      );
+      const source = await deleteSourceBatch(scope, dependencies.content, job, attemptId, now);
       counters.sourceVersionsDeleted = source.deleted;
       if (!source.empty) {
         await scope.transaction(async (c) => {
-          await c.query("SELECT yield_account_purge_attempt($1,$2)", [
-            job.deletionId,
-            attemptId,
-          ]);
+          await c.query("SELECT yield_account_purge_attempt($1,$2)", [job.deletionId, attemptId]);
         });
         return counters;
       }
@@ -377,23 +332,9 @@ export async function runAccountPurge(
 
     if (job.phase === "source_empty") {
       stage = "mail";
-      await clearLocalMail(
-        scope,
-        job,
-        attemptId,
-        now,
-        removeLocalMail,
-      );
+      await clearLocalMail(scope, job, attemptId, now, removeLocalMail);
       stage = "database";
-      Object.assign(
-        job,
-        await terminalErase(
-          scope,
-          job,
-          attemptId,
-          replacementPasswordHash(),
-        ),
-      );
+      Object.assign(job, await terminalErase(scope, job, attemptId, replacementPasswordHash()));
       counters.metadataPurged = 1;
     }
 
@@ -401,14 +342,14 @@ export async function runAccountPurge(
       stage = "ledger";
       if (dependencies.restoreRunId) {
         const historic = await scope.transaction(async (c) => {
-          const result = await c.query(
-            "SELECT acknowledge_historic_restored_purge($1,$2,$3) AS acknowledged",
-            [dependencies.restoreRunId, job.deletionId, attemptId],
-          );
+          const result = await c.query("SELECT acknowledge_historic_restored_purge($1,$2,$3) AS acknowledged", [
+            dependencies.restoreRunId,
+            job.deletionId,
+            attemptId,
+          ]);
           return result.rows?.[0]?.acknowledged === true;
         });
-        if (!historic)
-          throw new Error("Restore suppression has no historic ledger record");
+        if (!historic) throw new Error("Restore suppression has no historic ledger record");
         counters.terminalRecordsAcknowledged = 1;
         return counters;
       }
@@ -419,10 +360,13 @@ export async function runAccountPurge(
         scope.signal,
       );
       await scope.transaction(async (c) => {
-        await c.query(
-          "SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)",
-          [job.deletionId, attemptId, acknowledgement.key, acknowledgement.sha256, acknowledgement.versionId],
-        );
+        await c.query("SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)", [
+          job.deletionId,
+          attemptId,
+          acknowledgement.key,
+          acknowledgement.sha256,
+          acknowledgement.versionId,
+        ]);
       });
       counters.terminalRecordsAcknowledged = 1;
     }
@@ -433,10 +377,7 @@ export async function runAccountPurge(
   }
 }
 
-export function recordForPurgeSnapshot(
-  row: Record<string, unknown>,
-  event: "revoke" | "purged",
-): ErasureRecord {
+export function recordForPurgeSnapshot(row: Record<string, unknown>, event: "revoke" | "purged"): ErasureRecord {
   const parsed = snapshot(row);
   if (!parsed) throw new Error("Purge snapshot is missing");
   return event === "revoke" ? revokeRecord(parsed) : purgedRecord(parsed);

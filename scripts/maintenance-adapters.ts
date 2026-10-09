@@ -1,23 +1,13 @@
 import pg from "pg";
-import {
-  DeleteObjectCommand,
-  ListObjectVersionsCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, ListObjectVersionsCommand, S3Client } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import type { MaintenanceClient } from "./maintenance-guard.ts";
-import type {
-  MaintenanceObjectPage,
-  MaintenanceObjectStore,
-} from "./maintenance-cleanup.ts";
+import type { MaintenanceObjectPage, MaintenanceObjectStore } from "./maintenance-cleanup.ts";
 import { MaintenanceStorageFailure } from "./maintenance-cleanup.ts";
 
 type PgClientLike = {
   connect: () => Promise<void>;
-  query: (
-    sql: string,
-    values?: unknown[],
-  ) => Promise<{ rows?: Array<Record<string, unknown>> }>;
+  query: (sql: string, values?: unknown[]) => Promise<{ rows?: Array<Record<string, unknown>> }>;
   on: (event: "error" | "end", listener: () => void) => void;
   off: (event: "error" | "end", listener: () => void) => void;
   end: () => Promise<void>;
@@ -36,12 +26,8 @@ export function createMaintenanceDatabase(
     queryTimeoutMs?: number;
   } = {},
 ): MaintenanceDatabase {
-  const queryTimeoutMs = Math.min(
-    dependencies.queryTimeoutMs ?? 15_000,
-    15_000,
-  );
-  if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0)
-    throw new Error("Invalid maintenance database timeout");
+  const queryTimeoutMs = Math.min(dependencies.queryTimeoutMs ?? 15_000, 15_000);
+  if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) throw new Error("Invalid maintenance database timeout");
   const raw =
     dependencies.createClient?.() ??
     (new pg.Client({
@@ -68,8 +54,7 @@ export function createMaintenanceDatabase(
       }
     },
     query(sql, values) {
-      if (closing)
-        return Promise.reject(new Error("Maintenance database closed"));
+      if (closing) return Promise.reject(new Error("Maintenance database closed"));
       return new Promise((resolve, reject) => {
         let settled = false;
         const finish = (callback: (value: any) => void, value: unknown) => {
@@ -85,8 +70,7 @@ export function createMaintenanceDatabase(
         }, queryTimeoutMs);
         Promise.resolve()
           .then(() => {
-            if (closing || settled)
-              throw new Error("Maintenance database closed");
+            if (closing || settled) throw new Error("Maintenance database closed");
             return raw.query(sql, values);
           })
           .then(
@@ -106,10 +90,7 @@ export function createMaintenanceDatabase(
 }
 
 type S3ClientLike = {
-  send: (
-    command: unknown,
-    options?: { abortSignal?: AbortSignal },
-  ) => Promise<any>;
+  send: (command: unknown, options?: { abortSignal?: AbortSignal }) => Promise<any>;
   destroy: () => void;
 };
 
@@ -126,10 +107,7 @@ export function createMaintenanceObjectStore(
     requestTimeoutMs?: number;
   } = {},
 ): MaintenanceObjectStore & { close: () => void } {
-  const requestTimeoutMs = Math.min(
-    dependencies.requestTimeoutMs ?? 3_000,
-    3_000,
-  );
+  const requestTimeoutMs = Math.min(dependencies.requestTimeoutMs ?? 3_000, 3_000);
   if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0)
     throw new Error("Invalid maintenance storage timeout");
   const client =
@@ -151,14 +129,10 @@ export function createMaintenanceObjectStore(
   let closed = false;
   const send = async (command: unknown, signal: AbortSignal) => {
     if (closed || signal.aborted) throw new MaintenanceStorageFailure();
-    const requestSignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(requestTimeoutMs),
-    ]);
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
     try {
       const result = await client.send(command, { abortSignal: requestSignal });
-      if (closed || requestSignal.aborted)
-        throw new MaintenanceStorageFailure();
+      if (closed || requestSignal.aborted) throw new MaintenanceStorageFailure();
       return result;
     } catch {
       throw new MaintenanceStorageFailure();
@@ -210,8 +184,7 @@ export function createMaintenanceObjectStore(
       };
     },
     async deleteVersion(key, versionId, signal) {
-      if (!versionId || versionId === "null")
-        throw new MaintenanceStorageFailure();
+      if (!versionId || versionId === "null") throw new MaintenanceStorageFailure();
       await send(
         new DeleteObjectCommand({
           Bucket: config.bucket,

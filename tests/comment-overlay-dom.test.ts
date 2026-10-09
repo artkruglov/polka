@@ -14,11 +14,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import {
-  overlayNonce,
-  withLiveOverlay,
-  withStaticOverlay,
-} from "../apps/server/comment-overlay.ts";
+import { overlayNonce, withLiveOverlay, withStaticOverlay } from "../apps/server/comment-overlay.ts";
 import {
   LIVE_VIEWER_SANDBOX,
   STATIC_HTML_SANDBOX,
@@ -114,11 +110,7 @@ function nextEvent(match: (message: any) => boolean, timeout: number) {
 }
 
 /** Re-reads `read` until `ok`, up to the ceiling; for effects with no CDP event. */
-async function until<T>(
-  read: () => Promise<T>,
-  ok: (value: T) => boolean,
-  label: string,
-) {
+async function until<T>(read: () => Promise<T>, ok: (value: T) => boolean, label: string) {
   const deadline = Date.now() + CEILING_MS;
   for (;;) {
     const value = await read();
@@ -132,29 +124,15 @@ async function until<T>(
 // page session auto-attaches to (flat sessions), with its own contexts.
 const frameSessions: string[] = [];
 
-function send(
-  method: string,
-  params: Record<string, unknown> = {},
-  sessionId?: string,
-) {
+function send(method: string, params: Record<string, unknown> = {}, sessionId?: string) {
   const id = ++nextId;
   return new Promise<any>((resolve, reject) => {
-    pending.set(id, (message) =>
-      message.error
-        ? reject(new Error(message.error.message))
-        : resolve(message.result),
-    );
-    socket!.send(
-      JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }),
-    );
+    pending.set(id, (message) => (message.error ? reject(new Error(message.error.message)) : resolve(message.result)));
+    socket!.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
   });
 }
 
-async function evaluate(
-  expression: string,
-  contextId?: number,
-  sessionId?: string,
-) {
+async function evaluate(expression: string, contextId?: number, sessionId?: string) {
   const value = await send(
     "Runtime.evaluate",
     {
@@ -165,10 +143,7 @@ async function evaluate(
     },
     sessionId,
   );
-  if (value.exceptionDetails)
-    throw new Error(
-      value.exceptionDetails.exception?.description ?? "evaluation failed",
-    );
+  if (value.exceptionDetails) throw new Error(value.exceptionDetails.exception?.description ?? "evaluation failed");
   return value.result?.value;
 }
 
@@ -184,10 +159,7 @@ async function open(frame: string, sandbox: string) {
   });
   contexts.length = 0;
   frameSessions.length = 0;
-  const loaded = nextEvent(
-    (message) => message.method === "Page.loadEventFired" && !message.sessionId,
-    CEILING_MS,
-  );
+  const loaded = nextEvent((message) => message.method === "Page.loadEventFired" && !message.sessionId, CEILING_MS);
   await send("Page.navigate", { url: `${shell()}${name}` });
   assert.ok(await loaded, "the page did not load");
   const top: string = (await send("Page.getFrameTree")).frameTree.frame.id;
@@ -198,9 +170,7 @@ async function open(frame: string, sandbox: string) {
   const deadline = Date.now() + CEILING_MS;
   let context: (typeof contexts)[number] | undefined;
   while (!context) {
-    const candidate = contexts.findLast(
-      (item) => item.frameId !== top && item.isDefault,
-    );
+    const candidate = contexts.findLast((item) => item.frameId !== top && item.isDefault);
     if (candidate) {
       const shown = await evaluate(
         "location.href + ' ' + document.readyState",
@@ -211,10 +181,7 @@ async function open(frame: string, sandbox: string) {
     }
     if (context) break;
     assert.ok(Date.now() < deadline, "no execution context for the frame");
-    await nextEvent(
-      (message) => message.method === "Runtime.executionContextCreated",
-      250,
-    );
+    await nextEvent((message) => message.method === "Runtime.executionContextCreated", 250);
   }
   const { id, sessionId } = context;
   return {
@@ -243,9 +210,7 @@ before(async () => {
   server = createServer(handler);
   viewerServer = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  await new Promise<void>((resolve) =>
-    viewerServer.listen(0, "127.0.0.1", resolve),
-  );
+  await new Promise<void>((resolve) => viewerServer.listen(0, "127.0.0.1", resolve));
   port = (server.address() as { port: number }).port;
   viewerPort = (viewerServer.address() as { port: number }).port;
   profile = mkdtempSync(path.join(tmpdir(), "polka-chrome-overlay-"));
@@ -269,15 +234,9 @@ before(async () => {
   let targets: any[] = [];
   while (Date.now() < deadline && exited === null) {
     try {
-      debugPort ||= Number(
-        readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split(
-          "\n",
-        )[0],
-      );
+      debugPort ||= Number(readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]);
       if (debugPort) {
-        targets = (await (
-          await fetch(`http://127.0.0.1:${debugPort}/json`)
-        ).json()) as any[];
+        targets = (await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json()) as any[];
         if (targets.some((target) => target.type === "page")) break;
         await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, {
           method: "PUT",
@@ -310,10 +269,7 @@ before(async () => {
         isDefault: !!context.auxData?.isDefault,
         sessionId: message.sessionId,
       });
-    } else if (
-      message.method === "Target.attachedToTarget" &&
-      message.params.targetInfo.type === "iframe"
-    ) {
+    } else if (message.method === "Target.attachedToTarget" && message.params.targetInfo.type === "iframe") {
       const sessionId = message.params.sessionId as string;
       void send("Runtime.enable", {}, sessionId)
         .then(() => send("Runtime.runIfWaitingForDebugger", {}, sessionId))
@@ -339,12 +295,13 @@ after(async () => {
     await Promise.race([ended, wait(5_000)]);
   }
   for (const each of [server, viewerServer])
-    await new Promise<void>(
-      (resolve) => each?.close(() => resolve()) ?? resolve(),
-    );
+    await new Promise<void>((resolve) => each?.close(() => resolve()) ?? resolve());
   try {
     // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
-    if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+    if (profile)
+      try {
+        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {}
   } catch {
     /* the OS cleans the temp directory */
   }
@@ -362,114 +319,79 @@ function staticFrame(html: string, overlay: boolean, appOrigin = shell()) {
   return name;
 }
 
-const fromFrame = (expression: string) =>
-  `window.messages.filter((m) => m.fromFrame)${expression}`;
+const fromFrame = (expression: string) => `window.messages.filter((m) => m.fromFrame)${expression}`;
 
-test(
-  "static view with comments: only the overlay runs, the page's scripts and handlers do not",
-  { skip },
-  async () => {
-    const { parent, frame } = await open(
-      staticFrame(HOSTILE, true),
-      STATIC_OVERLAY_SANDBOX,
-    );
-    // The overlay announced itself to the shell, from the opaque origin.
-    await until(
-      () => parent(fromFrame(".length")),
-      (count) => count > 0,
-      "the overlay's first message",
-    );
-    assert.deepEqual(
-      await parent(fromFrame(".map((m) => [m.origin, m.data.type])[0]")),
-      ["null", "polka:ready"],
-    );
-    // The page's own script, inline handlers, javascript: URLs: nothing ran.
-    assert.equal(await frame("typeof window.pageRan"), "undefined");
-    assert.equal(await frame("typeof window.later"), "undefined");
-    assert.equal(await frame("document.title"), "t");
-    assert.equal(await frame("typeof window.errored"), "undefined");
-    await frame("document.getElementById('b').click()");
-    assert.equal(await frame("typeof window.clicked"), "undefined");
-    await frame(
-      "HTMLAnchorElement.prototype.click.call(document.getElementById('j'))",
-    );
-    await wait(200);
-    assert.equal(await frame("typeof window.js"), "undefined");
-    assert.equal(await frame("typeof window.svg"), "undefined");
-    // A script the page (or anyone) adds later has no nonce: blocked.
-    await frame(
-      "(() => { const s = document.createElement('script'); s.textContent = 'window.injected = 1'; document.head.appendChild(s); })()",
-    );
-    assert.equal(await frame("typeof window.injected"), "undefined");
-    // No network and no WebRTC, for the overlay's realm too.
-    const before = hits.length;
-    assert.equal(
-      await frame(
-        `fetch(${JSON.stringify(`${shell()}/probe`)}).then(() => "reached", (e) => e.name)`,
-      ),
-      "TypeError",
-    );
-    assert.equal(await frame("typeof RTCPeerConnection"), "undefined");
-    assert.equal(await frame("typeof webkitRTCPeerConnection"), "undefined");
-    assert.ok(!hits.slice(before).some((hit) => hit.startsWith("/probe")));
-    // Still an opaque origin without cookies.
-    assert.equal(await frame("self.origin"), "null");
-    // <noscript> reads as it did without scripts.
-    assert.equal(
-      await frame("document.getElementById('ns')?.textContent"),
-      "Без скриптов",
-    );
-  },
-);
+test("static view with comments: only the overlay runs, the page's scripts and handlers do not", { skip }, async () => {
+  const { parent, frame } = await open(staticFrame(HOSTILE, true), STATIC_OVERLAY_SANDBOX);
+  // The overlay announced itself to the shell, from the opaque origin.
+  await until(
+    () => parent(fromFrame(".length")),
+    (count) => count > 0,
+    "the overlay's first message",
+  );
+  assert.deepEqual(await parent(fromFrame(".map((m) => [m.origin, m.data.type])[0]")), ["null", "polka:ready"]);
+  // The page's own script, inline handlers, javascript: URLs: nothing ran.
+  assert.equal(await frame("typeof window.pageRan"), "undefined");
+  assert.equal(await frame("typeof window.later"), "undefined");
+  assert.equal(await frame("document.title"), "t");
+  assert.equal(await frame("typeof window.errored"), "undefined");
+  await frame("document.getElementById('b').click()");
+  assert.equal(await frame("typeof window.clicked"), "undefined");
+  await frame("HTMLAnchorElement.prototype.click.call(document.getElementById('j'))");
+  await wait(200);
+  assert.equal(await frame("typeof window.js"), "undefined");
+  assert.equal(await frame("typeof window.svg"), "undefined");
+  // A script the page (or anyone) adds later has no nonce: blocked.
+  await frame(
+    "(() => { const s = document.createElement('script'); s.textContent = 'window.injected = 1'; document.head.appendChild(s); })()",
+  );
+  assert.equal(await frame("typeof window.injected"), "undefined");
+  // No network and no WebRTC, for the overlay's realm too.
+  const before = hits.length;
+  assert.equal(
+    await frame(`fetch(${JSON.stringify(`${shell()}/probe`)}).then(() => "reached", (e) => e.name)`),
+    "TypeError",
+  );
+  assert.equal(await frame("typeof RTCPeerConnection"), "undefined");
+  assert.equal(await frame("typeof webkitRTCPeerConnection"), "undefined");
+  assert.ok(!hits.slice(before).some((hit) => hit.startsWith("/probe")));
+  // Still an opaque origin without cookies.
+  assert.equal(await frame("self.origin"), "null");
+  // <noscript> reads as it did without scripts.
+  assert.equal(await frame("document.getElementById('ns')?.textContent"), "Без скриптов");
+});
 
-test(
-  "static view with comments: anchors paint and resolve, the selection reaches the shell",
-  { skip },
-  async () => {
-    const { parent, frame } = await open(
-      staticFrame(HOSTILE, true),
-      STATIC_OVERLAY_SANDBOX,
-    );
-    await parent(`window.toFrame({ type: "polka:anchors", anchors: [
+test("static view with comments: anchors paint and resolve, the selection reaches the shell", { skip }, async () => {
+  const { parent, frame } = await open(staticFrame(HOSTILE, true), STATIC_OVERLAY_SANDBOX);
+  await parent(`window.toFrame({ type: "polka:anchors", anchors: [
       { id: "a1", exact: "Выручка выросла на 12%.", prefix: "", suffix: " Итоги" },
       { id: "dup", exact: "Выручка выросла на 12%.", prefix: "", suffix: "" },
       { id: "gone", exact: "Этого текста нет", prefix: "", suffix: "" }
     ] })`);
-    // Positions are also reported without anchors (layout, scroll): wait for
-    // the report that follows these anchors.
-    await until(
-      () =>
-        parent(
-          fromFrame(
-            ".filter((m) => m.data.type === 'polka:positions').map((m) => Object.keys(m.data.positions).join()).at(-1) ?? ''",
-          ),
-        ),
-      (keys) => keys === "a1",
-      "positions of the anchors",
-    );
-    assert.deepEqual(
-      await parent(
+  // Positions are also reported without anchors (layout, scroll): wait for
+  // the report that follows these anchors.
+  await until(
+    () =>
+      parent(
         fromFrame(
-          ".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing",
+          ".filter((m) => m.data.type === 'polka:positions').map((m) => Object.keys(m.data.positions).join()).at(-1) ?? ''",
         ),
       ),
-      ["dup", "gone"],
-    );
-    const positions = await parent(
-      fromFrame(
-        ".filter((m) => m.data.type === 'polka:positions').at(-1).data.positions",
-      ),
-    );
-    assert.deepEqual(Object.keys(positions), ["a1"]);
-    assert.ok(positions.a1 > 0);
-    // Painted with the CSS Highlight API: no element of the page changed.
-    assert.equal(await frame("CSS.highlights.get('polka-d1')?.size"), 1);
-    assert.equal(
-      await frame("document.getElementById('p').childNodes.length"),
-      1,
-    );
-    // The reader selects text: the shell gets the quote and its context.
-    await frame(`(() => {
+    (keys) => keys === "a1",
+    "positions of the anchors",
+  );
+  assert.deepEqual(await parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing")), [
+    "dup",
+    "gone",
+  ]);
+  const positions = await parent(fromFrame(".filter((m) => m.data.type === 'polka:positions').at(-1).data.positions"));
+  assert.deepEqual(Object.keys(positions), ["a1"]);
+  assert.ok(positions.a1 > 0);
+  // Painted with the CSS Highlight API: no element of the page changed.
+  assert.equal(await frame("CSS.highlights.get('polka-d1')?.size"), 1);
+  assert.equal(await frame("document.getElementById('p').childNodes.length"), 1);
+  // The reader selects text: the shell gets the quote and its context.
+  await frame(`(() => {
       const text = document.getElementById("p").firstChild;
       const range = document.createRange();
       range.setStart(text, 8);
@@ -477,49 +399,38 @@ test(
       getSelection().removeAllRanges();
       getSelection().addRange(range);
     })()`);
-    await until(
-      () => parent(fromFrame(".filter((m) => m.data.type === 'polka:selection').length")),
-      (count) => count > 0,
-      "polka:selection",
-    );
-    const selection = await parent(
-      fromFrame(
-        ".filter((m) => m.data.type === 'polka:selection').at(-1).data",
-      ),
-    );
-    assert.equal(selection.anchor.exact, "выросла на 12%");
-    assert.equal(selection.anchor.prefix.endsWith("Отчёт" + "Выручка "), true);
-    assert.equal(selection.anchor.suffix.startsWith(". Итоги"), true);
-    assert.ok(selection.rect.bottom > selection.rect.top);
-    await parent(`window.toFrame({ type: "polka:clearSelection" })`);
-    await until(
-      () => frame("getSelection().isCollapsed"),
-      (collapsed) => collapsed === true,
-      "the selection cleared",
-    );
-  },
-);
+  await until(
+    () => parent(fromFrame(".filter((m) => m.data.type === 'polka:selection').length")),
+    (count) => count > 0,
+    "polka:selection",
+  );
+  const selection = await parent(fromFrame(".filter((m) => m.data.type === 'polka:selection').at(-1).data"));
+  assert.equal(selection.anchor.exact, "выросла на 12%");
+  assert.equal(selection.anchor.prefix.endsWith("Отчёт" + "Выручка "), true);
+  assert.equal(selection.anchor.suffix.startsWith(". Итоги"), true);
+  assert.ok(selection.rect.bottom > selection.rect.top);
+  await parent(`window.toFrame({ type: "polka:clearSelection" })`);
+  await until(
+    () => frame("getSelection().isCollapsed"),
+    (collapsed) => collapsed === true,
+    "the selection cleared",
+  );
+});
 
-test(
-  "the overlay listens only to its parent from the expected origin",
-  { skip },
-  async () => {
-    // An overlay that expects another shell origin: its messages are never
-    // delivered here, and it ignores this parent's messages.
-    const { parent, frame } = await open(
-      staticFrame(HOSTILE, true, "http://polka.invalid"),
-      STATIC_OVERLAY_SANDBOX,
-    );
-    assert.equal(await parent(fromFrame(".length")), 0, JSON.stringify(await parent("window.messages")));
-    await parent(`window.toFrame({ type: "polka:anchors", anchors: [
+test("the overlay listens only to its parent from the expected origin", { skip }, async () => {
+  // An overlay that expects another shell origin: its messages are never
+  // delivered here, and it ignores this parent's messages.
+  const { parent, frame } = await open(staticFrame(HOSTILE, true, "http://polka.invalid"), STATIC_OVERLAY_SANDBOX);
+  assert.equal(await parent(fromFrame(".length")), 0, JSON.stringify(await parent("window.messages")));
+  await parent(`window.toFrame({ type: "polka:anchors", anchors: [
       { id: "a1", exact: "Итоги квартала.", prefix: "", suffix: "" }
     ] })`);
-    await wait(300);
-    assert.equal(await frame("CSS.highlights.get('polka-d1')?.size ?? 0"), 0);
-    // A message forged inside the frame (not trusted, not from the parent)
-    // is ignored by the overlay of the expected origin too.
-    const real = await open(staticFrame(HOSTILE, true), STATIC_OVERLAY_SANDBOX);
-    await real.frame(`(() => {
+  await wait(300);
+  assert.equal(await frame("CSS.highlights.get('polka-d1')?.size ?? 0"), 0);
+  // A message forged inside the frame (not trusted, not from the parent)
+  // is ignored by the overlay of the expected origin too.
+  const real = await open(staticFrame(HOSTILE, true), STATIC_OVERLAY_SANDBOX);
+  await real.frame(`(() => {
       try {
         window.dispatchEvent(new MessageEvent("message", {
           data: { type: "polka:anchors", anchors: [{ id: "x", exact: "Итоги квартала.", prefix: "", suffix: "" }] },
@@ -527,76 +438,45 @@ test(
         }));
       } catch (e) {}
     })()`);
-    await wait(300);
-    assert.equal(
-      await real.frame("CSS.highlights.get('polka-d1')?.size ?? 0"),
-      0,
-    );
-  },
-);
+  await wait(300);
+  assert.equal(await real.frame("CSS.highlights.get('polka-d1')?.size ?? 0"), 0);
+});
 
-test(
-  "the static view without comments runs nothing at all",
-  { skip },
-  async () => {
-    const { parent, frame } = await open(
-      staticFrame(HOSTILE, false),
-      STATIC_HTML_SANDBOX,
-    );
-    assert.equal(await parent(fromFrame(".length")), 0);
-    assert.equal(await frame("document.title"), "t");
-    assert.equal(await frame("typeof window.pageRan"), "undefined");
-  },
-);
+test("the static view without comments runs nothing at all", { skip }, async () => {
+  const { parent, frame } = await open(staticFrame(HOSTILE, false), STATIC_HTML_SANDBOX);
+  assert.equal(await parent(fromFrame(".length")), 0);
+  assert.equal(await frame("document.title"), "t");
+  assert.equal(await frame("typeof window.pageRan"), "undefined");
+});
 
-test(
-  "live view with comments: guard first, overlay next, then the page",
-  { skip },
-  async () => {
-    const name = `/live-${frames.size}`;
-    frames.set(name, {
-      body: withLiveOverlay(Buffer.from(LIVE), shell()),
-      csp: liveViewerCsp(shell()),
-    });
-    const { parent, frame } = await open(name, LIVE_VIEWER_SANDBOX);
-    assert.equal(await frame("window.pageRan"), 1);
-    assert.equal(await frame("typeof RTCPeerConnection"), "undefined");
-    assert.equal(
-      await frame(
-        `fetch(${JSON.stringify(`${shell()}/probe-live`)}).then(() => "reached", (e) => e.name)`,
-      ),
-      "TypeError",
-    );
-    await parent(`window.toFrame({ type: "polka:anchors", anchors: [
+test("live view with comments: guard first, overlay next, then the page", { skip }, async () => {
+  const name = `/live-${frames.size}`;
+  frames.set(name, {
+    body: withLiveOverlay(Buffer.from(LIVE), shell()),
+    csp: liveViewerCsp(shell()),
+  });
+  const { parent, frame } = await open(name, LIVE_VIEWER_SANDBOX);
+  assert.equal(await frame("window.pageRan"), 1);
+  assert.equal(await frame("typeof RTCPeerConnection"), "undefined");
+  assert.equal(
+    await frame(`fetch(${JSON.stringify(`${shell()}/probe-live`)}).then(() => "reached", (e) => e.name)`),
+    "TypeError",
+  );
+  await parent(`window.toFrame({ type: "polka:anchors", anchors: [
       { id: "a1", exact: "выручка выросла", prefix: "", suffix: "" }
     ] })`);
-    await until(
-      () => parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').length")),
-      (count) => count > 0,
-      "polka:resolved",
-    );
-    assert.deepEqual(
-      await parent(
-        fromFrame(
-          ".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing",
-        ),
-      ),
-      [],
-    );
-    assert.equal(await frame("CSS.highlights.get('polka-d1')?.size"), 1);
-    // The page re-renders: the overlay follows the new text.
-    await frame(
-      "document.getElementById('root').textContent = 'Новый текст без цитаты'",
-    );
-    await until(
-      () =>
-        parent(
-          fromFrame(
-            ".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing.join()",
-          ),
-        ),
-      (missing) => missing === "a1",
-      "the overlay follows the re-rendered text",
-    );
-  },
-);
+  await until(
+    () => parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').length")),
+    (count) => count > 0,
+    "polka:resolved",
+  );
+  assert.deepEqual(await parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing")), []);
+  assert.equal(await frame("CSS.highlights.get('polka-d1')?.size"), 1);
+  // The page re-renders: the overlay follows the new text.
+  await frame("document.getElementById('root').textContent = 'Новый текст без цитаты'");
+  await until(
+    () => parent(fromFrame(".filter((m) => m.data.type === 'polka:resolved').at(-1).data.missing.join()")),
+    (missing) => missing === "a1",
+    "the overlay follows the re-rendered text",
+  );
+});

@@ -1,13 +1,7 @@
 import React from "react";
 
 /** The GitHub mark (Octicons `mark-github`, MIT), inline: the CSP loads no remote images. */
-export function GitHubMark({
-  size = 18,
-  className,
-}: {
-  size?: number;
-  className?: string;
-}) {
+export function GitHubMark({ size = 18, className }: { size?: number; className?: string }) {
   return (
     <svg
       viewBox="0 0 16 16"

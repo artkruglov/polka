@@ -3,9 +3,7 @@ import { transaction, db } from "./db.ts";
 import { lockShelf } from "./shelves.ts";
 
 export const SHELF_CARD_MAX = 8000;
-const cardSchema = z
-  .object({ cardMd: z.string().max(SHELF_CARD_MAX).nullable() })
-  .strict();
+const cardSchema = z.object({ cardMd: z.string().max(SHELF_CARD_MAX).nullable() }).strict();
 
 type Actor = { id: string; tenant: string };
 

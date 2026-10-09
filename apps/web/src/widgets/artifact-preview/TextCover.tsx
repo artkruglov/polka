@@ -31,8 +31,18 @@ export function TextCover({
       {note && <span className="text-cover-note">{note}</span>}
       <svg className="text-cover-wave" viewBox="0 0 400 120" preserveAspectRatio="none">
         <path d="M0 80 C60 20 110 120 190 70 S320 10 400 60 L400 120 L0 120Z" fill={`hsl(${hue} 70% 60% / .18)`} />
-        <path d="M0 96 C80 60 130 130 220 84 S330 30 400 74" fill="none" stroke={`hsl(${hue} 80% 55% / .55)`} strokeWidth="1.5" />
-        <path d="M0 108 C90 80 160 20 250 66 S350 96 400 40" fill="none" stroke={`hsl(${(hue + 40) % 360} 70% 60% / .35)`} strokeWidth="1" />
+        <path
+          d="M0 96 C80 60 130 130 220 84 S330 30 400 74"
+          fill="none"
+          stroke={`hsl(${hue} 80% 55% / .55)`}
+          strokeWidth="1.5"
+        />
+        <path
+          d="M0 108 C90 80 160 20 250 66 S350 96 400 40"
+          fill="none"
+          stroke={`hsl(${(hue + 40) % 360} 70% 60% / .35)`}
+          strokeWidth="1"
+        />
       </svg>
     </div>
   );

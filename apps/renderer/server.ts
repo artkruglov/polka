@@ -53,11 +53,21 @@ export type RendererOptions = {
   anyPort?: boolean;
 };
 
-export function createRenderer({ secret, browser, render, get, robots = robotsVia(get), fetchAllow, anyPort = false }: RendererOptions) {
+export function createRenderer({
+  secret,
+  browser,
+  render,
+  get,
+  robots = robotsVia(get),
+  fetchAllow,
+  anyPort = false,
+}: RendererOptions) {
   if (secret.length < 32) throw new Error("RENDERER_SECRET must be at least 32 characters");
   let chain: Promise<unknown> = Promise.resolve();
   let waiting = 0;
-  const enqueue = <T extends RenderResult | FetchResult | SnapshotResult | PdfResult>(task: () => Promise<T>): Promise<T> => {
+  const enqueue = <T extends RenderResult | FetchResult | SnapshotResult | PdfResult>(
+    task: () => Promise<T>,
+  ): Promise<T> => {
     if (waiting > MAX_QUEUE) return Promise.resolve({ error: "busy" } as T);
     waiting++;
     const next = chain.then(task).finally(() => waiting--);
@@ -67,7 +77,9 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const started = Date.now();
     const send = (status: number, body: unknown) => {
-      res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(body));
+      res
+        .writeHead(status, { "content-type": "application/json", "cache-control": "no-store" })
+        .end(JSON.stringify(body));
     };
     if (req.method === "GET" && req.url === "/healthz") return send(200, { ok: true });
     const operation =
@@ -90,7 +102,8 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
     } catch {
       return send(413, { error: "bad_request" });
     }
-    if (!verifyRenderRequest(secret, req.headers, "POST", `/${operation}`, body)) return send(401, { error: "unauthorized" });
+    if (!verifyRenderRequest(secret, req.headers, "POST", `/${operation}`, body))
+      return send(401, { error: "unauthorized" });
     if (operation === "snapshot" || operation === "pdf") {
       let page: { html: string; script: boolean };
       try {
@@ -114,7 +127,13 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
       const parsed = JSON.parse(body) as { url?: unknown };
       if (typeof parsed.url !== "string" || parsed.url.length > 2048) throw new Error();
       const target = new URL(parsed.url);
-      if (target.protocol !== "https:" || target.username || target.password || (target.port && target.port !== "443" && !anyPort)) throw new Error();
+      if (
+        target.protocol !== "https:" ||
+        target.username ||
+        target.password ||
+        (target.port && target.port !== "443" && !anyPort)
+      )
+        throw new Error();
       target.hash = "";
       url = target.href;
     } catch {
@@ -131,7 +150,9 @@ export function createRenderer({ secret, browser, render, get, robots = robotsVi
             return renderPage(await browser(), url, render);
           });
     // Counts and outcomes only: the URL is the user's and stays out of logs.
-    console.log(JSON.stringify({ event: operation, outcome: "error" in result ? result.error : "ok", ms: Date.now() - started }));
+    console.log(
+      JSON.stringify({ event: operation, outcome: "error" in result ? result.error : "ok", ms: Date.now() - started }),
+    );
     send("error" in result ? (result.error === "busy" ? 503 : 422) : 200, result);
   });
 }

@@ -5,10 +5,7 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  publishEditorial,
-  withdrawEditorial,
-} from "../apps/server/editorial.ts";
+import { publishEditorial, withdrawEditorial } from "../apps/server/editorial.ts";
 import { Problem } from "../apps/server/errors.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
 import { publishOwnerShare } from "../apps/server/shares.ts";
@@ -17,8 +14,7 @@ import { prepareCapture } from "../scripts/prepare-capture.ts";
 
 if (!["127.0.0.1", "localhost"].includes(new URL(config.APP_ORIGIN).hostname))
   throw new Error("Editorial tests require a loopback installation");
-if (!config.HTML_LIVE_ENABLED)
-  throw new Error("Run editorial-catalog.test.ts with HTML_LIVE_ENABLED=true");
+if (!config.HTML_LIVE_ENABLED) throw new Error("Run editorial-catalog.test.ts with HTML_LIVE_ENABLED=true");
 
 const app = await createApp();
 const viewer = await createLiveViewerApp();
@@ -28,13 +24,7 @@ let other: Awaited<ReturnType<typeof createAccount>>;
 let cookie = "";
 let otherCookie = "";
 
-async function call(
-  method: any,
-  url: string,
-  body?: any,
-  session = cookie,
-  authorization?: string,
-) {
+async function call(method: any, url: string, body?: any, session = cookie, authorization?: string) {
   return app.inject({
     method,
     url,
@@ -42,9 +32,7 @@ async function call(
       origin: config.APP_ORIGIN,
       ...(session ? { cookie: session } : {}),
       ...(authorization ? { authorization: `Bearer ${authorization}` } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
@@ -56,11 +44,7 @@ async function catalogueHas(slug: string) {
   return response.json().items.some((item: any) => item.slug === slug);
 }
 
-async function saveHtml(
-  source: string,
-  existing?: { artifactId: string; revisionId: string },
-  session = cookie,
-) {
+async function saveHtml(source: string, existing?: { artifactId: string; revisionId: string }, session = cookie) {
   const bytes = Buffer.from(source);
   const begun = await call(
     "POST",
@@ -83,29 +67,20 @@ async function saveHtml(
   );
   assert.equal(begun.statusCode, 200, begun.body);
   const { uploadId } = begun.json();
-  const uploaded = await call(
-    "PUT",
-    `/api/uploads/${uploadId}/bytes`,
-    bytes,
-    session,
-  );
+  const uploaded = await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes, session);
   assert.equal(uploaded.statusCode, 200, uploaded.body);
-  const finalized = await call(
-    "POST",
-    `/api/uploads/${uploadId}/finalize`,
-    {},
-    session,
-  );
+  const finalized = await call("POST", `/api/uploads/${uploadId}/finalize`, {}, session);
   assert.equal(finalized.statusCode, 200, finalized.body);
   return { ...finalized.json(), bytes } as any;
 }
 
 async function saveBundle() {
-  const prepared = await prepareCapture(
-    "tests/fixtures/bundle-corpus/team-report",
+  const prepared = await prepareCapture("tests/fixtures/bundle-corpus/team-report", "index.html", [
     "index.html",
-    ["index.html", "assets/report.css", "assets/report.js", "assets/mark.svg"],
-  );
+    "assets/report.css",
+    "assets/report.js",
+    "assets/mark.svg",
+  ]);
   const begun = await call("POST", "/api/bundle-uploads", {
     key: randomUUID(),
     title: "Editorial bundle fixture",
@@ -122,17 +97,9 @@ async function saveBundle() {
     );
     assert.equal(uploaded.statusCode, 200, uploaded.body);
   }
-  const finalized = await call(
-    "POST",
-    `/api/bundle-uploads/${uploadId}/finalize`,
-    {},
-  );
+  const finalized = await call("POST", `/api/bundle-uploads/${uploadId}/finalize`, {});
   assert.equal(finalized.statusCode, 200, finalized.body);
-  const built = await call(
-    "POST",
-    `/api/revisions/${finalized.json().revisionId}/build-inline`,
-    {},
-  );
+  const built = await call("POST", `/api/revisions/${finalized.json().revisionId}/build-inline`, {});
   assert.equal(built.statusCode, 200, built.body);
   assert.equal(built.json().state, "ready");
   return finalized.json() as any;
@@ -158,9 +125,7 @@ const publicationInput = async (
   publicationOwner = owner,
   session = cookie,
 ) => {
-  const artifact = (
-    await call("GET", `/api/artifacts/${saved.artifactId}`, undefined, session)
-  ).json();
+  const artifact = (await call("GET", `/api/artifacts/${saved.artifactId}`, undefined, session)).json();
   const derivative =
     artifact.revision.storageKind === "bundle"
       ? (
@@ -225,20 +190,10 @@ before(async () => {
   const suffix = randomBytes(5).toString("hex");
   owner = await createAccount(`editor-${suffix}`, password);
   other = await createAccount(`editor-other-${suffix}`, password);
-  const login = await call(
-    "POST",
-    "/api/login",
-    { name: owner.name, password },
-    "",
-  );
+  const login = await call("POST", "/api/login", { name: owner.name, password }, "");
   assert.equal(login.statusCode, 200, login.body);
   cookie = `${login.cookies[0].name}=${login.cookies[0].value}`;
-  const otherLogin = await call(
-    "POST",
-    "/api/login",
-    { name: other.name, password },
-    "",
-  );
+  const otherLogin = await call("POST", "/api/login", { name: other.name, password }, "");
   assert.equal(otherLogin.statusCode, 200, otherLogin.body);
   otherCookie = `${otherLogin.cookies[0].name}=${otherLogin.cookies[0].value}`;
 });
@@ -247,10 +202,7 @@ after(async () => {
   let cleanupError: unknown;
   try {
     if (owner && other) {
-      await db.query(
-        "UPDATE accounts SET disabled=false WHERE id=ANY($1::uuid[])",
-        [[owner.id, other.id]],
-      );
+      await db.query("UPDATE accounts SET disabled=false WHERE id=ANY($1::uuid[])", [[owner.id, other.id]]);
       const publications = (
         await db.query(
           `SELECT id,tenant_id FROM editorial_publications
@@ -260,10 +212,7 @@ after(async () => {
       ).rows;
       for (const publication of publications) {
         const account = publication.tenant_id === owner.tenant ? owner : other;
-        await withdrawEditorial(
-          { id: account.id, tenant: account.tenant },
-          { publicationId: publication.id },
-        );
+        await withdrawEditorial({ id: account.id, tenant: account.tenant }, { publicationId: publication.id });
       }
     }
   } catch (error) {
@@ -271,14 +220,10 @@ after(async () => {
   } finally {
     try {
       if (owner && other) {
-        await db.query(
-          "UPDATE shares SET revoked=true WHERE tenant_id=ANY($1::uuid[])",
-          [[owner.tenant, other.tenant]],
-        );
-        await db.query(
-          "UPDATE accounts SET disabled=true WHERE id=ANY($1::uuid[])",
-          [[owner.id, other.id]],
-        );
+        await db.query("UPDATE shares SET revoked=true WHERE tenant_id=ANY($1::uuid[])", [
+          [owner.tenant, other.tenant],
+        ]);
+        await db.query("UPDATE accounts SET disabled=true WHERE id=ANY($1::uuid[])", [[owner.id, other.id]]);
         const available = Number(
           (
             await db.query(
@@ -329,10 +274,9 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
   assert.equal(
     Number(
       (
-        await db.query(
-          "SELECT count(*) FROM audit_outbox WHERE action='editorial.published' AND target_id=$1",
-          [input1.publicationId],
-        )
+        await db.query("SELECT count(*) FROM audit_outbox WHERE action='editorial.published' AND target_id=$1", [
+          input1.publicationId,
+        ])
       ).rows[0].count,
     ),
     1,
@@ -381,9 +325,7 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
 
   const listing = await call("GET", "/api/editorial", undefined, "");
   assert.equal(listing.statusCode, 200, listing.body);
-  const listed = listing
-    .json()
-    .items.find((item: any) => item.slug === input1.manifest.public.slug);
+  const listed = listing.json().items.find((item: any) => item.slug === input1.manifest.public.slug);
   assert.ok(listed);
   const publicText = JSON.stringify(listing.json());
   for (const secret of [
@@ -394,12 +336,7 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
     input1.manifest.runtimeProof.evidencePath,
   ])
     assert.equal(publicText.includes(secret), false);
-  const detail = await call(
-    "GET",
-    `/api/editorial/${input1.manifest.public.slug}`,
-    undefined,
-    "",
-  );
+  const detail = await call("GET", `/api/editorial/${input1.manifest.public.slug}`, undefined, "");
   assert.equal(detail.statusCode, 200, detail.body);
   assert.equal(detail.json().recipientUrl, listed.recipientUrl);
 
@@ -407,13 +344,7 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
   assert.equal(resolved1.statusCode, 200, resolved1.body);
   assert.equal(resolved1.json().revision.id, v1.revisionId);
   const grant1 = resolved1.json().grant;
-  const recipientBytes = await call(
-    "GET",
-    "/api/view/bytes",
-    undefined,
-    "",
-    grant1,
-  );
+  const recipientBytes = await call("GET", "/api/view/bytes", undefined, "", grant1);
   assert.deepEqual(recipientBytes.rawPayload, v1.bytes);
   const ownerBytes = await call("GET", `/api/revisions/${v1.revisionId}/bytes`);
   assert.deepEqual(ownerBytes.rawPayload, v1.bytes);
@@ -429,44 +360,14 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
     }),
     (error: unknown) => error instanceof Problem && error.status === 409,
   );
-  assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/editorial/${input1.manifest.public.slug}`,
-        undefined,
-        "",
-      )
-    ).statusCode,
-    200,
-  );
-  assert.equal(
-    (await call("POST", "/api/resolve", { token: token1 }, "")).json().revision
-      .id,
-    v1.revisionId,
-  );
+  assert.equal((await call("GET", `/api/editorial/${input1.manifest.public.slug}`, undefined, "")).statusCode, 200);
+  assert.equal((await call("POST", "/api/resolve", { token: token1 }, "")).json().revision.id, v1.revisionId);
 
   await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]);
   assert.equal(await catalogueHas(input1.manifest.public.slug), false);
-  assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/editorial/${input1.manifest.public.slug}`,
-        undefined,
-        "",
-      )
-    ).statusCode,
-    404,
-  );
-  assert.equal(
-    (await call("POST", "/api/resolve", { token: token1 }, "")).statusCode,
-    404,
-  );
-  assert.equal(
-    (await call("GET", "/api/view/bytes", undefined, "", grant1)).statusCode,
-    404,
-  );
+  assert.equal((await call("GET", `/api/editorial/${input1.manifest.public.slug}`, undefined, "")).statusCode, 404);
+  assert.equal((await call("POST", "/api/resolve", { token: token1 }, "")).statusCode, 404);
+  assert.equal((await call("GET", "/api/view/bytes", undefined, "", grant1)).statusCode, 404);
   await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [owner.id]);
 
   const trashed = await call("POST", `/api/artifacts/${v1.artifactId}/trash`, {
@@ -475,56 +376,34 @@ test("catalogue pins an explicit share, is idempotent, and closes every recipien
   });
   assert.equal(trashed.statusCode, 200, trashed.body);
   assert.equal(await catalogueHas(input1.manifest.public.slug), false);
-  const restored = await call(
-    "POST",
-    `/api/artifacts/${v1.artifactId}/restore`,
-    { expectedRevisionId: v2.revisionId, expectedLifecycleVersion: 1 },
-  );
+  const restored = await call("POST", `/api/artifacts/${v1.artifactId}/restore`, {
+    expectedRevisionId: v2.revisionId,
+    expectedLifecycleVersion: 1,
+  });
   assert.equal(restored.statusCode, 200, restored.body);
   assert.equal(await catalogueHas(input1.manifest.public.slug), false);
 
   const share2 = await enableShare(v2);
   const token2 = new URL(share2.url).hash.slice(1);
-  const input2 = await publicationInput(
-    v2,
-    share2,
-    randomUUID(),
-    input1.publicationId,
-    input1.manifest.public.slug,
-  );
+  const input2 = await publicationInput(v2, share2, randomUUID(), input1.publicationId, input1.manifest.public.slug);
   assert.equal((await publishEditorial(actor, input2)).state, "available");
   assert.equal(
     (
-      await db.query(
-        "SELECT withdrawn_at IS NOT NULL AS withdrawn FROM editorial_publications WHERE id=$1",
-        [input1.publicationId],
-      )
+      await db.query("SELECT withdrawn_at IS NOT NULL AS withdrawn FROM editorial_publications WHERE id=$1", [
+        input1.publicationId,
+      ])
     ).rows[0].withdrawn,
     true,
   );
-  assert.equal(
-    (await call("POST", "/api/resolve", { token: token1 }, "")).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", "/api/resolve", { token: token1 }, "")).statusCode, 404);
   const resolved2 = await call("POST", "/api/resolve", { token: token2 }, "");
   assert.equal(resolved2.statusCode, 200, resolved2.body);
   assert.equal(resolved2.json().revision.id, v2.revisionId);
 
-  assert.equal(
-    (await withdrawEditorial(actor, { publicationId: input2.publicationId }))
-      .state,
-    "withdrawn",
-  );
-  assert.equal(
-    (await withdrawEditorial(actor, { publicationId: input2.publicationId }))
-      .state,
-    "withdrawn",
-  );
+  assert.equal((await withdrawEditorial(actor, { publicationId: input2.publicationId })).state, "withdrawn");
+  assert.equal((await withdrawEditorial(actor, { publicationId: input2.publicationId })).state, "withdrawn");
   assert.equal(await catalogueHas(input1.manifest.public.slug), false);
-  assert.equal(
-    (await call("POST", "/api/resolve", { token: token2 }, "")).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", "/api/resolve", { token: token2 }, "")).statusCode, 404);
 });
 
 test("catalogue validates and gates a ready bundle derivative through the live viewer", async () => {
@@ -588,26 +467,14 @@ test("catalogue validates and gates a ready bundle derivative through the live v
   }
 
   assert.equal((await publishEditorial(actor, input)).state, "available");
-  const persisted = (
-    await db.query("SELECT request FROM editorial_publications WHERE id=$1", [
-      input.publicationId,
-    ])
-  ).rows[0].request;
+  const persisted = (await db.query("SELECT request FROM editorial_publications WHERE id=$1", [input.publicationId]))
+    .rows[0].request;
   assert.equal(persisted.manifest.source.path, input.manifest.source.path);
-  assert.equal(
-    persisted.manifest.runtimeProof.evidencePath,
-    input.manifest.runtimeProof.evidencePath,
-  );
+  assert.equal(persisted.manifest.runtimeProof.evidencePath, input.manifest.runtimeProof.evidencePath);
 
   const resolved = await call("POST", "/api/resolve", { token }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
-  const launched = await call(
-    "POST",
-    "/api/view/live-view",
-    {},
-    "",
-    resolved.json().grant,
-  );
+  const launched = await call("POST", "/api/view/live-view", {}, "", resolved.json().grant);
   assert.equal(launched.statusCode, 200, launched.body);
   const viewerToken = new URL(launched.json().url).pathname.split("/").at(-1)!;
   const embedded = () =>
@@ -635,22 +502,8 @@ test("catalogue validates and gates a ready bundle derivative through the live v
   const revoked = await call("POST", `/api/shares/${share.id}/revoke`, {});
   assert.equal(revoked.statusCode, 200, revoked.body);
   assert.equal((await embedded()).statusCode, 404);
-  assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/editorial/${input.manifest.public.slug}`,
-        undefined,
-        "",
-      )
-    ).statusCode,
-    404,
-  );
-  assert.equal(
-    (await withdrawEditorial(actor, { publicationId: input.publicationId }))
-      .state,
-    "withdrawn",
-  );
+  assert.equal((await call("GET", `/api/editorial/${input.manifest.public.slug}`, undefined, "")).statusCode, 404);
+  assert.equal((await withdrawEditorial(actor, { publicationId: input.publicationId })).state, "withdrawn");
   assert.equal((await embedded()).statusCode, 404);
 });
 
@@ -685,10 +538,9 @@ test("publication rejects another tenant and source hash mismatch without a row"
   assert.equal(
     Number(
       (
-        await db.query(
-          "SELECT count(*) FROM editorial_publications WHERE id=ANY($1::uuid[])",
-          [[input.publicationId, mismatched.publicationId]],
-        )
+        await db.query("SELECT count(*) FROM editorial_publications WHERE id=ANY($1::uuid[])", [
+          [input.publicationId, mismatched.publicationId],
+        ])
       ).rows[0].count,
     ),
     0,

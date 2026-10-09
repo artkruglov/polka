@@ -3,11 +3,7 @@
  * service worker; the page is read only here, on the user's request (toolbar,
  * the page button, or Полка's «Сохранить» handing over a link).
  */
-import type {
-  ImportFailure,
-  ImportStage,
-  ImportSuccess,
-} from "../../../packages/contracts/extension-bridge.ts";
+import type { ImportFailure, ImportStage, ImportSuccess } from "../../../packages/contracts/extension-bridge.ts";
 import { AuthError, connect, isConnected } from "./auth.ts";
 import { noteFor, publish, PublishError } from "./api.ts";
 import { captureCopy } from "./extract/copy-capture.ts";
@@ -28,14 +24,16 @@ const fail = (code: ImportFailure["code"], message: string): ImportFailure => ({
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A file name's extension as a language hint: page.jsx → jsx. */
-const extensionOf = (name: string | null) =>
-  /\.([a-z0-9]+)$/i.exec(name ?? "")?.[1]?.toLowerCase() ?? null;
+const extensionOf = (name: string | null) => /\.([a-z0-9]+)$/i.exec(name ?? "")?.[1]?.toLowerCase() ?? null;
 
 /**
  * One pass over the tab: the title menu's Download (once per save), the Copy
  * button, the Code view, the artifact frames.
  */
-async function extractOnce(tabId: number, state: { menuTried: boolean }): Promise<{
+async function extractOnce(
+  tabId: number,
+  state: { menuTried: boolean },
+): Promise<{
   best: Extracted | null;
   page: PageReport | null;
 }> {
@@ -85,8 +83,7 @@ async function extractOnce(tabId: number, state: { menuTried: boolean }): Promis
     if (typeof copied?.result === "string")
       candidates.push({ ...base, source: copied.result, language: page.code?.language ?? null, via: "copy-button" });
   }
-  if (page.code)
-    candidates.push({ ...base, source: page.code.source, language: page.code.language, via: "code-view" });
+  if (page.code) candidates.push({ ...base, source: page.code.source, language: page.code.language, via: "code-view" });
 
   if (page.provider === "claude" && page.frames > 0) {
     // Frames on hosts without permission are skipped by Chrome.
@@ -96,8 +93,7 @@ async function extractOnce(tabId: number, state: { menuTried: boolean }): Promis
     const frames = await chrome.scripting
       .executeScript({
         target: { tabId, allFrames: true },
-        func: () =>
-          ((globalThis as any).__polkaFrame?.extract() ?? null) as Promise<FrameReport | null>,
+        func: () => ((globalThis as any).__polkaFrame?.extract() ?? null) as Promise<FrameReport | null>,
       })
       .catch(() => []);
     for (const frame of frames) {
@@ -139,10 +135,7 @@ async function ensureConnected(origin: string, onStage?: (stage: ImportStage) =>
     await connect(origin);
     return null;
   } catch (error) {
-    return fail(
-      "not_connected",
-      error instanceof AuthError ? error.message : "Не удалось подключиться к Полке.",
-    );
+    return fail("not_connected", error instanceof AuthError ? error.message : "Не удалось подключиться к Полке.");
   }
 }
 
@@ -174,8 +167,7 @@ export async function saveTab(tabId: number): Promise<SaveResult> {
   if (notConnected) return notConnected;
   const { best, page } = await extract(tabId, 4000);
   if (page?.signIn) return fail("not_found", SIGN_IN);
-  if (!page?.provider)
-    return fail("unsupported_url", "Откройте артефакт на claude.ai или chatgpt.com.");
+  if (!page?.provider) return fail("unsupported_url", "Откройте артефакт на claude.ai или chatgpt.com.");
   if (!best) return fail("extract_failed", NOTHING_FOUND);
   return saveExtracted(polkaOrigin, best);
 }
@@ -186,10 +178,7 @@ let busy = false;
  * Полка's page handed over a link: open it in a background tab of this
  * browser (the user's own session), extract, close, save.
  */
-export async function importUrl(
-  url: string,
-  onStage: (stage: ImportStage) => void,
-): Promise<SaveResult> {
+export async function importUrl(url: string, onStage: (stage: ImportStage) => void): Promise<SaveResult> {
   if (busy) return fail("busy", "Расширение уже сохраняет другой артефакт. Дождитесь его.");
   busy = true;
   let tabId: number | undefined;
@@ -204,7 +193,11 @@ export async function importUrl(
     onStage("extracting");
     const { best, page } = await extract(tabId, 20_000);
     if (page?.signIn) return fail("not_found", SIGN_IN);
-    if (!best) return fail("extract_failed", "Не удалось найти артефакт по ссылке. Откройте ссылку сами и нажмите «На Полку» на странице артефакта.");
+    if (!best)
+      return fail(
+        "extract_failed",
+        "Не удалось найти артефакт по ссылке. Откройте ссылку сами и нажмите «На Полку» на странице артефакта.",
+      );
     onStage("saving");
     return await saveExtracted(polkaOrigin, best);
   } catch (error) {

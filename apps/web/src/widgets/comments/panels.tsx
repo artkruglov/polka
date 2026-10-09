@@ -1,18 +1,10 @@
 import React, { useEffect, useState } from "react";
-import type {
-  CommentAnchor,
-  Reaction,
-  ShareDiscussion,
-} from "../../../../../packages/contracts/comments.ts";
+import type { CommentAnchor, Reaction, ShareDiscussion } from "../../../../../packages/contracts/comments.ts";
 import { signInFromShare } from "../../shared/lib/share-return.ts";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { notesPhrase } from "../../entities/artifact/agent-phrases.ts";
 import { useOverlayBridge } from "./bridge.ts";
-import {
-  CommentsRail,
-  anchorsOf,
-  type PendingComment,
-} from "./CommentsRail.tsx";
+import { CommentsRail, anchorsOf, type PendingComment } from "./CommentsRail.tsx";
 import { SelectionButton } from "./SelectionButton.tsx";
 import { useSharedDiscussion, useWorkDiscussion } from "./useDiscussion.ts";
 
@@ -67,10 +59,7 @@ export function useSharedComments({
 }): CommentsPlacement {
   const bridge = useOverlayBridge();
   const wide = useWide();
-  const { data, unavailable, error, actions } = useSharedDiscussion(
-    token,
-    enabled,
-  );
+  const { data, unavailable, error, actions } = useSharedDiscussion(token, enabled);
   const count = data ? data.threads.filter((t) => !t.deleted && !t.resolvedAt).length : 0;
   const [open, setOpen] = useOpenState(wide, data ? count : null);
   const [pending, setPending] = useState<PendingComment>(null);
@@ -119,11 +108,7 @@ export function useSharedComments({
   );
   return {
     // A recipient with nothing to read gets no toggle at all.
-    available:
-      enabled &&
-      !unavailable &&
-      data?.mode !== "off" &&
-      !(readOnly && !data?.threads.length),
+    available: enabled && !unavailable && data?.mode !== "off" && !(readOnly && !data?.threads.length),
     label: notes ? (readOnly ? "Заметки автора" : "Заметки") : "Комментарии",
     count,
     open,
@@ -132,12 +117,7 @@ export function useSharedComments({
     overlay: bridge.overlay,
     floating:
       enabled && !unavailable && !readOnly && bridge.state.selection ? (
-        <SelectionButton
-          selection={bridge.state.selection}
-          onComment={comment}
-          onReact={react}
-          notes={notes}
-        />
+        <SelectionButton selection={bridge.state.selection} onComment={comment} onReact={react} notes={notes} />
       ) : null,
   };
 }
@@ -170,10 +150,7 @@ export function useWorkComments({
   const [pending, setPending] = useState<PendingComment>(null);
   const shares = data?.shares ?? [];
   const share = shares.find((s) => s.shareId === shareId) ?? shares[0] ?? null;
-  const count = shares.reduce(
-    (total, s) => total + s.threads.filter((t) => !t.deleted && !t.resolvedAt).length,
-    0,
-  );
+  const count = shares.reduce((total, s) => total + s.threads.filter((t) => !t.deleted && !t.resolvedAt).length, 0);
   const [open, setOpen] = useOpenState(wide, data ? data.unread : null);
   // Opening marks the comments read; the panel keeps saying how many were new.
   const [fresh, setFresh] = useState(0);
@@ -214,45 +191,38 @@ export function useWorkComments({
         onSettings={actions.settings}
         header={
           <>
-          {fresh > 0 && (
-            <p className="comments-fresh" role="status">
-              Новых с прошлого раза: {fresh}
-            </p>
-          )}
-          {shares.length > 1 ? (
-            <label className="comments-share">
-              <span>Обсуждение ссылки</span>
-              <select
-                className="ui-input"
-                value={share.shareId}
-                onChange={(event) => setShareId(event.target.value)}
-              >
-                {shares.map((s, index) => (
-                  <option key={s.shareId} value={s.shareId}>
-                    {shareLabel(s, index)} · {s.threads.length}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : share.state !== "active" ? (
-            <p className="comments-share-note">
-              Ссылка {share.state === "revoked" ? "закрыта" : "истекла"}: получатели обсуждение
-              больше не видят.
-            </p>
-          ) : null}
-          {share.threads.some((t) => !t.deleted && !t.resolvedAt) && (
-            <div className="comments-agent">
-              <span>
-                Агенту: «Поправь работу по моим {notes ? "заметкам" : "комментариям"} на Полке»
-              </span>
-              <CopyButton
-                variant="quiet"
-                value={notesPhrase(title, shelfUrl, notes ? "notes" : "comments")}
-                label="Скопировать"
-                successText="Скопировано"
-              />
-            </div>
-          )}
+            {fresh > 0 && (
+              <p className="comments-fresh" role="status">
+                Новых с прошлого раза: {fresh}
+              </p>
+            )}
+            {shares.length > 1 ? (
+              <label className="comments-share">
+                <span>Обсуждение ссылки</span>
+                <select className="ui-input" value={share.shareId} onChange={(event) => setShareId(event.target.value)}>
+                  {shares.map((s, index) => (
+                    <option key={s.shareId} value={s.shareId}>
+                      {shareLabel(s, index)} · {s.threads.length}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : share.state !== "active" ? (
+              <p className="comments-share-note">
+                Ссылка {share.state === "revoked" ? "закрыта" : "истекла"}: получатели обсуждение больше не видят.
+              </p>
+            ) : null}
+            {share.threads.some((t) => !t.deleted && !t.resolvedAt) && (
+              <div className="comments-agent">
+                <span>Агенту: «Поправь работу по моим {notes ? "заметкам" : "комментариям"} на Полке»</span>
+                <CopyButton
+                  variant="quiet"
+                  value={notesPhrase(title, shelfUrl, notes ? "notes" : "comments")}
+                  label="Скопировать"
+                  successText="Скопировано"
+                />
+              </div>
+            )}
           </>
         }
       />
@@ -288,4 +258,3 @@ export function useWorkComments({
       ) : null,
   };
 }
-

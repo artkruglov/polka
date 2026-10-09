@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from "react";
-import type {
-  Artifact,
-  Folder,
-} from "../../../../../packages/contracts/index.ts";
+import type { Artifact, Folder } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Button, TextField, SelectField } from "../../shared/ui/controls.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
@@ -23,9 +20,7 @@ export function ArtifactMetadataPanel({
   const [title, setTitle] = useState(artifact.title);
   const [folderId, setFolderId] = useState<string | null>(artifact.folderId);
   const [expectedTitle, setExpectedTitle] = useState(artifact.title);
-  const [expectedFolderId, setExpectedFolderId] = useState<string | null>(
-    artifact.folderId,
-  );
+  const [expectedFolderId, setExpectedFolderId] = useState<string | null>(artifact.folderId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
@@ -49,14 +44,10 @@ export function ArtifactMetadataPanel({
         setExpectedTitle(fresh.title);
         setExpectedFolderId(fresh.folderId);
         setConflict(false);
-        setError(
-          "Данные обновлены. Проверьте введённые поля и повторите сохранение.",
-        );
+        setError("Данные обновлены. Проверьте введённые поля и повторите сохранение.");
       }
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Не удалось обновить данные.",
-      );
+      setError(cause instanceof Error ? cause.message : "Не удалось обновить данные.");
     } finally {
       setBusy(false);
     }
@@ -83,15 +74,9 @@ export function ArtifactMetadataPanel({
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) {
         setConflict(true);
-        setError(
-          "Работа изменилась. Обновите данные и повторите сохранение. Введённые поля сохранены.",
-        );
+        setError("Работа изменилась. Обновите данные и повторите сохранение. Введённые поля сохранены.");
       } else {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Не удалось сохранить изменения.",
-        );
+        setError(cause instanceof Error ? cause.message : "Не удалось сохранить изменения.");
       }
     } finally {
       setBusy(false);
@@ -129,19 +114,12 @@ export function ArtifactMetadataPanel({
             ))}
           </SelectField>
           {error && (
-            <p
-              className={conflict ? "ui-field-hint" : "ui-field-error"}
-              role="alert"
-            >
+            <p className={conflict ? "ui-field-hint" : "ui-field-error"} role="alert">
               {error}
             </p>
           )}
           {conflict && (
-            <Button
-              type="button"
-              onClick={() => void reloadSnapshot()}
-              disabled={busy}
-            >
+            <Button type="button" onClick={() => void reloadSnapshot()} disabled={busy}>
               Обновить данные
             </Button>
           )}

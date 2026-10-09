@@ -38,9 +38,7 @@ export type RenderResult =
     }
   | { error: RenderError; detail?: string };
 /** POST /fetch: one plain HTTP GET of a server-fetch page (no browser). */
-export type FetchResult =
-  | { finalUrl: string; status: number; html: string }
-  | { error: RenderError; detail?: string };
+export type FetchResult = { finalUrl: string; status: number; html: string } | { error: RenderError; detail?: string };
 export const FETCH_TIMEOUT_MS = 15_000;
 
 /**
@@ -52,9 +50,7 @@ export const FETCH_TIMEOUT_MS = 15_000;
  */
 export type SnapshotRequest = { html: string; script: boolean };
 export type SnapshotResult =
-  | { image: string; blank: false }
-  | { blank: true }
-  | { error: RenderError; detail?: string };
+  { image: string; blank: false } | { blank: true } | { error: RenderError; detail?: string };
 /** The largest page the app sends: a built interactive version fits (8 MB), base64 images of 5 MB too. */
 export const SNAPSHOT_MAX_BODY = 12 * 1024 * 1024;
 /** The largest picture the renderer answers (base64 of it is a third larger). */
@@ -81,13 +77,7 @@ export const PDF_TIMEOUT_MS = 30_000;
 const payload = (timestamp: string, method: string, path: string, body: string) =>
   `${timestamp}\n${method.toUpperCase()}\n${path}\n${createHash("sha256").update(body).digest("hex")}`;
 
-export function signRenderRequest(
-  secret: string,
-  method: string,
-  path: string,
-  body: string,
-  now = Date.now(),
-) {
+export function signRenderRequest(secret: string, method: string, path: string, body: string, now = Date.now()) {
   const timestamp = String(Math.floor(now / 1000));
   return {
     "x-polka-timestamp": timestamp,

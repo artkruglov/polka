@@ -33,11 +33,7 @@ import {
   utf8Bytes,
 } from "../packages/contracts/bookmarklet.ts";
 import { beginUploadSchema } from "../packages/contracts/index.ts";
-import {
-  ORIGIN_PLACEHOLDER,
-  bookmarkletScript,
-  javascriptUrl,
-} from "../extensions/bookmarklet/build.ts";
+import { ORIGIN_PLACEHOLDER, bookmarkletScript, javascriptUrl } from "../extensions/bookmarklet/build.ts";
 
 // --- Unit ------------------------------------------------------------------
 
@@ -66,9 +62,23 @@ const message = (extra: Record<string, unknown> = {}) => ({
 });
 
 test("source origins: the AI chats' https origins only", () => {
-  for (const origin of ["https://claude.ai", "https://chatgpt.com", "https://chat.openai.com", "https://gemini.google.com"])
+  for (const origin of [
+    "https://claude.ai",
+    "https://chatgpt.com",
+    "https://chat.openai.com",
+    "https://gemini.google.com",
+  ])
     assert.equal(allowedSourceOrigin(origin), true, origin);
-  for (const origin of ["http://claude.ai", "https://claude.ai:8443", "https://evil.claude.ai", "https://claude.ai.evil.test", "https://claude.ai/", "null", "", 1])
+  for (const origin of [
+    "http://claude.ai",
+    "https://claude.ai:8443",
+    "https://evil.claude.ai",
+    "https://claude.ai.evil.test",
+    "https://claude.ai/",
+    "null",
+    "",
+    1,
+  ])
     assert.equal(allowedSourceOrigin(origin), false, String(origin));
 });
 
@@ -86,12 +96,24 @@ test("the receiving tab accepts one well-formed message from its opener", () => 
   assert.equal(acceptBookmarkletEvent(event({ ...message(), type: "other" }), expected), null);
   // Ours, but not takeable: a page of another origin, empty, oversize, malformed.
   const status = (data: unknown) => acceptBookmarkletEvent(event(data), expected);
-  assert.deepEqual(status(message({ source: source({ url: "https://chatgpt.com/c/1" }) })), { status: "rejected", reason: "invalid" });
+  assert.deepEqual(status(message({ source: source({ url: "https://chatgpt.com/c/1" }) })), {
+    status: "rejected",
+    reason: "invalid",
+  });
   assert.deepEqual(status(message({ source: source({ text: "  " }) })), { status: "rejected", reason: "invalid" });
   assert.deepEqual(status(message({ source: source({ kind: "exe" }) })), { status: "rejected", reason: "invalid" });
-  assert.deepEqual(status(message({ source: source({ text: "я".repeat(2_700_000) }) })), { status: "rejected", reason: "too_large" });
-  assert.deepEqual(status({ type: BOOKMARKLET_MESSAGE, nonce: NONCE, failure: "sign_in" }), { status: "failure", failure: "sign_in" });
-  assert.deepEqual(status({ type: BOOKMARKLET_MESSAGE, nonce: NONCE, failure: "rm -rf" }), { status: "rejected", reason: "invalid" });
+  assert.deepEqual(status(message({ source: source({ text: "я".repeat(2_700_000) }) })), {
+    status: "rejected",
+    reason: "too_large",
+  });
+  assert.deepEqual(status({ type: BOOKMARKLET_MESSAGE, nonce: NONCE, failure: "sign_in" }), {
+    status: "failure",
+    failure: "sign_in",
+  });
+  assert.deepEqual(status({ type: BOOKMARKLET_MESSAGE, nonce: NONCE, failure: "rm -rf" }), {
+    status: "rejected",
+    reason: "invalid",
+  });
   // Titles lose control and bidi characters and excess length.
   const titled = checkSource(source({ title: "a\u202eb\n c" + "x".repeat(300) }), CLAUDE);
   assert.ok(titled.status === "source");
@@ -103,10 +125,16 @@ test("the bookmark takes replies only from its own Полка tab", () => {
   const tab = {};
   const expected = { tab, origin: "https://polochka.app", nonce: NONCE };
   const reply = { type: BOOKMARKLET_MESSAGE, nonce: NONCE, reply: "ready" };
-  assert.equal(parseBookmarkletReply({ origin: "https://polochka.app", source: tab, data: reply }, expected)?.reply, "ready");
+  assert.equal(
+    parseBookmarkletReply({ origin: "https://polochka.app", source: tab, data: reply }, expected)?.reply,
+    "ready",
+  );
   assert.equal(parseBookmarkletReply({ origin: "https://evil.test", source: tab, data: reply }, expected), null);
   assert.equal(parseBookmarkletReply({ origin: "https://polochka.app", source: {}, data: reply }, expected), null);
-  assert.equal(parseBookmarkletReply({ origin: "https://polochka.app", source: tab, data: { ...reply, nonce: "x" } }, expected), null);
+  assert.equal(
+    parseBookmarkletReply({ origin: "https://polochka.app", source: tab, data: { ...reply, nonce: "x" } }, expected),
+    null,
+  );
 });
 
 test("nonce, sizes and the provenance address", () => {
@@ -130,10 +158,17 @@ test("an upload keeps a source address only for an HTML page, https and bare", (
   };
   assert.equal(beginUploadSchema.safeParse({ ...base, sourceUrl: "https://claude.ai/artifact/1" }).success, true);
   assert.equal(beginUploadSchema.safeParse(base).success, true);
-  for (const sourceUrl of ["http://claude.ai/x", "https://claude.ai/x?a=1", "https://claude.ai/x#f", "https://u:p@claude.ai/", "javascript:alert(1)"])
+  for (const sourceUrl of [
+    "http://claude.ai/x",
+    "https://claude.ai/x?a=1",
+    "https://claude.ai/x#f",
+    "https://u:p@claude.ai/",
+    "javascript:alert(1)",
+  ])
     assert.equal(beginUploadSchema.safeParse({ ...base, sourceUrl }).success, false, sourceUrl);
   assert.equal(
-    beginUploadSchema.safeParse({ ...base, mime: "text/plain", filename: "a.txt", sourceUrl: "https://claude.ai/x" }).success,
+    beginUploadSchema.safeParse({ ...base, mime: "text/plain", filename: "a.txt", sourceUrl: "https://claude.ai/x" })
+      .success,
     false,
   );
 });
@@ -147,7 +182,14 @@ test("the javascript: address carries the script intact, with the origin baked i
   assert.ok(script.includes('"https://polka.example"'));
   assert.ok(!script.includes(ORIGIN_PLACEHOLDER));
   // Nothing in it talks to a server: no fetch/XHR of its own, no storage.
-  for (const forbidden of [/XMLHttpRequest/, /sendBeacon/, /document\.cookie/, /localStorage/, /\bsessionStorage\b/, /new WebSocket/])
+  for (const forbidden of [
+    /XMLHttpRequest/,
+    /sendBeacon/,
+    /document\.cookie/,
+    /localStorage/,
+    /\bsessionStorage\b/,
+    /new WebSocket/,
+  ])
     assert.doesNotMatch(script, forbidden);
   await assert.rejects(bookmarkletScript("https://polka.example/path"), /origin/i);
   // Small enough for a bookmark (browsers take far more; this is a budget).
@@ -178,8 +220,7 @@ async function until<T>(probe: () => Promise<T>, what: string, ms = 10_000): Pro
   }
 }
 
-const fixture = (name: string) =>
-  readFileSync(new URL(`./fixtures/extension/${name}`, import.meta.url), "utf8");
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/extension/${name}`, import.meta.url), "utf8");
 const ARTIFACT = `${CLAUDE}/artifact/0f6e1b2a`;
 
 let app: any;
@@ -238,7 +279,10 @@ async function openTab(url: string) {
   const sessionId = await attach(targetId);
   // about:blank is already complete before the navigation: wait for this origin.
   const origin = JSON.stringify(new URL(url).origin);
-  await until(() => evaluate(sessionId, `document.readyState === 'complete' && location.origin === ${origin} && location.href`), url);
+  await until(
+    () => evaluate(sessionId, `document.readyState === 'complete' && location.origin === ${origin} && location.href`),
+    url,
+  );
   return { targetId, sessionId };
 }
 
@@ -294,9 +338,21 @@ before(async () => {
   const key = path.join(scratch, "key.pem");
   const cert = path.join(scratch, "cert.pem");
   const made = spawnSync("openssl", [
-    "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", cert,
-    "-days", "1", "-subj", "/CN=claude.ai",
-    "-addext", "subjectAltName=DNS:claude.ai,DNS:evil.test",
+    "req",
+    "-x509",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-keyout",
+    key,
+    "-out",
+    cert,
+    "-days",
+    "1",
+    "-subj",
+    "/CN=claude.ai",
+    "-addext",
+    "subjectAltName=DNS:claude.ai,DNS:evil.test",
   ]);
   assert.equal(made.status, 0, String(made.stderr));
   fixtures = createHttpsServer({ key: readFileSync(key), cert: readFileSync(cert) }, (req, res) => {
@@ -334,7 +390,13 @@ before(async () => {
     req.on("error", () => {});
     res.on("error", () => {});
     const upstream = httpRequest(
-      { host: "127.0.0.1", port: appPort, method: req.method, path: target.pathname + target.search, headers: req.headers },
+      {
+        host: "127.0.0.1",
+        port: appPort,
+        method: req.method,
+        path: target.pathname + target.search,
+        headers: req.headers,
+      },
       (answer) => {
         answer.on("error", () => res.destroy());
         res.writeHead(answer.statusCode ?? 502, answer.headers);
@@ -387,11 +449,15 @@ before(async () => {
   );
   let exited: number | null = null;
   chrome.once("exit", (code) => (exited = code ?? -1));
-  const endpoint = await until(async () => {
-    if (exited !== null) throw new Error(`Chrome exited (${exited})`);
-    const [port, route] = readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n");
-    return port && route ? `ws://127.0.0.1:${port}${route}` : undefined;
-  }, "Chrome", 45_000);
+  const endpoint = await until(
+    async () => {
+      if (exited !== null) throw new Error(`Chrome exited (${exited})`);
+      const [port, route] = readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n");
+      return port && route ? `ws://127.0.0.1:${port}${route}` : undefined;
+    },
+    "Chrome",
+    45_000,
+  );
   socket = new WebSocket(endpoint!);
   await new Promise((resolve, reject) => {
     socket!.addEventListener("open", resolve);
@@ -421,7 +487,10 @@ after(async () => {
   await db?.end();
   s3?.destroy();
   // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
-  if (scratch) try { rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+  if (scratch)
+    try {
+      rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    } catch {}
 });
 
 const REMEMBER_ORIGINALS = `window.__originals = [
@@ -451,7 +520,12 @@ test("claude.ai artifact → bookmark → Полка tab → sign in → saved w
     true,
   );
   const polka = await openedBy(claude.targetId, seen);
-  await until(async () => (await text(polka.sessionId)).includes("Трекер привычек") || (await text(polka.sessionId)).includes("Войти, чтобы сохранить"), "the card");
+  await until(
+    async () =>
+      (await text(polka.sessionId)).includes("Трекер привычек") ||
+      (await text(polka.sessionId)).includes("Войти, чтобы сохранить"),
+    "the card",
+  );
 
   // A guest: asked to sign in; the data waits in this tab only, the nonce is off the address bar.
   const guest = await text(polka.sessionId);
@@ -473,8 +547,14 @@ test("claude.ai artifact → bookmark → Полка tab → sign in → saved w
   // Signed in (the same browser session), back to the same tab: the card again.
   await send("Network.setCookie", { ...cookie!, url: appOrigin, path: "/" }, polka.sessionId);
   await send("Page.navigate", { url: `${appOrigin}/bring/receive` }, polka.sessionId);
-  await until(() => evaluate(polka.sessionId, "document.querySelector('.receive-card input')?.value"), "the title field");
-  assert.equal(await evaluate(polka.sessionId, "document.querySelector('.receive-card input').value"), "Трекер привычек");
+  await until(
+    () => evaluate(polka.sessionId, "document.querySelector('.receive-card input')?.value"),
+    "the title field",
+  );
+  assert.equal(
+    await evaluate(polka.sessionId, "document.querySelector('.receive-card input').value"),
+    "Трекер привычек",
+  );
   await evaluate(
     polka.sessionId,
     `[...document.querySelectorAll('.receive-card button')].find((b) => b.textContent.includes('Сохранить на полку')).click()`,
@@ -503,7 +583,10 @@ test("claude.ai artifact → bookmark → Полка tab → sign in → saved w
   assert.equal(saved.revision.sha256, createHash("sha256").update(expected).digest("hex"));
   assert.equal(saved.revision.manifest.provenance.kind, "url");
   assert.equal(saved.revision.manifest.provenance.sourceUrl, ARTIFACT);
-  assert.deepEqual(refused.filter((host) => /claude|evil/.test(host)), []);
+  assert.deepEqual(
+    refused.filter((host) => /claude|evil/.test(host)),
+    [],
+  );
 });
 
 test("forged messages are ignored: another nonce, another window, another origin", { skip }, async () => {
@@ -538,12 +621,11 @@ test("forged messages are ignored: another nonce, another window, another origin
   assert.deepEqual(await evaluate(claude.sessionId, "__replies"), []);
 
   // The real one, from claude.ai, the opener, with this nonce: taken and answered.
-  await evaluate(
-    claude.sessionId,
-    `window.__replies = []; ${post("Настоящий")}`,
-  );
+  await evaluate(claude.sessionId, `window.__replies = []; ${post("Настоящий")}`);
   await until(async () => /работа из чата/i.test(await text(polka.sessionId)), "the card");
-  assert.deepEqual(await until(() => evaluate(claude.sessionId, "__replies.length && __replies"), "the reply"), ["ready"]);
+  assert.deepEqual(await until(() => evaluate(claude.sessionId, "__replies.length && __replies"), "the reply"), [
+    "ready",
+  ]);
   // Only the first accepted message counts.
   await evaluate(claude.sessionId, post("Второй"));
   await wait(300);
@@ -578,7 +660,11 @@ test("on a site that is not an AI chat the bookmark opens nothing", { skip }, as
   const href = javascriptUrl(await bookmarkletScript(appOrigin));
   const evil = await openTab("https://evil.test/");
   const before = (await send("Target.getTargets")).targetInfos.length;
-  await evaluate(evil.sessionId, `(0, eval)(${JSON.stringify(decodeURIComponent(href.slice("javascript:".length)))}); true`, true);
+  await evaluate(
+    evil.sessionId,
+    `(0, eval)(${JSON.stringify(decodeURIComponent(href.slice("javascript:".length)))}); true`,
+    true,
+  );
   await wait(500);
   assert.equal((await send("Target.getTargets")).targetInfos.length, before);
   assert.equal(await evaluate(evil.sessionId, "!!document.getElementById('polka-bookmarklet-toast')"), true);

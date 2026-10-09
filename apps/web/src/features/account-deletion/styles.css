@@ -1,3 +1,19 @@
-.account-deletion ul { display: grid; gap: 8px; margin: 12px 0 16px; padding-left: 20px; color: var(--ink-2); line-height: var(--leading); }
-.account-deletion-warn { display: flex; align-items: center; gap: 8px; color: var(--danger); font-weight: 600; }
-.account-deletion-warn svg { width: 18px; height: 18px; }
+.account-deletion ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 16px;
+  padding-left: 20px;
+  color: var(--ink-2);
+  line-height: var(--leading);
+}
+.account-deletion-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--danger);
+  font-weight: 600;
+}
+.account-deletion-warn svg {
+  width: 18px;
+  height: 18px;
+}

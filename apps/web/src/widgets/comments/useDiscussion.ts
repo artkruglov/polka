@@ -71,8 +71,7 @@ export function useSharedDiscussion(token: string, enabled = true) {
     create: (input) => after(client.comments.create(token, input)),
     react: (emoji, anchor) => after(client.comments.react(token, emoji, anchor)),
     remove: (id) => after(client.comments.remove(token, id)),
-    resolve: (id, resolved) =>
-      after(client.comments.resolve(token, id, resolved)),
+    resolve: (id, resolved) => after(client.comments.resolve(token, id, resolved)),
     settings: (input) => after(client.comments.settings(input)),
   };
   return { data, unavailable, error, reload, actions };
@@ -93,8 +92,7 @@ export function useWorkDiscussion(artifactId: string, enabled = true) {
         setError("");
       })
       .catch((e) => {
-        if (current === generation.current)
-          setError(e instanceof Error ? e.message : String(e));
+        if (current === generation.current) setError(e instanceof Error ? e.message : String(e));
       });
   }, [artifactId]);
   useEffect(() => {
@@ -111,21 +109,16 @@ export function useWorkDiscussion(artifactId: string, enabled = true) {
     [reload],
   );
   const actionsFor = (shareId: string): DiscussionActions => ({
-    create: (input) =>
-      after(client.comments.ownerCreate(artifactId, shareId, input)),
-    react: (emoji, anchor) =>
-      after(client.comments.ownerReact(artifactId, shareId, emoji, anchor)),
+    create: (input) => after(client.comments.ownerCreate(artifactId, shareId, input)),
+    react: (emoji, anchor) => after(client.comments.ownerReact(artifactId, shareId, emoji, anchor)),
     remove: (id) => after(client.comments.ownerRemove(id)),
-    resolve: (id, resolved) =>
-      after(client.comments.ownerResolve(id, resolved)),
+    resolve: (id, resolved) => after(client.comments.ownerResolve(id, resolved)),
     settings: (input) => after(client.comments.settings(input)),
   });
   const markSeen = useCallback(() => {
     void client.comments
       .seen(artifactId)
-      .then(() =>
-        setData((current) => (current ? { ...current, unread: 0 } : current)),
-      )
+      .then(() => setData((current) => (current ? { ...current, unread: 0 } : current)))
       .catch(() => {});
   }, [artifactId]);
   return { data, error, reload, actionsFor, markSeen };

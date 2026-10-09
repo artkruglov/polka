@@ -60,10 +60,7 @@ const E = "(?![\\p{L}\\p{N}])";
  */
 const KINDS: Array<[SensitiveSignal | "login", RegExp]> = (
   [
-    [
-      "password",
-      `${W}парол[ьяюеи]|${W}(?:pass\\s?word|passwd|pwd|passcode)${E}`,
-    ],
+    ["password", `${W}парол[ьяюеи]|${W}(?:pass\\s?word|passwd|pwd|passcode)${E}`],
     [
       "card-number",
       `${W}(?:card\\s?(?:number|num|no)|cc\\s?(?:number|num)|credit\\s?card|debit\\s?card)${E}` +
@@ -114,17 +111,14 @@ export function fieldWords(value: string) {
 export function fieldKinds(value: string): Array<SensitiveSignal | "login"> {
   const words = fieldWords(value);
   if (!words) return [];
-  return KINDS.filter(([, pattern]) => pattern.test(words)).map(
-    ([kind]) => kind,
-  );
+  return KINDS.filter(([, pattern]) => pattern.test(words)).map(([kind]) => kind);
 }
 
 /** autocomplete tokens (WHATWG autofill) of a secret. */
 export function autocompleteKinds(value: string): SensitiveSignal[] {
   const kinds = new Set<SensitiveSignal>();
   for (const token of value.toLowerCase().split(/\s+/).slice(0, 8)) {
-    if (token === "current-password" || token === "new-password")
-      kinds.add("autocomplete-password");
+    if (token === "current-password" || token === "new-password") kinds.add("autocomplete-password");
     else if (token === "one-time-code") kinds.add("autocomplete-otp");
     else if (token.startsWith("cc-")) kinds.add("autocomplete-card");
   }
@@ -169,17 +163,12 @@ const NAMED =
 // <label …>Пароль</label>, <Label>, <FormLabel> in JSX or an HTML string.
 const LABEL = /<(?:label|FormLabel)\b[^>]{0,300}>\s{0,20}([^<{]{1,120})/giu;
 // window.prompt("Введите пароль") asks for the secret without any form.
-const PROMPT =
-  /(?<![\w$.])(?:window\.)?prompt\s{0,3}\(\s{0,3}["'`]([^"'`\n]{1,200})/gu;
+const PROMPT = /(?<![\w$.])(?:window\.)?prompt\s{0,3}\(\s{0,3}["'`]([^"'`\n]{1,200})/gu;
 
 function* matches(pattern: RegExp, source: string) {
   pattern.lastIndex = 0;
   let n = 0;
-  for (
-    let match = pattern.exec(source);
-    match && n < MAX_MATCHES;
-    match = pattern.exec(source)
-  ) {
+  for (let match = pattern.exec(source); match && n < MAX_MATCHES; match = pattern.exec(source)) {
     n++;
     if (match[0].length === 0) pattern.lastIndex++;
     yield match;
@@ -196,19 +185,14 @@ export class SensitiveInputDetector {
   /** An element of a page (only fields matter). */
   element(tag: string, attrs: ReadonlyArray<{ name: string; value: string }>) {
     if (tag !== "input" && tag !== "textarea") return;
-    const attr = (name: string) =>
-      attrs.find((item) => item.name.toLowerCase() === name)?.value;
-    const type =
-      tag === "input"
-        ? (attr("type") ?? "text").trim().toLowerCase()
-        : "textarea";
+    const attr = (name: string) => attrs.find((item) => item.name.toLowerCase() === name)?.value;
+    const type = tag === "input" ? (attr("type") ?? "text").trim().toLowerCase() : "textarea";
     if (type === "password") this.found.add("password-field");
     if (NOT_TEXT.has(type)) return;
     this.textFields++;
     for (const { name, value } of attrs) {
       const key = name.toLowerCase();
-      if (key === "autocomplete")
-        for (const kind of autocompleteKinds(value)) this.found.add(kind);
+      if (key === "autocomplete") for (const kind of autocompleteKinds(value)) this.found.add(kind);
       else if (NAMING.has(key)) this.named(value);
     }
   }
@@ -216,26 +200,21 @@ export class SensitiveInputDetector {
   /** Text of a <label> (counted once the page has a text field). */
   label(text: string) {
     const value = text.trim();
-    if (value && value.length <= 120 && this.labels.length < MAX_LABELS)
-      this.labels.push(value);
+    if (value && value.length <= 120 && this.labels.length < MAX_LABELS) this.labels.push(value);
   }
 
   /** A script: inline, a bundle file, a component's source, an event handler. */
   script(source: string) {
     if (!source) return;
-    const text =
-      source.length > MAX_SCRIPT ? source.slice(0, MAX_SCRIPT) : source;
+    const text = source.length > MAX_SCRIPT ? source.slice(0, MAX_SCRIPT) : source;
     if (PASSWORD_TYPE.test(text)) this.found.add("password-field");
     for (const match of matches(AUTOCOMPLETE, text))
-      for (const kind of autocompleteKinds(match[1] ?? match[2] ?? ""))
-        this.found.add(kind);
+      for (const kind of autocompleteKinds(match[1] ?? match[2] ?? "")) this.found.add(kind);
     for (const match of matches(PROMPT, text))
-      if (fieldKinds(match[1]!).some((kind) => kind !== "login"))
-        this.found.add("prompt");
+      if (fieldKinds(match[1]!).some((kind) => kind !== "login")) this.found.add("prompt");
     if (!MAKES_FIELD.test(text)) return;
     this.textFields++;
-    for (const match of matches(NAMED, text))
-      this.named(match[1] ?? match[2] ?? match[3] ?? "");
+    for (const match of matches(NAMED, text)) this.named(match[1] ?? match[2] ?? match[3] ?? "");
     for (const match of matches(LABEL, text)) this.label(match[1]!);
   }
 
@@ -249,14 +228,10 @@ export class SensitiveInputDetector {
     if (this.textFields) for (const label of this.labels) this.named(label);
     if (
       this.login &&
-      (this.found.has("password") ||
-        this.found.has("password-field") ||
-        this.found.has("autocomplete-password"))
+      (this.found.has("password") || this.found.has("password-field") || this.found.has("autocomplete-password"))
     )
       this.found.add("login-password");
-    const signals = SENSITIVE_SIGNALS.filter((signal) =>
-      this.found.has(signal),
-    ).slice(0, MAX_SIGNALS);
+    const signals = SENSITIVE_SIGNALS.filter((signal) => this.found.has(signal)).slice(0, MAX_SIGNALS);
     return { sensitive: signals.length > 0, signals };
   }
 }
@@ -269,9 +244,7 @@ export function scriptSensitiveInput(source: string) {
 }
 
 /** Several verdicts of one work (pages and scripts of a bundle) as one. */
-export function mergeSensitive(
-  ...results: Array<SensitiveInput | null | undefined>
-): SensitiveInput | null {
+export function mergeSensitive(...results: Array<SensitiveInput | null | undefined>): SensitiveInput | null {
   const signals = new Set<string>();
   let unknown = false;
   for (const result of results) {
@@ -294,7 +267,6 @@ export function sensitiveFields(result: SensitiveInput | null | undefined) {
 
 /** What the recipient is told: true, false, or null for a revision saved before. */
 export function sensitiveInputOf(contentFilter: unknown): boolean | null {
-  const value = (contentFilter as { sensitiveInput?: unknown } | null)
-    ?.sensitiveInput;
+  const value = (contentFilter as { sensitiveInput?: unknown } | null)?.sensitiveInput;
   return typeof value === "boolean" ? value : null;
 }

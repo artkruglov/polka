@@ -61,15 +61,30 @@ const QUERIES = [
 
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 function pg(sql) {
-  const out = execFileSync("docker", ["exec", "bench-pg", "psql", "-U", "postgres", "-At", "-c", `EXPLAIN (ANALYZE, FORMAT TEXT) ${sql}`], { encoding: "utf8", maxBuffer: 64 << 20 });
+  const out = execFileSync(
+    "docker",
+    ["exec", "bench-pg", "psql", "-U", "postgres", "-At", "-c", `EXPLAIN (ANALYZE, FORMAT TEXT) ${sql}`],
+    { encoding: "utf8", maxBuffer: 64 << 20 },
+  );
   return Number(/Execution Time: ([\d.]+) ms/.exec(out)[1]);
 }
 function ch(sql) {
-  const out = execFileSync("docker", ["exec", "bench-ch", "clickhouse-client", "--password", "bench", "--time", "--format", "Null", "--query", sql], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 << 20 });
+  const out = execFileSync(
+    "docker",
+    ["exec", "bench-ch", "clickhouse-client", "--password", "bench", "--time", "--format", "Null", "--query", sql],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 << 20 },
+  );
   return out;
 }
 function chTime(sql) {
-  const result = execFileSync("sh", ["-c", `docker exec bench-ch clickhouse-client --password bench --time --format Null --query "${sql.replace(/"/g, '\\"')}" 2>&1`], { encoding: "utf8" });
+  const result = execFileSync(
+    "sh",
+    [
+      "-c",
+      `docker exec bench-ch clickhouse-client --password bench --time --format Null --query "${sql.replace(/"/g, '\\"')}" 2>&1`,
+    ],
+    { encoding: "utf8" },
+  );
   return Number(result.trim().split("\n").pop()) * 1000;
 }
 void ch;

@@ -45,11 +45,7 @@ import {
  * CI jobs, the CLI in scripts/polka-publish.mjs. The same agent tokens and
  * scopes as /mcp, the same publishFromAgent, no cookies.
  */
-export const PUBLISH_API_PATHS = new Set([
-  "/api/v1/publish",
-  "/api/v1/sign-in-link",
-  "/api/v1/task-token",
-]);
+export const PUBLISH_API_PATHS = new Set(["/api/v1/publish", "/api/v1/sign-in-link", "/api/v1/task-token"]);
 /** The machine routes of this API: bearer only, exempt from the browser Origin rule. */
 export const isPublishApiPath = (pathname: string) =>
   PUBLISH_API_PATHS.has(pathname) ||
@@ -91,9 +87,7 @@ export const PUBLISH_BODY_LIMIT = 8 * 1024 * 1024;
  * schemas the routes parse; tests/publish-api.test.ts checks real responses
  * against them, so the published spec cannot drift from the routes.
  */
-export const problemSchema = z
-  .object({ code: z.string(), message: z.string() })
-  .strict();
+export const problemSchema = z.object({ code: z.string(), message: z.string() }).strict();
 
 export const publishResponseSchema = z
   .object({
@@ -201,13 +195,7 @@ export const editProblemSchema = z
     message: z.string(),
     editIndex: z.number().int().min(0),
     otherEditIndex: z.number().int().min(0).optional(),
-    reason: z.enum([
-      "empty_old_text",
-      "not_found",
-      "ambiguous",
-      "overlap",
-      "no_change",
-    ]),
+    reason: z.enum(["empty_old_text", "not_found", "ambiguous", "overlap", "no_change"]),
     occurrences: z.number().int().optional(),
   })
   .strict();
@@ -228,16 +216,11 @@ const EXPORT_CLI_SOURCE = new URL("../../scripts/polka-export.mjs", import.meta.
 const SESSIONS_CLI_SOURCE = new URL("../../scripts/polka-sessions.mjs", import.meta.url);
 
 const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
-  reply.header(
-    "www-authenticate",
-    `Bearer realm="polka"${error ? `, error="${error}"` : ""}`,
-  );
+  reply.header("www-authenticate", `Bearer realm="polka"${error ? `, error="${error}"` : ""}`);
   return new Problem(
     401,
     "unauthorized",
-    error
-      ? "Токен агента недействителен, истёк или отозван."
-      : "Нужен заголовок Authorization: Bearer <токен агента>.",
+    error ? "Токен агента недействителен, истёк или отозван." : "Нужен заголовок Authorization: Bearer <токен агента>.",
   );
 };
 
@@ -263,34 +246,18 @@ export async function bearerActor(
 ) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
-  const unauthenticated = () =>
-    limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
+  const unauthenticated = () => limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
   const origin = req.headers.origin;
-  if (
-    origin !== undefined &&
-    origin !== config.APP_ORIGIN &&
-    !EXTENSION_ORIGIN.test(origin)
-  )
-    throw new Problem(
-      403,
-      "forbidden",
-      "API вызывается с сервера, а не со страницы в браузере.",
-    );
-  const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(
-    req.headers.authorization ?? "",
-  );
+  if (origin !== undefined && origin !== config.APP_ORIGIN && !EXTENSION_ORIGIN.test(origin))
+    throw new Problem(403, "forbidden", "API вызывается с сервера, а не со страницы в браузере.");
+  const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(req.headers.authorization ?? "");
   if (!match) {
     await unauthenticated();
     throw unauthorized(reply);
   }
   let actor: ServiceActor | null = null;
   for (const audience of audiences) {
-    actor = await authenticateServiceToken(
-      match[1],
-      audience,
-      undefined,
-      "http",
-    ).catch(() => null);
+    actor = await authenticateServiceToken(match[1], audience, undefined, "http").catch(() => null);
     if (actor) break;
   }
   if (!actor) {
@@ -314,14 +281,8 @@ export async function bearerActor(
 
 /** Name the fields that failed instead of the generic form message. */
 function invalidFields(error: z.ZodError) {
-  const fields = [
-    ...new Set(error.issues.map((issue) => issue.path.join(".") || "body")),
-  ];
-  return new Problem(
-    400,
-    "invalid",
-    `Проверьте поля запроса: ${fields.join(", ")}.`,
-  );
+  const fields = [...new Set(error.issues.map((issue) => issue.path.join(".") || "body"))];
+  return new Problem(400, "invalid", `Проверьте поля запроса: ${fields.join(", ")}.`);
 }
 
 async function withFieldErrors<T>(operation: () => Promise<T>) {
@@ -344,8 +305,7 @@ function publishResponse(result: PublishResult) {
     url: result.url,
     expiresAt: shared?.expiresAt ?? null,
     shelfUrl: result.shelfUrl,
-    interactiveReady:
-      "interactiveReady" in result ? !!result.interactiveReady : false,
+    interactiveReady: "interactiveReady" in result ? !!result.interactiveReady : false,
     scriptsRunForRecipients: result.scriptsRunForRecipients,
     // "held": the link exists, recipients see a review screen until the
     // Полка moderator approves it; moderationMessage says so to a human.
@@ -355,21 +315,14 @@ function publishResponse(result: PublishResult) {
           moderationMessage: shared.moderationMessage,
         }
       : {}),
-    ...(shared && "expiresNote" in shared && shared.expiresNote
-      ? { expiresNote: shared.expiresNote }
-      : {}),
-    ...(shared && "linkMoved" in shared && shared.linkMoved
-      ? { linkMoved: true }
-      : {}),
+    ...(shared && "expiresNote" in shared && shared.expiresNote ? { expiresNote: shared.expiresNote } : {}),
+    ...(shared && "linkMoved" in shared && shared.linkMoved ? { linkMoved: true } : {}),
     ...("linkUnavailableReason" in result && result.linkUnavailableReason
       ? { linkUnavailableReason: result.linkUnavailableReason }
       : {}),
     // A provisional shelf: where the owner claims it to hand out links.
-    ...("claimUrl" in result && result.claimUrl
-      ? { claimUrl: result.claimUrl }
-      : {}),
-    ...("interactiveUnavailableReason" in result &&
-    result.interactiveUnavailableReason
+    ...("claimUrl" in result && result.claimUrl ? { claimUrl: result.claimUrl } : {}),
+    ...("interactiveUnavailableReason" in result && result.interactiveUnavailableReason
       ? { interactiveUnavailableReason: result.interactiveUnavailableReason }
       : {}),
   };
@@ -380,55 +333,42 @@ export async function registerPublishApi(app: FastifyInstance) {
   // token too (polka_project_upload), so an agent never pastes a file into
   // a tool argument.
   const PROJECT_AUDIENCES = [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE];
-  app.post(
-    "/api/v1/publish",
-    { bodyLimit: PUBLISH_BODY_LIMIT },
-    async (req, reply) => {
-      const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
-      return publishResponse(
-        await withFieldErrors(() => publishFromAgent(actor, req.body ?? {})),
-      );
-    },
-  );
+  app.post("/api/v1/publish", { bodyLimit: PUBLISH_BODY_LIMIT }, async (req, reply) => {
+    const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
+    return publishResponse(await withFieldErrors(() => publishFromAgent(actor, req.body ?? {})));
+  });
   // A one-time link back into this shelf for the agent's owner
   // (agent-sign-in-links.ts): OAuth connections only, 5 minutes, one use.
-  app.post(
-    "/api/v1/sign-in-link",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const actor = await bearerActor(req, reply);
-      return signInLinkResponseSchema.parse(await issueSignInLink(actor));
-    },
-  );
+  app.post("/api/v1/sign-in-link", { bodyLimit: 1024 }, async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    return signInLinkResponseSchema.parse(await issueSignInLink(actor));
+  });
   // Projects (docs/specs/PROJECTS.md): a folder of linked pages, file by file.
   app.post("/api/v1/projects", { bodyLimit: 256 * 1024 }, async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     return withFieldErrors(() => beginProjectUpload(actor, req.body ?? {}));
   });
-  app.put(
-    "/api/v1/projects/:uploadId/files/:index",
-    { bodyLimit: MAX_BYTES },
-    async (req, reply) => {
-      const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
-      const params = z
-        .object({
-          uploadId: uuid,
-          index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
-        })
-        .parse(req.params);
-      if (!Buffer.isBuffer(req.body))
-        throw new Problem(415, "invalid", "Send the file as application/octet-stream.");
-      return putProjectFile(actor, params.uploadId, params.index, req.body);
-    },
-  );
+  app.put("/api/v1/projects/:uploadId/files/:index", { bodyLimit: MAX_BYTES }, async (req, reply) => {
+    const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
+    const params = z
+      .object({
+        uploadId: uuid,
+        index: z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(PROJECT_MAX_FILES - 1),
+      })
+      .parse(req.params);
+    if (!Buffer.isBuffer(req.body)) throw new Problem(415, "invalid", "Send the file as application/octet-stream.");
+    return putProjectFile(actor, params.uploadId, params.index, req.body);
+  });
   // A video file (docs/specs/PROJECT_VIDEO.md): its bytes are streamed to the
   // store as they arrive, never held whole, so this route takes the body raw.
   await app.register(async (media) => {
     // Encapsulated: the app's buffering parser stays for every other route.
     media.removeContentTypeParser("application/octet-stream");
-    media.addContentTypeParser("application/octet-stream", (_req, payload, done) =>
-      done(null, payload),
-    );
+    media.addContentTypeParser("application/octet-stream", (_req, payload, done) => done(null, payload));
     media.put(
       "/api/v1/projects/:uploadId/media/:index",
       { bodyLimit: PROJECT_VIDEO_MAX_FILE_BYTES },
@@ -438,7 +378,11 @@ export async function registerPublishApi(app: FastifyInstance) {
           const params = z
             .object({
               uploadId: uuid,
-              index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+              index: z.coerce
+                .number()
+                .int()
+                .min(0)
+                .max(PROJECT_MAX_FILES - 1),
             })
             .parse(req.params);
           if (!req.headers["content-length"])
@@ -505,7 +449,11 @@ export async function registerPublishApi(app: FastifyInstance) {
     const params = z
       .object({
         revisionId: uuid,
-        index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
+        index: z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(PROJECT_MAX_FILES - 1),
       })
       .parse(req.params);
     const file = await exportFileForAgent(actor, params.revisionId, params.index);
@@ -537,9 +485,7 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.post("/api/v1/works/:artifactId/changes", { bodyLimit: PUBLISH_BODY_LIMIT }, async (req, reply) => {
     const actor = await bearerActor(req, reply);
     const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
-    const receipt = await withFieldErrors(() =>
-      changeFiles(actor, { ...((req.body ?? {}) as object), artifactId }),
-    );
+    const receipt = await withFieldErrors(() => changeFiles(actor, { ...((req.body ?? {}) as object), artifactId }));
     return {
       artifactId,
       revisionId: receipt.revisionId,
@@ -552,32 +498,31 @@ export async function registerPublishApi(app: FastifyInstance) {
   app.get("/api/v1/works/:artifactId/files", async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
-    const { revisionId } = z
-      .object({ revisionId: uuid.optional() })
-      .parse(req.query ?? {});
+    const { revisionId } = z.object({ revisionId: uuid.optional() }).parse(req.query ?? {});
     return withFieldErrors(() => workFilesForAgent(actor, artifactId, revisionId));
   });
-  app.get(
-    "/api/v1/works/:artifactId/revisions/:revisionId/files/:index",
-    async (req, reply) => {
-      const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
-      const params = z
-        .object({
-          artifactId: uuid,
-          revisionId: uuid,
-          index: z.coerce.number().int().min(0).max(PROJECT_MAX_FILES - 1),
-        })
-        .parse(req.params);
-      const file = await workFileForAgent(actor, params.artifactId, params.revisionId, params.index);
-      return reply
-        .type("application/octet-stream")
-        .header("cache-control", "no-store")
-        .header("x-content-type-options", "nosniff")
-        .header("x-polka-sha256", file.sha256)
-        .header("content-length", file.size)
-        .send("stream" in file ? file.stream : file.bytes);
-    },
-  );
+  app.get("/api/v1/works/:artifactId/revisions/:revisionId/files/:index", async (req, reply) => {
+    const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);
+    const params = z
+      .object({
+        artifactId: uuid,
+        revisionId: uuid,
+        index: z.coerce
+          .number()
+          .int()
+          .min(0)
+          .max(PROJECT_MAX_FILES - 1),
+      })
+      .parse(req.params);
+    const file = await workFileForAgent(actor, params.artifactId, params.revisionId, params.index);
+    return reply
+      .type("application/octet-stream")
+      .header("cache-control", "no-store")
+      .header("x-content-type-options", "nosniff")
+      .header("x-polka-sha256", file.sha256)
+      .header("content-length", file.size)
+      .send("stream" in file ? file.stream : file.bytes);
+  });
   app.post("/api/v1/projects/:uploadId/finalize", async (req, reply) => {
     const actor = await bearerActor(req, reply, "calls", PROJECT_AUDIENCES);
     const uploadId = uuid.parse((req.params as { uploadId: string }).uploadId);
@@ -602,83 +547,71 @@ export async function registerPublishApi(app: FastifyInstance) {
   // Patch edits (docs/specs/COMMENTS.md): the same engine and revise path as
   // polka_revise with edits. 422 names the failing edit, 409 the latest
   // version. With moveLink the open link follows, keeping its discussion.
-  app.post(
-    "/api/v1/works/:artifactId/edits",
-    { bodyLimit: PUBLISH_BODY_LIMIT },
-    async (req, reply) => {
-      const actor = await bearerActor(req, reply);
-      const artifactId = uuid.parse(
-        (req.params as { artifactId: string }).artifactId,
-      );
-      const input = await withFieldErrors(async () =>
-        editsBodySchema.parse(req.body ?? {}),
-      );
-      const receipt = await reviseWithEdits(actor, {
-        key: input.key,
-        artifactId,
-        baseRevisionId: input.baseRevisionId,
-        edits: input.edits,
-        ...(input.path ? { path: input.path } : {}),
-      });
-      const interactive = await prepareInteractive(
-        actor,
-        input.key,
-        receipt.revisionId,
-        receipt.htmlProfile ?? null,
-        "revise",
-      );
-      let link: Record<string, unknown> | null = null;
-      if (input.moveLink) {
-        const verified = await recheckServiceActor(actor, "context");
-        const {
-          rows: [open],
-        } = await db.query(
-          `SELECT id FROM shares WHERE artifact_id=$1 AND tenant_id=$2
+  app.post("/api/v1/works/:artifactId/edits", { bodyLimit: PUBLISH_BODY_LIMIT }, async (req, reply) => {
+    const actor = await bearerActor(req, reply);
+    const artifactId = uuid.parse((req.params as { artifactId: string }).artifactId);
+    const input = await withFieldErrors(async () => editsBodySchema.parse(req.body ?? {}));
+    const receipt = await reviseWithEdits(actor, {
+      key: input.key,
+      artifactId,
+      baseRevisionId: input.baseRevisionId,
+      edits: input.edits,
+      ...(input.path ? { path: input.path } : {}),
+    });
+    const interactive = await prepareInteractive(
+      actor,
+      input.key,
+      receipt.revisionId,
+      receipt.htmlProfile ?? null,
+      "revise",
+    );
+    let link: Record<string, unknown> | null = null;
+    if (input.moveLink) {
+      const verified = await recheckServiceActor(actor, "context");
+      const {
+        rows: [open],
+      } = await db.query(
+        `SELECT id FROM shares WHERE artifact_id=$1 AND tenant_id=$2
              AND NOT revoked AND expires_at>now()`,
-          [artifactId, verified.tenantId],
-        );
-        if (!verified.scopes.includes("share"))
-          link = {
-            moved: false,
-            reason:
-              "The token cannot manage links (Управлять ссылками); the link still shows the previous version.",
-          };
-        else if (!open)
-          link = { moved: false, reason: "The work has no open link." };
-        else {
-          try {
-            const moved = await moveShareFromAgent(verified, {
-              key: input.key,
-              artifactId,
-              shareId: open.id,
-              expectedRevisionId: receipt.revisionId,
-            });
-            link = { moved: moved.state === "active", ...moved };
-          } catch (error) {
-            if (!(error instanceof Problem) || error.status >= 500) throw error;
-            link = { moved: false, reason: error.message };
-          }
+        [artifactId, verified.tenantId],
+      );
+      if (!verified.scopes.includes("share"))
+        link = {
+          moved: false,
+          reason: "The token cannot manage links (Управлять ссылками); the link still shows the previous version.",
+        };
+      else if (!open) link = { moved: false, reason: "The work has no open link." };
+      else {
+        try {
+          const moved = await moveShareFromAgent(verified, {
+            key: input.key,
+            artifactId,
+            shareId: open.id,
+            expectedRevisionId: receipt.revisionId,
+          });
+          link = { moved: moved.state === "active", ...moved };
+        } catch (error) {
+          if (!(error instanceof Problem) || error.status >= 500) throw error;
+          link = { moved: false, reason: error.message };
         }
       }
-      return {
-        artifactId,
-        previousRevisionId: input.baseRevisionId,
-        revisionId: receipt.revisionId,
-        number: receipt.number,
-        htmlProfile: receipt.htmlProfile ?? null,
-        shelfUrl: `${config.APP_ORIGIN}/works/${artifactId}`,
-        ...(interactive
-          ? {
-              interactiveReady: interactive.ready,
-              ...(interactive.reason
-                ? { interactiveUnavailableReason: interactive.reason }
-                : {}),
-            }
-          : {}),
-        ...(link ? { link } : {}),
-      };
-    },
-  );
+    }
+    return {
+      artifactId,
+      previousRevisionId: input.baseRevisionId,
+      revisionId: receipt.revisionId,
+      number: receipt.number,
+      htmlProfile: receipt.htmlProfile ?? null,
+      shelfUrl: `${config.APP_ORIGIN}/works/${artifactId}`,
+      ...(interactive
+        ? {
+            interactiveReady: interactive.ready,
+            ...(interactive.reason ? { interactiveUnavailableReason: interactive.reason } : {}),
+          }
+        : {}),
+      ...(link ? { link } : {}),
+    };
+  });
   // The dependency-free CLI, downloadable from the installation it talks to
   // and pointed at it by default.
   const cli = (await readFile(CLI_SOURCE, "utf8")).replace(

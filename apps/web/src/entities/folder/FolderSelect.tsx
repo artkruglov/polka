@@ -31,11 +31,7 @@ export function FolderSelect({
       >
         <option value="">Моя полка — без папки</option>
         {value && !folders.items.some((f) => f.id === value) && (
-          <option value={value}>
-            {folders.loading
-              ? "Проверяем выбранную папку…"
-              : "Выбранная папка недоступна"}
-          </option>
+          <option value={value}>{folders.loading ? "Проверяем выбранную папку…" : "Выбранная папка недоступна"}</option>
         )}
         {folders.items.map((f) => (
           <option key={f.id} value={f.id}>
@@ -43,9 +39,7 @@ export function FolderSelect({
           </option>
         ))}
       </SelectField>
-      {folders.error && (
-        <Button onClick={folders.retry}>Загрузить папки снова</Button>
-      )}
+      {folders.error && <Button onClick={folders.retry}>Загрузить папки снова</Button>}
     </>
   );
 }

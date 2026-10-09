@@ -29,11 +29,7 @@ export function SelectField({
   const generated = useId(),
     fieldId = id ?? generated;
   const described =
-    [
-      props["aria-describedby"],
-      hint ? `${fieldId}-hint` : null,
-      error ? `${fieldId}-error` : null,
-    ]
+    [props["aria-describedby"], hint ? `${fieldId}-hint` : null, error ? `${fieldId}-error` : null]
       .filter(Boolean)
       .join(" ") || undefined;
   return (
@@ -72,17 +68,10 @@ export function Notice({
   onDismiss?: () => void;
 }) {
   return (
-    <div
-      className={`ui-notice ui-notice--${tone}`}
-      role={tone === "error" ? "alert" : "status"}
-    >
+    <div className={`ui-notice ui-notice--${tone}`} role={tone === "error" ? "alert" : "status"}>
       <div>{children}</div>
       {onDismiss && (
-        <Button
-          variant="quiet"
-          onClick={onDismiss}
-          aria-label="Скрыть уведомление"
-        >
+        <Button variant="quiet" onClick={onDismiss} aria-label="Скрыть уведомление">
           Скрыть
         </Button>
       )}
@@ -102,9 +91,7 @@ export function StatusPanel({
   compact?: boolean;
 }) {
   return (
-    <section
-      className={`ui-status-panel${compact ? " ui-status-panel--compact" : ""}`}
-    >
+    <section className={`ui-status-panel${compact ? " ui-status-panel--compact" : ""}`}>
       <strong>{title}</strong>
       <p>{children}</p>
       {action && <div className="ui-status-panel-action">{action}</div>}
@@ -120,10 +107,11 @@ export function Button({
   className = "",
   type = "button",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & React.RefAttributes<HTMLButtonElement> & {
-  variant?: ButtonVariant;
-  busy?: boolean;
-}) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> &
+  React.RefAttributes<HTMLButtonElement> & {
+    variant?: ButtonVariant;
+    busy?: boolean;
+  }) {
   return (
     <button
       {...props}
@@ -151,11 +139,7 @@ export function TextField({
   const generated = useId();
   const inputId = id ?? generated;
   const description =
-    [
-      props["aria-describedby"],
-      hint ? `${inputId}-hint` : null,
-      error ? `${inputId}-error` : null,
-    ]
+    [props["aria-describedby"], hint ? `${inputId}-hint` : null, error ? `${inputId}-error` : null]
       .filter(Boolean)
       .join(" ") || undefined;
   return (
@@ -195,11 +179,7 @@ export function TextAreaField({
   const generated = useId();
   const inputId = id ?? generated;
   const description =
-    [
-      props["aria-describedby"],
-      hint ? `${inputId}-hint` : null,
-      error ? `${inputId}-error` : null,
-    ]
+    [props["aria-describedby"], hint ? `${inputId}-hint` : null, error ? `${inputId}-error` : null]
       .filter(Boolean)
       .join(" ") || undefined;
   return (
@@ -243,7 +223,11 @@ export function EmptyState({
   );
 }
 
-export function Badge({tone = "neutral", className = "", ...props}: React.HTMLAttributes<HTMLSpanElement> & {tone?: "neutral" | "success" | "warning" | "danger" | "accent"}) {
+export function Badge({
+  tone = "neutral",
+  className = "",
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement> & { tone?: "neutral" | "success" | "warning" | "danger" | "accent" }) {
   return <span {...props} className={`ui-badge ui-badge--${tone} ${className}`} />;
 }
 
@@ -363,7 +347,14 @@ export function ChoiceCard({
 }) {
   return (
     <label className="ui-choice" data-selected={checked} data-disabled={disabled || undefined}>
-      <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onChange(value)} />
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        disabled={disabled}
+        onChange={() => onChange(value)}
+      />
       {icon ?? <span />}
       <span>
         <strong>{title}</strong>

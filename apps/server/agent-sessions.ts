@@ -51,7 +51,10 @@ const timestamp = z.number().int().min(0).max(4102444800000).nullish();
 const toolCallSchema = z.object({
   seq: z.number().int().min(0).max(10_000_000),
   at: timestamp,
-  tool: z.string().min(1).transform((value) => value.slice(0, 200)),
+  tool: z
+    .string()
+    .min(1)
+    .transform((value) => value.slice(0, 200)),
   kind: z.enum(["shell", "edit", "read", "web", "mcp", "task", "other"]),
   mcpServer: nullableText(100),
   status: z.enum(["ok", "error", "interrupted", "unknown"]),
@@ -89,8 +92,13 @@ export const sessionBodySchema = z.object({
   prompts: count.default(0),
   toolCallCount: count.default(0),
   toolCalls: z.array(toolCallSchema).max(SESSION_LIMITS.toolCalls),
-  tokens: usageSchema.extend({ reasoning: count.default(0) }).default({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }),
-  models: z.record(z.string().max(100), usageSchema).refine((value) => Object.keys(value).length <= 50, "Too many models").default({}),
+  tokens: usageSchema
+    .extend({ reasoning: count.default(0) })
+    .default({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }),
+  models: z
+    .record(z.string().max(100), usageSchema)
+    .refine((value) => Object.keys(value).length <= 50, "Too many models")
+    .default({}),
   costUSD: z.number().min(0).max(1e9).nullish(),
   links: z
     .object({
@@ -116,7 +124,10 @@ export const sessionBodySchema = z.object({
     )
     .max(5000)
     .default([]),
-  transcript: z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), bytes: z.number().int().min(1).max(SESSION_LIMITS.transcriptBytes) }),
+  transcript: z.object({
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    bytes: z.number().int().min(1).max(SESSION_LIMITS.transcriptBytes),
+  }),
 });
 export type SessionBody = z.infer<typeof sessionBodySchema>;
 
@@ -141,13 +152,20 @@ const DESTRUCTIVE = [
   /^docker (?:system prune|volume prune|rm -f)\b/,
   /^yc [a-z-]+ [a-z-]+ delete\b/,
 ];
-export type SessionAlert = { rule: "secret_sent_out" | "destructive_command" | "pipe_to_shell" | "no_approvals"; count: number; firstSeq: number | null };
+export type SessionAlert = {
+  rule: "secret_sent_out" | "destructive_command" | "pipe_to_shell" | "no_approvals";
+  count: number;
+  firstSeq: number | null;
+};
 export function sessionAlerts(body: SessionBody): SessionAlert[] {
   const alerts: SessionAlert[] = [];
   const sent = body.secrets.filter((s) => s.toNetwork).length;
   if (sent) alerts.push({ rule: "secret_sent_out", count: sent, firstSeq: null });
-  const destructive = body.toolCalls.filter((c) => c.kind === "shell" && c.template && DESTRUCTIVE.some((re) => re.test(c.template!)));
-  if (destructive.length) alerts.push({ rule: "destructive_command", count: destructive.length, firstSeq: destructive[0]!.seq });
+  const destructive = body.toolCalls.filter(
+    (c) => c.kind === "shell" && c.template && DESTRUCTIVE.some((re) => re.test(c.template!)),
+  );
+  if (destructive.length)
+    alerts.push({ rule: "destructive_command", count: destructive.length, firstSeq: destructive[0]!.seq });
   const piped = body.toolCalls.filter((c) => c.pipeToShell);
   if (piped.length) alerts.push({ rule: "pipe_to_shell", count: piped.length, firstSeq: piped[0]!.seq });
   if (body.permissionMode && /^(?:bypassPermissions|never\/danger-full-access)$/.test(body.permissionMode))
@@ -162,7 +180,10 @@ function modelPrices() {
   try {
     const parsed = config.AGENT_MODEL_PRICES ? JSON.parse(config.AGENT_MODEL_PRICES) : {};
     prices = Object.entries(parsed)
-      .filter((entry): entry is [string, number[]] => Array.isArray(entry[1]) && entry[1].length === 4 && entry[1].every((n) => typeof n === "number" && n >= 0))
+      .filter(
+        (entry): entry is [string, number[]] =>
+          Array.isArray(entry[1]) && entry[1].length === 4 && entry[1].every((n) => typeof n === "number" && n >= 0),
+      )
       .sort((a, b) => b[0].length - a[0].length);
   } catch {
     prices = [];
@@ -174,20 +195,28 @@ export function sessionCost(body: SessionBody): { cost: number | null; estimated
   // Claude Code writes 0 when it does not know the price (a subscription):
   // that is no figure, not a free session.
   const worked = body.tokens.input + body.tokens.output > 0;
-  if (typeof body.costUSD === "number" && (body.costUSD > 0 || !worked)) return { cost: body.costUSD, estimated: false };
+  if (typeof body.costUSD === "number" && (body.costUSD > 0 || !worked))
+    return { cost: body.costUSD, estimated: false };
   const used = Object.entries(body.models).filter(([, u]) => u.input + u.output + u.cacheRead + u.cacheWrite > 0);
   if (!used.length) return { cost: null, estimated: false };
   let total = 0;
   for (const [model, usage] of used) {
     const price = modelPrices().find(([prefix]) => model.startsWith(prefix))?.[1];
     if (!price) return { cost: null, estimated: false };
-    total += (usage.input * price[0]! + usage.output * price[1]! + usage.cacheRead * price[2]! + usage.cacheWrite * price[3]!) / 1e6;
+    total +=
+      (usage.input * price[0]! +
+        usage.output * price[1]! +
+        usage.cacheRead * price[2]! +
+        usage.cacheWrite * price[3]!) /
+      1e6;
   }
   return { cost: Math.round(total * 1e6) / 1e6, estimated: true };
 }
 
 const disabled = () =>
-  new Problem(403, "forbidden", "Сессии агентов на этой полке не включены. Их включает оператор установки.", { reason: "sessions_disabled" });
+  new Problem(403, "forbidden", "Сессии агентов на этой полке не включены. Их включает оператор установки.", {
+    reason: "sessions_disabled",
+  });
 const overQuota = () =>
   new Problem(413, "quota", "Место для сессий агентов закончилось. Удалите старые сессии на странице «Сессии».");
 
@@ -200,7 +229,11 @@ async function sessionShelf(c: PoolClient, tenantId: string, accountId: string) 
     [tenantId],
   );
   if (!tenant || tenant.kind !== "personal" || tenant.owner_id !== accountId)
-    throw new Problem(403, "forbidden", "Сессии агентов хранятся только на личной полке. Выдайте токен на своей полке.");
+    throw new Problem(
+      403,
+      "forbidden",
+      "Сессии агентов хранятся только на личной полке. Выдайте токен на своей полке.",
+    );
   const quota = Math.max(Number(tenant.session_quota_bytes), config.AGENT_SESSION_QUOTA_BYTES);
   return { quota, used: Number(tenant.session_used_bytes) };
 }
@@ -210,11 +243,21 @@ export async function sessionAllowance(tenantId: string) {
   const {
     rows: [tenant],
   } = await db.query(`SELECT kind, session_quota_bytes, session_used_bytes FROM tenants WHERE id=$1`, [tenantId]);
-  const quota = tenant?.kind === "personal" ? Math.max(Number(tenant.session_quota_bytes), config.AGENT_SESSION_QUOTA_BYTES) : 0;
-  return { enabled: quota > 0, quotaBytes: quota, usedBytes: Number(tenant?.session_used_bytes ?? 0), notice: sessionNotice() };
+  const quota =
+    tenant?.kind === "personal" ? Math.max(Number(tenant.session_quota_bytes), config.AGENT_SESSION_QUOTA_BYTES) : 0;
+  return {
+    enabled: quota > 0,
+    quotaBytes: quota,
+    usedBytes: Number(tenant?.session_used_bytes ?? 0),
+    notice: sessionNotice(),
+  };
 }
 
-const agentActor = (actor: ServiceActor) => ({ id: actor.accountId, tenant: actor.tenantId, connectionId: actor.connectionId });
+const agentActor = (actor: ServiceActor) => ({
+  id: actor.accountId,
+  tenant: actor.tenantId,
+  connectionId: actor.connectionId,
+});
 
 /** The installation's notice for people sending sessions, or null. */
 const sessionNotice = () => config.AGENT_SESSION_NOTICE.trim() || null;
@@ -241,7 +284,8 @@ export async function fingerprintKey(actor: ServiceActor) {
   });
 }
 
-const transcriptKey = (tenantId: string, sessionId: string, hash: string) => `${tenantId}/sessions/${sessionId}/${hash}.jsonl.gz`;
+const transcriptKey = (tenantId: string, sessionId: string, hash: string) =>
+  `${tenantId}/sessions/${sessionId}/${hash}.jsonl.gz`;
 
 /** POST /api/v1/sessions: the index, gzipped. Replaces an earlier upload of the same session. */
 export async function saveSession(actor: ServiceActor, gz: Buffer) {
@@ -252,7 +296,11 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
     body = sessionBodySchema.parse(JSON.parse(json.toString("utf8")));
   } catch (error) {
     if (error instanceof z.ZodError)
-      throw new Problem(400, "invalid", `Проверьте поля сессии: ${[...new Set(error.issues.map((i) => i.path.slice(0, 2).join(".") || "body"))].slice(0, 5).join(", ")}.`);
+      throw new Problem(
+        400,
+        "invalid",
+        `Проверьте поля сессии: ${[...new Set(error.issues.map((i) => i.path.slice(0, 2).join(".") || "body"))].slice(0, 5).join(", ")}.`,
+      );
     throw new Problem(400, "invalid", "Тело запроса — сжатый gzip JSON индекса сессии (polka-session-index/1).");
   }
   const status = secretsStatus(body.secrets);
@@ -284,10 +332,29 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
          cost_estimated=EXCLUDED.cost_estimated, secrets_status=EXCLUDED.secrets_status, alerts=EXCLUDED.alerts,
          index_bytes=EXCLUDED.index_bytes, updated_at=now()`,
       [
-        id, verified.tenantId, verified.accountId, verified.connectionId, body.source, body.externalId,
-        body.project.label, body.project.remote, body.project.gitBranch, body.cliVersion, body.permissionMode,
-        body.startedAt ?? null, body.endedAt ?? null, body.turns, body.prompts, Math.max(body.toolCallCount, body.toolCalls.length),
-        JSON.stringify(body.tokens), JSON.stringify(body.models), cost, estimated, status, JSON.stringify(alerts), gz.length,
+        id,
+        verified.tenantId,
+        verified.accountId,
+        verified.connectionId,
+        body.source,
+        body.externalId,
+        body.project.label,
+        body.project.remote,
+        body.project.gitBranch,
+        body.cliVersion,
+        body.permissionMode,
+        body.startedAt ?? null,
+        body.endedAt ?? null,
+        body.turns,
+        body.prompts,
+        Math.max(body.toolCallCount, body.toolCalls.length),
+        JSON.stringify(body.tokens),
+        JSON.stringify(body.models),
+        cost,
+        estimated,
+        status,
+        JSON.stringify(alerts),
+        gz.length,
       ],
     );
     await c.query(`DELETE FROM agent_session_tool_calls WHERE session_id=$1`, [id]);
@@ -309,9 +376,21 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
           id,
           JSON.stringify(
             calls.map((call) => ({
-              seq: call.seq, at: call.at ?? null, tool: call.tool, kind: call.kind, mcp_server: call.mcpServer, status: call.status,
-              duration_ms: call.durationMs ?? null, exit_code: call.exitCode ?? null, input_bytes: call.inputBytes, output_bytes: call.outputBytes,
-              argv0: call.argv0, template: call.template, hosts: call.hosts, network: call.network, subagent: call.subagent,
+              seq: call.seq,
+              at: call.at ?? null,
+              tool: call.tool,
+              kind: call.kind,
+              mcp_server: call.mcpServer,
+              status: call.status,
+              duration_ms: call.durationMs ?? null,
+              exit_code: call.exitCode ?? null,
+              input_bytes: call.inputBytes,
+              output_bytes: call.outputBytes,
+              argv0: call.argv0,
+              template: call.template,
+              hosts: call.hosts,
+              network: call.network,
+              subagent: call.subagent,
             })),
           ),
         ],
@@ -329,8 +408,17 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
           id,
           JSON.stringify(
             body.secrets.map((s) => ({
-              fingerprint: s.fingerprint, type: s.type, confidence: s.confidence, prefix: s.prefix, length: s.length, occurrences: s.occurrences,
-              seen_by_model: s.seenByModel, model_emitted: s.modelEmitted, to_command: s.toCommand, to_network: s.toNetwork, written_to_file: s.writtenToFile,
+              fingerprint: s.fingerprint,
+              type: s.type,
+              confidence: s.confidence,
+              prefix: s.prefix,
+              length: s.length,
+              occurrences: s.occurrences,
+              seen_by_model: s.seenByModel,
+              model_emitted: s.modelEmitted,
+              to_command: s.toCommand,
+              to_network: s.toNetwork,
+              written_to_file: s.writtenToFile,
             })),
           ),
         ],
@@ -348,7 +436,10 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
         `INSERT INTO agent_session_links(session_id, kind, target) SELECT $1, 'pr', pr FROM unnest($2::text[]) pr ON CONFLICT DO NOTHING`,
         [id, body.links.prs],
       );
-    await c.query(`UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1`, [verified.tenantId, delta]);
+    await c.query(`UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1`, [
+      verified.tenantId,
+      delta,
+    ]);
     // Ids and counts only, never content.
     await audit(c, agentActor(verified), "session.saved", id, {
       source: body.source,
@@ -400,7 +491,10 @@ export async function saveTranscript(actor: ServiceActor, sessionId: string, gz:
         `UPDATE agent_sessions SET transcript_key=$2, transcript_version=$3, transcript_bytes=$4, updated_at=now() WHERE id=$1`,
         [sessionId, key, version, gz.length],
       );
-      await c.query(`UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1`, [verified.tenantId, delta]);
+      await c.query(`UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1`, [
+        verified.tenantId,
+        delta,
+      ]);
       kept = true;
       if (session.transcript_key && session.transcript_version)
         afterCommit(c, () => deleteVersion(session.transcript_key, session.transcript_version));
@@ -467,8 +561,14 @@ export async function listSessionsIn(scope: SessionScope, query: unknown) {
              OR ($9::uuid IS NOT NULL AND COALESCE(s.started_at, s.uploaded_at) = $7 AND s.id > $9))
       ORDER BY COALESCE(s.started_at, s.uploaded_at) DESC, s.id LIMIT $8`,
     [
-      ...scopeParams(scope), q.source ?? null, q.project ?? null, q.secrets ?? null, q.alerts ?? null,
-      beforeAt ?? null, q.limit + 1, beforeId ?? null,
+      ...scopeParams(scope),
+      q.source ?? null,
+      q.project ?? null,
+      q.secrets ?? null,
+      q.alerts ?? null,
+      beforeAt ?? null,
+      q.limit + 1,
+      beforeId ?? null,
     ],
   );
   const page = rows.slice(0, q.limit).map(({ cursor_at: _, ...session }) => session);
@@ -488,10 +588,10 @@ export async function listSessionsIn(scope: SessionScope, query: unknown) {
 async function sessionIn(scope: SessionScope, sessionId: string) {
   const {
     rows: [session],
-  } = await db.query(`SELECT ${SESSION_COLUMNS}, s.tenant_id, s.transcript_key, s.transcript_version FROM agent_sessions s WHERE ${IN_SCOPE} AND s.id=$3`, [
-    ...scopeParams(scope),
-    sessionId,
-  ]);
+  } = await db.query(
+    `SELECT ${SESSION_COLUMNS}, s.tenant_id, s.transcript_key, s.transcript_version FROM agent_sessions s WHERE ${IN_SCOPE} AND s.id=$3`,
+    [...scopeParams(scope), sessionId],
+  );
   if (!session) throw new Problem(404, "not_found", "Сессия не найдена.");
   return session;
 }
@@ -499,7 +599,12 @@ async function sessionIn(scope: SessionScope, sessionId: string) {
 export const getSession = (person: Person, sessionId: string) => getSessionIn(own(person), sessionId);
 
 export async function getSessionIn(scope: SessionScope, sessionId: string) {
-  const { tenant_id: tenantId, transcript_key: _key, transcript_version: _version, ...session } = await sessionIn(scope, sessionId);
+  const {
+    tenant_id: tenantId,
+    transcript_key: _key,
+    transcript_version: _version,
+    ...session
+  } = await sessionIn(scope, sessionId);
   const [calls, secrets, links] = await Promise.all([
     db.query(
       `SELECT seq, at, tool, kind, mcp_server AS "mcpServer", status, duration_ms::float8 AS "durationMs", exit_code AS "exitCode",
@@ -530,7 +635,8 @@ const transcriptQuery = z.object({
 });
 
 /** A page of the transcript's events (the first line is its header). */
-export const readTranscript = (person: Person, sessionId: string, query: unknown) => readTranscriptIn(own(person), sessionId, query);
+export const readTranscript = (person: Person, sessionId: string, query: unknown) =>
+  readTranscriptIn(own(person), sessionId, query);
 
 export async function readTranscriptIn(scope: SessionScope, sessionId: string, query: unknown) {
   const q = transcriptQuery.parse(query ?? {});
@@ -539,7 +645,10 @@ export async function readTranscriptIn(scope: SessionScope, sessionId: string, q
   const gz = await readBlob(session.transcript_key, session.transcript_version);
   let lines: string[];
   try {
-    lines = gunzipSync(gz, { maxOutputLength: SESSION_LIMITS.transcriptViewBytes }).toString("utf8").split("\n").filter(Boolean);
+    lines = gunzipSync(gz, { maxOutputLength: SESSION_LIMITS.transcriptViewBytes })
+      .toString("utf8")
+      .split("\n")
+      .filter(Boolean);
   } catch {
     return { events: [], total: 0, offset: q.offset, tooLarge: true };
   }
@@ -558,7 +667,10 @@ export const transcriptFile = (person: Person, sessionId: string) => transcriptF
 export async function transcriptFileIn(scope: SessionScope, sessionId: string) {
   const session = await sessionIn(scope, sessionId);
   if (!session.transcript_key) throw new Problem(404, "not_found", "Расшифровка ещё не загружена.");
-  return { bytes: await readBlob(session.transcript_key, session.transcript_version), name: `${session.source}-${session.externalId}.jsonl.gz` };
+  return {
+    bytes: await readBlob(session.transcript_key, session.transcript_version),
+    name: `${session.source}-${session.externalId}.jsonl.gz`,
+  };
 }
 
 export async function deleteSession(person: Person, sessionId: string) {
@@ -566,14 +678,18 @@ export async function deleteSession(person: Person, sessionId: string) {
     await lockShelf(c, person, "owner");
     const {
       rows: [found],
-    } = await c.query(`SELECT source, started_at FROM agent_sessions WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`, [
-      sessionId,
-      person.tenant,
-      person.id,
-    ]);
+    } = await c.query(
+      `SELECT source, started_at FROM agent_sessions WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`,
+      [sessionId, person.tenant, person.id],
+    );
     if (!found) throw new Problem(404, "not_found", "Сессия не найдена.");
     await checkSessionDelete(
-      { actor: { id: person.id, tenant: person.tenant }, sessionId, source: found.source, startedAt: found.started_at?.toISOString() ?? null },
+      {
+        actor: { id: person.id, tenant: person.tenant },
+        sessionId,
+        source: found.source,
+        startedAt: found.started_at?.toISOString() ?? null,
+      },
       c,
     );
     const {
@@ -582,7 +698,10 @@ export async function deleteSession(person: Person, sessionId: string) {
       `DELETE FROM agent_sessions WHERE id=$1 RETURNING transcript_key, transcript_version, transcript_bytes + index_bytes AS bytes`,
       [sessionId],
     );
-    await c.query(`UPDATE tenants SET session_used_bytes=GREATEST(0, session_used_bytes-$2) WHERE id=$1`, [person.tenant, session.bytes]);
+    await c.query(`UPDATE tenants SET session_used_bytes=GREATEST(0, session_used_bytes-$2) WHERE id=$1`, [
+      person.tenant,
+      session.bytes,
+    ]);
     await audit(c, person, "session.deleted", sessionId);
     if (session.transcript_key && session.transcript_version)
       afterCommit(c, () => deleteVersion(session.transcript_key, session.transcript_version));
@@ -613,7 +732,10 @@ export async function sessionStatsIn(where: SessionScope, query: unknown) {
          FROM agent_sessions s, jsonb_each(s.models) m WHERE ${scope} AND m.key <> '<synthetic>' GROUP BY 1 ORDER BY output DESC`,
       params,
     ),
-    db.query(`SELECT s.secrets_status AS status, count(*)::int AS sessions FROM agent_sessions s WHERE ${scope} GROUP BY 1`, params),
+    db.query(
+      `SELECT s.secrets_status AS status, count(*)::int AS sessions FROM agent_sessions s WHERE ${scope} GROUP BY 1`,
+      params,
+    ),
     db.query(
       `SELECT x.fingerprint, min(x.type) AS type, min(x.prefix) AS prefix, count(DISTINCT x.session_id)::int AS sessions,
          sum(x.occurrences)::int AS occurrences, count(DISTINCT s.account_id)::int AS people, bool_or(x.to_network) AS "toNetwork", bool_or(x.to_command) AS "toCommand",
@@ -686,7 +808,10 @@ export async function sessionsOfWork(person: Person, artifactId: string) {
 }
 
 /** For agents (MCP polka_sessions): recent sessions, compact. */
-export async function sessionsForAgent(actor: ServiceActor, input: { days?: number; project?: string; secrets?: string; limit?: number }) {
+export async function sessionsForAgent(
+  actor: ServiceActor,
+  input: { days?: number; project?: string; secrets?: string; limit?: number },
+) {
   return withServiceActorTransaction(actor, "sessions", async (c, verified) => {
     await sessionShelf(c, verified.tenantId, verified.accountId);
     const { rows } = await c.query(
@@ -694,7 +819,14 @@ export async function sessionsForAgent(actor: ServiceActor, input: { days?: numb
         WHERE s.tenant_id=$1 AND s.account_id=$2 AND COALESCE(s.started_at, s.uploaded_at) > now() - make_interval(days => $3)
           AND ($4::text IS NULL OR s.project_label=$4) AND ($5::text IS NULL OR ($5='any' AND s.secrets_status<>'clean') OR s.secrets_status=$5)
         ORDER BY COALESCE(s.started_at, s.uploaded_at) DESC LIMIT $6`,
-      [verified.tenantId, verified.accountId, input.days ?? 7, input.project ?? null, input.secrets ?? null, input.limit ?? 20],
+      [
+        verified.tenantId,
+        verified.accountId,
+        input.days ?? 7,
+        input.project ?? null,
+        input.secrets ?? null,
+        input.limit ?? 20,
+      ],
     );
     return rows.map((row) => ({
       id: row.id,
@@ -731,19 +863,23 @@ export function registerAgentSessions(app: FastifyInstance) {
   app.get("/api/v1/sessions/key", async (req, reply) => fingerprintKey(await bearerActor(req, reply, "sessions")));
   app.post("/api/v1/sessions", { bodyLimit: SESSION_LIMITS.indexBytes }, async (req, reply) => {
     const actor = await bearerActor(req, reply, "sessions");
-    if (!Buffer.isBuffer(req.body)) throw new Problem(415, "unsupported", "Отправьте индекс как application/octet-stream (gzip JSON).");
+    if (!Buffer.isBuffer(req.body))
+      throw new Problem(415, "unsupported", "Отправьте индекс как application/octet-stream (gzip JSON).");
     return saveSession(actor, req.body);
   });
   app.put("/api/v1/sessions/:id/transcript", { bodyLimit: SESSION_LIMITS.transcriptBytes }, async (req, reply) => {
     const actor = await bearerActor(req, reply, "sessions");
-    if (!Buffer.isBuffer(req.body)) throw new Problem(415, "unsupported", "Отправьте расшифровку как application/octet-stream (gzip).");
+    if (!Buffer.isBuffer(req.body))
+      throw new Problem(415, "unsupported", "Отправьте расшифровку как application/octet-stream (gzip).");
     return saveTranscript(actor, sessionId(req), req.body);
   });
   // The person's own pages: always the account's own shelf.
   app.get("/api/sessions", async (req) => listSessions(await identity(req), req.query));
   app.get("/api/sessions/stats", async (req) => sessionStats(await identity(req), req.query));
   app.get("/api/sessions/:id", async (req) => getSession(await identity(req), sessionId(req)));
-  app.get("/api/sessions/:id/transcript", async (req) => readTranscript(await identity(req), sessionId(req), req.query));
+  app.get("/api/sessions/:id/transcript", async (req) =>
+    readTranscript(await identity(req), sessionId(req), req.query),
+  );
   app.get("/api/sessions/:id/transcript.gz", async (req, reply) => {
     const file = await transcriptFile(await identity(req), sessionId(req));
     return reply
@@ -759,7 +895,10 @@ export function registerAgentSessions(app: FastifyInstance) {
   app.get("/api/artifacts/:id/sessions", async (req) => sessionsOfWork(await identity(req), sessionId(req)));
 }
 
-const across = (selection: SessionSelection = {}): SessionScope => ({ tenant: null, accounts: selection.accounts ?? null });
+const across = (selection: SessionSelection = {}): SessionScope => ({
+  tenant: null,
+  accounts: selection.accounts ?? null,
+});
 const knownId = (value: string) => {
   const parsed = uuid.safeParse(value);
   if (!parsed.success) throw new Problem(404, "not_found", "Сессия не найдена.");
@@ -768,8 +907,12 @@ const knownId = (value: string) => {
 
 /** context.sessions of extensions (packages/extension-api): the reads above, across people. */
 export const sessionsForExtension: ExtensionContext["sessions"] = {
-  list: async (selection, query) => (await listSessionsIn(across(selection), query)) as Awaited<ReturnType<ExtensionContext["sessions"]["list"]>>,
-  get: async (sessionId, selection) => (await getSessionIn(across(selection), knownId(sessionId))) as Awaited<ReturnType<ExtensionContext["sessions"]["get"]>>,
+  list: async (selection, query) =>
+    (await listSessionsIn(across(selection), query)) as Awaited<ReturnType<ExtensionContext["sessions"]["list"]>>,
+  get: async (sessionId, selection) =>
+    (await getSessionIn(across(selection), knownId(sessionId))) as Awaited<
+      ReturnType<ExtensionContext["sessions"]["get"]>
+    >,
   stats: async (selection, query) => sessionStatsIn(across(selection), query),
   transcript: async (sessionId, query) => readTranscriptIn(across(), knownId(sessionId), query),
   transcriptFile: async (sessionId) => transcriptFileIn(across(), knownId(sessionId)),

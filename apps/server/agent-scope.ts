@@ -61,7 +61,11 @@ export async function scopedFolderForSave(
 
 export async function refuseFolderManagement(c: Query, actor: AgentActor) {
   if (await agentFolderScope(c, actor))
-    throw new Problem(403, "forbidden", "Агент, подключённый к папке, не создаёт, не переименовывает и не удаляет папки.");
+    throw new Problem(
+      403,
+      "forbidden",
+      "Агент, подключённый к папке, не создаёт, не переименовывает и не удаляет папки.",
+    );
 }
 
 /** Moving a work: only into the agent's folders, never out of them. */

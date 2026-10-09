@@ -24,10 +24,7 @@ import {
   migrationFileUrl,
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
-import {
-  BUNDLE_BUILDER_VERSION,
-  BUNDLE_RUNTIME_PROFILE,
-} from "../apps/server/bundle-runtime-contract.ts";
+import { BUNDLE_BUILDER_VERSION, BUNDLE_RUNTIME_PROFILE } from "../apps/server/bundle-runtime-contract.ts";
 import { createErasureLedgerS3Transport } from "./erasure-ledger-s3.ts";
 import {
   assertErasureRestorePlanStable,
@@ -37,10 +34,7 @@ import {
 } from "./erasure-restore.ts";
 import { reconcileErasureRestore } from "./erasure-restore-reconcile.ts";
 import { runAccountPurge } from "./account-purge.ts";
-import {
-  createMaintenanceDatabase,
-  createMaintenanceObjectStore,
-} from "./maintenance-adapters.ts";
+import { createMaintenanceDatabase, createMaintenanceObjectStore } from "./maintenance-adapters.ts";
 import { runMaintenanceGuard } from "./maintenance-guard.ts";
 import {
   assertDrillIdentity,
@@ -70,9 +64,7 @@ const s3Endpoint = new URL(required("S3_ENDPOINT"));
 assertPlainLoopbackUrl(workingDatabaseUrl, "Restore drill database endpoint");
 assertPlainLoopbackUrl(s3Endpoint, "Restore drill S3 endpoint");
 if (!process.argv.includes("--confirm-synthetic"))
-  throw new Error(
-    "Pass --confirm-synthetic to create isolated drill resources",
-  );
+  throw new Error("Pass --confirm-synthetic to create isolated drill resources");
 
 const drillId = `${new Date().toISOString().slice(2, 10).replaceAll("-", "")}${randomBytes(4).toString("hex")}`;
 const names = {
@@ -82,17 +74,10 @@ const names = {
   targetBucket: bucketName(drillId, "target"),
   ledgerBucket: `polka-restore-${drillId}-ledger`,
 };
-const workingDatabase = decodeURIComponent(
-  workingDatabaseUrl.pathname.slice(1),
-);
+const workingDatabase = decodeURIComponent(workingDatabaseUrl.pathname.slice(1));
 const workingBucket = required("S3_BUCKET");
 for (const role of ["source", "target"] as const)
-  assertDrillIdentity(
-    drillId,
-    role,
-    names[`${role}Database`],
-    names[`${role}Bucket`],
-  );
+  assertDrillIdentity(drillId, role, names[`${role}Database`], names[`${role}Bucket`]);
 assertSeparatedIdentities({
   workingDatabase,
   ...names,
@@ -115,14 +100,9 @@ const databaseUrl = (database: string) => {
 };
 const adminUrl = databaseUrl("postgres");
 const sentinelKey = ".polka-restore-drill-sentinel";
-const databaseSentinel = (role: DrillRole) =>
-  `polka-restore-drill:${drillId}:${role}`;
-const bucketSentinel = (role: DrillRole) =>
-  Buffer.from(databaseSentinel(role), "utf8");
-const ledgerSentinel = Buffer.from(
-  `polka-restore-drill:${drillId}:ledger`,
-  "utf8",
-);
+const databaseSentinel = (role: DrillRole) => `polka-restore-drill:${drillId}:${role}`;
+const bucketSentinel = (role: DrillRole) => Buffer.from(databaseSentinel(role), "utf8");
+const ledgerSentinel = Buffer.from(`polka-restore-drill:${drillId}:ledger`, "utf8");
 
 const s3 = new S3Client({
   endpoint: s3Endpoint.origin,
@@ -143,9 +123,7 @@ const created = {
 };
 
 async function databaseExists(client: pg.Client, name: string) {
-  return !!(
-    await client.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])
-  ).rowCount;
+  return !!(await client.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])).rowCount;
 }
 
 async function bucketExists(bucket: string) {
@@ -159,18 +137,14 @@ async function bucketExists(bucket: string) {
 }
 
 async function createDatabase(admin: pg.Client, name: string, role: DrillRole) {
-  if (await databaseExists(admin, name))
-    throw new Error(`Synthetic ${role} database already exists`);
+  if (await databaseExists(admin, name)) throw new Error(`Synthetic ${role} database already exists`);
   await admin.query(`CREATE DATABASE "${name}"`);
   created[`${role}Database`] = true;
-  await admin.query(
-    `COMMENT ON DATABASE "${name}" IS '${databaseSentinel(role)}'`,
-  );
+  await admin.query(`COMMENT ON DATABASE "${name}" IS '${databaseSentinel(role)}'`);
 }
 
 async function createBucket(bucket: string, role: DrillRole) {
-  if (await bucketExists(bucket))
-    throw new Error(`Synthetic ${role} bucket already exists`);
+  if (await bucketExists(bucket)) throw new Error(`Synthetic ${role} bucket already exists`);
   await s3.send(new CreateBucketCommand({ Bucket: bucket }));
   created[`${role}Bucket`] = true;
   await s3.send(
@@ -187,13 +161,11 @@ async function createBucket(bucket: string, role: DrillRole) {
       ContentType: "text/plain",
     }),
   );
-  if (!result.VersionId || result.VersionId === "null")
-    throw new Error("Synthetic bucket versioning is unavailable");
+  if (!result.VersionId || result.VersionId === "null") throw new Error("Synthetic bucket versioning is unavailable");
 }
 
 async function createLedgerBucket() {
-  if (await bucketExists(names.ledgerBucket))
-    throw new Error("Synthetic erasure ledger bucket already exists");
+  if (await bucketExists(names.ledgerBucket)) throw new Error("Synthetic erasure ledger bucket already exists");
   await s3.send(new CreateBucketCommand({ Bucket: names.ledgerBucket }));
   created.ledgerBucket = true;
   await s3.send(
@@ -224,9 +196,7 @@ async function applyMigrations(database: string) {
     );
     for (const { version, file } of SCHEMA_MIGRATIONS) {
       await client.query(await readFile(migrationFileUrl(file), "utf8"));
-      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [
-        version,
-      ]);
+      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [version]);
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -249,8 +219,7 @@ async function put(bucket: string, key: string, bytes: Buffer) {
       IfNoneMatch: "*",
     }),
   );
-  if (!result.VersionId || result.VersionId === "null")
-    throw new Error("Versioned object write required");
+  if (!result.VersionId || result.VersionId === "null") throw new Error("Versioned object write required");
   return { key, version: result.VersionId, sha256, size: bytes.length };
 }
 
@@ -281,9 +250,7 @@ async function seedSource(linkKey: string) {
     erasureRevision: randomUUID(),
     erasureDeletion: randomUUID(),
   };
-  const single = Buffer.from(
-    "<!doctype html><title>Restore single</title><p>Exact source</p>",
-  );
+  const single = Buffer.from("<!doctype html><title>Restore single</title><p>Exact source</p>");
   const bundleFiles = [
     {
       path: "index.html",
@@ -305,9 +272,7 @@ async function seedSource(linkKey: string) {
     {
       path: "mark.svg",
       mime: "image/svg+xml",
-      bytes: Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" cx="4" cy="4"/></svg>',
-      ),
+      bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" cx="4" cy="4"/></svg>'),
     },
   ];
   const capturedAt = new Date().toISOString();
@@ -331,25 +296,19 @@ async function seedSource(linkKey: string) {
     dependencies: { status: "unknown", unresolved: [] },
   });
   const manifestSha256 = fingerprint(JSON.stringify(manifest));
-  const derivativeBytes = Buffer.from(
-    "<!doctype html><title>Inline restore</title><p>ready</p>",
-  );
+  const derivativeBytes = Buffer.from("<!doctype html><title>Inline restore</title><p>ready</p>");
   const erasureBytes = Buffer.from("old snapshot content must be suppressed");
   const singleKey = `${ids.tenant}/${ids.singleUpload}`;
   const bundleBase = `${ids.tenant}/${ids.bundleUpload}`;
   const singleObject = await put(names.sourceBucket, singleKey, single);
   const bundleObjects = [];
   for (const [index, file] of manifest.files.entries()) {
-    const bytes = bundleFiles.find(
-      (candidate) => candidate.path === file.path,
-    )?.bytes;
+    const bytes = bundleFiles.find((candidate) => candidate.path === file.path)?.bytes;
     if (!bytes) throw new Error("Canonical manifest lost a synthetic file");
     bundleObjects.push(
       await put(
         names.sourceBucket,
-        file.path === manifest.entrypoint
-          ? bundleBase
-          : `${bundleBase}/files/${index}`,
+        file.path === manifest.entrypoint ? bundleBase : `${bundleBase}/files/${index}`,
         bytes,
       ),
     );
@@ -359,28 +318,14 @@ async function seedSource(linkKey: string) {
     `${ids.tenant}/derivatives/${ids.derivative}/${randomUUID()}.html`,
     derivativeBytes,
   );
-  const erasureObject = await put(
-    names.sourceBucket,
-    `${ids.erasureTenant}/snapshot-source`,
-    erasureBytes,
-  );
+  const erasureObject = await put(names.sourceBucket, `${ids.erasureTenant}/snapshot-source`, erasureBytes);
   const stagedBytes = Buffer.from("unfinished but live staging");
-  const stagedObject = await put(
-    names.sourceBucket,
-    `${ids.tenant}/${ids.liveStageUpload}`,
-    stagedBytes,
-  );
+  const stagedObject = await put(names.sourceBucket, `${ids.tenant}/${ids.liveStageUpload}`, stagedBytes);
   const sessionToken = randomBytes(32).toString("base64url");
   const agentToken = randomBytes(32).toString("base64url");
-  const activeToken = createHmac("sha256", linkKey)
-    .update(`share:${ids.activeShare}`)
-    .digest("base64url");
-  const revokedToken = createHmac("sha256", linkKey)
-    .update(`share:${ids.revokedShare}`)
-    .digest("base64url");
-  const sourceBytes =
-    single.length +
-    bundleFiles.reduce((sum, file) => sum + file.bytes.length, 0);
+  const activeToken = createHmac("sha256", linkKey).update(`share:${ids.activeShare}`).digest("base64url");
+  const revokedToken = createHmac("sha256", linkKey).update(`share:${ids.revokedShare}`).digest("base64url");
+  const sourceBytes = single.length + bundleFiles.reduce((sum, file) => sum + file.bytes.length, 0);
   const attemptId = randomUUID();
   const singleManifest = canonicalizeManifest({
     version: 1,
@@ -414,27 +359,21 @@ async function seedSource(linkKey: string) {
     files: manifest.files.map((file) => ({
       path: file.path,
       encoding: "base64" as const,
-      data: bundleFiles
-        .find((candidate) => candidate.path === file.path)!
-        .bytes.toString("base64"),
+      data: bundleFiles.find((candidate) => candidate.path === file.path)!.bytes.toString("base64"),
     })),
   };
   try {
     await client.query("BEGIN");
-    await client.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,$3)",
-      [ids.account, `restore-${drillId}`, ownerPasswordHash],
-    );
+    await client.query("INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,$3)", [
+      ids.account,
+      `restore-${drillId}`,
+      ownerPasswordHash,
+    ]);
     await client.query(
       `INSERT INTO accounts(
          id,name,password_hash,email,display_name,email_verified_at
        ) VALUES($1,$2,$3,$4,'Deleted fixture owner',now())`,
-      [
-        ids.erasureAccount,
-        `erase-${drillId}`,
-        ownerPasswordHash,
-        `erase-${drillId}@example.test`,
-      ],
+      [ids.erasureAccount, `erase-${drillId}`, ownerPasswordHash, `erase-${drillId}@example.test`],
     );
     await client.query(
       `INSERT INTO tenants(id,owner_id,used_bytes,quota_bytes,derivative_used_bytes,derivative_quota_bytes)
@@ -447,10 +386,11 @@ async function seedSource(linkKey: string) {
        ) VALUES($1,$2,$3,104857600,0,33554432)`,
       [ids.erasureTenant, ids.erasureAccount, erasureBytes.length],
     );
-    await client.query(
-      "INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Old private title')",
-      [ids.erasureArtifact, ids.erasureTenant, ids.erasureAccount],
-    );
+    await client.query("INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Old private title')", [
+      ids.erasureArtifact,
+      ids.erasureTenant,
+      ids.erasureAccount,
+    ]);
     await client.query(
       `INSERT INTO revisions(
          id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
@@ -467,28 +407,22 @@ async function seedSource(linkKey: string) {
         erasureObject.version,
       ],
     );
-    await client.query(
-      "UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1",
-      [ids.erasureArtifact, ids.erasureRevision],
-    );
-    await client.query(
-      "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-      [fingerprint(`erasure-session-${drillId}`), ids.erasureAccount],
-    );
-    await client.query(
-      "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-      [fingerprint(sessionToken), ids.account],
-    );
+    await client.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
+      ids.erasureArtifact,
+      ids.erasureRevision,
+    ]);
+    await client.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+      fingerprint(`erasure-session-${drillId}`),
+      ids.erasureAccount,
+    ]);
+    await client.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+      fingerprint(sessionToken),
+      ids.account,
+    ]);
     await client.query(
       `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
        VALUES($1,$2,$3,$4,'restore drill',ARRAY['context','read','capture','revise','share'],$5,now()+interval '7 days')`,
-      [
-        ids.connection,
-        ids.tenant,
-        ids.account,
-        fingerprint(agentToken),
-        "http://127.0.0.1:4680/mcp",
-      ],
+      [ids.connection, ids.tenant, ids.account, fingerprint(agentToken), "http://127.0.0.1:4680/mcp"],
     );
     await client.query(
       "INSERT INTO agent_connection_csrf(session_hash,token_hash,expires_at) VALUES($1,$2,now()+interval '10 minutes')",
@@ -497,12 +431,7 @@ async function seedSource(linkKey: string) {
     await client.query(
       `INSERT INTO login_challenges(id,email,code_hash,browser_hash,delivery,expires_at)
        VALUES($1,$2,$3,$4,'local',now()+interval '10 minutes')`,
-      [
-        randomUUID(),
-        `restore-${drillId}@example.test`,
-        fingerprint("123456"),
-        fingerprint("browser"),
-      ],
+      [randomUUID(), `restore-${drillId}@example.test`, fingerprint("123456"), fingerprint("browser")],
     );
     const singleRequest = {
       key: randomUUID(),
@@ -534,10 +463,11 @@ async function seedSource(linkKey: string) {
         singleReceipt,
       ],
     );
-    await client.query(
-      "INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Restore single')",
-      [ids.singleArtifact, ids.tenant, ids.account],
-    );
+    await client.query("INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Restore single')", [
+      ids.singleArtifact,
+      ids.tenant,
+      ids.account,
+    ]);
     await client.query(
       `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
        VALUES($1,$2,$3,1,$4,'index.html','text/html',$5,$6,$7,$8,'static',$9,$10,'single',$5)`,
@@ -554,14 +484,11 @@ async function seedSource(linkKey: string) {
         singleManifestHash,
       ],
     );
-    await client.query(
-      "UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1",
-      [ids.singleArtifact, ids.singleRevision],
-    );
-    const bundleTotal = bundleFiles.reduce(
-      (sum, file) => sum + file.bytes.length,
-      0,
-    );
+    await client.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
+      ids.singleArtifact,
+      ids.singleRevision,
+    ]);
+    const bundleTotal = bundleFiles.reduce((sum, file) => sum + file.bytes.length, 0);
     const bundleRequest = {
       key: bundleKey,
       title: "Restore bundle",
@@ -582,25 +509,18 @@ async function seedSource(linkKey: string) {
     await client.query(
       `INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,receipt,kind,connection_id)
        VALUES($1,$2,$3,$4,$5,$6,'bundle',$7)`,
-      [
-        ids.bundleUpload,
-        ids.tenant,
-        ids.account,
-        bundleRequest.key,
-        bundleRequest,
-        bundleReceipt,
-        ids.connection,
-      ],
+      [ids.bundleUpload, ids.tenant, ids.account, bundleRequest.key, bundleRequest, bundleReceipt, ids.connection],
     );
     for (const [index, object] of bundleObjects.entries())
       await client.query(
         "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,$2,$3,$4)",
         [ids.bundleUpload, index, object.key, object.version],
       );
-    await client.query(
-      "INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Restore bundle')",
-      [ids.bundleArtifact, ids.tenant, ids.account],
-    );
+    await client.query("INSERT INTO artifacts(id,tenant_id,created_by,title) VALUES($1,$2,$3,'Restore bundle')", [
+      ids.bundleArtifact,
+      ids.tenant,
+      ids.account,
+    ]);
     await client.query(
       `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,object_key,object_version,html_profile,manifest,manifest_sha256,storage_kind,total_size)
        VALUES($1,$2,$3,1,$4,'index.html','text/html',$5,$6,$7,$8,'unsupported',$9,$10,'bundle',$11)`,
@@ -623,22 +543,13 @@ async function seedSource(linkKey: string) {
       await client.query(
         `INSERT INTO revision_files(revision_id,file_index,path,mime,size,sha256,object_key,object_version)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [
-          ids.bundleRevision,
-          index,
-          file.path,
-          file.mime,
-          file.size,
-          file.sha256,
-          object.key,
-          object.version,
-        ],
+        [ids.bundleRevision, index, file.path, file.mime, file.size, file.sha256, object.key, object.version],
       );
     }
-    await client.query(
-      "UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1",
-      [ids.bundleArtifact, ids.bundleRevision],
-    );
+    await client.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
+      ids.bundleArtifact,
+      ids.bundleRevision,
+    ]);
     await client.query(
       `INSERT INTO revision_derivatives(id,tenant_id,revision_id,source_manifest_sha256,builder_version,state,attempt_id,runtime_profile,size,sha256,object_key,object_version)
        VALUES($1,$2,$3,$4,$5,'ready',$6,$7,$8,$9,$10,$11)`,
@@ -681,13 +592,7 @@ async function seedSource(linkKey: string) {
     await client.query(
       `INSERT INTO viewer_grants(hash,revision_id,share_id,source_grant_hash,derivative_id,expires_at)
        VALUES($1,$2,$3,$4,$5,now()+interval '50 seconds')`,
-      [
-        fingerprint(randomBytes(32)),
-        ids.bundleRevision,
-        ids.activeShare,
-        grantHash,
-        ids.derivative,
-      ],
+      [fingerprint(randomBytes(32)), ids.bundleRevision, ids.activeShare, grantHash, ids.derivative],
     );
     const stageRequest = {
       key: randomUUID(),
@@ -700,14 +605,7 @@ async function seedSource(linkKey: string) {
     await client.query(
       `INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,object_version,kind)
        VALUES($1,$2,$3,$4,$5,$6,'single')`,
-      [
-        ids.liveStageUpload,
-        ids.tenant,
-        ids.account,
-        stageRequest.key,
-        stageRequest,
-        stagedObject.version,
-      ],
+      [ids.liveStageUpload, ids.tenant, ids.account, stageRequest.key, stageRequest, stagedObject.version],
     );
     const deadBytes = Buffer.from("already reconciled");
     const deadManifest = canonicalizeManifest({
@@ -729,13 +627,7 @@ async function seedSource(linkKey: string) {
     await client.query(
       `INSERT INTO uploads(id,tenant_id,account_id,idempotency_key,request,aborted,reconciled_at,kind)
        VALUES($1,$2,$3,$4,$5,true,now(),'bundle')`,
-      [
-        ids.reconciledUpload,
-        ids.tenant,
-        ids.account,
-        deadRequest.key,
-        deadRequest,
-      ],
+      [ids.reconciledUpload, ids.tenant, ids.account, deadRequest.key, deadRequest],
     );
     await client.query(
       "INSERT INTO upload_files(upload_id,file_index,object_key,object_version) VALUES($1,0,$2,'missing-version')",
@@ -802,10 +694,9 @@ async function purgeSourceErasure(
         (await seeded.query("SELECT used_bytes FROM tenants WHERE id=$1", [seed.erasure.tenantId])).rows[0].used_bytes,
       ],
     );
-    await seeded.query(
-      "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
-      [seed.erasure.accountId],
-    );
+    await seeded.query("UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1", [
+      seed.erasure.accountId,
+    ]);
     await seeded.query(
       `UPDATE account_deletions SET state='access_revoked_pending_purge',
          requested_at=clock_timestamp(),revoked_at=clock_timestamp(),
@@ -863,11 +754,7 @@ async function purgeSourceErasure(
       Prefix: `${seed.erasure.tenantId}/`,
     }),
   );
-  if (
-    listed.IsTruncated !== false ||
-    (listed.Versions?.length ?? 0) !== 0 ||
-    (listed.DeleteMarkers?.length ?? 0) !== 0
-  )
+  if (listed.IsTruncated !== false || (listed.Versions?.length ?? 0) !== 0 || (listed.DeleteMarkers?.length ?? 0) !== 0)
     throw new Error("Source account purge left content versions");
   return {
     sourceVersionsDeleted: 1,
@@ -890,9 +777,7 @@ async function applyErasureBarrier(
     bucket: names.targetBucket,
   });
   const abort = new AbortController();
-  let reconciliation:
-    | Awaited<ReturnType<typeof reconcileErasureRestore>>
-    | undefined;
+  let reconciliation: Awaited<ReturnType<typeof reconcileErasureRestore>> | undefined;
   await database.connect();
   try {
     const result = await runMaintenanceGuard({
@@ -959,13 +844,8 @@ async function applyErasureBarrier(
       Number(row.sessions) !== 0
     )
       throw new Error("Restored erased tenant metadata survived suppression");
-    const historic = plan.entries.find(
-      (entry) => entry.requestId === seed.erasure.deletionId,
-    );
-    if (
-      historic?.state !== "purged" ||
-      new Date(row.purged_at).toISOString() !== historic.purged?.metadataPurgedAt
-    )
+    const historic = plan.entries.find((entry) => entry.requestId === seed.erasure.deletionId);
+    if (historic?.state !== "purged" || new Date(row.purged_at).toISOString() !== historic.purged?.metadataPurgedAt)
       throw new Error("Restored erasure receipt changed historic proof time");
   } finally {
     await checked.end();
@@ -976,17 +856,9 @@ async function applyErasureBarrier(
       Prefix: `${seed.erasure.tenantId}/`,
     }),
   );
-  if (
-    listed.IsTruncated !== false ||
-    (listed.Versions?.length ?? 0) !== 0 ||
-    (listed.DeleteMarkers?.length ?? 0) !== 0
-  )
+  if (listed.IsTruncated !== false || (listed.Versions?.length ?? 0) !== 0 || (listed.DeleteMarkers?.length ?? 0) !== 0)
     throw new Error("Restored erased tenant bytes survived suppression");
-  const after = await loadErasureRestorePlan(
-    ledger,
-    plan.ledgerId,
-    new AbortController().signal,
-  );
+  const after = await loadErasureRestorePlan(ledger, plan.ledgerId, new AbortController().signal);
   assertErasureRestorePlanStable(plan, after);
   return {
     entries: reconciliation!.entriesCompleted,
@@ -1059,10 +931,7 @@ async function collectObjects(directory: string) {
       }),
     );
     const bytes = Buffer.from(await response.Body!.transformToByteArray());
-    if (
-      bytes.length !== reference.size ||
-      fingerprint(bytes) !== reference.sha256
-    )
+    if (bytes.length !== reference.size || fingerprint(bytes) !== reference.sha256)
       throw new Error("Source object checksum mismatch");
     const path = join(objectDirectory, reference.sha256);
     try {
@@ -1076,31 +945,17 @@ async function collectObjects(directory: string) {
   const ordered = [...references.values()];
   const jsonl = ordered.map((value) => JSON.stringify(value)).join("\n") + "\n";
   await writeFile(join(directory, "objects.jsonl"), jsonl, { mode: 0o600 });
-  await writeFile(
-    join(directory, "objects.jsonl.sha256"),
-    `${fingerprint(jsonl)}  objects.jsonl\n`,
-    { mode: 0o600 },
-  );
+  await writeFile(join(directory, "objects.jsonl.sha256"), `${fingerprint(jsonl)}  objects.jsonl\n`, { mode: 0o600 });
   return ordered;
 }
 
-async function loadBackup(
-  directory: string,
-  expectedLinkKey: string,
-  erasurePlan: ErasureRestorePlan,
-) {
-  const backup = JSON.parse(
-    await readFile(join(directory, "backup.json"), "utf8"),
-  );
+async function loadBackup(directory: string, expectedLinkKey: string, erasurePlan: ErasureRestorePlan) {
+  const backup = JSON.parse(await readFile(join(directory, "backup.json"), "utf8"));
   const dump = await readFile(join(directory, "database.dump"));
-  const objectManifest = await readFile(
-    join(directory, "objects.jsonl"),
-    "utf8",
-  );
+  const objectManifest = await readFile(join(directory, "objects.jsonl"), "utf8");
   if (
     backup.formatVersion !== 1 ||
-    backup.schemaMigrations?.join(",") !==
-      EXPECTED_MIGRATION_VERSIONS.join(",") ||
+    backup.schemaMigrations?.join(",") !== EXPECTED_MIGRATION_VERSIONS.join(",") ||
     backup.databaseSha256 !== fingerprint(dump) ||
     backup.objectManifestSha256 !== fingerprint(objectManifest) ||
     backup.linkKeyFingerprint !== fingerprint(expectedLinkKey)
@@ -1140,8 +995,7 @@ async function dockerPostgresContainer() {
     "{{.Names}}",
   ]);
   const names = output.trim().split("\n").filter(Boolean);
-  if (names.length !== 1)
-    throw new Error("Expected one reviewed local Postgres container");
+  if (names.length !== 1) throw new Error("Expected one reviewed local Postgres container");
   return names[0];
 }
 
@@ -1156,9 +1010,7 @@ function runCapture(
 ) {
   return new Promise<string>(async (resolve, reject) => {
     const input = options.stdinFile ? await open(options.stdinFile, "r") : null;
-    const output = options.stdoutFile
-      ? await open(options.stdoutFile, "w", 0o600)
-      : null;
+    const output = options.stdoutFile ? await open(options.stdoutFile, "w", 0o600) : null;
     const child = spawn(command, args, {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: options.env ?? process.env,
@@ -1172,12 +1024,7 @@ function runCapture(
     child.on("close", async (code) => {
       await Promise.all([input?.close(), output?.close()]);
       if (code === 0) resolve(Buffer.concat(stdout).toString("utf8"));
-      else
-        reject(
-          new Error(
-            `${command} failed (${code}): ${Buffer.concat(stderr).toString("utf8").slice(0, 2000)}`,
-          ),
-        );
+      else reject(new Error(`${command} failed (${code}): ${Buffer.concat(stderr).toString("utf8").slice(0, 2000)}`));
     });
   });
 }
@@ -1254,9 +1101,7 @@ async function proveSourceAgentReplay(seed: Seed, linkKey: string) {
   return {
     shareInput,
     shareId: result.agentShareId as string,
-    shareToken: createHmac("sha256", linkKey)
-      .update(`share:${result.agentShareId}`)
-      .digest("base64url"),
+    shareToken: createHmac("sha256", linkKey).update(`share:${result.agentShareId}`).digest("base64url"),
   };
 }
 
@@ -1302,11 +1147,7 @@ async function trashSourceFixture(seed: Seed, linkKey: string) {
     },
   );
   const snapshot = JSON.parse(output);
-  if (
-    snapshot.id !== seed.ids.singleArtifact ||
-    snapshot.lifecycleVersion !== 1 ||
-    !snapshot.trashedAt
-  )
+  if (snapshot.id !== seed.ids.singleArtifact || snapshot.lifecycleVersion !== 1 || !snapshot.trashedAt)
     throw new Error("Source trash fixture transition failed");
 }
 
@@ -1349,17 +1190,11 @@ async function restoreDatabase(container: string, path: string) {
   );
 }
 
-async function restoreObjects(
-  directory: string,
-  references: ObjectReference[],
-) {
+async function restoreObjects(directory: string, references: ObjectReference[]) {
   const mapping = [];
   for (const reference of references) {
     const bytes = await readFile(join(directory, "objects", reference.sha256));
-    if (
-      bytes.length !== reference.size ||
-      fingerprint(bytes) !== reference.sha256
-    )
+    if (bytes.length !== reference.size || fingerprint(bytes) !== reference.sha256)
       throw new Error("Backup object checksum mismatch");
     const putResult = await s3.send(
       new PutObjectCommand({
@@ -1371,10 +1206,8 @@ async function restoreObjects(
         IfNoneMatch: "*",
       }),
     );
-    if (!putResult.VersionId || putResult.VersionId === "null")
-      throw new Error("Target object versioning required");
-    if (putResult.VersionId === reference.sourceVersionId)
-      throw new Error("Target storage reused a source VersionId");
+    if (!putResult.VersionId || putResult.VersionId === "null") throw new Error("Target object versioning required");
+    if (putResult.VersionId === reference.sourceVersionId) throw new Error("Target storage reused a source VersionId");
     const read = await s3.send(
       new GetObjectCommand({
         Bucket: names.targetBucket,
@@ -1383,19 +1216,14 @@ async function restoreObjects(
       }),
     );
     const restored = Buffer.from(await read.Body!.transformToByteArray());
-    if (
-      restored.length !== reference.size ||
-      fingerprint(restored) !== reference.sha256
-    )
+    if (restored.length !== reference.size || fingerprint(restored) !== reference.sha256)
       throw new Error("Target object checksum mismatch");
     mapping.push({ ...reference, targetVersionId: putResult.VersionId });
   }
   return mapping;
 }
 
-async function remapAndClose(
-  mapping: Awaited<ReturnType<typeof restoreObjects>>,
-) {
+async function remapAndClose(mapping: Awaited<ReturnType<typeof restoreObjects>>) {
   const client = new pg.Client({
     connectionString: databaseUrl(names.targetDatabase),
   });
@@ -1406,46 +1234,37 @@ async function remapAndClose(
       "CREATE TEMP TABLE restore_object_versions(object_key text,source_version text,target_version text,sha256 text,size bigint,PRIMARY KEY(object_key,source_version)) ON COMMIT DROP",
     );
     for (const item of mapping)
-      await client.query(
-        "INSERT INTO restore_object_versions VALUES($1,$2,$3,$4,$5)",
-        [
-          item.key,
-          item.sourceVersionId,
-          item.targetVersionId,
-          item.sha256,
-          item.size,
-        ],
-      );
+      await client.query("INSERT INTO restore_object_versions VALUES($1,$2,$3,$4,$5)", [
+        item.key,
+        item.sourceVersionId,
+        item.targetVersionId,
+        item.sha256,
+        item.size,
+      ]);
     const dead = await client.query(
       `DELETE FROM upload_files uf USING uploads u
        WHERE uf.upload_id=u.id AND u.receipt IS NULL AND u.reconciled_at IS NOT NULL
        RETURNING uf.upload_id`,
     );
-    if (dead.rowCount !== 1)
-      throw new Error("Expected one dead reconciled upload_file");
+    if (dead.rowCount !== 1) throw new Error("Expected one dead reconciled upload_file");
     const missing = await client.query(
       `WITH refs AS (${referenceSql})
        SELECT count(*)::int AS count FROM refs r
        LEFT JOIN restore_object_versions m ON m.object_key=r.key AND m.source_version=r.version
        WHERE m.object_key IS NULL`,
     );
-    if (missing.rows[0].count !== 0)
-      throw new Error("Target mapping misses live object references");
+    if (missing.rows[0].count !== 0) throw new Error("Target mapping misses live object references");
     await client.query(
       `UPDATE revisions r SET object_version=m.target_version FROM restore_object_versions m WHERE m.object_key=r.object_key AND m.source_version=r.object_version`,
     );
     await client.query(
       `UPDATE revision_files r SET object_version=m.target_version FROM restore_object_versions m WHERE m.object_key=r.object_key AND m.source_version=r.object_version`,
     );
-    await client.query(
-      "ALTER TABLE revision_derivatives DISABLE TRIGGER revision_derivative_ready_immutable",
-    );
+    await client.query("ALTER TABLE revision_derivatives DISABLE TRIGGER revision_derivative_ready_immutable");
     await client.query(
       `UPDATE revision_derivatives r SET object_version=m.target_version FROM restore_object_versions m WHERE r.state='ready' AND m.object_key=r.object_key AND m.source_version=r.object_version`,
     );
-    await client.query(
-      "ALTER TABLE revision_derivatives ENABLE TRIGGER revision_derivative_ready_immutable",
-    );
+    await client.query("ALTER TABLE revision_derivatives ENABLE TRIGGER revision_derivative_ready_immutable");
     await client.query(
       `UPDATE uploads u SET object_version=m.target_version FROM restore_object_versions m WHERE m.object_key=u.tenant_id::text||'/'||u.id::text AND m.source_version=u.object_version`,
     );
@@ -1484,15 +1303,9 @@ async function verify(
   });
   await client.connect();
   const tenant = (
-    await client.query(
-      "SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1",
-      [seed.ids.tenant],
-    )
+    await client.query("SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1", [seed.ids.tenant])
   ).rows[0];
-  if (
-    Number(tenant.used_bytes) !== seed.quotas.used ||
-    Number(tenant.derivative_used_bytes) !== seed.quotas.derivative
-  )
+  if (Number(tenant.used_bytes) !== seed.quotas.used || Number(tenant.derivative_used_bytes) !== seed.quotas.derivative)
     throw new Error("Quota counters changed during restore");
   const access = (
     await client.query(
@@ -1511,29 +1324,19 @@ async function verify(
     )
   ).rows[0];
   if (
-    Object.entries(access).some(
-      ([key, value]) => key !== "tombstone" && Number(value) !== 0,
-    ) ||
+    Object.entries(access).some(([key, value]) => key !== "tombstone" && Number(value) !== 0) ||
     Number(access.tombstone) !== 1
   )
     throw new Error("Fail-closed or reconciled tombstone invariant failed");
-  const manifests = (
-    await client.query(
-      "SELECT manifest,manifest_sha256 FROM revisions WHERE manifest IS NOT NULL",
-    )
-  ).rows;
+  const manifests = (await client.query("SELECT manifest,manifest_sha256 FROM revisions WHERE manifest IS NOT NULL"))
+    .rows;
   for (const row of manifests)
-    if (
-      fingerprint(JSON.stringify(canonicalizeManifest(row.manifest))) !==
-      row.manifest_sha256
-    )
+    if (fingerprint(JSON.stringify(canonicalizeManifest(row.manifest))) !== row.manifest_sha256)
       throw new Error("Restored manifest checksum mismatch");
   const refs = (await client.query(referenceSql)).rows;
   await client.end();
   for (const row of refs) {
-    const expected = mapping.find(
-      (item) => item.key === row.key && item.targetVersionId === row.version,
-    );
+    const expected = mapping.find((item) => item.key === row.key && item.targetVersionId === row.version);
     if (!expected) throw new Error("Restored DB reference is not remapped");
     const response = await s3.send(
       new GetObjectCommand({
@@ -1692,41 +1495,32 @@ async function proveMaintenanceCleanup(
   });
   await client.connect();
   const quotaBefore = (
-    await client.query(
-      "SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1",
-      [seed.ids.tenant],
-    )
+    await client.query("SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1", [seed.ids.tenant])
   ).rows[0];
   await client.query(
     "UPDATE uploads SET aborted=true,expires_at=now()-interval '1 second' WHERE id=$1 AND receipt IS NULL AND reconciled_at IS NULL",
     [seed.ids.liveStageUpload],
   );
   await client.end();
-  const maintenanceOutput = await runCapture(
-    process.execPath,
-    ["--import", "tsx", "scripts/maintenance.ts"],
-    {
-      env: {
-        ...process.env,
-        DATABASE_URL: databaseUrl(names.targetDatabase),
-        S3_BUCKET: names.targetBucket,
-        LINK_KEY: restoredLinkKey,
-        APP_ORIGIN: "http://127.0.0.1:4680",
-        HOST: "127.0.0.1",
-        PORT: "4680",
-        COOKIE_SECURE: "false",
-        HTML_LIVE_ENABLED: "false",
-        MAIL_MODE: "disabled",
-      },
+  const maintenanceOutput = await runCapture(process.execPath, ["--import", "tsx", "scripts/maintenance.ts"], {
+    env: {
+      ...process.env,
+      DATABASE_URL: databaseUrl(names.targetDatabase),
+      S3_BUCKET: names.targetBucket,
+      LINK_KEY: restoredLinkKey,
+      APP_ORIGIN: "http://127.0.0.1:4680",
+      HOST: "127.0.0.1",
+      PORT: "4680",
+      COOKIE_SECURE: "false",
+      HTML_LIVE_ENABLED: "false",
+      MAIL_MODE: "disabled",
     },
-  );
+  });
   const maintenanceEvents = maintenanceOutput
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
-  const maintenance = maintenanceEvents.find(
-    (event) => event.event === "maintenance.completed",
-  );
+  const maintenance = maintenanceEvents.find((event) => event.event === "maintenance.completed");
   if (
     maintenanceEvents.length !== 2 ||
     maintenanceEvents[0]?.event !== "maintenance.started" ||
@@ -1741,16 +1535,12 @@ async function proveMaintenanceCleanup(
   });
   await checked.connect();
   const upload = (
-    await checked.query(
-      "SELECT aborted,reconciled_at,object_version,receipt FROM uploads WHERE id=$1",
-      [seed.ids.liveStageUpload],
-    )
+    await checked.query("SELECT aborted,reconciled_at,object_version,receipt FROM uploads WHERE id=$1", [
+      seed.ids.liveStageUpload,
+    ])
   ).rows[0];
   const quotaAfter = (
-    await checked.query(
-      "SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1",
-      [seed.ids.tenant],
-    )
+    await checked.query("SELECT used_bytes,derivative_used_bytes FROM tenants WHERE id=$1", [seed.ids.tenant])
   ).rows[0];
   const refs = (await checked.query(referenceSql)).rows;
   await checked.end();
@@ -1781,9 +1571,7 @@ async function proveMaintenanceCleanup(
           reference.targetVersionId === staged.targetVersionId
         ),
     )
-    .sort((left, right) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right)),
-    );
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   const actualReferences = refs
     .map((row) => ({
       role: row.role,
@@ -1792,9 +1580,7 @@ async function proveMaintenanceCleanup(
       size: Number(row.size),
       sha256: row.sha256,
     }))
-    .sort((left, right) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right)),
-    );
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   if (JSON.stringify(actualReferences) !== JSON.stringify(expectedReferences))
     throw new Error("Maintenance changed the committed reference multiset");
   let targetStageMissing = false;
@@ -1809,8 +1595,7 @@ async function proveMaintenanceCleanup(
   } catch (error: any) {
     targetStageMissing = error.$metadata?.httpStatusCode === 404;
   }
-  if (!targetStageMissing)
-    throw new Error("Maintenance left the target staged object readable");
+  if (!targetStageMissing) throw new Error("Maintenance left the target staged object readable");
   const sourceStage = await s3.send(
     new GetObjectCommand({
       Bucket: names.sourceBucket,
@@ -1818,20 +1603,12 @@ async function proveMaintenanceCleanup(
       VersionId: staged.sourceVersionId,
     }),
   );
-  const sourceBytes = Buffer.from(
-    await sourceStage.Body!.transformToByteArray(),
-  );
-  if (
-    sourceBytes.length !== staged.size ||
-    fingerprint(sourceBytes) !== staged.sha256
-  )
+  const sourceBytes = Buffer.from(await sourceStage.Body!.transformToByteArray());
+  if (sourceBytes.length !== staged.size || fingerprint(sourceBytes) !== staged.sha256)
     throw new Error("Target maintenance affected source staging");
   for (const row of refs) {
-    const expected = mapping.find(
-      (item) => item.key === row.key && item.targetVersionId === row.version,
-    );
-    if (!expected || expected.key === stagedKey)
-      throw new Error("Committed reference changed during maintenance");
+    const expected = mapping.find((item) => item.key === row.key && item.targetVersionId === row.version);
+    if (!expected || expected.key === stagedKey) throw new Error("Committed reference changed during maintenance");
     const response = await s3.send(
       new GetObjectCommand({
         Bucket: names.targetBucket,
@@ -1858,16 +1635,9 @@ async function mutateSourceAfterSnapshot(seed: Seed) {
   await client.connect();
   await client.query("BEGIN");
   try {
-    await client.query("UPDATE shares SET revoked=true WHERE id=$1", [
-      seed.ids.activeShare,
-    ]);
-    await client.query(
-      "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1",
-      [seed.ids.connection],
-    );
-    await client.query("DELETE FROM sessions WHERE account_id=$1", [
-      seed.ids.account,
-    ]);
+    await client.query("UPDATE shares SET revoked=true WHERE id=$1", [seed.ids.activeShare]);
+    await client.query("UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1", [seed.ids.connection]);
+    await client.query("DELETE FROM sessions WHERE account_id=$1", [seed.ids.account]);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1877,28 +1647,16 @@ async function mutateSourceAfterSnapshot(seed: Seed) {
   }
 }
 
-async function verifyDatabaseSentinel(
-  admin: pg.Client,
-  name: string,
-  role: DrillRole,
-) {
+async function verifyDatabaseSentinel(admin: pg.Client, name: string, role: DrillRole) {
   const row = (
-    await admin.query(
-      "SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1",
-      [name],
-    )
+    await admin.query("SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1", [name])
   ).rows[0];
   return row?.value === databaseSentinel(role);
 }
 
-async function cleanupDatabase(
-  admin: pg.Client,
-  name: string,
-  role: DrillRole,
-) {
+async function cleanupDatabase(admin: pg.Client, name: string, role: DrillRole) {
   assertDrillIdentity(drillId, role, name, names[`${role}Bucket`]);
-  if (!(await verifyDatabaseSentinel(admin, name, role)))
-    throw new Error(`Refusing to clean unknown ${role} database`);
+  if (!(await verifyDatabaseSentinel(admin, name, role))) throw new Error(`Refusing to clean unknown ${role} database`);
   await admin.query(
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
     [name],
@@ -1908,12 +1666,9 @@ async function cleanupDatabase(
 
 async function cleanupBucket(bucket: string, role: DrillRole) {
   assertDrillIdentity(drillId, role, names[`${role}Database`], bucket);
-  const sentinel = await s3.send(
-    new GetObjectCommand({ Bucket: bucket, Key: sentinelKey }),
-  );
+  const sentinel = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: sentinelKey }));
   const bytes = Buffer.from(await sentinel.Body!.transformToByteArray());
-  if (!bytes.equals(bucketSentinel(role)))
-    throw new Error(`Refusing to clean unknown ${role} bucket`);
+  if (!bytes.equals(bucketSentinel(role))) throw new Error(`Refusing to clean unknown ${role} bucket`);
   // MinIO can expose more versions immediately after a deletion pass even when
   // the preceding response was not truncated. Re-list from the start until the
   // bucket is observably empty; authorization was already proven by sentinel.
@@ -1924,10 +1679,7 @@ async function cleanupBucket(bucket: string, role: DrillRole) {
         MaxKeys: 1000,
       }),
     );
-    const stored = [
-      ...(listed.Versions ?? []),
-      ...(listed.DeleteMarkers ?? []),
-    ];
+    const stored = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])];
     if (!stored.length) {
       await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
       return;
@@ -1952,10 +1704,7 @@ await admin.connect();
 let report: Record<string, unknown> | null = null;
 let syntheticResidueRemoved = false;
 try {
-  if (
-    (await databaseExists(admin, names.sourceDatabase)) ||
-    (await databaseExists(admin, names.targetDatabase))
-  )
+  if ((await databaseExists(admin, names.sourceDatabase)) || (await databaseExists(admin, names.targetDatabase)))
     throw new Error("Synthetic database collision before writes");
   if (
     (await bucketExists(names.sourceBucket)) ||
@@ -1988,11 +1737,7 @@ try {
   const dumpPath = join(directory, "database.dump");
   await dumpDatabase(container, dumpPath);
   const dump = await readFile(dumpPath);
-  await writeFile(
-    join(directory, "database.dump.sha256"),
-    `${fingerprint(dump)}  database.dump\n`,
-    { mode: 0o600 },
-  );
+  await writeFile(join(directory, "database.dump.sha256"), `${fingerprint(dump)}  database.dump\n`, { mode: 0o600 });
   const references = await collectObjects(directory);
   const backup = {
     formatVersion: 1,
@@ -2000,48 +1745,27 @@ try {
     cutoffAt: new Date().toISOString(),
     schemaMigrations: [...EXPECTED_MIGRATION_VERSIONS],
     databaseSha256: fingerprint(dump),
-    objectManifestSha256: fingerprint(
-      await readFile(join(directory, "objects.jsonl")),
-    ),
+    objectManifestSha256: fingerprint(await readFile(join(directory, "objects.jsonl"))),
     linkKeyFingerprint: fingerprint(linkKey),
     objectReferences: references.length,
     erasureLedgerId,
   };
-  await writeFile(
-    join(directory, "backup.json"),
-    JSON.stringify(backup, null, 2),
-    { mode: 0o600 },
-  );
+  await writeFile(join(directory, "backup.json"), JSON.stringify(backup, null, 2), { mode: 0o600 });
   // The backup owns its private object copy before the live source tenant is
   // actually purged. The worker writes both external ledger records.
-  const sourcePurge = await purgeSourceErasure(
-    seed,
-    erasureLedgerId,
-    ledger,
-  );
+  const sourcePurge = await purgeSourceErasure(seed, erasureLedgerId, ledger);
   // The complete external journal is loaded and bound to the backup before
   // pg_restore or any target object write begins.
-  const erasurePlan = await loadErasureRestorePlan(
-    ledger,
-    erasureLedgerId,
-    new AbortController().signal,
-  );
+  const erasurePlan = await loadErasureRestorePlan(ledger, erasureLedgerId, new AbortController().signal);
   const loadedBackup = await loadBackup(directory, linkKey, erasurePlan);
   await mutateSourceAfterSnapshot(seed);
   await restoreDatabase(container, dumpPath);
   const mapping = await restoreObjects(directory, loadedBackup.references);
-  const restoredLinkKey = decryptSecret(
-    await readFile(join(directory, "secrets.enc")),
-    wrappingKey,
-  );
+  const restoredLinkKey = decryptSecret(await readFile(join(directory, "secrets.enc")), wrappingKey);
   await remapAndClose(mapping);
   const erasure = await applyErasureBarrier(seed, erasurePlan, ledger);
   const verified = await verify(seed, sourceAgent, mapping, restoredLinkKey);
-  const maintenance = await proveMaintenanceCleanup(
-    seed,
-    mapping,
-    restoredLinkKey,
-  );
+  const maintenance = await proveMaintenanceCleanup(seed, mapping, restoredLinkKey);
   report = {
     drill: "synthetic-local",
     backupId: drillId,
@@ -2056,8 +1780,7 @@ try {
     freshOwnerLogin: verified.freshLogin && verified.freshIdentity,
     ownerSourceAndExportExact: verified.singleExact && verified.exportExact,
     explicitNewShare: verified.newShare && verified.newResolve,
-    rejectedAgentReplaysStable:
-      verified.agentReplaysDenied && verified.agentStateUnchanged,
+    rejectedAgentReplaysStable: verified.agentReplaysDenied && verified.agentStateUnchanged,
     trashStatePreserved: verified.trashStatePreserved,
     explicitTrashRestore: verified.explicitRestore,
     maintenance,
@@ -2082,8 +1805,7 @@ try {
         }),
       );
       const bytes = Buffer.from(await sentinel.Body!.transformToByteArray());
-      if (!bytes.equals(ledgerSentinel))
-        throw new Error("Refusing to clean unknown erasure ledger bucket");
+      if (!bytes.equals(ledgerSentinel)) throw new Error("Refusing to clean unknown erasure ledger bucket");
       for (let pass = 0; pass < 100; pass++) {
         const listed = await s3.send(
           new ListObjectVersionsCommand({
@@ -2091,14 +1813,9 @@ try {
             MaxKeys: 1000,
           }),
         );
-        const stored = [
-          ...(listed.Versions ?? []),
-          ...(listed.DeleteMarkers ?? []),
-        ];
+        const stored = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])];
         if (!stored.length) {
-          await s3.send(
-            new DeleteBucketCommand({ Bucket: names.ledgerBucket }),
-          );
+          await s3.send(new DeleteBucketCommand({ Bucket: names.ledgerBucket }));
           break;
         }
         for (const item of stored)
@@ -2110,8 +1827,7 @@ try {
                 VersionId: item.VersionId,
               }),
             );
-        if (pass === 99)
-          throw new Error("Erasure ledger cleanup exceeded pass bound");
+        if (pass === 99) throw new Error("Erasure ledger cleanup exceeded pass bound");
       }
     } catch (error) {
       cleanupErrors.push(error instanceof Error ? error.message : String(error));
@@ -2121,36 +1837,29 @@ try {
       try {
         await cleanupBucket(names[`${role}Bucket`], role);
       } catch (error) {
-        cleanupErrors.push(
-          error instanceof Error ? error.message : String(error),
-        );
+        cleanupErrors.push(error instanceof Error ? error.message : String(error));
       }
     if (created[`${role}Database`])
       try {
         await cleanupDatabase(admin, names[`${role}Database`], role);
       } catch (error) {
-        cleanupErrors.push(
-          error instanceof Error ? error.message : String(error),
-        );
+        cleanupErrors.push(error instanceof Error ? error.message : String(error));
       }
   }
   if (!cleanupErrors.length) {
     const databasesRemain =
-      (await databaseExists(admin, names.sourceDatabase)) ||
-      (await databaseExists(admin, names.targetDatabase));
+      (await databaseExists(admin, names.sourceDatabase)) || (await databaseExists(admin, names.targetDatabase));
     const bucketsRemain =
       (await bucketExists(names.sourceBucket)) ||
       (await bucketExists(names.targetBucket)) ||
       (await bucketExists(names.ledgerBucket));
-    if (databasesRemain || bucketsRemain)
-      cleanupErrors.push("Synthetic residue remains after cleanup");
+    if (databasesRemain || bucketsRemain) cleanupErrors.push("Synthetic residue remains after cleanup");
     else syntheticResidueRemoved = true;
   }
   await admin.end();
   s3.destroy();
   await rm(directory, { recursive: true, force: true });
-  if (cleanupErrors.length)
-    throw new Error(`Synthetic cleanup failed: ${cleanupErrors.join("; ")}`);
+  if (cleanupErrors.length) throw new Error(`Synthetic cleanup failed: ${cleanupErrors.join("; ")}`);
 }
 if (!report) throw new Error("Restore drill did not produce a report");
 report.syntheticResidueRemoved = syntheticResidueRemoved;

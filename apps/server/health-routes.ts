@@ -14,10 +14,7 @@ function statusHeaders(reply: FastifyReply) {
   });
 }
 
-export async function registerHealthRoutes(
-  app: FastifyInstance,
-  health: HealthRouteCoordinator,
-) {
+export async function registerHealthRoutes(app: FastifyInstance, health: HealthRouteCoordinator) {
   app.get("/healthz", async (_request, reply) => {
     statusHeaders(reply);
     if (!health.alive()) return reply.code(503).send({ status: "stopping" });

@@ -4,12 +4,7 @@ import { CircleStop, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Revision } from "../../../../../packages/contracts/index.ts";
-import {
-  isLive,
-  nextLiveSteps,
-  type CapabilityState,
-  type LiveMode,
-} from "./live-plan.ts";
+import { isLive, nextLiveSteps, type CapabilityState, type LiveMode } from "./live-plan.ts";
 
 const modeLabel: Record<LiveMode, string> = {
   production: "Интерактивная версия",
@@ -31,19 +26,13 @@ const UPLOAD_PROFILE = "inline-live-experimental-v1";
 const LIVE_SANDBOX = "allow-scripts allow-forms";
 
 function messageFor(error: unknown) {
-  return error instanceof Error && error.message
-    ? error.message
-    : "Интерактивную версию не удалось запустить.";
+  return error instanceof Error && error.message ? error.message : "Интерактивную версию не удалось запустить.";
 }
 
 // Requests go through the app's one path (shared/api/client.ts): a network
 // failure or an error answer reads in Russian, and the shelf header rides
 // along on a department shelf.
-async function readBuild(
-  path: string,
-  method: "GET" | "POST",
-  signal: AbortSignal,
-) {
+async function readBuild(path: string, method: "GET" | "POST", signal: AbortSignal) {
   const response = await send(`/api${path}`, {
     method,
     credentials: "same-origin",
@@ -75,9 +64,7 @@ export function LivePreview({
   const [live, setLive] = useState<LiveView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [build, setBuild] = useState<InlineBuild | null>(
-    revision.inlineBuild ?? null,
-  );
+  const [build, setBuild] = useState<InlineBuild | null>(revision.inlineBuild ?? null);
   const [buildBusy, setBuildBusy] = useState(false);
   const [pollPaused, setPollPaused] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -125,10 +112,7 @@ export function LivePreview({
     if (!expanded) return;
     focusBeforeExpand.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
-    const previousInert = new Map<
-      HTMLElement,
-      { had: boolean; value: string | null }
-    >();
+    const previousInert = new Map<HTMLElement, { had: boolean; value: string | null }>();
     const markBackground = (element: Node) => {
       if (!(element instanceof HTMLElement)) return;
       if (!previousInert.has(element)) {
@@ -159,16 +143,13 @@ export function LivePreview({
         }
       }
     });
-    for (const { ancestor } of paths)
-      observer.observe(ancestor, { childList: true });
+    for (const { ancestor } of paths) observer.observe(ancestor, { childList: true });
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setExpanded(false);
     };
     document.addEventListener("keydown", onKeyDown);
-    const focusFrame = requestAnimationFrame(() =>
-      collapseButton.current?.focus(),
-    );
+    const focusFrame = requestAnimationFrame(() => collapseButton.current?.focus());
     return () => {
       cancelAnimationFrame(focusFrame);
       observer.disconnect();
@@ -178,8 +159,7 @@ export function LivePreview({
       }
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
-      if (focusBeforeExpand.current?.isConnected)
-        focusBeforeExpand.current.focus();
+      if (focusBeforeExpand.current?.isConnected) focusBeforeExpand.current.focus();
       focusBeforeExpand.current = null;
     };
   }, [expanded]);
@@ -197,8 +177,7 @@ export function LivePreview({
           setCapability(
             result.liveExperimental !== true
               ? "disabled"
-              : result.liveMode === "staging" ||
-                  result.liveMode === "production"
+              : result.liveMode === "staging" || result.liveMode === "production"
                 ? result.liveMode
                 : result.liveMode === "local" || result.liveMode === undefined
                   ? "local"
@@ -215,13 +194,7 @@ export function LivePreview({
   }, [revision.id, grant, capabilityAttempt]);
 
   useEffect(() => {
-    if (
-      (!requiresBuild && !buildForLink) ||
-      grant ||
-      !isLive(capability) ||
-      build?.state !== "pending" ||
-      pollPaused
-    )
+    if ((!requiresBuild && !buildForLink) || grant || !isLive(capability) || build?.state !== "pending" || pollPaused)
       return;
     const abort = new AbortController();
     buildAbort.current?.abort();
@@ -235,11 +208,7 @@ export function LivePreview({
         return;
       }
       try {
-        const next = await readBuild(
-          `/revisions/${revision.id}/build-inline`,
-          "GET",
-          abort.signal,
-        );
+        const next = await readBuild(`/revisions/${revision.id}/build-inline`, "GET", abort.signal);
         if (abort.signal.aborted) return;
         if (!next || next.state !== "pending") {
           setBuild(
@@ -251,8 +220,7 @@ export function LivePreview({
             },
           );
           setPollPaused("");
-          if (next && onBuildChangeRef.current)
-            await onBuildChangeRef.current();
+          if (next && onBuildChangeRef.current) await onBuildChangeRef.current();
           return;
         }
         timer = setTimeout(poll, 500);
@@ -266,15 +234,7 @@ export function LivePreview({
       if (timer) clearTimeout(timer);
       if (buildAbort.current === abort) buildAbort.current = null;
     };
-  }, [
-    build?.state,
-    buildForLink,
-    capability,
-    grant,
-    pollPaused,
-    requiresBuild,
-    revision.id,
-  ]);
+  }, [build?.state, buildForLink, capability, grant, pollPaused, requiresBuild, revision.id]);
 
   const prepare = async () => {
     const abort = new AbortController();
@@ -283,11 +243,7 @@ export function LivePreview({
     setBuildBusy(true);
     setError("");
     try {
-      const next = await readBuild(
-        `/revisions/${revision.id}/build-inline`,
-        "POST",
-        abort.signal,
-      );
+      const next = await readBuild(`/revisions/${revision.id}/build-inline`, "POST", abort.signal);
       if (!abort.signal.aborted) {
         setBuild(
           next ?? {
@@ -298,8 +254,7 @@ export function LivePreview({
           },
         );
         setPollPaused("");
-        if (next?.state !== "pending" && onBuildChangeRef.current)
-          await onBuildChangeRef.current();
+        if (next?.state !== "pending" && onBuildChangeRef.current) await onBuildChangeRef.current();
       }
     } catch (reason) {
       if (!abort.signal.aborted) setError(messageFor(reason));
@@ -318,21 +273,16 @@ export function LivePreview({
     setError("");
     try {
       // The owner's view of a work on a department shelf carries X-Polka-Shelf (send).
-      const response = await send(
-        grant
-          ? "/api/view/live-view"
-          : `/api/revisions/${revision.id}/live-view`,
-        {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
-            ...(overlay ? { "Content-Type": "application/json" } : {}),
-          },
-          body: overlay ? JSON.stringify({ comments: true }) : undefined,
-          signal: abort.signal,
+      const response = await send(grant ? "/api/view/live-view" : `/api/revisions/${revision.id}/live-view`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          ...(grant ? { Authorization: `Bearer ${grant}` } : {}),
+          ...(overlay ? { "Content-Type": "application/json" } : {}),
         },
-      );
+        body: overlay ? JSON.stringify({ comments: true }) : undefined,
+        signal: abort.signal,
+      });
       const result = (await response.json()) as Partial<LiveView>;
       if (typeof result.url !== "string" || !result.url)
         throw new Error("Сервер не вернул адрес интерактивной версии.");
@@ -343,8 +293,7 @@ export function LivePreview({
           profile: result.profile,
         });
     } catch (reason) {
-      if (!abort.signal.aborted && generation.current === currentGeneration)
-        setError(messageFor(reason));
+      if (!abort.signal.aborted && generation.current === currentGeneration) setError(messageFor(reason));
     } finally {
       // A launch superseded by a newer one must not re-enable the button
       // while that newer launch is still running.
@@ -385,13 +334,7 @@ export function LivePreview({
   // The owner's upload was running while its build was prepared: switch to
   // the built version, which is what a link recipient sees. Once only.
   useEffect(() => {
-    if (
-      build?.state !== "ready" ||
-      live?.profile !== UPLOAD_PROFILE ||
-      grant ||
-      stopped ||
-      relaunchedForBuild.current
-    )
+    if (build?.state !== "ready" || live?.profile !== UPLOAD_PROFILE || grant || stopped || relaunchedForBuild.current)
       return;
     relaunchedForBuild.current = true;
     void launch();
@@ -399,26 +342,16 @@ export function LivePreview({
 
   // A ready build may list what it left out (remote fonts, images, hints).
   const builtNote =
-    build?.state === "ready" && build.reason ? (
-      <p className="html-preview-note">{build.reason}.</p>
-    ) : null;
+    build?.state === "ready" && build.reason ? <p className="html-preview-note">{build.reason}.</p> : null;
   // A single upload runs as is for its owner, but its link needs the build.
   const linkNote =
-    !grant &&
-    buildForLink &&
-    (build?.state === "unsupported" || build?.state === "failed") ? (
+    !grant && buildForLink && (build?.state === "unsupported" || build?.state === "failed") ? (
       <p className="html-preview-note">
-        Ссылка на интерактивную версию пока невозможна: её не удалось
-        подготовить.
+        Ссылка на интерактивную версию пока невозможна: её не удалось подготовить.
         {build.reason ? ` Причина: ${build.reason}.` : ""}
         {build.path ? ` Файл: ${build.path}.` : ""}{" "}
         {build.state === "failed" && (
-          <Button
-            type="button"
-            variant="quiet"
-            onClick={prepare}
-            busy={buildBusy}
-          >
+          <Button type="button" variant="quiet" onClick={prepare} busy={buildBusy}>
             Повторить подготовку
           </Button>
         )}
@@ -429,15 +362,10 @@ export function LivePreview({
 
   if (live)
     return (
-      <div
-        className={`html-preview${expanded ? " html-preview-expanded" : ""}`}
-        ref={expandedContainer}
-      >
+      <div className={`html-preview${expanded ? " html-preview-expanded" : ""}`} ref={expandedContainer}>
         {/* A recipient's toolbar stays one row on a phone: the buttons keep
             their icons and accessible names, the words show from 761px. */}
-        <div
-          className={`html-preview-note html-preview-toolbar${grant ? " html-preview-toolbar--compact" : ""}`}
-        >
+        <div className={`html-preview-note html-preview-toolbar${grant ? " html-preview-toolbar--compact" : ""}`}>
           <span title="Код страницы выполняется в изолированной песочнице на отдельном домене, без сети. Не вводите здесь конфиденциальные данные.">
             {isLive(capability) ? modeLabel[capability] : ""}
           </span>{" "}
@@ -449,9 +377,7 @@ export function LivePreview({
             onClick={() => setExpanded((value) => !value)}
           >
             {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-            <span className="html-preview-toolbar-label">
-              {expanded ? "Свернуть" : "Развернуть"}
-            </span>
+            <span className="html-preview-toolbar-label">{expanded ? "Свернуть" : "Развернуть"}</span>
           </Button>
           <Button
             type="button"
@@ -493,18 +419,12 @@ export function LivePreview({
     <>
       {children}
       {capability === "loading" && (
-        <p className="html-preview-note">
-          Проверяем доступность интерактивного эксперимента…
-        </p>
+        <p className="html-preview-note">Проверяем доступность интерактивного эксперимента…</p>
       )}
       {capability === "error" && (
         <p className="html-preview-note">
           {error}{" "}
-          <Button
-            type="button"
-            variant="quiet"
-            onClick={() => setCapabilityAttempt((attempt) => attempt + 1)}
-          >
+          <Button type="button" variant="quiet" onClick={() => setCapabilityAttempt((attempt) => attempt + 1)}>
             Повторить
           </Button>
         </p>
@@ -514,17 +434,9 @@ export function LivePreview({
           {error && <p className="preview-error">{error}</p>}
           {build?.state === "pending" ? (
             <>
-              <p role="status">
-                {pollPaused ||
-                  "Подготавливаем интерактивную версию. Она откроется здесь сама."}
-              </p>
+              <p role="status">{pollPaused || "Подготавливаем интерактивную версию. Она откроется здесь сама."}</p>
               {pollPaused && (
-                <Button
-                  type="button"
-                  variant="quiet"
-                  onClick={prepare}
-                  busy={buildBusy}
-                >
+                <Button type="button" variant="quiet" onClick={prepare} busy={buildBusy}>
                   {buildBusy ? "Повторяем подготовку…" : "Повторить подготовку"}
                 </Button>
               )}
@@ -561,25 +473,18 @@ export function LivePreview({
               : capability === "staging"
                 ? "Тестовый просмотр."
                 : "Локальная проверка."}{" "}
-            Код этой страницы запускается в браузере; не используйте здесь
-            конфиденциальные данные. Внешние запросы здесь не работают. В
-            подготовленной версии alert показывается внутри страницы, а confirm
-            отвечает «да»; prompt возвращает значение по умолчанию.
+            Код этой страницы запускается в браузере; не используйте здесь конфиденциальные данные. Внешние запросы
+            здесь не работают. В подготовленной версии alert показывается внутри страницы, а confirm отвечает «да»;
+            prompt возвращает значение по умолчанию.
           </p>
           {linkNote}
           {error && (
             <p className="preview-error">
-              {grant
-                ? "Доступ к просмотру мог истечь. Обновите страницу, чтобы проверить ссылку заново."
-                : error}
+              {grant ? "Доступ к просмотру мог истечь. Обновите страницу, чтобы проверить ссылку заново." : error}
               {grant && (
                 <>
                   {" "}
-                  <Button
-                    type="button"
-                    variant="quiet"
-                    onClick={() => location.reload()}
-                  >
+                  <Button type="button" variant="quiet" onClick={() => location.reload()}>
                     Обновить доступ
                   </Button>
                 </>
@@ -587,23 +492,12 @@ export function LivePreview({
             </p>
           )}
           {grant && !error && (
-            <Button
-              type="button"
-              variant="quiet"
-              onClick={() => location.reload()}
-            >
+            <Button type="button" variant="quiet" onClick={() => location.reload()}>
               Обновить доступ
             </Button>
           )}
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={launch}
-            busy={busy}
-          >
-            {busy
-              ? "Запускаем интерактивную версию…"
-              : "Запустить интерактивную версию"}
+          <Button type="button" variant="secondary" onClick={launch} busy={busy}>
+            {busy ? "Запускаем интерактивную версию…" : "Запустить интерактивную версию"}
           </Button>
         </div>
       )}

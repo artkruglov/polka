@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EXPECTED_MIGRATION_VERSIONS } from "../packages/migrations.ts";
-import {
-  ledgerManifestSha256,
-  sha256Hex,
-} from "../packages/restore-receipt.ts";
+import { ledgerManifestSha256, sha256Hex } from "../packages/restore-receipt.ts";
 import type { ErasureRestorePlan } from "../scripts/erasure-restore.ts";
 import { parseRestoreTargetConfig } from "../scripts/restore-target-config.ts";
 import { runRestoreTarget } from "../scripts/restore-target.ts";
@@ -12,10 +9,8 @@ import { runRestoreTarget } from "../scripts/restore-target.ts";
 const runId = "00000000-0000-4000-8000-000000000001";
 const ledgerId = "00000000-0000-4000-8000-000000000002";
 const baseEnv: NodeJS.ProcessEnv = {
-  DATABASE_URL:
-    "postgres://runtime:runtime-secret@localhost:5432/polka_restore",
-  RESTORE_DATABASE_URL:
-    "postgres://restore:restore-secret@localhost:5432/polka_restore",
+  DATABASE_URL: "postgres://runtime:runtime-secret@localhost:5432/polka_restore",
+  RESTORE_DATABASE_URL: "postgres://restore:restore-secret@localhost:5432/polka_restore",
   RESTORE_RUN_ID: runId,
   RESTORE_BACKUP_DESCRIPTOR: "/backup/restore-1/backup.json",
   RESTORE_RECEIPT_PATH: "/receipts/restore-1.json",
@@ -46,10 +41,7 @@ const plan: ErasureRestorePlan = Object.freeze({
 baseEnv.RESTORE_BACKUP_SHA256 = sha256Hex(backupBytes);
 baseEnv.RESTORE_LEDGER_MANIFEST_SHA256 = ledgerManifestSha256(plan.records);
 
-function adapters(
-  events: string[],
-  options: { connectFailure?: boolean } = {},
-) {
+function adapters(events: string[], options: { connectFailure?: boolean } = {}) {
   let ended = false;
   const database = {
     async connect() {
@@ -57,14 +49,12 @@ function adapters(
       if (options.connectFailure) throw new Error("connect failed");
     },
     async query(sql: string) {
-      if (sql.includes("pg_try_advisory_lock"))
-        return { rows: [{ locked: true }] };
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ locked: true }] };
       if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
         events.push(sql.toLowerCase());
         return { rows: [] };
       }
-      if (sql.includes("pg_advisory_unlock"))
-        return { rows: [{ pg_advisory_unlock: true }] };
+      if (sql.includes("pg_advisory_unlock")) return { rows: [{ pg_advisory_unlock: true }] };
       if (sql.includes("pg_stat_activity"))
         return {
           rows: [
@@ -105,9 +95,7 @@ function busyAdapters(events: string[]) {
   const value = adapters(events);
   const query = value.database.query.bind(value.database);
   value.database.query = async (sql: string) =>
-    sql.includes("pg_try_advisory_lock")
-      ? { rows: [{ locked: false }] }
-      : query(sql);
+    sql.includes("pg_try_advisory_lock") ? { rows: [{ locked: false }] } : query(sql);
   return value;
 }
 
@@ -141,10 +129,8 @@ test("restore target config binds distinct identities and an outside receipt", (
     () =>
       parseRestoreTargetConfig({
         ...baseEnv,
-        DATABASE_URL:
-          "postgres://restore:runtime-secret@localhost:5432/polka_restore",
-        RESTORE_DATABASE_URL:
-          "postgres://%72estore:restore-secret@localhost:5432/polka_restore",
+        DATABASE_URL: "postgres://restore:runtime-secret@localhost:5432/polka_restore",
+        RESTORE_DATABASE_URL: "postgres://%72estore:restore-secret@localhost:5432/polka_restore",
       }),
     /distinct/,
   );
@@ -189,16 +175,7 @@ test("restore target preloads the ledger, reconciles under the guard, then write
       return receipt;
     },
   });
-  assert.deepEqual(events, [
-    "backup",
-    "ledger",
-    "connect",
-    "begin",
-    "commit",
-    "reconcile",
-    "end",
-    "receipt",
-  ]);
+  assert.deepEqual(events, ["backup", "ledger", "connect", "begin", "commit", "reconcile", "end", "receipt"]);
   assert.equal(result.receipt.targetIdentitySha256.length, 64);
   assert.equal(written, result.receipt);
 });
@@ -313,16 +290,22 @@ test("restore-authorities writes what restore-target accepts, and a changed ledg
       return value;
     },
     async list(prefix: string) {
-      return { items: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, ...value })) };
+      return {
+        items: [...objects].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, ...value })),
+      };
     },
   };
   const revoke = {
-    schemaVersion: 1, event: "revoke", ledgerId,
+    schemaVersion: 1,
+    event: "revoke",
+    ledgerId,
     requestId: "00000000-0000-4000-8000-000000000012",
     accountId: "00000000-0000-4000-8000-000000000013",
     tenantId: "00000000-0000-4000-8000-000000000014",
-    requestedAt: "2026-01-01T00:00:00.000Z", revokedAt: "2026-01-01T00:01:00.000Z",
-    policyVersion: "r17.v1", workingDataPolicyDeadline: "2026-01-02T00:00:00.000Z",
+    requestedAt: "2026-01-01T00:00:00.000Z",
+    revokedAt: "2026-01-01T00:01:00.000Z",
+    policyVersion: "r17.v1",
+    workingDataPolicyDeadline: "2026-01-02T00:00:00.000Z",
     backupRetentionPolicyDeadline: "2026-02-01T00:00:00.000Z",
   } as const;
   const signal = new AbortController().signal;
@@ -344,12 +327,28 @@ test("restore-authorities writes what restore-target accepts, and a changed ledg
       adapters: { ...adapters([]), ledger },
       signal,
       readBackup: async () => authorities.descriptor,
-      reconcile: async () => ({ entriesCompleted: 1, metadataTenantsCompleted: 0, absentTenantsCompleted: 1, sourceVersionsDeleted: 0, metadataPurged: 0 }),
+      reconcile: async () => ({
+        entriesCompleted: 1,
+        metadataTenantsCompleted: 0,
+        absentTenantsCompleted: 1,
+        sourceVersionsDeleted: 0,
+        metadataPurged: 0,
+      }),
       writeReceipt: async (_path, receipt) => receipt,
     });
   const result = await run();
   assert.equal(result.receipt.ledgerManifestSha256, authorities.ledgerManifestSha256);
   // A deletion recorded after the authorities were computed: refused.
-  await appendErasureRecord(ledger, { ...revoke, requestId: "00000000-0000-4000-8000-000000000022", accountId: "00000000-0000-4000-8000-000000000023", tenantId: "00000000-0000-4000-8000-000000000024" }, ledgerId, signal);
+  await appendErasureRecord(
+    ledger,
+    {
+      ...revoke,
+      requestId: "00000000-0000-4000-8000-000000000022",
+      accountId: "00000000-0000-4000-8000-000000000023",
+      tenantId: "00000000-0000-4000-8000-000000000024",
+    },
+    ledgerId,
+    signal,
+  );
   await assert.rejects(run(), /manifest does not match/);
 });

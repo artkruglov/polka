@@ -30,10 +30,7 @@ export const shelfSnapshotInputSchema = z
  * acceptances are read from the audit journal. A moment within the last minute
  * may still change: a long save is stamped with the time it began.
  */
-export async function shelfSnapshotForAgent(
-  actor: ServiceActor,
-  raw: z.input<typeof shelfSnapshotInputSchema>,
-) {
+export async function shelfSnapshotForAgent(actor: ServiceActor, raw: z.input<typeof shelfSnapshotInputSchema>) {
   const verified = await recheckServiceActor(actor, "read");
   const input = parseSnapshotInput(raw);
   const scope = await agentFolderScope(db, {
@@ -51,10 +48,7 @@ export async function shelfSnapshotForAgent(
  * page shows (identity has checked the membership), plus what is true of each
  * work now, so the screen can say what changed since.
  */
-export async function shelfSnapshotForMember(
-  actor: { tenant: string },
-  raw: z.input<typeof shelfSnapshotInputSchema>,
-) {
+export async function shelfSnapshotForMember(actor: { tenant: string }, raw: z.input<typeof shelfSnapshotInputSchema>) {
   const input = parseSnapshotInput(raw);
   const page = await shelfSnapshot(actor.tenant, null, input);
   const ids = page.items.map((item) => item.id);

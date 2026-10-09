@@ -3,14 +3,7 @@ import { Check, Download, FileCode2, PlugZap } from "lucide-react";
 import type { AgentContext } from "../../../../../packages/contracts/agent-context.ts";
 import { request } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
-import {
-  Badge,
-  Button,
-  LinkButton,
-  SelectField,
-  TextField,
-  TextAreaField,
-} from "../../shared/ui/controls.tsx";
+import { Badge, Button, LinkButton, SelectField, TextField, TextAreaField } from "../../shared/ui/controls.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { improvePhrase, shelfUrl } from "../../entities/artifact/agent-phrases.ts";
 import "./styles.css";
@@ -61,7 +54,10 @@ export function AgentContextPanel({
   const files = context?.availableContent.length ?? 0;
   const included = context
     ? [
-        files > 0 && (imageOnly ? `Визуальный пример · ${files} ${files === 1 ? "файл" : "файла"}` : `Исходники · ${files} ${files === 1 ? "файл" : files < 5 ? "файла" : "файлов"}`),
+        files > 0 &&
+          (imageOnly
+            ? `Визуальный пример · ${files} ${files === 1 ? "файл" : "файла"}`
+            : `Исходники · ${files} ${files === 1 ? "файл" : files < 5 ? "файла" : "файлов"}`),
         context.rules && "Правила оформления и использования",
         context.questions && "Вопросы, которые агент уточнит",
         context.releaseId && "Закреплённый выпуск шаблона",
@@ -88,15 +84,10 @@ export function AgentContextPanel({
             </p>
             {imageOnly && (
               <p className="fine">
-                Доступны только изображения. Это ориентир по внешнему виду, а не
-                редактируемый стиль или набор ресурсов.
+                Доступны только изображения. Это ориентир по внешнему виду, а не редактируемый стиль или набор ресурсов.
               </p>
             )}
-            <SelectField
-              label="Как использовать"
-              value={context.purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-            >
+            <SelectField label="Как использовать" value={context.purpose} onChange={(e) => setPurpose(e.target.value)}>
               <option value="base">Взять за основу</option>
               <option value="source">Использовать как источник</option>
               <option value="style">{imageOnly ? "Использовать как визуальный пример" : "Взять оформление"}</option>
@@ -107,7 +98,9 @@ export function AgentContextPanel({
                 <ul className="ui-checklist">
                   {included.map((item) => (
                     <li key={item}>
-                      <span><Check /></span>
+                      <span>
+                        <Check />
+                      </span>
                       {item}
                     </li>
                   ))}
@@ -124,7 +117,10 @@ export function AgentContextPanel({
                 buttonLabel="Скопировать для агента"
                 successText="Скопировано. Вставьте в чат своего агента"
               />
-              <p className="fine">Подключённый агент найдёт работу по адресу сам. Копирование не запускает агента и не открывает доступ к работе.</p>
+              <p className="fine">
+                Подключённый агент найдёт работу по адресу сам. Копирование не запускает агента и не открывает доступ к
+                работе.
+              </p>
               <details className="agent-context-files">
                 <summary>Подробный контекст для агента</summary>
                 <CopyText
@@ -135,7 +131,9 @@ export function AgentContextPanel({
                   buttonLabel="Скопировать контекст"
                   successText="Контекст скопирован"
                 />
-                <p className="fine">Версия, состав файлов и правила шаблона — для агента без подключения или для точной версии.</p>
+                <p className="fine">
+                  Версия, состав файлов и правила шаблона — для агента без подключения или для точной версии.
+                </p>
               </details>
             </section>
             <details className="agent-context-files">
@@ -168,7 +166,10 @@ export function AgentContextPanel({
             )}
             <section className="agent-context-section agent-context-offline">
               <h3>Агент не подключён к Полке?</h3>
-              <p>Скачайте пакет и приложите его к сообщению. Если агент не читает ZIP, распакуйте его или скачайте нужные файлы выше.</p>
+              <p>
+                Скачайте пакет и приложите его к сообщению. Если агент не читает ZIP, распакуйте его или скачайте нужные
+                файлы выше.
+              </p>
               <div className="agent-context-offline-actions">
                 <LinkButton href={context.sourceAccess.packageUrl} download className="ui-button--block">
                   <Download /> Скачать пакет
@@ -177,7 +178,10 @@ export function AgentContextPanel({
                   <PlugZap /> Подключить агента
                 </LinkButton>
               </div>
-              <p className="fine">Для чтения через MCP нужно разрешение «Читать исходники и шаблоны». Отзыв доступа не удалит уже скачанные копии.</p>
+              <p className="fine">
+                Для чтения через MCP нужно разрешение «Читать исходники и шаблоны». Отзыв доступа не удалит уже
+                скачанные копии.
+              </p>
             </section>
             {!context.releaseId && (
               <section className="agent-context-section">
@@ -193,10 +197,12 @@ export function AgentContextPanel({
                       setBusy(true);
                       setError("");
                       try {
-                        await request(
-                          `/artifacts/${artifactId}/template-releases`,
-                          { revisionId, summary, rules, questions },
-                        );
+                        await request(`/artifacts/${artifactId}/template-releases`, {
+                          revisionId,
+                          summary,
+                          rules,
+                          questions,
+                        });
                         setEdit(false);
                         setPurpose("");
                         setRefresh((x) => x + 1);
@@ -208,10 +214,8 @@ export function AgentContextPanel({
                     }}
                   >
                     <p className="fine">
-                      Закрепите правила для повторного использования. Шаблон
-                      останется на вашей полке; публичная ссылка не создаётся.
-                      Правила выпуска неизменяемы — для изменений нужна новая версия
-                      работы.
+                      Закрепите правила для повторного использования. Шаблон останется на вашей полке; публичная ссылка
+                      не создаётся. Правила выпуска неизменяемы — для изменений нужна новая версия работы.
                     </p>
                     <TextField
                       label="Для каких случаев"
@@ -243,20 +247,14 @@ export function AgentContextPanel({
               </section>
             )}
             <LinkButton
-              href={
-                libraryId
-                  ? `/templates?libraryId=${encodeURIComponent(libraryId)}`
-                  : "/templates"
-              }
+              href={libraryId ? `/templates?libraryId=${encodeURIComponent(libraryId)}` : "/templates"}
               variant="quiet"
             >
               {libraryId ? "Шаблоны библиотеки" : "Мои шаблоны"}
             </LinkButton>
           </>
         )}
-        {!context && error && (
-          <Button onClick={() => setRefresh((x) => x + 1)}>Повторить</Button>
-        )}
+        {!context && error && <Button onClick={() => setRefresh((x) => x + 1)}>Повторить</Button>}
       </div>
     </Dialog>
   );

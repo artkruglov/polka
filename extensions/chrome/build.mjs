@@ -51,8 +51,7 @@ await build({
   },
   outdir: dist,
 });
-for (const file of ["popup.html", "options.html", "ui.css"])
-  copyFileSync(join(src, "ui", file), join(dist, file));
+for (const file of ["popup.html", "options.html", "ui.css"]) copyFileSync(join(src, "ui", file), join(dist, file));
 writeFileSync(join(dist, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
 // --- Icons: a blue tile with two shelves and a book, drawn at 4× and averaged.
@@ -78,14 +77,20 @@ function png(size) {
   for (let y = 0; y < size; y++) {
     raw[y * (size * 4 + 1)] = 0;
     for (let x = 0; x < size; x++) {
-      let r = 0, g = 0, b = 0, a = 0;
+      let r = 0,
+        g = 0,
+        b = 0,
+        a = 0;
       for (let sy = 0; sy < scale; sy++)
         for (let sx = 0; sx < scale; sx++) {
           const px = x * scale + sx + 0.5;
           const py = y * scale + sy + 0.5;
           if (!inside(px, py)) continue;
           const [cr, cg, cb] = white(px, py) ? [255, 255, 255] : [47, 91, 211];
-          r += cr; g += cg; b += cb; a += 255;
+          r += cr;
+          g += cg;
+          b += cb;
+          a += 255;
         }
       const n = scale * scale;
       const covered = a / 255 || 1;
@@ -116,8 +121,7 @@ function png(size) {
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
-for (const size of [16, 32, 48, 128])
-  writeFileSync(join(dist, "icons", `icon-${size}.png`), png(size));
+for (const size of [16, 32, 48, 128]) writeFileSync(join(dist, "icons", `icon-${size}.png`), png(size));
 
 // --- Zip (stored with deflate, fixed timestamps: reproducible).
 function files(dir) {

@@ -14,7 +14,14 @@ import { openFileForExtension, revisionForExtension } from "./extension-content.
 import { auditFeedHead, readAuditFeed } from "./extension-feed.ts";
 import { pdfConfigured, pdfForExtension } from "./renderer-pdf.ts";
 import { readShelfCard, setShelfCard } from "./shelf-card.ts";
-import { checkLinkOpen, extensions, extensionsConfigured, isExtensionMachinePath, loadExtensions, redactForExtension } from "./extensions.ts";
+import {
+  checkLinkOpen,
+  extensions,
+  extensionsConfigured,
+  isExtensionMachinePath,
+  loadExtensions,
+  redactForExtension,
+} from "./extensions.ts";
 import {
   HEADLINE_OPTIONS,
   searchJoin,
@@ -32,11 +39,7 @@ import { indexable, robotsTxt, sitemapXml } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
 import { registerOpsMetrics } from "./metrics.ts";
-import {
-  runInChannel,
-  trackPageView,
-  trackShareOpened,
-} from "./analytics.ts";
+import { runInChannel, trackPageView, trackShareOpened } from "./analytics.ts";
 import { POLKA_VERSION } from "./mcp-server.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { importSources, registerUrlImports } from "./url-import/routes.ts";
@@ -47,12 +50,7 @@ import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
-import {
-  assertStrongSession,
-  identity,
-  limitAttempts,
-  signIn,
-} from "./auth.ts";
+import { assertStrongSession, identity, limitAttempts, signIn } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
 import { registerEnterpriseRequests } from "./enterprise-requests.ts";
@@ -62,37 +60,15 @@ import { registerModerationRoutes } from "./moderation-routes.ts";
 import { registerCommentRoutes } from "./comment-routes.ts";
 import { registerSignInRoutes, sessionCookie } from "./sign-in-routes.ts";
 import { holdSignInCollision, registerClaimRoutes } from "./claim-routes.ts";
-import {
-  consumeSignInLink,
-  describeShelfHint,
-  previewSignInLink,
-} from "./agent-sign-in-links.ts";
-import {
-  PROVISIONAL_IDLE_DAYS,
-  PROVISIONAL_SESSION_SECONDS,
-  renewProvisionalSession,
-} from "./provisional.ts";
+import { consumeSignInLink, describeShelfHint, previewSignInLink } from "./agent-sign-in-links.ts";
+import { PROVISIONAL_IDLE_DAYS, PROVISIONAL_SESSION_SECONDS, renewProvisionalSession } from "./provisional.ts";
 import { linkOnly, PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { STATIC_HTML_CSP, withNewTabLinks } from "./html.ts";
-import {
-  isStaticSingleFileBundle,
-  staticSingleFileBundleSql,
-} from "./revision-manifest.ts";
+import { isStaticSingleFileBundle, staticSingleFileBundleSql } from "./revision-manifest.ts";
 import { verifyAwayToken, withSignedAwayLinks } from "./away-links.ts";
-import {
-  issueOwnerStaticView,
-  issueRecipientStaticView,
-} from "./static-viewer.ts";
-import {
-  issueOwnerProjectView,
-  issueRecipientProjectView,
-  renewProjectView,
-} from "./project-viewer.ts";
-import {
-  issueOwnerLiveView,
-  issueRecipientLiveView,
-  LIVE_HTML_PROFILE,
-} from "./live-viewer.ts";
+import { issueOwnerStaticView, issueRecipientStaticView } from "./static-viewer.ts";
+import { issueOwnerProjectView, issueRecipientProjectView, renewProjectView } from "./project-viewer.ts";
+import { issueOwnerLiveView, issueRecipientLiveView, LIVE_HTML_PROFILE } from "./live-viewer.ts";
 import {
   abortUpload,
   beginBundleUpload,
@@ -108,11 +84,7 @@ import {
   uploadStatus,
 } from "./artifacts.ts";
 import { readBlob, sha256 } from "./storage.ts";
-import {
-  buildInlineRevision,
-  getInlineBuildStatus,
-  inlineBuildSelect,
-} from "./bundle-derivatives.ts";
+import { buildInlineRevision, getInlineBuildStatus, inlineBuildSelect } from "./bundle-derivatives.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -140,31 +112,18 @@ import {
   isPublishApiPath,
   registerPublishApi,
 } from "./publish-api.ts";
-import {
-  enableOwnerShare,
-  publishOwnerShare,
-  revokeOwnerShare,
-} from "./shares.ts";
+import { enableOwnerShare, publishOwnerShare, revokeOwnerShare } from "./shares.ts";
 import { updateArtifactMetadata } from "./artifact-metadata.ts";
 import { transitionOwnerArtifactLifecycle } from "./artifact-trash.ts";
 import { deleteArtifactForever } from "./artifact-purge.ts";
-import {
-  assertEditorialShareAccessible,
-  getEditorial,
-  listEditorial,
-} from "./editorial.ts";
+import { assertEditorialShareAccessible, getEditorial, listEditorial } from "./editorial.ts";
 import {
   accountDeletionStatus,
   confirmAccountDeletion,
   createAccountDeletionPlan,
   issueAccountDeletionCsrf,
 } from "./account-deletion.ts";
-import {
-  answeringAccountSql,
-  linkShelfOpenSql,
-  lockActiveOwnerTenant,
-  lockAnsweringAccount,
-} from "./owner-state.ts";
+import { answeringAccountSql, linkShelfOpenSql, lockActiveOwnerTenant, lockAnsweringAccount } from "./owner-state.ts";
 import {
   adminCompanyShelf,
   findEmployee,
@@ -202,15 +161,12 @@ const pageCursor = z.object({ date: z.string().datetime(), id: uuid });
 function decodeCursor(value: string | undefined, message: string) {
   if (!value) return null;
   try {
-    return pageCursor.parse(
-      JSON.parse(Buffer.from(value, "base64url").toString()),
-    );
+    return pageCursor.parse(JSON.parse(Buffer.from(value, "base64url").toString()));
   } catch {
     throw new Problem(400, "invalid", message);
   }
 }
-const encodeCursor = (date: string, id: string) =>
-  Buffer.from(JSON.stringify({ date, id })).toString("base64url");
+const encodeCursor = (date: string, id: string) => Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
 /**
  * What a shelf chip groups by, from the latest version's bytes; mirrors
@@ -230,20 +186,17 @@ const SHELF_ORDER = {
   new: {
     key: UPDATED_KEY,
     by: "artifact.updated_at DESC,artifact.id DESC",
-    after: (key: string, id: string) =>
-      `(artifact.updated_at,artifact.id)<(${key}::timestamptz,${id})`,
+    after: (key: string, id: string) => `(artifact.updated_at,artifact.id)<(${key}::timestamptz,${id})`,
   },
   old: {
     key: UPDATED_KEY,
     by: "artifact.updated_at ASC,artifact.id ASC",
-    after: (key: string, id: string) =>
-      `(artifact.updated_at,artifact.id)>(${key}::timestamptz,${id})`,
+    after: (key: string, id: string) => `(artifact.updated_at,artifact.id)>(${key}::timestamptz,${id})`,
   },
   title: {
     key: "lower(artifact.title)",
     by: "lower(artifact.title) ASC,artifact.id ASC",
-    after: (key: string, id: string) =>
-      `(lower(artifact.title),artifact.id)>(${key},${id})`,
+    after: (key: string, id: string) => `(lower(artifact.title),artifact.id)>(${key},${id})`,
   },
   // A search, best answers first (searchRank over $3 and $6 of the shelf's
   // query), then newest. The key is «rank date»; without a query, newest first.
@@ -291,7 +244,6 @@ const viewOptions = z.object({ comments: z.boolean().optional() }).strict();
  */
 const SHELF = { shelf: true } as const;
 
-
 /** The first frame of a stack below its message: where it was thrown. */
 export function firstStackFrame(error: unknown) {
   const stack = (error as { stack?: unknown } | null)?.stack;
@@ -305,8 +257,7 @@ export function firstStackFrame(error: unknown) {
  * failure — the database down — is the request's failure, not a guest's.
  */
 export function anonymous(error: unknown): null {
-  if (error instanceof Problem && (error.status === 401 || error.status === 403))
-    return null;
+  if (error instanceof Problem && (error.status === 401 || error.status === 403)) return null;
   throw error;
 }
 
@@ -321,11 +272,7 @@ export async function createApp() {
     trustProxy: config.TRUST_PROXY.length ? config.TRUST_PROXY : false,
   });
   await app.register(cookie);
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
-  );
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
   app.addHook("onRequest", async (req) => {
     if (req.raw.complete || isMediaUploadPath(req.raw.url ?? "")) return;
     setTimeout(() => {
@@ -345,8 +292,7 @@ export async function createApp() {
     });
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
     // Public pages may be indexed (indexing.ts); everything else stays out.
-    if (!indexable(pathname))
-      reply.header("x-robots-tag", "noindex, nofollow, noarchive");
+    if (!indexable(pathname)) reply.header("x-robots-tag", "noindex, nofollow, noarchive");
     // /mcp, the OAuth machine endpoints and the HTTP publish API are
     // cookie-less server-to-server surfaces with their own authentication;
     // browser routes keep this check.
@@ -358,27 +304,18 @@ export async function createApp() {
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== config.APP_ORIGIN
     )
-      throw new Problem(
-        403,
-        "forbidden",
-        "Запрос должен быть отправлен из Полки.",
-      );
+      throw new Problem(403, "forbidden", "Запрос должен быть отправлен из Полки.");
   });
   // Which surface an action came through (analytics.ts: work_saved via).
   // A preHandler, not onRequest: the context must survive body parsing.
   app.addHook("preHandler", (req, _reply, done) => {
     const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
-    runInChannel(
-      pathname === "/mcp" ? "mcp" : isPublishApiPath(pathname) ? "api" : "web",
-      done,
-    );
+    runInChannel(pathname === "/mcp" ? "mcp" : isPublishApiPath(pathname) ? "api" : "web", done);
   });
   app.setErrorHandler((error: any, req, reply) => {
     if (error instanceof Problem) {
       if (error.retryAfter) reply.header("retry-after", String(error.retryAfter));
-      return reply
-        .code(error.status)
-        .send({ code: error.code, message: error.message, ...error.details });
+      return reply.code(error.status).send({ code: error.code, message: error.message, ...error.details });
     }
     if (error instanceof z.ZodError)
       return reply.code(400).send({
@@ -426,16 +363,12 @@ export async function createApp() {
     );
     return reply.code(500).send({
       code: "internal",
-      message:
-        "Не удалось завершить действие. Сохранённые данные остаются на полке.",
+      message: "Не удалось завершить действие. Сохранённые данные остаются на полке.",
     });
   });
   const id = (req: any) => uuid.parse(req.params.id);
   // Agents, tokens and deletion need a real sign-in, not an agent's link.
-  const strongIdentity = async (
-    req: Parameters<typeof identity>[0],
-    options: Parameters<typeof identity>[1] = {},
-  ) => {
+  const strongIdentity = async (req: Parameters<typeof identity>[0], options: Parameters<typeof identity>[1] = {}) => {
     const actor = await identity(req, options);
     assertStrongSession(actor);
     return actor;
@@ -444,8 +377,7 @@ export async function createApp() {
   // flag lives in the grant, never in a URL anyone could open.
   // COMMENTS_MODE=off: no overlay at all, whatever the shell asks.
   const withComments = (req: any) =>
-    viewOptions.parse(req.body ?? {}).comments === true &&
-    config.COMMENTS_MODE !== "off";
+    viewOptions.parse(req.body ?? {}).comments === true && config.COMMENTS_MODE !== "off";
   registerUrlImports(app, identity);
   registerAgentContext(app, identity);
   registerTemplateLibraryRoutes(app, strongIdentity);
@@ -462,13 +394,16 @@ export async function createApp() {
     reply
       .header("cache-control", "public, max-age=3600")
       .type("application/xml; charset=utf-8")
-      .send(sitemapXml(config.APP_ORIGIN, (await listEditorial()).items.map((item) => item.slug))),
+      .send(
+        sitemapXml(
+          config.APP_ORIGIN,
+          (await listEditorial()).items.map((item) => item.slug),
+        ),
+      ),
   );
   app.get("/connect", async (req, reply) => {
     trackPageView(req, "/connect");
-    return reply
-      .type("text/plain; charset=utf-8")
-      .send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL));
+    return reply.type("text/plain; charset=utf-8").send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL));
   });
   // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
   registerAgentDiscovery(app);
@@ -521,9 +456,7 @@ export async function createApp() {
     // «Удалить полку»); null: the page says «оператору этой установки».
     privacyContact: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null,
     // «Удалить аккаунт» in the settings (ACCOUNT_DELETION_ENABLED); `purge`: a worker erases the data.
-    accountDeletion: config.ACCOUNT_DELETION_ENABLED
-      ? { purge: config.ACCOUNT_DELETION_PURGE_WORKER }
-      : null,
+    accountDeletion: config.ACCOUNT_DELETION_ENABLED ? { purge: config.ACCOUNT_DELETION_PURGE_WORKER } : null,
     // AGPL-3.0 § 13: the interface links users to this installation's source.
     sourceUrl: config.SOURCE_URL,
   }));
@@ -547,8 +480,7 @@ export async function createApp() {
     return getEditorial(slug);
   });
   app.get("/api/auth/email/current", async (req) => {
-    if (config.MAIL_MODE === "disabled" || !req.cookies.polka_email_challenge)
-      return null;
+    if (config.MAIL_MODE === "disabled" || !req.cookies.polka_email_challenge) return null;
     const {
       rows: [pending],
     } = await db.query(
@@ -561,12 +493,7 @@ export async function createApp() {
       email: pending.email,
       delivery: pending.delivery,
       expiresAt: pending.expires_at,
-      retryAfter: Math.max(
-        0,
-        Math.ceil(
-          (new Date(pending.created_at).getTime() + 60000 - Date.now()) / 1000,
-        ),
-      ),
+      retryAfter: Math.max(0, Math.ceil((new Date(pending.created_at).getTime() + 60000 - Date.now()) / 1000)),
       locked: pending.attempts >= 5,
     };
   });
@@ -596,78 +523,64 @@ export async function createApp() {
       expiresInSeconds: result.expiresInSeconds,
     };
   });
-  app.post(
-    "/api/auth/email/verify",
-    { bodyLimit: 2048 },
-    async (req, reply) => {
-      const input = z
-        .object({
-          id: uuid,
-          code: z.string().regex(/^\d{8}$/),
-          // Where the visitor came from (a sign-up's source in analytics):
-          // the tab's own record, sanitised again by analytics.ts.
-          source: z
-            .object({
-              ref: z.string().max(200).optional(),
-              referrer: z.string().max(300).optional(),
-            })
-            .strict()
-            .optional(),
-          // The browser remembers another shelf (docs/specs/
-          // SIGN_IN_PROVIDERS.md § 1): ask before opening a new one.
-          knownShelf: z.boolean().optional(),
-          createNew: z.boolean().optional(),
-        })
-        .strict()
-        .parse(req.body);
-      // A provisional shelf in this browser is claimed by an address that
-      // has no shelf yet (provisional.ts).
-      let current: Awaited<ReturnType<typeof identity>> | null = null;
-      try {
-        current = await identity(req);
-      } catch {
-        current = null;
-      }
-      const result = await verifyEmailLogin(
-        input.id,
-        input.code,
-        req.cookies.polka_email_challenge ?? "",
-        req.ip,
-        input.source,
-        {
-          // An agent-link session never attaches an address to its shelf.
-          provisionalId:
-            current?.provisional && !current.weak ? current.id : null,
-          knownShelf: input.knownShelf,
-          createNew: input.createNew,
-        },
+  app.post("/api/auth/email/verify", { bodyLimit: 2048 }, async (req, reply) => {
+    const input = z
+      .object({
+        id: uuid,
+        code: z.string().regex(/^\d{8}$/),
+        // Where the visitor came from (a sign-up's source in analytics):
+        // the tab's own record, sanitised again by analytics.ts.
+        source: z
+          .object({
+            ref: z.string().max(200).optional(),
+            referrer: z.string().max(300).optional(),
+          })
+          .strict()
+          .optional(),
+        // The browser remembers another shelf (docs/specs/
+        // SIGN_IN_PROVIDERS.md § 1): ask before opening a new one.
+        knownShelf: z.boolean().optional(),
+        createNew: z.boolean().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    // A provisional shelf in this browser is claimed by an address that
+    // has no shelf yet (provisional.ts).
+    let current: Awaited<ReturnType<typeof identity>> | null = null;
+    try {
+      current = await identity(req);
+    } catch {
+      current = null;
+    }
+    const result = await verifyEmailLogin(
+      input.id,
+      input.code,
+      req.cookies.polka_email_challenge ?? "",
+      req.ip,
+      input.source,
+      {
+        // An agent-link session never attaches an address to its shelf.
+        provisionalId: current?.provisional && !current.weak ? current.id : null,
+        knownShelf: input.knownShelf,
+        createNew: input.createNew,
+      },
+    );
+    if (result.kind === "new-shelf")
+      throw new Problem(
+        409,
+        "conflict",
+        "На этот адрес полки ещё нет. Похоже, у вас уже есть полка: войдите в неё или создайте новую.",
+        { reason: "new_shelf" },
       );
-      if (result.kind === "new-shelf")
-        throw new Problem(
-          409,
-          "conflict",
-          "На этот адрес полки ещё нет. Похоже, у вас уже есть полка: войдите в неё или создайте новую.",
-          { reason: "new_shelf" },
-        );
-      reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
-      if (result.kind === "claimed") return { ok: true, claimed: true };
-      if (
-        await holdSignInCollision(
-          req,
-          reply,
-          { accountId: result.accountId, session: result.session },
-          "email",
-        )
-      )
-        return { ok: true, collision: true };
-      if (req.cookies.polka_session)
-        await db.query("DELETE FROM sessions WHERE hash=$1", [
-          sha256(req.cookies.polka_session),
-        ]);
-      reply.setCookie("polka_session", result.session, sessionCookie());
-      return { ok: true, created: result.created };
-    },
-  );
+    reply.clearCookie("polka_email_challenge", { path: "/api/auth/email" });
+    if (result.kind === "claimed") return { ok: true, claimed: true };
+    if (await holdSignInCollision(req, reply, { accountId: result.accountId, session: result.session }, "email"))
+      return { ok: true, collision: true };
+    if (req.cookies.polka_session)
+      await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session)]);
+    reply.setCookie("polka_session", result.session, sessionCookie());
+    return { ok: true, created: result.created };
+  });
   app.post("/api/login", { bodyLimit: 2048 }, async (req, reply) => {
     const input = z
       .object({
@@ -679,30 +592,19 @@ export async function createApp() {
     const token = await signIn(input.name, input.password, req.ip);
     const {
       rows: [signedIn],
-    } = await db.query("SELECT account_id FROM sessions WHERE hash=$1", [
-      sha256(token),
-    ]);
+    } = await db.query("SELECT account_id FROM sessions WHERE hash=$1", [sha256(token)]);
     if (
       signedIn &&
-      (await holdSignInCollision(
-        req,
-        reply,
-        { accountId: signedIn.account_id, session: token },
-        "password",
-      ))
+      (await holdSignInCollision(req, reply, { accountId: signedIn.account_id, session: token }, "password"))
     )
       return { ok: true, collision: true };
     if (req.cookies.polka_session)
-      await db.query("DELETE FROM sessions WHERE hash=$1", [
-        sha256(req.cookies.polka_session),
-      ]);
+      await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session)]);
     reply.setCookie("polka_session", token, sessionCookie());
     return { ok: true };
   });
   app.post("/api/logout", async (req, reply) => {
-    await db.query("DELETE FROM sessions WHERE hash=$1", [
-      sha256(req.cookies.polka_session ?? ""),
-    ]);
+    await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session ?? "")]);
     reply.clearCookie("polka_session", { path: "/" });
     return { ok: true };
   });
@@ -718,15 +620,8 @@ export async function createApp() {
       const a = await identity(req);
       // A provisional shelf lives while its browser comes back: its session
       // (and cookie) move 30 days ahead on a visit.
-      if (
-        a.provisional && !a.weak &&
-        (await renewProvisionalSession(req.cookies.polka_session ?? ""))
-      )
-        reply.setCookie(
-          "polka_session",
-          req.cookies.polka_session!,
-          sessionCookie(PROVISIONAL_SESSION_SECONDS),
-        );
+      if (a.provisional && !a.weak && (await renewProvisionalSession(req.cookies.polka_session ?? "")))
+        reply.setCookie("polka_session", req.cookies.polka_session!, sessionCookie(PROVISIONAL_SESSION_SECONDS));
       // createdAt lets the app tell a shelf made a minute ago from an old
       // one (the «Полка создана» note after a sign-up from a shared link).
       return {
@@ -734,9 +629,7 @@ export async function createApp() {
           id: a.id,
           name: a.name,
           createdAt: a.createdAt ? a.createdAt.toISOString() : null,
-          ...(a.provisional
-            ? { provisional: true, idleDays: PROVISIONAL_IDLE_DAYS }
-            : {}),
+          ...(a.provisional ? { provisional: true, idleDays: PROVISIONAL_IDLE_DAYS } : {}),
           ...(a.weak ? { assurance: "agent_link" as const } : {}),
         },
       };
@@ -746,10 +639,7 @@ export async function createApp() {
     }
   });
   app.post("/api/account/deletion-csrf", async (req) =>
-    issueAccountDeletionCsrf(
-      await strongIdentity(req),
-      req.cookies.polka_session ?? "",
-    ),
+    issueAccountDeletionCsrf(await strongIdentity(req), req.cookies.polka_session ?? ""),
   );
   app.post("/api/account/deletion-plan", async (req) =>
     createAccountDeletionPlan(
@@ -787,9 +677,7 @@ export async function createApp() {
       req.body,
     ),
   );
-  app.get("/api/agent-connections", async (req) =>
-    listAgentConnections(await identity(req)),
-  );
+  app.get("/api/agent-connections", async (req) => listAgentConnections(await identity(req)));
   app.post("/api/agent-connections/:id/revoke", async (req) =>
     revokeAgentConnection(
       await strongIdentity(req),
@@ -800,24 +688,19 @@ export async function createApp() {
   );
   // /signin?shelf=…: which shelf and its ways in (no secret in the hint).
   app.get("/api/auth/shelf-hint", async (req) => {
-    const { h } = z
-      .object({ h: z.string().min(10).max(1024) })
-      .parse(req.query);
+    const { h } = z.object({ h: z.string().min(10).max(1024) }).parse(req.query);
     await limitAttempts(`shelf-hint-ip:${req.ip}`, 60);
     return describeShelfHint(h);
   });
   // «Может выдавать ссылки для входа» (agent-sign-in-links.ts).
-  app.post(
-    "/api/agent-connections/:id/sign-in-links",
-    { bodyLimit: 1024 },
-    async (req) =>
-      setConnectionSignInLinks(
-        await strongIdentity(req),
-        req.cookies.polka_session ?? "",
-        String(req.headers["x-polka-csrf"] ?? ""),
-        id(req),
-        req.body,
-      ),
+  app.post("/api/agent-connections/:id/sign-in-links", { bodyLimit: 1024 }, async (req) =>
+    setConnectionSignInLinks(
+      await strongIdentity(req),
+      req.cookies.polka_session ?? "",
+      String(req.headers["x-polka-csrf"] ?? ""),
+      id(req),
+      req.body,
+    ),
   );
   // /enter#<token>: the page posts the fragment here (Origin-checked like
   // every browser POST). The token never appears in a URL we receive.
@@ -848,24 +731,17 @@ export async function createApp() {
       );
     const entered = await consumeSignInLink(token, req.ip);
     if (req.cookies.polka_session)
-      await db.query("DELETE FROM sessions WHERE hash=$1", [
-        sha256(req.cookies.polka_session),
-      ]);
-    reply.setCookie(
-      "polka_session",
-      entered.session,
-      sessionCookie(entered.maxAge),
-    );
+      await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session)]);
+    reply.setCookie("polka_session", entered.session, sessionCookie(entered.maxAge));
     return { ok: true, clientName: entered.clientName };
   });
   app.get(
     "/api/folders",
     async (req) =>
       (
-        await db.query(
-          "SELECT id,name FROM folders WHERE tenant_id=$1 ORDER BY name LIMIT 100",
-          [(await identity(req, SHELF)).tenant],
-        )
+        await db.query("SELECT id,name FROM folders WHERE tenant_id=$1 ORDER BY name LIMIT 100", [
+          (await identity(req, SHELF)).tenant,
+        ])
       ).rows,
   );
   // Shelves the account may open (docs/specs/TEAM_SHELVES.md): its own, then
@@ -884,7 +760,10 @@ export async function createApp() {
   app.post("/api/shelves", async (req) => {
     const actor = await identity(req);
     assertStrongSession(actor);
-    const input = z.object({ name: z.string().max(200) }).strict().parse(req.body);
+    const input = z
+      .object({ name: z.string().max(200) })
+      .strict()
+      .parse(req.body);
     return transaction((c) => createTeamShelfInTransaction(c, actor, input.name));
   });
   // The company admin's page (company-admin.ts): 404 for everyone else.
@@ -905,9 +784,7 @@ export async function createApp() {
   });
   // Members of a department shelf (shelf-members.ts).
   const shelfId = (req: FastifyRequest) => uuid.parse((req.params as any).shelfId);
-  app.get("/api/shelves/:shelfId/members", async (req) =>
-    listShelfMembers(await identity(req), shelfId(req)),
-  );
+  app.get("/api/shelves/:shelfId/members", async (req) => listShelfMembers(await identity(req), shelfId(req)));
   app.post("/api/shelves/:shelfId/members", { bodyLimit: 2048 }, async (req) => {
     const actor = await identity(req);
     assertStrongSession(actor);
@@ -925,9 +802,7 @@ export async function createApp() {
   });
   // Invitation links (shelf-invitations.ts): issued by the admin or a
   // curator, accepted by whoever opens the link signed in.
-  app.get("/api/shelves/:shelfId/invitations", async (req) =>
-    listShelfInvitations(await identity(req), shelfId(req)),
-  );
+  app.get("/api/shelves/:shelfId/invitations", async (req) => listShelfInvitations(await identity(req), shelfId(req)));
   app.post("/api/shelves/:shelfId/invitations", { bodyLimit: 2048 }, async (req) => {
     const actor = await identity(req);
     assertStrongSession(actor);
@@ -955,15 +830,10 @@ export async function createApp() {
     assertStrongSession(actor);
     return setShelfCard(actor, req.body);
   });
-  app.get("/api/shelves/:shelfId/events", async (req) =>
-    listShelfEvents(await identity(req), shelfId(req)),
-  );
+  app.get("/api/shelves/:shelfId/events", async (req) => listShelfEvents(await identity(req), shelfId(req)));
   app.post("/api/folders", async (req) => {
     const actor = await identity(req, SHELF),
-      input = z
-        .object({ name: folderNameSchema })
-        .strict()
-        .parse(req.body);
+      input = z.object({ name: folderNameSchema }).strict().parse(req.body);
     return transaction((c) => createFolderInTransaction(c, actor, input.name));
   });
   app.get("/api/artifacts", async (req) => {
@@ -1034,9 +904,7 @@ export async function createApp() {
       }
     }
     const snippets = new Map<string, string>(
-      page
-        .filter((row) => row.search_snippet)
-        .map((row) => [row.id, row.search_snippet]),
+      page.filter((row) => row.search_snippet).map((row) => [row.id, row.search_snippet]),
     );
     const items = (
       await getArtifacts(
@@ -1045,20 +913,14 @@ export async function createApp() {
       )
     )
       .filter((artifact) => artifact.trashedAt === null)
-      .map((artifact) =>
-        snippets.has(artifact.id)
-          ? { ...artifact, snippet: snippets.get(artifact.id) }
-          : artifact,
-      );
+      .map((artifact) => (snippets.has(artifact.id) ? { ...artifact, snippet: snippets.get(artifact.id) } : artifact));
     return {
       items,
       nextCursor: more ? encodeListCursor(q.sort, last.cursor_key, last.id) : null,
       ...(counts && { counts }),
     };
   });
-  app.get("/api/artifacts/:id", async (req) =>
-    getArtifact(await identity(req, SHELF), id(req)),
-  );
+  app.get("/api/artifacts/:id", async (req) => getArtifact(await identity(req, SHELF), id(req)));
   // «Полка на дату» (docs/specs/SHELF_SNAPSHOT.md): the shelf the page shows, read-only.
   app.get("/api/snapshot", async (req) =>
     shelfSnapshotForMember(await identity(req, SHELF), (req.query ?? {}) as never),
@@ -1069,10 +931,7 @@ export async function createApp() {
       .object({ cursor: z.string().max(200).optional() })
       .strict()
       .parse(req.query);
-    const cursor = decodeCursor(
-      query.cursor,
-      "Обновите корзину: указатель страницы некорректен.",
-    );
+    const cursor = decodeCursor(query.cursor, "Обновите корзину: указатель страницы некорректен.");
     const { rows } = await db.query(
       `SELECT id,
               to_char(trashed_at AT TIME ZONE 'UTC',
@@ -1094,29 +953,18 @@ export async function createApp() {
     ).filter((artifact) => artifact.trashedAt !== null);
     return {
       items,
-      nextCursor:
-        more && last ? encodeCursor(last.cursor_trashed_at, last.id) : null,
+      nextCursor: more && last ? encodeCursor(last.cursor_trashed_at, last.id) : null,
     };
   });
   app.post("/api/artifacts/:id/trash", async (req) =>
-    transitionOwnerArtifactLifecycle(
-      await identity(req, SHELF),
-      id(req),
-      req.body,
-      "trashed",
-    ),
+    transitionOwnerArtifactLifecycle(await identity(req, SHELF), id(req), req.body, "trashed"),
   );
   // Delete a trashed work for good (docs/specs/WORK_DELETION.md).
   app.post("/api/artifacts/:id/purge", { bodyLimit: 1024 }, async (req) =>
     deleteArtifactForever(await identity(req, SHELF), id(req), req.body),
   );
   app.post("/api/artifacts/:id/restore", async (req) =>
-    transitionOwnerArtifactLifecycle(
-      await identity(req, SHELF),
-      id(req),
-      req.body,
-      "active",
-    ),
+    transitionOwnerArtifactLifecycle(await identity(req, SHELF), id(req), req.body, "active"),
   );
   // A curator marks the accepted version and names who answers for the work.
   app.put("/api/artifacts/:id/accepted", { bodyLimit: 1024 }, async (req) => {
@@ -1125,9 +973,7 @@ export async function createApp() {
     return acceptRevision(actor, id(req), req.body);
   });
   // Proposals to «Лента» from a department shelf (feed-proposals.ts).
-  app.get("/api/artifacts/:id/feed-proposal", async (req) =>
-    readFeedProposal(await identity(req, SHELF), id(req)),
-  );
+  app.get("/api/artifacts/:id/feed-proposal", async (req) => readFeedProposal(await identity(req, SHELF), id(req)));
   app.post("/api/artifacts/:id/feed-proposal", { bodyLimit: 2048 }, async (req) => {
     const actor = await identity(req, SHELF);
     assertStrongSession(actor);
@@ -1143,9 +989,7 @@ export async function createApp() {
     assertStrongSession(actor);
     return setWorkOwner(actor, id(req), req.body);
   });
-  app.patch("/api/artifacts/:id", async (req) =>
-    updateArtifactMetadata(await identity(req, SHELF), id(req), req.body),
-  );
+  app.patch("/api/artifacts/:id", async (req) => updateArtifactMetadata(await identity(req, SHELF), id(req), req.body));
   app.get("/api/artifacts/:id/revisions", async (req) => {
     const actor = await identity(req, SHELF);
     await getArtifact(actor, id(req));
@@ -1157,9 +1001,7 @@ export async function createApp() {
       )
     ).rows.map(revisionDTO);
   });
-  app.post("/api/uploads", async (req) =>
-    beginUpload(await identity(req, SHELF), req.body),
-  );
+  app.post("/api/uploads", async (req) => beginUpload(await identity(req, SHELF), req.body));
   // «Сохранить как ссылку» (docs/specs/SAVED_LINKS.md).
   app.post("/api/links", { bodyLimit: 8192 }, async (req) => {
     const actor = await identity(req, SHELF);
@@ -1173,16 +1015,10 @@ export async function createApp() {
     const actor = await identity(req, SHELF);
     const {
       rows: [r],
-    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
-      id(req),
-      actor.tenant,
-    ]);
+    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [id(req), actor.tenant]);
     if (!r || r.mime !== LINK_MIME) throw missing();
     const { url } = readLinkDocument(await readBlob(r.object_key, r.object_version));
-    return reply
-      .header("referrer-policy", "no-referrer")
-      .header("cache-control", "no-store")
-      .redirect(url, 303);
+    return reply.header("referrer-policy", "no-referrer").header("cache-control", "no-store").redirect(url, 303);
   });
   // Runs before the body is read. The session is checked first, so requests
   // without one never hold a slot, and one shelf cannot take all of them.
@@ -1195,11 +1031,7 @@ export async function createApp() {
     const tenant = `${actor.tenant}:${actor.id}`;
     const mine = tenantTransfers.get(tenant) ?? 0;
     if (transfers >= TRANSFER_SLOTS.total || mine >= TRANSFER_SLOTS.perTenant)
-      throw new Problem(
-        429,
-        "quota",
-        "Сервер принимает несколько файлов. Повторите через минуту.",
-      ).retryIn(60);
+      throw new Problem(429, "quota", "Сервер принимает несколько файлов. Повторите через минуту.").retryIn(60);
     transfers++;
     tenantTransfers.set(tenant, mine + 1);
     reply.raw.once("close", () => {
@@ -1209,77 +1041,47 @@ export async function createApp() {
       else tenantTransfers.delete(tenant);
     });
   };
-  app.put(
-    "/api/uploads/:id/bytes",
-    { onRequest: transferGuard },
-    async (req) => {
-      if (!Buffer.isBuffer(req.body))
-        throw new Problem(
-          415,
-          "invalid",
-          "Файл должен передаваться отдельным двоичным запросом.",
-        );
-      return uploadBytes(await identity(req, SHELF), id(req), req.body);
-    },
-  );
-  app.post("/api/uploads/:id/finalize", async (req) =>
-    finalizeUpload(await identity(req, SHELF), id(req)),
-  );
+  app.put("/api/uploads/:id/bytes", { onRequest: transferGuard }, async (req) => {
+    if (!Buffer.isBuffer(req.body))
+      throw new Problem(415, "invalid", "Файл должен передаваться отдельным двоичным запросом.");
+    return uploadBytes(await identity(req, SHELF), id(req), req.body);
+  });
+  app.post("/api/uploads/:id/finalize", async (req) => finalizeUpload(await identity(req, SHELF), id(req)));
   app.get("/api/uploads/:id", async (req) => {
     return uploadStatus(await identity(req, SHELF), id(req), "single");
   });
-  app.delete("/api/uploads/:id", async (req) =>
-    abortUpload(await identity(req, SHELF), id(req), "single"),
-  );
+  app.delete("/api/uploads/:id", async (req) => abortUpload(await identity(req, SHELF), id(req), "single"));
   app.post("/api/bundle-uploads", { bodyLimit: 64 * 1024 }, async (req) =>
     beginBundleUpload(await identity(req, SHELF), req.body),
   );
-  app.put(
-    "/api/bundle-uploads/:id/files/:index",
-    { onRequest: transferGuard },
-    async (req) => {
-      if (!Buffer.isBuffer(req.body))
-        throw new Problem(
-          415,
-          "invalid",
-          "Файл пакета должен передаваться отдельным двоичным запросом.",
-        );
-      const index = z.coerce
-        .number()
-        .int()
-        .min(0)
-        .max(63)
-        .parse((req.params as any).index);
-      return uploadBundleFile(await identity(req, SHELF), id(req), index, req.body);
-    },
-  );
+  app.put("/api/bundle-uploads/:id/files/:index", { onRequest: transferGuard }, async (req) => {
+    if (!Buffer.isBuffer(req.body))
+      throw new Problem(415, "invalid", "Файл пакета должен передаваться отдельным двоичным запросом.");
+    const index = z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(63)
+      .parse((req.params as any).index);
+    return uploadBundleFile(await identity(req, SHELF), id(req), index, req.body);
+  });
   app.post("/api/bundle-uploads/:id/finalize", async (req) =>
     finalizeBundleUpload(await identity(req, SHELF), id(req)),
   );
-  app.get("/api/bundle-uploads/:id", async (req) =>
-    uploadStatus(await identity(req, SHELF), id(req), "bundle"),
-  );
-  app.delete("/api/bundle-uploads/:id", async (req) =>
-    abortUpload(await identity(req, SHELF), id(req), "bundle"),
-  );
+  app.get("/api/bundle-uploads/:id", async (req) => uploadStatus(await identity(req, SHELF), id(req), "bundle"));
+  app.delete("/api/bundle-uploads/:id", async (req) => abortUpload(await identity(req, SHELF), id(req), "bundle"));
   // Owner download and export stay available in the trash (docs/TRASH_SPEC.md:
   // R17 export); only /document, which renders the page, refuses a trashed one.
   app.get("/api/revisions/:id/bytes", async (req, reply) => {
     const actor = await identity(req, SHELF);
     const {
       rows: [r],
-    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
-      id(req),
-      actor.tenant,
-    ]);
+    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [id(req), actor.tenant]);
     if (!r) throw missing();
     reply
       .type(r.mime)
       .header("content-security-policy", "sandbox; default-src 'none'")
-      .header(
-        "content-disposition",
-        `attachment; filename*=UTF-8''${encodeURIComponent(r.filename)}`,
-      );
+      .header("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(r.filename)}`);
     return readBlob(r.object_key, r.object_version);
   });
   // Shelf covers (docs/specs/SHELF_COVERS.md). The card asks for the cover
@@ -1302,15 +1104,10 @@ export async function createApp() {
     const result = await exportRevision(await identity(req, SHELF), revisionId);
     reply
       .type("application/json; charset=utf-8")
-      .header(
-        "content-disposition",
-        `attachment; filename*=UTF-8''${revisionId}.polka-bundle.json`,
-      );
+      .header("content-disposition", `attachment; filename*=UTF-8''${revisionId}.polka-bundle.json`);
     return result;
   });
-  app.get("/api/revisions/:id/build-inline", async (req) =>
-    getInlineBuildStatus(await identity(req, SHELF), id(req)),
-  );
+  app.get("/api/revisions/:id/build-inline", async (req) => getInlineBuildStatus(await identity(req, SHELF), id(req)));
   app.post("/api/revisions/:id/build-inline", async (req, reply) => {
     const result = await buildInlineRevision(await identity(req, SHELF), id(req));
     if (result.concurrent) reply.code(202);
@@ -1339,10 +1136,7 @@ export async function createApp() {
       .header("content-security-policy", STATIC_HTML_CSP)
       .header("cross-origin-resource-policy", "same-origin");
     return withNewTabLinks(
-      withSignedAwayLinks(
-        await readBlob(r.object_key, r.object_version),
-        new URL(req.url, config.APP_ORIGIN).href,
-      ),
+      withSignedAwayLinks(await readBlob(r.object_key, r.object_version), new URL(req.url, config.APP_ORIGIN).href),
     );
   };
   // Where the static frame loads from: the viewer (a 60-second grant) when
@@ -1350,14 +1144,8 @@ export async function createApp() {
   app.post("/api/revisions/:id/static-view", async (req) => {
     const actor = await identity(req, SHELF);
     const revisionId = id(req);
-    if (!config.HTML_LIVE_ENABLED)
-      return { url: `/api/revisions/${revisionId}/document` };
-    return issueOwnerStaticView(
-      actor,
-      req.cookies.polka_session ?? "",
-      revisionId,
-      withComments(req),
-    );
+    if (!config.HTML_LIVE_ENABLED) return { url: `/api/revisions/${revisionId}/document` };
+    return issueOwnerStaticView(actor, req.cookies.polka_session ?? "", revisionId, withComments(req));
   });
   // Projects (docs/specs/PROJECTS.md): a view of the whole folder, page by page.
   app.post("/api/revisions/:id/project-view", async (req) => {
@@ -1377,8 +1165,7 @@ export async function createApp() {
   });
   app.post("/api/view/static-view", async (req) => {
     const grant = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
-    if (config.HTML_LIVE_ENABLED)
-      return issueRecipientStaticView(grant, withComments(req));
+    if (config.HTML_LIVE_ENABLED) return issueRecipientStaticView(grant, withComments(req));
     if (!/^[A-Za-z0-9_-]{43}$/.test(grant)) throw missing();
     return { url: `/api/view/${grant}/document` };
   });
@@ -1402,17 +1189,14 @@ export async function createApp() {
     const actor = await identity(req, SHELF);
     const {
       rows: [r],
-    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [
-      id(req),
-      actor.tenant,
-    ]);
+    } = await db.query("SELECT * FROM revisions WHERE id=$1 AND tenant_id=$2", [id(req), actor.tenant]);
     if (
       r &&
       !(
-        await db.query(
-          "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL",
-          [r.artifact_id, actor.tenant],
-        )
+        await db.query("SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL", [
+          r.artifact_id,
+          actor.tenant,
+        ])
       ).rowCount
     )
       throw missing();
@@ -1420,12 +1204,7 @@ export async function createApp() {
   });
   app.post("/api/revisions/:id/live-view", async (req) => {
     const actor = await identity(req, SHELF);
-    return issueOwnerLiveView(
-      actor,
-      req.cookies.polka_session ?? "",
-      id(req),
-      withComments(req),
-    );
+    return issueOwnerLiveView(actor, req.cookies.polka_session ?? "", id(req), withComments(req));
   });
   // Links follow the shelf: on a department shelf they are a curator's
   // (docs/specs/TEAM_SHELVES.md, stage 5).
@@ -1465,10 +1244,9 @@ export async function createApp() {
     // The owner looking at their own link is not a recipient opening it.
     const viewerAccount = req.cookies.polka_session
       ? ((
-          await db.query(
-            "SELECT account_id FROM sessions WHERE hash=$1 AND expires_at>now()",
-            [sha256(req.cookies.polka_session)],
-          )
+          await db.query("SELECT account_id FROM sessions WHERE hash=$1 AND expires_at>now()", [
+            sha256(req.cookies.polka_session),
+          ])
         ).rows[0]?.account_id as string | undefined)
       : undefined;
     // Read locks: resolve only issues a grant, so concurrent views of one
@@ -1479,12 +1257,8 @@ export async function createApp() {
       const tokenHash = sha256(token);
       // Blocked by the operator or the content filter: «Ссылка недоступна»,
       // whatever else became of the link or its author. Nothing else is said.
-      const blocked = (
-        await c.query(
-          "SELECT 1 FROM shares WHERE token_hash=$1 AND moderation='blocked'",
-          [tokenHash],
-        )
-      ).rowCount;
+      const blocked = (await c.query("SELECT 1 FROM shares WHERE token_hash=$1 AND moderation='blocked'", [tokenHash]))
+        .rowCount;
       if (blocked) return { blocked: true as const };
       const candidate = (
         await c.query(
@@ -1503,32 +1277,24 @@ export async function createApp() {
       ).rows[0];
       if (!candidate) throw missing();
       // The shelf and the account that answers for the link (owner or issuer).
-      if (
-        !(await lockAnsweringAccount(
-          c,
-          { id: candidate.account_id, tenant: candidate.tenant_id },
-          "SHARE",
-        ))
-      )
+      if (!(await lockAnsweringAccount(c, { id: candidate.account_id, tenant: candidate.tenant_id }, "SHARE")))
         throw missing();
       // An extension's policy (docs/specs/EXTENSIONS.md), e.g. employees only.
       if (extensions().length)
         await checkLinkOpen(
           {
             shareId: candidate.id,
-            shelf: (
-              await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])
-            ).rows[0],
+            shelf: (await c.query("SELECT id,kind,name FROM tenants WHERE id=$1", [candidate.tenant_id])).rows[0],
             artifactId: candidate.artifact_id,
             viewer: viewerAccount ? { id: viewerAccount } : null,
           },
           c,
         );
       const artifact = (
-        await c.query(
-          "SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE",
-          [candidate.artifact_id, candidate.tenant_id],
-        )
+        await c.query("SELECT title FROM artifacts WHERE id=$1 AND tenant_id=$2 AND trashed_at IS NULL FOR SHARE", [
+          candidate.artifact_id,
+          candidate.tenant_id,
+        ])
       ).rows[0];
       if (!artifact) throw missing();
       const s = (
@@ -1549,12 +1315,7 @@ export async function createApp() {
         if (String(s.moderation_reason ?? "").startsWith("spam:")) throw missing();
         return { review: true as const };
       }
-      const editorial = !!(
-        await c.query(
-          "SELECT 1 FROM editorial_publications WHERE share_id=$1",
-          [s.id],
-        )
-      ).rowCount;
+      const editorial = !!(await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [s.id])).rowCount;
       const view = await issueShareGrant(c, s, candidate.artifact_id);
       if (!editorial && viewerAccount !== candidate.account_id) {
         trackShareOpened(c, candidate.account_id, s.id);
@@ -1607,45 +1368,28 @@ export async function createApp() {
         [sha256(grant), config.HTML_LIVE_ENABLED],
       )
     ).rows[0];
-    if (revision)
-      await assertEditorialShareAccessible(db, revision.authorized_share_id);
+    if (revision) await assertEditorialShareAccessible(db, revision.authorized_share_id);
     return revision;
   };
   app.get("/api/view/bytes", async (req, reply) => {
-    const r = await granted(
-      req.headers.authorization?.replace(/^Bearer /, "") ?? "",
-    );
+    const r = await granted(req.headers.authorization?.replace(/^Bearer /, "") ?? "");
     if (!r) throw missing();
     // A link bound to an interactive version, and a page the static view
     // refuses, never hand the recipient the raw upload (as sendHtml).
-    if (
-      r.storage_kind === "bundle" ||
-      r.granted_derivative_id ||
-      r.html_profile === "unsupported"
-    )
-      throw missing();
-    reply
-      .type(r.mime)
-      .header("content-security-policy", "sandbox; default-src 'none'");
+    if (r.storage_kind === "bundle" || r.granted_derivative_id || r.html_profile === "unsupported") throw missing();
+    reply.type(r.mime).header("content-security-policy", "sandbox; default-src 'none'");
     return readBlob(r.object_key, r.object_version);
   });
   app.post("/api/view/live-view", async (req) =>
-    issueRecipientLiveView(
-      req.headers.authorization?.replace(/^Bearer /, "") ?? "",
-      withComments(req),
-    ),
+    issueRecipientLiveView(req.headers.authorization?.replace(/^Bearer /, "") ?? "", withComments(req)),
   );
   // An iframe cannot send Authorization, so the short-lived (60 s), revision-bound
   // grant travels in the path. It is not the share token and dies with revoke.
   app.get("/api/view/:grant/document", async (req, reply) => {
-    const { grant } = z
-      .object({ grant: z.string().regex(/^[A-Za-z0-9_-]{43}$/) })
-      .parse(req.params);
+    const { grant } = z.object({ grant: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).parse(req.params);
     return sendHtml(req, reply, await granted(grant));
   });
-  app.post("/api/reports", { bodyLimit: 4096 }, async (req) =>
-    reportShare(req.body, req.ip),
-  );
+  app.post("/api/reports", { bodyLimit: 4096 }, async (req) => reportShare(req.body, req.ip));
   registerModerationRoutes(app);
   registerCommentRoutes(app);
   registerEnterpriseRequests(app);

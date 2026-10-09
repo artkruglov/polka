@@ -55,7 +55,9 @@ test("a dry run counts and changes nothing; a request needs its ground", async (
   assert.equal(dry.state, "would_request");
   assert.equal(dry.counts.works, 1);
   assert.equal(dry.counts.agents, 1);
-  const { rows: [account] } = await db.query("SELECT disabled,deletion_requested_at FROM accounts WHERE id=$1", [owner.id]);
+  const {
+    rows: [account],
+  } = await db.query("SELECT disabled,deletion_requested_at FROM accounts WHERE id=$1", [owner.id]);
   assert.deepEqual({ ...account }, { disabled: false, deletion_requested_at: null });
   await assert.rejects(requestAccountErasure({ account: owner.name, dryRun: false, policy }), ErasureRefusal);
   await assert.rejects(requestAccountErasure({ account: "nobody-here", dryRun: true, policy }), /не найден/);
@@ -71,7 +73,9 @@ test("a request closes the account at once and queues the purge", async () => {
     policy,
   });
   assert.equal(report.state, "requested");
-  const { rows: [state] } = await db.query(
+  const {
+    rows: [state],
+  } = await db.query(
     `SELECT a.disabled, a.deletion_requested_at IS NOT NULL AS deleting,
             d.state, d.purge_max_hours, d.policy_version,
             (SELECT count(*)::int FROM agent_connections WHERE tenant_id=$2 AND revoked_at IS NULL) AS live_agents,
@@ -105,14 +109,19 @@ test("a request closes the account at once and queues the purge", async () => {
 test("the CLI refuses without the policy and prints no content", async () => {
   const owner = await shelf();
   const lines: string[] = [];
-  const log = console.log, error = console.error;
+  const log = console.log,
+    error = console.error;
   console.log = (line: string) => lines.push(line);
   console.error = (line: string) => lines.push(line);
   try {
     assert.equal(await runAccountErase(["--account", owner.name, "--dry-run"], {}), 1);
     assert.match(lines.join("\n"), /ACCOUNT_PURGE_MAX_HOURS/);
     lines.length = 0;
-    const env = { ACCOUNT_DELETION_POLICY_VERSION: "v", ACCOUNT_PURGE_MAX_HOURS: "720", BACKUP_RETENTION_MAX_DAYS: "30" };
+    const env = {
+      ACCOUNT_DELETION_POLICY_VERSION: "v",
+      ACCOUNT_PURGE_MAX_HOURS: "720",
+      BACKUP_RETENTION_MAX_DAYS: "30",
+    };
     assert.equal(await runAccountErase(["--account", owner.name, "--dry-run"], env), 0);
     assert.match(lines.join("\n"), /Пробный прогон.*работ 1/s);
     assert.doesNotMatch(lines.join("\n"), /Текст работы/);

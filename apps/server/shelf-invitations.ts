@@ -141,10 +141,10 @@ export async function revokeShelfInvitation(actor: Actor, shelfId: string, invit
       throw new Problem(403, "forbidden", "Приглашения отзывают администратор и куратор полки.");
     const {
       rows: [invitation],
-    } = await c.query(
-      "SELECT state,role,invited_by FROM tenant_invitations WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-      [invitationId, shelfId],
-    );
+    } = await c.query("SELECT state,role,invited_by FROM tenant_invitations WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [
+      invitationId,
+      shelfId,
+    ]);
     if (!invitation) throw missing();
     if (role === "curator" && invitation.invited_by !== actor.id)
       throw new Problem(403, "forbidden", "Куратор отзывает только свои приглашения.");
@@ -181,20 +181,12 @@ export async function acceptShelfInvitation(actor: Actor, shelfId: string, body:
     if (!active.has(actor.id)) throw missing();
     const memberships = await lockMemberships(c, shelfId, inviter ? [actor.id, inviter] : [actor.id]);
     const mine = memberships.get(actor.id);
-    if (mine?.state === "active")
-      return { shelfId, name: shelf.name, role: mine.role as ShelfRole, joined: false };
-    if (invitation.state !== "active")
-      throw new Problem(409, "conflict", "Приглашение отозвано.");
+    if (mine?.state === "active") return { shelfId, name: shelf.name, role: mine.role as ShelfRole, joined: false };
+    if (invitation.state !== "active") throw new Problem(409, "conflict", "Приглашение отозвано.");
     if (!invitation.fresh) throw new Problem(409, "conflict", "Срок действия приглашения истёк.");
-    if (invitation.uses >= invitation.max_uses)
-      throw new Problem(409, "conflict", "Приглашение уже использовано.");
+    if (invitation.uses >= invitation.max_uses) throw new Problem(409, "conflict", "Приглашение уже использовано.");
     const issuer = inviter ? memberships.get(inviter) : undefined;
-    if (
-      !inviter ||
-      !active.has(inviter) ||
-      issuer?.state !== "active" ||
-      !mayInvite(issuer.role, invitation.role)
-    )
+    if (!inviter || !active.has(inviter) || issuer?.state !== "active" || !mayInvite(issuer.role, invitation.role))
       throw new Problem(409, "conflict", "Тот, кто пригласил, больше не может выдавать доступ к этой полке.");
     if (await isUnclaimed(c, actor.id))
       throw new Problem(

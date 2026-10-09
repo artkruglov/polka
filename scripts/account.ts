@@ -5,9 +5,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 const name = process.argv[2];
 const generate = process.argv.includes("--generate");
 if (!name || (process.stdin.isTTY && !generate)) {
-  console.error(
-    "Use npm run account:create -- artem --generate, or pass the password through standard input.",
-  );
+  console.error("Use npm run account:create -- artem --generate, or pass the password through standard input.");
   process.exitCode = 1;
 } else {
   let password = generate ? randomBytes(24).toString("base64url") : "";

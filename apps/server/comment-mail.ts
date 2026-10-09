@@ -10,10 +10,7 @@
 // display name and carries no one else's address. Addresses in a comment are
 // defanged (example[.]com), so a mail client does not make them links.
 import { createHmac, timingSafeEqual } from "node:crypto";
-import {
-  COMMENT_MAIL_EXCERPT,
-  COMMENT_MAIL_PER_ADDRESS_PER_DAY,
-} from "../../packages/contracts/comments.ts";
+import { COMMENT_MAIL_EXCERPT, COMMENT_MAIL_PER_ADDRESS_PER_DAY } from "../../packages/contracts/comments.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { db, errorFacts, inBackground } from "./db.ts";
@@ -32,13 +29,12 @@ export type CommentNotice =
 // the letters off. It names one account and lasts a year.
 const OFF_PURPOSE = "polka/comment-mail-off/v1";
 const OFF_TTL_S = 365 * 24 * 60 * 60;
-const offKey = () =>
-  createHmac("sha256", config.LINK_KEY).update(OFF_PURPOSE).digest();
+const offKey = () => createHmac("sha256", config.LINK_KEY).update(OFF_PURPOSE).digest();
 
 export function commentMailOffToken(accountId: string, now = Date.now()) {
-  const payload = Buffer.from(
-    JSON.stringify({ a: accountId, e: Math.floor(now / 1000) + OFF_TTL_S }),
-  ).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ a: accountId, e: Math.floor(now / 1000) + OFF_TTL_S })).toString(
+    "base64url",
+  );
   return `${payload}.${createHmac("sha256", offKey()).update(payload).digest("base64url")}`;
 }
 
@@ -48,8 +44,7 @@ export function verifyCommentMailOffToken(token: string, now = Date.now()) {
   if (!match) return null;
   const expected = createHmac("sha256", offKey()).update(match[1]!).digest();
   const given = Buffer.from(match[2]!, "base64url");
-  if (given.length !== expected.length || !timingSafeEqual(given, expected))
-    return null;
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   try {
     const value = JSON.parse(Buffer.from(match[1]!, "base64url").toString("utf8"));
     if (
@@ -70,9 +65,8 @@ const offLine = (accountId: string) =>
 
 /** example.com → example[.]com, https://x → https[:]//x: text, not a link. */
 export function defang(text: string) {
-  return text.replace(
-    /\S*(?:[a-z][a-z0-9+.-]{1,20}:\/\/|www\.|[\p{L}\p{N}-]\.[\p{L}]{2,})\S*/giu,
-    (token) => token.replace(/:\/\//g, "[:]//").replace(/\.(?=[\p{L}\p{N}])/gu, "[.]"),
+  return text.replace(/\S*(?:[a-z][a-z0-9+.-]{1,20}:\/\/|www\.|[\p{L}\p{N}-]\.[\p{L}]{2,})\S*/giu, (token) =>
+    token.replace(/:\/\//g, "[:]//").replace(/\.(?=[\p{L}\p{N}])/gu, "[.]"),
   );
 }
 
@@ -82,19 +76,13 @@ export function excerpt(body: string, max = COMMENT_MAIL_EXCERPT) {
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, " ")
     .trim();
   const chars = [...text];
-  return defang(
-    chars.length > max ? chars.slice(0, max - 1).join("") + "\u2026" : text,
-  );
+  return defang(chars.length > max ? chars.slice(0, max - 1).join("") + "\u2026" : text);
 }
 
 /** One more letter to this address today, or false when its day is full. */
 async function withinDailyQuota(email: string) {
   try {
-    await limitAttempts(
-      `comment-mail:${email.toLowerCase()}`,
-      COMMENT_MAIL_PER_ADDRESS_PER_DAY,
-      "24 hours",
-    );
+    await limitAttempts(`comment-mail:${email.toLowerCase()}`, COMMENT_MAIL_PER_ADDRESS_PER_DAY, "24 hours");
     return true;
   } catch {
     return false;
@@ -138,8 +126,7 @@ async function facts(commentId: string) {
   return row;
 }
 
-const workUrl = (artifactId: string) =>
-  `${config.APP_ORIGIN}/works/${artifactId}`;
+const workUrl = (artifactId: string) => `${config.APP_ORIGIN}/works/${artifactId}`;
 
 const title = (row: any) => clean(row.title, 120) || "Без названия";
 
@@ -185,11 +172,7 @@ async function sendCommentLetters(commentId: string) {
   };
   const who = clean(row.author_name, 60) || "Читатель";
   const reply = !!row.parent_id;
-  if (
-    row.author_account_id !== row.owner_id &&
-    row.owner_email &&
-    row.owner_active
-  )
+  if (row.author_account_id !== row.owner_id && row.owner_email && row.owner_active)
     await attempt(() =>
       send(
         row.owner_email,
@@ -288,10 +271,7 @@ async function sendOperatorLetter(notice: CommentNotice) {
   else if (notice.kind === "report") {
     const {
       rows: [report],
-    } = await db.query(
-      "SELECT reason,comment FROM share_reports WHERE id=$1",
-      [notice.reportId],
-    );
+    } = await db.query("SELECT reason,comment FROM share_reports WHERE id=$1", [notice.reportId]);
     reason = `жалоба (${report?.reason ?? "\u2014"})${report?.comment ? `: \u00ab${excerpt(report.comment, 300)}\u00bb` : ""}`;
   }
   const text = [
@@ -310,9 +290,7 @@ async function sendOperatorLetter(notice: CommentNotice) {
     "Решения \u2014 скриптами на сервере:",
     `  npm run moderation:comments -- ${row.share_id}`,
     `  npm run moderation:delete-comment -- ${row.id}`,
-    ...(row.held_at
-      ? [`  npm run moderation:release-comment -- ${row.id}`]
-      : []),
+    ...(row.held_at ? [`  npm run moderation:release-comment -- ${row.id}`] : []),
     `  npm run moderation:disable -- ${clean(row.author_login, 60)}   (скрывает все комментарии автора)`,
   ].join("\n");
   return sendMail({
@@ -325,18 +303,13 @@ async function sendOperatorLetter(notice: CommentNotice) {
 export async function sendCommentNotice(notice: CommentNotice) {
   if (config.MAIL_MODE === "disabled") return null;
   try {
-    return notice.kind === "comment"
-      ? await sendCommentLetters(notice.commentId)
-      : await sendOperatorLetter(notice);
+    return notice.kind === "comment" ? await sendCommentLetters(notice.commentId) : await sendOperatorLetter(notice);
   } catch (error) {
     console.error(
       JSON.stringify({
         event: "comment.mail_failed",
         kind: notice.kind,
-        code:
-          typeof (error as { code?: unknown }).code === "string"
-            ? (error as { code: string }).code
-            : "internal",
+        code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
       }),
     );
     return null;
@@ -345,7 +318,5 @@ export async function sendCommentNotice(notice: CommentNotice) {
 
 /** After commit, without holding up the response. */
 export function dispatchCommentNotices(notices: CommentNotice[]) {
-  return inBackground(
-    Promise.all(notices.map(sendCommentNotice)).then(() => undefined),
-  );
+  return inBackground(Promise.all(notices.map(sendCommentNotice)).then(() => undefined));
 }

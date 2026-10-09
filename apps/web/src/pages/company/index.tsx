@@ -95,7 +95,9 @@ function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => 
       <ErrorNotice error={error} />
       {open &&
         (members === null ? (
-          <p className="company-muted" role="status">Загружаем…</p>
+          <p className="company-muted" role="status">
+            Загружаем…
+          </p>
         ) : (
           <ul className="company-members">
             {members.map((member) => (
@@ -162,8 +164,8 @@ function Offboarding() {
     <section className="company-card" aria-labelledby="offboard-title">
       <h2 id="offboard-title">Сотрудник уходит</h2>
       <p className="company-muted">
-        Уберите его со всех полок отделов одним действием: участие и его агенты на этих полках
-        закроются, работы останутся у отделов. Вход в Полку закрывается в SSO компании.
+        Уберите его со всех полок отделов одним действием: участие и его агенты на этих полках закроются, работы
+        останутся у отделов. Вход в Полку закрывается в SSO компании.
       </p>
       <form className="company-find" onSubmit={find}>
         <label className="ui-search">
@@ -175,7 +177,9 @@ function Offboarding() {
             onChange={(event) => setWho(event.target.value)}
           />
         </label>
-        <Button type="submit" busy={busy && !person}>Найти</Button>
+        <Button type="submit" busy={busy && !person}>
+          Найти
+        </Button>
       </form>
       <ErrorNotice error={error} />
       {done && <Notice>{done}</Notice>}
@@ -188,7 +192,9 @@ function Offboarding() {
               <p>
                 Полки отделов:{" "}
                 {person.shelves.map((shelf) => `«${shelf.name}» (${ROLE_LABEL[shelf.role].toLowerCase()})`).join(", ")}
-                {person.teamAgents ? ` · ${plural(person.teamAgents, "агент", "агента", "агентов")} на этих полках` : ""}
+                {person.teamAgents
+                  ? ` · ${plural(person.teamAgents, "агент", "агента", "агентов")} на этих полках`
+                  : ""}
               </p>
               <Button variant="primary" onClick={() => setConfirm(true)} disabled={busy}>
                 <UserMinus /> Убрать со всех полок отделов
@@ -200,17 +206,22 @@ function Offboarding() {
         </div>
       )}
       {confirm && person && (
-        <Dialog title={`Убрать ${person.name} со всех полок отделов?`} busy={busy} onClose={() => !busy && setConfirm(false)}>
+        <Dialog
+          title={`Убрать ${person.name} со всех полок отделов?`}
+          busy={busy}
+          onClose={() => !busy && setConfirm(false)}
+        >
           <div className="dialog-body">
             <p>
-              {person.name} перестанет видеть полки{" "}
-              {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")}, его агенты на них отключатся.
-              Работы останутся на полках. Где он был единственным администратором, администратором
-              станете вы.
+              {person.name} перестанет видеть полки {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")}, его
+              агенты на них отключатся. Работы останутся на полках. Где он был единственным администратором,
+              администратором станете вы.
             </p>
           </div>
           <div className="dialog-footer">
-            <Button onClick={() => setConfirm(false)} disabled={busy}>Отмена</Button>
+            <Button onClick={() => setConfirm(false)} disabled={busy}>
+              Отмена
+            </Button>
             <Button variant="primary" busy={busy} onClick={() => void offboard()}>
               Убрать
             </Button>
@@ -223,7 +234,12 @@ function Offboarding() {
 
 export function CompanyAdmin() {
   const account = useAccount();
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "denied" } | { kind: "error"; message: string } | { kind: "ready"; shelves: CompanyShelf[] }>({ kind: "loading" });
+  const [state, setState] = useState<
+    | { kind: "loading" }
+    | { kind: "denied" }
+    | { kind: "error"; message: string }
+    | { kind: "ready"; shelves: CompanyShelf[] }
+  >({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
   // Sections of extensions, e.g. the commercial edition's link policy.
   const extensionSections = useSlot("company-admin");
@@ -255,11 +271,14 @@ export function CompanyAdmin() {
           <span className="eyebrow">Администратор компании</span>
           <h1>Полки компании</h1>
         </header>
-        {state.kind === "loading" && <p className="company-muted" role="status">Загружаем…</p>}
+        {state.kind === "loading" && (
+          <p className="company-muted" role="status">
+            Загружаем…
+          </p>
+        )}
         {state.kind === "denied" && (
           <StatusPanel title="Эта страница — для администратора компании">
-            Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает
-            установку Полки.
+            Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
           </StatusPanel>
         )}
         {state.kind === "error" && <StatusPanel title="Не удалось загрузить">{state.message}</StatusPanel>}

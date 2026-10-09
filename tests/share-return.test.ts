@@ -9,15 +9,9 @@ const store = new Map<string, string>();
   setItem: (key: string, value: string) => void store.set(key, value),
   removeItem: (key: string) => void store.delete(key),
 };
-const {
-  SHARE_RETURN_PATH,
-  rememberShareForSignIn,
-  signInFromShare,
-  takeShareAfterSignIn,
-} = await import("../apps/web/src/shared/lib/share-return.ts");
-const { authReturnTo, safeNext } = await import(
-  "../apps/web/src/shared/lib/safe-next.ts"
-);
+const { SHARE_RETURN_PATH, rememberShareForSignIn, signInFromShare, takeShareAfterSignIn } =
+  await import("../apps/web/src/shared/lib/share-return.ts");
+const { authReturnTo, safeNext } = await import("../apps/web/src/shared/lib/safe-next.ts");
 
 const token = "A".repeat(20) + "b_-".repeat(7) + "Z".repeat(2);
 beforeEach(() => store.clear());

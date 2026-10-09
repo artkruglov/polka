@@ -47,9 +47,7 @@ export type LinkOpen = {
   viewer: { id: string } | null;
 };
 
-export type LinkIssueDecision =
-  | { allow: true }
-  | { allow: false; message: string };
+export type LinkIssueDecision = { allow: true } | { allow: false; message: string };
 
 export type LinkOpenDecision =
   | { allow: true }
@@ -65,13 +63,19 @@ export type SessionDelete = {
   startedAt: string | null;
 };
 
-export type SessionDeleteDecision =
-  | { allow: true }
-  | { allow: false; message: string };
+export type SessionDeleteDecision = { allow: true } | { allow: false; message: string };
 
 export type PolkaEvent =
   | { type: "revision.saved"; tenantId: string; artifactId: string; revisionId: string; accountId: string; at: string }
-  | { type: "share.created"; tenantId: string; artifactId: string; shareId: string; revisionId: string; accountId: string; at: string }
+  | {
+      type: "share.created";
+      tenantId: string;
+      artifactId: string;
+      shareId: string;
+      revisionId: string;
+      accountId: string;
+      at: string;
+    }
   | { type: "share.revoked"; tenantId: string; shareId: string; accountId: string | null; at: string }
   | { type: "member.revoked"; tenantId: string; accountId: string; at: string };
 
@@ -120,14 +124,7 @@ export type PdfOutcome =
   | { pdf: Buffer }
   | {
       skipped:
-        | "not_visual"
-        | "no_source"
-        | "too_large"
-        | "timeout"
-        | "busy"
-        | "failed"
-        | "renderer_outdated"
-        | "unavailable";
+        "not_visual" | "no_source" | "too_large" | "timeout" | "busy" | "failed" | "renderer_outdated" | "unavailable";
     };
 
 /** Agent sessions of the installation (docs/specs/AGENT_SESSIONS.md); accounts limits them to these people. */
@@ -239,12 +236,22 @@ export type ExtensionContext = {
    * core's 404.
    */
   sessions: {
-    list(selection: SessionSelection, query?: SessionListQuery): Promise<{ sessions: ExtensionSession[]; projects: Array<{ label: string; sessions: number }>; next: string | null }>;
+    list(
+      selection: SessionSelection,
+      query?: SessionListQuery,
+    ): Promise<{
+      sessions: ExtensionSession[];
+      projects: Array<{ label: string; sessions: number }>;
+      next: string | null;
+    }>;
     get(sessionId: string, selection?: SessionSelection): Promise<ExtensionSessionDetail>;
     /** «Секреты» and «Расход» across people, plus people: totals by person. */
     stats(selection: SessionSelection, query?: { days?: number }): Promise<Record<string, unknown>>;
     /** A page of the transcript's events. */
-    transcript(sessionId: string, query?: { offset?: number; limit?: number }): Promise<{ events: unknown[]; total: number; offset: number; tooLarge: boolean }>;
+    transcript(
+      sessionId: string,
+      query?: { offset?: number; limit?: number },
+    ): Promise<{ events: unknown[]; total: number; offset: number; tooLarge: boolean }>;
     /** The whole transcript, gzipped JSON lines. */
     transcriptFile(sessionId: string): Promise<{ bytes: Buffer; name: string }>;
   };

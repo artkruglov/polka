@@ -1,34 +1,142 @@
 /* Entry pages (/signup, /signup/choose, /claim, /enter, /signin): one column,
    one headline, the real way in. Global, so a page opened directly from an
    agent's link is styled too. */
-.onboard { width: 100%; max-width: 520px; margin: 56px auto 0; padding: 0 28px 80px; }
-.onboard-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 26px; border: 1px solid var(--accent-soft-2); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--accent); }
-.onboard-icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.onboard h1 { margin: 14px 0 16px; font-size: clamp(36px, 5vw, 48px); line-height: 1.06; letter-spacing: -.045em; }
-.onboard > p { margin-bottom: 26px; color: var(--muted); font-size: var(--text-lg); line-height: 1.6; }
-.onboard > .entry-loading { font-size: var(--text-sm); color: var(--muted-2); }
-.onboard-note { margin-bottom: 22px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft-3); color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; }
-.onboard form { display: grid; gap: 18px; }
-.onboard form input[autocomplete="one-time-code"] { font-size: 24px; letter-spacing: .25em; font-variant-numeric: tabular-nums; }
-.onboard form > .ui-button--primary { width: 100%; min-height: 48px; font-size: var(--text-md); }
-.onboard form > .ui-notice { margin: 0; }
-.onboard-secondary { display: flex; flex-wrap: wrap; gap: 10px; }
-.onboard-password { display: grid; gap: 20px; }
+.onboard {
+  width: 100%;
+  max-width: 520px;
+  margin: 56px auto 0;
+  padding: 0 28px 80px;
+}
+.onboard-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 26px;
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.onboard-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
+}
+.onboard h1 {
+  margin: 14px 0 16px;
+  font-size: clamp(36px, 5vw, 48px);
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+}
+.onboard > p {
+  margin-bottom: 26px;
+  color: var(--muted);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+}
+.onboard > .entry-loading {
+  font-size: var(--text-sm);
+  color: var(--muted-2);
+}
+.onboard-note {
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft-3);
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.onboard form {
+  display: grid;
+  gap: 18px;
+}
+.onboard form input[autocomplete="one-time-code"] {
+  font-size: 24px;
+  letter-spacing: 0.25em;
+  font-variant-numeric: tabular-nums;
+}
+.onboard form > .ui-button--primary {
+  width: 100%;
+  min-height: 48px;
+  font-size: var(--text-md);
+}
+.onboard form > .ui-notice {
+  margin: 0;
+}
+.onboard-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.onboard-password {
+  display: grid;
+  gap: 20px;
+}
 /* The code screen for an address outside the sign-up list (pages/signup/code-help.tsx). */
-.code-help { display: grid; gap: 14px; margin-bottom: 18px; }
-.code-help .ui-notice { margin: 0; }
-.code-help > .ui-button { justify-self: start; }
-.code-help-lead { margin: 4px 0 -4px; color: var(--ink-2); font-size: var(--text-sm); }
-.code-help .idp-or { margin: 8px 0 0; }
-.onboard form > .code-spam-hint { margin: -8px 0 0; }
-.onboard-fine { color: var(--muted-2); font-size: var(--text-sm); line-height: 1.6; }
-.onboard-consent { margin-top: 16px; }
-.onboard-consent a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
-.onboard-consent a:hover { color: var(--accent); }
-.onboard-legacy { display: inline-flex; align-items: center; gap: 8px; width: 100%; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: var(--text-base); }
-.onboard-legacy:hover { color: var(--accent); }
+.code-help {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.code-help .ui-notice {
+  margin: 0;
+}
+.code-help > .ui-button {
+  justify-self: start;
+}
+.code-help-lead {
+  margin: 4px 0 -4px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+}
+.code-help .idp-or {
+  margin: 8px 0 0;
+}
+.onboard form > .code-spam-hint {
+  margin: -8px 0 0;
+}
+.onboard-fine {
+  color: var(--muted-2);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.onboard-consent {
+  margin-top: 16px;
+}
+.onboard-consent a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.onboard-consent a:hover {
+  color: var(--accent);
+}
+.onboard-legacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--text-base);
+}
+.onboard-legacy:hover {
+  color: var(--accent);
+}
 @media (max-width: 720px) {
-  .onboard { margin-top: 32px; padding: 0 var(--gutter-mobile) 48px; }
-  .onboard h1 { font-size: 36px; }
-  .onboard > p { font-size: var(--text-md); }
+  .onboard {
+    margin-top: 32px;
+    padding: 0 var(--gutter-mobile) 48px;
+  }
+  .onboard h1 {
+    font-size: 36px;
+  }
+  .onboard > p {
+    font-size: var(--text-md);
+  }
 }

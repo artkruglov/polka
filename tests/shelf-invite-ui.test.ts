@@ -9,10 +9,7 @@ import {
   invitationSummary,
   inviteRoles,
 } from "../apps/web/src/features/shelf-members/InviteLinks.tsx";
-import {
-  parseShelfInvitation,
-  parseShelfInvitationFragment,
-} from "../apps/web/src/shared/lib/shelf-invite.ts";
+import { parseShelfInvitation, parseShelfInvitationFragment } from "../apps/web/src/shared/lib/shelf-invite.ts";
 import { isAppPage } from "../packages/contracts/app-routes.ts";
 import { routeTitle } from "../apps/web/src/app/routing/titles.ts";
 import type { ShelfInvitation } from "../apps/web/src/shared/api/client.ts";
@@ -56,7 +53,8 @@ test("the admin offers every role but admin; a curator, readers and authors", ()
   assert.match(admin, /<option value="curator">Куратор/);
   assert.doesNotMatch(admin, /value="admin"/);
   assert.match(admin, /Создать ссылку/);
-  for (const text of ["сутки", "3 дня", "неделю", "один человек", "до 50 человек"]) assert.match(admin, new RegExp(text));
+  for (const text of ["сутки", "3 дня", "неделю", "один человек", "до 50 человек"])
+    assert.match(admin, new RegExp(text));
   const curator = render({ inviter: "curator" });
   assert.doesNotMatch(curator, /<option value="curator">/);
   assert.match(curator, /Кураторов приглашает администратор/);
@@ -64,7 +62,11 @@ test("the admin offers every role but admin; a curator, readers and authors", ()
 
 test("a new link is shown once, with a copy button", () => {
   const html = render({
-    created: { id: "x", url: "https://polka.test/shelf-invite#token=abc&shelfId=def", summary: "автор · для одного · до 11 октября" },
+    created: {
+      id: "x",
+      url: "https://polka.test/shelf-invite#token=abc&shelfId=def",
+      summary: "автор · для одного · до 11 октября",
+    },
   });
   assert.match(html, /второй раз Полка её не покажет/);
   assert.match(html, /https:\/\/polka.test\/shelf-invite#token=abc&amp;shelfId=def/);
@@ -74,7 +76,14 @@ test("a new link is shown once, with a copy button", () => {
 test("active links are listed; a curator revokes only its own", () => {
   const items = [
     link({}),
-    link({ id: "44444444-4444-4444-8444-444444444444", invitedBy: colleague, inviterName: "Борис", role: "reader", maxUses: 10, uses: 3 }),
+    link({
+      id: "44444444-4444-4444-8444-444444444444",
+      invitedBy: colleague,
+      inviterName: "Борис",
+      role: "reader",
+      maxUses: 10,
+      uses: 3,
+    }),
     link({ id: "55555555-5555-4555-8555-555555555555", status: "used", uses: 1 }),
   ];
   const admin = render({ items });

@@ -34,14 +34,8 @@ export const confirmAccountDeletionSchema = z
   })
   .strict();
 
-const unavailable = () =>
-  new Problem(
-    503,
-    "invalid",
-    "Удаление аккаунта не включено на этой локальной установке.",
-  );
-const forbidden = () =>
-  new Problem(403, "forbidden", "Проверка запроса истекла.");
+const unavailable = () => new Problem(503, "invalid", "Удаление аккаунта не включено на этой локальной установке.");
+const forbidden = () => new Problem(403, "forbidden", "Проверка запроса истекла.");
 
 function requireEnabled() {
   if (!config.ACCOUNT_DELETION_ENABLED) throw unavailable();
@@ -49,25 +43,15 @@ function requireEnabled() {
 
 export async function lockTenantAccount(c: PoolClient, actor: Actor) {
   const tenant = (
-    await c.query(
-      "SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE",
-      [actor.tenant, actor.id],
-    )
+    await c.query("SELECT * FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [actor.tenant, actor.id])
   ).rows[0];
   if (!tenant) throw missing();
-  const account = (
-    await c.query("SELECT * FROM accounts WHERE id=$1 FOR UPDATE", [actor.id])
-  ).rows[0];
+  const account = (await c.query("SELECT * FROM accounts WHERE id=$1 FOR UPDATE", [actor.id])).rows[0];
   if (!account) throw missing();
   return { tenant, account };
 }
 
-async function validateSessionCsrf(
-  c: PoolClient,
-  actor: Actor,
-  sessionToken: string,
-  csrfToken: string,
-) {
+async function validateSessionCsrf(c: PoolClient, actor: Actor, sessionToken: string, csrfToken: string) {
   if (!TOKEN.test(sessionToken) || !TOKEN.test(csrfToken)) throw forbidden();
   const sessionHash = sha256(sessionToken);
   const valid = await c.query(
@@ -84,9 +68,7 @@ async function validateSessionCsrf(
 const receipt = (row: any): AccountDeletionReceipt => ({
   requestId: row.id,
   state: row.state,
-  requestedAt: row.requested_at
-    ? new Date(row.requested_at).toISOString()
-    : null,
+  requestedAt: row.requested_at ? new Date(row.requested_at).toISOString() : null,
   revokedAt: row.revoked_at ? new Date(row.revoked_at).toISOString() : null,
   workingDataPolicyDeadline: row.working_data_policy_deadline
     ? new Date(row.working_data_policy_deadline).toISOString()
@@ -118,10 +100,7 @@ const plan = (row: any, statusCapability: string | null) => ({
   purgeAvailable: config.ACCOUNT_DELETION_PURGE_WORKER,
 });
 
-export async function issueAccountDeletionCsrf(
-  actor: Actor,
-  sessionToken: string,
-) {
+export async function issueAccountDeletionCsrf(actor: Actor, sessionToken: string) {
   requireEnabled();
   if (!TOKEN.test(sessionToken)) throw forbidden();
   const csrfToken = randomBytes(32).toString("base64url");
@@ -209,11 +188,7 @@ async function refuseLastDepartmentAdmin(c: PoolClient, actor: Actor) {
     );
 }
 
-export async function createAccountDeletionPlan(
-  actor: Actor,
-  sessionToken: string,
-  csrfToken: string,
-) {
+export async function createAccountDeletionPlan(actor: Actor, sessionToken: string, csrfToken: string) {
   requireEnabled();
   const statusCapability = randomBytes(32).toString("base64url");
   return transaction(async (c) => {
@@ -222,12 +197,7 @@ export async function createAccountDeletionPlan(
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
     await refuseWhileEvidenceIsHeld(c, actor.tenant);
     await refuseLastDepartmentAdmin(c, actor);
-    const old = (
-      await c.query(
-        "SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE",
-        [actor.id],
-      )
-    ).rows[0];
+    const old = (await c.query("SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE", [actor.id])).rows[0];
     if (old && old.state !== "planned") return receipt(old);
     const counts = (
       await c.query(
@@ -279,71 +249,34 @@ export async function createAccountDeletionPlan(
   });
 }
 
-export async function confirmAccountDeletion(
-  actor: Actor,
-  sessionToken: string,
-  csrfToken: string,
-  body: unknown,
-) {
+export async function confirmAccountDeletion(actor: Actor, sessionToken: string, csrfToken: string, body: unknown) {
   requireEnabled();
   const input = confirmAccountDeletionSchema.parse(body);
-  if (
-    input.expectedAccountId !== actor.id ||
-    input.expectedTenantId !== actor.tenant
-  )
-    throw missing();
+  if (input.expectedAccountId !== actor.id || input.expectedTenantId !== actor.tenant) throw missing();
   const sessionHash = sha256(sessionToken);
   return transaction(async (c) => {
     const { account } = await lockTenantAccount(c, actor);
-    const deletion = (
-      await c.query(
-        "SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE",
-        [actor.id],
-      )
-    ).rows[0];
-    if (!deletion || deletion.id !== input.planId)
-      throw new Problem(409, "conflict", "План удаления был заменён.");
+    const deletion = (await c.query("SELECT * FROM account_deletions WHERE account_id=$1 FOR UPDATE", [actor.id]))
+      .rows[0];
+    if (!deletion || deletion.id !== input.planId) throw new Problem(409, "conflict", "План удаления был заменён.");
     if (deletion.state !== "planned") {
       if (deletion.confirmation_session_hash !== sessionHash) throw missing();
       return receipt(deletion);
     }
-    if (
-      account.disabled ||
-      account.deletion_requested_at ||
-      new Date(deletion.plan_expires_at).getTime() <= Date.now()
-    )
+    if (account.disabled || account.deletion_requested_at || new Date(deletion.plan_expires_at).getTime() <= Date.now())
       throw new Problem(409, "conflict", "План удаления истёк.");
     await validateSessionCsrf(c, actor, sessionToken, csrfToken);
     await refuseWhileEvidenceIsHeld(c, actor.tenant);
     await refuseLastDepartmentAdmin(c, actor);
 
-    await c.query(
-      "SELECT id FROM agent_connections WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
-    await c.query(
-      "SELECT id FROM uploads WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
-    await c.query(
-      "SELECT id FROM artifacts WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
-    await c.query(
-      "SELECT id FROM shares WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
-    await c.query(
-      "SELECT id FROM revision_derivatives WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
-    await c.query(
-      "SELECT id FROM editorial_publications WHERE tenant_id=$1 ORDER BY id FOR UPDATE",
-      [actor.tenant],
-    );
+    await c.query("SELECT id FROM agent_connections WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
+    await c.query("SELECT id FROM uploads WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
+    await c.query("SELECT id FROM artifacts WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
+    await c.query("SELECT id FROM shares WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
+    await c.query("SELECT id FROM revision_derivatives WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
+    await c.query("SELECT id FROM editorial_publications WHERE tenant_id=$1 ORDER BY id FOR UPDATE", [actor.tenant]);
 
-    const now = (await c.query("SELECT clock_timestamp() AS value")).rows[0]
-      .value;
+    const now = (await c.query("SELECT clock_timestamp() AS value")).rows[0].value;
     await c.query(
       `UPDATE accounts SET disabled=true,deletion_requested_at=$2
        WHERE id=$1`,
@@ -367,9 +300,7 @@ export async function confirmAccountDeletion(
       [actor.tenant],
     );
     await withdrawEditorialForDeletionInTransaction(c, actor);
-    await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [
-      actor.tenant,
-    ]);
+    await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [actor.tenant]);
     await c.query(
       `UPDATE uploads SET aborted=true
        WHERE tenant_id=$1 AND receipt IS NULL`,
@@ -407,12 +338,7 @@ export async function accountDeletionStatus(capability: string, ip: string) {
   const hash = sha256(capability);
   await limitAttempts(`account-deletion-status-ip:${ip}`, 120);
   await limitAttempts(`account-deletion-status:${hash}`, 60);
-  const row = (
-    await db.query(
-      "SELECT * FROM account_deletions WHERE status_capability_hash=$1",
-      [hash],
-    )
-  ).rows[0];
+  const row = (await db.query("SELECT * FROM account_deletions WHERE status_capability_hash=$1", [hash])).rows[0];
   if (!row) throw missing();
   return receipt(row);
 }

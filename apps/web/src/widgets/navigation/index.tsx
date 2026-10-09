@@ -20,22 +20,12 @@ import { client, rememberedShelf } from "../../shared/api/client.ts";
 import { Avatar, Button, IconButton } from "../../shared/ui/controls.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
-import {
-  rememberAccount,
-  useAccountState,
-} from "../../entities/account/model/useAccount.ts";
-import {
-  useSignInWays,
-  useSourceUrl,
-} from "../../entities/capabilities/useCapabilities.ts";
+import { rememberAccount, useAccountState } from "../../entities/account/model/useAccount.ts";
+import { useSignInWays, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { formatStars, onGitHub } from "../../shared/lib/project-links.ts";
-import {
-  OPEN_SHELF_PHRASE,
-  takeEnteredByAgent,
-  takeFreshShelfNote,
-} from "../../shared/lib/known-shelf.ts";
+import { OPEN_SHELF_PHRASE, takeEnteredByAgent, takeFreshShelfNote } from "../../shared/lib/known-shelf.ts";
 export { useAccount } from "../../entities/account/model/useAccount.ts";
 
 /**
@@ -53,16 +43,10 @@ function SourceLink() {
       href={sourceUrl}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={
-        github
-          ? `Открытый код на GitHub${stars ? `, ${stars} звёзд` : ""}`
-          : "Открытый код"
-      }
+      aria-label={github ? `Открытый код на GitHub${stars ? `, ${stars} звёзд` : ""}` : "Открытый код"}
     >
       {github ? <GitHubMark size={20} /> : <CodeXml aria-hidden="true" />}
-      <span className="site-github-label">
-        {github ? "GitHub" : "Открытый код"}
-      </span>
+      <span className="site-github-label">{github ? "GitHub" : "Открытый код"}</span>
       {stars && (
         <span className="site-github-stars" aria-hidden="true">
           ★ {stars}
@@ -72,14 +56,7 @@ function SourceLink() {
   );
 }
 
-export type Section =
-  | "landing"
-  | "discover"
-  | "shelf"
-  | "bring"
-  | "templates"
-  | "connections"
-  | "sessions";
+export type Section = "landing" | "discover" | "shelf" | "bring" | "templates" | "connections" | "sessions";
 
 function SiteBrand() {
   return (
@@ -104,9 +81,7 @@ const links: {
 ];
 
 function useNarrow(query = "(max-width: 760px)") {
-  const [narrow, setNarrow] = useState(
-    () => typeof matchMedia === "function" && matchMedia(query).matches,
-  );
+  const [narrow, setNarrow] = useState(() => typeof matchMedia === "function" && matchMedia(query).matches);
   useEffect(() => {
     if (typeof matchMedia !== "function") return;
     const list = matchMedia(query);
@@ -118,13 +93,7 @@ function useNarrow(query = "(max-width: 760px)") {
 }
 
 /** Avatar + name at the bottom of the rail; leaving is a separate, confirmed action. */
-function AccountMenu({
-  account,
-  onLoggedOut,
-}: {
-  account: Account;
-  onLoggedOut?: () => void;
-}) {
+function AccountMenu({ account, onLoggedOut }: { account: Account; onLoggedOut?: () => void }) {
   const [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -144,12 +113,26 @@ function AccountMenu({
           </span>
         }
         items={[
-          { id: "shelf", label: "Моя полка", icon: <Home />, onSelect: () => location.assign(rememberedShelf() ? "/?shelf=" : "/") },
+          {
+            id: "shelf",
+            label: "Моя полка",
+            icon: <Home />,
+            onSelect: () => location.assign(rememberedShelf() ? "/?shelf=" : "/"),
+          },
           // Next to «Моя полка»: one's own trash.
-          { id: "trash", label: "Корзина", onSelect: () => location.assign(rememberedShelf() ? "/trash?shelf=" : "/trash") },
+          {
+            id: "trash",
+            label: "Корзина",
+            onSelect: () => location.assign(rememberedShelf() ? "/trash?shelf=" : "/trash"),
+          },
           // Agents, sign-in methods and deleting the shelf.
           // Claude Code and Codex sessions of this person (docs/specs/AGENT_SESSIONS.md).
-          { id: "sessions", label: "Сессии агентов", icon: <SquareTerminal />, onSelect: () => location.assign("/sessions") },
+          {
+            id: "sessions",
+            label: "Сессии агентов",
+            icon: <SquareTerminal />,
+            onSelect: () => location.assign("/sessions"),
+          },
           { id: "settings", label: "Настройки", icon: <Settings />, onSelect: () => location.assign("/settings") },
           { id: "logout", label: "Выйти", icon: <LogOut />, tone: "danger", onSelect: () => setConfirm(true) },
         ]}
@@ -162,10 +145,16 @@ function AccountMenu({
                 ? `Полка временная и живёт в этом браузере. Вернуться в неё можно по ссылке от агента («${OPEN_SHELF_PHRASE}») — или закрепите её перед выходом.`
                 : "Сохранённые работы и ссылки останутся на месте. Чтобы вернуться, войдите снова."}
             </p>
-            {error && <p className="ui-field-error" role="alert">{error}</p>}
+            {error && (
+              <p className="ui-field-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
           <div className="dialog-footer">
-            <Button disabled={busy} onClick={() => setConfirm(false)}>Остаться</Button>
+            <Button disabled={busy} onClick={() => setConfirm(false)}>
+              Остаться
+            </Button>
             <Button
               variant="primary"
               busy={busy}
@@ -274,9 +263,7 @@ function SiteHeader({
             >
               <link.icon aria-hidden="true" />
               <span className="site-nav-label">{link.label}</span>
-              {link.id === "shelf" && guest && (
-                <span className="sr-only"> — нужен вход</span>
-              )}
+              {link.id === "shelf" && guest && <span className="sr-only"> — нужен вход</span>}
             </a>
           ))}
         </nav>
@@ -298,10 +285,7 @@ function SiteHeader({
               Загрузка…
             </span>
           ) : (
-            <a
-              className="site-login"
-              href={`/signup?next=${encodeURIComponent(returnTo)}`}
-            >
+            <a className="site-login" href={`/signup?next=${encodeURIComponent(returnTo)}`}>
               <LogIn /> Войти
             </a>
           )}
@@ -336,23 +320,18 @@ function SiteHeader({
 function ShelfBanners({ account }: { account: Account }) {
   const ways = useSignInWays();
   const [entered] = useState(() => takeEnteredByAgent());
-  const [fresh, setFresh] = useState(
-    () => !account.provisional && takeFreshShelfNote(),
-  );
-  const claimed =
-    !account.provisional &&
-    new URLSearchParams(location.search).get("claimed") === "1";
+  const [fresh, setFresh] = useState(() => !account.provisional && takeFreshShelfNote());
+  const claimed = !account.provisional && new URLSearchParams(location.search).get("claimed") === "1";
   return (
     <>
       {account.provisional && (
         <aside className="shelf-banner" aria-label="Временная полка">
           <div>
-            <strong>Полка живёт только в этом браузере.</strong> Закрепите
-            её — войдите {ways.with}, и ею можно будет делиться ссылками.
+            <strong>Полка живёт только в этом браузере.</strong> Закрепите её — войдите {ways.with}, и ею можно будет
+            делиться ссылками.
             <small>
-              Если {account.idleDays ?? 30} дней не открывать полку и не
-              пользоваться агентами, она удалится. Потеряли вход? Попросите
-              агента: «{OPEN_SHELF_PHRASE}».
+              Если {account.idleDays ?? 30} дней не открывать полку и не пользоваться агентами, она удалится. Потеряли
+              вход? Попросите агента: «{OPEN_SHELF_PHRASE}».
             </small>
           </div>
           <a className="ui-button ui-button--primary" href="/claim">
@@ -363,8 +342,7 @@ function ShelfBanners({ account }: { account: Account }) {
       {claimed && (
         <aside className="shelf-banner shelf-banner--quiet" role="status">
           <div>
-            <strong>Полка закреплена.</strong> Теперь ею можно делиться, а
-            входить — выбранным способом.
+            <strong>Полка закреплена.</strong> Теперь ею можно делиться, а входить — выбранным способом.
           </div>
         </aside>
       )}
@@ -378,8 +356,7 @@ function ShelfBanners({ account }: { account: Account }) {
       {fresh && (
         <aside className="shelf-banner shelf-banner--quiet">
           <div>
-            Уже есть полка? Привяжите этот вход к ней в{" "}
-            <a href="/settings/agents#sign-in">«Способах входа»</a>.
+            Уже есть полка? Привяжите этот вход к ней в <a href="/settings/agents#sign-in">«Способах входа»</a>.
           </div>
           <Button variant="quiet" onClick={() => setFresh(false)}>
             Понятно

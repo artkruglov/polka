@@ -8,11 +8,7 @@
 // Start with --dry-run: it prints what would move and changes nothing.
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import {
-  formatMergeReport,
-  mergeAccounts,
-  MergeRefusal,
-} from "../apps/server/account-merge.ts";
+import { formatMergeReport, mergeAccounts, MergeRefusal } from "../apps/server/account-merge.ts";
 import { flushAnalytics } from "../apps/server/analytics.ts";
 import { db } from "../apps/server/db.ts";
 import { s3 } from "../apps/server/storage.ts";
@@ -46,9 +42,7 @@ export async function runAccountMerge(argv: string[]) {
       reason: values.reason,
       proof: values.proof,
     });
-    console.log(
-      values.json ? JSON.stringify(report, null, 2) : formatMergeReport(report),
-    );
+    console.log(values.json ? JSON.stringify(report, null, 2) : formatMergeReport(report));
     await flushAnalytics();
     return report.leftovers.length ? 1 : 0;
   } catch (error) {

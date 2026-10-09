@@ -11,9 +11,7 @@ import "./styles.css";
  */
 export function MailOff() {
   const [token] = useState(() => location.hash.slice(1));
-  const [state, setState] = useState<"ask" | "busy" | "done" | "failed">(
-    token ? "ask" : "failed",
-  );
+  const [state, setState] = useState<"ask" | "busy" | "done" | "failed">(token ? "ask" : "failed");
   const [message, setMessage] = useState(
     "Ссылка неполная. Письма можно отключить в панели комментариев любой работы на Полке.",
   );
@@ -25,8 +23,7 @@ export function MailOff() {
           <>
             <h1>Письма о комментариях отключены</h1>
             <p>
-              Включить их снова можно в панели комментариев любой работы на
-              Полке. Письма входа приходят как прежде.
+              Включить их снова можно в панели комментариев любой работы на Полке. Письма входа приходят как прежде.
             </p>
             <LinkButton href="/">На Полку</LinkButton>
           </>
@@ -40,8 +37,8 @@ export function MailOff() {
           <>
             <h1>Не присылать письма о комментариях?</h1>
             <p>
-              Полка перестанет писать о новых комментариях к вашим работам и об
-              ответах в обсуждениях. Письма с кодом входа это не затронет.
+              Полка перестанет писать о новых комментариях к вашим работам и об ответах в обсуждениях. Письма с кодом
+              входа это не затронет.
             </p>
             <Button
               variant="primary"

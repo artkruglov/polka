@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  parseCommentAnchor,
-  type CommentAnchor,
-} from "../../../../../packages/contracts/comment-constants.ts";
+import { parseCommentAnchor, type CommentAnchor } from "../../../../../packages/contracts/comment-constants.ts";
 
 // The shell's side of the comment overlay protocol (apps/server/
 // comment-overlay.ts). Messages are taken only from the one frame this
@@ -54,9 +51,7 @@ const INITIAL: OverlayState = {
 };
 
 const finite = (value: unknown, max = 1e7) =>
-  typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= max
-    ? value
-    : null;
+  typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= max ? value : null;
 
 function rectOf(value: unknown): FrameRect | null {
   if (!value || typeof value !== "object") return null;
@@ -65,9 +60,7 @@ function rectOf(value: unknown): FrameRect | null {
     left = finite(r.left),
     bottom = finite(r.bottom),
     right = finite(r.right);
-  return top === null || left === null || bottom === null || right === null
-    ? null
-    : { top, left, bottom, right };
+  return top === null || left === null || bottom === null || right === null ? null : { top, left, bottom, right };
 }
 
 export function useOverlayBridge() {
@@ -91,8 +84,7 @@ export function useOverlayBridge() {
       const target = frame.current?.contentWindow;
       if (!target || event.source !== target) return;
       const data = event.data as Record<string, unknown> | null;
-      if (!data || typeof data !== "object" || typeof data.type !== "string")
-        return;
+      if (!data || typeof data !== "object" || typeof data.type !== "string") return;
       switch (data.type) {
         case "polka:ready":
           setState((current) => ({ ...current, ready: true }));
@@ -147,9 +139,7 @@ export function useOverlayBridge() {
           return;
         }
         case "polka:selectionCleared":
-          setState((current) =>
-            current.selection ? { ...current, selection: null } : current,
-          );
+          setState((current) => (current.selection ? { ...current, selection: null } : current));
           return;
         case "polka:focus":
           if (typeof data.id === "string" && data.id.length <= 100)
@@ -188,19 +178,13 @@ export function useOverlayBridge() {
     },
     [post],
   );
-  const scrollTo = useCallback(
-    (id: string) => post({ type: "polka:scrollTo", id }),
-    [post],
-  );
+  const scrollTo = useCallback((id: string) => post({ type: "polka:scrollTo", id }), [post]);
   const clearSelection = useCallback(() => {
     post({ type: "polka:clearSelection" });
     setState((current) => ({ ...current, selection: null }));
   }, [post]);
   /** The frame's top edge, for aligning cards with their fragments. */
-  const frameTop = useCallback(
-    () => frame.current?.getBoundingClientRect().top ?? null,
-    [],
-  );
+  const frameTop = useCallback(() => frame.current?.getBoundingClientRect().top ?? null, []);
 
   return {
     overlay: { onFrame },

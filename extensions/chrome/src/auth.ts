@@ -46,10 +46,7 @@ const random = (size = 32) => base64url(crypto.getRandomValues(new Uint8Array(si
 
 export async function pkcePair() {
   const verifier = random(32);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(verifier),
-  );
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
   return { verifier, challenge: base64url(new Uint8Array(digest)) };
 }
 
@@ -71,10 +68,7 @@ async function discover(origin: string): Promise<Metadata> {
   const register = sameOrigin(server.registration_endpoint, origin);
   const audience = sameOrigin(resource.resource, origin);
   if (!authorize || !token || !register || !audience)
-    throw new AuthError(
-      "failed",
-      `По адресу ${origin} не отвечает Полка с входом для приложений.`,
-    );
+    throw new AuthError("failed", `По адресу ${origin} не отвечает Полка с входом для приложений.`);
   return {
     authorize,
     token,
@@ -88,11 +82,8 @@ const redirectUri = () => chrome.identity.getRedirectURL("polka");
 
 async function clientId(origin: string, meta: Metadata, fresh = false) {
   const key = `client:${origin}`;
-  const stored = (await chrome.storage.local.get(key))[key] as
-    | { clientId: string; redirectUri: string }
-    | undefined;
-  if (!fresh && stored && stored.redirectUri === redirectUri())
-    return stored.clientId;
+  const stored = (await chrome.storage.local.get(key))[key] as { clientId: string; redirectUri: string } | undefined;
+  if (!fresh && stored && stored.redirectUri === redirectUri()) return stored.clientId;
   const response = await fetch(meta.register, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -199,10 +190,8 @@ async function connectOnce(origin: string): Promise<void> {
   if (returned.searchParams.get("state") !== state)
     throw new AuthError("failed", "Ответ Полки не совпал с запросом. Повторите подключение.");
   const iss = returned.searchParams.get("iss");
-  if (iss !== null && iss !== origin)
-    throw new AuthError("failed", "Ответ пришёл не от вашей Полки.");
-  if (returned.searchParams.get("error") === "access_denied")
-    throw new AuthError("cancelled", "Доступ не разрешён.");
+  if (iss !== null && iss !== origin) throw new AuthError("failed", "Ответ пришёл не от вашей Полки.");
+  if (returned.searchParams.get("error") === "access_denied") throw new AuthError("cancelled", "Доступ не разрешён.");
   const code = returned.searchParams.get("code");
   if (!code) throw new AuthError("failed", "Полка не выдала доступ. Повторите подключение.");
   const issued = await tokenRequest(meta, {
@@ -245,8 +234,7 @@ export async function accessToken(origin: string, force = false): Promise<string
     });
     if (!issued.ok) {
       // invalid_grant: revoked on the agents page, expired or rotated away.
-      if (issued.error === "invalid_grant" || issued.error === "invalid_client")
-        await forget(origin);
+      if (issued.error === "invalid_grant" || issued.error === "invalid_client") await forget(origin);
       return null;
     }
     await store(origin, grant.clientId, issued, grant.refreshToken);

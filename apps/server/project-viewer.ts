@@ -24,11 +24,7 @@ import { db, transaction } from "./db.ts";
 import { assertEditorialShareAccessible } from "./editorial.ts";
 import { missing } from "./errors.ts";
 import { VIEWER_GUARD, withLeadingMarkup } from "./html.ts";
-import {
-  escapeHtml,
-  projectDocumentPage,
-  renderProjectMarkdownBounded,
-} from "./project-markdown.ts";
+import { escapeHtml, projectDocumentPage, renderProjectMarkdownBounded } from "./project-markdown.ts";
 import { bump } from "./runtime-stats.ts";
 import { readBlob, readStream, sha256 } from "./storage.ts";
 
@@ -45,11 +41,7 @@ const viewResult = (token: string, expiresAt: Date) => ({
   expiresAt: expiresAt.toISOString(),
 });
 
-export async function issueOwnerProjectView(
-  actor: Actor,
-  sessionToken: string,
-  revisionId: string,
-) {
+export async function issueOwnerProjectView(actor: Actor, sessionToken: string, revisionId: string) {
   if (!config.HTML_LIVE_ENABLED) throw missing();
   const token = randomBytes(32).toString("base64url");
   const grant = await transaction(async (c) => {
@@ -420,8 +412,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
       // A player asks for the file in ranges as it plays and seeks: only
       // those bytes are read from the store, never the whole file.
       const range = parseRange(req.headers.range, file.size);
-      if (range === "unsatisfiable")
-        return reply.status(416).header("content-range", `bytes */${file.size}`).send();
+      if (range === "unsatisfiable") return reply.status(416).header("content-range", `bytes */${file.size}`).send();
       if (cacheableFile(req, reply, file.sha256, !!req.headers.range)) return reply;
       // Idle for a while when the player has buffered enough and waits.
       if (typeof req.raw.socket?.setTimeout === "function") req.raw.socket.setTimeout(10 * 60 * 1000);
@@ -441,9 +432,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
       if (cacheableFile(req, reply, file.sha256, false)) return reply;
       return reply.type(file.mime).send(await readBlob(stored.object_key, stored.object_version));
     }
-    const bytes = isVideoMime(file.mime)
-      ? Buffer.alloc(0)
-      : await readBlob(stored.object_key, stored.object_version);
+    const bytes = isVideoMime(file.mime) ? Buffer.alloc(0) : await readBlob(stored.object_key, stored.object_version);
     const name = posix.basename(file.path);
     if (file.mime === "text/html") {
       const page = withSignedAwayLinks(bytes, base(token) + file.path);
@@ -456,12 +445,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     const body =
       file.mime === "text/markdown"
         ? projectDocumentPage(
-            await renderProjectMarkdownBounded(
-              bytes.toString("utf8"),
-              file.path,
-              paths,
-              `${revision.id}:${file.path}`,
-            ),
+            await renderProjectMarkdownBounded(bytes.toString("utf8"), file.path, paths, `${revision.id}:${file.path}`),
             base(token) + NAV_SCRIPT,
           )
         : isVideoMime(file.mime)
@@ -470,14 +454,24 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
               `<h1>${escapeHtml(name)}</h1><video controls preload="metadata" style="max-width:100%" src="${escapeHtml(encodeURIComponent(name))}"></video>`,
               token,
             )
-        : file.mime.startsWith("image/")
-          ? wrapperPage(name, `<h1>${escapeHtml(name)}</h1><img src="${escapeHtml(encodeURIComponent(name))}" alt="">`, token)
-          : wrapperPage(name, `<h1>${escapeHtml(name)}</h1><pre><code>${escapeHtml(bytes.toString("utf8"))}</code></pre>`, token);
-    return reply
-      .type("text/html; charset=utf-8")
-      .header("content-security-policy", documentCsp(token))
-      // Полка draws these and runs no script of the author's in them, but
-      // every HTML response of the project starts with the guard.
-      .send(withLeadingMarkup(Buffer.from(body), Buffer.from(VIEWER_GUARD)));
+          : file.mime.startsWith("image/")
+            ? wrapperPage(
+                name,
+                `<h1>${escapeHtml(name)}</h1><img src="${escapeHtml(encodeURIComponent(name))}" alt="">`,
+                token,
+              )
+            : wrapperPage(
+                name,
+                `<h1>${escapeHtml(name)}</h1><pre><code>${escapeHtml(bytes.toString("utf8"))}</code></pre>`,
+                token,
+              );
+    return (
+      reply
+        .type("text/html; charset=utf-8")
+        .header("content-security-policy", documentCsp(token))
+        // Полка draws these and runs no script of the author's in them, but
+        // every HTML response of the project starts with the guard.
+        .send(withLeadingMarkup(Buffer.from(body), Buffer.from(VIEWER_GUARD)))
+    );
   });
 }

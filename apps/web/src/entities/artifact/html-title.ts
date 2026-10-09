@@ -17,10 +17,7 @@ function plain(fragment: string) {
     .replace(/<[^>]*>/g, " ")
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
       if (name[0] !== "#") return ENTITIES[name.toLowerCase()] ?? entity;
-      const code =
-        name[1] === "x" || name[1] === "X"
-          ? parseInt(name.slice(2), 16)
-          : Number(name.slice(1));
+      const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : Number(name.slice(1));
       return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
     })
     .replace(/\s+/g, " ")
@@ -28,16 +25,12 @@ function plain(fragment: string) {
 }
 
 /** Titles are limited to 160 characters on the server. */
-export const clipTitle = (title: string) =>
-  title.length > 160 ? `${title.slice(0, 159).trimEnd()}…` : title;
+export const clipTitle = (title: string) => (title.length > 160 ? `${title.slice(0, 159).trimEnd()}…` : title);
 
 export function htmlTitle(source: string) {
   // Only the head is needed; never more than the first 256 KiB.
   const head = source.slice(0, 256 * 1024);
-  for (const pattern of [
-    /<title[^>]*>([\s\S]*?)<\/title>/i,
-    /<h1[^>]*>([\s\S]*?)<\/h1>/i,
-  ]) {
+  for (const pattern of [/<title[^>]*>([\s\S]*?)<\/title>/i, /<h1[^>]*>([\s\S]*?)<\/h1>/i]) {
     const found = pattern.exec(head);
     const title = found ? plain(found[1]) : "";
     if (title) return clipTitle(title);

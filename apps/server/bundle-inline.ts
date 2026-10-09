@@ -2,17 +2,9 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
 import postcss, { Input } from "postcss";
-import {
-  parse,
-  parseFragment,
-  serialize,
-  type DefaultTreeAdapterTypes,
-} from "parse5";
+import { parse, parseFragment, serialize, type DefaultTreeAdapterTypes } from "parse5";
 import { SaxesParser } from "saxes";
-import {
-  canonicalizeManifest,
-  type BundleManifest,
-} from "../../packages/contracts/bundle.ts";
+import { canonicalizeManifest, type BundleManifest } from "../../packages/contracts/bundle.ts";
 
 import {
   BUILD_LIMITS,
@@ -61,13 +53,9 @@ export type Node = {
   sourceCodeLocation?: { startLine: number; endLine: number } | null;
 };
 
-export const digest = (value: Buffer | string) =>
-  createHash("sha256").update(value).digest("hex");
+export const digest = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
 
-export function fail(
-  reason: string,
-  resourcePath?: string,
-): BundleInlineResult {
+export function fail(reason: string, resourcePath?: string): BundleInlineResult {
   return { ok: false, reason, ...(resourcePath ? { path: resourcePath } : {}) };
 }
 
@@ -79,11 +67,7 @@ export function attr(node: Node, name: string) {
 export function insertIntoHead(head: Node, nodes: Node[]) {
   const children = (head.childNodes ??= []);
   let at = 0;
-  while (
-    at < children.length &&
-    (!children[at].tagName ||
-      ["meta", "title", "base"].includes(children[at].tagName!))
-  )
+  while (at < children.length && (!children[at].tagName || ["meta", "title", "base"].includes(children[at].tagName!)))
     at++;
   for (const node of nodes) node.parentNode = head;
   children.splice(at, 0, ...nodes);
@@ -157,16 +141,8 @@ export function resolveLocal(reference: string | undefined, from: string) {
     /[?#%\\\s\u0000-\u001f\u007f]/.test(reference)
   )
     return null;
-  const resolved = path.posix.normalize(
-    path.posix.join(path.posix.dirname(from), reference),
-  );
-  if (
-    resolved === "." ||
-    resolved === ".." ||
-    resolved.startsWith("../") ||
-    resolved.startsWith("/")
-  )
-    return null;
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from), reference));
+  if (resolved === "." || resolved === ".." || resolved.startsWith("../") || resolved.startsWith("/")) return null;
   return resolved;
 }
 
@@ -292,8 +268,7 @@ const SVG_ATTRIBUTES = new Set([
 const SVG_FRAGMENT_URL = /url\(\s*(["']?)#[A-Za-z_][\w.:-]*\1\s*\)/gi;
 // The XML predefined entities and character references expand to one
 // character each; any other entity needs a DTD, which is refused.
-const XML_CHARACTER_REFERENCE =
-  /&(?:amp|lt|gt|quot|apos|#\d{1,7}|#x[0-9a-f]{1,6});/gi;
+const XML_CHARACTER_REFERENCE = /&(?:amp|lt|gt|quot|apos|#\d{1,7}|#x[0-9a-f]{1,6});/gi;
 
 function safeSvg(value: Buffer) {
   let source: string;
@@ -330,58 +305,39 @@ function safeSvg(value: Buffer) {
   } catch {
     failed = true;
   }
-  if (
-    failed ||
-    rootName.toLowerCase() !== "svg" ||
-    rootUri !== "http://www.w3.org/2000/svg"
-  )
-    return false;
+  if (failed || rootName.toLowerCase() !== "svg" || rootUri !== "http://www.w3.org/2000/svg") return false;
   const fragment = parseFragment(source) as unknown as Node;
   const roots = (fragment.childNodes ?? []).filter((child) => child.tagName);
-  if (roots.length !== 1 || roots[0].tagName?.toLowerCase() !== "svg")
-    return false;
+  if (roots.length !== 1 || roots[0].tagName?.toLowerCase() !== "svg") return false;
   const stack = [{ node: roots[0], depth: 1 }];
   let count = 0;
   while (stack.length) {
     const current = stack.pop()!;
     if (++count > MAX_SVG_NODES || current.depth > MAX_SVG_DEPTH) return false;
     const node = current.node;
-    if (node.tagName && !SVG_ELEMENTS.has(node.tagName.toLowerCase()))
-      return false;
+    if (node.tagName && !SVG_ELEMENTS.has(node.tagName.toLowerCase())) return false;
     for (const item of node.attrs ?? []) {
       // parse5 splits a foreign attribute into prefix and local name.
       const prefix = (item as { prefix?: string }).prefix;
-      const name = (
-        prefix ? `${prefix}:${item.name}` : item.name
-      ).toLowerCase();
+      const name = (prefix ? `${prefix}:${item.name}` : item.name).toLowerCase();
       // Values are checked decoded, so a character reference cannot hide
       // a resource function or a scheme.
       if (!SVG_ATTRIBUTES.has(name)) return false;
       if (
         !name.startsWith("xmlns") &&
-        /url\s*\(|\b(?:javascript|vbscript|data|https?|file|blob):/i.test(
-          item.value.replace(SVG_FRAGMENT_URL, ""),
-        )
+        /url\s*\(|\b(?:javascript|vbscript|data|https?|file|blob):/i.test(item.value.replace(SVG_FRAGMENT_URL, ""))
       )
         return false;
-      if (name === "xmlns" && item.value !== "http://www.w3.org/2000/svg")
-        return false;
-      if (
-        name === "xmlns:xlink" &&
-        item.value !== "http://www.w3.org/1999/xlink"
-      )
-        return false;
+      if (name === "xmlns" && item.value !== "http://www.w3.org/2000/svg") return false;
+      if (name === "xmlns:xlink" && item.value !== "http://www.w3.org/1999/xlink") return false;
     }
-    for (const child of node.childNodes ?? [])
-      stack.push({ node: child, depth: current.depth + 1 });
+    for (const child of node.childNodes ?? []) stack.push({ node: child, depth: current.depth + 1 });
   }
   return true;
 }
 
 // postcss exposes its tokenizer only as an untyped module path.
-const tokenizer = createRequire(import.meta.url)("postcss/lib/tokenize") as (
-  input: Input,
-) => {
+const tokenizer = createRequire(import.meta.url)("postcss/lib/tokenize") as (input: Input) => {
   nextToken(): [string, string, ...unknown[]] | undefined;
   endOfFile(): boolean;
 };
@@ -409,21 +365,13 @@ function cssEscapesSafe(source: string) {
     else if (type === "at-word") {
       let end = index + 1;
       let escaped = value.includes("\\");
-      for (; tokens[end]?.[0] === "word"; end++)
-        if (tokens[end][1].includes("\\")) escaped = true;
+      for (; tokens[end]?.[0] === "word"; end++) if (tokens[end][1].includes("\\")) escaped = true;
       if (escaped) return false;
     } else if (type === "word") {
       let end = index;
       let escaped = false;
-      for (; tokens[end]?.[0] === "word"; end++)
-        if (tokens[end][1].includes("\\")) escaped = true;
-      if (
-        escaped &&
-        (depth > 0 ||
-          tokens[end]?.[0] === "(" ||
-          tokens[end]?.[0] === "brackets")
-      )
-        return false;
+      for (; tokens[end]?.[0] === "word"; end++) if (tokens[end][1].includes("\\")) escaped = true;
+      if (escaped && (depth > 0 || tokens[end]?.[0] === "(" || tokens[end]?.[0] === "brackets")) return false;
       index = end - 1;
     }
   }
@@ -433,13 +381,11 @@ function cssEscapesSafe(source: string) {
 const DATA_IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 const DATA_FONT_MIMES = ["font/woff2", "font/woff"];
 const MAGIC: Record<string, (value: Buffer) => boolean> = {
-  "image/png": (v) =>
-    v.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")),
+  "image/png": (v) => v.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")),
   "image/jpeg": (v) => v.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")),
   "image/gif": (v) => /^GIF8[79]a$/.test(v.subarray(0, 6).toString("latin1")),
   "image/webp": (v) =>
-    v.subarray(0, 4).toString("latin1") === "RIFF" &&
-    v.subarray(8, 12).toString("latin1") === "WEBP",
+    v.subarray(0, 4).toString("latin1") === "RIFF" && v.subarray(8, 12).toString("latin1") === "WEBP",
   "font/woff2": (v) => v.subarray(0, 4).toString("latin1") === "wOF2",
   "font/woff": (v) => v.subarray(0, 4).toString("latin1") === "wOFF",
   "image/svg+xml": (v) => safeSvg(v),
@@ -451,9 +397,7 @@ const MAGIC: Record<string, (value: Buffer) => boolean> = {
  * the normalized URI, or null when the reference is not such a URI.
  */
 function safeDataUri(reference: string, allowed: string[]) {
-  const match = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(
-    reference,
-  );
+  const match = /^data:([a-z0-9.+/-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(reference);
   if (!match) return null;
   const mime = match[1].toLowerCase();
   if (!allowed.includes(mime) && mime !== "image/svg+xml") return null;
@@ -476,12 +420,10 @@ function safeLinkHref(value: string) {
   }
 }
 
-const fragmentOnly = (value: string) =>
-  /^#[A-Za-z_][\w.:-]*$/.test(value.trim());
+const fragmentOnly = (value: string) => /^#[A-Za-z_][\w.:-]*$/.test(value.trim());
 
 /** An absolute web URL (or protocol-relative one) the viewer could not load. */
-export const isRemote = (value: string | undefined) =>
-  /^\s*(?:https?:)?\/\//i.test(value ?? "");
+export const isRemote = (value: string | undefined) => /^\s*(?:https?:)?\/\//i.test(value ?? "");
 
 const hostOf = (value: string) => {
   try {
@@ -496,10 +438,8 @@ function withinHtmlBounds(root: Node) {
   let count = 0;
   while (stack.length) {
     const current = stack.pop()!;
-    if (++count > MAX_HTML_NODES || current.depth > MAX_HTML_DEPTH)
-      return false;
-    for (const child of current.node.childNodes ?? [])
-      stack.push({ node: child, depth: current.depth + 1 });
+    if (++count > MAX_HTML_NODES || current.depth > MAX_HTML_DEPTH) return false;
+    for (const child of current.node.childNodes ?? []) stack.push({ node: child, depth: current.depth + 1 });
   }
   return true;
 }
@@ -526,9 +466,7 @@ function inlineCss(
     let error: string | undefined;
     root.walkAtRules((rule) => {
       if (rule.name.toLowerCase() !== "import") return;
-      const reference = /^\s*(?:url\(\s*)?["']?([^"')\s]+)/i.exec(
-        rule.params,
-      )?.[1];
+      const reference = /^\s*(?:url\(\s*)?["']?([^"')\s]+)/i.exec(rule.params)?.[1];
       if (dropRemote && isRemote(reference)) {
         dropRemote("import", reference!);
         rule.remove();
@@ -540,25 +478,20 @@ function inlineCss(
       // Only explicit local url() references and same-document fragments
       // (SVG paint, filter and clip references) are accepted. Protocols,
       // escapes and missing bundle resources are rejected by localAsset.
-      const pattern =
-        /\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s)'"(]+))\s*\)/gi;
+      const pattern = /\burl\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\s)'"(]+))\s*\)/gi;
       const unmatched = decl.value.replace(pattern, "");
-      if (/\burl\s*\(/i.test(unmatched))
-        throw Error("unsupported CSS URL syntax");
+      if (/\burl\s*\(/i.test(unmatched)) throw Error("unsupported CSS URL syntax");
       let remote = false;
-      const value = decl.value.replace(
-        pattern,
-        (match, double, single, bare) => {
-          const reference: string = double ?? single ?? bare;
-          if (fragmentOnly(reference)) return `url("${reference.trim()}")`;
-          if (dropRemote && isRemote(reference)) {
-            dropRemote("url", reference);
-            remote = true;
-            return match;
-          }
-          return `url("${localAsset(reference, resourcePath)}")`;
-        },
-      );
+      const value = decl.value.replace(pattern, (match, double, single, bare) => {
+        const reference: string = double ?? single ?? bare;
+        if (fragmentOnly(reference)) return `url("${reference.trim()}")`;
+        if (dropRemote && isRemote(reference)) {
+          dropRemote("url", reference);
+          remote = true;
+          return match;
+        }
+        return `url("${localAsset(reference, resourcePath)}")`;
+      });
       if (remote) decl.remove();
       else decl.value = value;
     });
@@ -566,10 +499,7 @@ function inlineCss(
   } catch (error) {
     // Our own refusals name the reason; parser errors stay generic.
     return {
-      error:
-        error instanceof Error && error.name === "Error"
-          ? error.message
-          : "stylesheet is not valid CSS",
+      error: error instanceof Error && error.name === "Error" ? error.message : "stylesheet is not valid CSS",
     };
   }
 }
@@ -579,9 +509,7 @@ function inlineCss(
  * output or compiled CSS imports) with the page CSS rules. It may reference
  * nothing but allowlisted data: images and fonts.
  */
-export function checkGeneratedCss(
-  source: string,
-): { css: string; error?: undefined } | { error: string } {
+export function checkGeneratedCss(source: string): { css: string; error?: undefined } | { error: string } {
   const result = inlineCss(source, "generated.css", (reference) => {
     const data = /^\s*data:/i.test(reference)
       ? safeDataUri(reference.trim(), [...DATA_IMAGE_MIMES, ...DATA_FONT_MIMES])
@@ -609,17 +537,9 @@ const JAVASCRIPT_TYPES = new Set([
   "text/livescript",
   "text/x-ecmascript",
   "text/x-javascript",
-  ...["1.0", "1.1", "1.2", "1.3", "1.4", "1.5"].map(
-    (v) => `text/javascript${v}`,
-  ),
+  ...["1.0", "1.1", "1.2", "1.3", "1.4", "1.5"].map((v) => `text/javascript${v}`),
 ]);
-const MODULE_LIKE_TYPES = [
-  "module",
-  "importmap",
-  "speculationrules",
-  "text/babel",
-  "text/jsx",
-];
+const MODULE_LIKE_TYPES = ["module", "importmap", "speculationrules", "text/babel", "text/jsx"];
 
 // <link> relations that only hint or label (loading, icons, metadata): the
 // viewer has no network and no tab icon, so they are left out.
@@ -646,13 +566,7 @@ const HINT_RELS = new Set([
 ]);
 
 const isFontHost = (host: string) =>
-  [
-    "fonts.googleapis.com",
-    "fonts.gstatic.com",
-    "fonts.bunny.net",
-    "use.typekit.net",
-    "rsms.me",
-  ].includes(host);
+  ["fonts.googleapis.com", "fonts.gstatic.com", "fonts.bunny.net", "use.typekit.net", "rsms.me"].includes(host);
 
 export function buildInlineBundle(
   manifest: BundleManifest,
@@ -666,24 +580,15 @@ export function buildInlineBundle(
     return fail("manifest is not canonical and valid");
   }
   const sourceManifestSha256 = digest(JSON.stringify(canonical));
-  const manifestFiles = new Map(
-    canonical.files.map((file) => [file.path, file]),
-  );
+  const manifestFiles = new Map(canonical.files.map((file) => [file.path, file]));
   for (const file of canonical.files) {
     const value = sourceBytes.get(file.path);
     if (!value) return fail("manifest file bytes are missing", file.path);
-    if (value.length !== file.size)
-      return fail("manifest file size does not match bytes", file.path);
-    if (digest(value) !== file.sha256)
-      return fail("manifest file hash does not match bytes", file.path);
+    if (value.length !== file.size) return fail("manifest file size does not match bytes", file.path);
+    if (digest(value) !== file.sha256) return fail("manifest file hash does not match bytes", file.path);
   }
   const consumed = new Set<string>();
-  const entry = readResource(
-    canonical.entrypoint,
-    manifestFiles,
-    sourceBytes,
-    consumed,
-  );
+  const entry = readResource(canonical.entrypoint, manifestFiles, sourceBytes, consumed);
   if (entry.error) return entry.error;
   let entryHtml: string;
   try {
@@ -692,23 +597,17 @@ export function buildInlineBundle(
     return fail("entrypoint is not valid UTF-8", canonical.entrypoint);
   }
   if (
-    (entryHtml.match(/<script\b/gi)?.length ?? 0) <
-      (entryHtml.match(/<\/script\b/gi)?.length ?? 0) ||
-    (entryHtml.match(/<style\b/gi)?.length ?? 0) <
-      (entryHtml.match(/<\/style\b/gi)?.length ?? 0)
+    (entryHtml.match(/<script\b/gi)?.length ?? 0) < (entryHtml.match(/<\/script\b/gi)?.length ?? 0) ||
+    (entryHtml.match(/<style\b/gi)?.length ?? 0) < (entryHtml.match(/<\/style\b/gi)?.length ?? 0)
   )
-    return fail(
-      "entrypoint contains an unsafe raw-text closing sequence",
-      manifest.entrypoint,
-    );
+    return fail("entrypoint contains an unsafe raw-text closing sequence", manifest.entrypoint);
   let document: Node;
   try {
     document = parse(entryHtml) as Node;
   } catch {
     return fail("entrypoint is not valid HTML", manifest.entrypoint);
   }
-  if (!withinHtmlBounds(document))
-    return fail("HTML exceeds node or depth limits", canonical.entrypoint);
+  if (!withinHtmlBounds(document)) return fail("HTML exceeds node or depth limits", canonical.entrypoint);
   // What the viewer could never load (its CSP has no network) is left out
   // of the page rather than refusing it; the owner sees what was dropped.
   const warnings = new Set<string>();
@@ -729,57 +628,28 @@ export function buildInlineBundle(
   let cssExpansionBytes = 0;
   const localCssAsset = (reference: string, from: string) => {
     if (/^\s*data:/i.test(reference)) {
-      const data = safeDataUri(reference, [
-        ...DATA_IMAGE_MIMES,
-        ...DATA_FONT_MIMES,
-      ]);
-      if (!data)
-        throw Error("CSS data: URI is not an allowlisted image or font");
+      const data = safeDataUri(reference, [...DATA_IMAGE_MIMES, ...DATA_FONT_MIMES]);
+      if (!data) throw Error("CSS data: URI is not an allowlisted image or font");
       cssExpansionBytes += data.length;
-      if (cssExpansionBytes > MAX_OUTPUT_BYTES)
-        throw Error("CSS resources exceed output limit");
+      if (cssExpansionBytes > MAX_OUTPUT_BYTES) throw Error("CSS resources exceed output limit");
       return data;
     }
     const resolved = resolveLocal(reference, from);
-    if (!resolved)
-      throw Error(
-        `CSS resource "${reference.trim().slice(0, 120)}" is not a file of this page`,
-      );
-    const resource = readResource(
-      resolved,
-      manifestFiles,
-      sourceBytes,
-      consumed,
-    );
-    if (resource.error)
-      throw Error(`CSS resource ${resolved} is missing from the bundle`);
+    if (!resolved) throw Error(`CSS resource "${reference.trim().slice(0, 120)}" is not a file of this page`);
+    const resource = readResource(resolved, manifestFiles, sourceBytes, consumed);
+    if (resource.error) throw Error(`CSS resource ${resolved} is missing from the bundle`);
     const mime = resource.file.mime;
-    if (
-      ![
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-        "image/svg+xml",
-        "font/woff2",
-      ].includes(mime)
-    )
+    if (!["image/png", "image/jpeg", "image/webp", "image/svg+xml", "font/woff2"].includes(mime))
       throw Error(`CSS resource ${resolved} has an unsupported type (${mime})`);
     if (mime === "image/svg+xml" && !safeSvg(resource.value))
       throw Error(`CSS SVG ${resolved} is not an inert allowlisted image`);
-    if (
-      mime === "font/woff2" &&
-      resource.value.subarray(0, 4).toString() !== "wOF2"
-    )
+    if (mime === "font/woff2" && resource.value.subarray(0, 4).toString() !== "wOF2")
       throw Error(`${resolved} is not a valid WOFF2 font`);
     cssExpansionBytes += Math.ceil(resource.value.length / 3) * 4 + 80;
-    if (cssExpansionBytes > MAX_OUTPUT_BYTES)
-      throw Error("CSS resources exceed output limit");
+    if (cssExpansionBytes > MAX_OUTPUT_BYTES) throw Error("CSS resources exceed output limit");
     return `data:${mime};base64,${resource.value.toString("base64")}`;
   };
-  const process = (
-    node: Node,
-    currentPath: string,
-  ): BundleInlineResult | null => {
+  const process = (node: Node, currentPath: string): BundleInlineResult | null => {
     const tag = node.tagName?.toLowerCase();
     const attrs = node.attrs ?? [];
     if (
@@ -801,32 +671,16 @@ export function buildInlineBundle(
           "image",
         ].includes(tag))
     )
-      return fail(
-        `<${tag}> (or srcset) is an unsupported HTML resource or container`,
-        currentPath,
-      );
+      return fail(`<${tag}> (or srcset) is an unsupported HTML resource or container`, currentPath);
     if (attrs.some((item) => /^on/i.test(item.name))) runsScripts = true;
     for (const item of attrs) {
       const name = item.name.toLowerCase();
-      if (
-        ![
-          "src",
-          "href",
-          "xlink:href",
-          "poster",
-          "background",
-          "action",
-          "formaction",
-        ].includes(name)
-      )
-        continue;
+      if (!["src", "href", "xlink:href", "poster", "background", "action", "formaction"].includes(name)) continue;
       const handled =
         (name === "src" && (tag === "img" || tag === "script")) ||
         (name === "href" && tag === "link") ||
         (name === "href" && tag === "a" && safeLinkHref(item.value)) ||
-        ((name === "href" || name === "xlink:href") &&
-          tag === "use" &&
-          fragmentOnly(item.value));
+        ((name === "href" || name === "xlink:href") && tag === "use" && fragmentOnly(item.value));
       if (!handled)
         return fail(
           `<${tag} ${name}="${item.value.trim().slice(0, 80)}"> is an unhandled resource-bearing HTML attribute`,
@@ -835,38 +689,21 @@ export function buildInlineBundle(
     }
     if (tag === "meta" && /refresh/i.test(attr(node, "http-equiv") ?? ""))
       return fail("meta refresh is unsupported", currentPath);
-    const inlineStyle = attrs.find(
-      (item) => item.name.toLowerCase() === "style",
-    );
+    const inlineStyle = attrs.find((item) => item.name.toLowerCase() === "style");
     if (inlineStyle) {
-      const css = inlineCss(
-        `a{${inlineStyle.value}}`,
-        currentPath,
-        localCssAsset,
-        dropRemote,
-      );
+      const css = inlineCss(`a{${inlineStyle.value}}`, currentPath, localCssAsset, dropRemote);
       if (css.error) return fail(css.error, currentPath);
       const parsedStyle = postcss.parse(css.css!);
       inlineStyle.value =
-        parsedStyle.first?.type === "rule"
-          ? parsedStyle.first.nodes.map((n) => n.toString()).join(";")
-          : "";
+        parsedStyle.first?.type === "rule" ? parsedStyle.first.nodes.map((n) => n.toString()).join(";") : "";
     }
     if (tag === "link") {
-      const rel = (attr(node, "rel") ?? "")
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
+      const rel = (attr(node, "rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
       const href = attr(node, "href") ?? "";
       if (!rel.includes("stylesheet")) {
         if (!rel.length || !rel.every((item) => HINT_RELS.has(item)))
-          return fail(
-            `<link rel="${rel.join(" ")}"> is an unsupported link resource`,
-            currentPath,
-          );
-        warnings.add(
-          "подсказки загрузки и значки (<link rel=preconnect/icon/…>) не нужны просмотру и убраны",
-        );
+          return fail(`<link rel="${rel.join(" ")}"> is an unsupported link resource`, currentPath);
+        warnings.add("подсказки загрузки и значки (<link rel=preconnect/icon/…>) не нужны просмотру и убраны");
         removals.push(node);
         return null;
       }
@@ -880,50 +717,21 @@ export function buildInlineBundle(
       if (
         attrs.some(
           (item) =>
-            ![
-              "rel",
-              "href",
-              "type",
-              "crossorigin",
-              "integrity",
-              "referrerpolicy",
-            ].includes(item.name.toLowerCase()),
+            !["rel", "href", "type", "crossorigin", "integrity", "referrerpolicy"].includes(item.name.toLowerCase()),
         ) ||
-        !["", "text/css"].includes(
-          (attr(node, "type") ?? "").trim().toLowerCase(),
-        )
+        !["", "text/css"].includes((attr(node, "type") ?? "").trim().toLowerCase())
       )
         return fail("stylesheet link has unsupported attributes", currentPath);
-      if (
-        hasAttr(node, "media") ||
-        hasAttr(node, "disabled") ||
-        hasAttr(node, "title") ||
-        rel.includes("alternate")
-      )
-        return fail(
-          "stylesheet presentation semantics are unsupported",
-          currentPath,
-        );
+      if (hasAttr(node, "media") || hasAttr(node, "disabled") || hasAttr(node, "title") || rel.includes("alternate"))
+        return fail("stylesheet presentation semantics are unsupported", currentPath);
       const resolved = resolveLocal(href, currentPath);
-      if (!resolved)
-        return fail(
-          `stylesheet "${href.trim().slice(0, 120)}" is not a file of this page`,
-          currentPath,
-        );
-      const resource = readResource(
-        resolved,
-        manifestFiles,
-        sourceBytes,
-        consumed,
-      );
+      if (!resolved) return fail(`stylesheet "${href.trim().slice(0, 120)}" is not a file of this page`, currentPath);
+      const resource = readResource(resolved, manifestFiles, sourceBytes, consumed);
       if (resource.error) return resource.error;
-      if (resource.file.mime !== "text/css")
-        return fail("stylesheet has unsupported MIME", resolved);
+      if (resource.file.mime !== "text/css") return fail("stylesheet has unsupported MIME", resolved);
       let cssSource: string;
       try {
-        cssSource = new TextDecoder("utf-8", { fatal: true }).decode(
-          resource.value,
-        );
+        cssSource = new TextDecoder("utf-8", { fatal: true }).decode(resource.value);
       } catch {
         return fail("stylesheet is not valid UTF-8", resolved);
       }
@@ -950,24 +758,17 @@ export function buildInlineBundle(
         MODULE_LIKE_TYPES.includes(type) ||
         // Inline classic scripts ignore async/defer; a referenced one would
         // change execution order, so that stays refused.
-        ((hasAttr(node, "async") || hasAttr(node, "defer")) &&
-          hasAttr(node, "src"))
+        ((hasAttr(node, "async") || hasAttr(node, "defer")) && hasAttr(node, "src"))
       )
         return fail(
           "module, importmap, non-JavaScript (e.g. text/babel) and referenced async or defer scripts are unsupported",
           currentPath,
         );
-      if (hasAttr(node, "src") && !source)
-        return fail("empty script source is unsupported", currentPath);
-      if (hasAttr(node, "type") && !type)
-        return fail("empty script type is unsupported", currentPath);
+      if (hasAttr(node, "src") && !source) return fail("empty script source is unsupported", currentPath);
+      if (hasAttr(node, "type") && !type) return fail("empty script type is unsupported", currentPath);
       // A data block (shader source, JSON) is inert text for the page's
       // own scripts; it may not name a file.
-      if (!javascript && source)
-        return fail(
-          `script of type ${type} with a src is unsupported`,
-          currentPath,
-        );
+      if (!javascript && source) return fail(`script of type ${type} with a src is unsupported`, currentPath);
       if (javascript) runsScripts = true;
       if (source) {
         const resolved = resolveLocal(source, currentPath);
@@ -978,43 +779,27 @@ export function buildInlineBundle(
               : `script "${source.trim().slice(0, 120)}" is not a file of this page`,
             currentPath,
           );
-        const resource = readResource(
-          resolved,
-          manifestFiles,
-          sourceBytes,
-          consumed,
-        );
+        const resource = readResource(resolved, manifestFiles, sourceBytes, consumed);
         if (resource.error) return resource.error;
-        if (resource.file.mime !== "text/javascript")
-          return fail("script has unsupported MIME", resolved);
+        if (resource.file.mime !== "text/javascript") return fail("script has unsupported MIME", resolved);
         let script: string;
         try {
-          script = new TextDecoder("utf-8", { fatal: true }).decode(
-            resource.value,
-          );
+          script = new TextDecoder("utf-8", { fatal: true }).decode(resource.value);
         } catch {
           return fail("script is not valid UTF-8", resolved);
         }
-        if (/<\/script/i.test(script))
-          return fail("script contains a raw closing sequence", resolved);
-        node.attrs = node.attrs?.filter(
-          (item) => item.name.toLowerCase() !== "src",
-        );
+        if (/<\/script/i.test(script)) return fail("script contains a raw closing sequence", resolved);
+        node.attrs = node.attrs?.filter((item) => item.name.toLowerCase() !== "src");
         node.childNodes = [textNode(script, node)];
       } else {
-        const script = (node.childNodes ?? [])
-          .map((child) => child.value ?? "")
-          .join("");
-        if (/<\/script/i.test(script))
-          return fail("script contains a raw closing sequence", currentPath);
+        const script = (node.childNodes ?? []).map((child) => child.value ?? "").join("");
+        if (/<\/script/i.test(script)) return fail("script contains a raw closing sequence", currentPath);
       }
     } else if (tag === "img" && /^\s*data:/i.test(attr(node, "src") ?? "")) {
       const data = safeDataUri(attr(node, "src")!.trim(), DATA_IMAGE_MIMES);
-      if (!data)
-        return fail("image data: URI is not an allowlisted image", currentPath);
+      if (!data) return fail("image data: URI is not an allowlisted image", currentPath);
       cssExpansionBytes += data.length;
-      if (cssExpansionBytes > MAX_OUTPUT_BYTES)
-        return fail("inlined HTML exceeds 8 MiB", currentPath);
+      if (cssExpansionBytes > MAX_OUTPUT_BYTES) return fail("inlined HTML exceeds 8 MiB", currentPath);
       setAttr(node, "src", data);
     } else if (tag === "img" && isRemote(attr(node, "src"))) {
       // The image keeps its size and alt text; only the address goes.
@@ -1023,36 +808,18 @@ export function buildInlineBundle(
     } else if (tag === "img" && (attr(node, "src") ?? "").trim()) {
       const reference = attr(node, "src")!;
       const resolved = resolveLocal(reference, currentPath);
-      if (!resolved)
-        return fail(
-          `image "${reference.trim().slice(0, 120)}" is not a file of this page`,
-          currentPath,
-        );
-      const resource = readResource(
-        resolved,
-        manifestFiles,
-        sourceBytes,
-        consumed,
-      );
+      if (!resolved) return fail(`image "${reference.trim().slice(0, 120)}" is not a file of this page`, currentPath);
+      const resource = readResource(resolved, manifestFiles, sourceBytes, consumed);
       if (resource.error) return resource.error;
-      if (
-        !["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(
-          resource.file.mime,
-        )
-      )
+      if (!["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(resource.file.mime))
         return fail("image has unsupported MIME", resolved);
       if (resource.file.mime === "image/svg+xml" && !safeSvg(resource.value))
         return fail("SVG is not an inert allowlisted image", resolved);
       // Each <img> gets its own data: copy; charge it before allocating so a
       // repeated reference cannot amplify memory beyond the output limit.
       cssExpansionBytes += Math.ceil(resource.value.length / 3) * 4 + 80;
-      if (cssExpansionBytes > MAX_OUTPUT_BYTES)
-        return fail("inlined HTML exceeds 8 MiB", resolved);
-      setAttr(
-        node,
-        "src",
-        `data:${resource.file.mime};base64,${resource.value.toString("base64")}`,
-      );
+      if (cssExpansionBytes > MAX_OUTPUT_BYTES) return fail("inlined HTML exceeds 8 MiB", resolved);
+      setAttr(node, "src", `data:${resource.file.mime};base64,${resource.value.toString("base64")}`);
     }
     for (const child of node.childNodes ?? []) {
       const result = process(child, currentPath);
@@ -1066,10 +833,7 @@ export function buildInlineBundle(
     const siblings = node.parentNode?.childNodes;
     if (siblings) siblings.splice(siblings.indexOf(node), 1);
   }
-  if (remoteImages)
-    warnings.add(
-      `внешние изображения (${remoteImages}) не показаны (просмотр без сети)`,
-    );
+  if (remoteImages) warnings.add(`внешние изображения (${remoteImages}) не показаны (просмотр без сети)`);
   // Scripts get the same environment as runtime pages (storage in memory,
   // dialogs in the page) before any of them runs.
   if (prelude && runsScripts) {
@@ -1077,11 +841,8 @@ export function buildInlineBundle(
     if (!head) return fail("entrypoint has no head", manifest.entrypoint);
     insertIntoHead(head, [element("script", PRELUDE, head)]);
   }
-  const html = Buffer.from(
-    serialize(document as unknown as DefaultTreeAdapterTypes.ParentNode),
-  );
-  if (html.length > MAX_OUTPUT_BYTES)
-    return fail("inlined HTML exceeds 8 MiB", manifest.entrypoint);
+  const html = Buffer.from(serialize(document as unknown as DefaultTreeAdapterTypes.ParentNode));
+  if (html.length > MAX_OUTPUT_BYTES) return fail("inlined HTML exceeds 8 MiB", manifest.entrypoint);
   return {
     ok: true,
     sourceManifestSha256,

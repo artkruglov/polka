@@ -77,12 +77,9 @@ export function SharePanel({
     }
   };
   const copy = async () => {
-    if ((await clip.copy()) === "failed")
-      setError("Не удалось скопировать. Выделите адрес выше.");
+    if ((await clip.copy()) === "failed") setError("Не удалось скопировать. Выделите адрес выше.");
   };
-  const telegram = url
-    ? `https://t.me/share/url?url=${encodeURIComponent(url)}`
-    : null;
+  const telegram = url ? `https://t.me/share/url?url=${encodeURIComponent(url)}` : null;
   return (
     <Dialog title="Поделиться" onClose={onClose} busy={busy}>
       <div className="dialog-body share-panel">
@@ -125,7 +122,11 @@ export function SharePanel({
               checked={false}
               disabled
               icon={<Globe />}
-              title={<>Опубликовать <small className="share-soon">после проверки</small></>}
+              title={
+                <>
+                  Опубликовать <small className="share-soon">после проверки</small>
+                </>
+              }
               description="В «Ленте» после проверки редакцией Полки. Пока публикует оператор."
               onChange={() => undefined}
             />
@@ -135,9 +136,7 @@ export function SharePanel({
         {wantsLink && provisional && (
           <div className="share-step share-step--warn" role="note">
             <strong>Полка ещё не закреплена.</strong>
-            <p>
-              Ссылки выдаются после входа {ways.via}: так требует закон. Работа сохранена и видна только вам.
-            </p>
+            <p>Ссылки выдаются после входа {ways.via}: так требует закон. Работа сохранена и видна только вам.</p>
           </div>
         )}
         {wantsLink && !provisional && (
@@ -180,8 +179,7 @@ export function SharePanel({
               </>
             ) : (
               <p className="fine" role="note">
-                Адрес ссылки сейчас недоступен. Закройте окно и откройте его
-                снова.
+                Адрес ссылки сейчас недоступен. Закройте окно и откройте его снова.
               </p>
             )}
             {telegram && (
@@ -199,7 +197,8 @@ export function SharePanel({
               {opensNote(a.share)}
             </p>
             <p className="fine">
-              Получатель видит версию {a.share!.number}. Действует до {dateLong(a.share!.expiresAt)}. Поисковикам передаётся запрет индексации.
+              Получатель видит версию {a.share!.number}. Действует до {dateLong(a.share!.expiresAt)}. Поисковикам
+              передаётся запрет индексации.
             </p>
             {a.share!.status === "behind" && (
               <div className="share-update">
@@ -218,10 +217,7 @@ export function SharePanel({
         {a.revision.link && (
           <p className="share-moderation" role="note" data-link-access>
             <LinkIcon aria-hidden="true" />
-            <span>
-              Это ссылка, а не копия.{" "}
-              {recipientAccessNote(a.revision.link.host, a.revision.link.service)}
-            </span>
+            <span>Это ссылка, а не копия. {recipientAccessNote(a.revision.link.host, a.revision.link.service)}</span>
           </p>
         )}
 
@@ -247,12 +243,13 @@ export function SharePanel({
           <span>
             {currentShelf() ? (
               <>
-                <strong>Ссылка с полки отдела.</strong> За неё отвечаете вы: письма о жалобах и
-                проверке придут вам. Без ссылки работу видят только участники полки.
+                <strong>Ссылка с полки отдела.</strong> За неё отвечаете вы: письма о жалобах и проверке придут вам. Без
+                ссылки работу видят только участники полки.
               </>
             ) : (
               <>
-                <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Ленту» сами; по умолчанию их видите только вы.
+                <strong>Публикация — после проверки.</strong> Ваши работы не попадают в «Ленту» сами; по умолчанию их
+                видите только вы.
               </>
             )}
           </span>

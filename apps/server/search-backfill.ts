@@ -12,12 +12,7 @@ import { LINK_MIME } from "../../packages/contracts/index.ts";
 import { db, transaction } from "./db.ts";
 import { inspectHtmlBounded } from "./html.ts";
 import { linkText } from "./saved-link-format.ts";
-import {
-  SEARCH_TEXT_CHARS,
-  SearchText,
-  addScriptText,
-  indexRevisionText,
-} from "./search-text.ts";
+import { SEARCH_TEXT_CHARS, SearchText, addScriptText, indexRevisionText } from "./search-text.ts";
 import { readBlob } from "./storage.ts";
 
 const MAX_BUNDLE_FILES = 500;
@@ -35,25 +30,15 @@ type Row = {
 /** The text of one stored version for search; null when it cannot be read. */
 export async function searchTextOfRevision(revision: Row): Promise<string | null> {
   const page = async (key: string, version: string) =>
-    (
-      await inspectHtmlBounded(
-        (await readBlob(key, version)).toString("utf8"),
-        undefined,
-        { text: true },
-      )
-    ).text ?? null;
+    (await inspectHtmlBounded((await readBlob(key, version)).toString("utf8"), undefined, { text: true })).text ?? null;
   try {
     if (revision.mime === "text/plain") {
       const bytes = await readBlob(revision.object_key, revision.object_version);
       return bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4));
     }
     if (revision.mime === LINK_MIME)
-      return linkText(
-        revision.title,
-        await readBlob(revision.object_key, revision.object_version),
-      );
-    if (revision.storage_kind !== "bundle")
-      return await page(revision.object_key, revision.object_version);
+      return linkText(revision.title, await readBlob(revision.object_key, revision.object_version));
+    if (revision.storage_kind !== "bundle") return await page(revision.object_key, revision.object_version);
     // A bundle: the entry page's visible text, then the scripts' phrases.
     const text = new SearchText();
     const entry = await page(revision.object_key, revision.object_version);
@@ -68,10 +53,7 @@ export async function searchTextOfRevision(revision: Row): Promise<string | null
     ).rows;
     for (const script of scripts) {
       if (text.full) break;
-      addScriptText(
-        (await readBlob(script.object_key, script.object_version)).toString("utf8"),
-        text,
-      );
+      addScriptText((await readBlob(script.object_key, script.object_version)).toString("utf8"), text);
     }
     return text.value();
   } catch {
@@ -149,11 +131,7 @@ export async function backfillSearch(
            WHERE a.id=$1 FOR UPDATE OF a, r`,
           [row.artifact_id, row.revision_id],
         );
-        if (
-          current?.latest_revision_id !== row.revision_id ||
-          current.content_purged_at ||
-          current.blocked
-        )
+        if (current?.latest_revision_id !== row.revision_id || current.content_purged_at || current.blocked)
           return false;
         await indexRevisionText(c, row.artifact_id, row.revision_id, text);
         return true;

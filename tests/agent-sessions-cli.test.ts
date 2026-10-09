@@ -9,12 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
-import {
-  commandShape,
-  createRedactor,
-  main,
-  prepareSession,
-} from "../scripts/polka-sessions.mjs";
+import { commandShape, createRedactor, main, prepareSession } from "../scripts/polka-sessions.mjs";
 import { FAKE, claudeSession, codexSession } from "./agent-sessions-fixtures.ts";
 
 let dir: string;
@@ -36,7 +31,10 @@ test("a Claude Code session: facts, secrets report and a redacted transcript wit
   assert.equal(body.project.label, "demo-app");
   assert.equal(body.permissionMode, "bypassPermissions");
   assert.equal(body.toolCallCount, 5);
-  assert.deepEqual(body.toolCalls.map((c: { kind: string }) => c.kind), ["shell", "shell", "shell", "web", "mcp"]);
+  assert.deepEqual(
+    body.toolCalls.map((c: { kind: string }) => c.kind),
+    ["shell", "shell", "shell", "web", "mcp"],
+  );
   assert.equal(body.toolCalls[1].template, "git push --force origin");
   assert.equal(body.toolCalls[1].status, "error");
   assert.equal(body.toolCalls[2].pipeToShell, true);
@@ -57,10 +55,16 @@ test("a Claude Code session: facts, secrets report and a redacted transcript wit
   assert.match(transcript, /\[REDACTED:github-token:[0-9a-f]{12}\]/);
   assert.ok(!transcript.includes("Private reasoning"));
   assert.match(transcript, /\[image\]/);
-  const [header, ...events] = transcript.trim().split("\n").map((line) => JSON.parse(line));
+  const [header, ...events] = transcript
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
   assert.equal(header.schema, "polka-session-transcript/1");
   assert.equal(header.thinking, false);
-  assert.deepEqual([...new Set(events.map((e: { type: string }) => e.type))], ["prompt", "assistant", "tool_call", "tool_result"]);
+  assert.deepEqual(
+    [...new Set(events.map((e: { type: string }) => e.type))],
+    ["prompt", "assistant", "tool_call", "tool_result"],
+  );
   assert.equal(body.transcript.bytes, transcriptGz.length);
   // With --thinking the reasoning is kept, redacted like the rest.
   const withThinking = await prepareSession({ source: "claude-code", path, id }, KEY, { thinking: true });
@@ -92,15 +96,30 @@ test("the redactor replaces the captured value, not an equal user name", () => {
   assert.match(redactor.redact(`OD_SECRET=${FAKE.hexSecret}`, "x"), /^OD_SECRET=\[REDACTED:assignment:/);
   // A bot token in a Bot API address, where no word boundary precedes it.
   const bot = "7301" + "123456" + ":AA" + "x".repeat(33);
-  assert.match(redactor.redact(`https://api.telegram.org/bot${bot}/sendMessage`, "x"), /^https:\/\/api\.telegram\.org\/bot\[REDACTED:telegram-bot-token:[0-9a-f]{12}\]\/sendMessage$/);
+  assert.match(
+    redactor.redact(`https://api.telegram.org/bot${bot}/sendMessage`, "x"),
+    /^https:\/\/api\.telegram\.org\/bot\[REDACTED:telegram-bot-token:[0-9a-f]{12}\]\/sendMessage$/,
+  );
   assert.match(redactor.redact(`TG ${bot}`, "x"), /^TG \[REDACTED:telegram-bot-token:/);
   // Code and placeholders stay.
-  for (const text of ["password: string", "token: null", "API_KEY=${API_KEY}", "const secret = loadSecret()", "commit " + "0123456789abcdef".repeat(2) + "01234567"])
+  for (const text of [
+    "password: string",
+    "token: null",
+    "API_KEY=${API_KEY}",
+    "const secret = loadSecret()",
+    "commit " + "0123456789abcdef".repeat(2) + "01234567",
+  ])
     assert.equal(redactor.redact(text, "x"), text);
   assert.deepEqual(commandShape("FOO=1 rm -rf /tmp/x && echo ok"), { argv0: "rm", template: "rm -rf <arg>" });
   // The setup steps of a chain are not the command.
-  assert.deepEqual(commandShape('cd "/a b/c"; npm run -s check 2>&1 | tail'), { argv0: "npm", template: "npm run -s check" });
-  assert.deepEqual(commandShape("export A=1 && source .env && psql -c 'select 1'"), { argv0: "psql", template: "psql -c <arg>" });
+  assert.deepEqual(commandShape('cd "/a b/c"; npm run -s check 2>&1 | tail'), {
+    argv0: "npm",
+    template: "npm run -s check",
+  });
+  assert.deepEqual(commandShape("export A=1 && source .env && psql -c 'select 1'"), {
+    argv0: "psql",
+    template: "psql -c <arg>",
+  });
   assert.deepEqual(commandShape("cd /tmp"), { argv0: "cd", template: "cd <arg>" });
 });
 
@@ -122,7 +141,8 @@ async function standIn({ keyDelayMs = 0 } = {}) {
     return Buffer.concat(chunks);
   };
   const server = createServer(async (req, res) => {
-    const reply = (status: number, payload: unknown) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(payload));
+    const reply = (status: number, payload: unknown) =>
+      res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(payload));
     if (req.method === "GET" && req.url === "/api/v1/sessions/key") {
       keyRequests++;
       await new Promise((r) => setTimeout(r, keyDelayMs));
@@ -147,7 +167,9 @@ async function standIn({ keyDelayMs = 0 } = {}) {
 }
 
 /** A home of its own with Claude Code's folder in it; HOME and CLAUDE_CONFIG_DIR point there meanwhile. */
-async function inHome(run: (home: string, session: (id: string, ageDays?: number) => Promise<string>) => Promise<void>) {
+async function inHome(
+  run: (home: string, session: (id: string, ageDays?: number) => Promise<string>) => Promise<void>,
+) {
   const home = await mkdtemp(join(dir, "home-"));
   const projects = join(home, ".claude", "projects", "-work-demo-app");
   await mkdir(projects, { recursive: true });
@@ -170,12 +192,17 @@ async function inHome(run: (home: string, session: (id: string, ageDays?: number
 }
 
 async function until(what: string, ok: () => boolean | Promise<boolean>) {
-  for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (await ok()) return;
+  for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50)))
+    if (await ok()) return;
   assert.fail(`timed out waiting for ${what}`);
 }
 
-const said = (out: string[]) => ({ stdout: { write: (text: string) => out.push(text) }, stderr: { write: (text: string) => out.push(text) } });
-const stateOf = async (home: string) => JSON.parse(await readFile(join(home, ".polka", "sessions-state.json"), "utf8").catch(() => "{}"));
+const said = (out: string[]) => ({
+  stdout: { write: (text: string) => out.push(text) },
+  stderr: { write: (text: string) => out.push(text) },
+});
+const stateOf = async (home: string) =>
+  JSON.parse(await readFile(join(home, ".polka", "sessions-state.json"), "utf8").catch(() => "{}"));
 
 test("/clear ends one session and starts another: the hook sends both, the scheduled sync neither again", async () => {
   const server = await standIn();
@@ -183,7 +210,11 @@ test("/clear ends one session and starts another: the hook sends both, the sched
     await inHome(async (home, session) => {
       const env = { HOME: home, POLKA_SESSIONS: "on", POLKA_TOKEN: TOKEN, POLKA_ENDPOINT: server.endpoint };
       const end = (reason: string, path: string) =>
-        main(["hook"], { env, ...said([]), stdin: async () => JSON.stringify({ hook_event_name: "SessionEnd", reason, transcript_path: path }) });
+        main(["hook"], {
+          env,
+          ...said([]),
+          stdin: async () => JSON.stringify({ hook_event_name: "SessionEnd", reason, transcript_path: path }),
+        });
       const [cleared, rest] = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000002"];
       // SessionEnd with reason "clear" for the conversation so far; what follows is a new id and file.
       assert.equal(await end("clear", await session(cleared)), 0);
@@ -193,7 +224,10 @@ test("/clear ends one session and starts another: the hook sends both, the sched
       assert.deepEqual(server.received, [cleared, rest]);
       // /clear before the first prompt: Claude Code wrote no file, there is nothing to send.
       assert.equal(await end("clear", join(home, ".claude", "projects", "-work-demo-app", `${randomUUID()}.jsonl`)), 0);
-      assert.match(await readFile(join(home, ".polka", "sessions-hook.log"), "utf8"), /clear [0-9a-f-]{36}\.jsonl \(no file: nothing to send\)\n/);
+      assert.match(
+        await readFile(join(home, ".polka", "sessions-hook.log"), "utf8"),
+        /clear [0-9a-f-]{36}\.jsonl \(no file: nothing to send\)\n/,
+      );
       // The hourly sync knows what the hook sent.
       const out: string[] = [];
       assert.equal(await main(["sync", "--since", "2d"], { env, ...said(out) }), 0, out.join(""));
@@ -215,7 +249,10 @@ test("a closed terminal may run no SessionEnd: the scheduled sync finds the sess
       // newer than the last sync that went through.
       await session(id, 3);
       await mkdir(join(home, ".polka"), { recursive: true });
-      await writeFile(join(home, ".polka", "sessions-state.json"), JSON.stringify({ lastSyncAt: Date.now() - 4 * 86_400_000 }));
+      await writeFile(
+        join(home, ".polka", "sessions-state.json"),
+        JSON.stringify({ lastSyncAt: Date.now() - 4 * 86_400_000 }),
+      );
       const out: string[] = [];
       assert.equal(await main(["sync", "--since", "2d"], { env, ...said(out) }), 0, out.join(""));
       assert.match(out.join(""), /Sent 1, unchanged 0\.\n$/);
@@ -229,27 +266,45 @@ test("a closed terminal may run no SessionEnd: the scheduled sync finds the sess
   }
 });
 
-test("closing the terminal while the hook's upload runs does not stop the upload", { skip: process.platform === "win32" }, async () => {
-  const server = await standIn({ keyDelayMs: 500 });
-  try {
-    await inHome(async (home, session) => {
-      const path = await session("cccccccc-0000-4000-8000-000000000001");
-      const input = join(home, "hook-input.json");
-      await writeFile(input, JSON.stringify({ hook_event_name: "SessionEnd", reason: "other", transcript_path: path }));
-      // The terminal's process group: a shell that runs the hook and stays, as Claude Code would.
-      const env = { PATH: process.env.PATH, HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"), POLKA_SESSIONS: "on", POLKA_TOKEN: TOKEN, POLKA_ENDPOINT: server.endpoint };
-      const terminal = spawn("sh", ["-c", `"${process.execPath}" "${SCRIPT}" hook < "${input}"; sleep 30`], { detached: true, stdio: "ignore", env });
-      const closed = new Promise((r) => terminal.once("exit", (_code, signal) => r(signal)));
-      await until("the upload to start", () => server.keyRequests() === 1);
-      process.kill(-terminal.pid!, "SIGHUP");
-      assert.equal(await closed, "SIGHUP");
-      assert.equal(server.received.length, 0, "the upload was still waiting for the key");
-      await until("the upload to arrive", () => server.received.length === 1);
-    });
-  } finally {
-    await server.close();
-  }
-});
+test(
+  "closing the terminal while the hook's upload runs does not stop the upload",
+  { skip: process.platform === "win32" },
+  async () => {
+    const server = await standIn({ keyDelayMs: 500 });
+    try {
+      await inHome(async (home, session) => {
+        const path = await session("cccccccc-0000-4000-8000-000000000001");
+        const input = join(home, "hook-input.json");
+        await writeFile(
+          input,
+          JSON.stringify({ hook_event_name: "SessionEnd", reason: "other", transcript_path: path }),
+        );
+        // The terminal's process group: a shell that runs the hook and stays, as Claude Code would.
+        const env = {
+          PATH: process.env.PATH,
+          HOME: home,
+          CLAUDE_CONFIG_DIR: join(home, ".claude"),
+          POLKA_SESSIONS: "on",
+          POLKA_TOKEN: TOKEN,
+          POLKA_ENDPOINT: server.endpoint,
+        };
+        const terminal = spawn("sh", ["-c", `"${process.execPath}" "${SCRIPT}" hook < "${input}"; sleep 30`], {
+          detached: true,
+          stdio: "ignore",
+          env,
+        });
+        const closed = new Promise((r) => terminal.once("exit", (_code, signal) => r(signal)));
+        await until("the upload to start", () => server.keyRequests() === 1);
+        process.kill(-terminal.pid!, "SIGHUP");
+        assert.equal(await closed, "SIGHUP");
+        assert.equal(server.received.length, 0, "the upload was still waiting for the key");
+        await until("the upload to arrive", () => server.received.length === 1);
+      });
+    } finally {
+      await server.close();
+    }
+  },
+);
 
 test("a session the server refuses does not hold back the others and is tried again", async () => {
   const server = await standIn();

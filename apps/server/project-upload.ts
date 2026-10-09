@@ -7,10 +7,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import { z } from "zod";
 import type { PoolClient } from "pg";
-import {
-  PROJECT_RUNTIME,
-  canonicalizeManifest,
-} from "../../packages/contracts/bundle.ts";
+import { PROJECT_RUNTIME, canonicalizeManifest } from "../../packages/contracts/bundle.ts";
 import { MAX_TITLE, uuid } from "../../packages/contracts/index.ts";
 import {
   authorizedRevisionFiles,
@@ -66,10 +63,10 @@ export async function beginProjectUpload(actor: ServiceActor, body: unknown) {
   return withServiceActorTransaction(actor, mode, async (c, verified) => {
     const who = owner(verified);
     const old = (
-      await c.query(
-        "SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2",
-        [who.tenant, input.key],
-      )
+      await c.query("SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [
+        who.tenant,
+        input.key,
+      ])
     ).rows[0];
     if (old && old.connection_id !== (who.connectionId ?? null))
       throw new Problem(409, "conflict", "Ключ уже относится к другой операции.");
@@ -81,15 +78,14 @@ export async function beginProjectUpload(actor: ServiceActor, body: unknown) {
         title: input.title,
         manifest,
         ...(input.folderId ? { folderId: input.folderId } : {}),
-        ...(input.artifactId
-          ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId }
-          : {}),
+        ...(input.artifactId ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId } : {}),
       }),
     );
-    await c.query(
-      "UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3",
-      [result.uploadId, who.connectionId ?? null, who.tenant],
-    );
+    await c.query("UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3", [
+      result.uploadId,
+      who.connectionId ?? null,
+      who.tenant,
+    ]);
     return {
       uploadId: result.uploadId,
       receipt: result.receipt,
@@ -114,9 +110,7 @@ async function lockProjectUpload(c: PoolClient, who: Actor, uploadId: string) {
 
 const scopeOf = async (actor: ServiceActor, uploadId: string) =>
   withServiceActorTransaction(actor, "capture", async (c, verified) =>
-    (await lockProjectUpload(c, owner(verified), uploadId)).artifactId
-      ? ("revise" as const)
-      : ("capture" as const),
+    (await lockProjectUpload(c, owner(verified), uploadId)).artifactId ? ("revise" as const) : ("capture" as const),
   ).catch(async (error) => {
     // A revise-only connection may still send files of its new version.
     if (error instanceof Problem && error.status === 403)
@@ -128,12 +122,7 @@ const scopeOf = async (actor: ServiceActor, uploadId: string) =>
     throw error;
   });
 
-export async function putProjectFile(
-  actor: ServiceActor,
-  uploadId: string,
-  index: number,
-  bytes: Buffer,
-) {
+export async function putProjectFile(actor: ServiceActor, uploadId: string, index: number, bytes: Buffer) {
   const scope = await scopeOf(actor, uploadId);
   // Stored before the transaction (artifacts.ts, stageBundleFile); the
   // transaction rechecks the connection and records it.
@@ -150,12 +139,7 @@ export async function putProjectFile(
  * arrives, checked against its manifest entry on the way, then recorded like
  * any other file.
  */
-export async function putProjectMedia(
-  actor: ServiceActor,
-  uploadId: string,
-  index: number,
-  body: Readable,
-) {
+export async function putProjectMedia(actor: ServiceActor, uploadId: string, index: number, body: Readable) {
   const scope = await scopeOf(actor, uploadId);
   const staged = await stageBundleMedia(owner(actor), uploadId, index, body, () => body.resume());
   return withServiceActorTransaction(actor, scope, async (c, verified) => {
@@ -183,14 +167,13 @@ export async function reuseProjectFiles(actor: ServiceActor, uploadId: string) {
     const request = normalizeBundleRequest(upload.request, true);
     const {
       rows: [revision],
-    } = await c.query(
-      "SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3",
-      [request.baseRevisionId, request.artifactId, who.tenant],
-    );
+    } = await c.query("SELECT * FROM revisions WHERE id=$1 AND artifact_id=$2 AND tenant_id=$3", [
+      request.baseRevisionId,
+      request.artifactId,
+      who.tenant,
+    ]);
     if (!revision?.manifest) return [];
-    const base = new Map(
-      (await authorizedRevisionFiles(c, revision)).stored.map((file) => [file.path, file]),
-    );
+    const base = new Map((await authorizedRevisionFiles(c, revision)).stored.map((file) => [file.path, file]));
     return request.manifest.files.flatMap((file, index) => {
       const same = base.get(file.path);
       return same && same.sha256 === file.sha256 && same.mime === file.mime && same.size === file.size
@@ -236,11 +219,7 @@ const PROJECT_TOKENS_PER_HOUR = 10;
  * 30 minutes, and it stops when its parent is revoked.
  */
 export async function issueProjectUploadToken(actor: ServiceActor) {
-  await limitAttempts(
-    `project-upload-token:${actor.connectionId}`,
-    PROJECT_TOKENS_PER_HOUR,
-    "1 hour",
-  );
+  await limitAttempts(`project-upload-token:${actor.connectionId}`, PROJECT_TOKENS_PER_HOUR, "1 hour");
   const token = randomBytes(32).toString("base64url");
   const row = await withServiceActorDerivedScopeTransaction(
     actor,
@@ -250,18 +229,13 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
     }),
     async (c, verified) => {
       if (verified.shelf?.role === "reader")
-        throw new Problem(
-          403,
-          "forbidden",
-          "На этой полке вы читатель: загружать проекты нельзя.",
-        );
+        throw new Problem(403, "forbidden", "На этой полке вы читатель: загружать проекты нельзя.");
       if (verified.audience !== MCP_AUDIENCE)
         throw new Problem(403, "forbidden", "Этот токен сам выдан для загрузки проекта.");
       // source:read, when the connection has it, lets the CLI pull a
       // version into a folder before pushing the next one.
       const scopes = verified.scopes.filter(
-        (scope) =>
-          scope === "capture" || scope === "revise" || scope === "share" || scope === "source:read",
+        (scope) => scope === "capture" || scope === "revise" || scope === "share" || scope === "source:read",
       );
       const {
         rows: [inserted],
@@ -286,7 +260,12 @@ export async function issueProjectUploadToken(actor: ServiceActor) {
         ],
       );
       // A task token (a child itself) cannot ask for another child.
-      if (!inserted) throw new Problem(403, "forbidden", "Этот токен сам выдан для задачи: загрузку проекта запрашивает исходное подключение.");
+      if (!inserted)
+        throw new Problem(
+          403,
+          "forbidden",
+          "Этот токен сам выдан для задачи: загрузку проекта запрашивает исходное подключение.",
+        );
       return { ...inserted, canPull: scopes.includes("source:read") };
     },
   );

@@ -12,14 +12,10 @@ export function installProcessErrorHandlers(
   exit: (code: number) => void = (code) => process.exit(code),
 ) {
   target.on("unhandledRejection", (reason: unknown) => {
-    console.error(
-      JSON.stringify({ event: "process.unhandled_rejection", ...errorFacts(reason) }),
-    );
+    console.error(JSON.stringify({ event: "process.unhandled_rejection", ...errorFacts(reason) }));
   });
   target.on("uncaughtException", (error: unknown) => {
-    console.error(
-      JSON.stringify({ event: "process.uncaught_exception", ...errorFacts(error) }),
-    );
+    console.error(JSON.stringify({ event: "process.uncaught_exception", ...errorFacts(error) }));
     exit(1);
   });
 }

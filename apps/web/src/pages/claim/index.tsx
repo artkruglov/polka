@@ -5,16 +5,9 @@ import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
-import {
-  loadCapabilities,
-  useSignInWays,
-} from "../../entities/capabilities/useCapabilities.ts";
+import { loadCapabilities, useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
-import {
-  LinkProviderButtons,
-  ProviderButtons,
-  providerErrorMessage,
-} from "../../features/provider-sign-in/index.tsx";
+import { LinkProviderButtons, ProviderButtons, providerErrorMessage } from "../../features/provider-sign-in/index.tsx";
 
 type Collision = {
   method: string;
@@ -53,18 +46,12 @@ export function ClaimChoice({
     <>
       {weak && (
         <Notice>
-          Вы вошли по ссылке от агента. Чтобы объединить полки, войдите {via}
-          {" "}— а пока можно перейти в ту полку.
+          Вы вошли по ссылке от агента. Чтобы объединить полки, войдите {via} — а пока можно перейти в ту полку.
         </Notice>
       )}
       <div className="shelf-choice">
         {!weak && (
-          <Button
-            variant="primary"
-            busy={busy === "merge"}
-            disabled={busy !== null}
-            onClick={() => onAct("merge")}
-          >
+          <Button variant="primary" busy={busy === "merge"} disabled={busy !== null} onClick={() => onAct("merge")}>
             Объединить
           </Button>
         )}
@@ -76,12 +63,7 @@ export function ClaimChoice({
         >
           {weak ? "Перейти в ту полку" : "Открыть ту полку без объединения"}
         </Button>
-        <Button
-          variant="quiet"
-          busy={busy === "cancel"}
-          disabled={busy !== null}
-          onClick={() => onAct("cancel")}
-        >
+        <Button variant="quiet" busy={busy === "cancel"} disabled={busy !== null} onClick={() => onAct("cancel")}>
           Отмена
         </Button>
       </div>
@@ -105,17 +87,14 @@ export function Claim() {
   const [emailLogin, setEmailLogin] = useState(false);
   const [collision, setCollision] = useState<Collision | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(
-    providerErrorMessage(query.get("idp_error")) ?? "",
-  );
+  const [error, setError] = useState(providerErrorMessage(query.get("idp_error")) ?? "");
   const [busy, setBusy] = useState<"merge" | "switch" | "cancel" | null>(null);
   // A session from an agent's link: sign in for real, then carry works over.
   const [weak, setWeak] = useState(false);
   // Agents that move with the works: the person ticks their own, none by default.
   const [keep, setKeep] = useState<string[]>([]);
   useEffect(() => {
-    if (account === null)
-      location.replace(`/signup?${new URLSearchParams({ next: "/" })}`);
+    if (account === null) location.replace(`/signup?${new URLSearchParams({ next: "/" })}`);
     if (!account) return;
     Promise.all([
       loadCapabilities(),
@@ -143,10 +122,7 @@ export function Claim() {
     setBusy(kind);
     setError("");
     try {
-      await request(
-        `/account/claim/${kind}`,
-        kind === "merge" ? { connections: keep } : {},
-      );
+      await request(`/account/claim/${kind}`, kind === "merge" ? { connections: keep } : {});
       if (kind === "cancel") {
         setCollision(null);
         setBusy(null);
@@ -178,20 +154,16 @@ export function Claim() {
               <p>{collision.methodName} открывает её.</p>
             ) : (
               <p>
-                {collision.methodName} открывает её. Объединить с ней временную
-                полку?{" "}
-                {collision.works
-                  ? `Работы (${collision.works}) перейдут туда.`
-                  : "Работ на временной полке нет."}{" "}
+                {collision.methodName} открывает её. Объединить с ней временную полку?{" "}
+                {collision.works ? `Работы (${collision.works}) перейдут туда.` : "Работ на временной полке нет."}{" "}
                 Временная полка закроется.
               </p>
             )}
             {!weak && collision.connections.length > 0 && (
               <fieldset className="claim-connections">
                 <legend>
-                  Какие агенты перенести? Отметьте только тех, кого подключали
-                  вы сами и помните когда: имя агент выбирает себе сам.
-                  Остальные будут отключены.
+                  Какие агенты перенести? Отметьте только тех, кого подключали вы сами и помните когда: имя агент
+                  выбирает себе сам. Остальные будут отключены.
                 </legend>
                 {collision.connections.map((connection) => (
                   <label key={connection.id} className="claim-connection">
@@ -222,28 +194,21 @@ export function Claim() {
               </fieldset>
             )}
             {error && <Notice tone="error">{error}</Notice>}
-            <ClaimChoice
-              weak={weak}
-              via={ways.via}
-              busy={busy}
-              onAct={(kind) => void act(kind)}
-            />
+            <ClaimChoice weak={weak} via={ways.via} busy={busy} onAct={(kind) => void act(kind)} />
           </>
         ) : (
           <>
             <h1>Закрепите полку.</h1>
             <p>
-              Сейчас полка живёт только в этом браузере и не выдаёт ссылки.
-              Войдите {ways.with} — способ входа привяжется к этой же полке,
-              работы и агенты останутся на месте.
+              Сейчас полка живёт только в этом браузере и не выдаёт ссылки. Войдите {ways.with} — способ входа
+              привяжется к этой же полке, работы и агенты останутся на месте.
             </p>
             {error && <Notice tone="error">{error}</Notice>}
             {loaded && weak && (
               <>
                 <Notice>
-                  Вы вошли по ссылке от агента. Чтобы закрепить полку, войдите
-                  в свою полку (или создайте её) {ways.via} — затем работы этой
-                  временной полки можно будет перенести туда.
+                  Вы вошли по ссылке от агента. Чтобы закрепить полку, войдите в свою полку (или создайте её) {ways.via}{" "}
+                  — затем работы этой временной полки можно будет перенести туда.
                 </Notice>
                 <ProviderButtons providers={providers} next="/" />
                 {emailLogin && (
@@ -258,10 +223,7 @@ export function Claim() {
             )}
             {loaded && !weak && (
               <>
-                <LinkProviderButtons
-                  providers={providers.filter((provider) => provider.signup)}
-                  onError={setError}
-                />
+                <LinkProviderButtons providers={providers.filter((provider) => provider.signup)} onError={setError} />
                 {emailLogin && (
                   <a
                     className="ui-button ui-button--secondary ui-button--block"
@@ -271,10 +233,9 @@ export function Claim() {
                   </a>
                 )}
                 <p className="onboard-fine">
-                  По закону делиться ссылками можно после авторизации через
-                  российские сервисы: войдите {ways.via} (почта — на российском
-                  домене). Если этот способ уже открывает другую вашу полку,
-                  предложим объединить.
+                  По закону делиться ссылками можно после авторизации через российские сервисы: войдите {ways.via}{" "}
+                  (почта — на российском домене). Если этот способ уже открывает другую вашу полку, предложим
+                  объединить.
                 </p>
               </>
             )}

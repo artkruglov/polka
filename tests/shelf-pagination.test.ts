@@ -22,10 +22,7 @@ const KINDS = [
 const kindOf = (index: number) => (["images", "pages", "documents"] as const)[index % 3];
 
 before(async () => {
-  owner = await createAccount(
-    `shelf-page-${randomBytes(6).toString("hex")}`,
-    password,
-  );
+  owner = await createAccount(`shelf-page-${randomBytes(6).toString("hex")}`, password);
   const login = await app.inject({
     method: "POST",
     url: "/api/login",
@@ -56,35 +53,17 @@ before(async () => {
          object_key,object_version,total_size,html_profile
        ) VALUES($1,$2,$3,1,$4,$7,$8,1,$5,$6,'fixture',1,
                 CASE WHEN $8='text/html' THEN 'static' END)`,
-      [
-        revisionId,
-        owner.tenant,
-        artifactId,
-        owner.id,
-        "0".repeat(64),
-        `pagination/${artifactId}`,
-        ...KINDS[index % 3],
-      ],
+      [revisionId, owner.tenant, artifactId, owner.id, "0".repeat(64), `pagination/${artifactId}`, ...KINDS[index % 3]],
     );
-    await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
-      artifactId,
-      revisionId,
-    ]);
+    await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [artifactId, revisionId]);
   }
 });
 
 after(async () => {
   if (owner) {
-    await db.query(
-      "UPDATE artifacts SET latest_revision_id=NULL WHERE id=ANY($1::uuid[])",
-      [artifactIds],
-    );
-    await db.query("DELETE FROM revisions WHERE artifact_id=ANY($1::uuid[])", [
-      artifactIds,
-    ]);
-    await db.query("DELETE FROM artifacts WHERE id=ANY($1::uuid[])", [
-      artifactIds,
-    ]);
+    await db.query("UPDATE artifacts SET latest_revision_id=NULL WHERE id=ANY($1::uuid[])", [artifactIds]);
+    await db.query("DELETE FROM revisions WHERE artifact_id=ANY($1::uuid[])", [artifactIds]);
+    await db.query("DELETE FROM artifacts WHERE id=ANY($1::uuid[])", [artifactIds]);
     await db.query("DELETE FROM sessions WHERE account_id=$1", [owner.id]);
     await db.query("DELETE FROM tenants WHERE id=$1", [owner.tenant]);
     await db.query("DELETE FROM accounts WHERE id=$1", [owner.id]);
@@ -153,19 +132,24 @@ async function walk(query: string) {
 test("the shelf sorts the whole shelf, not the loaded page", async () => {
   const oldest = await walk("sort=old");
   assert.equal(oldest.pages, 2);
-  assert.deepEqual(oldest.seen.map((item) => item.id), artifactIds);
+  assert.deepEqual(
+    oldest.seen.map((item) => item.id),
+    artifactIds,
+  );
   const newest = await walk("sort=new");
-  assert.deepEqual(newest.seen.map((item) => item.id), [...artifactIds].reverse());
+  assert.deepEqual(
+    newest.seen.map((item) => item.id),
+    [...artifactIds].reverse(),
+  );
   const byTitle = await walk("sort=title");
   const titles = byTitle.seen.map((item) => item.title);
   assert.equal(titles.length, 26);
-  assert.deepEqual(titles, [...titles].sort((a, b) => a.localeCompare(b, "en")));
+  assert.deepEqual(
+    titles,
+    [...titles].sort((a, b) => a.localeCompare(b, "en")),
+  );
   // «Cursor microseconds 1», «… 10», «… 11»: by the words, not by the date.
-  assert.deepEqual(titles.slice(0, 3), [
-    "Cursor microseconds 1",
-    "Cursor microseconds 10",
-    "Cursor microseconds 11",
-  ]);
+  assert.deepEqual(titles.slice(0, 3), ["Cursor microseconds 1", "Cursor microseconds 10", "Cursor microseconds 11"]);
 });
 
 test("a kind filter covers the whole shelf and the counts are the shelf's", async () => {
@@ -174,7 +158,11 @@ test("a kind filter covers the whole shelf and the counts are the shelf's", asyn
   for (const kind of ["images", "pages", "documents"] as const) {
     const expected = artifactIds.filter((_, index) => kindOf(index + 1) === kind);
     const filtered = await walk(`sort=old&kind=${kind}`);
-    assert.deepEqual(filtered.seen.map((item) => item.id), expected, kind);
+    assert.deepEqual(
+      filtered.seen.map((item) => item.id),
+      expected,
+      kind,
+    );
     // The chips keep the numbers of every kind while one is chosen.
     assert.deepEqual(filtered.counts, all.counts, kind);
   }
@@ -189,7 +177,10 @@ test("«Принятые» shows only works with an accepted version, across pag
     for (const id of marked)
       await db.query("UPDATE artifacts SET accepted_revision_id=latest_revision_id WHERE id=$1", [id]);
     const accepted = await walk("sort=old&accepted=1");
-    assert.deepEqual(accepted.seen.map((item) => item.id), marked);
+    assert.deepEqual(
+      accepted.seen.map((item) => item.id),
+      marked,
+    );
     assert.ok(accepted.pages > 1, "the filtered walk crossed a page");
     // The counts follow the filter, so a chip never promises what the filter hides.
     assert.equal(accepted.counts?.all, 25);
@@ -203,7 +194,8 @@ test("«Принятые» shows only works with an accepted version, across pag
     await db.query("UPDATE artifacts SET accepted_revision_id=NULL WHERE id=ANY($1::uuid[])", [marked]);
   }
   assert.equal(
-    (await app.inject({ method: "GET", url: "/api/artifacts?q=&accepted=yes", headers: { origin, cookie } })).statusCode,
+    (await app.inject({ method: "GET", url: "/api/artifacts?q=&accepted=yes", headers: { origin, cookie } }))
+      .statusCode,
     400,
   );
 });
@@ -230,7 +222,13 @@ test("the shelf card: read by a member, written by a curator through the session
   const headers = { origin, cookie };
   const read = async () => (await app.inject({ method: "GET", url: "/api/shelf/card", headers })).json().cardMd;
   assert.equal(await read(), null);
-  const put = (payload: unknown) => app.inject({ method: "PUT", url: "/api/shelf/card", headers: { ...headers, "content-type": "application/json" }, payload: JSON.stringify(payload) });
+  const put = (payload: unknown) =>
+    app.inject({
+      method: "PUT",
+      url: "/api/shelf/card",
+      headers: { ...headers, "content-type": "application/json" },
+      payload: JSON.stringify(payload),
+    });
   const saved = await put({ cardMd: "  Названия — «Клиент — тема».  " });
   assert.equal(saved.statusCode, 200, saved.body);
   assert.equal(await read(), "Названия — «Клиент — тема».");
@@ -238,7 +236,14 @@ test("the shelf card: read by a member, written by a curator through the session
   assert.equal((await put({ cardMd: "я".repeat(8001) })).statusCode, 400);
   assert.equal((await put({ text: "x" })).statusCode, 400);
   assert.equal(
-    (await app.inject({ method: "PUT", url: "/api/shelf/card", headers: { origin, "content-type": "application/json" }, payload: JSON.stringify({ cardMd: "x" }) })).statusCode,
+    (
+      await app.inject({
+        method: "PUT",
+        url: "/api/shelf/card",
+        headers: { origin, "content-type": "application/json" },
+        payload: JSON.stringify({ cardMd: "x" }),
+      })
+    ).statusCode,
     401,
   );
   assert.equal((await app.inject({ method: "GET", url: "/api/shelf/card", headers: { origin } })).statusCode, 401);

@@ -53,10 +53,12 @@ function fixture(initialPhase = "awaiting_revoke_ledger") {
           }
           if (text.includes("lock_account_purge_mail")) {
             return {
-              rows: [{
-                account_email: "owner@example.test",
-                challenges: [{ id: ids.challenge, delivery: "local" }],
-              }],
+              rows: [
+                {
+                  account_email: "owner@example.test",
+                  challenges: [{ id: ids.challenge, delivery: "local" }],
+                },
+              ],
             };
           }
           if (text.includes("complete_account_purge_mail"))
@@ -83,15 +85,21 @@ test("purge records revoke, verifies an empty source, scrubs mail/metadata, then
     attemptId: () => ids.attempt,
     now: () => new Date("2026-09-21T10:00:03.000Z"),
     replacementPasswordHash: () => `${"a".repeat(32)}:${"b".repeat(128)}`,
-    removeLocalMail: async (path) => { removed.push(path); },
+    removeLocalMail: async (path) => {
+      removed.push(path);
+    },
     ledger: {
       async putIfAbsent(key, bytes) {
         assert.equal(ledger.has(key), false);
         ledger.set(key, bytes);
         return { versionId: `version-${ledger.size}` };
       },
-      async read(key) { return { bytes: ledger.get(key)!, versionId: "version-existing" }; },
-      async list() { return { items: [] }; },
+      async read(key) {
+        return { bytes: ledger.get(key)!, versionId: "version-existing" };
+      },
+      async list() {
+        return { items: [] };
+      },
     },
     content: {
       async listVersions(input) {
@@ -99,7 +107,9 @@ test("purge records revoke, verifies an empty source, scrubs mail/metadata, then
         assert.equal(input.maxKeys, 100);
         return { versions: [], deleteMarkers: [], truncated: false };
       },
-      async deleteVersion() { throw new Error("nothing may be deleted"); },
+      async deleteVersion() {
+        throw new Error("nothing may be deleted");
+      },
     },
   });
   assert.deepEqual(counters, {
@@ -114,10 +124,7 @@ test("purge records revoke, verifies an empty source, scrubs mail/metadata, then
   assert.deepEqual(removed, [`.local/mail/${ids.challenge}.json`]);
   assert.deepEqual(
     [...ledger.keys()],
-    [
-      `erasure/v1/${ids.ledger}/${ids.deletion}/revoke.json`,
-      `erasure/v1/${ids.ledger}/${ids.deletion}/purged.json`,
-    ],
+    [`erasure/v1/${ids.ledger}/${ids.deletion}/revoke.json`, `erasure/v1/${ids.ledger}/${ids.deletion}/purged.json`],
   );
   const completion = sql.find((query) => query.text.includes("complete_account_purge_mail"));
   assert.deepEqual(completion?.values?.[3], [ids.challenge]);
@@ -135,20 +142,42 @@ test("one pass deletes at most one 100-version source batch and leaves metadata 
     ledgerId: ids.ledger,
     attemptId: () => ids.attempt,
     ledger: {
-      async putIfAbsent() { throw new Error("ledger should not be called"); },
-      async read() { throw new Error("ledger should not be called"); },
-      async list() { return { items: [] }; },
+      async putIfAbsent() {
+        throw new Error("ledger should not be called");
+      },
+      async read() {
+        throw new Error("ledger should not be called");
+      },
+      async list() {
+        return { items: [] };
+      },
     },
     content: {
-      async listVersions() { return { versions, deleteMarkers: [], truncated: true, nextKeyMarker: "next", nextVersionIdMarker: "next-version" }; },
-      async deleteVersion(key, version) { deleted.push(`${key}@${version}`); },
+      async listVersions() {
+        return {
+          versions,
+          deleteMarkers: [],
+          truncated: true,
+          nextKeyMarker: "next",
+          nextVersionIdMarker: "next-version",
+        };
+      },
+      async deleteVersion(key, version) {
+        deleted.push(`${key}@${version}`);
+      },
     },
   });
   assert.equal(counters.sourceVersionsDeleted, 100);
   assert.equal(deleted.length, 100);
   assert.equal(current.phase, "deleting_source");
-  assert.equal(sql.some((query) => query.text.includes("yield_account_purge_attempt")), true);
-  assert.equal(sql.some((query) => query.text.includes("terminal_erase")), false);
+  assert.equal(
+    sql.some((query) => query.text.includes("yield_account_purge_attempt")),
+    true,
+  );
+  assert.equal(
+    sql.some((query) => query.text.includes("terminal_erase")),
+    false,
+  );
 });
 
 test("purge config requires a loopback database, separate worker and journal identities", () => {
@@ -170,7 +199,9 @@ test("purge config requires a loopback database, separate worker and journal ide
   assert.throws(() => parseAccountPurgeConfig({ ...base, MAINTENANCE_DATABASE_URL: base.DATABASE_URL }));
   assert.throws(() => parseAccountPurgeConfig({ ...base, ERASURE_LEDGER_BUCKET: base.S3_BUCKET }));
   assert.throws(() => parseAccountPurgeConfig({ ...base, DATABASE_URL: `${base.DATABASE_URL}?host=remote.example` }));
-  assert.throws(() => parseAccountPurgeConfig({ ...base, DATABASE_URL: "postgresql://runtime:secret@db.example:5432/polka" }));
+  assert.throws(() =>
+    parseAccountPurgeConfig({ ...base, DATABASE_URL: "postgresql://runtime:secret@db.example:5432/polka" }),
+  );
   // A hosted installation: its own database on loopback, a remote store over HTTPS.
   const hosted = {
     ...base,
@@ -181,5 +212,7 @@ test("purge config requires a loopback database, separate worker and journal ide
   assert.equal(parseAccountPurgeConfig(hosted).S3_REGION, "ru-central1");
   assert.equal(parseAccountPurgeConfig(hosted).ERASURE_LEDGER_REGION, "us-east-1");
   assert.throws(() => parseAccountPurgeConfig({ ...hosted, S3_ENDPOINT: "http://storage.yandexcloud.net" }), /HTTPS/);
-  assert.throws(() => parseAccountPurgeConfig({ ...hosted, ERASURE_LEDGER_ENDPOINT: "https://user:pw@storage.yandexcloud.net" }));
+  assert.throws(() =>
+    parseAccountPurgeConfig({ ...hosted, ERASURE_LEDGER_ENDPOINT: "https://user:pw@storage.yandexcloud.net" }),
+  );
 });

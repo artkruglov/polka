@@ -1,8 +1,4 @@
-import {
-  CopyObjectCommand,
-  DeleteObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import type { Readable } from "node:stream";
 import { createS3Store } from "../../packages/storage/s3.ts";
 import { config } from "./config.ts";
@@ -14,15 +10,7 @@ const store = createS3Store({
   secretKey: config.S3_SECRET_KEY,
   bucket: config.S3_BUCKET,
 });
-export const {
-  s3,
-  bucket,
-  prepareBucket,
-  putImmutable,
-  putStream,
-  verifyObject,
-  deleteAllVersions,
-} = store;
+export const { s3, bucket, prepareBucket, putImmutable, putStream, verifyObject, deleteAllVersions } = store;
 export { StreamRejected } from "../../packages/storage/s3.ts";
 
 /** One object version, for good (the bucket is versioned: the key alone would only add a delete marker). */
@@ -43,8 +31,7 @@ export async function copyVersion(fromKey: string, fromVersion: string, toKey: s
       MetadataDirective: "COPY",
     }),
   );
-  if (!result.VersionId || result.VersionId === "null")
-    throw new Error("Storage versioning required");
+  if (!result.VersionId || result.VersionId === "null") throw new Error("Storage versioning required");
   return result.VersionId;
 }
 
@@ -57,21 +44,13 @@ export async function readBlob(key: string, version: string) {
   // owner included, until it is deleted or the block is lifted.
   const { isolatedObject } = await import("./content-moderation.ts");
   if (await isolatedObject(key))
-    throw new Problem(
-      410,
-      "expired",
-      "Содержимое заблокировано модератором Полки и недоступно.",
-    );
+    throw new Problem(410, "expired", "Содержимое заблокировано модератором Полки и недоступно.");
   try {
     return await store.readBlob(key, version);
   } catch (error: any) {
     const { purgedObject } = await import("./content-moderation.ts");
     if (error?.$metadata?.httpStatusCode === 404 && (await purgedObject(key)))
-      throw new Problem(
-        410,
-        "expired",
-        "Содержимое удалено по решению модератора Полки.",
-      );
+      throw new Problem(410, "expired", "Содержимое удалено по решению модератора Полки.");
     throw error;
   }
 }
@@ -88,11 +67,7 @@ export async function readStream(
 ): Promise<Readable> {
   const { isolatedObject } = await import("./content-moderation.ts");
   if (await isolatedObject(key))
-    throw new Problem(
-      410,
-      "expired",
-      "Содержимое заблокировано модератором Полки и недоступно.",
-    );
+    throw new Problem(410, "expired", "Содержимое заблокировано модератором Полки и недоступно.");
   try {
     const object = await s3.send(
       new GetObjectCommand({
@@ -106,11 +81,7 @@ export async function readStream(
   } catch (error: any) {
     const { purgedObject } = await import("./content-moderation.ts");
     if (error?.$metadata?.httpStatusCode === 404 && (await purgedObject(key)))
-      throw new Problem(
-        410,
-        "expired",
-        "Содержимое удалено по решению модератора Полки.",
-      );
+      throw new Problem(410, "expired", "Содержимое удалено по решению модератора Полки.");
     throw error;
   }
 }

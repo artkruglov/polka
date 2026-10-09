@@ -19,8 +19,7 @@ import { Problem, missing } from "./errors.ts";
 import { assertMayChange, lockShelf } from "./shelves.ts";
 import { deleteAllVersions } from "./storage.ts";
 
-const conflict = () =>
-  new Problem(409, "conflict", "Состояние работы изменилось. Обновите корзину и повторите.");
+const conflict = () => new Problem(409, "conflict", "Состояние работы изменилось. Обновите корзину и повторите.");
 
 /** Close the work, then delete it. Returns once the objects are gone. */
 export async function deleteArtifactForever(actor: Actor, artifactId: string, body: unknown) {
@@ -29,14 +28,10 @@ export async function deleteArtifactForever(actor: Actor, artifactId: string, bo
     const { role } = await lockShelf(c, actor, "author");
     const {
       rows: [artifact],
-    } = await c.query(
-      "SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-      [artifactId, actor.tenant],
-    );
+    } = await c.query("SELECT * FROM artifacts WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [artifactId, actor.tenant]);
     if (!artifact || artifact.purged_at) throw missing();
     assertMayChange(role, artifact.created_by, actor.id);
-    if (!artifact.trashed_at)
-      throw new Problem(409, "conflict", "Сначала переместите работу в корзину.");
+    if (!artifact.trashed_at) throw new Problem(409, "conflict", "Сначала переместите работу в корзину.");
     if (
       artifact.latest_revision_id !== input.expectedRevisionId ||
       Number(artifact.lifecycle_version) !== input.expectedLifecycleVersion
@@ -68,10 +63,10 @@ export async function deleteArtifactForever(actor: Actor, artifactId: string, bo
         "Работа опубликована в Ленте или в библиотеке шаблонов. Сначала снимите публикацию.",
         { reason: "published" },
       );
-    await c.query(
-      "UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2 AND NOT revoked",
-      [artifactId, actor.tenant],
-    );
+    await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2 AND NOT revoked", [
+      artifactId,
+      actor.tenant,
+    ]);
     await c.query(
       `UPDATE uploads SET aborted=true
        WHERE tenant_id=$1 AND receipt IS NULL AND NOT aborted AND request->>'artifactId'=$2`,
@@ -125,9 +120,8 @@ async function finishLocked(artifactId: string) {
   const ids = revisions.map((row) => row.id as string);
   const prefixes = new Set<string>();
   for (const row of revisions) if (row.object_key) prefixes.add(row.object_key);
-  for (const row of (
-    await db.query("SELECT object_key FROM revision_files WHERE revision_id=ANY($1::uuid[])", [ids])
-  ).rows)
+  for (const row of (await db.query("SELECT object_key FROM revision_files WHERE revision_id=ANY($1::uuid[])", [ids]))
+    .rows)
     prefixes.add(row.object_key);
   for (const row of (
     await db.query("SELECT id,tenant_id FROM revision_derivatives WHERE revision_id=ANY($1::uuid[])", [ids])

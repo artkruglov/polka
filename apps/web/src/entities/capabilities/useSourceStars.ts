@@ -8,9 +8,7 @@ let cached: Promise<number | null> | null = null;
 /** One /source/stars request per page load; the server caches GitHub's answer for an hour. */
 function loadSourceStars() {
   cached ??= request<{ stars?: unknown }>("/source/stars")
-    .then((body) =>
-      typeof body?.stars === "number" && body.stars >= 0 ? body.stars : null,
-    )
+    .then((body) => (typeof body?.stars === "number" && body.stars >= 0 ? body.stars : null))
     .catch(() => null);
   return cached;
 }

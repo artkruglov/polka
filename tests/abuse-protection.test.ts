@@ -23,28 +23,16 @@ import {
   workerSlots,
 } from "../apps/server/html.ts";
 import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
-import {
-  signModerationToken,
-  verifyModerationToken,
-} from "../apps/server/moderation-tokens.ts";
-import {
-  SCAN_INCOMPLETE,
-  SignalCollector,
-  isSuspicious,
-  scanScript,
-} from "../apps/server/phishing-signals.ts";
-import {
-  authorStanding,
-  decideModeration,
-} from "../apps/server/share-moderation.ts";
+import { signModerationToken, verifyModerationToken } from "../apps/server/moderation-tokens.ts";
+import { SCAN_INCOMPLETE, SignalCollector, isSuspicious, scanScript } from "../apps/server/phishing-signals.ts";
+import { authorStanding, decideModeration } from "../apps/server/share-moderation.ts";
 import { publishResponseSchema } from "../apps/server/publish-api.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const app = await createApp();
 const origin = config.APP_ORIGIN;
-if (config.MAIL_MODE !== "local")
-  throw new Error("Abuse-protection tests read operator letters from local mail");
+if (config.MAIL_MODE !== "local") throw new Error("Abuse-protection tests read operator letters from local mail");
 const password = randomBytes(24).toString("hex");
 const defaults = {
   SHARE_MODERATION: config.SHARE_MODERATION,
@@ -69,17 +57,16 @@ after(async () => {
   s3.destroy();
 });
 
-const address = () =>
-  `2001:db8:a::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:a::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; cookie: string };
 
 async function session(accountId: string) {
   const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), accountId],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
+    accountId,
+  ]);
   return `polka_session=${token}`;
 }
 
@@ -97,10 +84,7 @@ async function signedUp(ageDays = 0, way = "email"): Promise<Owner> {
 }
 
 async function operatorCreated(): Promise<Owner> {
-  const created = await createAccount(
-    `abuse-${randomBytes(4).toString("hex")}`,
-    password,
-  );
+  const created = await createAccount(`abuse-${randomBytes(4).toString("hex")}`, password);
   return { ...created, cookie: await session(created.id) };
 }
 
@@ -143,21 +127,12 @@ async function save(owner: Owner, html: string, title = "Страница") {
     payload: bytes,
   });
   assert.equal(put.statusCode, 200, put.body);
-  const done = await call(
-    "POST",
-    `/api/uploads/${uploadId}/finalize`,
-    {},
-    owner.cookie,
-  );
+  const done = await call("POST", `/api/uploads/${uploadId}/finalize`, {}, owner.cookie);
   assert.equal(done.statusCode, 200, done.body);
   return done.json() as { artifactId: string; revisionId: string };
 }
 
-async function share(
-  owner: Owner,
-  receipt: { artifactId: string; revisionId: string },
-  days = 7,
-) {
+async function share(owner: Owner, receipt: { artifactId: string; revisionId: string }, days = 7) {
   return call(
     "POST",
     `/api/artifacts/${receipt.artifactId}/share`,
@@ -195,9 +170,7 @@ async function letters(shareId: string, count = 1) {
     try {
       const names = (await readdir(LOCAL_OPERATOR_MAIL_DIRECTORY)).sort();
       for (const name of names) {
-        const letter = JSON.parse(
-          await readFile(join(LOCAL_OPERATOR_MAIL_DIRECTORY, name), "utf8"),
-        ) as Letter;
+        const letter = JSON.parse(await readFile(join(LOCAL_OPERATOR_MAIL_DIRECTORY, name), "utf8")) as Letter;
         if (letter.text.includes(shareId)) found.push(letter);
       }
     } catch (error) {
@@ -210,20 +183,16 @@ async function letters(shareId: string, count = 1) {
 
 /** The token behind a button of a letter. */
 function button(letter: Letter, label: string) {
-  const line = letter.text
-    .split("\n")
-    .find((row) => row.startsWith(`${label}: `));
+  const line = letter.text.split("\n").find((row) => row.startsWith(`${label}: `));
   assert.ok(line, `no «${label}» in ${letter.text}`);
   const url = new URL(line.slice(label.length + 2));
   assert.equal(url.origin + url.pathname, `${origin}/moderation`);
   return url.hash.slice(1);
 }
 
-const moderation = (path: string, token: string) =>
-  call("POST", `/api/moderation/${path}`, { token });
+const moderation = (path: string, token: string) => call("POST", `/api/moderation/${path}`, { token });
 
-const shareRow = async (shareId: string) =>
-  (await db.query("SELECT * FROM shares WHERE id=$1", [shareId])).rows[0];
+const shareRow = async (shareId: string) => (await db.query("SELECT * FROM shares WHERE id=$1", [shareId])).rows[0];
 
 test("trust: operator-created, approved, or old without open reports; a paused link revokes it", async () => {
   const operator = await operatorCreated();
@@ -249,22 +218,16 @@ test("trust: operator-created, approved, or old without open reports; a paused l
   assert.equal((await authorStanding(db, old.tenant)).trusted, false);
   // Approval makes an account trusted regardless of age...
   const approved = await signedUp(0);
-  await db.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [
-    approved.id,
-  ]);
+  await db.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [approved.id]);
   const approvedLink = await sharedLink(approved, HONEST);
   assert.equal((await authorStanding(db, approved.tenant)).trusted, true);
   // ...until one of its links is paused after reports.
-  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [
-    approvedLink.shareId,
-  ]);
+  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [approvedLink.shareId]);
   assert.equal((await authorStanding(db, approved.tenant)).trusted, false);
   // Accounts that existed before migration 029 were backfilled as trusted,
   // and created_at stays NULL (old) for them.
   const legacy = (
-    await db.query(
-      "SELECT count(*)::int AS n FROM accounts WHERE created_at IS NULL AND trusted_at IS NULL",
-    )
+    await db.query("SELECT count(*)::int AS n FROM accounts WHERE created_at IS NULL AND trusted_at IS NULL")
   ).rows[0].n;
   assert.equal(legacy, 0);
 });
@@ -319,9 +282,7 @@ test("moving a new account's 7-day link counts whole days left by the database's
 test("SHARE_MODERATION decides which new links wait", async () => {
   const fresh = await signedUp(0);
   const approved = await signedUp(0);
-  await db.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [
-    approved.id,
-  ]);
+  await db.query("UPDATE accounts SET trusted_at=now() WHERE id=$1", [approved.id]);
   const operator = await operatorCreated();
   const cases: Array<[string, Owner, string, string]> = [
     ["off", fresh, PHISHING, "none"],
@@ -339,10 +300,7 @@ test("SHARE_MODERATION decides which new links wait", async () => {
   ];
   for (const [mode, owner, page, expected] of cases) {
     config.SHARE_MODERATION = mode as typeof config.SHARE_MODERATION;
-    await db.query(
-      "UPDATE shares SET revoked=true WHERE tenant_id=$1",
-      [owner.tenant],
-    );
+    await db.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [owner.tenant]);
     const link = await sharedLink(owner, page);
     assert.equal(link.moderation, expected, `${mode}`);
     assert.equal((await shareRow(link.shareId)).moderation, expected, mode);
@@ -368,9 +326,7 @@ test("a waiting link shows recipients the review screen only; the owner still se
   assert.deepEqual(resolved.json(), { review: true });
   assert.doesNotMatch(resolved.body, /Секретный план|Квартальный/);
   // No grant was issued for the recipient.
-  const grants = await db.query("SELECT 1 FROM grants WHERE share_id=$1", [
-    link.shareId,
-  ]);
+  const grants = await db.query("SELECT 1 FROM grants WHERE share_id=$1", [link.shareId]);
   assert.equal(grants.rowCount, 0);
   // The owner's shelf says the link is under review and shows the work.
   const mine = await call("GET", `/api/artifacts/${link.artifactId}`, undefined, owner.cookie);
@@ -383,9 +339,7 @@ test("a waiting link shows recipients the review screen only; the owner still se
   assert.equal(document.statusCode, 200);
   assert.match(document.body, /Квартальный отчёт/);
   // A paused link looks the same to a recipient.
-  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [
-    link.shareId,
-  ]);
+  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [link.shareId]);
   assert.deepEqual((await resolve(link.token)).json(), { review: true });
   // An ordinary link tells the recipient who published it, never by name.
   config.SHARE_MODERATION = "off";
@@ -409,9 +363,8 @@ test("the recipient learns whether the version asks for secrets and whether it w
   const plain = (await resolve(report.token)).json();
   assert.equal(plain.sensitiveInput, false);
   assert.equal(plain.autoChecked, false);
-  const stored = (
-    await db.query("SELECT content_filter FROM revisions WHERE id=$1", [report.revisionId])
-  ).rows[0].content_filter;
+  const stored = (await db.query("SELECT content_filter FROM revisions WHERE id=$1", [report.revisionId])).rows[0]
+    .content_filter;
   assert.equal(stored.sensitiveInput, false);
   assert.equal(stored.sensitiveSignals, undefined);
   // The text model answered "none": checked automatically.
@@ -420,7 +373,14 @@ test("the recipient learns whether the version asks for secrets and whether it w
      WHERE id=$1`,
     [
       report.revisionId,
-      JSON.stringify({ state: "checked", hash: "x", attempts: 1, at: new Date().toISOString(), findings: [], answers: [{ source: "text", model: "qwen", answer: "none" }] }),
+      JSON.stringify({
+        state: "checked",
+        hash: "x",
+        attempts: 1,
+        at: new Date().toISOString(),
+        findings: [],
+        answers: [{ source: "text", model: "qwen", answer: "none" }],
+      }),
     ],
   );
   const checked = (await resolve(report.token)).json();
@@ -442,10 +402,9 @@ test("the recipient learns whether the version asks for secrets and whether it w
   assert.doesNotMatch(JSON.stringify(asks), /login-password|sensitiveSignals/);
   // A version saved before the flag existed: unknown.
   const old = await sharedLink(owner, HONEST.replace("Квартальный", "Годовой"));
-  await db.query(
-    "UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1",
-    [old.revisionId],
-  );
+  await db.query("UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1", [
+    old.revisionId,
+  ]);
   assert.equal((await resolve(old.token)).json().sensitiveInput, null);
   // The operator's backfill fills it from the stored object, once.
   const { backfillSensitiveInput } = await import("../apps/server/sensitive-input-backfill.ts");
@@ -453,10 +412,9 @@ test("the recipient learns whether the version asks for secrets and whether it w
   const dry = await backfillSensitiveInput({ dryRun: true, ...only });
   assert.deepEqual([dry.scanned, dry.plain, dry.updated], [1, 1, 0]);
   assert.equal((await resolve(old.token)).json().sensitiveInput, null);
-  await db.query(
-    "UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1",
-    [form.revisionId],
-  );
+  await db.query("UPDATE revisions SET content_filter=content_filter-'sensitiveInput'-'sensitiveSignals' WHERE id=$1", [
+    form.revisionId,
+  ]);
   const done = await backfillSensitiveInput(only);
   assert.deepEqual([done.scanned, done.sensitive, done.plain, done.updated], [2, 1, 1, 2]);
   assert.equal((await resolve(old.token)).json().sensitiveInput, false);
@@ -493,9 +451,7 @@ test("reports: every report is a letter; N distinct reporters pause the link; th
   );
   assert.deepEqual(reporters.rows[0], { n: 2, total: 3 });
   // No address is stored, only the per-link hash.
-  const stored = JSON.stringify(
-    (await db.query("SELECT * FROM share_reports WHERE share_id=$1", [link.shareId])).rows,
-  );
+  const stored = JSON.stringify((await db.query("SELECT * FROM share_reports WHERE share_id=$1", [link.shareId])).rows);
   assert.ok(!stored.includes(a) && !stored.includes(b));
   assert.equal((await report(c)).statusCode, 200);
   const paused = await shareRow(link.shareId);
@@ -506,10 +462,7 @@ test("reports: every report is a letter; N distinct reporters pause the link; th
   const mail = await letters(link.shareId, 4);
   assert.equal(mail.length, 4);
   assert.ok(mail.every((letter) => letter.to === "operator@example.test"));
-  assert.equal(
-    mail.filter((letter) => /жалоба на ссылку/.test(letter.subject)).length,
-    3,
-  );
+  assert.equal(mail.filter((letter) => /жалоба на ссылку/.test(letter.subject)).length, 3);
   const pause = mail.find((letter) => /приостановлена/.test(letter.subject));
   assert.ok(pause);
   assert.match(pause.text, /Разных жалобщиков за 7 дней: 3/);
@@ -576,10 +529,7 @@ test("operator letter: GET and inspect change nothing, POST acts once, a repeat 
   assert.equal(before.moderation, "held");
   assert.deepEqual((await resolve(link.token)).json(), { review: true });
   // A GET to the action endpoint does not exist.
-  assert.equal(
-    (await app.inject({ method: "GET", url: `/api/moderation/act?token=${approve}` })).statusCode,
-    404,
-  );
+  assert.equal((await app.inject({ method: "GET", url: `/api/moderation/act?token=${approve}` })).statusCode, 404);
   assert.equal((await shareRow(link.shareId)).moderation, "held");
 
   const first = await moderation("act", approve);
@@ -615,10 +565,7 @@ test("approve and trust: the author's next links open without review; close-disa
   assert.equal(first.statusCode, 200, first.body);
   assert.equal(first.json().changed, true);
   assert.equal((await shareRow(bad.shareId)).revoked, true);
-  assert.equal(
-    (await db.query("SELECT disabled FROM accounts WHERE id=$1", [other.id])).rows[0].disabled,
-    true,
-  );
+  assert.equal((await db.query("SELECT disabled FROM accounts WHERE id=$1", [other.id])).rows[0].disabled, true);
   const second = await moderation("act", disable);
   assert.equal(second.statusCode, 200, second.body);
   assert.equal(second.json().changed, false);
@@ -721,26 +668,16 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
   // Only with an off-page channel: a look-alike sign-in page, a request to
   // tell the code, to write to a Telegram account.
   assert.equal(
-    flagged(
-      '<p>Your Apple ID has been suspended.</p><a href="https://appleid-unlock.com/signin">Unlock</a>',
-    ),
+    flagged('<p>Your Apple ID has been suspended.</p><a href="https://appleid-unlock.com/signin">Unlock</a>'),
     true,
   );
-  assert.equal(
-    flagged('<h1>Госуслуги</h1><p>Сообщите одноразовый код оператору.</p><input id="otp_code">'),
-    true,
-  );
+  assert.equal(flagged('<h1>Госуслуги</h1><p>Сообщите одноразовый код оператору.</p><input id="otp_code">'), true);
   // The same pages without the channel: a form on Полка sends nothing.
   assert.equal(
-    flagged(
-      '<p>Your Apple ID has been suspended.</p><input aria-label="Password" autocomplete="current-password">',
-    ),
+    flagged('<p>Your Apple ID has been suspended.</p><input aria-label="Password" autocomplete="current-password">'),
     false,
   );
-  assert.equal(
-    flagged('<h1>Госуслуги</h1><p>Введите одноразовый код</p><input id="otp_code">'),
-    false,
-  );
+  assert.equal(flagged('<h1>Госуслуги</h1><p>Введите одноразовый код</p><input id="otp_code">'), false);
   // An interactive page: the fields and the channel live in script strings.
   assert.equal(
     flagged(
@@ -775,9 +712,7 @@ test("phishing signals: obvious fakes are flagged, honest pages are not", () => 
     false,
   );
   assert.equal(
-    flagged(
-      "<p>Пример из документации Google:</p><pre>&lt;input type=\"password\" name=\"password\"&gt;</pre>",
-    ),
+    flagged('<p>Пример из документации Google:</p><pre>&lt;input type="password" name="password"&gt;</pre>'),
     false,
   );
 });
@@ -913,11 +848,17 @@ test("the phishing scan stays linear in the page size", () => {
   const largePages = pages(2 * MB);
   const largeScripts = scripts(2 * MB);
   pages(MB / 2).forEach((page, i) =>
-    linear(JSON.stringify(page.slice(0, 16)), () => inspectHtml(page), () => inspectHtml(largePages[i]!)),
+    linear(
+      JSON.stringify(page.slice(0, 16)),
+      () => inspectHtml(page),
+      () => inspectHtml(largePages[i]!),
+    ),
   );
   scripts(MB / 2).forEach((source, i) =>
-    linear(JSON.stringify(source.slice(0, 4)),
+    linear(
+      JSON.stringify(source.slice(0, 4)),
       () => scanScript(source, new SignalCollector()),
-      () => scanScript(largeScripts[i]!, new SignalCollector())),
+      () => scanScript(largeScripts[i]!, new SignalCollector()),
+    ),
   );
 });

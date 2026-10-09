@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  ENTERPRISE_INTERESTS,
-  ENTERPRISE_LIMITS,
-  ENTERPRISE_TEAM_SIZES,
-} from "./constants.ts";
+import { ENTERPRISE_INTERESTS, ENTERPRISE_LIMITS, ENTERPRISE_TEAM_SIZES } from "./constants.ts";
 
 // One line of text: no control characters, so a field never breaks the
 // letter's subject or layout.

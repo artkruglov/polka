@@ -1,17 +1,9 @@
-import {
-  createMcpHandler,
-  type AuthInfo,
-  type McpHandlerRequestOptions,
-} from "@modelcontextprotocol/server";
+import { createMcpHandler, type AuthInfo, type McpHandlerRequestOptions } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { FastifyInstance } from "fastify";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { authenticateServiceToken, MCP_AUDIENCE, type ServiceActor } from "./service-auth.ts";
 import { createMcpServer } from "./mcp-server.ts";
 import { PROTECTED_RESOURCE_METADATA_URL } from "./oauth.ts";
 
@@ -34,10 +26,7 @@ function actorFromAuth(authInfo?: AuthInfo) {
 }
 
 export async function registerMcpTransport(app: FastifyInstance) {
-  const handler = createMcpHandler(
-    ({ authInfo }) => createMcpServer(actorFromAuth(authInfo)),
-    { legacy: "stateless" },
-  );
+  const handler = createMcpHandler(({ authInfo }) => createMcpServer(actorFromAuth(authInfo)), { legacy: "stateless" });
   const securedHandler = {
     async fetch(request: Request, options?: McpHandlerRequestOptions) {
       const response = await handler.fetch(request, options);
@@ -54,41 +43,28 @@ export async function registerMcpTransport(app: FastifyInstance) {
     },
   };
   const nodeHandler = toNodeHandler(securedHandler, {
-    onerror: () =>
-      console.error(JSON.stringify({ event: "mcp.transport.failed" })),
+    onerror: () => console.error(JSON.stringify({ event: "mcp.transport.failed" })),
   });
   await app.register(async (mcp) => {
     mcp.all("/mcp", { bodyLimit: MCP_BODY_LIMIT }, async (request, reply) => {
-      if (request.headers.host !== endpoint.host)
-        return reply.code(403).send({ code: "forbidden" });
+      if (request.headers.host !== endpoint.host) return reply.code(403).send({ code: "forbidden" });
       const origin = request.headers.origin;
-      if (origin !== undefined && origin !== config.APP_ORIGIN)
-        return reply.code(403).send({ code: "forbidden" });
+      if (origin !== undefined && origin !== config.APP_ORIGIN) return reply.code(403).send({ code: "forbidden" });
       const authorization = request.headers.authorization ?? "";
       const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
-      const unauthenticated = () =>
-        limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
+      const unauthenticated = () => limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
       if (!match) {
         await unauthenticated();
-        return reply
-          .header("www-authenticate", challenge())
-          .code(401)
-          .send({ code: "unauthorized" });
+        return reply.header("www-authenticate", challenge()).code(401).send({ code: "unauthorized" });
       }
       let actor: ServiceActor;
       try {
         actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
       } catch {
         await unauthenticated();
-        return reply
-          .header("www-authenticate", challenge("invalid_token"))
-          .code(401)
-          .send({ code: "unauthorized" });
+        return reply.header("www-authenticate", challenge("invalid_token")).code(401).send({ code: "unauthorized" });
       }
-      await limitAttempts(
-        `mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`,
-        MCP_LIMITS.perConnection,
-      );
+      await limitAttempts(`mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`, MCP_LIMITS.perConnection);
       const auth: AuthInfo = {
         token: "[redacted]",
         clientId: actor.connectionId,

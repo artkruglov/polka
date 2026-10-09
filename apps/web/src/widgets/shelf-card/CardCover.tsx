@@ -11,11 +11,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
-import {
-  coverImageUrl,
-  type CoverGenre,
-  type RevisionCover,
-} from "../../../../../packages/contracts/cover.ts";
+import { coverImageUrl, type CoverGenre, type RevisionCover } from "../../../../../packages/contracts/cover.ts";
 import { client, withShelf } from "../../shared/api/client.ts";
 import { providerById } from "../../entities/link/index.tsx";
 import { ServiceMark } from "../../shared/ui/ServiceMark.tsx";
@@ -124,7 +120,7 @@ export function CardCover({
         {!thumb && series && <SeriesBadge series={series} />}
       </div>
     );
-  const Icon = cover ? GENRE_ICON[cover.genre] ?? FileText : FileText;
+  const Icon = cover ? (GENRE_ICON[cover.genre] ?? FileText) : FileText;
   if (thumb) return <Tile a={a} icon={Icon} cover={cover} />;
   const { color } = coverAccent(a, cover);
   const heading = cover?.heading || a.title;
@@ -169,7 +165,11 @@ function Tile({
 }) {
   const { color } = coverAccent(a, cover);
   return (
-    <div className="card-cover card-cover--tile" style={{ "--cover-accent": color } as React.CSSProperties} aria-hidden="true">
+    <div
+      className="card-cover card-cover--tile"
+      style={{ "--cover-accent": color } as React.CSSProperties}
+      aria-hidden="true"
+    >
       <Icon />
     </div>
   );

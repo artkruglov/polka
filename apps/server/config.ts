@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
-import {
-  PUBLIC_MAIL_DOMAINS,
-  parseSignupDomains,
-} from "./mail-domains.ts";
+import { PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
 import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
 const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
@@ -117,11 +114,7 @@ const env = z
           .map((entry) => entry.trim().toLowerCase())
           .filter(Boolean),
       )
-      .pipe(
-        z.array(
-          z.string().regex(/^(?:[^@\s]+)?@[^@\s]+\.[^@\s]+$/, "an address or @domain"),
-        ),
-      ),
+      .pipe(z.array(z.string().regex(/^(?:[^@\s]+)?@[^@\s]+\.[^@\s]+$/, "an address or @domain"))),
     // Where a NEW shelf may open by an emailed code (docs/specs/
     // SIGN_IN_PROVIDERS.md § 3): any | ru-only | a list of domains (ru-only
     // may be one of its entries). Existing accounts sign in on any domain
@@ -158,9 +151,7 @@ const env = z
     OIDC_CLIENT_ID: unsetIfEmpty(z.string().max(500)),
     OIDC_CLIENT_SECRET: unsetIfEmpty(z.string().max(500)),
     OIDC_SCOPES: z.string().default("openid email profile"),
-    OIDC_NAME: unsetIfEmpty(z.string().max(60)).transform(
-      (value) => value ?? "Единый вход компании",
-    ),
+    OIDC_NAME: unsetIfEmpty(z.string().max(60)).transform((value) => value ?? "Единый вход компании"),
     OIDC_ALLOWED_DOMAINS: z.string().default(""),
     OIDC_ORG_CLAIM: unsetIfEmpty(z.string().max(100)),
     OIDC_ORG_VALUE: unsetIfEmpty(z.string().max(500)),
@@ -176,7 +167,12 @@ const env = z
     // Agent sessions (docs/specs/AGENT_SESSIONS.md): the allowance of every
     // personal shelf in bytes; 0 keeps them off except on shelves the
     // operator enabled (tenants.session_quota_bytes).
-    AGENT_SESSION_QUOTA_BYTES: z.coerce.number().int().min(0).max(1024 ** 4).default(0),
+    AGENT_SESSION_QUOTA_BYTES: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(1024 ** 4)
+      .default(0),
     // Secret fingerprints: shelf (a key per personal shelf) or installation
     // (one key derived from LINK_KEY, so one secret matches across people —
     // for a company that reads every session). Switching changes the
@@ -206,18 +202,14 @@ const env = z
     // link waits because of who made it; the content filter decides, and trust
     // is earned automatically. Only images of a new account wait while no
     // image model is configured.
-    SHARE_MODERATION: z
-      .enum(["off", "auto", "flagged", "new-accounts", "all"])
-      .default("flagged"),
+    SHARE_MODERATION: z.enum(["off", "auto", "flagged", "new-accounts", "all"]).default("flagged"),
     // auto: saves of an account (none blocked) before it is trusted by age.
     TRUST_MIN_CLEAN_SAVES: z.coerce.number().int().min(0).max(1000).default(3),
     // Where moderation mail goes. Unset or empty: no mail, scripts only.
     OPERATOR_EMAIL: unsetIfEmpty(z.string().email()),
     // A Telegram bot that also tells the operator about requests from
     // /enterprise (BotFather token and the chat it writes to). Both or neither.
-    OPERATOR_TELEGRAM_BOT_TOKEN: unsetIfEmpty(
-      z.string().regex(/^\d{6,12}:[\w-]{30,}$/),
-    ),
+    OPERATOR_TELEGRAM_BOT_TOKEN: unsetIfEmpty(z.string().regex(/^\d{6,12}:[\w-]{30,}$/)),
     OPERATOR_TELEGRAM_CHAT_ID: unsetIfEmpty(z.string().regex(/^(-?\d{1,20}|@\w{5,32})$/)),
     // Distinct reporters of one link within 7 days that pause it. 0: never.
     MODERATION_AUTOPAUSE_REPORTS: z.coerce.number().int().min(0).max(1000).default(3),
@@ -255,9 +247,7 @@ const env = z
     // with a Russian provider. openai-compatible: a self-hosted server with the
     // same API. The fallback and the code model may use another endpoint
     // (CONTENT_MODEL_FALLBACK_* / CONTENT_CODE_MODEL_*, by default the primary's).
-    CONTENT_MODEL_PROVIDER: z
-      .enum(["off", "yandex", "neuraldeep", "openai-compatible"])
-      .default("off"),
+    CONTENT_MODEL_PROVIDER: z.enum(["off", "yandex", "neuraldeep", "openai-compatible"]).default("off"),
     // The /chat/completions address. Unset: the provider's own (Yandex AI
     // Studio or NeuralDeep); a …/v1 base gets /chat/completions appended.
     CONTENT_MODEL_URL: unsetIfEmpty(z.string().url()),
@@ -353,22 +343,10 @@ const env = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
-    ACCOUNT_PURGE_MAX_HOURS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(8760)
-      .optional(),
-    BACKUP_RETENTION_MAX_DAYS: z.coerce
-      .number()
-      .int()
-      .min(0)
-      .max(3650)
-      .optional(),
+    ACCOUNT_PURGE_MAX_HOURS: z.coerce.number().int().min(1).max(8760).optional(),
+    BACKUP_RETENTION_MAX_DAYS: z.coerce.number().int().min(0).max(3650).optional(),
     // Empty counts as unset: the hosted compose file always passes it on.
-    ACCOUNT_DELETION_POLICY_VERSION: unsetIfEmpty(
-      z.string().regex(/^[A-Za-z0-9._-]{1,80}$/),
-    ),
+    ACCOUNT_DELETION_POLICY_VERSION: unsetIfEmpty(z.string().regex(/^[A-Za-z0-9._-]{1,80}$/)),
     // Chrome extension IDs of the official «На Полку» build (comma-separated,
     // 32 letters a–p each). Its OAuth consent screen is labelled «Расширение
     // браузера «На Полку»»; any other extension is shown with its ID and a
@@ -382,10 +360,7 @@ const env = z
           .map((entry) => entry.trim())
           .filter(Boolean),
       )
-      .refine(
-        (ids) => ids.every((id) => /^[a-p]{32}$/.test(id)),
-        "BROWSER_EXTENSION_IDS: 32 letters a–p each",
-      ),
+      .refine((ids) => ids.every((id) => /^[a-p]{32}$/.test(id)), "BROWSER_EXTENSION_IDS: 32 letters a–p each"),
     // Operator status for external monitoring (GET /api/ops/status). Unset or
     // empty: the route does not exist. OPS_BACKUP_BUCKET is where the backup
     // job writes dumps; the app only lists it to report the newest dump's age.
@@ -405,14 +380,9 @@ const env = z
       .optional(),
   })
   .parse(process.env);
-if (new URL(env.APP_ORIGIN).origin !== env.APP_ORIGIN)
-  throw new Error("APP_ORIGIN must be an origin");
-if (new URL(env.VIEWER_ORIGIN).origin !== env.VIEWER_ORIGIN)
-  throw new Error("VIEWER_ORIGIN must be an origin");
-if (
-  env.COOKIE_SECURE === "false" &&
-  !["127.0.0.1", "localhost"].includes(new URL(env.APP_ORIGIN).hostname)
-)
+if (new URL(env.APP_ORIGIN).origin !== env.APP_ORIGIN) throw new Error("APP_ORIGIN must be an origin");
+if (new URL(env.VIEWER_ORIGIN).origin !== env.VIEWER_ORIGIN) throw new Error("VIEWER_ORIGIN must be an origin");
+if (env.COOKIE_SECURE === "false" && !["127.0.0.1", "localhost"].includes(new URL(env.APP_ORIGIN).hostname))
   throw new Error("Insecure cookies only supported on loopback");
 if (
   env.MAIL_MODE === "local" &&
@@ -447,9 +417,7 @@ const privateHost = (host: string) =>
 const yandexHost = (host: string) =>
   /(?:^|\.)(?:yandex\.net|yandexcloud\.net|cloud\.yandex\.ru|cloud\.yandex\.net)$/.test(host);
 if (env.CONTENT_MODEL_FOREIGN_DEV && env.MAIL_MODE === "smtp" && env.APP_ORIGIN.startsWith("https:"))
-  throw new Error(
-    "CONTENT_MODEL_FOREIGN_DEV is for development and benchmarks only, not a production install",
-  );
+  throw new Error("CONTENT_MODEL_FOREIGN_DEV is for development and benchmarks only, not a production install");
 // NeuralDeep: exactly its API host (it serves its open models on its own
 // hardware in Russia), and only the models CONTENT_MODEL_ND_ALLOWED lists.
 const NEURALDEEP_HOST = "api.neuraldeep.ru";
@@ -471,25 +439,18 @@ export type ModelEndpoint = {
 };
 type ModelRole = "CONTENT_MODEL" | "CONTENT_MODEL_FALLBACK" | "CONTENT_CODE_MODEL";
 const chatUrl = (value: string) =>
-  /\/v1\/?$/.test(new URL(value).pathname)
-    ? value.replace(/\/?$/, "/chat/completions")
-    : value;
+  /\/v1\/?$/.test(new URL(value).pathname) ? value.replace(/\/?$/, "/chat/completions") : value;
 /**
  * A role's endpoint. The fallback and the code model inherit the primary's
  * provider; its URL when the provider is the same; its key, limits and flat
  * rate only when the URL is the same (a key never goes to another host).
  */
 function modelEndpoint(role: ModelRole, model: string, primary: ModelEndpoint | null): ModelEndpoint {
-  const own = (name: string) =>
-    (env as Record<string, unknown>)[`${role}_${name}`] as string | undefined;
+  const own = (name: string) => (env as Record<string, unknown>)[`${role}_${name}`] as string | undefined;
   const label = (name: "URL" | "MODEL") =>
     name === "URL" ? `${role}_URL` : role === "CONTENT_MODEL" ? "CONTENT_MODEL_PRIMARY" : role;
-  const provider = (primary
-    ? (own("PROVIDER") ?? primary.provider)
-    : env.CONTENT_MODEL_PROVIDER) as ModelProvider;
-  const given =
-    own("URL") ??
-    (primary && provider === primary.provider ? primary.url : PROVIDER_URLS[provider]);
+  const provider = (primary ? (own("PROVIDER") ?? primary.provider) : env.CONTENT_MODEL_PROVIDER) as ModelProvider;
+  const given = own("URL") ?? (primary && provider === primary.provider ? primary.url : PROVIDER_URLS[provider]);
   if (!given) throw new Error(`${label("URL")} is required for provider ${provider}`);
   const url = chatUrl(given);
   const sameEndpoint = !!primary && url === primary.url;
@@ -505,11 +466,7 @@ function modelEndpoint(role: ModelRole, model: string, primary: ModelEndpoint | 
         `${label("MODEL")}: «${model}» is not in CONTENT_MODEL_ND_ALLOWED — NeuralDeep may serve other models abroad (a cross-border transfer)`,
       );
   }
-  if (
-    provider === "openai-compatible" &&
-    !privateHost(parsed.hostname) &&
-    !env.CONTENT_MODEL_FOREIGN_DEV
-  )
+  if (provider === "openai-compatible" && !privateHost(parsed.hostname) && !env.CONTENT_MODEL_FOREIGN_DEV)
     throw new Error(
       `${label("URL")} must be a self-hosted model; a foreign API only with CONTENT_MODEL_FOREIGN_DEV=true outside production`,
     );
@@ -534,17 +491,14 @@ let contentModelEndpoints: {
   code: ModelEndpoint | null;
 } | null = null;
 if (env.CONTENT_MODEL_PROVIDER !== "off") {
-  if (!env.CONTENT_MODEL_PRIMARY)
-    throw new Error("CONTENT_MODEL_PRIMARY is required for the content model");
+  if (!env.CONTENT_MODEL_PRIMARY) throw new Error("CONTENT_MODEL_PRIMARY is required for the content model");
   const primary = modelEndpoint("CONTENT_MODEL", env.CONTENT_MODEL_PRIMARY, null);
   contentModelEndpoints = {
     primary,
     fallback: env.CONTENT_MODEL_FALLBACK
       ? modelEndpoint("CONTENT_MODEL_FALLBACK", env.CONTENT_MODEL_FALLBACK, primary)
       : null,
-    code: env.CONTENT_CODE_MODEL
-      ? modelEndpoint("CONTENT_CODE_MODEL", env.CONTENT_CODE_MODEL, primary)
-      : null,
+    code: env.CONTENT_CODE_MODEL ? modelEndpoint("CONTENT_CODE_MODEL", env.CONTENT_CODE_MODEL, primary) : null,
   };
 }
 
@@ -586,15 +540,12 @@ if (env.OIDC_DISCOVERY_URL) {
   )
     throw new Error("OIDC_DISCOVERY_URL must be https");
 }
-if (!!env.OIDC_ORG_CLAIM !== !!env.OIDC_ORG_VALUE)
-  throw new Error("OIDC_ORG_CLAIM and OIDC_ORG_VALUE go together");
+if (!!env.OIDC_ORG_CLAIM !== !!env.OIDC_ORG_VALUE) throw new Error("OIDC_ORG_CLAIM and OIDC_ORG_VALUE go together");
 const signInConfig = {
   EMAIL_SIGNUP_DOMAINS: parseSignupDomains(env.EMAIL_SIGNUP_DOMAINS, env.APP_ORIGIN),
   OIDC_ALLOWED_DOMAINS: domainList(env.OIDC_ALLOWED_DOMAINS, "OIDC_ALLOWED_DOMAINS"),
   ORG_DOMAINS: orgDomains,
-  OIDC_ORG_LIBRARY: env.OIDC_ORG_LIBRARY.trim()
-    ? libraryGrant(env.OIDC_ORG_LIBRARY, "OIDC_ORG_LIBRARY")
-    : null,
+  OIDC_ORG_LIBRARY: env.OIDC_ORG_LIBRARY.trim() ? libraryGrant(env.OIDC_ORG_LIBRARY, "OIDC_ORG_LIBRARY") : null,
   /** Providers with a configured client, in the order the buttons show. */
   SIGN_IN_PROVIDERS: [
     ...(env.YANDEX_CLIENT_ID && env.YANDEX_CLIENT_SECRET ? (["yandex"] as const) : []),
@@ -627,9 +578,7 @@ if (
     !env.RESTORE_LEDGER_ID ||
     !env.RESTORE_LEDGER_MANIFEST_SHA256)
 )
-  throw new Error(
-    "Restore mode requires the exact completion receipt identity",
-  );
+  throw new Error("Restore mode requires the exact completion receipt identity");
 export const config = {
   ...env,
   ...viewerConfig,

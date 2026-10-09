@@ -9,8 +9,7 @@
 
 // Zero-width, soft hyphen, combining grapheme joiner, bidi controls, variation
 // selectors, Hangul fillers: invisible characters that split a word.
-const INVISIBLE =
-  /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]/g;
+const INVISIBLE = /[­͏؜ᅟᅠ឴឵᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]/g;
 const MARKS = /\p{Mn}/gu;
 
 /**

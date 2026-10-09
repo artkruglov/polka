@@ -50,11 +50,7 @@ export const coverSelectSql = (r: string) => `(
 const isImageMime = (mime: string) => mime.startsWith("image/");
 
 /** The card's view of a stored cover; null asks the card to request it (none yet, or an older reader's). */
-export function coverDTO(r: {
-  mime: string;
-  sha256: string;
-  cover?: any;
-}): RevisionCover | null {
+export function coverDTO(r: { mime: string; sha256: string; cover?: any }): RevisionCover | null {
   const c = r.cover;
   if (!c || Number(c.version) < COVER_VERSION) return null;
   const image = isImageMime(r.mime);
@@ -83,10 +79,10 @@ async function readEntry(r: any, limit = COVER_READ_BYTES): Promise<string | nul
   const entry = r.manifest?.entrypoint;
   const {
     rows: [file],
-  } = await db.query(
-    "SELECT object_key,object_version FROM revision_files WHERE revision_id=$1 AND path=$2",
-    [r.id, entry],
-  );
+  } = await db.query("SELECT object_key,object_version FROM revision_files WHERE revision_id=$1 AND path=$2", [
+    r.id,
+    entry,
+  ]);
   if (!file) return null;
   return (await readBlob(file.object_key, file.object_version)).subarray(0, limit).toString("utf8");
 }
@@ -178,8 +174,7 @@ export async function refreshCover(r: any, { schedule = true } = {}): Promise<an
   let cover = r.cover;
   if (!cover || Number(cover.version) < COVER_VERSION) {
     const facts = await computeCoverFacts(r);
-    const wanted =
-      facts.kind === "visual" && (isImageMime(r.mime) || r.mime === "text/html");
+    const wanted = facts.kind === "visual" && (isImageMime(r.mime) || r.mime === "text/html");
     const { signals, kind, genre, ...shown } = facts;
     const {
       rows: [row],
@@ -209,8 +204,7 @@ export async function refreshCover(r: any, { schedule = true } = {}): Promise<an
       cover = { ...cover, imageState: "wanted" };
     }
   }
-  if (schedule && cover && (cover.imageState === "wanted" || cover.imageState === "pending"))
-    scheduleSnapshot(r.id);
+  if (schedule && cover && (cover.imageState === "wanted" || cover.imageState === "pending")) scheduleSnapshot(r.id);
   return cover;
 }
 
@@ -226,10 +220,7 @@ async function storedCover(revisionId: string) {
 }
 
 /** GET /api/revisions/:id/cover: the owner's card asks once per version. */
-export async function coverFor(
-  actor: { tenant: string },
-  revisionId: string,
-): Promise<RevisionCover | null> {
+export async function coverFor(actor: { tenant: string }, revisionId: string): Promise<RevisionCover | null> {
   const {
     rows: [r],
   } = await db.query(
@@ -255,8 +246,7 @@ export async function coverImage(actor: { tenant: string }, revisionId: string) 
   );
   if (!r || r.hidden) throw missing();
   if (r.image_state === "ready" && r.image) return { type: "image/jpeg", bytes: r.image as Buffer };
-  if (isImageMime(r.mime))
-    return { type: r.mime as string, bytes: await readBlob(r.object_key, r.object_version) };
+  if (isImageMime(r.mime)) return { type: r.mime as string, bytes: await readBlob(r.object_key, r.object_version) };
   throw missing();
 }
 
@@ -321,8 +311,7 @@ export async function renderablePage(
     };
   if (r.storage_kind === "single" || isStaticSingleFileBundle(r)) {
     const html = await readEntry(r, 8 * 1024 * 1024);
-    if (html !== null)
-      return { html, script: r.html_profile !== "static", source: "source" };
+    if (html !== null) return { html, script: r.html_profile !== "static", source: "source" };
   }
   return { reason: "no_source" };
 }

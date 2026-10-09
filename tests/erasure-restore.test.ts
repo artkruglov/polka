@@ -27,8 +27,12 @@ const revoke = {
 
 function transport(records = [encodeErasureRecord(revoke)]) {
   return {
-    async putIfAbsent() { throw new Error("restore must not write the ledger"); },
-    async read() { throw new Error("restore listing supplies pinned bytes"); },
+    async putIfAbsent() {
+      throw new Error("restore must not write the ledger");
+    },
+    async read() {
+      throw new Error("restore listing supplies pinned bytes");
+    },
     async list(_prefix: string, cursor: string | undefined) {
       assert.equal(cursor, undefined);
       return {
@@ -61,7 +65,12 @@ test("restore blocks a missing namespace, journal delta and abort", async () => 
   const signal = new AbortController().signal;
   const plan = await loadErasureRestorePlan(transport(), ledgerId, signal);
   assert.throws(() => requireBackupLedger({}, plan));
-  const changedRecord = encodeErasureRecord({ ...revoke, requestId: randomUUID(), accountId: randomUUID(), tenantId: randomUUID() });
+  const changedRecord = encodeErasureRecord({
+    ...revoke,
+    requestId: randomUUID(),
+    accountId: randomUUID(),
+    tenantId: randomUUID(),
+  });
   const changed = await loadErasureRestorePlan(transport([changedRecord]), ledgerId, signal);
   assert.throws(() => assertErasureRestorePlanStable(plan, changed));
   const aborted = new AbortController();
@@ -72,8 +81,12 @@ test("restore blocks a missing namespace, journal delta and abort", async () => 
 test("restore stability preserves every identical historical object version", async () => {
   const record = encodeErasureRecord(revoke);
   const make = (versions: string[]) => ({
-    async putIfAbsent() { throw new Error("restore must not write"); },
-    async read() { throw new Error("unused"); },
+    async putIfAbsent() {
+      throw new Error("restore must not write");
+    },
+    async read() {
+      throw new Error("unused");
+    },
     async list() {
       return {
         items: versions.map((versionId) => ({
@@ -86,7 +99,10 @@ test("restore stability preserves every identical historical object version", as
   });
   const signal = new AbortController().signal;
   const before = await loadErasureRestorePlan(make(["v1", "v2"]), ledgerId, signal);
-  assert.deepEqual(before.records.map(({ versionId }) => versionId), ["v1", "v2"]);
+  assert.deepEqual(
+    before.records.map(({ versionId }) => versionId),
+    ["v1", "v2"],
+  );
   const replaced = await loadErasureRestorePlan(make(["v3", "v2"]), ledgerId, signal);
   assert.throws(() => assertErasureRestorePlanStable(before, replaced));
   const removed = await loadErasureRestorePlan(make(["v2"]), ledgerId, signal);

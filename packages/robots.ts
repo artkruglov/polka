@@ -80,7 +80,11 @@ export function robotsAllow(robots: Robots, url: URL): boolean {
   let best: RobotsRule | null = null;
   for (const rule of robots.rules) {
     if (!matches(normalize(rule.pattern), path)) continue;
-    if (!best || rule.pattern.length > best.pattern.length || (rule.pattern.length === best.pattern.length && rule.allow))
+    if (
+      !best ||
+      rule.pattern.length > best.pattern.length ||
+      (rule.pattern.length === best.pattern.length && rule.allow)
+    )
       best = rule;
   }
   return !best || best.allow;

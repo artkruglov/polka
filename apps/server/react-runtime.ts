@@ -5,10 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parse as parseJs } from "acorn";
 import { build, type Loader, type Message, type Plugin } from "esbuild";
 import { parse, serialize, type DefaultTreeAdapterTypes } from "parse5";
-import {
-  canonicalizeManifest,
-  type BundleManifest,
-} from "../../packages/contracts/bundle.ts";
+import { canonicalizeManifest, type BundleManifest } from "../../packages/contracts/bundle.ts";
 import {
   RUNTIME_LIBRARIES,
   RUNTIME_LIBRARY_NAMES,
@@ -37,12 +34,7 @@ import {
   BUNDLE_BUILDER_VERSION,
   REACT_RUNTIME_PROFILE,
 } from "./bundle-runtime-contract.ts";
-import {
-  allowedPackageDirs,
-  isAllowedLibraryFile,
-  staticImportsOnly,
-  withinNestingLimits,
-} from "./runtime-guards.ts";
+import { allowedPackageDirs, isAllowedLibraryFile, staticImportsOnly, withinNestingLimits } from "./runtime-guards.ts";
 
 /**
  * The Полка runtime builder (profile react-runtime-v1). A page whose scripts
@@ -80,13 +72,7 @@ const compilerFailure = (): BundleInlineResult => ({
 });
 
 const MODULE_TYPES = ["module", "text/babel", "text/jsx"];
-const CLASSIC_TYPES = [
-  "",
-  "text/javascript",
-  "application/javascript",
-  "application/ecmascript",
-  "text/ecmascript",
-];
+const CLASSIC_TYPES = ["", "text/javascript", "application/javascript", "application/ecmascript", "text/ecmascript"];
 const BABEL_PACKAGES = ["@babel/standalone", "babel-standalone"];
 const TAILWIND_PACKAGES = ["tailwindcss", "@tailwindcss/browser"];
 // A UMD library that other CDN scripts depended on; the runtime needs none.
@@ -102,8 +88,7 @@ function cdnReference(reference: string | undefined) {
     return null;
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-  if (url.hostname === "cdn.tailwindcss.com")
-    return { name: "tailwindcss", file: "", esm: false };
+  if (url.hostname === "cdn.tailwindcss.com") return { name: "tailwindcss", file: "", esm: false };
   let pathname = url.pathname;
   let esm = false;
   if (url.hostname === "unpkg.com") pathname = pathname.slice(1);
@@ -130,16 +115,11 @@ function cdnReference(reference: string | undefined) {
 }
 
 const cdnLibrary = (name: string) =>
-  RUNTIME_LIBRARIES.find((library) =>
-    (library.cdnNames as readonly string[]).includes(name),
-  ) ?? null;
+  RUNTIME_LIBRARIES.find((library) => (library.cdnNames as readonly string[]).includes(name)) ?? null;
 
 /** Vendored three.js example modules, by their path under examples/jsm. */
 function threeAddon(file: string) {
-  const match =
-    /^examples\/(?:js|jsm)\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+)(?:\.min)?\.js$/.exec(
-      file,
-    );
+  const match = /^examples\/(?:js|jsm)\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+)(?:\.min)?\.js$/.exec(file);
   if (!match) return null;
   const module = `three/examples/jsm/${match[1]}.js`;
   const exists = existsSync(path.join(ROOT, "node_modules", module));
@@ -161,8 +141,7 @@ export function cdnRole(reference: string | undefined): CdnRole | null {
   const cdn = cdnReference(reference);
   if (!cdn) return null;
   if (TAILWIND_PACKAGES.includes(cdn.name)) return { kind: "tailwind" };
-  if (BABEL_PACKAGES.includes(cdn.name) || DROPPED_PACKAGES.includes(cdn.name))
-    return { kind: "drop" };
+  if (BABEL_PACKAGES.includes(cdn.name) || DROPPED_PACKAGES.includes(cdn.name)) return { kind: "drop" };
   const library = cdnLibrary(cdn.name);
   if (!library) return null;
   if (library.name === "three" && /^examples\//.test(cdn.file)) {
@@ -185,9 +164,7 @@ export function cdnRole(reference: string | undefined): CdnRole | null {
 export function vendoredSpecifier(reference: string) {
   const cdn = cdnReference(reference);
   if (!cdn) return null;
-  const library =
-    cdnLibrary(cdn.name) ??
-    (runtimeLibraryFor(cdn.name) ? { name: cdn.name } : null);
+  const library = cdnLibrary(cdn.name) ?? (runtimeLibraryFor(cdn.name) ? { name: cdn.name } : null);
   if (!library) return null;
   const file = cdn.file.replace(/\?.*$/, "");
   if (!file) return library.name;
@@ -197,14 +174,10 @@ export function vendoredSpecifier(reference: string) {
     return addon?.module ?? null;
   }
   // react-dom/client, react/jsx-runtime, lodash/debounce, chart.js/auto…
-  for (const candidate of [subpath, `${library.name}/${file}`])
-    if (runtimeLibraryFor(candidate)) return candidate;
+  for (const candidate of [subpath, `${library.name}/${file}`]) if (runtimeLibraryFor(candidate)) return candidate;
   // A library's own build file (three/build/three.module.js,
   // react/umd/react.production.min.js) stands for the library.
-  if (
-    /^(?:build|dist|umd|esm|es|lib|es20\d\d|denonext)\/[^/]+\.m?js$/.test(file)
-  )
-    return library.name;
+  if (/^(?:build|dist|umd|esm|es|lib|es20\d\d|denonext)\/[^/]+\.m?js$/.test(file)) return library.name;
   return null;
 }
 
@@ -240,8 +213,7 @@ const GLOBAL_SETUP: Record<string, string> = {
 const MOUNT = `import { createElement as __polkaCreate } from "react";import { createRoot as __polkaRoot } from "react-dom/client";
 const __polkaMount=(module)=>{const App=module&&module.default;if(typeof App!=="function")return false;let target=document.getElementById("root");if(!target){target=document.createElement("div");target.id="root";document.body.appendChild(target)}__polkaRoot(target).render(__polkaCreate(App));return true};`;
 
-const exportsDefault = (source: string) =>
-  /\bexport\s+default\b|\bas\s+default\b/.test(source);
+const exportsDefault = (source: string) => /\bexport\s+default\b|\bas\s+default\b/.test(source);
 
 function entrySource(
   modules: Module[],
@@ -275,17 +247,15 @@ function entrySource(
 }
 
 const loaderFor = (file: string): Loader | null =>
-  (RUNTIME_MODULE_LOADERS as Record<string, Loader>)[
-    path.posix.extname(file)
-  ] ?? (file.endsWith(".css") ? "css" : file.endsWith(".json") ? "json" : null);
+  (RUNTIME_MODULE_LOADERS as Record<string, Loader>)[path.posix.extname(file)] ??
+  (file.endsWith(".css") ? "css" : file.endsWith(".json") ? "json" : null);
 
 /** Words that may be Tailwind classes; the compiler ignores the rest. */
 function candidates(sources: string[]) {
   const found = new Set<string>();
   for (const source of sources)
     for (const token of source.split(/[\s"'`{}<>;,=\\]+/)) {
-      if (!token || token.length > 120 || found.size >= MAX_CANDIDATES)
-        continue;
+      if (!token || token.length > 120 || found.size >= MAX_CANDIDATES) continue;
       // An arbitrary value must not smuggle a resource into the stylesheet.
       if (/url\(|image-set|:\/\/|@import/i.test(token)) continue;
       found.add(token);
@@ -320,11 +290,7 @@ function tailwindStylesheet(id: string) {
 const V3_BORDER_COMPAT = `@layer base { *,::after,::before,::backdrop,::file-selector-button{border-color:var(--color-gray-200,currentColor)} }`;
 const TAILWIND_CONFIG_ID = "polka:tailwind-config";
 
-async function tailwindCss(
-  words: string[],
-  preflight: boolean,
-  config: Record<string, unknown> | null,
-) {
+async function tailwindCss(words: string[], preflight: boolean, config: Record<string, unknown> | null) {
   tailwind ??= import("tailwindcss");
   const { compile } = await tailwind;
   const input = [
@@ -364,12 +330,9 @@ function inlineTailwindConfig(source: string) {
       case "Literal":
         return node.regex ? undefined : node.value;
       case "TemplateLiteral":
-        return node.expressions.length
-          ? undefined
-          : node.quasis[0].value.cooked;
+        return node.expressions.length ? undefined : node.quasis[0].value.cooked;
       case "UnaryExpression":
-        return node.operator === "-" &&
-          typeof literal(node.argument) === "number"
+        return node.operator === "-" && typeof literal(node.argument) === "number"
           ? -(literal(node.argument) as number)
           : undefined;
       case "ArrayExpression": {
@@ -383,15 +346,11 @@ function inlineTailwindConfig(source: string) {
             property.type === "Property" && !property.computed
               ? property.key.type === "Identifier"
                 ? property.key.name
-                : typeof property.key.value === "string" ||
-                    typeof property.key.value === "number"
+                : typeof property.key.value === "string" || typeof property.key.value === "number"
                   ? String(property.key.value)
                   : undefined
               : undefined;
-          const value =
-            key === undefined || property.kind !== "init"
-              ? undefined
-              : literal(property.value);
+          const value = key === undefined || property.kind !== "init" ? undefined : literal(property.value);
           if (
             key === undefined ||
             value === undefined ||
@@ -410,12 +369,8 @@ function inlineTailwindConfig(source: string) {
     return undefined;
   };
   for (const statement of program.body) {
-    const expression =
-      statement.type === "ExpressionStatement" ? statement.expression : null;
-    const target =
-      expression?.type === "AssignmentExpression" && expression.operator === "="
-        ? expression.left
-        : null;
+    const expression = statement.type === "ExpressionStatement" ? statement.expression : null;
+    const target = expression?.type === "AssignmentExpression" && expression.operator === "=" ? expression.left : null;
     const names: string[] = [];
     for (let node = target; node; node = node.object) {
       if (node.type === "Identifier") {
@@ -426,8 +381,7 @@ function inlineTailwindConfig(source: string) {
       names.unshift(node.property.name);
     }
     const name = names.join(".");
-    if (name !== "tailwind.config" && name !== "window.tailwind.config")
-      continue;
+    if (name !== "tailwind.config" && name !== "window.tailwind.config") continue;
     const config = literal(expression.right);
     if (config && typeof config === "object" && !Array.isArray(config))
       return { config: config as Record<string, unknown>, skipped };
@@ -471,10 +425,7 @@ const CHARACTER_REFERENCE = /&#|&[a-z][a-z0-9]*;/i;
  * The build worker asks for the one runtime slot when it is. A page without
  * any module type or CDN host is answered without parsing it.
  */
-export function needsRuntimeBuild(
-  manifest: BundleManifest,
-  sourceBytes: Map<string, Buffer>,
-) {
+export function needsRuntimeBuild(manifest: BundleManifest, sourceBytes: Map<string, Buffer>) {
   const entry = sourceBytes.get(manifest.entrypoint);
   if (!entry || entry.length > MAX_OUTPUT_BYTES) return false;
   try {
@@ -490,9 +441,7 @@ export function needsRuntimeBuild(
 
 /** The first line of an inline script's text in its HTML file. */
 const scriptLine = (node: Node) =>
-  node.childNodes?.[0]?.sourceCodeLocation?.startLine ??
-  node.sourceCodeLocation?.startLine ??
-  1;
+  node.childNodes?.[0]?.sourceCodeLocation?.startLine ?? node.sourceCodeLocation?.startLine ?? 1;
 
 /**
  * Builds a runtime page, or returns null when the entrypoint has no module,
@@ -517,16 +466,13 @@ export async function buildRuntimeBundle(
   const entryPath = canonical.entrypoint;
   const decode = (file: string) => {
     try {
-      return new TextDecoder("utf-8", { fatal: true }).decode(
-        sourceBytes.get(file)!,
-      );
+      return new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes.get(file)!);
     } catch {
       return null;
     }
   };
   const entryHtml = decode(entryPath);
-  if (entryHtml === null)
-    return fail("entrypoint is not valid UTF-8", entryPath);
+  if (entryHtml === null) return fail("entrypoint is not valid UTF-8", entryPath);
   let document: Node;
   try {
     document = parse(entryHtml, { sourceCodeLocationInfo: true }) as Node;
@@ -570,10 +516,7 @@ export async function buildRuntimeBundle(
     lines: number;
   } | null = null;
   const babelSources = new Set<string>();
-  const babelPath = path.posix.join(
-    path.posix.dirname(entryPath),
-    "polka-babel.jsx",
-  );
+  const babelPath = path.posix.join(path.posix.dirname(entryPath), "polka-babel.jsx");
   for (const [index, node] of scripts.entries()) {
     const type = typeOf(node);
     const source = attr(node, "src");
@@ -584,21 +527,15 @@ export async function buildRuntimeBundle(
           entryPath,
         );
       if (!source && CLASSIC_TYPES.includes(type)) {
-        const text = (node.childNodes ?? [])
-          .map((child) => child.value ?? "")
-          .join("");
+        const text = (node.childNodes ?? []).map((child) => child.value ?? "").join("");
         if (/\btailwind\s*\.\s*config\s*=/.test(text)) {
           const found = inlineTailwindConfig(text);
           if (!found)
-            warnings.add(
-              "tailwind.config не применён: в нём есть функции или ссылки, поддерживаются только значения",
-            );
+            warnings.add("tailwind.config не применён: в нём есть функции или ссылки, поддерживаются только значения");
           else {
             tailwindConfig = found.config;
             if (found.skipped)
-              warnings.add(
-                "из tailwind.config взяты только значения; функции, плагины и ссылки пропущены",
-              );
+              warnings.add("из tailwind.config взяты только значения; функции, плагины и ссылки пропущены");
           }
         }
       }
@@ -635,31 +572,18 @@ export async function buildRuntimeBundle(
         );
       const file = files.get(resolved);
       const loader = loaderFor(resolved);
-      if (!file)
-        return fail("module script is missing from the bundle", resolved);
-      if (
-        file.mime !== "text/javascript" ||
-        !loader ||
-        loader === "css" ||
-        loader === "json"
-      )
-        return fail(
-          "module script must be a .js, .mjs, .jsx, .ts or .tsx file",
-          resolved,
-        );
+      if (!file) return fail("module script is missing from the bundle", resolved);
+      if (file.mime !== "text/javascript" || !loader || loader === "css" || loader === "json")
+        return fail("module script must be a .js, .mjs, .jsx, .ts or .tsx file", resolved);
       const decoded = decode(resolved);
-      if (decoded === null)
-        return fail("module script is not valid UTF-8", resolved);
+      if (decoded === null) return fail("module script is not valid UTF-8", resolved);
       text = decoded;
       origin = { path: resolved, line: 1 };
       module = { path: resolved, source: text, loader };
     } else {
       text = (node.childNodes ?? []).map((child) => child.value ?? "").join("");
       origin = { path: entryPath, line: scriptLine(node) };
-      const virtual = path.posix.join(
-        path.posix.dirname(entryPath),
-        `polka-inline-${index}.jsx`,
-      );
+      const virtual = path.posix.join(path.posix.dirname(entryPath), `polka-inline-${index}.jsx`);
       module = { path: virtual, source: text, loader: "jsx" };
     }
     if (type !== "module") {
@@ -680,8 +604,7 @@ export async function buildRuntimeBundle(
       babelModule.lines += text.split("\n").length;
       if (origin.path !== entryPath) babelSources.add(origin.path);
     } else {
-      if (source === undefined)
-        origins.set(module.path, [{ start: 1, ...origin }]);
+      if (source === undefined) origins.set(module.path, [{ start: 1, ...origin }]);
       modules.push(module);
     }
     if (!anchor) anchor = node;
@@ -697,40 +620,29 @@ export async function buildRuntimeBundle(
   const siblings = parent.childNodes!;
   if (anchor) siblings.splice(siblings.indexOf(anchor), 1, runtimeScript);
   else siblings.push(runtimeScript);
-  insertIntoHead(head, [
-    element("script", PRELUDE, head),
-    element("style", placeholderCss, head),
-  ]);
+  insertIntoHead(head, [element("script", PRELUDE, head), element("style", placeholderCss, head)]);
 
   // The rest of the page (styles, images, links, classic scripts) is checked
   // and inlined by the v4 rules on the rewritten entrypoint.
-  const rewritten = Buffer.from(
-    serialize(document as unknown as DefaultTreeAdapterTypes.ParentNode),
-  );
+  const rewritten = Buffer.from(serialize(document as unknown as DefaultTreeAdapterTypes.ParentNode));
   const rewrittenManifest = {
     ...canonical,
     files: canonical.files.map((file) =>
-      file.path === entryPath
-        ? { ...file, size: rewritten.length, sha256: digest(rewritten) }
-        : file,
+      file.path === entryPath ? { ...file, size: rewritten.length, sha256: digest(rewritten) } : file,
     ),
   };
-  const page = buildInlineBundle(
-    rewrittenManifest,
-    new Map([...sourceBytes, [entryPath, rewritten]]),
-    { prelude: false },
-  );
+  const page = buildInlineBundle(rewrittenManifest, new Map([...sourceBytes, [entryPath, rewritten]]), {
+    prelude: false,
+  });
   if (!page.ok) return page;
   for (const warning of page.warnings) warnings.add(warning);
 
   /** A compiled file and line as the page's own file and line. */
   const where = (file: string, line?: number) => {
     const segments = origins.get(file);
-    if (!segments)
-      return { path: file, label: line ? `${file}:${line}` : file };
+    if (!segments) return { path: file, label: line ? `${file}:${line}` : file };
     const at = line ?? 1;
-    const segment =
-      [...segments].reverse().find((item) => item.start <= at) ?? segments[0];
+    const segment = [...segments].reverse().find((item) => item.start <= at) ?? segments[0];
     const real = segment.line + (at - segment.start);
     return {
       path: segment.path,
@@ -742,8 +654,7 @@ export async function buildRuntimeBundle(
   const codeBytes = canonical.files
     .filter((file) => file.path !== entryPath && loaderFor(file.path) !== null)
     .reduce((total, file) => total + file.size, 0);
-  if (codeBytes > BUILD_LIMITS.bundleCodeBytes)
-    return fail("the bundle's code files exceed 8 MiB", entryPath);
+  if (codeBytes > BUILD_LIMITS.bundleCodeBytes) return fail("the bundle's code files exceed 8 MiB", entryPath);
 
   const userSources = new Map(modules.map((module) => [module.path, module]));
   const mount = modules.some((module) => exportsDefault(module.source));
@@ -761,15 +672,10 @@ export async function buildRuntimeBundle(
   let loadedBytes = 0;
   const guard = async (file: string, source: string, loader: Loader) => {
     if (++loadedFiles > BUILD_LIMITS.runtimeModules)
-      return refuse(
-        `a runtime page may load at most ${BUILD_LIMITS.runtimeModules} source files`,
-        file,
-      );
+      return refuse(`a runtime page may load at most ${BUILD_LIMITS.runtimeModules} source files`, file);
     loadedBytes += Buffer.byteLength(source);
-    if (loadedBytes > BUILD_LIMITS.runtimeSourceBytes)
-      return refuse("runtime sources exceed 2 MiB", file);
-    if (!withinNestingLimits(source))
-      return refuse("source nests too deeply to compile safely", file);
+    if (loadedBytes > BUILD_LIMITS.runtimeSourceBytes) return refuse("runtime sources exceed 2 MiB", file);
+    if (!withinNestingLimits(source)) return refuse("source nests too deeply to compile safely", file);
     let refusal: string | null;
     try {
       refusal = await staticImportsOnly(source, loader);
@@ -780,10 +686,7 @@ export async function buildRuntimeBundle(
     if (refusal) {
       const line = /\(line (\d+)\)$/.exec(refusal);
       const place = where(file, line ? Number(line[1]) : undefined);
-      return refuse(
-        line ? refusal.replace(/\(line \d+\)$/, `(${place.label})`) : refusal,
-        file,
-      );
+      return refuse(line ? refusal.replace(/\(line \d+\)$/, `(${place.label})`) : refusal, file);
     }
     return null;
   };
@@ -791,36 +694,24 @@ export async function buildRuntimeBundle(
     name: "polka-runtime",
     setup(builder) {
       builder.onResolve({ filter: /.*/ }, async (args) => {
-        if (args.kind === "entry-point")
-          return { path: "entry", namespace: "polka" };
+        if (args.kind === "entry-point") return { path: "entry", namespace: "polka" };
         if (args.namespace !== "polka" && args.namespace !== "user") return;
         // Only the generated entry names page modules directly.
         if (args.namespace === "polka" && args.path.startsWith("user:")) {
           const target = args.path.slice(5);
-          if (userSources.has(target))
-            return { path: target, namespace: "user" };
+          if (userSources.has(target)) return { path: target, namespace: "user" };
         }
         const importer = args.namespace === "user" ? args.importer : entryPath;
         if (args.path.startsWith("./") || args.path.startsWith("../")) {
-          const resolved = resolveUserFile(
-            args.path,
-            importer,
-            files,
-            entryPath,
-          );
+          const resolved = resolveUserFile(args.path, importer, files, entryPath);
           if (resolved) return { path: resolved, namespace: "user" };
-          return refuse(
-            `import "${args.path}" is not a file of this page`,
-            importer,
-          );
+          return refuse(`import "${args.path}" is not a file of this page`, importer);
         }
         // Library imports resolve from Полка's node_modules.
         if (args.kind !== "url-token" && runtimeLibraryFor(args.path)) return;
         // A CDN URL of an allowlisted library is the vendored library.
         const vendored =
-          args.kind !== "url-token" && /^https?:\/\//i.test(args.path)
-            ? vendoredSpecifier(args.path)
-            : null;
+          args.kind !== "url-token" && /^https?:\/\//i.test(args.path) ? vendoredSpecifier(args.path) : null;
         if (vendored) {
           const resolved = await builder.resolve(vendored, {
             kind: args.kind,
@@ -850,11 +741,9 @@ export async function buildRuntimeBundle(
       builder.onLoad({ filter: /.*/, namespace: "user" }, async (args) => {
         const inline = userSources.get(args.path);
         const loader = inline?.loader ?? loaderFor(args.path);
-        const contents =
-          inline?.source ?? (files.has(args.path) ? decode(args.path) : null);
+        const contents = inline?.source ?? (files.has(args.path) ? decode(args.path) : null);
         if (!loader) return notAllowed();
-        if (contents === null)
-          return refuse("source is not valid UTF-8", args.path);
+        if (contents === null) return refuse("source is not valid UTF-8", args.path);
         const refusal = await guard(args.path, contents, loader);
         if (refusal) return refusal;
         return { contents, loader, resolveDir: ROOT };
@@ -866,8 +755,7 @@ export async function buildRuntimeBundle(
         // empty stub esbuild makes without reading anything.
         if (args.namespace === "") return undefined;
         if (args.namespace !== "file") return notAllowed();
-        if (!isAllowedLibraryFile(args.path, libraryDirs()))
-          return notAllowed();
+        if (!isAllowedLibraryFile(args.path, libraryDirs())) return notAllowed();
         return undefined;
       });
     },
@@ -893,21 +781,11 @@ export async function buildRuntimeBundle(
       logLevel: "silent",
       plugins: [plugin],
     });
-    js =
-      result.outputFiles.find((file) => file.path.endsWith(".js"))?.text ?? "";
-    importedCss =
-      result.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? "";
+    js = result.outputFiles.find((file) => file.path.endsWith(".js"))?.text ?? "";
+    importedCss = result.outputFiles.find((file) => file.path.endsWith(".css"))?.text ?? "";
     for (const input of Object.keys(result.metafile.inputs)) {
-      if (
-        input.startsWith("user:") ||
-        input === "polka:entry" ||
-        input.startsWith("(disabled):")
-      )
-        continue;
-      if (
-        /^[a-z-]+:/.test(input) ||
-        !isAllowedLibraryFile(path.resolve(ROOT, input), libraryDirs())
-      )
+      if (input.startsWith("user:") || input === "polka:entry" || input.startsWith("(disabled):")) continue;
+      if (/^[a-z-]+:/.test(input) || !isAllowedLibraryFile(path.resolve(ROOT, input), libraryDirs()))
         return fail("import not allowed", entryPath);
     }
     consumed = Object.keys(result.metafile.inputs)
@@ -923,15 +801,11 @@ export async function buildRuntimeBundle(
     if (!Array.isArray(errors) || !errors.length) return compilerFailure();
     return describe(errors, where, entryPath);
   }
-  if (Buffer.byteLength(js) > MAX_SCRIPT_BYTES)
-    return fail("compiled script exceeds 7 MiB", entryPath);
+  if (Buffer.byteLength(js) > MAX_SCRIPT_BYTES) return fail("compiled script exceeds 7 MiB", entryPath);
   // esbuild escapes "</script"; an HTML comment opener could still change how
   // the parser ends the inline script, so it is refused.
   if (/<\/script/i.test(js) || js.includes("<!--"))
-    return fail(
-      "compiled script contains an HTML comment or closing sequence",
-      entryPath,
-    );
+    return fail("compiled script contains an HTML comment or closing sequence", entryPath);
 
   const words = candidates([
     entryHtml,
@@ -950,8 +824,7 @@ export async function buildRuntimeBundle(
     );
   }
   const checked = checkGeneratedCss(css);
-  if (checked.error !== undefined)
-    return fail(`generated stylesheet refused: ${checked.error}`, entryPath);
+  if (checked.error !== undefined) return fail(`generated stylesheet refused: ${checked.error}`, entryPath);
 
   const html = page.html.toString("utf8");
   const jsTag = `<script>${placeholderJs}</script>`;
@@ -959,12 +832,9 @@ export async function buildRuntimeBundle(
   if (html.split(jsTag).length !== 2 || html.split(cssTag).length !== 2)
     return fail("runtime placeholders were not preserved", entryPath);
   const output = Buffer.from(
-    html
-      .replace(cssTag, () => `<style>${checked.css}</style>`)
-      .replace(jsTag, () => `<script>${js}</script>`),
+    html.replace(cssTag, () => `<style>${checked.css}</style>`).replace(jsTag, () => `<script>${js}</script>`),
   );
-  if (output.length > MAX_OUTPUT_BYTES)
-    return fail("compiled page exceeds 8 MiB", entryPath);
+  if (output.length > MAX_OUTPUT_BYTES) return fail("compiled page exceeds 8 MiB", entryPath);
   return {
     ok: true,
     sourceManifestSha256: digest(JSON.stringify(canonical)),
@@ -978,9 +848,7 @@ export async function buildRuntimeBundle(
         ...page.consumedPaths,
         ...consumed,
         ...babelSources,
-        ...modules
-          .map((module) => module.path)
-          .filter((file) => files.has(file)),
+        ...modules.map((module) => module.path).filter((file) => files.has(file)),
       ]),
     ].sort(),
     warnings: [...warnings],
@@ -999,14 +867,10 @@ function describe(
   entryPath: string,
 ) {
   const first = errors[0];
-  if (!first?.location?.file.startsWith("user:"))
-    return fail("compilation failed", entryPath);
+  if (!first?.location?.file.startsWith("user:")) return fail("compilation failed", entryPath);
   const text = first.text.replace(/(?:^|(?<=[\s"'(]))\/[^\s"')]*/g, "…");
   const place = where(first.location.file.slice(5), first.location.line);
-  return fail(
-    `compilation failed: ${text} (${place.label})`.slice(0, 280),
-    place.path,
-  );
+  return fail(`compilation failed: ${text} (${place.label})`.slice(0, 280), place.path);
 }
 
 /** A relative import to another source file of the bundle. */
@@ -1027,12 +891,7 @@ function resolveUserFile(
     const file = files.get(candidate);
     const loader = loaderFor(candidate);
     if (!file || candidate === entryPath || !loader) continue;
-    const expected =
-      loader === "css"
-        ? "text/css"
-        : loader === "json"
-          ? "application/json"
-          : "text/javascript";
+    const expected = loader === "css" ? "text/css" : loader === "json" ? "application/json" : "text/javascript";
     if (file.mime === expected) return candidate;
   }
   return null;
@@ -1052,7 +911,6 @@ export async function buildDerivative(
   if (!allowRuntime && needsRuntimeBuild(manifest, sourceBytes))
     return fail("runtime build was not admitted", manifest.entrypoint);
   return (
-    (await buildRuntimeBundle(manifest, sourceBytes, { allowRuntime })) ??
-    buildInlineBundle(manifest, sourceBytes)
+    (await buildRuntimeBundle(manifest, sourceBytes, { allowRuntime })) ?? buildInlineBundle(manifest, sourceBytes)
   );
 }

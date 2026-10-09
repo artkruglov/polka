@@ -7,10 +7,7 @@ import {
   type ClientSetup,
   type SetupCopy,
 } from "../../entities/onboarding/agent-setup.ts";
-import {
-  isLoopbackOrigin,
-  reachableFrom,
-} from "../../entities/onboarding/connect-phrase.ts";
+import { isLoopbackOrigin, reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 
 /** «Где вы работаете с ИИ?»: the five places, one pressed. */
 export function ClientCards({
@@ -23,28 +20,29 @@ export function ClientCards({
   const reachable = reachableFrom(location.origin);
   return (
     <>
-    {isLoopbackOrigin(location.origin) && (
-      <p className="agent-setup-intro" role="note">
-        Эта Полка работает на вашем компьютере ({location.host}): claude.ai и
-        ChatGPT подключаются со своих серверов и до неё не достанут.
-        Подключите Claude Code или Codex на этом компьютере, а для скриптов —
-        токен в разделе «Для разработчиков».
-      </p>
-    )}
-    <div className="agent-client-cards" role="group" aria-label="Где вы работаете с ИИ">
-      {agentClients.filter((item) => reachable(item.id)).map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className="agent-client-card"
-          aria-pressed={selected === item.id}
-          onClick={() => onChoose(item.id)}
-        >
-          <strong>{item.name}</strong>
-          <small>{item.hint}</small>
-        </button>
-      ))}
-    </div>
+      {isLoopbackOrigin(location.origin) && (
+        <p className="agent-setup-intro" role="note">
+          Эта Полка работает на вашем компьютере ({location.host}): claude.ai и ChatGPT подключаются со своих серверов и
+          до неё не достанут. Подключите Claude Code или Codex на этом компьютере, а для скриптов — токен в разделе «Для
+          разработчиков».
+        </p>
+      )}
+      <div className="agent-client-cards" role="group" aria-label="Где вы работаете с ИИ">
+        {agentClients
+          .filter((item) => reachable(item.id))
+          .map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="agent-client-card"
+              aria-pressed={selected === item.id}
+              onClick={() => onChoose(item.id)}
+            >
+              <strong>{item.name}</strong>
+              <small>{item.hint}</small>
+            </button>
+          ))}
+      </div>
     </>
   );
 }
@@ -58,11 +56,7 @@ export function SetupPanel({
   waiting: boolean;
 }) {
   return (
-    <section
-      className="agent-setup"
-      aria-labelledby="agent-setup-title"
-      data-client={setup.id}
-    >
+    <section className="agent-setup" aria-labelledby="agent-setup-title" data-client={setup.id}>
       <h3 id="agent-setup-title">{setup.title}</h3>
       <p className="agent-setup-intro">{setup.intro}</p>
       <ol className="agent-setup-steps">
@@ -107,7 +101,6 @@ export function CopyBlock({ copy }: { copy: SetupCopy }) {
     </div>
   );
 }
-
 
 /**
  * The whole instruction for someone not signed in (the landing): pick where

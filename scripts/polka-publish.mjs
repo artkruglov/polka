@@ -56,13 +56,7 @@ class CliError extends Error {
 }
 
 const escapeHtml = (text) =>
-  text.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        char
-      ],
-  );
+  text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
 function titleFromHtml(html) {
   const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html.slice(0, 262_144));
@@ -81,8 +75,7 @@ function titleFromHtml(html) {
 /** Plain text and Markdown are wrapped into a minimal page, shown as written. */
 function asHtml(source, name) {
   const extension = extname(name).toLowerCase();
-  if ([".html", ".htm"].includes(extension) || /^\s*</.test(source))
-    return source;
+  if ([".html", ".htm"].includes(extension) || /^\s*</.test(source)) return source;
   const title = escapeHtml(basename(name, extension) || "Текст");
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${title}</title><style>body{margin:40px auto;max-width:760px;padding:0 20px;font:16px/1.6 system-ui,sans-serif}pre{white-space:pre-wrap;word-wrap:break-word;font:inherit}</style></head><body><pre>${escapeHtml(source)}</pre></body></html>`;
 }
@@ -123,19 +116,12 @@ function parse(argv) {
       "Do not pass the token as an argument: it stays in shell history and process lists. Set POLKA_TOKEN instead.",
       2,
     );
-  if (positionals.length !== 1)
-    throw new CliError(
-      `Give exactly one file (or - for stdin).\n\n${USAGE}`,
-      2,
-    );
+  if (positionals.length !== 1) throw new CliError(`Give exactly one file (or - for stdin).\n\n${USAGE}`, 2);
   const share = values.share === undefined ? undefined : Number(values.share);
-  if (share !== undefined && ![1, 7, 30].includes(share))
-    throw new CliError("--share must be 1, 7 or 30 (days).", 2);
-  const uuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (share !== undefined && ![1, 7, 30].includes(share)) throw new CliError("--share must be 1, 7 or 30 (days).", 2);
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   for (const name of ["folder", "key", "artifact", "base-revision"])
-    if (values[name] !== undefined && !uuid.test(values[name]))
-      throw new CliError(`--${name} must be a UUID.`, 2);
+    if (values[name] !== undefined && !uuid.test(values[name])) throw new CliError(`--${name} must be a UUID.`, 2);
   if ((values.artifact === undefined) !== (values["base-revision"] === undefined))
     throw new CliError("A new version needs both --artifact and --base-revision.", 2);
   if (values.artifact !== undefined && values.folder !== undefined)
@@ -219,8 +205,7 @@ export async function main(
         "Set POLKA_TOKEN to an agent token from Полка → Агенты (for example: read -r -s POLKA_TOKEN && export POLKA_TOKEN).",
         2,
       );
-    const address =
-      options.endpoint?.trim() || env.POLKA_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
+    const address = options.endpoint?.trim() || env.POLKA_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
     if (!address)
       throw new CliError(
         "Set POLKA_ENDPOINT or pass --endpoint with your Полка address (for example https://polka.example.com).",
@@ -232,10 +217,7 @@ export async function main(
     } catch {
       throw new CliError("The endpoint must be a URL such as https://polka.example.com.", 2);
     }
-    if (
-      endpoint.protocol !== "https:" &&
-      !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname)
-    )
+    if (endpoint.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname))
       throw new CliError("The endpoint must use https.", 2);
     const source =
       options.file === "-"
@@ -247,10 +229,7 @@ export async function main(
     const name = options.file === "-" ? "stdin.html" : options.file;
     const html = options.component ? null : asHtml(source, name);
     const title =
-      options.title?.trim() ||
-      (html ? titleFromHtml(html) : "") ||
-      basename(name, extname(name)) ||
-      "Без названия";
+      options.title?.trim() || (html ? titleFromHtml(html) : "") || basename(name, extname(name)) || "Без названия";
     const key = options.key ?? randomUUID();
     const result = await post(
       new URL("/api/v1/publish", endpoint),
@@ -258,14 +237,10 @@ export async function main(
       {
         key,
         title: title.slice(0, 160),
-        ...(html === null
-          ? { component: source, componentLanguage: options.language }
-          : { html }),
+        ...(html === null ? { component: source, componentLanguage: options.language } : { html }),
         ...(options.share ? { expiresInDays: options.share } : {}),
         ...(options.folderId ? { folderId: options.folderId } : {}),
-        ...(options.artifactId
-          ? { artifactId: options.artifactId, baseRevisionId: options.baseRevisionId }
-          : {}),
+        ...(options.artifactId ? { artifactId: options.artifactId, baseRevisionId: options.baseRevisionId } : {}),
       },
       fetchImpl,
     );
@@ -280,9 +255,7 @@ export async function main(
       );
     } else {
       stdout.write(`${result.shelfUrl}\n`);
-      stderr.write(
-        `Saved privately, no link: ${result.linkUnavailableReason ?? "the token cannot manage links"}\n`,
-      );
+      stderr.write(`Saved privately, no link: ${result.linkUnavailableReason ?? "the token cannot manage links"}\n`);
     }
     if (result.moderation)
       stderr.write(
@@ -290,9 +263,7 @@ export async function main(
       );
     if (result.expiresNote) stderr.write(`${result.expiresNote}\n`);
     if (result.interactiveUnavailableReason)
-      stderr.write(
-        `Scripts will not run: ${result.interactiveUnavailableReason}\n`,
-      );
+      stderr.write(`Scripts will not run: ${result.interactiveUnavailableReason}\n`);
     return 0;
   } catch (error) {
     stderr.write(`polka-publish: ${error.message}\n`);

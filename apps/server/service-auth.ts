@@ -1,11 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
-import {
-  issueAgentConnectionSchema,
-  type AgentConnection,
-  type AgentScope,
-} from "../../packages/contracts/index.ts";
+import { issueAgentConnectionSchema, type AgentConnection, type AgentScope } from "../../packages/contracts/index.ts";
 import type { Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
@@ -23,10 +19,7 @@ export const MCP_AUDIENCE = new URL("/mcp", config.APP_ORIGIN).toString();
  * A one-time project upload token's audience (polka_project_upload,
  * project-upload.ts): only the project routes of the HTTP API accept it.
  */
-export const PROJECT_UPLOAD_AUDIENCE = new URL(
-  "/api/v1/projects",
-  config.APP_ORIGIN,
-).toString();
+export const PROJECT_UPLOAD_AUDIENCE = new URL("/api/v1/projects", config.APP_ORIGIN).toString();
 
 export type ServiceActor = {
   accountId: string;
@@ -84,8 +77,7 @@ const liveConnectionSql = (match: string, lock = "") =>
       AND NOT account.disabled AND account.deletion_requested_at IS NULL
     ${lock}`;
 
-const teamShelvesSql = () =>
-  config.TEAM_SHELVES === "on" ? "" : "AND tenant.kind='personal'";
+const teamShelvesSql = () => (config.TEAM_SHELVES === "on" ? "" : "AND tenant.kind='personal'");
 
 const CONNECTION_BY_ID = `connection.id=$1 AND connection.tenant_id=$2
       AND connection.account_id=$3 AND connection.audience=$4`;
@@ -119,24 +111,16 @@ function serviceActorFromRow(row: any): ServiceActor {
     expiresAt: Math.floor(
       Math.min(
         new Date(row.expires_at).getTime(),
-        row.access_expires_at
-          ? new Date(row.access_expires_at).getTime()
-          : Infinity,
+        row.access_expires_at ? new Date(row.access_expires_at).getTime() : Infinity,
       ) / 1000,
     ),
   };
 }
 
-export const unauthorized = () =>
-  new Problem(401, "unauthorized", "Подключение агента недействительно.");
+export const unauthorized = () => new Problem(401, "unauthorized", "Подключение агента недействительно.");
 
 const requireScope = (scopes: readonly AgentScope[], scope: AgentScope) => {
-  if (!scopes.includes(scope))
-    throw new Problem(
-      403,
-      "forbidden",
-      "У подключения нет разрешения для этого действия.",
-    );
+  if (!scopes.includes(scope)) throw new Problem(403, "forbidden", "У подключения нет разрешения для этого действия.");
 };
 
 const connectionDTO = (row: any): AgentConnection => ({
@@ -156,9 +140,7 @@ const connectionDTO = (row: any): AgentConnection => ({
   signInLinks: !!row.oauth_client_id && row.sign_in_links !== false,
   createdAt: new Date(row.created_at).toISOString(),
   expiresAt: new Date(row.expires_at).toISOString(),
-  lastSeenAt: row.last_seen_at
-    ? new Date(row.last_seen_at).toISOString()
-    : null,
+  lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null,
   ...(row.shelf_kind === "team" && {
     shelf: { id: row.tenant_id, name: row.shelf_name },
   }),
@@ -178,31 +160,14 @@ export function assertOwnShelf(actor: ServiceActor) {
 }
 
 /** Scopes that change the shelf: a reader connects an agent only to read it. */
-const WRITE_SCOPES: readonly AgentScope[] = [
-  "capture",
-  "revise",
-  "share",
-  "manage",
-];
-export function assertScopesFitRole(
-  role: ShelfRole,
-  scopes: readonly AgentScope[],
-) {
+const WRITE_SCOPES: readonly AgentScope[] = ["capture", "revise", "share", "manage"];
+export function assertScopesFitRole(role: ShelfRole, scopes: readonly AgentScope[]) {
   if (role === "reader" && scopes.some((scope) => WRITE_SCOPES.includes(scope)))
-    throw new Problem(
-      403,
-      "forbidden",
-      "На этой полке вы читатель: агент может только читать и искать работы.",
-    );
+    throw new Problem(403, "forbidden", "На этой полке вы читатель: агент может только читать и искать работы.");
 }
 
 /** Lock the active owner and verify the session-bound CSRF token. */
-export async function lockOwner(
-  c: PoolClient,
-  actor: Actor,
-  sessionToken: string,
-  csrfToken: string,
-) {
+export async function lockOwner(c: PoolClient, actor: Actor, sessionToken: string, csrfToken: string) {
   await lockActiveOwnerTenant(c, actor, unauthorized);
   if (!TOKEN.test(sessionToken) || !TOKEN.test(csrfToken))
     throw new Problem(403, "forbidden", "Проверка запроса истекла.");
@@ -214,8 +179,7 @@ export async function lockOwner(
        AND csrf.token_hash=$3 AND csrf.expires_at>now()`,
     [sha256(sessionToken), actor.id, sha256(csrfToken)],
   );
-  if (!valid.rowCount)
-    throw new Problem(403, "forbidden", "Проверка запроса истекла.");
+  if (!valid.rowCount) throw new Problem(403, "forbidden", "Проверка запроса истекла.");
 }
 
 export async function issueConnectionCsrf(actor: Actor, sessionToken: string) {
@@ -241,38 +205,28 @@ export async function issueConnectionCsrf(actor: Actor, sessionToken: string) {
   return { csrfToken: token, expiresAt: row.expires_at.toISOString() };
 }
 
-export async function issueAgentConnection(
-  actor: Actor,
-  sessionToken: string,
-  csrfToken: string,
-  body: unknown,
-) {
+export async function issueAgentConnection(actor: Actor, sessionToken: string, csrfToken: string, body: unknown) {
   const input = issueAgentConnectionSchema.parse(body);
-  if (input.audience !== MCP_AUDIENCE)
-    throw new Problem(
-      400,
-      "invalid",
-      "Endpoint подключения не поддерживается.",
-    );
+  if (input.audience !== MCP_AUDIENCE) throw new Problem(400, "invalid", "Endpoint подключения не поддерживается.");
   const token = randomBytes(32).toString("base64url");
   const connection = await transaction(async (c) => {
     // To a department shelf the account belongs to (docs/specs/TEAM_SHELVES.md).
     // Its row first: shelf before account, the order every shelf path takes.
     const tenant = input.shelfId ?? actor.tenant;
-    if (tenant !== actor.tenant)
-      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [tenant]);
+    if (tenant !== actor.tenant) await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [tenant]);
     await lockOwner(c, actor, sessionToken, csrfToken);
-    const shelf =
-      tenant === actor.tenant
-        ? null
-        : await lockShelf(c, { id: actor.id, tenant }, "reader");
+    const shelf = tenant === actor.tenant ? null : await lockShelf(c, { id: actor.id, tenant }, "reader");
     if (shelf) assertScopesFitRole(shelf.role, input.scopes);
     // Other shelves to search: department shelves the account belongs to, read only.
     if (input.allowedShelfIds.includes(tenant))
       throw new Problem(400, "invalid", "Полка токена уже ищется: уберите её из списка других полок.");
     if (input.allowedShelfIds.length) {
       if (config.TEAM_SHELVES !== "on" || !input.scopes.includes("read"))
-        throw new Problem(400, "invalid", "Поиск по другим полкам нужен вместе с правом read и включёнными полками отделов.");
+        throw new Problem(
+          400,
+          "invalid",
+          "Поиск по другим полкам нужен вместе с правом read и включёнными полками отделов.",
+        );
       const { rows: member } = await c.query(
         `SELECT t.id FROM tenants t JOIN tenant_members m ON m.tenant_id=t.id
          WHERE t.id=ANY($1::uuid[]) AND t.kind='team' AND t.state='active'
@@ -292,11 +246,7 @@ export async function issueAgentConnection(
       [tenant, actor.id],
     );
     if (Number(active.count) >= MAX_ACTIVE_CONNECTIONS)
-      throw new Problem(
-        413,
-        "quota",
-        "Достигнут лимит активных подключений агента.",
-      );
+      throw new Problem(413, "quota", "Достигнут лимит активных подключений агента.");
     const id = randomUUID();
     const {
       rows: [row],
@@ -370,10 +320,7 @@ export async function revokeAgentConnection(
     );
     if (!connection) throw missing();
     if (!connection.revoked_at) {
-      await c.query(
-        "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1",
-        [connectionId],
-      );
+      await c.query("UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1", [connectionId]);
       await c.query(
         `UPDATE oauth_refresh_tokens SET revoked_at=clock_timestamp()
          WHERE connection_id=$1 AND revoked_at IS NULL`,
@@ -400,8 +347,7 @@ export async function setConnectionSignInLinks(
   return transaction(async (c) => {
     await lockOwner(c, actor, sessionToken, csrfToken);
     const { setSignInLinks } = await import("./agent-sign-in-links.ts");
-    if (!(await setSignInLinks(c, actor, connectionId, enabled)))
-      throw missing();
+    if (!(await setSignInLinks(c, actor, connectionId, enabled))) throw missing();
     // An owner who switches links off also voids the ones not yet used.
     if (!enabled)
       await c.query(
@@ -419,18 +365,11 @@ export async function authenticateServiceToken(
   scope?: AgentScope,
   transport: "mcp" | "http" = "mcp",
 ): Promise<ServiceActor> {
-  if (
-    !TOKEN.test(token) ||
-    (audience !== MCP_AUDIENCE && audience !== PROJECT_UPLOAD_AUDIENCE)
-  )
-    throw unauthorized();
+  if (!TOKEN.test(token) || (audience !== MCP_AUDIENCE && audience !== PROJECT_UPLOAD_AUDIENCE)) throw unauthorized();
   const tokenHash = sha256(token);
   const {
     rows: [row],
-  } = await db.query(
-    liveConnectionSql("connection.token_hash=$1 AND connection.audience=$2"),
-    [tokenHash, audience],
-  );
+  } = await db.query(liveConnectionSql("connection.token_hash=$1 AND connection.audience=$2"), [tokenHash, audience]);
   if (!row) throw unauthorized();
   if (scope) requireScope(row.scopes, scope);
   // A token's first successful call is when its agent connected (analytics;
@@ -474,26 +413,15 @@ export async function authenticateServiceToken(
            AND (oauth_client_id IS NOT NULL OR last_seen_at IS NOT NULL)) AS found`,
       [row.tenant_id, row.id],
     );
-    trackAgentConnected(
-      null,
-      row.account_id,
-      transport === "http" ? "token-http" : "token-mcp",
-      !earlier.found,
-    );
+    trackAgentConnected(null, row.account_id, transport === "http" ? "token-http" : "token-mcp", !earlier.found);
   }
   return serviceActorFromRow(row);
 }
 
-export async function recheckServiceActor(
-  actor: ServiceActor,
-  scope: AgentScope,
-) {
+export async function recheckServiceActor(actor: ServiceActor, scope: AgentScope) {
   const {
     rows: [connection],
-  } = await db.query(
-    liveConnectionSql(CONNECTION_BY_ID),
-    connectionIdParams(actor),
-  );
+  } = await db.query(liveConnectionSql(CONNECTION_BY_ID), connectionIdParams(actor));
   if (!connection) throw unauthorized();
   requireScope(connection.scopes, scope);
   return serviceActorFromRow(connection);
@@ -524,10 +452,7 @@ export async function withFreshServiceActorTransaction<T>(
   return transaction(async (c) => {
     const {
       rows: [connection],
-    } = await c.query(
-      liveConnectionSql(CONNECTION_BY_ID),
-      connectionIdParams(actor),
-    );
+    } = await c.query(liveConnectionSql(CONNECTION_BY_ID), connectionIdParams(actor));
     if (!connection) throw unauthorized();
     requireScope(connection.scopes, scope);
     const result = await operation(c, serviceActorFromRow(connection));
@@ -548,19 +473,10 @@ async function withLockedServiceActor<T>(
   return transaction(async (c) => {
     // The shelf, the account and its membership: an agent acts only while
     // its account is on the shelf. The role is checked by each operation.
-    await lockShelf(
-      c,
-      { id: actor.accountId, tenant: actor.tenantId },
-      "reader",
-      "UPDATE",
-      unauthorized,
-    );
+    await lockShelf(c, { id: actor.accountId, tenant: actor.tenantId }, "reader", "UPDATE", unauthorized);
     const {
       rows: [connection],
-    } = await c.query(
-      liveConnectionSql(CONNECTION_BY_ID, "FOR UPDATE OF connection"),
-      connectionIdParams(actor),
-    );
+    } = await c.query(liveConnectionSql(CONNECTION_BY_ID, "FOR UPDATE OF connection"), connectionIdParams(actor));
     if (!connection) throw unauthorized();
     return operation(c, serviceActorFromRow(connection));
   });
@@ -568,15 +484,8 @@ async function withLockedServiceActor<T>(
 
 export async function withServiceActorDerivedScopeTransaction<Value, Result>(
   actor: ServiceActor,
-  derive: (
-    c: PoolClient,
-    actor: ServiceActor,
-  ) => Promise<{ scope: AgentScope; value: Value }>,
-  operation: (
-    c: PoolClient,
-    actor: ServiceActor,
-    value: Value,
-  ) => Promise<Result>,
+  derive: (c: PoolClient, actor: ServiceActor) => Promise<{ scope: AgentScope; value: Value }>,
+  operation: (c: PoolClient, actor: ServiceActor, value: Value) => Promise<Result>,
 ) {
   return withLockedServiceActor(actor, async (c, verified) => {
     const { scope, value } = await derive(c, verified);

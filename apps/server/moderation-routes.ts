@@ -21,16 +21,8 @@ import {
 } from "./moderation.ts";
 import { ACTION_LABEL, csamSignal } from "./moderation-mail.ts";
 import { modelView } from "./content-moderation.ts";
-import {
-  SEVERE,
-  describeFindings,
-  findingsOf,
-} from "./content-filter/policy.ts";
-import {
-  verifyModerationToken,
-  type ModerationAction,
-  type ModerationToken,
-} from "./moderation-tokens.ts";
+import { SEVERE, describeFindings, findingsOf } from "./content-filter/policy.ts";
+import { verifyModerationToken, type ModerationAction, type ModerationToken } from "./moderation-tokens.ts";
 import { describeSignals } from "./phishing-signals.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { authorStanding, SIGNED_UP_SQL } from "./share-moderation.ts";
@@ -54,14 +46,11 @@ const refused = () =>
 
 const EFFECT: Record<ModerationAction, string> = {
   preview: "Только просмотр: ничего не меняется.",
-  approve:
-    "Получатели увидят работу по этой ссылке. Жалобы на ссылку будут отмечены рассмотренными.",
+  approve: "Получатели увидят работу по этой ссылке. Жалобы на ссылку будут отмечены рассмотренными.",
   "approve-trust":
     "Получатели увидят работу по этой ссылке, а автор станет доверенным: его следующие ссылки открываются без проверки.",
-  unpause:
-    "Пауза снимется: получатели снова увидят работу. Жалобы будут отмечены рассмотренными.",
-  close:
-    "Ссылка закроется навсегда. Работа останется на полке автора, новую ссылку он сможет создать сам.",
+  unpause: "Пауза снимется: получатели снова увидят работу. Жалобы будут отмечены рассмотренными.",
+  close: "Ссылка закроется навсегда. Работа останется на полке автора, новую ссылку он сможет создать сам.",
   "close-disable":
     "Эта и все остальные ссылки автора закроются, вход и подключения агентов будут отключены. Данные не удаляются; вернуть доступ можно скриптом moderation:enable.",
   block:
@@ -181,17 +170,11 @@ async function perform(
         reason: "решение оператора по письму модерации",
         category,
         authority: options.authority,
-        legalHold: options.legalHold
-          ? options.authority || "решение оператора: сохранить как доказательство"
-          : null,
+        legalHold: options.legalHold ? options.authority || "решение оператора: сохранить как доказательство" : null,
       });
     }
     case "preview":
-      throw new Problem(
-        400,
-        "invalid",
-        "Эта ссылка только для просмотра; действие выберите кнопкой в письме.",
-      );
+      throw new Problem(400, "invalid", "Эта ссылка только для просмотра; действие выберите кнопкой в письме.");
   }
 }
 
@@ -204,7 +187,9 @@ async function blockCategory(shareId: string) {
      JOIN revisions revision ON revision.id=share.revision_id WHERE share.id=$1`,
     [shareId],
   );
-  const findings = findingsOf(row?.content_filter, modelView(row?.content_filter)).sort((a, b) => Number(SEVERE.has(b.category)) - Number(SEVERE.has(a.category)) || b.score - a.score);
+  const findings = findingsOf(row?.content_filter, modelView(row?.content_filter)).sort(
+    (a, b) => Number(SEVERE.has(b.category)) - Number(SEVERE.has(a.category)) || b.score - a.score,
+  );
   return findings[0]?.category ?? "other";
 }
 
@@ -243,12 +228,7 @@ async function preview(token: ModerationToken) {
        FOR SHARE OF share`,
       [token.shareId],
     );
-    if (!share)
-      throw new Problem(
-        404,
-        "not_found",
-        "Ссылка уже закрыта, истекла или автор отключён: просмотра нет.",
-      );
+    if (!share) throw new Problem(404, "not_found", "Ссылка уже закрыта, истекла или автор отключён: просмотра нет.");
     const view = await issueShareGrant(c, share, share.artifact_id);
     return {
       title: share.title ?? "Работа",
@@ -260,12 +240,8 @@ async function preview(token: ModerationToken) {
 }
 
 export function registerModerationRoutes(app: FastifyInstance) {
-  app.post("/api/moderation/inspect", { bodyLimit: 2048 }, async (req) =>
-    describe(await verified(req)),
-  );
-  app.post("/api/moderation/preview", { bodyLimit: 2048 }, async (req) =>
-    preview(await verified(req)),
-  );
+  app.post("/api/moderation/inspect", { bodyLimit: 2048 }, async (req) => describe(await verified(req)));
+  app.post("/api/moderation/preview", { bodyLimit: 2048 }, async (req) => preview(await verified(req)));
   app.post("/api/moderation/act", { bodyLimit: 2048 }, async (req) => {
     const token = await verified(req);
     try {

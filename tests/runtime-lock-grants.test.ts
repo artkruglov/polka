@@ -47,10 +47,18 @@ test("no query locks a row of a table the runtime role cannot update", () => {
       const before = text.slice(Math.max(0, lock.index! - 3000), lock.index);
       const start = Math.max(before.lastIndexOf("`"), before.lastIndexOf('"'));
       const query = before.slice(start + 1);
-      const tables = [...query.matchAll(/\b(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(?!(?:JOIN|LEFT|RIGHT|INNER|WHERE|ON|SET|FOR|GROUP|ORDER|LIMIT|USING|CROSS)\b)(\w+))?/gi)]
-        .map((m) => ({ table: m[1], alias: m[2] ?? m[1] }));
+      const tables = [
+        ...query.matchAll(
+          /\b(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(?!(?:JOIN|LEFT|RIGHT|INNER|WHERE|ON|SET|FOR|GROUP|ORDER|LIMIT|USING|CROSS)\b)(\w+))?/gi,
+        ),
+      ].map((m) => ({ table: m[1], alias: m[2] ?? m[1] }));
       const locked = lock[1]
-        ? tables.filter(({ table, alias }) => lock[1].split(",").map((n) => n.trim()).some((n) => n === alias || n === table))
+        ? tables.filter(({ table, alias }) =>
+            lock[1]
+              .split(",")
+              .map((n) => n.trim())
+              .some((n) => n === alias || n === table),
+          )
         : tables;
       for (const { table } of locked)
         if (readOnly.has(table)) found.push(`${file.slice(root.length)}:${line} locks ${table}`);

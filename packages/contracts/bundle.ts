@@ -39,35 +39,26 @@ const pathSchema = z
     const segments = value.split("/");
     return (
       segments.length <= 8 &&
-      segments.every(
-        (segment) =>
-          /^[A-Za-z0-9_-][A-Za-z0-9._-]*(?![\s\S])/.test(segment) &&
-          !segment.endsWith("."),
-      )
+      segments.every((segment) => /^[A-Za-z0-9_-][A-Za-z0-9._-]*(?![\s\S])/.test(segment) && !segment.endsWith("."))
     );
   }, "path must be a relative POSIX path with valid ASCII segments");
 
 const capturedAtSchema = z.string().refine((value) => {
-  const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})(?![\s\S])/,
-  );
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})(?![\s\S])/);
   if (!match) return false;
   const [, year, month, day, hour, minute, second, timezone] = match;
   const monthNumber = Number(month);
   const dayNumber = Number(day);
-  const timezoneMatch =
-    timezone === "Z" ? null : timezone.match(/^[+-](\d{2}):(\d{2})$/);
+  const timezoneMatch = timezone === "Z" ? null : timezone.match(/^[+-](\d{2}):(\d{2})$/);
   return (
     monthNumber >= 1 &&
     monthNumber <= 12 &&
     dayNumber >= 1 &&
-    dayNumber <=
-      new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate() &&
+    dayNumber <= new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate() &&
     Number(hour) <= 23 &&
     Number(minute) <= 59 &&
     Number(second) <= 59 &&
-    (!timezoneMatch ||
-      (Number(timezoneMatch[1]) <= 23 && Number(timezoneMatch[2]) <= 59))
+    (!timezoneMatch || (Number(timezoneMatch[1]) <= 23 && Number(timezoneMatch[2]) <= 59))
   );
 }, "capturedAt must be an RFC3339 timestamp with timezone");
 
@@ -79,10 +70,10 @@ const fileSchema = z
     sha256: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/),
   })
   .strict()
-  .refine(
-    (file) => isVideoMime(file.mime) || file.size <= MAX_BYTES,
-    { path: ["size"], message: `a file of this type is at most ${MAX_BYTES} bytes` },
-  );
+  .refine((file) => isVideoMime(file.mime) || file.size <= MAX_BYTES, {
+    path: ["size"],
+    message: `a file of this type is at most ${MAX_BYTES} bytes`,
+  });
 
 const provenanceSchema = z
   .object({
@@ -122,22 +113,14 @@ const manifestInputSchema = z
   .object({
     version: z.literal(1),
     entrypoint: pathSchema,
-    runtime: z.enum([
-      "static-sandbox-v1",
-      "inline-live-experimental-v1",
-      "preserved-only-v1",
-      PROJECT_RUNTIME,
-    ]),
+    runtime: z.enum(["static-sandbox-v1", "inline-live-experimental-v1", "preserved-only-v1", PROJECT_RUNTIME]),
     files: z.array(fileSchema).min(1).max(PROJECT_MAX_FILES),
     provenance: provenanceSchema,
     dependencies: dependenciesSchema,
   })
   .strict()
   .superRefine((value, context) => {
-    const paths = new Map<
-      string,
-      { path: string; size: number; index: number }
-    >();
+    const paths = new Map<string, { path: string; size: number; index: number }>();
     let total = 0;
     let video = 0;
     for (const [index, file] of value.files.entries()) {
@@ -190,9 +173,7 @@ const manifestInputSchema = z
         message: "entrypoint must exactly match one file path",
       });
     else {
-      if (
-        project ? !PROJECT_ENTRY_MIME.has(entry.mime) : entry.mime !== "text/html"
-      )
+      if (project ? !PROJECT_ENTRY_MIME.has(entry.mime) : entry.mime !== "text/html")
         context.addIssue({
           code: "custom",
           path: ["entrypoint"],
@@ -234,9 +215,7 @@ export function canonicalizeManifest(input: unknown): BundleManifest {
       attribution: manifest.provenance.attribution,
       license: manifest.provenance.license,
       // Present only when set, so manifests saved before it keep their hash.
-      ...(manifest.provenance.renderer
-        ? { renderer: manifest.provenance.renderer }
-        : {}),
+      ...(manifest.provenance.renderer ? { renderer: manifest.provenance.renderer } : {}),
     },
     dependencies: {
       status: manifest.dependencies.status,
@@ -255,10 +234,7 @@ export const beginBundleUploadSchema = z
     folderId: uuid.nullable().optional(),
   })
   .strict()
-  .refine(
-    (value) => !!value.artifactId === !!value.baseRevisionId,
-    "A revision needs its base",
-  );
+  .refine((value) => !!value.artifactId === !!value.baseRevisionId, "A revision needs its base");
 
 export type BundleUploadInput = z.infer<typeof beginBundleUploadSchema>;
 

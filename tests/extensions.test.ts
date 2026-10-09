@@ -28,9 +28,13 @@ const policy: PolkaExtension = {
   machinePaths: ["/api/ext/policy/agent/ping"],
   register(app, context) {
     extensionContext = context;
-    app.post("/api/ext/policy/agent/ping", async (req, reply) => ({ tenantId: (await context.agent(req, reply, "sessions")).tenantId }));
+    app.post("/api/ext/policy/agent/ping", async (req, reply) => ({
+      tenantId: (await context.agent(req, reply, "sessions")).tenantId,
+    }));
     app.get("/api/ext/policy/agent/ping", async (req) => ({ name: (await context.identity(req)).name }));
-    app.post("/api/ext/policy/browser", async (req, reply) => ({ tenantId: (await context.agent(req, reply, "sessions")).tenantId }));
+    app.post("/api/ext/policy/browser", async (req, reply) => ({
+      tenantId: (await context.agent(req, reply, "sessions")).tenantId,
+    }));
     app.get("/api/ext/policy/whoami", async (req) => ({ name: (await context.identity(req)).name }));
   },
   policies: {
@@ -40,7 +44,9 @@ const policy: PolkaExtension = {
         : { allow: true };
     },
     async linkOpen(open) {
-      return open.viewer ? { allow: true } : { allow: false, signIn: true, message: "Ссылка только для сотрудников компании." };
+      return open.viewer
+        ? { allow: true }
+        : { allow: false, signIn: true, message: "Ссылка только для сотрудников компании." };
     },
   },
   onEvent(event) {
@@ -69,7 +75,12 @@ const call = (method: any, url: string, body?: unknown, withCookie = true) =>
 
 before(async () => {
   owner = await createAccount(`ext-${randomBytes(5).toString("hex")}`, password);
-  const login = await app.inject({ method: "POST", url: "/api/login", headers: { origin }, payload: { name: owner.name, password } });
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    headers: { origin },
+    payload: { name: owner.name, password },
+  });
   cookie = `polka_session=${login.cookies[0].value}`;
 });
 
@@ -83,7 +94,12 @@ after(async () => {
 test("an extension's policy refuses a link and asks recipients to sign in; events follow the commit", async () => {
   const body = Buffer.from("<!doctype html><title>Отчёт</title><h1>Отчёт</h1><p>Текст.</p>");
   const start = await call("POST", "/api/uploads", {
-    key: randomUUID(), title: "Отчёт", filename: "r.html", mime: "text/html", size: body.length, sha256: sha256(body),
+    key: randomUUID(),
+    title: "Отчёт",
+    filename: "r.html",
+    mime: "text/html",
+    size: body.length,
+    sha256: sha256(body),
   });
   assert.equal(start.statusCode, 200, start.body);
   await call("PUT", `/api/uploads/${start.json().uploadId}/bytes`, body);
@@ -91,10 +107,16 @@ test("an extension's policy refuses a link and asks recipients to sign in; event
   await new Promise((resolve) => setImmediate(resolve));
   assert.ok(events.some((event) => event.type === "revision.saved" && event.revisionId === saved.revisionId));
 
-  const refused = await call("POST", `/api/artifacts/${saved.artifactId}/share`, { expectedRevisionId: saved.revisionId, expiresInDays: 30 });
+  const refused = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+    expectedRevisionId: saved.revisionId,
+    expiresInDays: 30,
+  });
   assert.equal(refused.statusCode, 403, refused.body);
   assert.match(refused.json().message, /дольше 7 дней/);
-  const shared = await call("POST", `/api/artifacts/${saved.artifactId}/share`, { expectedRevisionId: saved.revisionId, expiresInDays: 7 });
+  const shared = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
+    expectedRevisionId: saved.revisionId,
+    expiresInDays: 7,
+  });
   assert.equal(shared.statusCode, 200, shared.body);
   await new Promise((resolve) => setImmediate(resolve));
   assert.ok(events.some((event) => event.type === "share.created" && event.shareId === shared.json().share.id));
@@ -135,7 +157,12 @@ async function agentToken(scopes: string[]) {
 
 test("an extension's machine route takes an agent token with a permission and no Origin, never a cookie", async () => {
   const ping = (authorization?: string) =>
-    app.inject({ method: "POST", url: "/api/ext/policy/agent/ping", headers: authorization ? { authorization } : {}, payload: {} });
+    app.inject({
+      method: "POST",
+      url: "/api/ext/policy/agent/ping",
+      headers: authorization ? { authorization } : {},
+      payload: {},
+    });
   assert.equal((await ping()).statusCode, 401);
   assert.equal((await ping(`Bearer ${randomBytes(32).toString("base64url")}`)).statusCode, 401);
   assert.equal((await ping(`Bearer ${await agentToken(["context"])}`)).statusCode, 403);
@@ -145,7 +172,12 @@ test("an extension's machine route takes an agent token with a permission and no
   // A cookie on a machine path is refused: no Origin check guards it there.
   assert.equal((await call("GET", "/api/ext/policy/agent/ping")).statusCode, 403);
   // Any other extension route keeps the browser Origin rule.
-  const browser = await app.inject({ method: "POST", url: "/api/ext/policy/browser", headers: { authorization: `Bearer ${await agentToken(["sessions"])}` }, payload: {} });
+  const browser = await app.inject({
+    method: "POST",
+    url: "/api/ext/policy/browser",
+    headers: { authorization: `Bearer ${await agentToken(["sessions"])}` },
+    payload: {},
+  });
   assert.equal(browser.statusCode, 403);
   assert.match(browser.json().message, /из Полки/);
 });
@@ -172,7 +204,10 @@ test("context.redact replaces a secret as the sessions CLI does, with an uploade
       payload: gzipSync(Buffer.from(JSON.stringify(prepared.body))),
     });
     assert.equal(saved.statusCode, 200, saved.body);
-    const { rows } = await db.query(`SELECT fingerprint FROM agent_session_secrets WHERE session_id=$1 AND type='github-token'`, [saved.json().id]);
+    const { rows } = await db.query(
+      `SELECT fingerprint FROM agent_session_secrets WHERE session_id=$1 AND type='github-token'`,
+      [saved.json().id],
+    );
     assert.equal(rows.length, 1);
 
     const text = `git push https://x:${FAKE.github}@github.com/acme/app.git; export GITHUB_TOKEN=${FAKE.github}`;
@@ -181,7 +216,10 @@ test("context.redact replaces a secret as the sessions CLI does, with an uploade
     assert.equal(result.text, createRedactor(Buffer.from(key.json().key, "hex")).redact(text));
     assert.ok(result.text.includes(`[REDACTED:github-token:${rows[0].fingerprint}]`), result.text);
     assert.deepEqual(result.secrets, [{ type: "github-token", fingerprint: rows[0].fingerprint }]);
-    assert.deepEqual(extensionContext.redact("ls -la /tmp && echo done"), { text: "ls -la /tmp && echo done", secrets: [] });
+    assert.deepEqual(extensionContext.redact("ls -la /tmp && echo done"), {
+      text: "ls -la /tmp && echo done",
+      secrets: [],
+    });
   } finally {
     config.AGENT_SESSION_FINGERPRINTS = was;
     await rm(scratch, { recursive: true, force: true });
@@ -191,6 +229,9 @@ test("context.redact replaces a secret as the sessions CLI does, with an uploade
 test("an extension loads by path and must name itself", async () => {
   const [hello] = await loadExtensions("./tests/fixtures/extension-hello.mjs");
   assert.equal(hello!.name, "hello");
-  await assert.rejects(loadExtensions("./tests/fixtures/extension-hello.mjs,./tests/fixtures/extension-hello.mjs"), /loaded twice/);
+  await assert.rejects(
+    loadExtensions("./tests/fixtures/extension-hello.mjs,./tests/fixtures/extension-hello.mjs"),
+    /loaded twice/,
+  );
   useExtensions([policy]);
 });

@@ -2,10 +2,7 @@ import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
 import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import { revisionDTO } from "./artifacts.ts";
-import {
-  isServedBuilderVersion,
-  isServedRuntimeProfile,
-} from "./bundle-runtime-contract.ts";
+import { isServedBuilderVersion, isServedRuntimeProfile } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { autoCheckedClean } from "./content-filter/policy.ts";
 import { sensitiveInputOf } from "./content-filter/sensitive-input.ts";
@@ -40,8 +37,7 @@ export async function issueShareGrant(
   // A bundle (other than a lone static page) and any share bound to an
   // interactive version open only through that ready derivative.
   // A project opens in the project viewer, not a built version.
-  const project =
-    r?.storage_kind === "bundle" && r.manifest?.runtime === PROJECT_RUNTIME;
+  const project = r?.storage_kind === "bundle" && r.manifest?.runtime === PROJECT_RUNTIME;
   if (project && (!config.HTML_LIVE_ENABLED || share.derivative_id)) throw missing();
   const needsDerivative = project
     ? false

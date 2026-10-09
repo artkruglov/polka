@@ -35,19 +35,17 @@ async function seed() {
     [ids.readerAccount, "library-reader"],
     [ids.creatorAccount, "library-creator"],
   ])
-    await db.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,$3)",
-      [id, `${name}-${randomUUID().slice(0, 8)}`, "test"],
-    );
+    await db.query("INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,$3)", [
+      id,
+      `${name}-${randomUUID().slice(0, 8)}`,
+      "test",
+    ]);
   for (const [id, owner] of [
     [ids.sourceTenant, ids.sourceAccount],
     [ids.readerTenant, ids.readerAccount],
     [ids.creatorTenant, ids.creatorAccount],
   ])
-    await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-      id,
-      owner,
-    ]);
+    await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [id, owner]);
   await db.query(
     `INSERT INTO artifacts(id,tenant_id,created_by,title)
      VALUES($1,$2,$3,'Library source')`,
@@ -58,14 +56,7 @@ async function seed() {
        id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
        object_key,object_version,total_size
      ) VALUES($1,$2,$3,1,$4,'source.pdf','application/pdf',1,$5,$6,'v1',1)`,
-    [
-      ids.revision,
-      ids.sourceTenant,
-      ids.artifact,
-      ids.sourceAccount,
-      "0".repeat(64),
-      `library-test/${ids.revision}`,
-    ],
+    [ids.revision, ids.sourceTenant, ids.artifact, ids.sourceAccount, "0".repeat(64), `library-test/${ids.revision}`],
   );
   await db.query(
     `INSERT INTO template_releases(id,artifact_id,revision_id,title,summary,rules,questions)
@@ -87,14 +78,7 @@ async function seed() {
     `INSERT INTO template_library_publications(
        id,library_id,release_id,artifact_id,revision_id,publisher_id
      ) VALUES($1,$2,$3,$4,$5,$6)`,
-    [
-      ids.publication,
-      ids.library,
-      ids.release,
-      ids.artifact,
-      ids.revision,
-      ids.creatorAccount,
-    ],
+    [ids.publication, ids.library, ids.release, ids.artifact, ids.revision, ids.creatorAccount],
   );
 }
 
@@ -103,10 +87,7 @@ async function deniedAfter(sql: string, values: unknown[]) {
   try {
     await client.query("BEGIN");
     await client.query(sql, values);
-    await assert.rejects(
-      authorizeTemplateRevision(client, actor, request),
-      (error: any) => error?.status === 404,
-    );
+    await assert.rejects(authorizeTemplateRevision(client, actor, request), (error: any) => error?.status === 404);
   } finally {
     await client.query("ROLLBACK");
     client.release();
@@ -115,9 +96,7 @@ async function deniedAfter(sql: string, values: unknown[]) {
 
 test("authorizes only the exact active publication for an active member and source owner", async () => {
   await seed();
-  const authorized = await transaction((client) =>
-    authorizeTemplateRevision(client, actor, request),
-  );
+  const authorized = await transaction((client) => authorizeTemplateRevision(client, actor, request));
   assert.deepEqual(authorized, {
     libraryId: ids.library,
     publicationId: ids.publication,
@@ -135,14 +114,8 @@ test("authorizes only the exact active publication for an active member and sour
   const creatorClient = await db.connect();
   try {
     await creatorClient.query("BEGIN");
-    await creatorClient.query("UPDATE accounts SET disabled=true WHERE id=$1", [
-      ids.creatorAccount,
-    ]);
-    assert.equal(
-      (await authorizeTemplateRevision(creatorClient, actor, request))
-        .revisionId,
-      ids.revision,
-    );
+    await creatorClient.query("UPDATE accounts SET disabled=true WHERE id=$1", [ids.creatorAccount]);
+    assert.equal((await authorizeTemplateRevision(creatorClient, actor, request)).revisionId, ids.revision);
   } finally {
     await creatorClient.query("ROLLBACK");
     creatorClient.release();
@@ -155,26 +128,18 @@ test("authorizes only the exact active publication for an active member and sour
     { revisionId: randomUUID() },
   ])
     await assert.rejects(
-      transaction((client) =>
-        authorizeTemplateRevision(client, actor, { ...request, ...changed }),
-      ),
+      transaction((client) => authorizeTemplateRevision(client, actor, { ...request, ...changed })),
       (error: any) => error?.status === 404,
     );
 
   await assert.rejects(
     transaction((client) =>
-      authorizeTemplateRevision(
-        client,
-        { id: ids.readerAccount, tenant: ids.sourceTenant },
-        request,
-      ),
+      authorizeTemplateRevision(client, { id: ids.readerAccount, tenant: ids.sourceTenant }, request),
     ),
     (error: any) => error?.status === 404,
   );
 
-  await deniedAfter("UPDATE accounts SET disabled=true WHERE id=$1", [
-    ids.readerAccount,
-  ]);
+  await deniedAfter("UPDATE accounts SET disabled=true WHERE id=$1", [ids.readerAccount]);
   await deniedAfter(
     `UPDATE template_library_members
         SET state='revoked',revoked_at=clock_timestamp()
@@ -193,29 +158,26 @@ test("authorizes only the exact active publication for an active member and sour
       WHERE id=$1`,
     [ids.publication],
   );
-  await deniedAfter(
-    "UPDATE artifacts SET trashed_at=clock_timestamp() WHERE id=$1",
-    [ids.artifact],
-  );
-  await deniedAfter("UPDATE accounts SET disabled=true WHERE id=$1", [
-    ids.sourceAccount,
-  ]);
+  await deniedAfter("UPDATE artifacts SET trashed_at=clock_timestamp() WHERE id=$1", [ids.artifact]);
+  await deniedAfter("UPDATE accounts SET disabled=true WHERE id=$1", [ids.sourceAccount]);
 });
 
 async function waitUntilBlocked(waiter: number, blocker: number) {
   for (let attempt = 0; attempt < 100; attempt++) {
     const result = await db.query("SELECT $2::integer=ANY(pg_blocking_pids($1)) AS blocked", [waiter, blocker]);
     if (result.rows[0].blocked) return;
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.fail("Expected a real database lock wait");
 }
 
 test("library read does not invert the tenant/account order of account deletion", async () => {
-  const writer = await db.connect(), reader = await db.connect();
+  const writer = await db.connect(),
+    reader = await db.connect();
   let pending: Promise<unknown> | undefined;
   try {
-    await writer.query("BEGIN"); await reader.query("BEGIN");
+    await writer.query("BEGIN");
+    await reader.query("BEGIN");
     await writer.query("SET LOCAL lock_timeout='2s'");
     await reader.query("SET LOCAL statement_timeout='4s'");
     const writerPid = (await writer.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
@@ -227,50 +189,55 @@ test("library read does not invert the tenant/account order of account deletion"
     await waitUntilBlocked(readerPid, writerPid);
     await writer.query("UPDATE accounts SET disabled=true WHERE id=$1", [ids.sourceAccount]);
     await writer.query("ROLLBACK");
-    assert.equal((await pending as any).revisionId, ids.revision);
+    assert.equal(((await pending) as any).revisionId, ids.revision);
   } finally {
     await writer.query("ROLLBACK");
     if (pending) await pending.catch(() => {});
     await reader.query("ROLLBACK");
-    writer.release(); reader.release();
+    writer.release();
+    reader.release();
   }
 });
 
 test("member revoke waits for an authorized read then denies subsequent reads", async () => {
-  const reader = await db.connect(), writer = await db.connect();
+  const reader = await db.connect(),
+    writer = await db.connect();
   let pending: Promise<unknown> | undefined;
   try {
-    await reader.query("BEGIN"); await writer.query("BEGIN");
+    await reader.query("BEGIN");
+    await writer.query("BEGIN");
     await writer.query("SET LOCAL statement_timeout='4s'");
     const readerPid = (await reader.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
     const writerPid = (await writer.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
     await authorizeTemplateRevision(reader, actor, request);
-    pending = writer.query("UPDATE template_library_members SET state='revoked',revoked_at=clock_timestamp() WHERE library_id=$1 AND account_id=$2", [ids.library, ids.readerAccount]);
+    pending = writer.query(
+      "UPDATE template_library_members SET state='revoked',revoked_at=clock_timestamp() WHERE library_id=$1 AND account_id=$2",
+      [ids.library, ids.readerAccount],
+    );
     await waitUntilBlocked(writerPid, readerPid);
     await reader.query("COMMIT");
-    await pending; await writer.query("COMMIT");
-    await assert.rejects(transaction(c => authorizeTemplateRevision(c, actor, request)), (error: any) => error.status === 404);
+    await pending;
+    await writer.query("COMMIT");
+    await assert.rejects(
+      transaction((c) => authorizeTemplateRevision(c, actor, request)),
+      (error: any) => error.status === 404,
+    );
   } finally {
     await reader.query("ROLLBACK");
     if (pending) await pending.catch(() => {});
     await writer.query("ROLLBACK");
-    reader.release(); writer.release();
+    reader.release();
+    writer.release();
   }
 });
 
 test("source deletion cascades its library publication", async () => {
-  await db.query("UPDATE artifacts SET latest_revision_id=NULL WHERE id=$1", [
-    ids.artifact,
-  ]);
+  await db.query("UPDATE artifacts SET latest_revision_id=NULL WHERE id=$1", [ids.artifact]);
   await db.query("DELETE FROM revisions WHERE id=$1", [ids.revision]);
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT count(*) FROM template_library_publications WHERE id=$1",
-          [ids.publication],
-        )
-      ).rows[0].count,
+      (await db.query("SELECT count(*) FROM template_library_publications WHERE id=$1", [ids.publication])).rows[0]
+        .count,
     ),
     0,
   );

@@ -23,10 +23,7 @@ export type ImportResult = ImportSuccess | ImportFailure;
 export type ExtensionLink = {
   version: string;
   connected: boolean;
-  importArtifact(
-    url: string,
-    onStage?: (stage: ImportStage) => void,
-  ): Promise<ImportResult>;
+  importArtifact(url: string, onStage?: (stage: ImportStage) => void): Promise<ImportResult>;
   close(): void;
 };
 
@@ -61,7 +58,11 @@ export function findExtension(
     win.postMessage({ source: PAGE_SOURCE, v: 1, nonce, ...message }, origin);
   const pending = new Map<
     string,
-    { resolve: (result: ImportResult) => void; onStage?: (stage: ImportStage) => void; timer: ReturnType<typeof setTimeout> }
+    {
+      resolve: (result: ImportResult) => void;
+      onStage?: (stage: ImportStage) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
 
   return new Promise((resolveLink) => {

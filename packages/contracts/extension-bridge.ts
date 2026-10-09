@@ -49,14 +49,7 @@ export type ImportSuccess = {
 };
 export type ImportFailure = {
   ok: false;
-  code:
-    | "not_connected"
-    | "unsupported_url"
-    | "not_found"
-    | "extract_failed"
-    | "publish_failed"
-    | "busy"
-    | "timeout";
+  code: "not_connected" | "unsupported_url" | "not_found" | "extract_failed" | "publish_failed" | "busy" | "timeout";
   message: string;
 };
 
@@ -88,10 +81,8 @@ export type ExtensionMessage =
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-const text = (value: unknown, max = MAX_TEXT) =>
-  typeof value === "string" && value.length <= max;
-const nullableText = (value: unknown, max = MAX_TEXT) =>
-  value === null || text(value, max);
+const text = (value: unknown, max = MAX_TEXT) => typeof value === "string" && value.length <= max;
+const nullableText = (value: unknown, max = MAX_TEXT) => value === null || text(value, max);
 const webUrl = (value: unknown) => {
   if (typeof value !== "string" || value.length > MAX_URL) return false;
   try {
@@ -107,9 +98,7 @@ const webUrl = (value: unknown) => {
  * published, shared or Claude Code) or a ChatGPT shared canvas/conversation.
  * Returns a normalised URL (no credentials, no fragment) or null.
  */
-export function importableArtifact(
-  value: unknown,
-): { provider: ArtifactProvider; url: string } | null {
+export function importableArtifact(value: unknown): { provider: ArtifactProvider; url: string } | null {
   if (typeof value !== "string" || value.length > MAX_URL) return null;
   let url: URL;
   try {
@@ -117,38 +106,26 @@ export function importableArtifact(
   } catch {
     return null;
   }
-  if (url.protocol !== "https:" || url.username || url.password || url.port)
-    return null;
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
   url.hash = "";
   const host = url.hostname.toLowerCase();
   const path = url.pathname;
   const id = "[A-Za-z0-9-]{6,80}";
   if (
     host === "claude.ai" &&
-    new RegExp(
-      `^/(artifact/${id}|public/artifacts/${id}|code/artifact/${id}|chat/${id})/?$`,
-    ).test(path)
+    new RegExp(`^/(artifact/${id}|public/artifacts/${id}|code/artifact/${id}|chat/${id})/?$`).test(path)
   )
     return { provider: "claude", url: url.href };
-  if (
-    host === "chatgpt.com" &&
-    new RegExp(`^/(canvas/shared/${id}|share/${id}|c/${id})/?$`).test(path)
-  )
+  if (host === "chatgpt.com" && new RegExp(`^/(canvas/shared/${id}|share/${id}|c/${id})/?$`).test(path))
     return { provider: "chatgpt", url: url.href };
   return null;
 }
 
 export function parsePageMessage(data: unknown): PageMessage | null {
-  if (!isObject(data) || data.source !== PAGE_SOURCE || data.v !== 1)
-    return null;
+  if (!isObject(data) || data.source !== PAGE_SOURCE || data.v !== 1) return null;
   if (typeof data.nonce !== "string" || !NONCE.test(data.nonce)) return null;
-  if (data.type === "hello")
-    return { source: PAGE_SOURCE, v: 1, type: "hello", nonce: data.nonce };
-  if (
-    data.type === "import" &&
-    typeof data.requestId === "string" &&
-    REQUEST_ID.test(data.requestId)
-  ) {
+  if (data.type === "hello") return { source: PAGE_SOURCE, v: 1, type: "hello", nonce: data.nonce };
+  if (data.type === "import" && typeof data.requestId === "string" && REQUEST_ID.test(data.requestId)) {
     const artifact = importableArtifact(data.url);
     if (!artifact) return null;
     return {
@@ -163,12 +140,7 @@ export function parsePageMessage(data: unknown): PageMessage | null {
   return null;
 }
 
-const STAGES: readonly ImportStage[] = [
-  "opening",
-  "extracting",
-  "saving",
-  "connecting",
-];
+const STAGES: readonly ImportStage[] = ["opening", "extracting", "saving", "connecting"];
 const FAILURES: readonly ImportFailure["code"][] = [
   "not_connected",
   "unsupported_url",
@@ -197,11 +169,7 @@ function parseResult(value: unknown): ImportSuccess | ImportFailure | null {
       note: value.note as string | null,
     };
   }
-  if (
-    value.ok === false &&
-    FAILURES.includes(value.code as ImportFailure["code"]) &&
-    text(value.message)
-  )
+  if (value.ok === false && FAILURES.includes(value.code as ImportFailure["code"]) && text(value.message))
     return {
       ok: false,
       code: value.code as ImportFailure["code"],
@@ -211,8 +179,7 @@ function parseResult(value: unknown): ImportSuccess | ImportFailure | null {
 }
 
 export function parseExtensionMessage(data: unknown): ExtensionMessage | null {
-  if (!isObject(data) || data.source !== EXTENSION_SOURCE || data.v !== 1)
-    return null;
+  if (!isObject(data) || data.source !== EXTENSION_SOURCE || data.v !== 1) return null;
   if (typeof data.nonce !== "string" || !NONCE.test(data.nonce)) return null;
   const base = { source: EXTENSION_SOURCE, v: 1, nonce: data.nonce } as const;
   if (data.type === "ready" && text(data.version, 32))
@@ -222,8 +189,7 @@ export function parseExtensionMessage(data: unknown): ExtensionMessage | null {
       version: data.version as string,
       connected: data.connected === true,
     };
-  if (typeof data.requestId !== "string" || !REQUEST_ID.test(data.requestId))
-    return null;
+  if (typeof data.requestId !== "string" || !REQUEST_ID.test(data.requestId)) return null;
   if (data.type === "progress" && STAGES.includes(data.stage as ImportStage))
     return {
       ...base,
@@ -233,9 +199,7 @@ export function parseExtensionMessage(data: unknown): ExtensionMessage | null {
     };
   if (data.type === "result") {
     const result = parseResult(data.result);
-    return result
-      ? { ...base, type: "result", requestId: data.requestId, result }
-      : null;
+    return result ? { ...base, type: "result", requestId: data.requestId, result } : null;
   }
   return null;
 }
@@ -251,8 +215,7 @@ export function acceptPageEvent(
   event: BridgeEvent,
   expected: { window: unknown; origin: string; nonce: string | null },
 ): PageMessage | null {
-  if (event.source !== expected.window || event.origin !== expected.origin)
-    return null;
+  if (event.source !== expected.window || event.origin !== expected.origin) return null;
   const message = parsePageMessage(event.data);
   if (!message) return null;
   // «hello» sets the nonce; everything after it must carry the same one.
@@ -264,8 +227,7 @@ export function acceptExtensionEvent(
   event: BridgeEvent,
   expected: { window: unknown; origin: string; nonce: string },
 ): ExtensionMessage | null {
-  if (event.source !== expected.window || event.origin !== expected.origin)
-    return null;
+  if (event.source !== expected.window || event.origin !== expected.origin) return null;
   const message = parseExtensionMessage(event.data);
   return message && message.nonce === expected.nonce ? message : null;
 }

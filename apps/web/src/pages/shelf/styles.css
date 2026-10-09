@@ -1,66 +1,288 @@
 /* Personal shelf: the agent hero (features/agent-hero), then a filterable gallery of large covers. */
-.shelf-folder-heading { margin: 4px 0 var(--space-7); }
-.shelf-folder-heading h1 { margin-top: 8px; font-size: clamp(30px, 3vw, 40px); }
-
-/* Library head: title, search, sort, view. */
-.shelf-library-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px 24px; margin-bottom: 14px; }
-.shelf-library-head h2 { font-size: clamp(26px, 2.6vw, 34px); letter-spacing: -.035em; }
-.shelf-tools { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-left: auto; }
-.shelf-search { width: min(100%, 300px); }
-.shelf-search > input { min-height: 40px; padding-block: 6px; font-size: var(--text-base); }
-.shelf-sort { position: relative; display: inline-flex; }
-.shelf-sort select { appearance: auto; min-height: 40px; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--ink-2); font: 400 var(--text-base) / 1.3 var(--font-sans); cursor: pointer; }
-.shelf-sort select:hover { background: var(--soft-2); }
-.shelf-chips { min-height: 32px; margin-bottom: var(--space-6); }
-/* Offline: what is shown may be out of date. */
-.shelf-stale { margin: calc(-1 * var(--space-3)) 0 var(--space-5); color: var(--warning); font-size: var(--text-sm); }
-[data-stale] { opacity: .55; }
-
-/* Cards, covers, grid and list: widgets/shelf-card/styles.css. */
-.shelf-more { display: flex; justify-content: center; margin-top: var(--space-8); }
-.shelf-more-note { margin-top: var(--space-6); text-align: center; color: var(--muted); font-size: var(--text-sm); }
-
-.shelf-library-head h2:focus-visible { outline-offset: 6px; }
-
-/* Empty */
-.shelf-empty-quiet { max-width: 60ch; padding: 20px 0 8px; color: var(--muted); font-size: var(--text-md); line-height: var(--leading-loose); border-top: 1px solid var(--line); }
-.shelf-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 56px 24px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--soft-3); }
-.shelf-empty h2 { max-width: 24ch; font-size: var(--text-2xl); letter-spacing: -.03em; }
-.shelf-empty p { max-width: 46ch; color: var(--muted); line-height: var(--leading-loose); }
-.shelf-empty .button-row { justify-content: center; margin-top: 6px; }
-.shelf-empty-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px; margin-top: 4px; }
-.shelf-empty-links a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--ink-2); font-size: var(--text-base); }
-.shelf-empty-links a:hover { color: var(--accent); }
-.shelf-empty-links svg { width: 16px; height: 16px; color: var(--muted); }
-
-/* First-run: three ways to put the first work on the shelf. */
-.shelf-start { display: grid; gap: 28px; padding: 36px; border: 1px solid var(--line); border-radius: 24px; background: radial-gradient(900px 300px at 10% -20%, #e8eeff 0%, transparent 70%), var(--soft-3); }
-.shelf-start header { max-width: 60ch; }
-.shelf-start h2 { font-size: clamp(24px, 2.4vw, 32px); letter-spacing: -.035em; }
-.shelf-start header p { margin-top: 10px; color: var(--muted); font-size: var(--text-lg); line-height: var(--leading-loose); }
-.shelf-start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.shelf-start-card { display: grid; align-content: start; gap: 8px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: #fff; color: var(--muted); font: inherit; text-align: left; text-decoration: none; cursor: pointer; box-shadow: 0 1px 2px rgba(15, 20, 32, .04); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
-.shelf-start-card:hover { transform: translateY(-2px); border-color: var(--accent-ring); box-shadow: 0 12px 28px -14px rgba(31, 79, 255, .35); }
-.shelf-start-card strong { color: var(--ink); font-size: var(--text-xl); letter-spacing: -.02em; }
-.shelf-start-card > span:last-child { font-size: var(--text-base); line-height: 1.5; }
-.shelf-start-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 6px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
-.shelf-start-icon svg { width: 20px; height: 20px; }
-.shelf-start-card--main { background: #0b1020; border-color: #0b1020; color: #aeb8d0; }
-.shelf-start-card--main strong { color: #fff; }
-.shelf-start-card--main .shelf-start-icon { background: rgba(255, 255, 255, .12); color: #fff; }
-.shelf-start-card--main:hover { border-color: #0b1020; box-shadow: 0 14px 30px -14px rgba(11, 16, 32, .6); }
-@media (prefers-reduced-motion: reduce) { .shelf-start-card { transition: none; } .shelf-start-card:hover { transform: none; } }
-
-@media (max-width: 760px) {
-  .shelf-start { padding: 22px 18px; border-radius: 20px; }
-  .shelf-start-grid { grid-template-columns: 1fr; }
-  .shelf-library-head { margin-bottom: 12px; }
-  .shelf-library-head h2 { font-size: 26px; }
-  .shelf-tools { width: 100%; flex-wrap: wrap; margin-left: 0; }
-  .shelf-search { width: 100%; flex: 1 1 100%; }
-  .shelf-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--gutter-mobile)) var(--space-5); padding: 0 var(--gutter-mobile) 4px; scrollbar-width: none; }
-  .shelf-empty { padding: 36px 20px; }
-  .shelf-empty .button-row { flex-direction: column; align-items: stretch; width: 100%; }
+.shelf-folder-heading {
+  margin: 4px 0 var(--space-7);
+}
+.shelf-folder-heading h1 {
+  margin-top: 8px;
+  font-size: clamp(30px, 3vw, 40px);
 }
 
-.shelf-team-lead { margin: 6px 0 12px; max-width: 60ch; color: var(--muted); }
+/* Library head: title, search, sort, view. */
+.shelf-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  margin-bottom: 14px;
+}
+.shelf-library-head h2 {
+  font-size: clamp(26px, 2.6vw, 34px);
+  letter-spacing: -0.035em;
+}
+.shelf-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+.shelf-search {
+  width: min(100%, 300px);
+}
+.shelf-search > input {
+  min-height: 40px;
+  padding-block: 6px;
+  font-size: var(--text-base);
+}
+.shelf-sort {
+  position: relative;
+  display: inline-flex;
+}
+.shelf-sort select {
+  appearance: auto;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-2);
+  font: 400 var(--text-base) / 1.3 var(--font-sans);
+  cursor: pointer;
+}
+.shelf-sort select:hover {
+  background: var(--soft-2);
+}
+.shelf-chips {
+  min-height: 32px;
+  margin-bottom: var(--space-6);
+}
+/* Offline: what is shown may be out of date. */
+.shelf-stale {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+[data-stale] {
+  opacity: 0.55;
+}
+
+/* Cards, covers, grid and list: widgets/shelf-card/styles.css. */
+.shelf-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-8);
+}
+.shelf-more-note {
+  margin-top: var(--space-6);
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.shelf-library-head h2:focus-visible {
+  outline-offset: 6px;
+}
+
+/* Empty */
+.shelf-empty-quiet {
+  max-width: 60ch;
+  padding: 20px 0 8px;
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-loose);
+  border-top: 1px solid var(--line);
+}
+.shelf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 56px 24px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--soft-3);
+}
+.shelf-empty h2 {
+  max-width: 24ch;
+  font-size: var(--text-2xl);
+  letter-spacing: -0.03em;
+}
+.shelf-empty p {
+  max-width: 46ch;
+  color: var(--muted);
+  line-height: var(--leading-loose);
+}
+.shelf-empty .button-row {
+  justify-content: center;
+  margin-top: 6px;
+}
+.shelf-empty-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 22px;
+  margin-top: 4px;
+}
+.shelf-empty-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  color: var(--ink-2);
+  font-size: var(--text-base);
+}
+.shelf-empty-links a:hover {
+  color: var(--accent);
+}
+.shelf-empty-links svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+/* First-run: three ways to put the first work on the shelf. */
+.shelf-start {
+  display: grid;
+  gap: 28px;
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: radial-gradient(900px 300px at 10% -20%, #e8eeff 0%, transparent 70%), var(--soft-3);
+}
+.shelf-start header {
+  max-width: 60ch;
+}
+.shelf-start h2 {
+  font-size: clamp(24px, 2.4vw, 32px);
+  letter-spacing: -0.035em;
+}
+.shelf-start header p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-loose);
+}
+.shelf-start-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.shelf-start-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 20, 32, 0.04);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+.shelf-start-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-ring);
+  box-shadow: 0 12px 28px -14px rgba(31, 79, 255, 0.35);
+}
+.shelf-start-card strong {
+  color: var(--ink);
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+}
+.shelf-start-card > span:last-child {
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+.shelf-start-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.shelf-start-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.shelf-start-card--main {
+  background: #0b1020;
+  border-color: #0b1020;
+  color: #aeb8d0;
+}
+.shelf-start-card--main strong {
+  color: #fff;
+}
+.shelf-start-card--main .shelf-start-icon {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.shelf-start-card--main:hover {
+  border-color: #0b1020;
+  box-shadow: 0 14px 30px -14px rgba(11, 16, 32, 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .shelf-start-card {
+    transition: none;
+  }
+  .shelf-start-card:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .shelf-start {
+    padding: 22px 18px;
+    border-radius: 20px;
+  }
+  .shelf-start-grid {
+    grid-template-columns: 1fr;
+  }
+  .shelf-library-head {
+    margin-bottom: 12px;
+  }
+  .shelf-library-head h2 {
+    font-size: 26px;
+  }
+  .shelf-tools {
+    width: 100%;
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+  .shelf-search {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .shelf-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 calc(-1 * var(--gutter-mobile)) var(--space-5);
+    padding: 0 var(--gutter-mobile) 4px;
+    scrollbar-width: none;
+  }
+  .shelf-empty {
+    padding: 36px 20px;
+  }
+  .shelf-empty .button-row {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
+.shelf-team-lead {
+  margin: 6px 0 12px;
+  max-width: 60ch;
+  color: var(--muted);
+}

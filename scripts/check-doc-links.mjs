@@ -6,9 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, normalize, basename } from "node:path";
 
-const files = execFileSync("git", ["ls-files", "*.md"], { encoding: "utf8" })
-  .split("\n")
-  .filter(Boolean);
+const files = execFileSync("git", ["ls-files", "*.md"], { encoding: "utf8" }).split("\n").filter(Boolean);
 
 const slug = (heading) =>
   heading

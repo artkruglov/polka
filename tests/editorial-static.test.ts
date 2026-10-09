@@ -7,11 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAccount } from "../apps/server/auth.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  editorialPublishSchema,
-  getEditorial,
-  withdrawEditorial,
-} from "../apps/server/editorial.ts";
+import { editorialPublishSchema, getEditorial, withdrawEditorial } from "../apps/server/editorial.ts";
 import { classifyHtml } from "../apps/server/html.ts";
 import {
   STATIC_SNAPSHOT_NOTE,
@@ -21,8 +17,7 @@ import {
   staticSourcePath,
 } from "../scripts/editorial-static-lib.ts";
 
-const sha256 = (bytes: Buffer | string) =>
-  createHash("sha256").update(bytes).digest("hex");
+const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 const staticCatalogue = staticCandidatesSchema.parse(
   JSON.parse(await readFile("content/editorial/static-candidates.json", "utf8")),
 );
@@ -45,10 +40,7 @@ test("every editorial original has a committed static snapshot", async () => {
     // The interactive entries stay intact for the future live viewer.
     assert.equal(item.interactiveSourcePath, original.sourcePath);
     assert.equal(item.interactiveSourceSha256, original.sourceSha256);
-    assert.equal(
-      sha256(await readFile(original.sourcePath)),
-      original.sourceSha256,
-    );
+    assert.equal(sha256(await readFile(original.sourcePath)), original.sourceSha256);
     assert.equal(item.title, original.title);
     assert.equal(item.sourcePath, staticSourcePath(item.slug));
     const html = await readFile(item.sourcePath, "utf8");
@@ -57,8 +49,7 @@ test("every editorial original has a committed static snapshot", async () => {
     assert.doesNotMatch(html, /<script\b|\son[a-z]+\s*=|javascript:/i);
     // Only snapshots of interactive originals carry the note; an original
     // that is already static is published as it is.
-    const originalIsStatic =
-      classifyHtml(await readFile(original.sourcePath, "utf8")) === "static";
+    const originalIsStatic = classifyHtml(await readFile(original.sourcePath, "utf8")) === "static";
     assert.equal(html.includes(STATIC_SNAPSHOT_NOTE), !originalIsStatic, item.slug);
   }
 });
@@ -103,30 +94,24 @@ test("static manifests pass the server publish schema without a derivative", () 
 });
 
 function seed(...args: string[]) {
-  return new Promise<{ code: number; stdout: string; stderr: string }>(
-    (resolve, reject) => {
-      const child = spawn(
-        process.execPath,
-        ["--import", "tsx", "scripts/editorial-seed-hosted.ts", ...args],
-        { env: process.env },
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (chunk) => (stdout += chunk));
-      child.stderr.on("data", (chunk) => (stderr += chunk));
-      child.once("error", reject);
-      child.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-    },
-  );
+  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--import", "tsx", "scripts/editorial-seed-hosted.ts", ...args], {
+      env: process.env,
+    });
+    let stdout = "",
+      stderr = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+  });
 }
 
 test("seed publishes a static snapshot once, idempotently, printing no links, renewing before expiry", async () => {
   const suffix = randomBytes(5).toString("hex");
   const login = `redakciya-${suffix}`;
   const owner = await createAccount(login, randomBytes(24).toString("hex"));
-  cleanup.push(() =>
-    db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]),
-  );
+  cleanup.push(() => db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]));
   // A unique slug keeps the shared test database free of real catalogue slugs.
   const slug = `static-seed-${suffix}`;
   const directory = await mkdtemp(join(tmpdir(), "polka-static-seed-"));
@@ -143,14 +128,7 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   const refused = await seed("--login", login, "--candidates", candidates);
   assert.equal(refused.code, 1);
   assert.equal(refused.stdout, "");
-  assert.equal(
-    (
-      await db.query("SELECT 1 FROM editorial_publications WHERE slug=$1", [
-        slug,
-      ])
-    ).rowCount,
-    0,
-  );
+  assert.equal((await db.query("SELECT 1 FROM editorial_publications WHERE slug=$1", [slug])).rowCount, 0);
 
   const args = ["--confirm-publication", "--login", login, "--candidates", candidates];
   const first = await seed(...args);
@@ -170,20 +148,13 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
      WHERE publication.slug=$1 AND publication.withdrawn_at IS NULL`,
     [slug],
   );
-  cleanup.push(() =>
-    withdrawEditorial(
-      { id: owner.id, tenant: owner.tenant },
-      { publicationId: publication.id },
-    ),
-  );
+  cleanup.push(() => withdrawEditorial({ id: owner.id, tenant: owner.tenant }, { publicationId: publication.id }));
   assert.equal(publication.tenant_id, owner.tenant);
   assert.equal(publication.derivative_id, null);
   assert.equal(publication.source_sha256, staticCatalogue.items[0]!.sourceSha256);
   assert.equal(publication.html_profile, "static");
   assert.equal(publication.storage_kind, "single");
-  assert.ok(
-    new Date(publication.expires_at).getTime() > Date.now() + 29 * 86_400_000,
-  );
+  assert.ok(new Date(publication.expires_at).getTime() > Date.now() + 29 * 86_400_000);
   const item = await getEditorial(slug);
   assert.equal(item.title, staticCatalogue.items[0]!.title);
   assert.equal(item.author, "Редакция Полки");
@@ -192,20 +163,11 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   assert.equal(again.code, 0, again.stderr);
   assert.deepEqual(JSON.parse(again.stdout), { slug, status: "unchanged", version: "static" });
   assert.equal(
-    (
-      await db.query(
-        "SELECT count(*)::int AS n FROM editorial_publications WHERE slug=$1",
-        [slug],
-      )
-    ).rows[0].n,
+    (await db.query("SELECT count(*)::int AS n FROM editorial_publications WHERE slug=$1", [slug])).rows[0].n,
     1,
   );
   assert.equal(
-    (
-      await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [
-        owner.tenant,
-      ])
-    ).rows[0].n,
+    (await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [owner.tenant])).rows[0].n,
     1,
   );
 
@@ -230,12 +192,7 @@ test("seed publishes a static snapshot once, idempotently, printing no links, re
   const current = rows.find((row) => row.id !== publication.id)!;
   assert.deepEqual([old.active, old.revoked], [false, true]);
   assert.deepEqual([current.active, current.revoked], [true, false]);
-  cleanup.push(() =>
-    withdrawEditorial(
-      { id: owner.id, tenant: owner.tenant },
-      { publicationId: current.id },
-    ),
-  );
+  cleanup.push(() => withdrawEditorial({ id: owner.id, tenant: owner.tenant }, { publicationId: current.id }));
   assert.equal((await getEditorial(slug)).slug, slug);
 });
 
@@ -245,34 +202,24 @@ test("seed --withdraw takes this tenant's slugs out of the catalogue and revokes
   const other = `redakciya-o-${suffix}`;
   const owner = await createAccount(login, randomBytes(24).toString("hex"));
   const stranger = await createAccount(other, randomBytes(24).toString("hex"));
-  cleanup.push(() =>
-    db.query("UPDATE accounts SET disabled=true WHERE id=ANY($1)", [
-      [owner.id, stranger.id],
-    ]),
-  );
+  cleanup.push(() => db.query("UPDATE accounts SET disabled=true WHERE id=ANY($1)", [[owner.id, stranger.id]]));
   const mine = `withdraw-seed-${suffix}`;
   const theirs = `withdraw-other-${suffix}`;
   const directory = await mkdtemp(join(tmpdir(), "polka-withdraw-seed-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   const write = async (slug: string) => {
     const path = join(directory, `${slug}.json`);
-    await writeFile(
-      path,
-      JSON.stringify({ ...staticCatalogue, items: [{ ...staticCatalogue.items[0]!, slug }] }),
-    );
+    await writeFile(path, JSON.stringify({ ...staticCatalogue, items: [{ ...staticCatalogue.items[0]!, slug }] }));
     return path;
   };
   const published = await seed("--confirm-publication", "--login", login, "--candidates", await write(mine));
   assert.equal(published.code, 0, published.stderr);
   const foreign = await seed("--confirm-publication", "--login", other, "--candidates", await write(theirs));
   assert.equal(foreign.code, 0, foreign.stderr);
-  const { rows: [strangers] } = await db.query(
-    "SELECT id FROM editorial_publications WHERE slug=$1 AND withdrawn_at IS NULL",
-    [theirs],
-  );
-  cleanup.push(() =>
-    withdrawEditorial({ id: stranger.id, tenant: stranger.tenant }, { publicationId: strangers.id }),
-  );
+  const {
+    rows: [strangers],
+  } = await db.query("SELECT id FROM editorial_publications WHERE slug=$1 AND withdrawn_at IS NULL", [theirs]);
+  cleanup.push(() => withdrawEditorial({ id: stranger.id, tenant: stranger.tenant }, { publicationId: strangers.id }));
 
   // Without confirmation nothing happens; a malformed list publishes nothing.
   const refused = await seed("--login", login, "--withdraw", mine);
@@ -284,11 +231,18 @@ test("seed --withdraw takes this tenant's slugs out of the catalogue and revokes
   assert.equal((await getEditorial(mine)).slug, mine);
 
   const withdrawn = await seed(
-    "--confirm-publication", "--login", login, "--withdraw", `${mine},${theirs},absent-${suffix}`,
+    "--confirm-publication",
+    "--login",
+    login,
+    "--withdraw",
+    `${mine},${theirs},absent-${suffix}`,
   );
   assert.equal(withdrawn.code, 1, "another tenant's slug is reported as blocked");
   assert.deepEqual(
-    withdrawn.stdout.trim().split("\n").map((line) => JSON.parse(line)),
+    withdrawn.stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)),
     [
       { slug: mine, status: "withdrawn" },
       { slug: theirs, status: "blocked" },
@@ -297,7 +251,9 @@ test("seed --withdraw takes this tenant's slugs out of the catalogue and revokes
   );
   assert.doesNotMatch(withdrawn.stdout + withdrawn.stderr, /https?:|\/s#|[0-9a-f]{8}-[0-9a-f]{4}-/);
   await assert.rejects(getEditorial(mine));
-  const { rows: [row] } = await db.query(
+  const {
+    rows: [row],
+  } = await db.query(
     `SELECT publication.withdrawn_at IS NOT NULL AS withdrawn,share.revoked
      FROM editorial_publications publication
      JOIN shares share ON share.id=publication.share_id

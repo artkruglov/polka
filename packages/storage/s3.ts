@@ -15,8 +15,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { createHash } from "node:crypto";
-export const sha256 = (bytes: Uint8Array | string) =>
-  createHash("sha256").update(bytes).digest("hex");
+export const sha256 = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 /** Parts of a streamed object: S3 wants at least 5 MiB except the last. */
 const STREAM_PART_BYTES = 8 * 1024 * 1024;
 /** Why putStream refused a stream: nothing was stored. */
@@ -25,12 +24,7 @@ export class StreamRejected extends Error {
     super(`stream rejected: ${reason}`);
   }
 }
-export function createS3Store(config: {
-  endpoint: string;
-  accessKey: string;
-  secretKey: string;
-  bucket: string;
-}) {
+export function createS3Store(config: { endpoint: string; accessKey: string; secretKey: string; bucket: string }) {
   const s3 = new S3Client({
     endpoint: config.endpoint,
     region: "us-east-1",
@@ -76,30 +70,20 @@ export function createS3Store(config: {
           Metadata: { sha256: hash },
         }),
       );
-      if (!result.VersionId || result.VersionId === "null")
-        throw new Error("Storage versioning required");
+      if (!result.VersionId || result.VersionId === "null") throw new Error("Storage versioning required");
       return result.VersionId;
     } catch (e: any) {
       if (e.$metadata?.httpStatusCode !== 412) throw e;
-      const head = await s3.send(
-        new HeadObjectCommand({ Bucket: bucket, Key: key }),
-      );
-      if (
-        !head.VersionId ||
-        head.Metadata?.sha256 !== hash ||
-        head.ContentLength !== bytes.length
-      )
+      const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      if (!head.VersionId || head.Metadata?.sha256 !== hash || head.ContentLength !== bytes.length)
         throw new Error("Immutable object conflict");
       const existing = await readBlob(key, head.VersionId);
-      if (sha256(existing) !== hash)
-        throw new Error("Stored bytes checksum mismatch");
+      if (sha256(existing) !== hash) throw new Error("Stored bytes checksum mismatch");
       return head.VersionId;
     }
   }
   async function readBlob(key: string, version: string) {
-    const object = await s3.send(
-      new GetObjectCommand({ Bucket: bucket, Key: key, VersionId: version }),
-    );
+    const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
     return Buffer.from(await object.Body!.transformToByteArray());
   }
 
@@ -117,12 +101,10 @@ export function createS3Store(config: {
     body: AsyncIterable<Buffer | Uint8Array>,
     expected: { size: number; sha256: string; head?: (first: Buffer) => boolean },
   ): Promise<string> {
-    const existing = await s3
-      .send(new HeadObjectCommand({ Bucket: bucket, Key: key }))
-      .catch((e: any) => {
-        if (e.$metadata?.httpStatusCode === 404) return null;
-        throw e;
-      });
+    const existing = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key })).catch((e: any) => {
+      if (e.$metadata?.httpStatusCode === 404) return null;
+      throw e;
+    });
     if (existing) {
       if (
         existing.VersionId &&
@@ -209,14 +191,11 @@ export function createS3Store(config: {
           MultipartUpload: { Parts: parts },
         }),
       );
-      if (!done.VersionId || done.VersionId === "null")
-        throw new Error("Storage versioning required");
+      if (!done.VersionId || done.VersionId === "null") throw new Error("Storage versioning required");
       return done.VersionId;
     } catch (error) {
       await inFlight?.catch(() => undefined);
-      await s3
-        .send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId }))
-        .catch(() => undefined);
+      await s3.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId })).catch(() => undefined);
       throw error;
     }
   }
@@ -227,9 +206,7 @@ export function createS3Store(config: {
    * reading its bytes.
    */
   async function verifyObject(key: string, version: string, size: number, sha: string) {
-    const head = await s3.send(
-      new HeadObjectCommand({ Bucket: bucket, Key: key, VersionId: version }),
-    );
+    const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key, VersionId: version }));
     return head.ContentLength === size && head.Metadata?.sha256 === sha;
   }
 
@@ -237,10 +214,7 @@ export function createS3Store(config: {
    * `keep` does not keep: the only way an object leaves a versioned bucket
    * for good. Returns how many versions were removed.
    */
-  async function deleteAllVersions(
-    prefix: string,
-    matches: (key: string) => boolean = () => true,
-  ) {
+  async function deleteAllVersions(prefix: string, matches: (key: string) => boolean = () => true) {
     let deleted = 0;
     let keyMarker: string | undefined;
     let versionIdMarker: string | undefined;
@@ -254,12 +228,8 @@ export function createS3Store(config: {
           VersionIdMarker: versionIdMarker,
         }),
       );
-      for (const version of [
-        ...(result.Versions ?? []),
-        ...(result.DeleteMarkers ?? []),
-      ]) {
-        if (!version.Key || !version.VersionId || !matches(version.Key))
-          continue;
+      for (const version of [...(result.Versions ?? []), ...(result.DeleteMarkers ?? [])]) {
+        if (!version.Key || !version.VersionId || !matches(version.Key)) continue;
         await s3.send(
           new DeleteObjectCommand({
             Bucket: bucket,

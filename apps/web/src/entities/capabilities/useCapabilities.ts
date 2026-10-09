@@ -57,10 +57,7 @@ const httpsUrl = (value: unknown) => {
 export function loadCapabilities() {
   cached ??= request<Record<string, unknown>>("/capabilities")
     .then((raw) => {
-      const emailLogin =
-        raw.emailLogin === "local" || raw.emailLogin === "smtp"
-          ? raw.emailLogin
-          : "disabled";
+      const emailLogin = raw.emailLogin === "local" || raw.emailLogin === "smtp" ? raw.emailLogin : "disabled";
       return {
         emailLogin,
         emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
@@ -82,18 +79,12 @@ export function loadCapabilities() {
               }))
           : [],
         emailSignupDomains: Array.isArray(raw.emailSignupDomains)
-          ? raw.emailSignupDomains.filter(
-              (item): item is string => typeof item === "string",
-            )
+          ? raw.emailSignupDomains.filter((item): item is string => typeof item === "string")
           : "any",
         emailLoginDomains: raw.emailLoginDomains === "signup" ? "signup" : "any",
-        commentsMode:
-          raw.commentsMode === "owner-notes" || raw.commentsMode === "off"
-            ? raw.commentsMode
-            : "on",
+        commentsMode: raw.commentsMode === "owner-notes" || raw.commentsMode === "off" ? raw.commentsMode : "on",
         privacyContact:
-          typeof raw.privacyContact === "string" &&
-          /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}$/.test(raw.privacyContact)
+          typeof raw.privacyContact === "string" && /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}$/.test(raw.privacyContact)
             ? raw.privacyContact
             : null,
         accountDeletion:
@@ -144,8 +135,7 @@ export function useSignInWays() {
           .filter((provider) => provider.id !== "oidc" && provider.signup)
           .map((provider) => provider.name)
       : [];
-  const email =
-    state.status === "ready" && state.capabilities.emailLogin !== "disabled";
+  const email = state.status === "ready" && state.capabilities.emailLogin !== "disabled";
   const list = names.join(", ");
   const via =
     list && email

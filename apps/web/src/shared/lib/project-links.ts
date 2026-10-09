@@ -16,9 +16,7 @@ export function onGitHub(sourceUrl: string) {
 
 /** The short self-host path: the hosted guide inside the repository, or a fork's own source page. */
 export function selfHostGuideUrl(sourceUrl: string) {
-  return onGitHub(sourceUrl)
-    ? `${sourceUrl.replace(/\/$/, "")}/blob/main/deploy/hosted/README.md`
-    : sourceUrl;
+  return onGitHub(sourceUrl) ? `${sourceUrl.replace(/\/$/, "")}/blob/main/deploy/hosted/README.md` : sourceUrl;
 }
 
 /** Fewer stars than this are not shown: a count is social proof, not a confession. */

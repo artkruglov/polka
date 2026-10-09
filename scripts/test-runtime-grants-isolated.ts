@@ -15,11 +15,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import {
-  CURRENT_SCHEMA_VERSION,
-  migrationFileUrl,
-  SCHEMA_MIGRATIONS,
-} from "../packages/migrations.ts";
+import { CURRENT_SCHEMA_VERSION, migrationFileUrl, SCHEMA_MIGRATIONS } from "../packages/migrations.ts";
 import { assertPlainLoopbackUrl } from "./restore-drill-lib.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -29,31 +25,23 @@ const required = (name: string) => {
   return value;
 };
 if (!process.argv.includes("--confirm-synthetic"))
-  throw new Error(
-    "Pass --confirm-synthetic to create isolated runtime-role test resources",
-  );
+  throw new Error("Pass --confirm-synthetic to create isolated runtime-role test resources");
 
 const expectedSchema = process.argv
   .find((arg) => arg.startsWith("--expected-schema="))
   ?.slice("--expected-schema=".length);
 if (expectedSchema !== String(CURRENT_SCHEMA_VERSION))
-  throw new Error(
-    "Pass --expected-schema=<reviewed version>; current catalog must match before creating resources",
-  );
+  throw new Error("Pass --expected-schema=<reviewed version>; current catalog must match before creating resources");
 
 const workingDatabaseUrl = new URL(required("DATABASE_URL"));
 const storageEndpoint = new URL(required("S3_ENDPOINT"));
 assertPlainLoopbackUrl(workingDatabaseUrl, "Runtime-role database endpoint");
 assertPlainLoopbackUrl(storageEndpoint, "Runtime-role S3 endpoint");
-if (
-  storageEndpoint.port !== "9038" ||
-  required("S3_ACCESS_KEY") !== "polka-local"
-)
+if (storageEndpoint.port !== "9038" || required("S3_ACCESS_KEY") !== "polka-local")
   throw new Error("Runtime-role acceptance requires reviewed local storage");
 
 const testRunId = `${new Date().toISOString().slice(2, 10).replaceAll("-", "")}${randomBytes(4).toString("hex")}`;
-if (!/^[a-z0-9]{10,24}$/.test(testRunId))
-  throw new Error("Unsafe runtime-role test id");
+if (!/^[a-z0-9]{10,24}$/.test(testRunId)) throw new Error("Unsafe runtime-role test id");
 const targetDatabase = `polka_r17_test_${testRunId}`;
 const targetBucket = `polka-r17-test-${testRunId}`;
 const ledgerBucket = `polka-r17-ledger-${testRunId}`;
@@ -69,9 +57,7 @@ const mcConfigDirectory = `/tmp/polka-r17-${testRunId}`;
 const mcConfigSentinel = `polka-r17-mc:${testRunId}`;
 const futureTable = `runtime_future_table_${testRunId}`;
 const futureFunction = `runtime_future_function_${testRunId}`;
-const workingDatabase = decodeURIComponent(
-  workingDatabaseUrl.pathname.slice(1),
-);
+const workingDatabase = decodeURIComponent(workingDatabaseUrl.pathname.slice(1));
 if (
   targetDatabase === workingDatabase ||
   targetBucket === required("S3_BUCKET") ||
@@ -90,11 +76,7 @@ if (
 )
   throw new Error("Runtime-role synthetic identities are unsafe");
 
-const databaseUrl = (
-  database: string,
-  username?: string,
-  password?: string,
-) => {
+const databaseUrl = (database: string, username?: string, password?: string) => {
   const value = new URL(workingDatabaseUrl);
   value.pathname = `/${database}`;
   if (username !== undefined) value.username = username;
@@ -161,13 +143,10 @@ async function readBucketSentinel(bucket = targetBucket) {
   let timer: NodeJS.Timeout | undefined;
   try {
     const reading = (async () => {
-      const object = await s3.send(
-        new GetObjectCommand({ Bucket: bucket, Key: sentinelKey }),
-        { abortSignal: controller.signal },
-      );
-      return Buffer.from(await object.Body!.transformToByteArray()).toString(
-        "utf8",
-      );
+      const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: sentinelKey }), {
+        abortSignal: controller.signal,
+      });
+      return Buffer.from(await object.Body!.transformToByteArray()).toString("utf8");
     })();
     return await Promise.race([
       reading,
@@ -201,14 +180,10 @@ let purgeRoleOid: number | null = null;
 let restoreRoleOid: number | null = null;
 
 async function databaseExists(name: string) {
-  return !!(
-    await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])
-  ).rowCount;
+  return !!(await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])).rowCount;
 }
 async function role(name: string) {
-  return (
-    await admin.query("SELECT oid FROM pg_roles WHERE rolname=$1", [name])
-  ).rows[0];
+  return (await admin.query("SELECT oid FROM pg_roles WHERE rolname=$1", [name])).rows[0];
 }
 async function bucketExists(name: string) {
   try {
@@ -224,12 +199,8 @@ async function applyMigrations() {
   const owner = new pg.Client(pgOptions(schemaUrl));
   await owner.connect();
   try {
-    const identity = (await owner.query("SELECT current_user,session_user"))
-      .rows[0];
-    if (
-      identity.current_user !== schemaOwner ||
-      identity.session_user !== schemaOwner
-    )
+    const identity = (await owner.query("SELECT current_user,session_user")).rows[0];
+    if (identity.current_user !== schemaOwner || identity.session_user !== schemaOwner)
       throw new Error("Migration did not use the schema-owner identity");
     await owner.query("BEGIN");
     await owner.query(
@@ -237,9 +208,7 @@ async function applyMigrations() {
     );
     for (const { version, file } of SCHEMA_MIGRATIONS) {
       await owner.query(await readFile(migrationFileUrl(file), "utf8"));
-      await owner.query("INSERT INTO schema_migrations(version) VALUES($1)", [
-        version,
-      ]);
+      await owner.query("INSERT INTO schema_migrations(version) VALUES($1)", [version]);
     }
     await owner.query("COMMIT");
   } catch (error) {
@@ -403,8 +372,7 @@ async function createMcConfigDirectory() {
   );
   if (preflight.code === 17 && preflight.stdout === "collision")
     throw new Error("Synthetic mc config directory collision");
-  if (preflight.code !== 0)
-    throw new Error("Synthetic mc config directory preflight was inconclusive");
+  if (preflight.code !== 0) throw new Error("Synthetic mc config directory preflight was inconclusive");
   mcConfigCleanupPending = true;
   const result = await boundedCommand(
     "docker",
@@ -427,10 +395,7 @@ async function createMcConfigDirectory() {
     undefined,
     30_000,
   );
-  if (result.code !== 0)
-    throw new Error(
-      "Synthetic mc config directory collision or creation failure",
-    );
+  if (result.code !== 0) throw new Error("Synthetic mc config directory collision or creation failure");
 }
 
 async function provisionLedgerReader() {
@@ -441,17 +406,14 @@ async function provisionLedgerReader() {
     [ledgerReaderAccessKey, "unused", mcConfigSentinel],
     `${required("S3_SECRET_KEY")}\n`,
   );
-  if (user.code === 0)
-    throw new Error("Synthetic ledger reader user collision");
-  if (mcErrorCode(user) !== "XMinioAdminNoSuchUser")
-    throw new Error("Ledger reader user preflight was inconclusive");
+  if (user.code === 0) throw new Error("Synthetic ledger reader user collision");
+  if (mcErrorCode(user) !== "XMinioAdminNoSuchUser") throw new Error("Ledger reader user preflight was inconclusive");
   const policy = await boundedMc(
     `${mcPrelude}; exec mc --json admin policy info local "$2"`,
     [ledgerReaderPolicy, "unused", mcConfigSentinel],
     `${required("S3_SECRET_KEY")}\n`,
   );
-  if (policy.code === 0)
-    throw new Error("Synthetic ledger reader policy collision");
+  if (policy.code === 0) throw new Error("Synthetic ledger reader policy collision");
   if (mcErrorCode(policy) !== "XMinioAdminNoSuchPolicy")
     throw new Error("Ledger reader policy preflight was inconclusive");
 
@@ -476,8 +438,7 @@ async function provisionLedgerReader() {
     [ledgerReaderPolicy, "unused", mcConfigSentinel],
     `${required("S3_SECRET_KEY")}\n${policyDocument}`,
   );
-  if (createdPolicy.code !== 0)
-    throw new Error("Ledger reader policy creation failed");
+  if (createdPolicy.code !== 0) throw new Error("Ledger reader policy creation failed");
 
   ledgerReaderUserCleanupPending = true;
   const createdUser = await boundedMc(
@@ -485,15 +446,13 @@ async function provisionLedgerReader() {
     [ledgerReaderAccessKey, "unused", mcConfigSentinel],
     `${required("S3_SECRET_KEY")}\n${ledgerReaderSecretKey}\n`,
   );
-  if (createdUser.code !== 0)
-    throw new Error("Ledger reader user creation failed");
+  if (createdUser.code !== 0) throw new Error("Ledger reader user creation failed");
   const attached = await boundedMc(
     `${mcPrelude}; mc admin policy attach local "$2" --user "$3" >/dev/null`,
     [ledgerReaderPolicy, ledgerReaderAccessKey, mcConfigSentinel],
     `${required("S3_SECRET_KEY")}\n`,
   );
-  if (attached.code !== 0)
-    throw new Error("Ledger reader policy attachment failed");
+  if (attached.code !== 0) throw new Error("Ledger reader policy attachment failed");
 }
 
 async function cleanupLedgerReader() {
@@ -504,8 +463,7 @@ async function cleanupLedgerReader() {
       [ledgerReaderAccessKey, "unused", mcConfigSentinel],
       `${required("S3_SECRET_KEY")}\n`,
     );
-    if (removed.code !== 0 && mcErrorCode(removed) !== "XMinioAdminNoSuchUser")
-      errors.push("ledger-reader-user");
+    if (removed.code !== 0 && mcErrorCode(removed) !== "XMinioAdminNoSuchUser") errors.push("ledger-reader-user");
   }
   if (ledgerReaderPolicyCleanupPending) {
     const removed = await boundedMc(
@@ -513,11 +471,7 @@ async function cleanupLedgerReader() {
       [ledgerReaderPolicy, "unused", mcConfigSentinel],
       `${required("S3_SECRET_KEY")}\n`,
     );
-    if (
-      removed.code !== 0 &&
-      mcErrorCode(removed) !== "XMinioAdminNoSuchPolicy"
-    )
-      errors.push("ledger-reader-policy");
+    if (removed.code !== 0 && mcErrorCode(removed) !== "XMinioAdminNoSuchPolicy") errors.push("ledger-reader-policy");
   }
   if (ledgerReaderUserCleanupPending) {
     const absent = await boundedMc(
@@ -588,10 +542,7 @@ async function cleanupLedgerReader() {
 
 async function applyExactRuntimeRecipe() {
   const container = await postgresContainer();
-  const recipe = await readFile(
-    new URL("../deploy/runtime-grants.sql", import.meta.url),
-    "utf8",
-  );
+  const recipe = await readFile(new URL("../deploy/runtime-grants.sql", import.meta.url), "utf8");
   const shell = [
     "unset PGPASSWORD PGSERVICE PGSERVICEFILE;",
     "export PGCONNECT_TIMEOUT=5;",
@@ -627,10 +578,7 @@ async function applyExactRuntimeRecipe() {
 
 async function applyExactPurgeRecipe() {
   const container = await postgresContainer();
-  const recipe = await readFile(
-    new URL("../deploy/purge-worker-grants.sql", import.meta.url),
-    "utf8",
-  );
+  const recipe = await readFile(new URL("../deploy/purge-worker-grants.sql", import.meta.url), "utf8");
   const shell = [
     "unset PGPASSWORD PGSERVICE PGSERVICEFILE;",
     "export PGCONNECT_TIMEOUT=5;",
@@ -666,10 +614,7 @@ async function applyExactPurgeRecipe() {
 
 async function applyExactRestoreRecipe() {
   const container = await postgresContainer();
-  const recipe = await readFile(
-    new URL("../deploy/restore-worker-grants.sql", import.meta.url),
-    "utf8",
-  );
+  const recipe = await readFile(new URL("../deploy/restore-worker-grants.sql", import.meta.url), "utf8");
   const shell = [
     "unset PGPASSWORD PGSERVICE PGSERVICEFILE;",
     "export PGCONNECT_TIMEOUT=5;",
@@ -710,30 +655,20 @@ async function createFutureAclProbes() {
   await owner.connect();
   try {
     await owner.query(`CREATE TABLE public."${futureTable}"(id integer)`);
-    await owner.query(
-      `CREATE FUNCTION public."${futureFunction}"() RETURNS integer LANGUAGE sql AS 'SELECT 1'`,
-    );
+    await owner.query(`CREATE FUNCTION public."${futureFunction}"() RETURNS integer LANGUAGE sql AS 'SELECT 1'`);
   } finally {
     await boundedPgEnd(owner);
   }
 }
 
-async function spawnTestWithEnv(
-  file: string,
-  extraEnv: Record<string, string>,
-  timeoutMs: number,
-) {
+async function spawnTestWithEnv(file: string, extraEnv: Record<string, string>, timeoutMs: number) {
   const testPath = fileURLToPath(new URL(file, import.meta.url));
   return new Promise<number>((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", "--test", testPath],
-      {
-        cwd: root,
-        env: { ...process.env, ...extraEnv },
-        stdio: "inherit",
-      },
-    );
+    const child = spawn(process.execPath, ["--import", "tsx", "--test", testPath], {
+      cwd: root,
+      env: { ...process.env, ...extraEnv },
+      stdio: "inherit",
+    });
     let settled = false;
     let spawned = false;
     let timedOut = false;
@@ -767,10 +702,9 @@ async function spawnTestWithEnv(
 
 async function verifyDatabaseSentinel() {
   const row = (
-    await admin.query(
-      "SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1",
-      [targetDatabase],
-    )
+    await admin.query("SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1", [
+      targetDatabase,
+    ])
   ).rows[0];
   return row?.value === sentinel;
 }
@@ -781,26 +715,14 @@ async function verifyBucketSentinel(bucket: string, expectedSentinel: string) {
     return false;
   }
 }
-async function cleanupBucket(
-  bucket: string,
-  expectedSentinel: string,
-  created: boolean,
-) {
+async function cleanupBucket(bucket: string, expectedSentinel: string, created: boolean) {
   if (!created) return;
-  if (!(await verifyBucketSentinel(bucket, expectedSentinel)))
-    throw new Error("Unrecognized synthetic bucket");
+  if (!(await verifyBucketSentinel(bucket, expectedSentinel))) throw new Error("Unrecognized synthetic bucket");
   for (let pass = 0; pass < 100; pass++) {
-    const listed = await s3.send(
-      new ListObjectVersionsCommand({ Bucket: bucket, MaxKeys: 1000 }),
-    );
-    if (typeof listed.IsTruncated !== "boolean")
-      throw new Error("Incomplete cleanup listing");
-    const objects = [
-      ...(listed.Versions ?? []),
-      ...(listed.DeleteMarkers ?? []),
-    ];
-    if (!objects.length && listed.IsTruncated)
-      throw new Error("Incomplete cleanup page");
+    const listed = await s3.send(new ListObjectVersionsCommand({ Bucket: bucket, MaxKeys: 1000 }));
+    if (typeof listed.IsTruncated !== "boolean") throw new Error("Incomplete cleanup listing");
+    const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])];
+    if (!objects.length && listed.IsTruncated) throw new Error("Incomplete cleanup page");
     if (!objects.length) {
       await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
       return;
@@ -819,27 +741,18 @@ async function cleanupBucket(
 }
 async function cleanupDatabase() {
   if (!databaseCreated) return;
-  if (!(await verifyDatabaseSentinel()))
-    throw new Error("Unrecognized synthetic database");
+  if (!(await verifyDatabaseSentinel())) throw new Error("Unrecognized synthetic database");
   await admin.query(
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
     [targetDatabase],
   );
   await admin.query(`DROP DATABASE "${targetDatabase}"`);
 }
-async function cleanupRole(
-  name: string,
-  expectedOid: number | null,
-  created: boolean,
-) {
+async function cleanupRole(name: string, expectedOid: number | null, created: boolean) {
   if (!created) return;
   const current = await role(name);
-  if (!expectedOid || !current || Number(current.oid) !== expectedOid)
-    throw new Error("Unrecognized synthetic role");
-  const memberships = await admin.query(
-    "SELECT 1 FROM pg_auth_members WHERE member=$1 OR roleid=$1",
-    [expectedOid],
-  );
+  if (!expectedOid || !current || Number(current.oid) !== expectedOid) throw new Error("Unrecognized synthetic role");
+  const memberships = await admin.query("SELECT 1 FROM pg_auth_members WHERE member=$1 OR roleid=$1", [expectedOid]);
   if (memberships.rowCount) throw new Error("Synthetic role has memberships");
   await admin.query(`DROP ROLE "${name}"`);
 }
@@ -897,24 +810,16 @@ try {
   );
   restoreRoleCreated = true;
   restoreRoleOid = Number((await role(restoreRole)).oid);
-  await admin.query(
-    `CREATE DATABASE "${targetDatabase}" OWNER "${schemaOwner}"`,
-  );
+  await admin.query(`CREATE DATABASE "${targetDatabase}" OWNER "${schemaOwner}"`);
   databaseCreated = true;
   await admin.query(`COMMENT ON DATABASE "${targetDatabase}" IS '${sentinel}'`);
   await admin.query(`REVOKE ALL ON DATABASE "${targetDatabase}" FROM PUBLIC`);
   await admin.query(
     `GRANT CONNECT ON DATABASE "${targetDatabase}" TO "${schemaOwner}","${runtimeRole}","${purgeRole}","${restoreRole}"`,
   );
-  await admin.query(
-    `ALTER ROLE "${runtimeRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`,
-  );
-  await admin.query(
-    `ALTER ROLE "${purgeRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`,
-  );
-  await admin.query(
-    `ALTER ROLE "${restoreRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`,
-  );
+  await admin.query(`ALTER ROLE "${runtimeRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`);
+  await admin.query(`ALTER ROLE "${purgeRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`);
+  await admin.query(`ALTER ROLE "${restoreRole}" IN DATABASE "${targetDatabase}" SET search_path TO pg_catalog,public`);
   const setup = new pg.Client(pgOptions(databaseUrl(targetDatabase)));
   await setup.connect();
   try {
@@ -940,8 +845,7 @@ try {
       ContentType: "text/plain",
     }),
   );
-  if (!stored.VersionId || stored.VersionId === "null")
-    throw new Error("Synthetic bucket versioning is unavailable");
+  if (!stored.VersionId || stored.VersionId === "null") throw new Error("Synthetic bucket versioning is unavailable");
 
   await s3.send(new CreateBucketCommand({ Bucket: ledgerBucket }));
   ledgerBucketCreated = true;
@@ -1028,8 +932,7 @@ try {
     60_000,
   );
   restoreAssertionsPassed = restoreCode === 0;
-  if (!restoreAssertionsPassed)
-    throw new Error("Restore SQL assertions failed");
+  if (!restoreAssertionsPassed) throw new Error("Restore SQL assertions failed");
   failureStage = "purge-restore-s3";
   const s3Code = await spawnTestWithEnv(
     "../tests/account-purge-restore-s3.test.ts",
@@ -1049,8 +952,7 @@ try {
     180_000,
   );
   purgeRestoreS3Passed = s3Code === 0;
-  if (!purgeRestoreS3Passed)
-    throw new Error("Real S3 purge/restore assertions failed");
+  if (!purgeRestoreS3Passed) throw new Error("Real S3 purge/restore assertions failed");
   failureStage = "restore-target-operational";
   const restoreTargetCode = await spawnTestWithEnv(
     "../tests/restore-target-integration.test.ts",
@@ -1071,8 +973,7 @@ try {
     150_000,
   );
   restoreTargetOperationalPassed = restoreTargetCode === 0;
-  if (!restoreTargetOperationalPassed)
-    throw new Error("Operational restore target assertions failed");
+  if (!restoreTargetOperationalPassed) throw new Error("Operational restore target assertions failed");
   failureStage = "runtime-app";
   const appCode = await spawnTestWithEnv(
     "../tests/account-deletion.test.ts",
@@ -1176,26 +1077,22 @@ try {
     cleanupErrors.push("database");
   }
   try {
-    if (adminConnected)
-      await cleanupRole(restoreRole, restoreRoleOid, restoreRoleCreated);
+    if (adminConnected) await cleanupRole(restoreRole, restoreRoleOid, restoreRoleCreated);
   } catch {
     cleanupErrors.push("restore-role");
   }
   try {
-    if (adminConnected)
-      await cleanupRole(purgeRole, purgeRoleOid, purgeRoleCreated);
+    if (adminConnected) await cleanupRole(purgeRole, purgeRoleOid, purgeRoleCreated);
   } catch {
     cleanupErrors.push("purge-role");
   }
   try {
-    if (adminConnected)
-      await cleanupRole(runtimeRole, runtimeRoleOid, runtimeRoleCreated);
+    if (adminConnected) await cleanupRole(runtimeRole, runtimeRoleOid, runtimeRoleCreated);
   } catch {
     cleanupErrors.push("runtime-role");
   }
   try {
-    if (adminConnected)
-      await cleanupRole(schemaOwner, schemaRoleOid, schemaRoleCreated);
+    if (adminConnected) await cleanupRole(schemaOwner, schemaRoleOid, schemaRoleCreated);
   } catch {
     cleanupErrors.push("schema-role");
   }
@@ -1244,5 +1141,4 @@ const evidence = {
   productionRoleModelProven: false,
 };
 process.stdout.write(`${JSON.stringify(evidence)}\n`);
-if (failed)
-  throw new Error(`Synthetic runtime grants failed (${failureStage})`);
+if (failed) throw new Error(`Synthetic runtime grants failed (${failureStage})`);

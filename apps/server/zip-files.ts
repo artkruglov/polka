@@ -15,8 +15,7 @@ export function zipFiles(files: Array<{ path: string; bytes: Buffer }>) {
     let crc = 0xffffffff;
     for (const b of file.bytes) {
       crc ^= b;
-      for (let i = 0; i < 8; i++)
-        crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+      for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
     }
     crc = (crc ^ 0xffffffff) >>> 0;
     const h = Buffer.alloc(30);

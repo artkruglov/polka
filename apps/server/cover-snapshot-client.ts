@@ -15,10 +15,7 @@ import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
  * shelf covers (covers.ts); the renderer keeps nothing.
  */
 
-export type SnapshotCall = (
-  page: { html: string; script: boolean },
-  signal?: AbortSignal,
-) => Promise<SnapshotResult>;
+export type SnapshotCall = (page: { html: string; script: boolean }, signal?: AbortSignal) => Promise<SnapshotResult>;
 
 const ERRORS = new Set(["timeout", "navigation_failed", "too_large", "busy", "bad_request", "unauthorized"]);
 const MAX_ANSWER = Math.ceil(SNAPSHOT_MAX_IMAGE * 1.4) + 1024;

@@ -90,7 +90,10 @@ export async function fetchPage(
       answer = await get(url.href, { maxBytes: RENDER_MAX_HTML });
     } catch (error) {
       const reason = error instanceof FetchFailure ? error.reason : "network";
-      return { error: reason === "too_large" ? "too_large" : reason === "timeout" ? "timeout" : "navigation_failed", detail: reason };
+      return {
+        error: reason === "too_large" ? "too_large" : reason === "timeout" ? "timeout" : "navigation_failed",
+        detail: reason,
+      };
     }
     const header = (name: string) => {
       const value = answer.headers[name];
@@ -106,8 +109,20 @@ export async function fetchPage(
     }
     const html = answer.body.toString("utf8");
     const title = readTitle(html);
-    const headers = Object.fromEntries(Object.entries(answer.headers).map(([key, value]) => [key, String(Array.isArray(value) ? value[0] : value ?? "")]));
-    const challenge = detectChallenge({ url: url.href, title, headers, status: answer.status, frameUrls: [], text: html.length > 5_000 ? "x".repeat(500) : "" });
+    const headers = Object.fromEntries(
+      Object.entries(answer.headers).map(([key, value]) => [
+        key,
+        String(Array.isArray(value) ? value[0] : (value ?? "")),
+      ]),
+    );
+    const challenge = detectChallenge({
+      url: url.href,
+      title,
+      headers,
+      status: answer.status,
+      frameUrls: [],
+      text: html.length > 5_000 ? "x".repeat(500) : "",
+    });
     if (challenge) return { error: "source_blocked", detail: challenge };
     if (answer.status >= 400) return { error: "navigation_failed", detail: `http_${answer.status}` };
     if (!/^text\/html/i.test(header("content-type") ?? "")) return { error: "navigation_failed", detail: "not_html" };

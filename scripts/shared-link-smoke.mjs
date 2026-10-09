@@ -22,7 +22,9 @@ const executablePath = existsSync(cache)
       .filter((name) => name.startsWith("chromium_headless_shell"))
       .sort()
       .reverse()
-      .flatMap((name) => readdirSync(`${cache}/${name}`).map((arch) => `${cache}/${name}/${arch}/chrome-headless-shell`))
+      .flatMap((name) =>
+        readdirSync(`${cache}/${name}`).map((arch) => `${cache}/${name}/${arch}/chrome-headless-shell`),
+      )
       .find(existsSync)
   : undefined;
 const browser = await chromium.launch(executablePath ? { executablePath } : {});
@@ -37,7 +39,12 @@ const frame = page.frames().find((f) => new URL(f.url(), "http://x").pathname.st
 console.log(
   frame
     ? await frame.evaluate(() =>
-        JSON.stringify({ visible: document.visibilityState, width: innerWidth, height: innerHeight, bodyChildren: document.body.children.length }),
+        JSON.stringify({
+          visible: document.visibilityState,
+          width: innerWidth,
+          height: innerHeight,
+          bodyChildren: document.body.children.length,
+        }),
       )
     : "no project frame",
 );

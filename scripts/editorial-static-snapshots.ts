@@ -22,9 +22,7 @@ import {
   staticSourcePath,
 } from "./editorial-static-lib.ts";
 
-const CHROME =
-  process.env.CHROME_PATH ??
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const root = resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
 const check = args.includes("--check");
@@ -146,8 +144,7 @@ const finalize = (withNote: boolean) => `(() => {
 })()`;
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
-const sha256 = (bytes: Buffer | string) =>
-  createHash("sha256").update(bytes).digest("hex");
+const sha256 = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 
 async function launchChrome() {
   const profile = await mkdtemp(join(tmpdir(), "polka-editorial-chrome-"));
@@ -209,7 +206,9 @@ async function launchChrome() {
   const evaluate = async (expression: string) => {
     const result = await cmd("Runtime.evaluate", { expression, returnByValue: true });
     if (result.exceptionDetails)
-      throw new Error(`Page script failed: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`);
+      throw new Error(
+        `Page script failed: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+      );
     return result.result.value;
   };
   const viewport = (width: number, height: number) =>
@@ -259,9 +258,7 @@ try {
     await browser.viewport(1100, 900);
     await browser.navigate(pathToFileURL(join(root, candidate.sourcePath)).href);
     if (prepare[candidate.slug]) await browser.evaluate(prepare[candidate.slug]!);
-    const html: string = await browser.evaluate(
-      finalize(classifyHtml(original.toString("utf8")) !== "static"),
-    );
+    const html: string = await browser.evaluate(finalize(classifyHtml(original.toString("utf8")) !== "static"));
     const profile = classifyHtml(html);
     if (!looksLikeHtml(html) || profile !== "static")
       throw new Error(`${candidate.slug}: snapshot classifies as ${profile}`);

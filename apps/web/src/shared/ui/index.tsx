@@ -2,9 +2,7 @@ import { Button, Notice } from "./controls.tsx";
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 export function ErrorNotice({ error }: { error: string }) {
-  return error ? (
-    <Notice tone="error">{error}</Notice>
-  ) : null;
+  return error ? <Notice tone="error">{error}</Notice> : null;
 }
 export function Dialog({
   title,
@@ -47,13 +45,7 @@ export function Dialog({
           {eyebrow && <span className="eyebrow">{eyebrow}</span>}
           <h2>{title}</h2>
         </div>
-        <Button
-          variant="quiet"
-          className="icon"
-          aria-label="Закрыть"
-          onClick={onClose}
-          disabled={busy}
-        >
+        <Button variant="quiet" className="icon" aria-label="Закрыть" onClick={onClose} disabled={busy}>
           <X />
         </Button>
       </div>

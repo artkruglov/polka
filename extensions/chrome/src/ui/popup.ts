@@ -43,7 +43,11 @@ async function render() {
       error.hidden = false;
     });
     main.replaceChildren(
-      el("p", {}, "Подключите расширение к своей Полке: откроется окно входа, где вы разрешите сохранять работы и выдавать ссылки."),
+      el(
+        "p",
+        {},
+        "Подключите расширение к своей Полке: откроется окно входа, где вы разрешите сохранять работы и выдавать ссылки.",
+      ),
       connect,
       error,
     );
@@ -52,8 +56,16 @@ async function render() {
   const tab = await activeTab();
   if (!tab.onProvider || tab.id === undefined) {
     main.replaceChildren(
-      el("p", {}, "Откройте артефакт в Claude или ChatGPT и нажмите «Сохранить на Полку» здесь или кнопку «На Полку» рядом с артефактом."),
-      el("p", { className: "muted" }, "Ссылку на артефакт можно и вставить в поле «Сохранить» на Полке — расширение заберёт его само."),
+      el(
+        "p",
+        {},
+        "Откройте артефакт в Claude или ChatGPT и нажмите «Сохранить на Полку» здесь или кнопку «На Полку» рядом с артефактом.",
+      ),
+      el(
+        "p",
+        { className: "muted" },
+        "Ссылку на артефакт можно и вставить в поле «Сохранить» на Полке — расширение заберёт его само.",
+      ),
     );
     return;
   }
@@ -62,18 +74,12 @@ async function render() {
   save.addEventListener("click", async () => {
     save.disabled = true;
     save.textContent = "Сохраняем…";
-    const result = await chrome.runtime
-      .sendMessage<Result>({ type: "save-tab", tabId: tab.id })
-      .catch(() => null);
+    const result = await chrome.runtime.sendMessage<Result>({ type: "save-tab", tabId: tab.id }).catch(() => null);
     save.disabled = false;
     save.textContent = "Сохранить на Полку";
     out.replaceChildren(...renderResult(result, () => void render()));
   });
-  main.replaceChildren(
-    el("p", {}, "Сохранит открытый артефакт на вашу полку и выдаст ссылку."),
-    save,
-    out,
-  );
+  main.replaceChildren(el("p", {}, "Сохранит открытый артефакт на вашу полку и выдаст ссылку."), save, out);
 }
 
 void render();

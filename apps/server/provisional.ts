@@ -10,11 +10,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { passwordHash } from "./auth.ts";
-import {
-  trackShelfClaimed,
-  trackSignup,
-  type VisitSource,
-} from "./analytics.ts";
+import { trackShelfClaimed, trackSignup, type VisitSource } from "./analytics.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
@@ -37,16 +33,12 @@ export const PROVISIONAL_QUOTA_BYTES = 20 * 1024 * 1024;
 /** «через Яндекс ID, VK ID или почту», from what this installation offers. */
 export function claimMethods() {
   // The company's IdP and a link-only Google do not claim a shelf.
-  const names = config.SIGN_IN_PROVIDERS.filter(
-    (id) => id !== "oidc" && !linkOnly(id),
-  ).map(
-    (id) => PROVIDER_NAMES[id](),
+  const names = config.SIGN_IN_PROVIDERS.filter((id) => id !== "oidc" && !linkOnly(id)).map((id) =>
+    PROVIDER_NAMES[id](),
   );
   if (config.MAIL_MODE !== "disabled") names.push("почту");
   if (!names.length) return "выданный оператором способ";
-  return names.length === 1
-    ? names[0]
-    : `${names.slice(0, -1).join(", ")} или ${names.at(-1)}`;
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} или ${names.at(-1)}`;
 }
 
 /** The refusal of a link or a publication from an unclaimed shelf. */
@@ -76,10 +68,7 @@ export async function isUnclaimed(c: Queryable, accountId: string) {
  * libraries and invitations: the author must be authorised through a Russian
  * system (ч. 10 ст. 8 149-ФЗ), i.e. not an unclaimed provisional shelf.
  */
-export async function assertAuthorisedForPublic(
-  c: Queryable,
-  accountId: string,
-) {
+export async function assertAuthorisedForPublic(c: Queryable, accountId: string) {
   if (await isUnclaimed(c, accountId)) throw unclaimedRefusal();
 }
 
@@ -107,15 +96,12 @@ export async function markClaimed(
     // Sessions opened by an agent's link end here: they were for looking at
     // a provisional shelf and must not become sessions of a real one.
     // (Claiming itself needs a strong session, so the owner stays in.)
-    await c.query(
-      "DELETE FROM sessions WHERE account_id=$1 AND assurance='agent_link'",
-      [accountId],
-    );
+    await c.query("DELETE FROM sessions WHERE account_id=$1 AND assurance='agent_link'", [accountId]);
     // A claimed shelf gets the ordinary storage quota.
-    await c.query(
-      "UPDATE tenants SET quota_bytes=DEFAULT WHERE owner_id=$1 AND quota_bytes=$2",
-      [accountId, PROVISIONAL_QUOTA_BYTES],
-    );
+    await c.query("UPDATE tenants SET quota_bytes=DEFAULT WHERE owner_id=$1 AND quota_bytes=$2", [
+      accountId,
+      PROVISIONAL_QUOTA_BYTES,
+    ]);
     trackShelfClaimed(c, accountId, method);
   }
   return !!claimed.rowCount;
@@ -181,10 +167,7 @@ async function provisionalRoomLeft(c: PoolClient, ip: string) {
  * authorization's browser cookie). Counts against its own daily limits
  * (provisionalRoomLeft), not the sign-up budget.
  */
-export async function createProvisionalShelf(
-  ip: string,
-  source: VisitSource | null = null,
-) {
+export async function createProvisionalShelf(ip: string, source: VisitSource | null = null) {
   const password = await passwordHash(randomBytes(32).toString("hex"));
   return transaction(async (c) => {
     await provisionalRoomLeft(c, ip);
@@ -195,16 +178,18 @@ export async function createProvisionalShelf(
        VALUES($1,$2,$3,$4,clock_timestamp())`,
       [id, `guest-${id}`, password, PROVISIONAL_DISPLAY_NAME],
     );
-    await c.query(
-      "INSERT INTO tenants(id,owner_id,quota_bytes) VALUES($1,$2,$3)",
-      [tenant, id, PROVISIONAL_QUOTA_BYTES],
-    );
+    await c.query("INSERT INTO tenants(id,owner_id,quota_bytes) VALUES($1,$2,$3)", [
+      tenant,
+      id,
+      PROVISIONAL_QUOTA_BYTES,
+    ]);
     trackSignup(c, id, "provisional", source);
     const session = randomBytes(32).toString("base64url");
-    await c.query(
-      `INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 day')`,
-      [sha256(session), id, PROVISIONAL_SESSION_DAYS],
-    );
+    await c.query(`INSERT INTO sessions VALUES($1,$2,now()+$3*interval '1 day')`, [
+      sha256(session),
+      id,
+      PROVISIONAL_SESSION_DAYS,
+    ]);
     return { accountId: id, tenant, session };
   });
 }

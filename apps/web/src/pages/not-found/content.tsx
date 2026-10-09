@@ -13,10 +13,7 @@ export function NotFoundContent() {
       <main className="not-found-page" id="main">
         <span className="eyebrow">Ошибка 404</span>
         <h1>Страница не найдена</h1>
-        <p>
-          Такой страницы на Полке нет. Возможно, адрес набран с ошибкой или
-          ссылка устарела.
-        </p>
+        <p>Такой страницы на Полке нет. Возможно, адрес набран с ошибкой или ссылка устарела.</p>
         <div className="button-row">
           <LinkButton variant="primary" href="/">
             Моя полка

@@ -15,11 +15,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import {
-  CURRENT_SCHEMA_VERSION,
-  migrationFileUrl,
-  SCHEMA_MIGRATIONS,
-} from "../packages/migrations.ts";
+import { CURRENT_SCHEMA_VERSION, migrationFileUrl, SCHEMA_MIGRATIONS } from "../packages/migrations.ts";
 import { assertPlainLoopbackUrl } from "./restore-drill-lib.ts";
 
 const required = (name: string) => {
@@ -29,33 +25,20 @@ const required = (name: string) => {
 };
 
 if (!process.argv.includes("--confirm-synthetic"))
-  throw new Error(
-    "Pass --confirm-synthetic to create an isolated account deletion test target",
-  );
+  throw new Error("Pass --confirm-synthetic to create an isolated account deletion test target");
 
 const workingDatabaseUrl = new URL(required("DATABASE_URL"));
 const storageEndpoint = new URL(required("S3_ENDPOINT"));
-assertPlainLoopbackUrl(
-  workingDatabaseUrl,
-  "Account deletion test database endpoint",
-);
+assertPlainLoopbackUrl(workingDatabaseUrl, "Account deletion test database endpoint");
 assertPlainLoopbackUrl(storageEndpoint, "Account deletion test S3 endpoint");
-if (
-  storageEndpoint.port !== "9038" ||
-  required("S3_ACCESS_KEY") !== "polka-local"
-)
-  throw new Error(
-    "Account deletion tests require the reviewed local S3 target",
-  );
+if (storageEndpoint.port !== "9038" || required("S3_ACCESS_KEY") !== "polka-local")
+  throw new Error("Account deletion tests require the reviewed local S3 target");
 
 const testRunId = `${new Date().toISOString().slice(2, 10).replaceAll("-", "")}${randomBytes(4).toString("hex")}`;
-if (!/^[a-z0-9]{10,24}$/.test(testRunId))
-  throw new Error("Unsafe account deletion test id");
+if (!/^[a-z0-9]{10,24}$/.test(testRunId)) throw new Error("Unsafe account deletion test id");
 const targetDatabase = `polka_r17_test_${testRunId}`;
 const targetBucket = `polka-r17-test-${testRunId}`;
-const workingDatabase = decodeURIComponent(
-  workingDatabaseUrl.pathname.slice(1),
-);
+const workingDatabase = decodeURIComponent(workingDatabaseUrl.pathname.slice(1));
 const workingBucket = required("S3_BUCKET");
 if (
   targetDatabase === workingDatabase ||
@@ -97,9 +80,7 @@ let databaseCreated = false;
 let bucketCreated = false;
 
 async function databaseExists(name: string) {
-  return !!(
-    await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])
-  ).rowCount;
+  return !!(await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])).rowCount;
 }
 
 async function bucketExists(name: string) {
@@ -122,9 +103,7 @@ async function applyMigrations() {
     );
     for (const { version, file } of SCHEMA_MIGRATIONS) {
       await client.query(await readFile(migrationFileUrl(file), "utf8"));
-      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [
-        version,
-      ]);
+      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [version]);
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -137,24 +116,17 @@ async function applyMigrations() {
 
 async function verifyDatabaseSentinel() {
   const row = (
-    await admin.query(
-      "SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1",
-      [targetDatabase],
-    )
+    await admin.query("SELECT shobj_description(oid,'pg_database') AS value FROM pg_database WHERE datname=$1", [
+      targetDatabase,
+    ])
   ).rows[0];
   return row?.value === sentinel;
 }
 
 async function verifyBucketSentinel() {
   try {
-    const object = await s3.send(
-      new GetObjectCommand({ Bucket: targetBucket, Key: sentinelKey }),
-    );
-    return (
-      Buffer.from(await object.Body!.transformToByteArray()).toString(
-        "utf8",
-      ) === sentinel
-    );
+    const object = await s3.send(new GetObjectCommand({ Bucket: targetBucket, Key: sentinelKey }));
+    return Buffer.from(await object.Body!.transformToByteArray()).toString("utf8") === sentinel;
   } catch {
     return false;
   }
@@ -162,8 +134,7 @@ async function verifyBucketSentinel() {
 
 async function cleanupDatabase() {
   if (!databaseCreated) return;
-  if (!(await verifyDatabaseSentinel()))
-    throw new Error("Refusing to clean an unrecognized synthetic database");
+  if (!(await verifyDatabaseSentinel())) throw new Error("Refusing to clean an unrecognized synthetic database");
   await admin.query(
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1 AND pid<>pg_backend_pid()",
     [targetDatabase],
@@ -173,16 +144,10 @@ async function cleanupDatabase() {
 
 async function cleanupBucket() {
   if (!bucketCreated) return;
-  if (!(await verifyBucketSentinel()))
-    throw new Error("Refusing to clean an unrecognized synthetic bucket");
+  if (!(await verifyBucketSentinel())) throw new Error("Refusing to clean an unrecognized synthetic bucket");
   for (let pass = 0; pass < 100; pass++) {
-    const listed = await s3.send(
-      new ListObjectVersionsCommand({ Bucket: targetBucket, MaxKeys: 1000 }),
-    );
-    const objects = [
-      ...(listed.Versions ?? []),
-      ...(listed.DeleteMarkers ?? []),
-    ];
+    const listed = await s3.send(new ListObjectVersionsCommand({ Bucket: targetBucket, MaxKeys: 1000 }));
+    const objects = [...(listed.Versions ?? []), ...(listed.DeleteMarkers ?? [])];
     if (!objects.length) {
       await s3.send(new DeleteBucketCommand({ Bucket: targetBucket }));
       return;
@@ -201,38 +166,32 @@ async function cleanupBucket() {
 }
 
 async function runTest() {
-  const testFile = fileURLToPath(
-    new URL("../tests/account-deletion.test.ts", import.meta.url),
-  );
+  const testFile = fileURLToPath(new URL("../tests/account-deletion.test.ts", import.meta.url));
   return new Promise<number>((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", "--test", testFile],
-      {
-        cwd: fileURLToPath(new URL("..", import.meta.url)),
-        env: {
-          ...process.env,
-          DATABASE_URL: databaseUrl(targetDatabase),
-          S3_BUCKET: targetBucket,
-          LINK_KEY: randomBytes(64).toString("base64url"),
-          APP_ORIGIN: "http://127.0.0.1:4390",
-          HOST: "127.0.0.1",
-          PORT: "4390",
-          COOKIE_SECURE: "false",
-          MAIL_MODE: "disabled",
-          HTML_LIVE_ENABLED: "true",
-          VIEWER_ORIGIN: "http://localhost:4391",
-          VIEWER_HOST: "localhost",
-          VIEWER_PORT: "4391",
-          ACCOUNT_DELETION_ENABLED: "true",
-          ACCOUNT_PURGE_MAX_HOURS: "24",
-          BACKUP_RETENTION_MAX_DAYS: "0",
-          ACCOUNT_DELETION_POLICY_VERSION: "local-r17-test-v1",
-          R17_TEST_RUN_ID: testRunId,
-        },
-        stdio: "inherit",
+    const child = spawn(process.execPath, ["--import", "tsx", "--test", testFile], {
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl(targetDatabase),
+        S3_BUCKET: targetBucket,
+        LINK_KEY: randomBytes(64).toString("base64url"),
+        APP_ORIGIN: "http://127.0.0.1:4390",
+        HOST: "127.0.0.1",
+        PORT: "4390",
+        COOKIE_SECURE: "false",
+        MAIL_MODE: "disabled",
+        HTML_LIVE_ENABLED: "true",
+        VIEWER_ORIGIN: "http://localhost:4391",
+        VIEWER_HOST: "localhost",
+        VIEWER_PORT: "4391",
+        ACCOUNT_DELETION_ENABLED: "true",
+        ACCOUNT_PURGE_MAX_HOURS: "24",
+        BACKUP_RETENTION_MAX_DAYS: "0",
+        ACCOUNT_DELETION_POLICY_VERSION: "local-r17-test-v1",
+        R17_TEST_RUN_ID: testRunId,
       },
-    );
+      stdio: "inherit",
+    });
     let timedOut = false;
     let spawned = false;
     child.once("spawn", () => {
@@ -273,10 +232,7 @@ let failureStage = "setup";
 try {
   await admin.connect();
   adminConnected = true;
-  if (
-    (await databaseExists(targetDatabase)) ||
-    (await bucketExists(targetBucket))
-  )
+  if ((await databaseExists(targetDatabase)) || (await bucketExists(targetBucket)))
     throw new Error("Synthetic account deletion target already exists");
   await admin.query(`CREATE DATABASE "${targetDatabase}"`);
   databaseCreated = true;
@@ -297,8 +253,7 @@ try {
       ContentType: "text/plain",
     }),
   );
-  if (!stored.VersionId || stored.VersionId === "null")
-    throw new Error("Synthetic bucket versioning is unavailable");
+  if (!stored.VersionId || stored.VersionId === "null") throw new Error("Synthetic bucket versioning is unavailable");
   failureStage = "migration";
   await applyMigrations();
   failureStage = "test";
@@ -319,9 +274,7 @@ try {
     cleanupErrors.push("database");
   }
   if (!cleanupErrors.length) {
-    const databaseRemains = adminConnected
-      ? await databaseExists(targetDatabase)
-      : databaseCreated;
+    const databaseRemains = adminConnected ? await databaseExists(targetDatabase) : databaseCreated;
     const bucketRemains = await bucketExists(targetBucket);
     residueRemoved = !databaseRemains && !bucketRemains;
     if (!residueRemoved) cleanupErrors.push("residue");
@@ -347,5 +300,4 @@ const evidence = {
   productionPurgeProven: false,
 };
 process.stdout.write(`${JSON.stringify(evidence)}\n`);
-if (failed)
-  throw new Error(`Synthetic account deletion run failed (${failureStage})`);
+if (failed) throw new Error(`Synthetic account deletion run failed (${failureStage})`);

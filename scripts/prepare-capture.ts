@@ -21,36 +21,21 @@ const mimeByExtension: Record<string, string> = {
 };
 
 /** Only explicitly selected files; never walks a user's directory or sends bytes. */
-export async function prepareCapture(
-  root: string,
-  entrypoint: string,
-  selected: string[],
-) {
-  if (!selected.length || selected.length > 64)
-    throw Error("Select 1–64 files.");
+export async function prepareCapture(root: string, entrypoint: string, selected: string[]) {
+  if (!selected.length || selected.length > 64) throw Error("Select 1–64 files.");
   const files = [];
   const payload = [];
   let total = 0;
   for (const relative of selected) {
     const segments = relative.split("/");
-    if (
-      segments.length > 8 ||
-      segments.some(
-        (s) => !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(s) || s.endsWith("."),
-      )
-    )
+    if (segments.length > 8 || segments.some((s) => !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(s) || s.endsWith(".")))
       throw Error(`Invalid relative path: ${relative}`);
     let current = path.resolve(root);
     for (const [index, segment] of segments.entries()) {
       current = path.join(current, segment);
       const info = await lstat(current);
-      if (
-        info.isSymbolicLink() ||
-        (index < segments.length - 1 ? !info.isDirectory() : !info.isFile())
-      )
-        throw Error(
-          `Only regular files within the selected directory are supported: ${relative}`,
-        );
+      if (info.isSymbolicLink() || (index < segments.length - 1 ? !info.isDirectory() : !info.isFile()))
+        throw Error(`Only regular files within the selected directory are supported: ${relative}`);
       if (index === segments.length - 1 && info.size > MAX_BYTES - total)
         throw Error("Selected files exceed the 5 MiB limit.");
     }
@@ -58,8 +43,7 @@ export async function prepareCapture(
     if (!mime) throw Error(`Unsupported extension: ${relative}`);
     const bytes = await readFile(current);
     total += bytes.length;
-    if (total > MAX_BYTES)
-      throw Error("Selected files exceed the 5 MiB limit.");
+    if (total > MAX_BYTES) throw Error("Selected files exceed the 5 MiB limit.");
     files.push({
       path: relative,
       mime,
@@ -92,28 +76,19 @@ export async function prepareCapture(
   };
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const [root, entrypoint, output, ...files] = process.argv.slice(2);
     if (!root || !entrypoint || !output || !files.length)
-      throw Error(
-        "Usage: tsx scripts/prepare-capture.ts ROOT ENTRYPOINT OUTPUT FILE [FILE ...]",
-      );
+      throw Error("Usage: tsx scripts/prepare-capture.ts ROOT ENTRYPOINT OUTPUT FILE [FILE ...]");
     const result = await prepareCapture(root, entrypoint, files);
     await writeFile(output, JSON.stringify(result), {
       mode: 0o600,
       flag: "wx",
     });
-    console.log(
-      `Prepared ${result.files.length} files. Nothing uploaded. Output contains the selected source bytes.`,
-    );
+    console.log(`Prepared ${result.files.length} files. Nothing uploaded. Output contains the selected source bytes.`);
   } catch (error) {
-    console.error(
-      error instanceof Error ? error.message : "Preparation failed.",
-    );
+    console.error(error instanceof Error ? error.message : "Preparation failed.");
     process.exitCode = 1;
   }
 }

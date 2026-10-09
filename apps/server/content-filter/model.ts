@@ -47,20 +47,37 @@ export const MAX_TEXT_CHARS = 24_000;
 // The benchmark's normalisation, ported as is: spaced letters joined, Latin
 // look-alikes in a Cyrillic word read as Cyrillic.
 const LAT2CYR: Record<string, string> = {
-  a: "а", e: "е", o: "о", p: "р", c: "с", x: "х", y: "у", k: "к", m: "м",
-  t: "т", h: "н", b: "в", A: "А", E: "Е", O: "О", P: "Р", C: "С", X: "Х",
-  K: "К", M: "М", T: "Т", H: "Н", B: "В",
+  a: "а",
+  e: "е",
+  o: "о",
+  p: "р",
+  c: "с",
+  x: "х",
+  y: "у",
+  k: "к",
+  m: "м",
+  t: "т",
+  h: "н",
+  b: "в",
+  A: "А",
+  E: "Е",
+  O: "О",
+  P: "Р",
+  C: "С",
+  X: "Х",
+  K: "К",
+  M: "М",
+  T: "Т",
+  H: "Н",
+  B: "В",
 };
 export function normalizeForModel(text: string) {
-  const joined = text.replace(
-    /(?<![\p{L}\p{N}_])((?:[\p{L}\p{N}_] ){2,}[\p{L}\p{N}_])(?![\p{L}\p{N}_])/gu,
-    (match) => match.replaceAll(" ", ""),
+  const joined = text.replace(/(?<![\p{L}\p{N}_])((?:[\p{L}\p{N}_] ){2,}[\p{L}\p{N}_])(?![\p{L}\p{N}_])/gu, (match) =>
+    match.replaceAll(" ", ""),
   );
   return joined
     .split(" ")
-    .map((word) =>
-      /[а-яё]/i.test(word) ? [...word].map((ch) => LAT2CYR[ch] ?? ch).join("") : word,
-    )
+    .map((word) => (/[а-яё]/i.test(word) ? [...word].map((ch) => LAT2CYR[ch] ?? ch).join("") : word))
     .join(" ");
 }
 
@@ -74,14 +91,8 @@ export function userMessage(text: string) {
 const REFUSAL = /^\s*я не могу обсуждать эту тему/i;
 
 /** A reply as a category, or a reason to fall back. */
-export function parseAnswer(
-  content: unknown,
-  finishReason: unknown,
-  model: string,
-  costRub: number,
-): ModelAnswer {
-  if (typeof content !== "string" || !content.trim())
-    return { failed: "unparseable", model, costRub };
+export function parseAnswer(content: unknown, finishReason: unknown, model: string, costRub: number): ModelAnswer {
+  if (typeof content !== "string" || !content.trim()) return { failed: "unparseable", model, costRub };
   if (REFUSAL.test(content)) return { failed: "refusal", model, costRub };
   if (finishReason !== undefined && finishReason !== null && finishReason !== "stop")
     return { failed: "unparseable", model, costRub };
@@ -94,8 +105,7 @@ export function parseAnswer(
     return { failed: "unparseable", model, costRub };
   }
   const category = String(parsed?.category ?? "");
-  if (!(MODEL_CATEGORIES as readonly string[]).includes(category))
-    return { failed: "unparseable", model, costRub };
+  if (!(MODEL_CATEGORIES as readonly string[]).includes(category)) return { failed: "unparseable", model, costRub };
   const ours: Category | "none" =
     category === "safe" ? "none" : category === "fraud_phishing" ? "fraud" : (category as Category);
   if (ours !== "none" && !(CATEGORIES as readonly string[]).includes(ours))
@@ -121,7 +131,10 @@ type PriceEntry = { provider: ModelProvider | null; name: string; price: Price }
  */
 export function parsePrices(value: string): PriceEntry[] {
   const prices: PriceEntry[] = [];
-  for (const part of value.split(",").map((item) => item.trim()).filter(Boolean)) {
+  for (const part of value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)) {
     const match = /^([^=]{1,120})=(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(part);
     if (!match) throw new Error(`CONTENT_MODEL_PRICES_RUB: «${part}»`);
     const scoped = /^(yandex|neuraldeep|openai-compatible):(.+)$/.exec(match[1]!.trim());
@@ -145,11 +158,8 @@ export const NEURALDEEP_PRICES: PriceEntry[] = [
 ].map(([name, price]) => ({ provider: "neuraldeep", name: name as string, price: price as Price }));
 
 const longest = (entries: PriceEntry[], model: string) =>
-  entries
-    .filter((entry) => model.includes(entry.name))
-    .sort((a, b) => b.name.length - a.name.length)[0]?.price;
-const dearestOf = (entries: PriceEntry[]) =>
-  entries.reduce((max, { price }) => Math.max(max, ...price), 0);
+  entries.filter((entry) => model.includes(entry.name)).sort((a, b) => b.name.length - a.name.length)[0]?.price;
+const dearestOf = (entries: PriceEntry[]) => entries.reduce((max, { price }) => Math.max(max, ...price), 0);
 
 let priceTable: PriceEntry[] | null = null;
 /**
@@ -173,7 +183,10 @@ export function costOf(
     model,
   ) ??
     longest(builtIn, model) ??
-    longest(table.filter((entry) => !entry.provider), model) ?? [dearest, dearest, dearest];
+    longest(
+      table.filter((entry) => !entry.provider),
+      model,
+    ) ?? [dearest, dearest, dearest];
   const prompt = Number(usage?.prompt_tokens ?? 0);
   const hit = Number(usage?.prompt_tokens_details?.cached_tokens ?? 0);
   const completion = Number(usage?.completion_tokens ?? 0);
@@ -181,11 +194,8 @@ export function costOf(
 }
 
 /** The cost that counts towards the budget: none on a flat-rate key. */
-export const budgetCost = (
-  endpoint: Pick<ModelEndpoint, "provider" | "flatRate">,
-  model: string,
-  usage: any,
-) => (endpoint.flatRate ? 0 : costOf(model, usage, endpoint.provider));
+export const budgetCost = (endpoint: Pick<ModelEndpoint, "provider" | "flatRate">, model: string, usage: any) =>
+  endpoint.flatRate ? 0 : costOf(model, usage, endpoint.provider);
 
 /** Extra request fields of one model (a JSON object from the configuration). */
 export function modelOptions(value: string): Record<string, unknown> {
@@ -315,8 +325,7 @@ export async function spentToday() {
 }
 
 /** False once today's CONTENT_MODEL_DAILY_BUDGET_RUB is spent. */
-export const budgetLeft = async () =>
-  (await spentToday()) < config.CONTENT_MODEL_DAILY_BUDGET_RUB;
+export const budgetLeft = async () => (await spentToday()) < config.CONTENT_MODEL_DAILY_BUDGET_RUB;
 
 /**
  * Record a call's cost (one atomic increment); true for the call that took

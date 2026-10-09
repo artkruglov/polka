@@ -111,7 +111,14 @@ test("page messages: exact shape, nonce, an importable URL", () => {
     { source: EXTENSION_SOURCE, v: 1, type: "hello", nonce: NONCE },
     { source: PAGE_SOURCE, v: 1, type: "hello", nonce: "short" },
     { source: PAGE_SOURCE, v: 1, type: "hello", nonce: `${NONCE}<script>` },
-    { source: PAGE_SOURCE, v: 1, type: "import", nonce: NONCE, requestId: "req-12345678", url: "https://evil.example/" },
+    {
+      source: PAGE_SOURCE,
+      v: 1,
+      type: "import",
+      nonce: NONCE,
+      requestId: "req-12345678",
+      url: "https://evil.example/",
+    },
     { source: PAGE_SOURCE, v: 1, type: "import", nonce: NONCE, requestId: "x", url: ARTIFACT },
     { source: PAGE_SOURCE, v: 1, type: "open-tab", nonce: NONCE, url: ARTIFACT },
   ])
@@ -142,13 +149,8 @@ test("extension messages: results carry only web links and bounded text", () => 
     { ok: false, code: "timeout", message: "x".repeat(501) },
   ])
     assert.equal(parseExtensionMessage({ ...ok, result }), null, JSON.stringify(result));
-  assert.ok(
-    parseExtensionMessage({ ...ok, result: { ok: false, code: "not_connected", message: "Подключите" } }),
-  );
-  assert.equal(
-    parseExtensionMessage({ ...ok, type: "progress", stage: "exfiltrating" }),
-    null,
-  );
+  assert.ok(parseExtensionMessage({ ...ok, result: { ok: false, code: "not_connected", message: "Подключите" } }));
+  assert.equal(parseExtensionMessage({ ...ok, type: "progress", stage: "exfiltrating" }), null);
 });
 
 test("an event counts only from this window, this origin, with the nonce", () => {
@@ -170,7 +172,9 @@ test("an event counts only from this window, this origin, with the nonce", () =>
     null,
   );
   const ready = { source: EXTENSION_SOURCE, v: 1, type: "ready", nonce: NONCE, version: "0.1.0", connected: true };
-  assert.ok(acceptExtensionEvent({ origin: ORIGIN, source: win, data: ready }, { window: win, origin: ORIGIN, nonce: NONCE }));
+  assert.ok(
+    acceptExtensionEvent({ origin: ORIGIN, source: win, data: ready }, { window: win, origin: ORIGIN, nonce: NONCE }),
+  );
   assert.equal(
     acceptExtensionEvent(
       { origin: ORIGIN, source: win, data: ready },

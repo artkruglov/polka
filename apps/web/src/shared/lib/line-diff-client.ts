@@ -4,13 +4,8 @@ import { diffTexts, type DiffResult } from "./line-diff.ts";
  * Diff two texts in a Web Worker; an abort terminates the worker. Where
  * workers are unavailable the (bounded) diff runs in place.
  */
-export function diffInWorker(
-  oldText: string,
-  newText: string,
-  signal?: AbortSignal,
-): Promise<DiffResult> {
-  if (typeof Worker === "undefined")
-    return Promise.resolve(diffTexts(oldText, newText));
+export function diffInWorker(oldText: string, newText: string, signal?: AbortSignal): Promise<DiffResult> {
+  if (typeof Worker === "undefined") return Promise.resolve(diffTexts(oldText, newText));
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./line-diff.worker.ts", import.meta.url), {
       type: "module",

@@ -1,10 +1,7 @@
 import "./styles.css";
 import React, { useEffect, useRef, useState } from "react";
 import { Check, CircleAlert, LockKeyhole, LogIn } from "lucide-react";
-import type {
-  Artifact,
-  Receipt,
-} from "../../../../../packages/contracts/index.ts";
+import type { Artifact, Receipt } from "../../../../../packages/contracts/index.ts";
 import { size } from "../../entities/artifact/format.ts";
 import { useAccountState } from "../../entities/account/model/useAccount.ts";
 import { useFolders } from "../../entities/folder/useFolders.ts";
@@ -28,10 +25,7 @@ export function PasteCode({
   titled = true,
 }: {
   initialFolderId?: string;
-  renderResult: (
-    saved: { receipt: Receipt; work: Artifact },
-    restart: () => void,
-  ) => React.ReactNode;
+  renderResult: (saved: { receipt: Receipt; work: Artifact }, restart: () => void) => React.ReactNode;
   /** False when a surrounding tab already names the card: the heading stays for screen readers. */
   titled?: boolean;
 }) {
@@ -61,8 +55,7 @@ export function PasteCode({
   };
 
   const save = async () => {
-    if (!pasted || !title.trim())
-      return upload.setError("Вставьте код и укажите название.");
+    if (!pasted || !title.trim()) return upload.setError("Вставьте код и укажите название.");
     if (pasted.tooLarge) return upload.setError("Код больше 5 МБ.");
     await upload.save(new Blob([code], { type: pasted.mime }), {
       title: title.trim(),
@@ -82,12 +75,7 @@ export function PasteCode({
   const saved = upload.saved;
 
   return (
-    <section
-      className="paste-code"
-      id="paste"
-      ref={card}
-      aria-labelledby="paste-code-title"
-    >
+    <section className="paste-code" id="paste" ref={card} aria-labelledby="paste-code-title">
       {saved?.work ? (
         renderResult({ receipt: saved.receipt, work: saved.work }, restart)
       ) : saved ? (
@@ -105,9 +93,8 @@ export function PasteCode({
             <h2 id="paste-code-title">Вставить код</h2>
           </div>
           <p className="paste-code-hint">
-            Нет файла? В Claude или ChatGPT откройте готовую страницу или код, нажмите
-            «Копировать» (Copy) и вставьте код сюда. HTML сохранится
-            страницей, всё остальное — текстом.
+            Нет файла? В Claude или ChatGPT откройте готовую страницу или код, нажмите «Копировать» (Copy) и вставьте
+            код сюда. HTML сохранится страницей, всё остальное — текстом.
           </p>
           <TextAreaField
             label="Код страницы"
@@ -196,15 +183,8 @@ export function PasteCode({
             )
           ) : (
             <div className="bring-actions">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={save}
-                disabled={!pasted || pasted.tooLarge || busy}
-              >
-                <LockKeyhole />{" "}
-                {upload.stage ||
-                  (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
+              <Button type="button" variant="primary" onClick={save} disabled={!pasted || pasted.tooLarge || busy}>
+                <LockKeyhole /> {upload.stage || (upload.retrying ? "Повторить сохранение" : "Сохранить на полку")}
               </Button>
             </div>
           )}

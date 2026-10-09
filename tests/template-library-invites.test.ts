@@ -18,12 +18,7 @@ let otherCookie = "";
 const recipientEmail = `recipient-${randomBytes(5).toString("hex")}@example.test`;
 const otherEmail = `other-${randomBytes(5).toString("hex")}@example.test`;
 
-async function call(
-  method: string,
-  url: string,
-  body?: Record<string, unknown>,
-  cookie = adminCookie,
-) {
+async function call(method: string, url: string, body?: Record<string, unknown>, cookie = adminCookie) {
   return app.inject({
     method: method as any,
     url,
@@ -44,19 +39,11 @@ async function library(name: string) {
   return response.json().id as string;
 }
 
-async function invite(
-  libraryId: string,
-  email = recipientEmail,
-  extra: Record<string, unknown> = {},
-) {
-  const response = await call(
-    "POST",
-    `/api/template-libraries/${libraryId}/invitations`,
-    {
-      email,
-      ...extra,
-    },
-  );
+async function invite(libraryId: string, email = recipientEmail, extra: Record<string, unknown> = {}) {
+  const response = await call("POST", `/api/template-libraries/${libraryId}/invitations`, {
+    email,
+    ...extra,
+  });
   assert.equal(response.statusCode, 200, response.body);
   const result = response.json();
   const url = new URL(result.invitationUrl);
@@ -91,38 +78,21 @@ after(async () => {
 
 test("admin creates, lists, revokes, and accepts only bounded email invitations", async () => {
   const libraryId = await library("Invite boundaries");
-  const created = await invite(
-    libraryId,
-    `  ${recipientEmail.toUpperCase()}  `,
-  );
+  const created = await invite(libraryId, `  ${recipientEmail.toUpperCase()}  `);
   assert.equal(created.email, recipientEmail);
   assert.equal(created.role, "reader");
   assert.equal(
     sha256(created.token),
-    (
-      await db.query(
-        "SELECT token_hash FROM template_library_invitations WHERE id=$1",
-        [created.id],
-      )
-    ).rows[0].token_hash,
+    (await db.query("SELECT token_hash FROM template_library_invitations WHERE id=$1", [created.id])).rows[0]
+      .token_hash,
   );
-  const listed = await call(
-    "GET",
-    `/api/template-libraries/${libraryId}/invitations`,
-  );
+  const listed = await call("GET", `/api/template-libraries/${libraryId}/invitations`);
   assert.equal(listed.statusCode, 200, listed.body);
   assert.equal(listed.json().items[0].status, "pending");
   assert.equal(listed.body.includes(created.token), false);
   assert.equal(listed.body.includes("token_hash"), false);
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/template-libraries/${libraryId}/invitations`,
-        undefined,
-        otherCookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/template-libraries/${libraryId}/invitations`, undefined, otherCookie)).statusCode,
     404,
   );
   assert.equal(
@@ -140,13 +110,7 @@ test("admin creates, lists, revokes, and accepts only bounded email invitations"
     expiresInHours: 1,
   });
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/template-libraries/${libraryId}/invitations/${revoked.id}/revoke`,
-        {},
-      )
-    ).statusCode,
+    (await call("POST", `/api/template-libraries/${libraryId}/invitations/${revoked.id}/revoke`, {})).statusCode,
     200,
   );
   assert.equal(
@@ -180,9 +144,7 @@ test("admin creates, lists, revokes, and accepts only bounded email invitations"
     ).statusCode,
     403,
   );
-  await db.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [
-    recipient.id,
-  ]);
+  await db.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [recipient.id]);
   const accepted = await call(
     "POST",
     `/api/template-libraries/${libraryId}/invitations/accept`,
@@ -198,9 +160,7 @@ test("admin creates, lists, revokes, and accepts only bounded email invitations"
     recipientCookie,
   );
   assert.equal(retry.statusCode, 200, retry.body);
-  const events = (
-    await call("GET", `/api/template-libraries/${libraryId}/events`)
-  ).json().items;
+  const events = (await call("GET", `/api/template-libraries/${libraryId}/events`)).json().items;
   assert.deepEqual(
     events.map((event: any) => event.action),
     [
@@ -211,12 +171,7 @@ test("admin creates, lists, revokes, and accepts only bounded email invitations"
       "template_library.created",
     ],
   );
-  assert.equal(
-    events.filter(
-      (event: any) => event.action === "template_library.invitation_accepted",
-    ).length,
-    1,
-  );
+  assert.equal(events.filter((event: any) => event.action === "template_library.invitation_accepted").length, 1);
   assert.deepEqual(events[0].target, {
     type: "account",
     id: recipient.id,
@@ -242,13 +197,7 @@ test("old invite cannot restore revoked access and a new invite creates a new ep
     200,
   );
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/template-libraries/${libraryId}/members/${recipient.id}/revoke`,
-        {},
-      )
-    ).statusCode,
+    (await call("POST", `/api/template-libraries/${libraryId}/members/${recipient.id}/revoke`, {})).statusCode,
     200,
   );
   assert.equal(
@@ -278,24 +227,17 @@ test("old invite cannot restore revoked access and a new invite creates a new ep
   // the active row, not whichever row sorts first.
   for (const path of ["publications", "members", "events", "invitations"])
     assert.equal(
-      (
-        await call(
-          "GET",
-          `/api/template-libraries/${libraryId}/${path}`,
-          undefined,
-          recipientCookie,
-        )
-      ).statusCode,
+      (await call("GET", `/api/template-libraries/${libraryId}/${path}`, undefined, recipientCookie)).statusCode,
       200,
       path,
     );
   assert.equal(
     Number(
       (
-        await db.query(
-          "SELECT count(*) FROM template_library_members WHERE library_id=$1 AND account_id=$2",
-          [libraryId, recipient.id],
-        )
+        await db.query("SELECT count(*) FROM template_library_members WHERE library_id=$1 AND account_id=$2", [
+          libraryId,
+          recipient.id,
+        ])
       ).rows[0].count,
     ),
     2,
@@ -368,15 +310,11 @@ test("acceptance rejects expiry, another library, and an issuer who lost admin r
 test("account anonymization clears pending and accepted invitation identity", async () => {
   const pendingLibrary = await library("Purge pending");
   const pending = await invite(pendingLibrary, otherEmail);
-  await db.query(
-    "UPDATE accounts SET email=NULL,email_verified_at=NULL WHERE id=$1",
-    [other.id],
-  );
+  await db.query("UPDATE accounts SET email=NULL,email_verified_at=NULL WHERE id=$1", [other.id]);
   const pendingRow = (
-    await db.query(
-      "SELECT state,email,token_hash,accepted_by FROM template_library_invitations WHERE id=$1",
-      [pending.id],
-    )
+    await db.query("SELECT state,email,token_hash,accepted_by FROM template_library_invitations WHERE id=$1", [
+      pending.id,
+    ])
   ).rows[0];
   assert.deepEqual(pendingRow, {
     state: "redacted",
@@ -393,10 +331,10 @@ test("account anonymization clears pending and accepted invitation identity", as
     { token: accepted.token },
     recipientCookie,
   );
-  await db.query(
-    "DELETE FROM template_library_members WHERE library_id=$1 AND account_id=$2",
-    [acceptedLibrary, recipient.id],
-  );
+  await db.query("DELETE FROM template_library_members WHERE library_id=$1 AND account_id=$2", [
+    acceptedLibrary,
+    recipient.id,
+  ]);
   const acceptedRow = (
     await db.query(
       `SELECT state,email,token_hash,accepted_by,accepted_membership_joined_at

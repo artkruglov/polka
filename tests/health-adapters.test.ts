@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  createDatabaseHealthAdapter,
-  createStorageHealthAdapter,
-} from "../apps/server/health-adapters.ts";
-import {
-  READINESS_BYTES,
-  READINESS_KEY,
-} from "../packages/storage/readiness.ts";
+import { createDatabaseHealthAdapter, createStorageHealthAdapter } from "../apps/server/health-adapters.ts";
+import { READINESS_BYTES, READINESS_KEY } from "../packages/storage/readiness.ts";
 
 const databaseConfig = {
   databaseUrl: "postgres://health:test@127.0.0.1/polka",
@@ -20,8 +14,7 @@ const storageConfig = {
   secretKey: "health-secret",
   bucket: "polka",
 };
-const commandName = (command: unknown) =>
-  (command as { constructor: { name: string } }).constructor.name;
+const commandName = (command: unknown) => (command as { constructor: { name: string } }).constructor.name;
 
 test("database adapter uses a bounded dedicated pool and exact migration set", async () => {
   let options: Record<string, unknown> | undefined;
@@ -129,8 +122,7 @@ test("storage adapter requires versioning and reads the exact known canary versi
       return {
         async send(command) {
           const input = (command as { input: { Key?: string; VersionId?: string } }).input;
-          if (commandName(command) === "GetBucketVersioningCommand")
-            return { Status: "Enabled" };
+          if (commandName(command) === "GetBucketVersioningCommand") return { Status: "Enabled" };
           seen.push({ key: input.Key, version: input.VersionId });
           return {
             VersionId: input.VersionId ?? "version-1",
@@ -172,8 +164,7 @@ test("storage adapter rejects disabled versioning, wrong bytes, missing version,
     const adapter = createStorageHealthAdapter(storageConfig, {
       createClient: () => ({
         async send(command) {
-          if (commandName(command) === "GetBucketVersioningCommand")
-            return { Status: current.versioning };
+          if (commandName(command) === "GetBucketVersioningCommand") return { Status: current.versioning };
           return {
             VersionId: current.version,
             Body: objectStream(current.body, () => {
@@ -196,8 +187,7 @@ test("storage adapter disposes bodies when versions are invalid or do not match"
     const adapter = createStorageHealthAdapter(storageConfig, {
       createClient: () => ({
         async send(command) {
-          if (commandName(command) === "GetBucketVersioningCommand")
-            return { Status: "Enabled" };
+          if (commandName(command) === "GetBucketVersioningCommand") return { Status: "Enabled" };
           const input = (command as { input: { VersionId?: string } }).input;
           return {
             VersionId: mode === "missing" ? null : input.VersionId ? "other" : "version-1",
@@ -220,8 +210,7 @@ test("storage adapter aborts and destroys an overlong canary stream", async () =
   const adapter = createStorageHealthAdapter(storageConfig, {
     createClient: () => ({
       async send(command) {
-        if (commandName(command) === "GetBucketVersioningCommand")
-          return { Status: "Enabled" };
+        if (commandName(command) === "GetBucketVersioningCommand") return { Status: "Enabled" };
         return {
           VersionId: "version-1",
           Body: {
@@ -254,8 +243,7 @@ test("storage adapter disposes a body returned after an already-aborted request"
   const adapter = createStorageHealthAdapter(storageConfig, {
     createClient: () => ({
       async send(command) {
-        if (commandName(command) === "GetBucketVersioningCommand")
-          return { Status: "Enabled" };
+        if (commandName(command) === "GetBucketVersioningCommand") return { Status: "Enabled" };
         controller.abort();
         return {
           VersionId: "version-1",

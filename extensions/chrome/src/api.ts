@@ -32,8 +32,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export async function publish(origin: string, body: PublishBody): Promise<Published> {
   let token = await accessToken(origin);
-  if (!token)
-    throw new PublishError("not_connected", "Расширение не подключено к Полке.");
+  if (!token) throw new PublishError("not_connected", "Расширение не подключено к Полке.");
   let refreshed = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await wait(attempt * 2000);
@@ -80,7 +79,7 @@ export async function publish(origin: string, body: PublishBody): Promise<Publis
 export function noteFor(published: Published): string | null {
   return (
     published.moderationMessage ??
-    (published.url ? null : published.linkUnavailableReason ?? "Работа сохранена приватно, без ссылки.") ??
+    (published.url ? null : (published.linkUnavailableReason ?? "Работа сохранена приватно, без ссылки.")) ??
     published.expiresNote ??
     published.interactiveUnavailableReason ??
     null

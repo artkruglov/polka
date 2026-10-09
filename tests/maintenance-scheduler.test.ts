@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import {
-  runMaintenanceScheduler,
-  type MaintenanceChild,
-} from "../scripts/maintenance-scheduler.ts";
+import { runMaintenanceScheduler, type MaintenanceChild } from "../scripts/maintenance-scheduler.ts";
 
 function pendingChild() {
   let resolve!: (value: { code: number | null }) => void;
@@ -66,10 +63,7 @@ test("deadline sends TERM then KILL and cannot restart until actual exit", async
   controller.abort();
   first.finish(1);
   await run;
-  assert.deepEqual(events, [
-    { event: "started" },
-    { event: "failed", reason: "deadline" },
-  ]);
+  assert.deepEqual(events, [{ event: "started" }, { event: "failed", reason: "deadline" }]);
 });
 
 test("stop cancels waiting; pre-aborted scheduler never spawns", async () => {

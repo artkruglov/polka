@@ -14,10 +14,7 @@ import { config } from "./config.ts";
 import { transaction } from "./db.ts";
 import { missing } from "./errors.ts";
 import { readBlob, sha256 } from "./storage.ts";
-import {
-  authorizeTemplateRevision,
-  type TemplateLibraryRevisionRequest,
-} from "./template-library-access.ts";
+import { authorizeTemplateRevision, type TemplateLibraryRevisionRequest } from "./template-library-access.ts";
 import { isLiveRevisionEligible } from "./viewer-config.ts";
 
 const LIVE_HTML_PROFILE = "inline-live-experimental-v1";
@@ -47,14 +44,8 @@ export async function prepareLibraryLiveView(
   request: TemplateLibraryRevisionRequest,
   dependencies: { build?: typeof buildInlineRevisionFromSource } = {},
 ) {
-  if (
-    !config.HTML_LIVE_ENABLED ||
-    !isLiveRevisionEligible(config, request.revisionId)
-  )
-    throw missing();
-  const initial = await transaction((c) =>
-    authorizeTemplateRevision(c, actor, request),
-  );
+  if (!config.HTML_LIVE_ENABLED || !isLiveRevisionEligible(config, request.revisionId)) throw missing();
+  const initial = await transaction((c) => authorizeTemplateRevision(c, actor, request));
   const authorizeBuild = async (c: PoolClient) => {
     const authorized = await authorizeTemplateRevision(c, actor, request, {
       sourceMutation: true,
@@ -100,11 +91,7 @@ export async function issueLibraryLiveView(
   sessionToken: string,
   request: TemplateLibraryRevisionRequest,
 ): Promise<LibraryLiveViewResult> {
-  if (
-    !config.HTML_LIVE_ENABLED ||
-    !isLiveRevisionEligible(config, request.revisionId)
-  )
-    throw missing();
+  if (!config.HTML_LIVE_ENABLED || !isLiveRevisionEligible(config, request.revisionId)) throw missing();
   const token = randomBytes(32).toString("base64url");
   const sessionHash = sha256(sessionToken);
   return transaction(async (c) => {
@@ -142,11 +129,7 @@ export async function issueLibraryLiveView(
          FOR SHARE`,
         [request.revisionId, revision.manifest_sha256],
       );
-      if (
-        !candidate ||
-        candidate.state !== "ready" ||
-        !isServedRuntimeProfile(candidate.runtime_profile)
-      ) {
+      if (!candidate || candidate.state !== "ready" || !isServedRuntimeProfile(candidate.runtime_profile)) {
         return {
           status: "preparation_required",
           revisionId: request.revisionId,
@@ -227,15 +210,13 @@ export async function readLibraryLiveDocument(token: string) {
     // This first read only discovers the lock set. Authorization is repeated
     // below before the grant or any stored bytes are trusted.
     const candidate = await candidateForToken(c, token);
-    if (!candidate || !isLiveRevisionEligible(config, candidate.revisionId))
-      throw missing();
+    if (!candidate || !isLiveRevisionEligible(config, candidate.revisionId)) throw missing();
     const actor: Actor = {
       id: candidate.accountId,
       tenant: candidate.tenantId,
     };
     const authorized = await authorizeTemplateRevision(c, actor, candidate);
-    if (authorized.membershipJoinedAt !== candidate.membershipJoinedAt)
-      throw missing();
+    if (authorized.membershipJoinedAt !== candidate.membershipJoinedAt) throw missing();
 
     const session = await c.query(
       `SELECT 1 FROM sessions

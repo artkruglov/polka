@@ -11,11 +11,7 @@ import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
-import {
-  mergeAccounts,
-  MergeRefusal,
-  WEB_MERGE_MAX_OBJECTS,
-} from "../apps/server/account-merge.ts";
+import { mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "../apps/server/account-merge.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
@@ -25,8 +21,7 @@ import { runAccountMerge } from "../scripts/account-merge.ts";
 const app = await createApp();
 const origin = config.APP_ORIGIN;
 const password = randomBytes(24).toString("hex");
-const address = () =>
-  `2001:db8:4e::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:4e::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; name: string };
 
@@ -37,15 +32,8 @@ after(async () => {
 });
 
 async function owner(prefix: string, email?: string): Promise<Owner> {
-  const created = await createAccount(
-    `${prefix}-${randomBytes(4).toString("hex")}`,
-    password,
-  );
-  if (email)
-    await db.query(
-      "UPDATE accounts SET email=$2,email_verified_at=now() WHERE id=$1",
-      [created.id, email],
-    );
+  const created = await createAccount(`${prefix}-${randomBytes(4).toString("hex")}`, password);
+  if (email) await db.query("UPDATE accounts SET email=$2,email_verified_at=now() WHERE id=$1", [created.id, email]);
   return created;
 }
 
@@ -54,14 +42,7 @@ async function staticToken(who: Owner) {
   await db.query(
     `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at)
      VALUES($1,$2,$3,$4,'script',$5,$6,now()+interval '1 day')`,
-    [
-      randomUUID(),
-      who.tenant,
-      who.id,
-      sha256(secret),
-      ["context", "capture", "revise", "share"],
-      MCP_AUDIENCE,
-    ],
+    [randomUUID(), who.tenant, who.id, sha256(secret), ["context", "capture", "revise", "share"], MCP_AUDIENCE],
   );
   return secret;
 }
@@ -82,15 +63,7 @@ async function connector(who: Owner) {
     `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,
        expires_at,oauth_client_id,access_expires_at)
      VALUES($1,$2,$3,$4,'Claude',$5,$6,now()+interval '30 days',$7,now()+interval '1 hour')`,
-    [
-      connection,
-      who.tenant,
-      who.id,
-      sha256(access),
-      ["context", "capture", "share"],
-      MCP_AUDIENCE,
-      clientId,
-    ],
+    [connection, who.tenant, who.id, sha256(access), ["context", "capture", "share"], MCP_AUDIENCE, clientId],
   );
   await db.query(
     `INSERT INTO oauth_refresh_tokens(id,connection_id,tenant_id,account_id,client_id,token_hash,expires_at)
@@ -153,28 +126,21 @@ async function fixture() {
   const into = await owner("artem", `artem.${suffix}@gmail.com`);
   const from = await owner("yandex", `artem.${suffix}@yandex.ru`);
   // Both have a folder «Отчёты»; the source also has «Черновики».
-  const [intoReports, fromReports, fromDrafts] = [
-    randomUUID(),
-    randomUUID(),
-    randomUUID(),
-  ];
-  await db.query(
-    "INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,'Отчёты'),($3,$4,'Отчёты'),($5,$4,'Черновики')",
-    [intoReports, into.tenant, fromReports, from.tenant, fromDrafts],
-  );
+  const [intoReports, fromReports, fromDrafts] = [randomUUID(), randomUUID(), randomUUID()];
+  await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,'Отчёты'),($3,$4,'Отчёты'),($5,$4,'Черновики')", [
+    intoReports,
+    into.tenant,
+    fromReports,
+    from.tenant,
+    fromDrafts,
+  ]);
   const intoToken = await staticToken(into);
   await publish(intoToken, "Уже на полке");
   const fromToken = await staticToken(from);
   const first = await publish(fromToken, "Отчёт за квартал");
   const second = await publish(fromToken, "Черновик письма");
-  await db.query("UPDATE artifacts SET folder_id=$2 WHERE id=$1", [
-    first.artifactId,
-    fromReports,
-  ]);
-  await db.query("UPDATE artifacts SET folder_id=$2 WHERE id=$1", [
-    second.artifactId,
-    fromDrafts,
-  ]);
+  await db.query("UPDATE artifacts SET folder_id=$2 WHERE id=$1", [first.artifactId, fromReports]);
+  await db.query("UPDATE artifacts SET folder_id=$2 WHERE id=$1", [second.artifactId, fromDrafts]);
   // A second version of the first work.
   const edited = await app.inject({
     method: "POST",
@@ -194,34 +160,16 @@ async function fixture() {
   // The owner's note on the first link.
   const {
     rows: [share],
-  } = await db.query(
-    "SELECT id,revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked",
-    [first.artifactId],
-  );
+  } = await db.query("SELECT id,revision_id FROM shares WHERE artifact_id=$1 AND NOT revoked", [first.artifactId]);
   await db.query(
     `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,body)
      VALUES($1,$2,$3,$4,$5,$6,'Проверить цифры')`,
-    [
-      randomUUID(),
-      from.tenant,
-      first.artifactId,
-      share.id,
-      share.revision_id,
-      from.id,
-    ],
+    [randomUUID(), from.tenant, first.artifactId, share.id, share.revision_id, from.id],
   );
   await db.query(
     `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,emoji)
      VALUES($1,$2,$3,$4,$5,$6,'',$7)`,
-    [
-      randomUUID(),
-      from.tenant,
-      first.artifactId,
-      share.id,
-      share.revision_id,
-      from.id,
-      "\u{1F44D}",
-    ],
+    [randomUUID(), from.tenant, first.artifactId, share.id, share.revision_id, from.id, "\u{1F44D}"],
   );
   const oauth = await connector(from);
   await db.query(
@@ -230,19 +178,16 @@ async function fixture() {
     [randomUUID(), from.id, `ya-${suffix}`, `artem.${suffix}@yandex.ru`],
   );
   const library = randomUUID();
-  await db.query(
-    "INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Шаблоны отдела',$2)",
-    [library, from.id],
-  );
+  await db.query("INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Шаблоны отдела',$2)", [
+    library,
+    from.id,
+  ]);
   await db.query(
     "INSERT INTO template_library_members(library_id,account_id,role,state) VALUES($1,$2,'admin','active')",
     [library, from.id],
   );
   const session = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')",
-    [sha256(session), from.id],
-  );
+  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '1 day')", [sha256(session), from.id]);
   await flushAnalytics();
   return {
     into,
@@ -273,8 +218,7 @@ test("runs as the expected database role", async () => {
 });
 
 const tenantOf = async (artifactId: string) =>
-  (await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [artifactId]))
-    .rows[0].tenant_id as string;
+  (await db.query("SELECT tenant_id FROM artifacts WHERE id=$1", [artifactId])).rows[0].tenant_id as string;
 
 test("a dry run prints what would move and changes nothing", async () => {
   const f = await fixture();
@@ -307,16 +251,7 @@ test("a dry run prints what would move and changes nothing", async () => {
   const log = console.log;
   console.log = (line: string) => printed.push(line);
   try {
-    assert.equal(
-      await runAccountMerge([
-        "--from",
-        f.from.id,
-        "--into",
-        f.intoEmail,
-        "--dry-run",
-      ]),
-      0,
-    );
+    assert.equal(await runAccountMerge(["--from", f.from.id, "--into", f.intoEmail, "--dry-run"]), 0);
   } finally {
     console.log = log;
   }
@@ -327,18 +262,11 @@ test("a dry run prints what would move and changes nothing", async () => {
 
 test("a merge moves everything; old links open, tokens keep working, the source is closed", async () => {
   const f = await fixture();
-  const before = (
-    await db.query(
-      "SELECT object_key,object_version FROM revisions WHERE tenant_id=$1",
-      [f.from.tenant],
-    )
-  ).rows;
+  const before = (await db.query("SELECT object_key,object_version FROM revisions WHERE tenant_id=$1", [f.from.tenant]))
+    .rows;
   const sourceKey = actorKey(f.from.id);
   // Without evidence that one person owns both, nothing happens (В5).
-  await assert.rejects(
-    mergeAccounts({ from: f.from.name, into: f.into.id, actor: "operator-script" }),
-    /--proof/,
-  );
+  await assert.rejects(mergeAccounts({ from: f.from.name, into: f.into.id, actor: "operator-script" }), /--proof/);
   assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
   const report = await mergeAccounts({
     from: f.from.name,
@@ -355,15 +283,11 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   assert.equal(await tenantOf(f.second.artifactId), f.into.tenant);
   const {
     rows: [first],
-  } = await db.query("SELECT folder_id,created_by FROM artifacts WHERE id=$1", [
-    f.first.artifactId,
-  ]);
+  } = await db.query("SELECT folder_id,created_by FROM artifacts WHERE id=$1", [f.first.artifactId]);
   assert.equal(first.folder_id, f.intoReports, "same-name folder joined");
   assert.equal(first.created_by, f.into.id);
   const folders = (
-    await db.query("SELECT name FROM folders WHERE tenant_id=$1 ORDER BY name", [
-      f.into.tenant,
-    ])
+    await db.query("SELECT name FROM folders WHERE tenant_id=$1 ORDER BY name", [f.into.tenant])
   ).rows.map((row) => row.name);
   assert.deepEqual(folders, ["Отчёты", "Черновики"]);
   const moved = (
@@ -373,8 +297,7 @@ test("a merge moves everything; old links open, tokens keep working, the source 
     )
   ).rows;
   assert.equal(moved.length, 3);
-  for (const row of moved)
-    assert.ok(row.object_key.startsWith(`${f.into.tenant}/`), row.object_key);
+  for (const row of moved) assert.ok(row.object_key.startsWith(`${f.into.tenant}/`), row.object_key);
   // The originals under the source's prefix are gone.
   for (const row of before)
     await assert.rejects(
@@ -396,10 +319,7 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   // The owner's note moved with its link.
   const {
     rows: [note],
-  } = await db.query(
-    "SELECT tenant_id,author_account_id FROM comments WHERE artifact_id=$1",
-    [f.first.artifactId],
-  );
+  } = await db.query("SELECT tenant_id,author_account_id FROM comments WHERE artifact_id=$1", [f.first.artifactId]);
   assert.equal(note.tenant_id, f.into.tenant);
   assert.equal(note.author_account_id, f.into.id);
   // So did the reaction, although the runtime role never updates reactions.
@@ -407,9 +327,7 @@ test("a merge moves everything; old links open, tokens keep working, the source 
     "SELECT tenant_id,author_account_id FROM comment_reactions WHERE artifact_id=$1",
     [f.first.artifactId],
   );
-  assert.deepEqual(reactions, [
-    { tenant_id: f.into.tenant, author_account_id: f.into.id },
-  ]);
+  assert.deepEqual(reactions, [{ tenant_id: f.into.tenant, author_account_id: f.into.id }]);
 
   // The source's agent token now saves to the target's shelf.
   const saved = await publish(f.fromToken, "После объединения");
@@ -427,49 +345,30 @@ test("a merge moves everything; old links open, tokens keep working, the source 
     }).toString(),
   });
   assert.equal(refreshed.statusCode, 200, refreshed.body);
-  const viaConnector = await publish(
-    refreshed.json().access_token,
-    "Из Claude после объединения",
-  );
+  const viaConnector = await publish(refreshed.json().access_token, "Из Claude после объединения");
   assert.equal(await tenantOf(viaConnector.artifactId), f.into.tenant);
 
   // Identity, library, source closed.
   const {
     rows: [identity],
-  } = await db.query(
-    "SELECT account_id FROM account_identities WHERE provider='yandex' AND subject=$1",
-    [f.subject],
-  );
+  } = await db.query("SELECT account_id FROM account_identities WHERE provider='yandex' AND subject=$1", [f.subject]);
   assert.equal(identity.account_id, f.into.id);
   const members = (
-    await db.query(
-      "SELECT account_id,role,state FROM template_library_members WHERE library_id=$1",
-      [f.library],
-    )
+    await db.query("SELECT account_id,role,state FROM template_library_members WHERE library_id=$1", [f.library])
   ).rows;
-  assert.deepEqual(
-    Object.fromEntries(
-      members.map((row) => [row.account_id, `${row.role}:${row.state}`]),
-    ),
-    { [f.from.id]: "admin:revoked", [f.into.id]: "admin:active" },
-  );
+  assert.deepEqual(Object.fromEntries(members.map((row) => [row.account_id, `${row.role}:${row.state}`])), {
+    [f.from.id]: "admin:revoked",
+    [f.into.id]: "admin:active",
+  });
   const {
     rows: [source],
-  } = await db.query(
-    "SELECT disabled,deletion_requested_at,email,display_name FROM accounts WHERE id=$1",
-    [f.from.id],
-  );
+  } = await db.query("SELECT disabled,deletion_requested_at,email,display_name FROM accounts WHERE id=$1", [f.from.id]);
   assert.equal(source.disabled, true);
   // The emptied source is deleted, not only disabled: no address or name left.
   assert.ok(source.deletion_requested_at);
   assert.equal(source.email, null);
   assert.equal(source.display_name, null);
-  assert.equal(
-    (
-      await db.query("SELECT 1 FROM sessions WHERE account_id=$1", [f.from.id])
-    ).rowCount,
-    0,
-  );
+  assert.equal((await db.query("SELECT 1 FROM sessions WHERE account_id=$1", [f.from.id])).rowCount, 0);
   const me = await app.inject({
     method: "GET",
     url: "/api/me",
@@ -497,19 +396,9 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   assert.equal(event.details.intoAccountId, f.into.id);
   assert.equal(event.reason, "одна полка");
   await flushAnalytics();
-  assert.equal(
-    (
-      await db.query("SELECT 1 FROM analytics_events WHERE actor=$1", [
-        sourceKey,
-      ])
-    ).rowCount,
-    0,
-  );
+  assert.equal((await db.query("SELECT 1 FROM analytics_events WHERE actor=$1", [sourceKey])).rowCount, 0);
   const targetEvents = (
-    await db.query(
-      "SELECT name FROM analytics_events WHERE actor=$1",
-      [actorKey(f.into.id)],
-    )
+    await db.query("SELECT name FROM analytics_events WHERE actor=$1", [actorKey(f.into.id)])
   ).rows.map((row) => row.name);
   assert.equal(
     targetEvents.filter((name) => name === "signup_completed").length,
@@ -536,9 +425,7 @@ test("refuses a disabled side, the same account and blocked content", async () =
   );
   assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
   const other = await fixture();
-  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [
-    other.into.id,
-  ]);
+  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [other.into.id]);
   await assert.rejects(
     mergeAccounts({
       from: other.from.id,
@@ -552,10 +439,7 @@ test("refuses a disabled side, the same account and blocked content", async () =
   const error = console.error;
   console.error = (line: string) => refused.push(line);
   try {
-    assert.equal(
-      await runAccountMerge(["--from", other.from.id, "--into", other.into.id, "--proof", "t"]),
-      1,
-    );
+    assert.equal(await runAccountMerge(["--from", other.from.id, "--into", other.into.id, "--proof", "t"]), 1);
   } finally {
     console.error = error;
   }
@@ -585,9 +469,7 @@ test("the web path refuses a shelf with more objects than the cap, before copyin
 // (deploy/migrations grants); a temporary table there fails the whole merge.
 test("server code creates no temporary tables", async () => {
   const dir = new URL("../apps/server/", import.meta.url);
-  const files = (await readdir(dir, { recursive: true })).filter((file) =>
-    file.endsWith(".ts"),
-  );
+  const files = (await readdir(dir, { recursive: true })).filter((file) => file.endsWith(".ts"));
   for (const file of files) {
     const source = await readFile(new URL(file, dir), "utf8");
     assert.doesNotMatch(source, /CREATE\s+TEMP(ORARY)?\s+TABLE/i, file);

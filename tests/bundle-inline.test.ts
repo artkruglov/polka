@@ -11,9 +11,7 @@ const sourcePaths = ["index.html", "assets/report.css", "assets/report.js", "ass
 const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex");
 
 function fixture(html?: string) {
-  const bytes = new Map<string, Buffer>(
-    sourcePaths.map((file) => [file, readFileSync(new URL(file, root))]),
-  );
+  const bytes = new Map<string, Buffer>(sourcePaths.map((file) => [file, readFileSync(new URL(file, root))]));
   if (html !== undefined) bytes.set("index.html", Buffer.from(html));
   const manifest = canonicalizeManifest({
     version: 1,
@@ -23,14 +21,13 @@ function fixture(html?: string) {
       const value = bytes.get(path)!;
       return {
         path,
-        mime:
-          path.endsWith(".html")
-            ? "text/html"
-            : path.endsWith(".css")
-              ? "text/css"
-              : path.endsWith(".js")
-                ? "text/javascript"
-                : "image/svg+xml",
+        mime: path.endsWith(".html")
+          ? "text/html"
+          : path.endsWith(".css")
+            ? "text/css"
+            : path.endsWith(".js")
+              ? "text/javascript"
+              : "image/svg+xml",
         size: value.length,
         sha256: digest(value),
       };
@@ -116,11 +113,16 @@ test("rejects malformed XML inside SVG and stylesheet attributes that would be d
   const malformedManifest = canonicalizeManifest({
     ...malformed.manifest,
     files: malformed.manifest.files.map((file) =>
-      file.path === svg.path ? { ...file, size: malformed.bytes.get(svg.path)!.length, sha256: digest(malformed.bytes.get(svg.path)!) } : file,
+      file.path === svg.path
+        ? { ...file, size: malformed.bytes.get(svg.path)!.length, sha256: digest(malformed.bytes.get(svg.path)!) }
+        : file,
     ),
   });
   assert.equal(buildInlineBundle(malformedManifest, malformed.bytes).ok, false);
-  assert.equal(resultForHtml('<!doctype html><link rel="stylesheet" type="text/plain" id="theme" href="assets/report.css">').ok, false);
+  assert.equal(
+    resultForHtml('<!doctype html><link rel="stylesheet" type="text/plain" id="theme" href="assets/report.css">').ok,
+    false,
+  );
 });
 
 test("rejects unsupported HTML resource constructs explicitly", () => {
@@ -158,28 +160,45 @@ test("bounds deeply nested HTML and SVG before recursive processing", () => {
   });
 });
 
-test('CSS local images are embedded in stylesheets and style attributes', () => {
- for(const html of ['<style>body{background:url("assets/mark.svg")}</style><h1>Hello</h1>','<h1 style="background:url(assets/mark.svg);color:red">Hello</h1>']) {
-  const {manifest,bytes}=fixture(html);const result=buildInlineBundle(manifest,bytes);
-  assert.equal(result.ok,true);if(!result.ok)return;
-  assert.match(result.html.toString(),/data:image\/svg\+xml;base64,/);
-  assert.ok(result.consumedPaths.includes('assets/mark.svg'));
- }
+test("CSS local images are embedded in stylesheets and style attributes", () => {
+  for (const html of [
+    '<style>body{background:url("assets/mark.svg")}</style><h1>Hello</h1>',
+    '<h1 style="background:url(assets/mark.svg);color:red">Hello</h1>',
+  ]) {
+    const { manifest, bytes } = fixture(html);
+    const result = buildInlineBundle(manifest, bytes);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.match(result.html.toString(), /data:image\/svg\+xml;base64,/);
+    assert.ok(result.consumedPaths.includes("assets/mark.svg"));
+  }
 });
-test('CSS external, escaped, missing and active-image references fail closed',()=>{
- for(const reference of ['data:image/svg+xml,evil','../outside.png','missing.png','assets/report.js','assets/mark.svg#fragment','assets/\\6dark.svg']){
-  const {manifest,bytes}=fixture(`<style>body{background:url("${reference}")}</style>`);
-  assert.equal(buildInlineBundle(manifest,bytes).ok,false,reference);
- }
- const {manifest,bytes}=fixture('<style>body{background:url(assets/mark.svg)}</style>');
- const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');bytes.set('assets/mark.svg',svg);
- const updated=canonicalizeManifest({...manifest,files:manifest.files.map(f=>f.path==='assets/mark.svg'?{...f,size:svg.length,sha256:digest(svg)}:f)});
- assert.equal(buildInlineBundle(updated,bytes).ok,false);
+test("CSS external, escaped, missing and active-image references fail closed", () => {
+  for (const reference of [
+    "data:image/svg+xml,evil",
+    "../outside.png",
+    "missing.png",
+    "assets/report.js",
+    "assets/mark.svg#fragment",
+    "assets/\\6dark.svg",
+  ]) {
+    const { manifest, bytes } = fixture(`<style>body{background:url("${reference}")}</style>`);
+    assert.equal(buildInlineBundle(manifest, bytes).ok, false, reference);
+  }
+  const { manifest, bytes } = fixture("<style>body{background:url(assets/mark.svg)}</style>");
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+  bytes.set("assets/mark.svg", svg);
+  const updated = canonicalizeManifest({
+    ...manifest,
+    files: manifest.files.map((f) =>
+      f.path === "assets/mark.svg" ? { ...f, size: svg.length, sha256: digest(svg) } : f,
+    ),
+  });
+  assert.equal(buildInlineBundle(updated, bytes).ok, false);
 });
 
 // bundle-inline-v4: markup a chat artifact commonly carries.
-const PNG =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const GIF = Buffer.from("GIF89a\x01\x00\x01\x00\x00\x00\x00;", "latin1").toString("base64");
 const WOFF2 = Buffer.from("wOF2\x00\x01\x00\x00", "latin1").toString("base64");
 const WOFF = Buffer.from("wOFF\x00\x01\x00\x00", "latin1").toString("base64");
@@ -203,9 +222,9 @@ test("v4 keeps validated data: images and fonts as they are", () => {
 });
 
 test("v4 refuses data: URIs of other types, mislabelled bytes and active SVG", () => {
-  const activeSvg = Buffer.from(
-    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
-  ).toString("base64");
+  const activeSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString(
+    "base64",
+  );
   for (const html of [
     `<!doctype html><img src="data:image/png;base64,${Buffer.from("not a png").toString("base64")}">`,
     `<!doctype html><img src="data:image/svg+xml;base64,${activeSvg}">`,
@@ -214,7 +233,7 @@ test("v4 refuses data: URIs of other types, mislabelled bytes and active SVG", (
     `<!doctype html><img src="data:image/png;base64,${PNG.slice(0, -2)}">`,
     `<!doctype html><img src="data:image/png;charset=utf-8;base64,${PNG}">`,
     `<!doctype html><img src="data:font/woff2;base64,${WOFF2}">`,
-    '<!doctype html><style>div{background:url(data:text/html;base64,PGI+)}</style>',
+    "<!doctype html><style>div{background:url(data:text/html;base64,PGI+)}</style>",
     `<!doctype html><style>div{background:url(data:application/javascript;base64,${PNG})}</style>`,
   ])
     assert.equal(resultForHtml(html).ok, false, html);
@@ -252,7 +271,7 @@ test("v4 accepts CSS escapes in strings and identifiers, not in functions or at-
     '<!doctype html><style>q::before{content:"\\201C"}</style>',
     "<!doctype html><style>.md\\:flex{display:flex}</style>",
     "<!doctype html><style>/* \\x */ a{color:red}</style>",
-    '<!doctype html><p style="font-family:\'A\\42 C\'">x</p>',
+    "<!doctype html><p style=\"font-family:'A\\42 C'\">x</p>",
   ]) {
     const result = resultForHtml(html);
     assert.equal(result.ok, true, `${html}: ${JSON.stringify(result)}`);
@@ -271,10 +290,7 @@ test("v4 accepts CSS escapes in strings and identifiers, not in functions or at-
 });
 
 test("v4 accepts inline classic scripts with async or defer, not modules or JSX", () => {
-  for (const html of [
-    "<!doctype html><script async>1</script>",
-    "<!doctype html><script defer>1</script>",
-  ])
+  for (const html of ["<!doctype html><script async>1</script>", "<!doctype html><script defer>1</script>"])
     assert.equal(resultForHtml(html).ok, true, html);
   for (const html of [
     '<!doctype html><script async src="assets/report.js"></script>',
@@ -289,7 +305,7 @@ test("v4 accepts inline classic scripts with async or defer, not modules or JSX"
 // load is left out with a warning instead of refusing the page.
 test("v6 drops link hints, remote stylesheets, fonts and images with warnings", () => {
   const result = resultForHtml(
-    '<!doctype html><html><head>' +
+    "<!doctype html><html><head>" +
       '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="icon" href="favicon.ico">' +
       '<link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" crossorigin>' +
       '<link rel="stylesheet" href="https://cdn.example.org/lib.css" integrity="sha384-x">' +
@@ -390,7 +406,7 @@ test("v6 gives plain-script pages the environment prelude before their first scr
     assert.equal(result.ok, true, JSON.stringify(result));
     if (!result.ok) continue;
     const page = result.html.toString();
-    const prelude = page.indexOf('Object.defineProperty(window,name,{value:memory()');
+    const prelude = page.indexOf("Object.defineProperty(window,name,{value:memory()");
     assert.ok(prelude > 0, page.slice(0, 300));
     assert.ok(prelude > page.indexOf("<title>"), "after meta and title");
     const firstScript = page.indexOf('localStorage.setItem("a"');

@@ -1,7 +1,4 @@
-import {
-  MAX_BYTES,
-  looksLikeHtml,
-} from "../../../../../packages/contracts/constants.ts";
+import { MAX_BYTES, looksLikeHtml } from "../../../../../packages/contracts/constants.ts";
 import { clipTitle, htmlTitle } from "../../entities/artifact/html-title.ts";
 
 /**
@@ -47,8 +44,7 @@ const COMPONENT_SOURCE =
 export function describePaste(source: string): PastedCode | null {
   if (!source.trim()) return null;
   const size = new TextEncoder().encode(source).length;
-  const component =
-    COMPONENT_SOURCE.test(source) && !/^\s*<(?:!doctype|html)\b/i.test(source);
+  const component = COMPONENT_SOURCE.test(source) && !/^\s*<(?:!doctype|html)\b/i.test(source);
   const kind = component ? "component" : looksLikeHtml(source) ? "html" : "text";
   return {
     kind,

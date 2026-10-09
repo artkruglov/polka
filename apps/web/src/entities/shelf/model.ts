@@ -1,11 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import {
-  client,
-  currentShelf,
-  rememberShelf,
-  type Shelf,
-  type ShelfRole,
-} from "../../shared/api/client.ts";
+import { client, currentShelf, rememberShelf, type Shelf, type ShelfRole } from "../../shared/api/client.ts";
 
 // Shelves the account may open (docs/specs/TEAM_SHELVES.md): its own and
 // the department shelves it belongs to. One request per page load.
@@ -39,7 +33,7 @@ const rank: Record<ShelfRole, number> = { reader: 1, author: 2, curator: 3, admi
 export const atLeast = (role: ShelfRole, min: ShelfRole) => rank[role] >= rank[min];
 
 export const shelfName = (shelf: Shelf | null) =>
-  !shelf || shelf.kind === "personal" ? "Моя полка" : shelf.name ?? "Полка отдела";
+  !shelf || shelf.kind === "personal" ? "Моя полка" : (shelf.name ?? "Полка отдела");
 
 // The department shelf this tab shows, once known: what the account may do
 // there. Null on one's own shelf (and until the shelves load).

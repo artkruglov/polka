@@ -56,15 +56,10 @@ export const updateArtifactMetadataFields = {
 export const updateArtifactMetadataSchema = z
   .object(updateArtifactMetadataFields)
   .strict()
-  .refine(
-    (value) => value.title !== undefined || value.folderId !== undefined,
-    {
-      message: "At least one metadata field must be changed",
-    },
-  );
-export type UpdateArtifactMetadata = z.infer<
-  typeof updateArtifactMetadataSchema
->;
+  .refine((value) => value.title !== undefined || value.folderId !== undefined, {
+    message: "At least one metadata field must be changed",
+  });
+export type UpdateArtifactMetadata = z.infer<typeof updateArtifactMetadataSchema>;
 export const issueAgentConnectionSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -133,13 +128,7 @@ export const sourceUrlSchema = z
       return false;
     try {
       const url = new URL(value);
-      return (
-        url.protocol === "https:" &&
-        !url.username &&
-        !url.password &&
-        !url.search &&
-        !url.hash
-      );
+      return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
     } catch {
       return false;
     }
@@ -159,14 +148,8 @@ export const beginUploadSchema = z
     sourceUrl: sourceUrlSchema.optional(),
   })
   .strict()
-  .refine(
-    (x) => !!x.artifactId === !!x.baseRevisionId,
-    "A revision needs its base",
-  )
-  .refine(
-    (x) => x.sourceUrl === undefined || x.mime === "text/html",
-    "Only an HTML page keeps its source address",
-  );
+  .refine((x) => !!x.artifactId === !!x.baseRevisionId, "A revision needs its base")
+  .refine((x) => x.sourceUrl === undefined || x.mime === "text/html", "Only an HTML page keeps its source address");
 export type UploadInput = z.infer<typeof beginUploadSchema>;
 /** «Сохранить как ссылку»: the web form, the MCP tool and the API take this. */
 export const saveLinkSchema = z
@@ -202,9 +185,7 @@ export const shareSchema = z
     expiresInDays: z.union([z.literal(1), z.literal(7), z.literal(30)]),
   })
   .strict();
-export const publishSchema = z
-  .object({ revisionId: uuid, expectedPublishedRevisionId: uuid })
-  .strict();
+export const publishSchema = z.object({ revisionId: uuid, expectedPublishedRevisionId: uuid }).strict();
 export const artifactLifecycleSchema = z
   .object({
     expectedLifecycleVersion: z.number().int().min(0),
@@ -313,8 +294,7 @@ export interface Receipt {
 }
 // Legacy browser-only URL classification shapes. These are NOT the durable
 // /api/imports job contract implemented in server/url-import; no receipt here.
-export type ImportStatus =
-  "not_https" | "closed" | "unsupported_host" | "ready" | "provider";
+export type ImportStatus = "not_https" | "closed" | "unsupported_host" | "ready" | "provider";
 export interface ImportProvenance {
   sourceUrl: string;
   sourceHost: string;

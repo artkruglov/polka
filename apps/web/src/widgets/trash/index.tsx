@@ -31,8 +31,7 @@ function restoreError(error: unknown, fallback = "Работу не удалос
     return error.message;
   if (error && typeof error === "object" && "status" in error) {
     const status = (error as { status?: unknown }).status;
-    if (status === 409)
-      return "Работа изменилась. Обновите список корзины и повторите.";
+    if (status === 409) return "Работа изменилась. Обновите список корзины и повторите.";
   }
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -51,9 +50,7 @@ export function TrashPanel({
   const access = shelfAccess(useTeamShelf(), useAccountState().account?.id);
   const restoring = useRef(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [restoreErrors, setRestoreErrors] = useState<Record<string, string>>(
-    {},
-  );
+  const [restoreErrors, setRestoreErrors] = useState<Record<string, string>>({});
 
   // Deleting for good asks once more, in the card itself.
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -109,14 +106,12 @@ export function TrashPanel({
           <p className="trash-panel-kicker eyebrow">Архив хранения</p>
           <h2 id="trash-panel-title">Корзина</h2>
           <p className="trash-panel-muted">
-            Работы лежат в корзине, пока вы их не восстановите или не удалите:
-            сами они не удаляются и продолжают занимать место. Старые ссылки
-            закрыты и не оживут после восстановления.
+            Работы лежат в корзине, пока вы их не восстановите или не удалите: сами они не удаляются и продолжают
+            занимать место. Старые ссылки закрыты и не оживут после восстановления.
           </p>
           <p className="trash-panel-muted">
-            «Удалить навсегда» стирает работу и все её версии, возвращает
-            место и не восстанавливается. Все работы сразу можно удалить вместе
-            с полкой: <a href="/settings#delete-shelf">Настройки → «Удалить полку»</a>.
+            «Удалить навсегда» стирает работу и все её версии, возвращает место и не восстанавливается. Все работы сразу
+            можно удалить вместе с полкой: <a href="/settings#delete-shelf">Настройки → «Удалить полку»</a>.
           </p>
         </div>
         <Button type="button" onClick={() => onLoad()} disabled={loading}>
@@ -131,9 +126,7 @@ export function TrashPanel({
         </p>
       )}
       {!loading && !error && items.length === 0 && (
-        <EmptyState title="Корзина пуста">
-          Работы появятся здесь, если вы переместите их в корзину.
-        </EmptyState>
+        <EmptyState title="Корзина пуста">Работы появятся здесь, если вы переместите их в корзину.</EmptyState>
       )}
 
       {items.length > 0 && (
@@ -141,39 +134,27 @@ export function TrashPanel({
           {items.map((artifact) => {
             const restoreMessage = restoreErrors[artifact.id];
             const revisionSize =
-              artifact.revision.storageKind === "bundle"
-                ? artifact.revision.totalSize
-                : artifact.revision.size;
+              artifact.revision.storageKind === "bundle" ? artifact.revision.totalSize : artifact.revision.size;
             return (
               <article className="trash-panel-item" key={artifact.id}>
                 <div className="trash-panel-item-copy">
                   <h3>{artifact.title}</h3>
                   <p>
-                    В корзине {date(artifact.trashedAt ?? artifact.updatedAt)} ·
-                    версия {artifact.revision.number} · {size(revisionSize)}
+                    В корзине {date(artifact.trashedAt ?? artifact.updatedAt)} · версия {artifact.revision.number} ·{" "}
+                    {size(revisionSize)}
                   </p>
                   <p className="trash-panel-muted">
-                    Все версии сохранены. Откройте работу для списка версий и
-                    скачивания оригиналов.
+                    Все версии сохранены. Откройте работу для списка версий и скачивания оригиналов.
                   </p>
-                  {restoreMessage && (
-                    <Notice tone="error">{restoreMessage}</Notice>
-                  )}
+                  {restoreMessage && <Notice tone="error">{restoreMessage}</Notice>}
                 </div>
                 <div className="trash-panel-actions">
-                  <Button
-                    type="button"
-                    onClick={() => onOpenArtifact(artifact)}
-                  >
+                  <Button type="button" onClick={() => onOpenArtifact(artifact)}>
                     Версии и скачать
                   </Button>
                   {access.changes(artifact.author) && confirming !== artifact.id && (
                     <>
-                      <Button
-                        type="button"
-                        onClick={() => setConfirming(artifact.id)}
-                        disabled={busyId !== null}
-                      >
+                      <Button type="button" onClick={() => setConfirming(artifact.id)} disabled={busyId !== null}>
                         Удалить навсегда
                       </Button>
                       <Button
@@ -182,17 +163,14 @@ export function TrashPanel({
                         onClick={() => void restore(artifact)}
                         disabled={busyId !== null}
                       >
-                        {busyId === artifact.id
-                          ? "Восстанавливаем…"
-                          : "Восстановить"}
+                        {busyId === artifact.id ? "Восстанавливаем…" : "Восстановить"}
                       </Button>
                     </>
                   )}
                   {access.changes(artifact.author) && confirming === artifact.id && (
                     <div role="alertdialog" aria-label="Удалить работу навсегда">
                       <p className="trash-panel-muted">
-                        «{artifact.title}» и все её версии будут стёрты. Вернуть
-                        их нельзя.
+                        «{artifact.title}» и все её версии будут стёрты. Вернуть их нельзя.
                       </p>
                       <Button
                         variant="primary"
@@ -202,11 +180,7 @@ export function TrashPanel({
                       >
                         {busyId === artifact.id ? "Удаляем…" : "Да, удалить навсегда"}
                       </Button>
-                      <Button
-                        type="button"
-                        onClick={() => setConfirming(null)}
-                        disabled={busyId !== null}
-                      >
+                      <Button type="button" onClick={() => setConfirming(null)} disabled={busyId !== null}>
                         Отмена
                       </Button>
                     </div>
@@ -219,12 +193,7 @@ export function TrashPanel({
       )}
 
       {nextCursor && (
-        <Button
-          className="trash-panel-more"
-          type="button"
-          onClick={() => onLoad(nextCursor)}
-          disabled={loading}
-        >
+        <Button className="trash-panel-more" type="button" onClick={() => onLoad(nextCursor)} disabled={loading}>
           {loading ? "Загружаем…" : "Показать ещё"}
         </Button>
       )}

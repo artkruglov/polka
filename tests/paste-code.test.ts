@@ -6,7 +6,7 @@ import { describePaste } from "../apps/web/src/features/paste-code/model.ts";
 
 test("pasted HTML is saved as a page named by its own title", () => {
   const pasted = describePaste(
-    '<!doctype html><html><head><title>  Отчёт &amp; план\n за Q3 </title></head><body><h1>Другое</h1></body></html>',
+    "<!doctype html><html><head><title>  Отчёт &amp; план\n за Q3 </title></head><body><h1>Другое</h1></body></html>",
   );
   assert.equal(pasted?.kind, "html");
   assert.equal(pasted?.mime, "text/html");
@@ -16,15 +16,8 @@ test("pasted HTML is saved as a page named by its own title", () => {
 });
 
 test("a fragment without <title> takes its first heading; none gives a neutral name", () => {
-  assert.equal(
-    describePaste('<div class="card"><h1>Итоги <b>недели</b></h1><p>…</p></div>')
-      ?.title,
-    "Итоги недели",
-  );
-  assert.equal(
-    describePaste("<section><p>Без заголовка</p></section>")?.title,
-    "Страница из чата",
-  );
+  assert.equal(describePaste('<div class="card"><h1>Итоги <b>недели</b></h1><p>…</p></div>')?.title, "Итоги недели");
+  assert.equal(describePaste("<section><p>Без заголовка</p></section>")?.title, "Страница из чата");
 });
 
 test("Markdown and prose are saved as text named by the first line", () => {
@@ -61,9 +54,8 @@ export default function Counter() {
   );
   // A real page that happens to contain a module script stays a page.
   assert.equal(
-    describePaste(
-      '<!doctype html><html><body><script type="module">\nimport x from "./x.js";\n</script></body></html>',
-    )?.kind,
+    describePaste('<!doctype html><html><body><script type="module">\nimport x from "./x.js";\n</script></body></html>')
+      ?.kind,
     "html",
   );
 });

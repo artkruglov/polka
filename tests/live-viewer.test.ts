@@ -8,32 +8,26 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { createLiveViewerApp } from "../apps/server/live-viewer.ts";
-import {
-  BUILD_FAILURE_MESSAGES,
-  BUNDLE_BUILDER_VERSION,
-} from "../apps/server/bundle-runtime-contract.ts";
+import { BUILD_FAILURE_MESSAGES, BUNDLE_BUILDER_VERSION } from "../apps/server/bundle-runtime-contract.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
-if (!config.HTML_LIVE_ENABLED)
-  throw new Error("Run live-viewer.test.ts with HTML_LIVE_ENABLED=true");
+if (!config.HTML_LIVE_ENABLED) throw new Error("Run live-viewer.test.ts with HTML_LIVE_ENABLED=true");
 
 const app = await createApp();
 const viewer = await createLiveViewerApp();
 const origin = config.APP_ORIGIN;
-const embeddedDocument = (url: string) => viewer.inject({url,headers:{host:config.VIEWER_UPSTREAM_HOST,"sec-fetch-dest":"iframe","sec-fetch-mode":"navigate"}});
+const embeddedDocument = (url: string) =>
+  viewer.inject({
+    url,
+    headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "iframe", "sec-fetch-mode": "navigate" },
+  });
 const password = randomBytes(24).toString("hex");
 let owner: Awaited<ReturnType<typeof createAccount>>;
 let stranger: Awaited<ReturnType<typeof createAccount>>;
 let ownerCookie = "";
 let strangerCookie = "";
 
-async function call(
-  method: any,
-  url: string,
-  body?: any,
-  cookie = ownerCookie,
-  authorization?: string,
-) {
+async function call(method: any, url: string, body?: any, cookie = ownerCookie, authorization?: string) {
   return app.inject({
     method,
     url,
@@ -41,9 +35,7 @@ async function call(
       origin,
       ...(cookie ? { cookie } : {}),
       ...(authorization ? { authorization } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
@@ -60,11 +52,7 @@ async function login(name: string) {
   return `${response.cookies[0].name}=${response.cookies[0].value}`;
 }
 
-async function save(
-  source: string,
-  mime = "text/html",
-  patch: Record<string, unknown> = {},
-) {
+async function save(source: string, mime = "text/html", patch: Record<string, unknown> = {}) {
   const bytes = Buffer.from(source);
   const start = await call("POST", "/api/uploads", {
     key: randomUUID(),
@@ -93,8 +81,7 @@ async function buildReady(revisionId: string) {
   assert.equal(built.json().state, "ready", built.body);
 }
 
-const capabilityToken = (url: string) =>
-  new URL(url).pathname.split("/").at(-1) as string;
+const capabilityToken = (url: string) => new URL(url).pathname.split("/").at(-1) as string;
 
 before(async () => {
   const suffix = randomBytes(5).toString("hex");
@@ -114,13 +101,7 @@ test("live viewer configuration rejects hosted, same-host and same-port layouts"
   const check = (environment: Record<string, string>, message: RegExp) => {
     const child = spawnSync(
       process.execPath,
-      [
-        "--import",
-        "tsx",
-        "--input-type=module",
-        "--eval",
-        "await import('./apps/server/config.ts')",
-      ],
+      ["--import", "tsx", "--input-type=module", "--eval", "await import('./apps/server/config.ts')"],
       {
         cwd: process.cwd(),
         env: {
@@ -198,33 +179,11 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
   assert.equal(html.htmlProfile, "unsupported");
   const nonHtml = await save("plain text", "text/plain");
 
-  assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/revisions/${html.revisionId}/live-view`,
-        {},
-        strangerCookie,
-      )
-    ).statusCode,
-    404,
-  );
-  assert.equal(
-    (await call("POST", `/api/revisions/${html.revisionId}/live-view`, {}, ""))
-      .statusCode,
-    401,
-  );
-  assert.equal(
-    (await call("POST", `/api/revisions/${nonHtml.revisionId}/live-view`, {}))
-      .statusCode,
-    404,
-  );
+  assert.equal((await call("POST", `/api/revisions/${html.revisionId}/live-view`, {}, strangerCookie)).statusCode, 404);
+  assert.equal((await call("POST", `/api/revisions/${html.revisionId}/live-view`, {}, "")).statusCode, 401);
+  assert.equal((await call("POST", `/api/revisions/${nonHtml.revisionId}/live-view`, {})).statusCode, 404);
 
-  const issued = await call(
-    "POST",
-    `/api/revisions/${html.revisionId}/live-view`,
-    {},
-  );
+  const issued = await call("POST", `/api/revisions/${html.revisionId}/live-view`, {});
   assert.equal(issued.statusCode, 200, issued.body);
   assert.equal(issued.json().profile, "inline-live-experimental-v1");
   assert.equal(new URL(issued.json().url).origin, config.VIEWER_ORIGIN);
@@ -232,16 +191,11 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
   // against ours; the point is that the grant is short-lived, not exact.
   assert.ok(Date.parse(issued.json().expiresAt) <= Date.now() + 61_000);
 
-  const document = await embeddedDocument(
-    `/document/${capabilityToken(issued.json().url)}`,
-  );
+  const document = await embeddedDocument(`/document/${capabilityToken(issued.json().url)}`);
   assert.equal(document.statusCode, 200, document.body);
   // Byte-exact page, with the viewer's WebRTC guard first.
   assert.equal(document.body, withViewerGuard(Buffer.from(interactive)).toString());
-  assert.match(
-    document.headers["content-security-policy"] as string,
-    /^sandbox allow-scripts allow-forms;/,
-  );
+  assert.match(document.headers["content-security-policy"] as string, /^sandbox allow-scripts allow-forms;/);
   for (const directive of [
     "default-src 'none'",
     "script-src 'unsafe-inline'",
@@ -257,12 +211,7 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
     "form-action 'none'",
     `frame-ancestors ${config.APP_ORIGIN}`,
   ])
-    assert.ok(
-      (document.headers["content-security-policy"] as string).includes(
-        directive,
-      ),
-      directive,
-    );
+    assert.ok((document.headers["content-security-policy"] as string).includes(directive), directive);
   assert.equal(document.headers["cache-control"], "no-store");
   assert.equal(document.headers["referrer-policy"], "no-referrer");
   assert.equal(document.headers["x-content-type-options"], "nosniff");
@@ -270,41 +219,31 @@ test("owner capabilities are tenant-scoped, HTML-only and run unsupported saved 
   assert.equal(document.headers["set-cookie"], undefined);
   assert.equal(document.headers["access-control-allow-origin"], undefined);
   assert.equal((await embeddedDocument("/api/health")).statusCode, 404);
-  const random = await embeddedDocument(
-    `/document/${randomBytes(32).toString("base64url")}`,
-  );
+  const random = await embeddedDocument(`/document/${randomBytes(32).toString("base64url")}`);
   assert.equal(random.statusCode, 404);
   assert.equal(random.headers["cache-control"], "no-store");
 });
 
 test("owner capability is revoked by logout, account disable and expiry", async () => {
   const html = await save("<!doctype html><p>owner auth</p>");
-  let issued = (
-    await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})
-  ).json();
+  let issued = (await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})).json();
   let token = capabilityToken(issued.url);
   assert.equal((await embeddedDocument(`/document/${token}`)).statusCode, 200);
   await call("POST", "/api/logout", {}, ownerCookie);
   assert.equal((await embeddedDocument(`/document/${token}`)).statusCode, 404);
 
   ownerCookie = await login(owner.name);
-  issued = (
-    await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})
-  ).json();
+  issued = (await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})).json();
   token = capabilityToken(issued.url);
   await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]);
   try {
     assert.equal((await embeddedDocument(`/document/${token}`)).statusCode, 404);
   } finally {
-    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [
-      owner.id,
-    ]);
+    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [owner.id]);
   }
 
   ownerCookie = await login(owner.name);
-  issued = (
-    await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})
-  ).json();
+  issued = (await call("POST", `/api/revisions/${html.revisionId}/live-view`, {})).json();
   token = capabilityToken(issued.url);
   await db.query(
     "UPDATE viewer_grants SET created_at=now()-interval '2 seconds',expires_at=now()-interval '1 second' WHERE hash=$1",
@@ -316,33 +255,19 @@ test("owner capability is revoked by logout, account disable and expiry", async 
 test("recipient capability stays pinned and cannot outlive, revoke or lose its source grant", async () => {
   const first = await save(scripted("version one"));
   await buildReady(first.revisionId);
-  const enabled = await call(
-    "POST",
-    `/api/artifacts/${first.artifactId}/share`,
-    { expectedRevisionId: first.revisionId, expiresInDays: 1 },
-  );
+  const enabled = await call("POST", `/api/artifacts/${first.artifactId}/share`, {
+    expectedRevisionId: first.revisionId,
+    expiresInDays: 1,
+  });
   assert.equal(enabled.statusCode, 200, enabled.body);
   const share = enabled.json().share;
   const shareToken = new URL(share.url).hash.slice(1);
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: shareToken },
-    "",
-  );
+  const resolved = await call("POST", "/api/resolve", { token: shareToken }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
   const sourceGrant = resolved.json();
-  const issued = await call(
-    "POST",
-    "/api/view/live-view",
-    {},
-    "",
-    `Bearer ${sourceGrant.grant}`,
-  );
+  const issued = await call("POST", "/api/view/live-view", {}, "", `Bearer ${sourceGrant.grant}`);
   assert.equal(issued.statusCode, 200, issued.body);
-  assert.ok(
-    Date.parse(issued.json().expiresAt) <= Date.parse(sourceGrant.expiresAt),
-  );
+  assert.ok(Date.parse(issued.json().expiresAt) <= Date.parse(sourceGrant.expiresAt));
   const token = capabilityToken(issued.json().url);
 
   const second = await save(scripted("version two"), "text/html", {
@@ -361,42 +286,19 @@ test("recipient capability stays pinned and cannot outlive, revoke or lose its s
   );
   assert.match((await embeddedDocument(`/document/${token}`)).body, /version one/);
 
-  await db.query(
-    "UPDATE grants SET expires_at=now()-interval '1 second' WHERE hash=$1",
-    [sha256(sourceGrant.grant)],
-  );
+  await db.query("UPDATE grants SET expires_at=now()-interval '1 second' WHERE hash=$1", [sha256(sourceGrant.grant)]);
   assert.equal((await embeddedDocument(`/document/${token}`)).statusCode, 404);
 
-  const resolvedAgain = await call(
-    "POST",
-    "/api/resolve",
-    { token: shareToken },
-    "",
-  );
-  const issuedAgain = await call(
-    "POST",
-    "/api/view/live-view",
-    {},
-    "",
-    `Bearer ${resolvedAgain.json().grant}`,
-  );
+  const resolvedAgain = await call("POST", "/api/resolve", { token: shareToken }, "");
+  const issuedAgain = await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolvedAgain.json().grant}`);
   const tokenAgain = capabilityToken(issuedAgain.json().url);
   await call("POST", `/api/shares/${share.id}/revoke`, {});
-  assert.equal(
-    (await embeddedDocument(`/document/${tokenAgain}`)).statusCode,
-    404,
-  );
+  assert.equal((await embeddedDocument(`/document/${tokenAgain}`)).statusCode, 404);
 
-  const { rowCount } = await db.query("DELETE FROM grants WHERE hash=$1", [
-    sha256(resolvedAgain.json().grant),
-  ]);
+  const { rowCount } = await db.query("DELETE FROM grants WHERE hash=$1", [sha256(resolvedAgain.json().grant)]);
   assert.equal(rowCount, 1);
   assert.equal(
-    +(
-      await db.query("SELECT count(*) FROM viewer_grants WHERE hash=$1", [
-        sha256(tokenAgain),
-      ])
-    ).rows[0].count,
+    +(await db.query("SELECT count(*) FROM viewer_grants WHERE hash=$1", [sha256(tokenAgain)])).rows[0].count,
     0,
   );
 });
@@ -417,15 +319,30 @@ test("app capabilities and frame policy expose only the enabled experiment mode"
   );
 });
 
-
 test("live document refuses top-level and metadata-free loads with a valid capability", async () => {
   const saved = await save("<!doctype html><h1>Embedding only</h1>");
   const issued = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   assert.equal(issued.statusCode, 200);
   const path = new URL(issued.json().url).pathname;
-  assert.equal((await viewer.inject({url:path,headers:{host:config.VIEWER_UPSTREAM_HOST}})).statusCode, 404);
-  assert.equal((await viewer.inject({url:path,headers:{host:config.VIEWER_UPSTREAM_HOST,"sec-fetch-dest":"document","sec-fetch-mode":"navigate"}})).statusCode, 404);
-  assert.equal((await viewer.inject({url:path,headers:{host:config.VIEWER_UPSTREAM_HOST,"sec-fetch-dest":"iframe","sec-fetch-mode":"cors"}})).statusCode, 404);
+  assert.equal((await viewer.inject({ url: path, headers: { host: config.VIEWER_UPSTREAM_HOST } })).statusCode, 404);
+  assert.equal(
+    (
+      await viewer.inject({
+        url: path,
+        headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" },
+      })
+    ).statusCode,
+    404,
+  );
+  assert.equal(
+    (
+      await viewer.inject({
+        url: path,
+        headers: { host: config.VIEWER_UPSTREAM_HOST, "sec-fetch-dest": "iframe", "sec-fetch-mode": "cors" },
+      })
+    ).statusCode,
+    404,
+  );
   assert.equal((await embeddedDocument(path)).statusCode, 200);
 });
 
@@ -452,23 +369,14 @@ test("live document rejects unknown Host before resolving a valid capability", a
 test("staging allowlist gates owner and recipient issuance and every read", async () => {
   const allowed = await save("<!doctype html><p>Allowed staging revision</p>");
   const excluded = await save("<!doctype html><p>Excluded staging revision</p>");
-  const oldCapability = await call(
-    "POST",
-    `/api/revisions/${excluded.revisionId}/live-view`,
-    {},
-  );
+  const oldCapability = await call("POST", `/api/revisions/${excluded.revisionId}/live-view`, {});
   assert.equal(oldCapability.statusCode, 200, oldCapability.body);
   const shared = await call("POST", `/api/artifacts/${excluded.artifactId}/share`, {
     expectedRevisionId: excluded.revisionId,
     expiresInDays: 1,
   });
   assert.equal(shared.statusCode, 200, shared.body);
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: new URL(shared.json().share.url).hash.slice(1) },
-    "",
-  );
+  const resolved = await call("POST", "/api/resolve", { token: new URL(shared.json().share.url).hash.slice(1) }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
 
   const mutable = config as any;
@@ -477,46 +385,15 @@ test("staging allowlist gates owner and recipient issuance and every read", asyn
   mutable.HTML_LIVE_MODE = "staging";
   mutable.HTML_LIVE_STAGING_REVISION_IDS = Object.freeze([allowed.revisionId]);
   try {
-    const issued = await call(
-      "POST",
-      `/api/revisions/${allowed.revisionId}/live-view`,
-      {},
-    );
+    const issued = await call("POST", `/api/revisions/${allowed.revisionId}/live-view`, {});
     assert.equal(issued.statusCode, 200, issued.body);
+    assert.equal((await call("POST", `/api/revisions/${excluded.revisionId}/live-view`, {})).statusCode, 404);
     assert.equal(
-      (
-        await call(
-          "POST",
-          `/api/revisions/${excluded.revisionId}/live-view`,
-          {},
-        )
-      ).statusCode,
+      (await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`)).statusCode,
       404,
     );
-    assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/view/live-view",
-          {},
-          "",
-          `Bearer ${resolved.json().grant}`,
-        )
-      ).statusCode,
-      404,
-    );
-    assert.equal(
-      (
-        await embeddedDocument(
-          new URL(oldCapability.json().url).pathname,
-        )
-      ).statusCode,
-      404,
-    );
-    assert.equal(
-      (await embeddedDocument(new URL(issued.json().url).pathname)).statusCode,
-      200,
-    );
+    assert.equal((await embeddedDocument(new URL(oldCapability.json().url).pathname)).statusCode, 404);
+    assert.equal((await embeddedDocument(new URL(issued.json().url).pathname)).statusCode, 200);
   } finally {
     mutable.HTML_LIVE_MODE = priorMode;
     mutable.HTML_LIVE_STAGING_REVISION_IDS = priorAllowlist;
@@ -532,12 +409,7 @@ test("production mode serves every eligible revision and reports itself honestly
     expiresInDays: 1,
   });
   assert.equal(shared.statusCode, 200, shared.body);
-  const resolved = await call(
-    "POST",
-    "/api/resolve",
-    { token: new URL(shared.json().share.url).hash.slice(1) },
-    "",
-  );
+  const resolved = await call("POST", "/api/resolve", { token: new URL(shared.json().share.url).hash.slice(1) }, "");
   assert.equal(resolved.statusCode, 200, resolved.body);
 
   const mutable = config as any;
@@ -555,21 +427,11 @@ test("production mode serves every eligible revision and reports itself honestly
 
     const urls = [];
     for (const saved of [first, second]) {
-      const issued = await call(
-        "POST",
-        `/api/revisions/${saved.revisionId}/live-view`,
-        {},
-      );
+      const issued = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
       assert.equal(issued.statusCode, 200, issued.body);
       urls.push(new URL(issued.json().url).pathname);
     }
-    const recipient = await call(
-      "POST",
-      "/api/view/live-view",
-      {},
-      "",
-      `Bearer ${resolved.json().grant}`,
-    );
+    const recipient = await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`);
     assert.equal(recipient.statusCode, 200, recipient.body);
     urls.push(new URL(recipient.json().url).pathname);
     for (const path of urls) {
@@ -579,22 +441,14 @@ test("production mode serves every eligible revision and reports itself honestly
       assert.equal(document.headers["cache-control"], "no-store");
     }
     assert.equal(
-      (
-        await call(
-          "POST",
-          `/api/revisions/${first.revisionId}/live-view`,
-          {},
-          strangerCookie,
-        )
-      ).statusCode,
+      (await call("POST", `/api/revisions/${first.revisionId}/live-view`, {}, strangerCookie)).statusCode,
       404,
     );
 
     // Rollback to disabled refuses reads of capabilities issued in production.
     mutable.HTML_LIVE_ENABLED = false;
     try {
-      for (const path of urls)
-        assert.equal((await embeddedDocument(path)).statusCode, 404);
+      for (const path of urls) assert.equal((await embeddedDocument(path)).statusCode, 404);
     } finally {
       mutable.HTML_LIVE_ENABLED = true;
     }
@@ -607,12 +461,18 @@ test("production mode serves every eligible revision and reports itself honestly
 test("bundle storage cannot use single-file live capabilities, including an existing grant", async () => {
   const saved = await save("<!doctype html><h1>Bundle gate fixture</h1>");
   const shareResponse = await call("POST", `/api/artifacts/${saved.artifactId}/share`, {
-    expectedRevisionId: saved.revisionId, expiresInDays: 1,
+    expectedRevisionId: saved.revisionId,
+    expiresInDays: 1,
   });
   assert.equal(shareResponse.statusCode, 200, shareResponse.body);
-  const resolved = await call("POST", "/api/resolve", {
-    token: new URL(shareResponse.json().share.url).hash.slice(1),
-  }, "");
+  const resolved = await call(
+    "POST",
+    "/api/resolve",
+    {
+      token: new URL(shareResponse.json().share.url).hash.slice(1),
+    },
+    "",
+  );
   assert.equal(resolved.statusCode, 200, resolved.body);
   const ownerLaunch = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
   const recipientLaunch = await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`);
@@ -621,10 +481,15 @@ test("bundle storage cannot use single-file live capabilities, including an exis
   assert.equal(recipientLaunch.statusCode, 404, recipientLaunch.body);
   // Synthetic inconsistent metadata tests the final read gate independently of
   // issuance/share checks. Real revisions never change storage kind.
-  await db.query("UPDATE revisions SET storage_kind='bundle',html_profile='unsupported' WHERE id=$1", [saved.revisionId]);
+  await db.query("UPDATE revisions SET storage_kind='bundle',html_profile='unsupported' WHERE id=$1", [
+    saved.revisionId,
+  ]);
   try {
     assert.equal((await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {})).statusCode, 404);
-    assert.equal((await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`)).statusCode, 404);
+    assert.equal(
+      (await call("POST", "/api/view/live-view", {}, "", `Bearer ${resolved.json().grant}`)).statusCode,
+      404,
+    );
     for (const launched of [ownerLaunch]) {
       const path = `/document/${capabilityToken(launched.json().url)}`;
       assert.equal((await embeddedDocument(path)).statusCode, 404);
@@ -638,32 +503,19 @@ test("the comment overlay follows the WebRTC guard, only on a grant issued for i
   const source = scripted("Overlay order");
   const saved = await save(source);
   const plain = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, {});
-  const commented = await call(
-    "POST",
-    `/api/revisions/${saved.revisionId}/live-view`,
-    { comments: true },
-  );
+  const commented = await call("POST", `/api/revisions/${saved.revisionId}/live-view`, { comments: true });
   assert.equal(commented.statusCode, 200, commented.body);
   const without = await embeddedDocument(`/document/${capabilityToken(plain.json().url)}`);
   const withOverlay = await embeddedDocument(`/document/${capabilityToken(commented.json().url)}`);
   assert.equal(without.body, withViewerGuard(Buffer.from(source)).toString());
   // Same CSP either way: the overlay adds no capability.
-  assert.equal(
-    withOverlay.headers["content-security-policy"],
-    without.headers["content-security-policy"],
-  );
+  assert.equal(withOverlay.headers["content-security-policy"], without.headers["content-security-policy"]);
   const guard = withOverlay.body.indexOf("RTCPeerConnection");
   const overlay = withOverlay.body.indexOf("polka:ready");
   const page = withOverlay.body.indexOf("Overlay order");
   assert.ok(guard > 0 && overlay > guard && page > overlay);
-  assert.equal(
-    withOverlay.body.replace(/<script>\(function\(\)\{[\s\S]*?\}\)\(\);<\/script>/, ""),
-    without.body,
-  );
-  assert.equal(
-    (await call("POST", `/api/revisions/${saved.revisionId}/live-view`, { comments: 1 })).statusCode,
-    400,
-  );
+  assert.equal(withOverlay.body.replace(/<script>\(function\(\)\{[\s\S]*?\}\)\(\);<\/script>/, ""), without.body);
+  assert.equal((await call("POST", `/api/revisions/${saved.revisionId}/live-view`, { comments: 1 })).statusCode, 400);
 });
 
 test("a build the builder gave up on is not rebuilt in a loop", async () => {
@@ -683,9 +535,6 @@ test("a build the builder gave up on is not rebuilt in a loop", async () => {
   const retried = await call("POST", `/api/revisions/${saved.revisionId}/build-inline`, {});
   assert.equal(retried.json().state, "failed", retried.body);
   // After the cooldown the same source is built again.
-  await db.query(
-    "UPDATE revision_derivatives SET updated_at=now()-interval '31 seconds' WHERE id=$1",
-    [failed.id],
-  );
+  await db.query("UPDATE revision_derivatives SET updated_at=now()-interval '31 seconds' WHERE id=$1", [failed.id]);
   await buildReady(saved.revisionId);
 });

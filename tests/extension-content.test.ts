@@ -81,9 +81,18 @@ test("a version with its work, shelf and files; each file streams as recorded", 
   assert.equal(version.revision.number, 1);
   assert.equal(version.unavailable, null);
   assert.deepEqual(version.files, [
-    { index: 0, path: "note.txt", mime: "text/plain", size: Buffer.byteLength("Текст заметки"), sha256: hex(Buffer.from("Текст заметки")) },
+    {
+      index: 0,
+      path: "note.txt",
+      mime: "text/plain",
+      size: Buffer.byteLength("Текст заметки"),
+      sha256: hex(Buffer.from("Текст заметки")),
+    },
   ]);
-  assert.equal((await readAll(await context.content.openFile(owner.tenant, saved.revisionId, 0))).toString(), "Текст заметки");
+  assert.equal(
+    (await readAll(await context.content.openFile(owner.tenant, saved.revisionId, 0))).toString(),
+    "Текст заметки",
+  );
   // Another shelf's id finds nothing.
   assert.equal(await context.content.revision(randomUUID(), saved.revisionId), null);
 });
@@ -101,7 +110,13 @@ test("a project's files, in the manifest's order", async () => {
       entrypoint: "README.md",
       runtime: "project-v1",
       files: files.map(([path, mime, bytes]) => ({ path, mime, size: bytes.length, sha256: hex(bytes) })),
-      provenance: { kind: "file", sourceUrl: null, capturedAt: new Date().toISOString(), attribution: "unknown", license: "unknown" },
+      provenance: {
+        kind: "file",
+        sourceUrl: null,
+        capturedAt: new Date().toISOString(),
+        attribution: "unknown",
+        license: "unknown",
+      },
       dependencies: { status: "unknown", unresolved: [] },
     },
   });
@@ -109,7 +124,10 @@ test("a project's files, in the manifest's order", async () => {
     await uploadBundleFile(owner, begun.uploadId, index, files.find(([path]) => path === file.path)![2]);
   const saved = (await finalizeBundleUpload(owner, begun.uploadId)) as { revisionId: string };
   const version = await context.content.revision(owner.tenant, saved.revisionId);
-  assert.deepEqual(version!.files.map((file) => file.path), ["README.md", "notes/a.md"]);
+  assert.deepEqual(
+    version!.files.map((file) => file.path),
+    ["README.md", "notes/a.md"],
+  );
   assert.equal(version!.revision.entrypoint, "README.md");
   assert.equal(version!.revision.runtime, "project-v1");
   assert.ok(version!.revision.manifestSha256);
@@ -129,7 +147,12 @@ test("moderation, the trash and deletion: reported, never read", async () => {
   await assert.rejects(context.content.openFile(owner.tenant, held.revisionId, 0), /заблокирована/);
 
   const old = await saveText("В корзине", "старое");
-  await transitionOwnerArtifactLifecycle(owner, old.artifactId, { expectedLifecycleVersion: 0, expectedRevisionId: old.revisionId }, "trashed");
+  await transitionOwnerArtifactLifecycle(
+    owner,
+    old.artifactId,
+    { expectedLifecycleVersion: 0, expectedRevisionId: old.revisionId },
+    "trashed",
+  );
   assert.equal((await context.content.revision(owner.tenant, old.revisionId))!.artifact.trashed, true);
 
   const gone = await saveText("Удалено", "удалённое");
@@ -144,15 +167,24 @@ test("a stream that is not the recorded file fails at its end", async () => {
     (await readAll(Readable.from([good]).pipe(verifyingStream({ size: good.length, sha256: hex(good) })))).toString(),
     "правильные байты",
   );
-  await assert.rejects(readAll(Readable.from([good.subarray(0, 5)]).pipe(verifyingStream({ size: good.length, sha256: hex(good) }))), /checksum/);
-  await assert.rejects(readAll(Readable.from([good]).pipe(verifyingStream({ size: good.length, sha256: "0".repeat(64) }))), /checksum/);
+  await assert.rejects(
+    readAll(Readable.from([good.subarray(0, 5)]).pipe(verifyingStream({ size: good.length, sha256: hex(good) }))),
+    /checksum/,
+  );
+  await assert.rejects(
+    readAll(Readable.from([good]).pipe(verifyingStream({ size: good.length, sha256: "0".repeat(64) }))),
+    /checksum/,
+  );
   // The last chunk waits for the check: a wrong file never arrives whole.
   const seen: Buffer[] = [];
   const checked = verifyingStream({ size: good.length * 2, sha256: "0".repeat(64) });
   checked.on("data", (chunk: Buffer) => seen.push(chunk));
   await assert.rejects(pipeline(Readable.from([good, good]), checked));
   assert.ok(Buffer.concat(seen).length < good.length * 2);
-  await assert.rejects(readAll(Readable.from([good, good]).pipe(verifyingStream({ size: good.length, sha256: hex(good) }))), /larger/);
+  await assert.rejects(
+    readAll(Readable.from([good, good]).pipe(verifyingStream({ size: good.length, sha256: hex(good) }))),
+    /larger/,
+  );
 });
 
 test("the journal: commit order, a cursor to keep, nothing skipped behind a late commit", async () => {
@@ -190,15 +222,27 @@ test("the journal: commit order, a cursor to keep, nothing skipped behind a late
   };
   // The cursor kept from the early read did not move past either row.
   const resumed = await settled(early.next);
-  assert.deepEqual(resumed.items.map((item) => item.payload?.n), [1, 2]);
+  assert.deepEqual(
+    resumed.items.map((item) => item.payload?.n),
+    [1, 2],
+  );
   const page = await settled(start);
-  assert.deepEqual(page.items.map((item) => item.payload?.n), [1, 2]);
+  assert.deepEqual(
+    page.items.map((item) => item.payload?.n),
+    [1, 2],
+  );
   assert.equal(page.items[0]!.tenantId, owner.tenant);
   // Read from the returned cursor: nothing again; a full page stops at its last row.
   assert.deepEqual((await context.auditFeed.read(page.next, { actions: [action], limit: 10 })).items, []);
   const first = await context.auditFeed.read(start, { actions: [action], limit: 1 });
-  assert.deepEqual(first.items.map((item) => item.payload?.n), [1]);
-  assert.deepEqual((await context.auditFeed.read(first.next, { actions: [action], limit: 1 })).items.map((item) => item.payload?.n), [2]);
+  assert.deepEqual(
+    first.items.map((item) => item.payload?.n),
+    [1],
+  );
+  assert.deepEqual(
+    (await context.auditFeed.read(first.next, { actions: [action], limit: 1 })).items.map((item) => item.payload?.n),
+    [2],
+  );
 });
 
 test("no renderer, no PDF; the renderer's answer is a small PDF or a known outcome", () => {

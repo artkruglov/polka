@@ -402,8 +402,7 @@ export function overlayScript(appOrigin: string, mode: "static" | "live") {
  * element or enter the script-data escape states.
  */
 function assertPlainScript(source: string) {
-  if (/<\/script|<!--|<script/i.test(source))
-    throw new Error("Overlay source must not contain script markup");
+  if (/<\/script|<!--|<script/i.test(source)) throw new Error("Overlay source must not contain script markup");
 }
 assertPlainScript(overlayScript("https://polka.invalid", "live"));
 
@@ -415,12 +414,7 @@ export const overlayNonce = () => randomBytes(18).toString("base64url");
  * then the overlay, then the page (whose scripts run after both).
  */
 export function withLiveOverlay(html: Buffer, appOrigin: string) {
-  return withLeadingMarkup(
-    html,
-    Buffer.from(
-      `${VIEWER_GUARD}<script>${overlayScript(appOrigin, "live")}</script>`,
-    ),
-  );
+  return withLeadingMarkup(html, Buffer.from(`${VIEWER_GUARD}<script>${overlayScript(appOrigin, "live")}</script>`));
 }
 
 /**
@@ -428,19 +422,12 @@ export function withLiveOverlay(html: Buffer, appOrigin: string) {
  * its nonce, and they are the WebRTC guard and the overlay. The CSP from
  * staticHtmlCsp(…, nonce) admits nothing else.
  */
-export function withStaticOverlay(
-  html: Buffer,
-  appOrigin: string,
-  nonce: string,
-) {
+export function withStaticOverlay(html: Buffer, appOrigin: string, nonce: string) {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(nonce)) throw new Error("Invalid nonce");
   assertPlainScript(overlayScript(appOrigin, "static"));
   const open = `<script nonce="${nonce}">`;
   return withLeadingMarkup(
     html,
-    Buffer.from(
-      VIEWER_GUARD.replace("<script>", open) +
-        `${open}${overlayScript(appOrigin, "static")}</script>`,
-    ),
+    Buffer.from(VIEWER_GUARD.replace("<script>", open) + `${open}${overlayScript(appOrigin, "static")}</script>`),
   );
 }

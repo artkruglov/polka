@@ -25,7 +25,11 @@ function readInvitation(): ShelfInvitationLink | null {
         sessionStorage.removeItem(STORAGE_KEY);
         return null;
       }
-      try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fromUrl)); } catch { /* use the in-memory invite */ }
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fromUrl));
+      } catch {
+        /* use the in-memory invite */
+      }
       return fromUrl;
     }
     const saved = sessionStorage.getItem(STORAGE_KEY);
@@ -42,8 +46,10 @@ export function invitationError(error: unknown) {
     if (error.status === 401) return "Войдите в Полку, чтобы принять приглашение.";
     if (error.status === 403 && /Временная полка/.test(error.message)) return error.message;
     if (error.status === 403) return "Для этого действия войдите через Яндекс ID, VK ID или по почте.";
-    if (error.status === 409 && /истёк/.test(error.message)) return "Срок действия приглашения истёк. Попросите новую ссылку.";
-    if (error.status === 409 && /использовано/.test(error.message)) return "По этой ссылке уже пришли все, кого звали. Попросите новую.";
+    if (error.status === 409 && /истёк/.test(error.message))
+      return "Срок действия приглашения истёк. Попросите новую ссылку.";
+    if (error.status === 409 && /использовано/.test(error.message))
+      return "По этой ссылке уже пришли все, кого звали. Попросите новую.";
     if (error.status === 409) return "Приглашение больше не действует. Попросите новую ссылку.";
     if (error.status === 404) return "Приглашение не найдено: его отозвали или ссылка скопирована не целиком.";
   }
@@ -59,31 +65,60 @@ export function ShelfInvite() {
   useEffect(() => setInvitation(readInvitation()), []);
   async function accept() {
     if (!invitation || busy) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const joined = await client.acceptShelfInvitation(invitation.shelfId, invitation.token);
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* nothing was stored */ }
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* nothing was stored */
+      }
       switchShelf(joined.shelfId);
     } catch (e) {
       setError(invitationError(e));
       setBusy(false);
     }
   }
-  return <AppShell current="shelf" account={account}>
-    <main className="shelf-invite-page">
-      <span className="eyebrow">Полка отдела</span>
-      <h1>Вас пригласили на полку отдела</h1>
-      {invitation === undefined ? null : !invitation ? <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." /> : account === undefined ? (accountError ?
-        <><ErrorNotice error={`Не удалось проверить аккаунт. ${accountError}`} /><Button onClick={retryAccount}>Проверить снова</Button></> :
-        <p role="status">Проверяем аккаунт…</p>) : account === null ? <>
-          <p>Войдите или заведите аккаунт — после входа вы вернётесь сюда и примете приглашение.</p>
-          <LinkButton variant="primary" href="/?login=1&next=%2Fshelf-invite">Войти и продолжить</LinkButton>
-        </> : <>
-          <p>Работы на полке отдела видят все её участники. Роль назначил тот, кто прислал ссылку; потом её может поменять администратор полки.</p>
-          {error && <Notice tone="error">{error}</Notice>}
-          <Button variant="primary" busy={busy} onClick={accept}>Принять приглашение</Button>
-          <p className="fine">Вы вошли как {account.name}. Если это не тот аккаунт, выйдите и откройте ссылку снова.</p>
-        </>}
-    </main>
-  </AppShell>;
+  return (
+    <AppShell current="shelf" account={account}>
+      <main className="shelf-invite-page">
+        <span className="eyebrow">Полка отдела</span>
+        <h1>Вас пригласили на полку отдела</h1>
+        {invitation === undefined ? null : !invitation ? (
+          <ErrorNotice error="Ссылка приглашения неполная или уже недоступна." />
+        ) : account === undefined ? (
+          accountError ? (
+            <>
+              <ErrorNotice error={`Не удалось проверить аккаунт. ${accountError}`} />
+              <Button onClick={retryAccount}>Проверить снова</Button>
+            </>
+          ) : (
+            <p role="status">Проверяем аккаунт…</p>
+          )
+        ) : account === null ? (
+          <>
+            <p>Войдите или заведите аккаунт — после входа вы вернётесь сюда и примете приглашение.</p>
+            <LinkButton variant="primary" href="/?login=1&next=%2Fshelf-invite">
+              Войти и продолжить
+            </LinkButton>
+          </>
+        ) : (
+          <>
+            <p>
+              Работы на полке отдела видят все её участники. Роль назначил тот, кто прислал ссылку; потом её может
+              поменять администратор полки.
+            </p>
+            {error && <Notice tone="error">{error}</Notice>}
+            <Button variant="primary" busy={busy} onClick={accept}>
+              Принять приглашение
+            </Button>
+            <p className="fine">
+              Вы вошли как {account.name}. Если это не тот аккаунт, выйдите и откройте ссылку снова.
+            </p>
+          </>
+        )}
+      </main>
+    </AppShell>
+  );
 }

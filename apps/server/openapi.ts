@@ -39,20 +39,17 @@ export const PUBLISH_FIELD_NOTES: Record<string, string> = {
     "React component source as-is (default export rendered full-page). Only where the installation runs scripts; otherwise 422 unsupported.",
   componentLanguage: "Only with component. Default jsx.",
   folderId: "Optional folder on the shelf.",
-  expiresInDays:
-    "Link lifetime. A new account gets at most 7 days: 30 becomes 7 and expiresNote says so.",
+  expiresInDays: "Link lifetime. A new account gets at most 7 days: 30 becomes 7 and expiresNote says so.",
 };
 
 export const PUBLISH_RESPONSE_NOTES: Record<string, string> = {
   state:
     "shared: url is a live link. saved: the work is saved privately and url is null; linkUnavailableReason says why.",
   url: "The unlisted link (…/s#…) to give the human. Anyone with it can open the work until it expires or is revoked.",
-  shelfUrl:
-    "The work on the owner's shelf. Opens only for the signed-in owner; not a share link.",
+  shelfUrl: "The work on the owner's shelf. Opens only for the signed-in owner; not a share link.",
   moderation:
     "Present only while the link waits for a Полка moderator: recipients see a review screen until approval. Relay moderationMessage to the human; do not present the link as ready.",
-  expiresNote:
-    "The link was issued for fewer days than requested (new account).",
+  expiresNote: "The link was issued for fewer days than requested (new account).",
 };
 
 function withNotes(schema: Record<string, any>, notes: Record<string, string>) {
@@ -61,17 +58,12 @@ function withNotes(schema: Record<string, any>, notes: Record<string, string>) {
   return schema;
 }
 
-const problem = (
-  description: string,
-  examples: Record<string, { code: string; message: string }>,
-) => ({
+const problem = (description: string, examples: Record<string, { code: string; message: string }>) => ({
   description,
   content: {
     "application/json": {
       schema: { $ref: "#/components/schemas/Problem" },
-      examples: Object.fromEntries(
-        Object.entries(examples).map(([name, value]) => [name, { value }]),
-      ),
+      examples: Object.fromEntries(Object.entries(examples).map(([name, value]) => [name, { value }])),
     },
   },
 });
@@ -94,15 +86,12 @@ const common = {
       },
     },
   },
-  "403": problem(
-    "The token lacks the scope, or the request came from a browser page on another origin.",
-    {
-      scope: {
-        code: "forbidden",
-        message: "У подключения нет разрешения для этого действия.",
-      },
+  "403": problem("The token lacks the scope, or the request came from a browser page on another origin.", {
+    scope: {
+      code: "forbidden",
+      message: "У подключения нет разрешения для этого действия.",
     },
-  ),
+  }),
   "429": {
     ...problem(
       `Rate limit: ${PUBLISH_API_LIMITS.perConnection} requests per token and ${PUBLISH_API_LIMITS.perIp} per IP address in 10 minutes. Retry with the same key after Retry-After.`,
@@ -125,23 +114,20 @@ const common = {
     {
       busy: {
         code: "busy",
-        message:
-          "Полка сейчас занята другим действием с этими работами. Повторите через несколько секунд.",
+        message: "Полка сейчас занята другим действием с этими работами. Повторите через несколько секунд.",
       },
     },
   ),
 };
 
 export function openApiDocument(origin: string) {
-  const artifactId = jsonSchema(agentGetArtifactInputSchema, "input").properties
-    .artifactId;
+  const artifactId = jsonSchema(agentGetArtifactInputSchema, "input").properties.artifactId;
   return {
     openapi: "3.1.0",
     info: {
       title: "Полка agent HTTP API",
       version: POLKA_VERSION,
-      summary:
-        "Save a self-contained HTML page to the token owner's Полка shelf and get an unlisted link.",
+      summary: "Save a self-contained HTML page to the token owner's Полка shelf and get an unlisted link.",
       description: `Полка (Polka) keeps pages, reports and prototypes made with AI agents and gives an unlisted link to them. This API is for agents and scripts that do not speak MCP; MCP clients connect to ${origin}/mcp instead (see ${origin}/llms.txt). The human creates the token in the browser; never ask them to paste it into a chat. Errors are JSON {code, message}; message is Russian and meant for the human.`,
       license: {
         name: "AGPL-3.0-only",
@@ -184,8 +170,7 @@ export function openApiDocument(origin: string) {
           },
           responses: {
             "200": {
-              description:
-                "Saved. state tells whether a link was issued; check moderation before presenting the link.",
+              description: "Saved. state tells whether a link was issued; check moderation before presenting the link.",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/PublishResponse" },
@@ -250,22 +235,18 @@ export function openApiDocument(origin: string) {
             ),
             "401": common["401"],
             "403": common["403"],
-            "409": problem(
-              "The same key was already used for different content.",
-              {
-                key: {
-                  code: "conflict",
-                  message: "Ключ уже относится к другой операции.",
-                },
+            "409": problem("The same key was already used for different content.", {
+              key: {
+                code: "conflict",
+                message: "Ключ уже относится к другой операции.",
               },
-            ),
+            }),
             "413": problem(
               `The page is larger than ${MAX_BYTES / 1024 / 1024} MB, the body larger than ${PUBLISH_BODY_LIMIT / 1024 / 1024} MB, or the shelf is out of space.`,
               {
                 size: {
                   code: "quota",
-                  message:
-                    "Страница больше 5 МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.",
+                  message: "Страница больше 5 МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.",
                 },
               },
             ),
@@ -301,16 +282,13 @@ export function openApiDocument(origin: string) {
               },
             },
             "401": common["401"],
-            "403": problem(
-              "A provisional shelf and a connection without the sign_in permission (or a static token).",
-              {
-                token: {
-                  code: "forbidden",
-                  message:
-                    "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
-                },
+            "403": problem("A provisional shelf and a connection without the sign_in permission (or a static token).", {
+              token: {
+                code: "forbidden",
+                message:
+                  "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
               },
-            ),
+            }),
             "429": common["429"],
           },
         },
@@ -348,16 +326,12 @@ export function openApiDocument(origin: string) {
             }),
             "401": common["401"],
             "403": common["403"],
-            "404": problem(
-              "No such work, or it is not visible to this token.",
-              {
-                missing: {
-                  code: "not_found",
-                  message:
-                    "Материал недоступен. Ссылка могла измениться или доступ был закрыт.",
-                },
+            "404": problem("No such work, or it is not visible to this token.", {
+              missing: {
+                code: "not_found",
+                message: "Материал недоступен. Ссылка могла измениться или доступ был закрыт.",
               },
-            ),
+            }),
             "429": common["429"],
             "503": common["503"],
           },
@@ -405,8 +379,7 @@ export function openApiDocument(origin: string) {
           },
           responses: {
             "200": {
-              description:
-                "Saved as a new version. link says whether the open link now shows it.",
+              description: "Saved as a new version. link says whether the open link now shows it.",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/EditsResponse" },
@@ -424,8 +397,7 @@ export function openApiDocument(origin: string) {
             "404": problem("No such work or file, or it is in the trash.", {
               missing: {
                 code: "not_found",
-                message:
-                  "Материал недоступен. Ссылка могла измениться или доступ был закрыт.",
+                message: "Материал недоступен. Ссылка могла измениться или доступ был закрыт.",
               },
             }),
             "409": {
@@ -519,10 +491,11 @@ export function openApiDocument(origin: string) {
           description:
             "For an upload begun with artifactId and baseRevisionId: every file whose path, mime, size and SHA-256 are those of a file in the base version is copied inside the store. Returns reused [index]; send only the other files. Safe to repeat.",
           security: [{ bearerAuth: ["revise"] }],
-          parameters: [
-            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-          ],
-          responses: { "200": { description: "reused: the indexes now stored." }, "404": { description: "No such upload for this token." } },
+          parameters: [{ name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": { description: "reused: the indexes now stored." },
+            "404": { description: "No such upload for this token." },
+          },
         },
       },
       "/api/v1/task-token": {
@@ -550,7 +523,12 @@ export function openApiDocument(origin: string) {
             "A feed to poll, oldest first. Without after it returns no events and nextCursor, the current end of the feed; keep that cursor and pass it back as after. after=0 reads the shelf's history from the start. Events: revision.saved, revision.accepted, owner.changed, artifact.metadata_updated, artifact.moved, artifact.trashed, artifact.restored, each {id, action, artifactId, revisionId?, actorType human|agent, at}. An event appears once its transaction and every older one have committed, so a cursor never skips one. Event ids and cursors are opaque strings. No content of a work and no share links. A token limited to folders sees only their works. Scope read.",
           security: [{ bearerAuth: ["read"] }],
           parameters: [
-            { name: "after", in: "query", required: false, schema: { type: "string", pattern: "^(0|[0-9]{1,20}:[0-9]{1,18})$" } },
+            {
+              name: "after",
+              in: "query",
+              required: false,
+              schema: { type: "string", pattern: "^(0|[0-9]{1,20}:[0-9]{1,18})$" },
+            },
             { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
           ],
           responses: {
@@ -597,7 +575,14 @@ export function openApiDocument(origin: string) {
             { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 100 } },
             { name: "folderId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
             { name: "state", in: "query", required: false, schema: { type: "string", enum: ["active", "trashed"] } },
-            { name: "shelfIds", in: "query", required: false, schema: { type: "string" }, description: "Search these shelves too, comma-separated: your own and department shelves the owner allowed this token at issue (allowedShelfIds). Active works only; every item says its shelfId." },
+            {
+              name: "shelfIds",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+              description:
+                "Search these shelves too, comma-separated: your own and department shelves the owner allowed this token at issue (allowedShelfIds). Active works only; every item says its shelfId.",
+            },
           ],
           responses: {
             "200": { description: "A page of works and nextCursor." },
@@ -672,21 +657,28 @@ export function openApiDocument(origin: string) {
             { name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
             { name: "revisionId", in: "query", required: false, schema: { type: "string", format: "uuid" } },
           ],
-          responses: { "200": { description: "The version and its files." }, "404": { description: "No such work or version for this token." } },
+          responses: {
+            "200": { description: "The version and its files." },
+            "404": { description: "No such work or version for this token." },
+          },
         },
       },
       "/api/v1/works/{artifactId}/revisions/{revisionId}/files/{index}": {
         get: {
           operationId: "getWorkFile",
           summary: "Download one file of a saved version",
-          description: "The file's bytes as application/octet-stream; X-Polka-Sha256 is its SHA-256. Scope source:read.",
+          description:
+            "The file's bytes as application/octet-stream; X-Polka-Sha256 is its SHA-256. Scope source:read.",
           security: [{ bearerAuth: ["source:read"] }],
           parameters: [
             { name: "artifactId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
             { name: "revisionId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
             { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0, maximum: 399 } },
           ],
-          responses: { "200": { description: "The bytes." }, "410": { description: "Blocked or deleted by moderation." } },
+          responses: {
+            "200": { description: "The bytes." },
+            "410": { description: "Blocked or deleted by moderation." },
+          },
         },
       },
       "/api/v1/cli/polka-pull.mjs": {
@@ -719,7 +711,9 @@ export function openApiDocument(origin: string) {
             "200": { description: "A page of the inventory and nextCursor (null on the last page)." },
             "400": { description: "A parameter is invalid." },
             "401": common["401"],
-            "403": { description: "A scope is missing, the token is limited to folders, or the shelf is not a personal one." },
+            "403": {
+              description: "A scope is missing, the token is limited to folders, or the shelf is not a personal one.",
+            },
             "429": common["429"],
           },
         },
@@ -780,9 +774,7 @@ export function openApiDocument(origin: string) {
           description:
             "Saves one version of the project and returns its receipt with shelfUrl. Every page, document and script is screened and indexed for search.",
           security: [{ bearerAuth: ["capture"] }],
-          parameters: [
-            { name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
-          ],
+          parameters: [{ name: "uploadId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
           responses: {
             "200": { description: "The receipt: artifactId, revisionId, number, shelfUrl." },
             "409": { description: "A file is missing, or a newer version appeared since baseRevisionId." },
@@ -832,16 +824,10 @@ export function openApiDocument(origin: string) {
       },
       schemas: {
         PublishRequest: {
-          ...withNotes(
-            jsonSchema(agentPublishInputSchema, "input"),
-            PUBLISH_FIELD_NOTES,
-          ),
+          ...withNotes(jsonSchema(agentPublishInputSchema, "input"), PUBLISH_FIELD_NOTES),
           description: "Send exactly one of html and component.",
         },
-        PublishResponse: withNotes(
-          jsonSchema(publishResponseSchema, "output"),
-          PUBLISH_RESPONSE_NOTES,
-        ),
+        PublishResponse: withNotes(jsonSchema(publishResponseSchema, "output"), PUBLISH_RESPONSE_NOTES),
         StatusResponse: jsonSchema(statusResponseSchema, "output"),
         SignInLinkResponse: jsonSchema(signInLinkResponseSchema, "output"),
         EditsRequest: jsonSchema(editsBodySchema, "input"),

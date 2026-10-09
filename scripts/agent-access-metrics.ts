@@ -57,7 +57,21 @@ try {
      FROM artifacts WHERE trashed_at IS NULL AND purged_at IS NULL`,
   );
   console.log(
-    JSON.stringify({ event: "agent_access_metrics", at: new Date().toISOString(), ...accepted, ...tokens, ...principals, ...owners, ...reads, ...opens, machine_read_share_percent: readShare }, null, 2),
+    JSON.stringify(
+      {
+        event: "agent_access_metrics",
+        at: new Date().toISOString(),
+        ...accepted,
+        ...tokens,
+        ...principals,
+        ...owners,
+        ...reads,
+        ...opens,
+        machine_read_share_percent: readShare,
+      },
+      null,
+      2,
+    ),
   );
 } finally {
   await db.end();

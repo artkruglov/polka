@@ -1,9 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import type {
-  AgentScope,
-  OAuthConsentDetails,
-} from "../../../../../packages/contracts/index.ts";
+import type { AgentScope, OAuthConsentDetails } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client, oauthConsent } from "../../shared/api/client.ts";
 import { knownShelf } from "../../shared/lib/known-shelf.ts";
 import { visitSource } from "../../shared/lib/visit-source.ts";
@@ -16,17 +13,14 @@ import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import "./styles.css";
 
 const entryErrors: Record<string, string> = {
-  client:
-    "Это приложение не зарегистрировано на этой Полке. Удалите коннектор в приложении и добавьте его заново.",
-  redirect:
-    "Адрес возврата не совпадает с тем, что приложение указало при регистрации. Подключение остановлено.",
+  client: "Это приложение не зарегистрировано на этой Полке. Удалите коннектор в приложении и добавьте его заново.",
+  redirect: "Адрес возврата не совпадает с тем, что приложение указало при регистрации. Подключение остановлено.",
   rate: "Слишком много попыток подключения. Повторите через 10 минут.",
   invalid_request:
     "Приложение прислало неполный запрос: Полка требует защиту PKCE (S256). Обновите приложение или коннектор.",
   unsupported_response_type:
     "Приложение запросило неподдерживаемый способ входа. Полка выдаёт доступ только через код авторизации.",
-  invalid_target:
-    "Приложение запросило доступ к другому адресу. Коннектор должен указывать на адрес /mcp этой Полки.",
+  invalid_target: "Приложение запросило доступ к другому адресу. Коннектор должен указывать на адрес /mcp этой Полки.",
   invalid_scope: "Приложение запросило некорректный набор разрешений.",
 };
 
@@ -38,10 +32,7 @@ type State =
   | { kind: "ready"; details: OAuthConsentDetails }
   | { kind: "leaving"; host: string; approved: boolean };
 
-const signInHere = () =>
-  location.assign(
-    `/signup?next=${encodeURIComponent(location.pathname + location.search)}`,
-  );
+const signInHere = () => location.assign(`/signup?next=${encodeURIComponent(location.pathname + location.search)}`);
 
 export function OAuthConsent() {
   const account = useAccount();
@@ -53,15 +44,13 @@ export function OAuthConsent() {
       ? {
           kind: "error",
           message:
-            entryErrors[entryError] ??
-            "Запрос на подключение некорректен. Начните подключение заново в приложении.",
+            entryErrors[entryError] ?? "Запрос на подключение некорректен. Начните подключение заново в приложении.",
         }
       : requestId
         ? { kind: "loading" }
         : {
             kind: "error",
-            message:
-              "Эта страница открывается из Claude, ChatGPT или другого MCP-клиента при подключении Полки.",
+            message: "Эта страница открывается из Claude, ChatGPT или другого MCP-клиента при подключении Полки.",
           },
   );
   const [scopes, setScopes] = useState<AgentScope[]>([]);
@@ -124,9 +113,7 @@ export function OAuthConsent() {
       setState({
         kind: "leaving",
         // «Возвращаем вас …»: a site by its host, an extension by what it is.
-        host: state.details.client.extension
-          ? "в расширение браузера"
-          : `на ${state.details.client.redirectHost}`,
+        host: state.details.client.extension ? "в расширение браузера" : `на ${state.details.client.redirectHost}`,
         approved: decision === "approve",
       });
       location.assign(result.redirectTo);
@@ -147,18 +134,12 @@ export function OAuthConsent() {
   };
 
   const toggle = (scope: AgentScope) =>
-    setScopes((current) =>
-      current.includes(scope)
-        ? current.filter((item) => item !== scope)
-        : [...current, scope],
-    );
+    setScopes((current) => (current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]));
 
   return (
     <AppShell current="connections" account={account}>
       <main className="oauth-consent" id="main">
-        {state.kind === "loading" && (
-          <p role="status">Загружаем запрос на подключение…</p>
-        )}
+        {state.kind === "loading" && <p role="status">Загружаем запрос на подключение…</p>}
         {state.kind === "error" && (
           <section className="oauth-card">
             <span className="eyebrow">Подключение к Полке</span>
@@ -167,28 +148,20 @@ export function OAuthConsent() {
           </section>
         )}
         {state.kind === "guest" && (
-          <GuestChoice
-            requestId={requestId}
-            onStarted={() => setState({ kind: "loading" })}
-          />
+          <GuestChoice requestId={requestId} onStarted={() => setState({ kind: "loading" })} />
         )}
         {state.kind === "leaving" && (
           <section className="oauth-card" role="status">
             <span className="eyebrow">Подключение к Полке</span>
-            <h1>
-              {state.approved ? "Доступ разрешён" : "Подключение отклонено"}
-            </h1>
+            <h1>{state.approved ? "Доступ разрешён" : "Подключение отклонено"}</h1>
             <p>Возвращаем вас {state.host}…</p>
             {state.approved && (
               <>
                 <p>
-                  Вернитесь к агенту: теперь он может сохранять работы на вашу
-                  полку. Подключение видно в разделе «Агенты».
+                  Вернитесь к агенту: теперь он может сохранять работы на вашу полку. Подключение видно в разделе
+                  «Агенты».
                 </p>
-                <AskAgentHint
-                  lead="Чтобы вернуться в эту полку из браузера, попросите агента:"
-                  tail=""
-                />
+                <AskAgentHint lead="Чтобы вернуться в эту полку из браузера, попросите агента:" tail="" />
               </>
             )}
           </section>
@@ -241,8 +214,8 @@ function ShelfWhere({
       <div className="shelf-where">
         <strong>Работы пойдут в вашу полку (временная, этот браузер).</strong>
         <small>
-          Делиться ссылками можно будет, когда закрепите полку — войдите{" "}
-          {ways.with}. Если 30 дней ею не пользоваться, она удалится.
+          Делиться ссылками можно будет, когда закрепите полку — войдите {ways.with}. Если 30 дней ею не пользоваться,
+          она удалится.
         </small>
       </div>
     );
@@ -251,8 +224,7 @@ function ShelfWhere({
   if (team)
     return (
       <div className="shelf-where">
-        <strong>Работы будут сохраняться на полку отдела «{team}»</strong> — их увидят все её
-        участники.
+        <strong>Работы будут сохраняться на полку отдела «{team}»</strong> — их увидят все её участники.
       </div>
     );
   return (
@@ -274,13 +246,7 @@ function ShelfWhere({
  * shelf here and connects the agent to it; «Войти» is for an existing shelf.
  * A browser that remembers a shelf is offered that one first.
  */
-function GuestChoice({
-  requestId,
-  onStarted,
-}: {
-  requestId: string;
-  onStarted: () => void;
-}) {
+function GuestChoice({ requestId, onStarted }: { requestId: string; onStarted: () => void }) {
   const hint = knownShelf();
   const ways = useSignInWays();
   const [busy, setBusy] = useState(false);
@@ -293,11 +259,7 @@ function GuestChoice({
       rememberAccount(await client.session());
       onStarted();
     } catch (e) {
-      setError(
-        e instanceof ApiError && e.status < 500
-          ? e.message
-          : "Не удалось открыть полку. Повторите попытку.",
-      );
+      setError(e instanceof ApiError && e.status < 500 ? e.message : "Не удалось открыть полку. Повторите попытку.");
       setBusy(false);
     }
   };
@@ -344,8 +306,7 @@ const READ_SCOPES: AgentScope[] = ["context", "read", "source:read"];
 /** Links and sign-in links belong to one's own shelf for now. */
 const OWN_SHELF_SCOPES: AgentScope[] = ["share", "sign_in", "sessions"];
 const fitsRole = (role: string, scope: AgentScope) =>
-  (role !== "reader" || READ_SCOPES.includes(scope)) &&
-  (role === "owner" || !OWN_SHELF_SCOPES.includes(scope));
+  (role !== "reader" || READ_SCOPES.includes(scope)) && (role === "owner" || !OWN_SHELF_SCOPES.includes(scope));
 const chosenRole = (details: OAuthConsentDetails, shelfId: string | null) =>
   details.shelves?.find((shelf) => shelf.id === shelfId)?.role ?? "owner";
 const ROLE_NAME: Record<string, string> = {
@@ -429,41 +390,31 @@ function ConsentForm({
   onDecide: (decision: "approve" | "deny") => void;
 }) {
   const role = chosenRole(details, shelfId);
-  const offered = scopeOptions.filter(
-    (scope) => details.scopes.includes(scope.id) && fitsRole(role, scope.id),
-  );
+  const offered = scopeOptions.filter((scope) => details.scopes.includes(scope.id) && fitsRole(role, scope.id));
   const extension = details.client.extension;
   return (
     <section className="oauth-card" aria-labelledby="oauth-title">
-      <span className="eyebrow">
-        {extension?.official
-          ? "Расширение браузера «На Полку»"
-          : "Подключение к Полке"}
-      </span>
+      <span className="eyebrow">{extension?.official ? "Расширение браузера «На Полку»" : "Подключение к Полке"}</span>
       {extension ? (
         <>
           <h1 id="oauth-title">
             Разрешить доступ к вашей полке для{" "}
             <span className="oauth-host">
-              {extension.official
-                ? "расширения браузера «На Полку»"
-                : "расширения браузера"}
+              {extension.official ? "расширения браузера «На Полку»" : "расширения браузера"}
             </span>
             ?
           </h1>
           <p className="oauth-lead">
             {extension.official ? (
               <>
-                Это официальное расширение Полки. Оно сохраняет работы
-                Claude и ChatGPT из вашего браузера на вашу полку.
+                Это официальное расширение Полки. Оно сохраняет работы Claude и ChatGPT из вашего браузера на вашу
+                полку.
               </>
             ) : (
               <>
-                Ответ получит расширение браузера с ID{" "}
-                <code className="oauth-extension-id">{extension.id}</code>.
-                Оно называет себя «{details.client.name}» — это имя оно указало
-                само. Разрешайте, только если вы сами установили это расширение
-                и нажали в нём «Подключить».
+                Ответ получит расширение браузера с ID <code className="oauth-extension-id">{extension.id}</code>. Оно
+                называет себя «{details.client.name}» — это имя оно указало само. Разрешайте, только если вы сами
+                установили это расширение и нажали в нём «Подключить».
               </>
             )}
           </p>
@@ -471,13 +422,11 @@ function ConsentForm({
       ) : (
         <>
           <h1 id="oauth-title">
-            Разрешить доступ к вашей полке для{" "}
-            <span className="oauth-host">{details.client.redirectHost}</span>?
+            Разрешить доступ к вашей полке для <span className="oauth-host">{details.client.redirectHost}</span>?
           </h1>
           <p className="oauth-lead">
-            Ответ получит сайт <strong>{details.client.redirectHost}</strong>.
-            Приложение называет себя «{details.client.name}» — это имя оно
-            указало само. Разрешайте, только если вы сами начали подключение на
+            Ответ получит сайт <strong>{details.client.redirectHost}</strong>. Приложение называет себя «
+            {details.client.name}» — это имя оно указало само. Разрешайте, только если вы сами начали подключение на
             этом сайте.
           </p>
         </>
@@ -489,19 +438,12 @@ function ConsentForm({
       />
       <ShelfChoice details={details} shelfId={shelfId} onShelf={onShelf} disabled={busy !== null} />
       {details.replaces && (
-        <Notice>
-          У этого приложения уже есть доступ. Новое подключение заменит его,
-          прежний доступ закроется.
-        </Notice>
+        <Notice>У этого приложения уже есть доступ. Новое подключение заменит его, прежний доступ закроется.</Notice>
       )}
       <fieldset className="oauth-scopes">
         <legend>Что сможет приложение</legend>
         {offered.map((scope) => (
-          <label
-            key={scope.id}
-            className="oauth-scope"
-            data-selected={scopes.includes(scope.id)}
-          >
+          <label key={scope.id} className="oauth-scope" data-selected={scopes.includes(scope.id)}>
             <input
               type="checkbox"
               checked={scope.id === "context" || scopes.includes(scope.id)}
@@ -510,11 +452,7 @@ function ConsentForm({
             />
             <span>
               <strong>{scope.label}</strong>
-              <small>
-                {scope.id === "context"
-                  ? `${scope.description} Нужно всегда.`
-                  : scope.description}
-              </small>
+              <small>{scope.id === "context" ? `${scope.description} Нужно всегда.` : scope.description}</small>
             </span>
           </label>
         ))}
@@ -522,12 +460,10 @@ function ConsentForm({
       <p className="oauth-terms">
         <ShieldCheck size={17} />
         <span>
-          Разрешения действуют на всю вашу полку. Приложение получает ключ на{" "}
-          {details.accessMinutes} минут и само продлевает его, пока пользуется
-          Полкой; если оно не обращается {details.refreshDays} дней, доступ
-          закроется, а без повторного подтверждения — не позже чем через год.
-          Отозвать доступ можно в любой момент в разделе «Агенты». Уже выданные
-          ссылки при отзыве не закрываются — их закрывают на вашей полке.
+          Разрешения действуют на всю вашу полку. Приложение получает ключ на {details.accessMinutes} минут и само
+          продлевает его, пока пользуется Полкой; если оно не обращается {details.refreshDays} дней, доступ закроется, а
+          без повторного подтверждения — не позже чем через год. Отозвать доступ можно в любой момент в разделе
+          «Агенты». Уже выданные ссылки при отзыве не закрываются — их закрывают на вашей полке.
         </span>
       </p>
       {error && <Notice tone="error">{error}</Notice>}
@@ -540,11 +476,7 @@ function ConsentForm({
         >
           Разрешить
         </Button>
-        <Button
-          busy={busy === "deny"}
-          disabled={busy !== null}
-          onClick={() => onDecide("deny")}
-        >
+        <Button busy={busy === "deny"} disabled={busy !== null} onClick={() => onDecide("deny")}>
           Отклонить
         </Button>
       </div>

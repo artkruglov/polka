@@ -10,29 +10,14 @@ const METHOD = "polka:sign-in-method";
 const FRESH_NOTE = "polka:fresh-shelf-note";
 const ENTERED = "polka:entered-by-agent";
 
-export type SignInMethod =
-  | "email"
-  | "password"
-  | "yandex"
-  | "vk"
-  | "google"
-  | "oidc"
-  | "agent";
+export type SignInMethod = "email" | "password" | "yandex" | "vk" | "google" | "oidc" | "agent";
 export type KnownShelf = {
   displayName: string;
   method: SignInMethod | null;
   at: string;
 };
 
-const METHODS: SignInMethod[] = [
-  "email",
-  "password",
-  "yandex",
-  "vk",
-  "google",
-  "oidc",
-  "agent",
-];
+const METHODS: SignInMethod[] = ["email", "password", "yandex", "vk", "google", "oidc", "agent"];
 
 export function knownShelf(): KnownShelf | null {
   try {
@@ -76,11 +61,7 @@ export function rememberKnownShelf(displayName: string) {
     const hint: KnownShelf = {
       displayName: displayName.slice(0, 80),
       method:
-        method && METHODS.includes(method)
-          ? method
-          : previous?.displayName === displayName
-            ? previous.method
-            : null,
+        method && METHODS.includes(method) ? method : previous?.displayName === displayName ? previous.method : null,
       at: new Date().toISOString(),
     };
     localStorage.setItem(HINT, JSON.stringify(hint));

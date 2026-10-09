@@ -5,11 +5,7 @@
 //   npm run editorial:content-scan
 import { readFile, readdir, stat } from "node:fs/promises";
 import { inspectHtml } from "../apps/server/html.ts";
-import {
-  CATEGORY_LABEL,
-  findingsOf,
-  describeFindings,
-} from "../apps/server/content-filter/policy.ts";
+import { CATEGORY_LABEL, findingsOf, describeFindings } from "../apps/server/content-filter/policy.ts";
 import { mergeResults, scanText } from "../apps/server/content-filter/scanner.ts";
 
 const root = new URL("../content/editorial/", import.meta.url);
@@ -42,9 +38,7 @@ for (const slug of entries) {
   // Code signals below the threshold are listed too: an editorial page should
   // have none, and the reviewer decides whether a mention is an example.
   const code = mergeResults(...results).hits.malicious_code;
-  const line = findings.length
-    ? `ОТМЕЧЕНО: ${describeFindings(findings)}`
-    : "чисто";
+  const line = findings.length ? `ОТМЕЧЕНО: ${describeFindings(findings)}` : "чисто";
   if (findings.length) flagged++;
   console.log(
     [
@@ -59,4 +53,3 @@ for (const slug of entries) {
 console.log(
   `\n${entries.length} материалов, отмечено фильтром: ${flagged}. Ручная проверка — docs/EDITORIAL_CHECKLIST.md.`,
 );
-

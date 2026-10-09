@@ -1,10 +1,7 @@
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  Client,
-  StreamableHTTPClientTransport,
-} from "@modelcontextprotocol/client";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { uuid } from "../packages/contracts/index.ts";
@@ -51,14 +48,9 @@ function endpointUrl(value: string): URL {
   } catch {
     throw new Error("invalid endpoint");
   }
-  if (url.username || url.password || url.protocol === "file:")
-    throw new Error("invalid endpoint");
+  if (url.username || url.password || url.protocol === "file:") throw new Error("invalid endpoint");
   if (url.protocol === "https:") return url;
-  if (
-    url.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase())
-  )
-    return url;
+  if (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase())) return url;
   throw new Error("endpoint must use HTTPS or loopback HTTP");
 }
 
@@ -66,24 +58,16 @@ async function readRequestFile(filename: string): Promise<unknown> {
   const handle = await open(filename, "r");
   try {
     const initial = await handle.stat();
-    if (!initial.isFile())
-      throw new Error("request path is not a regular file");
-    if (initial.size > MAX_REQUEST_BYTES)
-      throw new Error("request file is too large");
+    if (!initial.isFile()) throw new Error("request path is not a regular file");
+    if (initial.size > MAX_REQUEST_BYTES) throw new Error("request file is too large");
     const bytes = Buffer.alloc(MAX_REQUEST_BYTES + 1);
     let bytesRead = 0;
     while (bytesRead < bytes.length) {
-      const result = await handle.read(
-        bytes,
-        bytesRead,
-        bytes.length - bytesRead,
-        bytesRead,
-      );
+      const result = await handle.read(bytes, bytesRead, bytes.length - bytesRead, bytesRead);
       if (!result.bytesRead) break;
       bytesRead += result.bytesRead;
     }
-    if (bytesRead > MAX_REQUEST_BYTES)
-      throw new Error("request file is too large");
+    if (bytesRead > MAX_REQUEST_BYTES) throw new Error("request file is too large");
     return JSON.parse(bytes.subarray(0, bytesRead).toString("utf8"));
   } finally {
     await handle.close();
@@ -130,9 +114,7 @@ async function run(filename: string, endpoint: string, token: string) {
       capture.structuredContent,
       status.structuredContent,
     );
-    console.log(
-      JSON.stringify({ capture: captureReceipt, status: statusReceipt }),
-    );
+    console.log(JSON.stringify({ capture: captureReceipt, status: statusReceipt }));
   } finally {
     await client.close();
   }
@@ -150,30 +132,19 @@ function safeStatus(value: unknown): {
 } | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
-  if (typeof source.uploadId !== "string" || typeof source.state !== "string")
-    return null;
+  if (typeof source.uploadId !== "string" || typeof source.state !== "string") return null;
   const receipt = source.receipt === null ? null : safeReceipt(source.receipt);
   if (source.receipt !== null && !receipt) return null;
   return { uploadId: source.uploadId, state: source.state, receipt };
 }
 
-function validateSuccessfulReceipts(
-  captureValue: unknown,
-  statusValue: unknown,
-) {
+function validateSuccessfulReceipts(captureValue: unknown, statusValue: unknown) {
   const captureReceipt = safeReceipt(captureValue);
   if (!captureReceipt) throw new Error("capture did not return a receipt");
   const statusReceipt = safeStatus(statusValue);
-  if (
-    !statusReceipt ||
-    statusReceipt.state !== "saved" ||
-    statusReceipt.uploadId !== captureReceipt.uploadId
-  )
+  if (!statusReceipt || statusReceipt.state !== "saved" || statusReceipt.uploadId !== captureReceipt.uploadId)
     throw new Error("status did not return a receipt");
-  if (
-    !statusReceipt.receipt ||
-    JSON.stringify(statusReceipt.receipt) !== JSON.stringify(captureReceipt)
-  )
+  if (!statusReceipt.receipt || JSON.stringify(statusReceipt.receipt) !== JSON.stringify(captureReceipt))
     throw new Error("status receipt mismatch");
   return { captureReceipt, statusReceipt };
 }
@@ -193,9 +164,7 @@ async function main() {
   const [filename, endpoint] = process.argv.slice(2);
   const token = process.env.POLKA_MCP_TOKEN;
   if (!token) {
-    console.error(
-      JSON.stringify({ ok: false, error: "POLKA_MCP_TOKEN is required" }),
-    );
+    console.error(JSON.stringify({ ok: false, error: "POLKA_MCP_TOKEN is required" }));
     process.exitCode = 1;
   } else if (!filename || !endpoint) {
     console.error(
@@ -215,8 +184,4 @@ async function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-)
-  void main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) void main();

@@ -13,33 +13,20 @@ import {
   transitionArtifactFromAgent,
   updateArtifactFromAgent,
 } from "../apps/server/agent-management.ts";
-import {
-  MCP_AUDIENCE,
-  type ServiceActor,
-} from "../apps/server/service-auth.ts";
+import { MCP_AUDIENCE, type ServiceActor } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const password = randomBytes(24).toString("hex");
 let owner: Awaited<ReturnType<typeof createAccount>>;
 let other: Awaited<ReturnType<typeof createAccount>>;
 
-async function connection(
-  account: Awaited<ReturnType<typeof createAccount>>,
-  scopes: string[],
-) {
+async function connection(account: Awaited<ReturnType<typeof createAccount>>, scopes: string[]) {
   const id = randomUUID();
   await db.query(
     `INSERT INTO agent_connections(
        id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at
      ) VALUES($1,$2,$3,$4,'management test',$5,$6,now()+interval '1 day')`,
-    [
-      id,
-      account.tenant,
-      account.id,
-      sha256(randomBytes(32)),
-      scopes,
-      MCP_AUDIENCE,
-    ],
+    [id, account.tenant, account.id, sha256(randomBytes(32)), scopes, MCP_AUDIENCE],
   );
   return {
     accountId: account.id,
@@ -90,15 +77,11 @@ async function artifact(
       `${account.tenant}/agent-management/${revisionId}`,
     ],
   );
-  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
-    artifactId,
-    revisionId,
-  ]);
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [artifactId, revisionId]);
   return { artifactId, revisionId };
 }
 
-const rejected = (status: number, code: string) => (error: any) =>
-  error?.status === status && error?.code === code;
+const rejected = (status: number, code: string) => (error: any) => error?.status === status && error?.code === code;
 
 before(async () => {
   const suffix = randomBytes(5).toString("hex");
@@ -210,21 +193,14 @@ test("agent reads are tenant-safe and preserve state-aware microsecond cursors",
   );
   for (const secret of ["share", "token", "object_key", "url", "manifest"])
     assert.doesNotMatch(JSON.stringify(visible), new RegExp(secret, "i"));
-  await assert.rejects(
-    getArtifactForAgent(actor, { artifactId: foreign.artifactId }),
-    rejected(404, "not_found"),
-  );
+  await assert.rejects(getArtifactForAgent(actor, { artifactId: foreign.artifactId }), rejected(404, "not_found"));
 
   const folders = [
     { id: randomUUID(), name: "Management A" },
     { id: randomUUID(), name: "Management B" },
   ];
   for (const folder of folders)
-    await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [
-      folder.id,
-      owner.tenant,
-      folder.name,
-    ]);
+    await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [folder.id, owner.tenant, folder.name]);
   await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [
     randomUUID(),
     other.tenant,
@@ -279,11 +255,7 @@ test("metadata mutation has connection-bound atomic receipts and current auth re
   assert.equal(replay.replayed, true);
   assert.deepEqual(replay.applied, first.applied);
   assert.equal(
-    (
-      await db.query("SELECT title FROM artifacts WHERE id=$1", [
-        target.artifactId,
-      ])
-    ).rows[0].title,
+    (await db.query("SELECT title FROM artifacts WHERE id=$1", [target.artifactId])).rows[0].title,
     "Metadata current",
   );
   await assert.rejects(
@@ -293,10 +265,7 @@ test("metadata mutation has connection-bound atomic receipts and current auth re
     }),
     rejected(409, "conflict"),
   );
-  await assert.rejects(
-    updateArtifactFromAgent(otherConnection, firstInput),
-    rejected(409, "conflict"),
-  );
+  await assert.rejects(updateArtifactFromAgent(otherConnection, firstInput), rejected(409, "conflict"));
   await assert.rejects(
     updateArtifactFromAgent(readOnly, {
       ...firstInput,
@@ -334,27 +303,12 @@ test("metadata mutation has connection-bound atomic receipts and current auth re
     [target.artifactId],
   );
   assert.equal(auditRows.rows.length, 2);
-  assert.ok(
-    auditRows.rows.every(
-      (row) =>
-        row.actor_type === "agent" && row.connection_id === actor.connectionId,
-    ),
-  );
+  assert.ok(auditRows.rows.every((row) => row.actor_type === "agent" && row.connection_id === actor.connectionId));
 
-  await db.query(
-    "UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1",
-    [actor.connectionId],
-  );
-  await assert.rejects(
-    updateArtifactFromAgent(actor, firstInput),
-    rejected(401, "unauthorized"),
-  );
+  await db.query("UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE id=$1", [actor.connectionId]);
+  await assert.rejects(updateArtifactFromAgent(actor, firstInput), rejected(401, "unauthorized"));
   assert.equal(
-    (
-      await db.query("SELECT title FROM artifacts WHERE id=$1", [
-        target.artifactId,
-      ])
-    ).rows[0].title,
+    (await db.query("SELECT title FROM artifacts WHERE id=$1", [target.artifactId])).rows[0].title,
     "Metadata current",
   );
 
@@ -386,9 +340,7 @@ test("metadata mutation has connection-bound atomic receipts and current auth re
       rejected(401, "unauthorized"),
     );
   } finally {
-    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [
-      owner.id,
-    ]);
+    await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [owner.id]);
   }
 });
 
@@ -400,13 +352,7 @@ test("manage-only lifecycle is exact-retry safe, ABA-safe, and preserves source 
   await db.query(
     `INSERT INTO shares(id,tenant_id,artifact_id,revision_id,token_hash,expires_at)
      VALUES($1,$2,$3,$4,$5,now()+interval '1 day')`,
-    [
-      shareId,
-      owner.tenant,
-      target.artifactId,
-      target.revisionId,
-      sha256(randomBytes(32)),
-    ],
+    [shareId, owner.tenant, target.artifactId, target.revisionId, sha256(randomBytes(32))],
   );
   await db.query(
     `INSERT INTO grants(hash,share_id,revision_id,expires_at)
@@ -427,65 +373,34 @@ test("manage-only lifecycle is exact-retry safe, ABA-safe, and preserves source 
     expectedLifecycleVersion: 0,
     expectedRevisionId: target.revisionId,
   };
-  await assert.rejects(
-    transitionArtifactFromAgent(foreignActor, request, "trashed"),
-    rejected(404, "not_found"),
-  );
+  await assert.rejects(transitionArtifactFromAgent(foreignActor, request, "trashed"), rejected(404, "not_found"));
   const trashed = await transitionArtifactFromAgent(actor, request, "trashed");
   assert.equal(trashed.lifecycleVersion, 1);
   assert.ok(trashed.trashedAt);
-  assert.deepEqual(
-    await transitionArtifactFromAgent(actor, request, "trashed"),
-    trashed,
-  );
+  assert.deepEqual(await transitionArtifactFromAgent(actor, request, "trashed"), trashed);
   assert.equal(
     Number(
       (
-        await db.query(
-          "SELECT count(*) FROM audit_outbox WHERE target_id=$1 AND action='artifact.trashed'",
-          [target.artifactId],
-        )
+        await db.query("SELECT count(*) FROM audit_outbox WHERE target_id=$1 AND action='artifact.trashed'", [
+          target.artifactId,
+        ])
       ).rows[0].count,
     ),
     1,
   );
-  assert.equal(
-    (await db.query("SELECT revoked FROM shares WHERE id=$1", [shareId]))
-      .rows[0].revoked,
-    true,
-  );
-  assert.equal(
-    Number(
-      (
-        await db.query("SELECT count(*) FROM grants WHERE share_id=$1", [
-          shareId,
-        ])
-      ).rows[0].count,
-    ),
-    0,
-  );
-  const restored = await transitionArtifactFromAgent(
-    actor,
-    { ...request, expectedLifecycleVersion: 1 },
-    "active",
-  );
+  assert.equal((await db.query("SELECT revoked FROM shares WHERE id=$1", [shareId])).rows[0].revoked, true);
+  assert.equal(Number((await db.query("SELECT count(*) FROM grants WHERE share_id=$1", [shareId])).rows[0].count), 0);
+  const restored = await transitionArtifactFromAgent(actor, { ...request, expectedLifecycleVersion: 1 }, "active");
   assert.deepEqual(restored, {
     id: target.artifactId,
     trashedAt: null,
     lifecycleVersion: 2,
   });
   assert.deepEqual(
-    await transitionArtifactFromAgent(
-      actor,
-      { ...request, expectedLifecycleVersion: 1 },
-      "active",
-    ),
+    await transitionArtifactFromAgent(actor, { ...request, expectedLifecycleVersion: 1 }, "active"),
     restored,
   );
-  await assert.rejects(
-    transitionArtifactFromAgent(actor, request, "trashed"),
-    rejected(409, "conflict"),
-  );
+  await assert.rejects(transitionArtifactFromAgent(actor, request, "trashed"), rejected(409, "conflict"));
   const afterSource = (
     await db.query(
       `SELECT tenant.used_bytes,revision.object_key,revision.object_version,
@@ -496,11 +411,7 @@ test("manage-only lifecycle is exact-retry safe, ABA-safe, and preserves source 
     )
   ).rows[0];
   assert.deepEqual(afterSource, before);
-  assert.equal(
-    (await db.query("SELECT revoked FROM shares WHERE id=$1", [shareId]))
-      .rows[0].revoked,
-    true,
-  );
+  assert.equal((await db.query("SELECT revoked FROM shares WHERE id=$1", [shareId])).rows[0].revoked, true);
 });
 
 async function untilEvents(actor: ServiceActor, after: string, count: number) {
@@ -517,10 +428,13 @@ test("the events feed shows works' events by cursor, only its own shelf, without
   const mine = await artifact(owner, "Events work");
   const theirs = await artifact(other, "Foreign events work");
   const emit = (account: typeof owner, action: string, target: string, payload: object | null = null) =>
-    db.query(
-      "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,payload) VALUES($1,$2,$3,$4,$5)",
-      [account.tenant, account.id, action, target, payload],
-    );
+    db.query("INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,payload) VALUES($1,$2,$3,$4,$5)", [
+      account.tenant,
+      account.id,
+      action,
+      target,
+      payload,
+    ]);
   // Tailing: nothing back, the cursor is the current end.
   const tail = await listEventsForAgent(actor, {});
   assert.deepEqual(tail.events, []);
@@ -562,10 +476,7 @@ test("the events feed shows works' events by cursor, only its own shelf, without
     slow.release();
   }
   const late = await untilEvents(actor, second.nextCursor, 2);
-  assert.deepEqual(
-    late.events.map((event) => event.action).sort(),
-    ["artifact.moved", "artifact.restored"],
-  );
+  assert.deepEqual(late.events.map((event) => event.action).sort(), ["artifact.moved", "artifact.restored"]);
   // Needs the read scope.
   await assert.rejects(listEventsForAgent(await connection(owner, ["context"]), {}));
   await assert.rejects(listEventsForAgent(actor, { after: "abc" } as never));
@@ -631,10 +542,11 @@ test("agent reads are counted per shelf and day, nothing else", async () => {
   // The cursor bootstrap and an empty poll are not reads; a poll that returns events is.
   const start = await listEventsForAgent(actor, {});
   assert.equal((await count()) - before, 2);
-  await db.query(
-    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'artifact.trashed',$3)",
-    [owner.tenant, owner.id, work.artifactId],
-  );
+  await db.query("INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,'artifact.trashed',$3)", [
+    owner.tenant,
+    owner.id,
+    work.artifactId,
+  ]);
   let polled = 0;
   for (let tries = 0; tries < 60 && !polled; tries++) {
     polled = (await listEventsForAgent(actor, { after: start.nextCursor })).events.length;
@@ -725,7 +637,9 @@ test("the shelf snapshot shows works, versions, trash and accepted marks as they
   assert.equal(recent.get(w1.artifactId).acceptedRevisionId, rev2);
   // "Now" by the database's clock: rows were written with its now(), and the
   // Docker VM's clock may run ahead of this process's.
-  const { rows: [{ t: dbNow }] } = await db.query<{ t: Date }>("SELECT now() AS t");
+  const {
+    rows: [{ t: dbNow }],
+  } = await db.query<{ t: Date }>("SELECT now() AS t");
   const now = await at(dbNow.toISOString());
   assert.equal(now.get(w1.artifactId).acceptedRevisionId, null, "the mark was cleared");
   assert.ok(now.has(w2.artifactId));
@@ -737,7 +651,9 @@ test("the shelf snapshot shows works, versions, trash and accepted marks as they
   assert.equal(sharp.get(w1.artifactId).revision.number, 2);
 
   // Not the future; the «+» offset arriving as a space is understood; a bad cursor and a missing read scope are refused.
-  await assert.rejects(shelfSnapshotForAgent(actor, { at: new Date(Date.now() + 3_600_000).toISOString() }), { status: 400 });
+  await assert.rejects(shelfSnapshotForAgent(actor, { at: new Date(Date.now() + 3_600_000).toISOString() }), {
+    status: 400,
+  });
   const plus = await shelfSnapshotForAgent(actor, { at: day(0).replace("Z", "+00:00").replace("+", " "), limit: 1 });
   assert.ok(plus.items.length <= 1);
   await assert.rejects(shelfSnapshotForAgent(actor, { at: day(0), cursor: "nope" as never }));
@@ -750,6 +666,9 @@ test("the shelf snapshot shows works, versions, trash and accepted marks as they
   assert.ok(!foreign.items.some((item) => mine.includes(item.id)));
   assert.ok(foreign.items.some((item) => item.id === theirs.artifactId));
   // A snapshot is a read: it is counted.
-  const counted = Number((await db.query("SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1", [owner.tenant])).rows[0].n);
+  const counted = Number(
+    (await db.query("SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1", [owner.tenant]))
+      .rows[0].n,
+  );
   assert.ok(counted > 0);
 });

@@ -8,18 +8,9 @@ import { readFileSync } from "node:fs";
 import { createApp, sourceStars } from "../apps/server/app.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  STARS_RETRY_MS,
-  STARS_TTL_MS,
-  createStarCounter,
-  githubRepository,
-} from "../apps/server/source-stars.ts";
+import { STARS_RETRY_MS, STARS_TTL_MS, createStarCounter, githubRepository } from "../apps/server/source-stars.ts";
 import { s3 } from "../apps/server/storage.ts";
-import {
-  MIN_STARS_SHOWN,
-  formatStars,
-  selfHostGuideUrl,
-} from "../apps/web/src/shared/lib/project-links.ts";
+import { MIN_STARS_SHOWN, formatStars, selfHostGuideUrl } from "../apps/web/src/shared/lib/project-links.ts";
 
 const app = await createApp();
 const originalFetch = globalThis.fetch;
@@ -81,10 +72,7 @@ test("githubRepository: only https://github.com/<owner>/<repo>", () => {
 
 test("counter: one request, cached for an hour, then asked again", async () => {
   let clock = 1_000_000;
-  const { fetch, calls } = fakeFetch([
-    async () => github(1234),
-    async () => github(1300),
-  ]);
+  const { fetch, calls } = fakeFetch([async () => github(1234), async () => github(1300)]);
   const counter = createStarCounter({
     sourceUrl: "https://github.com/artkruglov/polka",
     fetch,
@@ -190,10 +178,7 @@ test("GET /api/source/stars answers { stars } from the cache, cacheable by the b
   let requests = 0;
   globalThis.fetch = (async (input: string | URL | Request) => {
     requests++;
-    assert.equal(
-      String(input),
-      "https://api.github.com/repos/artkruglov/polka",
-    );
+    assert.equal(String(input), "https://api.github.com/repos/artkruglov/polka");
     return github(256);
   }) as typeof globalThis.fetch;
   try {
@@ -242,15 +227,9 @@ test("the interface shows a count only from 10 stars, in short form", () => {
     selfHostGuideUrl("https://github.com/artkruglov/polka"),
     "https://github.com/artkruglov/polka/blob/main/deploy/hosted/README.md",
   );
-  assert.equal(
-    selfHostGuideUrl("https://git.example.org/team/polka"),
-    "https://git.example.org/team/polka",
-  );
+  assert.equal(selfHostGuideUrl("https://git.example.org/team/polka"), "https://git.example.org/team/polka");
   // The header offers the source on every page; the landing has the self-host section.
-  const navigation = readFileSync(
-    "apps/web/src/widgets/navigation/index.tsx",
-    "utf8",
-  );
+  const navigation = readFileSync("apps/web/src/widgets/navigation/index.tsx", "utf8");
   assert.match(navigation, /useSourceStars\(\)/);
   assert.match(navigation, /<GitHubMark/);
   const landing = readFileSync("apps/web/src/pages/landing/index.tsx", "utf8");

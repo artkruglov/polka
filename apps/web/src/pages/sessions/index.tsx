@@ -83,7 +83,12 @@ function SessionsList() {
     }
   };
   if (error && !page) return <StatusPanel title="Не удалось загрузить сессии">{error}</StatusPanel>;
-  if (!page) return <p className="sessions-muted" role="status">Загружаем…</p>;
+  if (!page)
+    return (
+      <p className="sessions-muted" role="status">
+        Загружаем…
+      </p>
+    );
   if (!page.enabled) return <SessionsOff />;
   const filtered = Object.values(filters).some(Boolean);
   const notice = page.notice && <p className="sessions-notice">{page.notice}</p>;
@@ -100,7 +105,11 @@ function SessionsList() {
       {notice}
       <QuotaBar used={page.usedBytes} quota={page.quotaBytes} />
       <div className="sessions-filters">
-        <SelectField label="Агент" value={filters.source ?? ""} onChange={(e) => set({ source: e.target.value as SessionFilters["source"] })}>
+        <SelectField
+          label="Агент"
+          value={filters.source ?? ""}
+          onChange={(e) => set({ source: e.target.value as SessionFilters["source"] })}
+        >
           <option value="">Все</option>
           <option value="claude-code">Claude Code</option>
           <option value="codex">Codex</option>
@@ -113,7 +122,11 @@ function SessionsList() {
             </option>
           ))}
         </SelectField>
-        <SelectField label="Секреты" value={filters.secrets ?? ""} onChange={(e) => set({ secrets: e.target.value as SessionFilters["secrets"] })}>
+        <SelectField
+          label="Секреты"
+          value={filters.secrets ?? ""}
+          onChange={(e) => set({ secrets: e.target.value as SessionFilters["secrets"] })}
+        >
           <option value="">Все сессии</option>
           <option value="any">Любые находки</option>
           <option value="sent_out">{SECRETS_LABEL.sent_out}</option>
@@ -121,7 +134,11 @@ function SessionsList() {
           <option value="seen">{SECRETS_LABEL.seen}</option>
           <option value="clean">Без секретов</option>
         </SelectField>
-        <SelectField label="Предупреждения" value={filters.alerts ?? ""} onChange={(e) => set({ alerts: e.target.value as SessionFilters["alerts"] })}>
+        <SelectField
+          label="Предупреждения"
+          value={filters.alerts ?? ""}
+          onChange={(e) => set({ alerts: e.target.value as SessionFilters["alerts"] })}
+        >
           <option value="">Все</option>
           <option value="any">Только с предупреждениями</option>
         </SelectField>
@@ -174,7 +191,12 @@ function SecretsView() {
   const [days, setDays] = useState(30);
   const { stats, error, off } = useStats(days);
   if (error) return <StatusPanel title="Не удалось загрузить">{error}</StatusPanel>;
-  if (!stats) return <p className="sessions-muted" role="status">Загружаем…</p>;
+  if (!stats)
+    return (
+      <p className="sessions-muted" role="status">
+        Загружаем…
+      </p>
+    );
   if (off) return <SessionsOff />;
   return (
     <>
@@ -198,7 +220,12 @@ function UsagePage() {
   const [days, setDays] = useState(30);
   const { stats, error, off } = useStats(days);
   if (error) return <StatusPanel title="Не удалось загрузить">{error}</StatusPanel>;
-  if (!stats) return <p className="sessions-muted" role="status">Загружаем…</p>;
+  if (!stats)
+    return (
+      <p className="sessions-muted" role="status">
+        Загружаем…
+      </p>
+    );
   if (off) return <SessionsOff />;
   return (
     <>
@@ -279,11 +306,19 @@ function SessionPage({ id }: { id: string }) {
   }, [id]);
   if (error)
     return (
-      <StatusPanel title={error.missing ? "Сессия не найдена" : "Не удалось загрузить сессию"} action={<LinkButton href="/sessions">К сессиям</LinkButton>}>
+      <StatusPanel
+        title={error.missing ? "Сессия не найдена" : "Не удалось загрузить сессию"}
+        action={<LinkButton href="/sessions">К сессиям</LinkButton>}
+      >
         {error.missing ? "Её удалили, или она принадлежит другому человеку." : error.text}
       </StatusPanel>
     );
-  if (!detail) return <p className="sessions-muted" role="status">Загружаем…</p>;
+  if (!detail)
+    return (
+      <p className="sessions-muted" role="status">
+        Загружаем…
+      </p>
+    );
   const { session } = detail;
   const remove = async () => {
     setBusy(true);

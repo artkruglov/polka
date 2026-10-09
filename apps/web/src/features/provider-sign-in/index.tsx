@@ -3,15 +3,9 @@ import { Building2 } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { visitSourceQuery } from "../../shared/lib/visit-source.ts";
-import {
-  knownShelf,
-  rememberSignInMethod,
-} from "../../shared/lib/known-shelf.ts";
+import { knownShelf, rememberSignInMethod } from "../../shared/lib/known-shelf.ts";
 import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
-import {
-  loadIdentities,
-  type AccountIdentities,
-} from "../../entities/account/model/identities.ts";
+import { loadIdentities, type AccountIdentities } from "../../entities/account/model/identities.ts";
 
 /**
  * Sign-in with Яндекс ID, VK ID, Google or the company's own IdP
@@ -81,11 +75,7 @@ function Mark({ id }: { id: SignInProvider["id"] }) {
 }
 
 const label = (provider: SignInProvider) =>
-  provider.id === "oidc"
-    ? provider.name
-    : provider.id === "google"
-      ? "Войти через Google"
-      : `Войти с ${provider.name}`;
+  provider.id === "oidc" ? provider.name : provider.id === "google" ? "Войти через Google" : `Войти с ${provider.name}`;
 
 /**
  * Under the buttons when a provider signs in only to a shelf it is linked to
@@ -96,9 +86,8 @@ function LinkOnlyNote({ providers }: { providers: SignInProvider[] }) {
   if (!names.length) return null;
   return (
     <p className="idp-note">
-      {names.join(" и ")} — для тех, кто уже привязал его к своей полке в
-      «Способах входа». Новая полка через {names.length > 1 ? "них" : "него"}{" "}
-      не открывается.
+      {names.join(" и ")} — для тех, кто уже привязал его к своей полке в «Способах входа». Новая полка через{" "}
+      {names.length > 1 ? "них" : "него"} не открывается.
     </p>
   );
 }
@@ -121,11 +110,7 @@ export function ProviderButtons({
   if (!providers.length) return null;
   const known = knownShelf() ? "&known=1" : "";
   return (
-    <div
-      className="idp-buttons"
-      role="group"
-      aria-label="Войти через другой сервис"
-    >
+    <div className="idp-buttons" role="group" aria-label="Войти через другой сервис">
       {providers.map((provider) => (
         <a
           key={provider.id}
@@ -170,10 +155,7 @@ export function LinkProviderButtons({
           onClick={async () => {
             setBusy(provider.id);
             try {
-              const { location: target } = await request<{ location: string }>(
-                `/auth/idp/${provider.id}/link`,
-                {},
-              );
+              const { location: target } = await request<{ location: string }>(`/auth/idp/${provider.id}/link`, {});
               location.assign(target);
             } catch (e) {
               onError((e as Error).message);
@@ -191,28 +173,19 @@ export function LinkProviderButtons({
 
 /** «Яндекс ID, VK ID или Google»: the providers this installation offers. */
 function providerList(data: AccountIdentities) {
-  const names = data.available
-    .filter((item) => item.provider !== "oidc")
-    .map((item) => item.name);
+  const names = data.available.filter((item) => item.provider !== "oidc").map((item) => item.name);
   if (!names.length) return "способ входа";
-  return names.length === 1
-    ? names[0]
-    : `${names.slice(0, -1).join(", ")} или ${names.at(-1)}`;
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} или ${names.at(-1)}`;
 }
 
 const ERRORS: Record<string, string> = {
-  state:
-    "Вход не завершён: запрос устарел или открыт в другом браузере. Начните вход ещё раз.",
+  state: "Вход не завершён: запрос устарел или открыт в другом браузере. Начните вход ещё раз.",
   denied: "Вход отменён. Можно попробовать снова или войти другим способом.",
-  provider:
-    "Сервис входа не ответил. Попробуйте ещё раз через минуту или войдите другим способом.",
-  blocked:
-    "Эта полка заблокирована или удаляется. Если это ошибка, напишите оператору Полки.",
-  signup:
-    "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
+  provider: "Сервис входа не ответил. Попробуйте ещё раз через минуту или войдите другим способом.",
+  blocked: "Эта полка заблокирована или удаляется. Если это ошибка, напишите оператору Полки.",
+  signup: "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
   domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
-  linked:
-    "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
+  linked: "Этот аккаунт уже привязан к другой полке. Войдите через него, чтобы открыть ту полку.",
   link_only:
     "Через Google можно войти только в полку, к которой он уже привязан. Войдите через Яндекс ID, VK ID или по почте и привяжите Google в «Способах входа».",
   unavailable: "Этот способ входа сейчас выключен.",
@@ -250,10 +223,7 @@ export function SignInMethods() {
     setBusy(provider);
     setError(null);
     try {
-      const { location: target } = await request<{ location: string }>(
-        `/auth/idp/${provider}/link`,
-        {},
-      );
+      const { location: target } = await request<{ location: string }>(`/auth/idp/${provider}/link`, {});
       location.assign(target);
     } catch (e) {
       setError((e as Error).message);
@@ -267,27 +237,18 @@ export function SignInMethods() {
       await request(`/account/identities/${provider}/unlink`, {});
       await load();
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? e.message
-          : "Не удалось отвязать. Повторите попытку.",
-      );
+      setError(e instanceof ApiError ? e.message : "Не удалось отвязать. Повторите попытку.");
     } finally {
       setBusy(null);
     }
   };
   return (
-    <section
-      className="idp-methods"
-      id="sign-in"
-      aria-labelledby="idp-methods-title"
-    >
+    <section className="idp-methods" id="sign-in" aria-labelledby="idp-methods-title">
       <h2 id="idp-methods-title">Способы входа</h2>
       <p className="idp-methods-lead">
         {data.email ? `Код на почту ${data.email}. ` : ""}
-        Привяжите {providerList(data)}, чтобы входить через{" "}
-        {data.available.length > 1 ? "них" : "него"} — например, если ваша
-        почта у иностранного сервиса.
+        Привяжите {providerList(data)}, чтобы входить через {data.available.length > 1 ? "них" : "него"} — например,
+        если ваша почта у иностранного сервиса.
       </p>
       {linked && !returned && <Notice>Способ входа привязан.</Notice>}
       {returned && <Notice tone="error">{returned}</Notice>}
@@ -299,11 +260,7 @@ export function SignInMethods() {
               <strong>{item.name}</strong>
               {item.email ? ` · ${item.email}` : ""}
             </span>
-            <Button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void unlink(item.provider)}
-            >
+            <Button type="button" disabled={busy !== null} onClick={() => void unlink(item.provider)}>
               Отвязать
             </Button>
           </li>
@@ -313,12 +270,7 @@ export function SignInMethods() {
           .map((item) => (
             <li key={item.provider}>
               <span>{item.name}</span>
-              <Button
-                type="button"
-                variant="primary"
-                disabled={busy !== null}
-                onClick={() => void link(item.provider)}
-              >
+              <Button type="button" variant="primary" disabled={busy !== null} onClick={() => void link(item.provider)}>
                 Привязать
               </Button>
             </li>

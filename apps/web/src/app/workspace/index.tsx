@@ -3,11 +3,7 @@ import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
 import { Button, EmptyState, IconButton, Notice } from "../../shared/ui/controls.tsx";
 import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
 import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
-import {
-  ArtifactReader,
-  readerTabFromSearch,
-  withReaderTab,
-} from "../../widgets/artifact-reader/index.tsx";
+import { ArtifactReader, readerTabFromSearch, withReaderTab } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { CompareRevisions } from "../../features/compare-revisions/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
@@ -15,18 +11,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useWorkComments } from "../../widgets/comments/index.ts";
-import type {
-  Artifact,
-  Folder,
-  Revision,
-} from "../../../../../packages/contracts/index.ts";
-import {
-  ApiError,
-  client,
-  currentShelf,
-  withShelf,
-  type ShelfCounts,
-} from "../../shared/api/client.ts";
+import type { Artifact, Folder, Revision } from "../../../../../packages/contracts/index.ts";
+import { ApiError, client, currentShelf, withShelf, type ShelfCounts } from "../../shared/api/client.ts";
 import type { Category } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
@@ -38,10 +24,7 @@ import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
 import { ProposeToFeedPanel } from "../../features/propose-to-feed/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
 import { Login } from "../../pages/login/index.tsx";
-import {
-  rememberAccount,
-  useAccountState,
-} from "../../entities/account/model/useAccount.ts";
+import { rememberAccount, useAccountState } from "../../entities/account/model/useAccount.ts";
 import { LazyLanding } from "../routing/lazy-pages.tsx";
 import { safeNext } from "../../shared/lib/safe-next.ts";
 import { ReworkArtifactPanel } from "../../features/rework-artifact/index.tsx";
@@ -50,22 +33,14 @@ import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 import { shelfAccess, useShelves, shelfName } from "../../entities/shelf/model.ts";
-import {
-  CreateShelfPanel,
-  ShelfMembersPanel,
-  ShelfSwitcher,
-} from "../../features/shelf-members/index.tsx";
+import { CreateShelfPanel, ShelfMembersPanel, ShelfSwitcher } from "../../features/shelf-members/index.tsx";
 import "./styles.css";
 const params = new URLSearchParams(location.search);
 /** The shelf's order as GET /api/artifacts names it. */
 const SORT_PARAM = { relevant: "relevance", newest: "new", oldest: "old", title: "title" } as const;
 function resume(next: string) {
   const intent = params.get("intent");
-  location.replace(
-    intent && !/[?#]/.test(next)
-      ? `${next}?intent=${encodeURIComponent(intent)}`
-      : next,
-  );
+  location.replace(intent && !/[?#]/.test(next) ? `${next}?intent=${encodeURIComponent(intent)}` : next);
 }
 export function App() {
   const { account, error: authError, retry: retryAccount } = useAccountState();
@@ -90,9 +65,7 @@ export function App() {
     [workMissing, setWorkMissing] = useState(false),
     [focusSearch] = useState(() => params.has("search")),
     [selected, setSelected] = useState<string | null>(
-      location.pathname.startsWith("/works/")
-        ? location.pathname.split("/")[2]
-        : null,
+      location.pathname.startsWith("/works/") ? location.pathname.split("/")[2] : null,
     ),
     [trashView, setTrashView] = useState(location.pathname === "/trash"),
     [work, setWork] = useState<Artifact | null>(null),
@@ -116,8 +89,7 @@ export function App() {
       // A department shelf has no links or agent context yet (TEAM_SHELVES.md).
       const team = currentShelf() !== null;
       return location.pathname.startsWith("/works/") &&
-        (requested === "metadata" ||
-          (!team && (requested === "share" || requested === "agent-context")))
+        (requested === "metadata" || (!team && (requested === "share" || requested === "agent-context")))
         ? requested
         : null;
     }),
@@ -128,9 +100,7 @@ export function App() {
     [refresh, setRefresh] = useState(0),
     // «Версии» survives a reload: /works/:id?tab=versions.
     [history, setHistoryState] = useState(
-      () =>
-        location.pathname.startsWith("/works/") &&
-        readerTabFromSearch(location.search) === "versions",
+      () => location.pathname.startsWith("/works/") && readerTabFromSearch(location.search) === "versions",
     ),
     [notice, setNotice] = useState(""),
     [trashBusy, setTrashBusy] = useState(false),
@@ -141,11 +111,7 @@ export function App() {
   const setHistory = (value: boolean) => {
     setHistoryState(value);
     if (location.pathname.startsWith("/works/"))
-      window.history.replaceState(
-        window.history.state,
-        "",
-        withReaderTab(location.href, value ? "versions" : "work"),
-      );
+      window.history.replaceState(window.history.state, "", withReaderTab(location.href, value ? "versions" : "work"));
   };
   // The tab names the open work (the owner's own title) or the trash.
   useDocumentTitle(selected ? (work?.title ?? "Работа") : trashView ? "Корзина" : null);
@@ -166,18 +132,14 @@ export function App() {
     const pop = () => {
       routeGeneration.current++;
       trashGeneration.current++;
-      const nextSelected = location.pathname.startsWith("/works/")
-        ? location.pathname.split("/")[2]
-        : null;
+      const nextSelected = location.pathname.startsWith("/works/") ? location.pathname.split("/")[2] : null;
       selectedRef.current = nextSelected;
       setTrashView(location.pathname === "/trash");
       setSelected(nextSelected);
       setWork(null);
       setViewed(null);
       setPanel(null);
-      setHistoryState(
-        !!nextSelected && readerTabFromSearch(location.search) === "versions",
-      );
+      setHistoryState(!!nextSelected && readerTabFromSearch(location.search) === "versions");
       setLoading(false);
       setError("");
       trashBusyRef.current = false;
@@ -285,19 +247,11 @@ export function App() {
       const page = await client.trash(nextCursor);
       if (generation !== trashGeneration.current) return;
       setTrashItems((current) =>
-        nextCursor
-          ? [
-              ...current,
-              ...page.items.filter(
-                (a) => !current.some((old) => old.id === a.id),
-              ),
-            ]
-          : page.items,
+        nextCursor ? [...current, ...page.items.filter((a) => !current.some((old) => old.id === a.id))] : page.items,
       );
       setTrashCursor(page.nextCursor);
     } catch (e) {
-      if (generation === trashGeneration.current)
-        setTrashError((e as Error).message);
+      if (generation === trashGeneration.current) setTrashError((e as Error).message);
     } finally {
       if (generation === trashGeneration.current) setTrashLoading(false);
     }
@@ -314,10 +268,7 @@ export function App() {
     const expectedId = selected;
     const expectedAccount = account;
     const generation = routeGeneration.current;
-    const [a, r] = await Promise.all([
-      client.artifact(expectedId),
-      client.revisions(expectedId),
-    ]);
+    const [a, r] = await Promise.all([client.artifact(expectedId), client.revisions(expectedId)]);
     if (
       routeGeneration.current !== generation ||
       selectedRef.current !== expectedId ||
@@ -353,7 +304,7 @@ export function App() {
             setError("Эта версия работы недоступна.");
             return;
           }
-          setViewed(exact??null);
+          setViewed(exact ?? null);
           setError("");
         }
       })
@@ -427,48 +378,44 @@ export function App() {
         accepted: acceptedOnly,
       });
       if (generation !== shelfGeneration.current) return;
-      setItems((x) => [
-        ...x,
-        ...page.items.filter((a) => !x.some((old) => old.id === a.id)),
-      ]);
+      setItems((x) => [...x, ...page.items.filter((a) => !x.some((old) => old.id === a.id))]);
       setCursor(page.nextCursor);
     } catch (e) {
-      if (generation === shelfGeneration.current)
-        setError((e as Error).message);
+      if (generation === shelfGeneration.current) setError((e as Error).message);
     } finally {
       if (generation === shelfGeneration.current) setLoadingMore(false);
     }
   };
   const nav = (
     <>
-    <ShelfSwitcher
-      shelves={shelves.items}
-      current={shelves.current}
-      canCreate={shelves.canCreate}
-      onCreate={() => {
-        setShelfDialog("create");
-        setMobile(false);
-      }}
-      onMembers={() => {
-        setShelfDialog("members");
-        setMobile(false);
-      }}
-    />
-    <ShelfNavigation
-      folders={folders}
-      folderId={folderId}
-      trashView={trashView}
-      onCreateFolder={() => {
-        setPanel("folder");
-        setMobile(false);
-      }}
-      onOpenFolder={(id) => {
-        setFolderId(id);
-        open(null);
-      }}
-      onOpenTrash={openTrash}
-      canCreateFolder={shelfAccess(team, account?.id).curate}
-    />
+      <ShelfSwitcher
+        shelves={shelves.items}
+        current={shelves.current}
+        canCreate={shelves.canCreate}
+        onCreate={() => {
+          setShelfDialog("create");
+          setMobile(false);
+        }}
+        onMembers={() => {
+          setShelfDialog("members");
+          setMobile(false);
+        }}
+      />
+      <ShelfNavigation
+        folders={folders}
+        folderId={folderId}
+        trashView={trashView}
+        onCreateFolder={() => {
+          setPanel("folder");
+          setMobile(false);
+        }}
+        onOpenFolder={(id) => {
+          setFolderId(id);
+          open(null);
+        }}
+        onOpenTrash={openTrash}
+        canCreateFolder={shelfAccess(team, account?.id).curate}
+      />
     </>
   );
 
@@ -484,12 +431,15 @@ export function App() {
       current="shelf"
       account={account}
       foldableRail={!!selected}
-      className={
-        selected ? "app work-layout reader-layout" : "app shelf-layout"
-      }
+      className={selected ? "app work-layout reader-layout" : "app shelf-layout"}
       navigation={<nav aria-label="Папки и корзина">{nav}</nav>}
       actions={
-        <IconButton className="navigation-mobile-menu" label="Папки и корзина" aria-haspopup="dialog" onClick={() => setMobile(true)}>
+        <IconButton
+          className="navigation-mobile-menu"
+          label="Папки и корзина"
+          aria-haspopup="dialog"
+          onClick={() => setMobile(true)}
+        >
           <Menu />
         </IconButton>
       }
@@ -501,12 +451,7 @@ export function App() {
         open(null);
       }}
     >
-      <div
-        className="workspace"
-        data-comments={
-          workComments.available && workComments.open ? "open" : undefined
-        }
-      >
+      <div className="workspace" data-comments={workComments.available && workComments.open ? "open" : undefined}>
         <main>
           {!selected && notices}
           {selected ? (
@@ -517,10 +462,7 @@ export function App() {
                 shown={shown}
                 revisions={revisions}
                 viewed={viewed}
-                folderName={
-                  folders.find((f) => f.id === work.folderId)?.name ??
-                  shelfName(shelves.current)
-                }
+                folderName={folders.find((f) => f.id === work.folderId)?.name ?? shelfName(shelves.current)}
                 history={history}
                 setHistory={setHistory}
                 setViewed={setViewed}
@@ -544,30 +486,18 @@ export function App() {
                       }
                     : undefined
                 }
-                compare={
-                  history ? (
-                    <CompareRevisions revisions={revisions} shown={shown} />
-                  ) : null
-                }
+                compare={history ? <CompareRevisions revisions={revisions} shown={shown} /> : null}
                 onDownload={() => {
                   void downloadRevision(shown, work.title).catch((e) =>
-                    setError(
-                      e instanceof Error
-                        ? e.message
-                        : "Не удалось скачать работу.",
-                    ),
+                    setError(e instanceof Error ? e.message : "Не удалось скачать работу."),
                   );
                 }}
                 preview={
                   <Preview
                     revision={shown}
                     title={work.title}
-                    overlay={
-                      workComments.available ? workComments.overlay : undefined
-                    }
-                    readingTitle={
-                      shown.mime === "text/plain" ? work.title : undefined
-                    }
+                    overlay={workComments.available ? workComments.overlay : undefined}
+                    readingTitle={shown.mime === "text/plain" ? work.title : undefined}
                     onInlineBuildChange={async () => {
                       await refreshWork();
                     }}
@@ -586,7 +516,9 @@ export function App() {
                 </header>
                 {notices}
                 {loading && (
-                  <div className="empty" role="status">Открываем работу…</div>
+                  <div className="empty" role="status">
+                    Открываем работу…
+                  </div>
                 )}
                 {!loading && workMissing && (
                   <EmptyState
@@ -597,9 +529,8 @@ export function App() {
                       </Button>
                     }
                   >
-                    На этой полке такой работы нет. Возможно, адрес неполный,
-                    работу удалили или она лежит на другой полке — тогда
-                    переключитесь на неё в меню слева.
+                    На этой полке такой работы нет. Возможно, адрес неполный, работу удалили или она лежит на другой
+                    полке — тогда переключитесь на неё в меню слева.
                   </EmptyState>
                 )}
               </div>
@@ -611,22 +542,14 @@ export function App() {
               loading={trashLoading}
               error={trashError}
               onLoad={(nextCursor) => void loadTrash(nextCursor)}
-              onRestore={async ({
-                artifact,
-                expectedLifecycleVersion,
-                expectedRevisionId,
-              }) => {
+              onRestore={async ({ artifact, expectedLifecycleVersion, expectedRevisionId }) => {
                 const expectedGeneration = routeGeneration.current;
                 const expectedAccount = account;
                 await client.restoreArtifact(artifact.id, {
                   expectedLifecycleVersion,
                   expectedRevisionId,
                 });
-                if (
-                  routeGeneration.current !== expectedGeneration ||
-                  accountRef.current !== expectedAccount
-                )
-                  return;
+                if (routeGeneration.current !== expectedGeneration || accountRef.current !== expectedAccount) return;
                 setNotice("Работа восстановлена. Старые ссылки закрыты.");
                 setRefresh((value) => value + 1);
               }}
@@ -634,11 +557,7 @@ export function App() {
                 const expectedGeneration = routeGeneration.current;
                 const expectedAccount = account;
                 await client.purgeArtifact(artifact.id, { expectedLifecycleVersion, expectedRevisionId });
-                if (
-                  routeGeneration.current !== expectedGeneration ||
-                  accountRef.current !== expectedAccount
-                )
-                  return;
+                if (routeGeneration.current !== expectedGeneration || accountRef.current !== expectedAccount) return;
                 setNotice("Работа удалена навсегда, место освобождено.");
                 setRefresh((value) => value + 1);
               }}
@@ -685,7 +604,9 @@ export function App() {
       {selected && workComments.floating}
       {mobile && (
         <Dialog title="Папки" onClose={() => setMobile(false)}>
-          <nav className="mobile-nav" aria-label="Папки и корзина (меню)">{nav}</nav>
+          <nav className="mobile-nav" aria-label="Папки и корзина (меню)">
+            {nav}
+          </nav>
         </Dialog>
       )}
       {shelfDialog === "create" && <CreateShelfPanel onClose={() => setShelfDialog(null)} />}
@@ -781,9 +702,7 @@ export function App() {
                 trashBusyRef.current = false;
                 setTrashBusy(false);
                 setPanel(null);
-                setNotice(
-                  "Работа перемещена в корзину. Старые ссылки закрыты.",
-                );
+                setNotice("Работа перемещена в корзину. Старые ссылки закрыты.");
                 setRefresh((value) => value + 1);
                 open(null);
               }
@@ -793,9 +712,7 @@ export function App() {
                 try {
                   await refreshWork();
                   if (isCurrent())
-                    setTrashActionError(
-                      "Работа изменилась. Данные обновлены, проверьте их и повторите перемещение.",
-                    );
+                    setTrashActionError("Работа изменилась. Данные обновлены, проверьте их и повторите перемещение.");
                 } catch {
                   if (isCurrent())
                     setTrashActionError(
@@ -853,12 +770,7 @@ export function App() {
         />
       )}
       {panel === "agent-context" && work && shown && (
-        <AgentContextPanel
-          key={shown.id}
-          artifactId={work.id}
-          revisionId={shown.id}
-          onClose={() => setPanel(null)}
-        />
+        <AgentContextPanel key={shown.id} artifactId={work.id} revisionId={shown.id} onClose={() => setPanel(null)} />
       )}
       {panel === "rework" && work && (
         <ReworkArtifactPanel

@@ -1,12 +1,8 @@
 import { createHash } from "node:crypto";
-import {
-  canonicalizeManifest,
-  type BundleManifest,
-} from "../../packages/contracts/bundle.ts";
+import { canonicalizeManifest, type BundleManifest } from "../../packages/contracts/bundle.ts";
 import type { HtmlProfile } from "../../packages/contracts/index.ts";
 
-const digest = (value: Buffer | string) =>
-  createHash("sha256").update(value).digest("hex");
+const digest = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
 
 export function createSingleHtmlRevisionManifest(
   bytes: Buffer,
@@ -18,10 +14,7 @@ export function createSingleHtmlRevisionManifest(
   const manifest = canonicalizeManifest({
     version: 1,
     entrypoint: "index.html",
-    runtime:
-      htmlProfile === "static" || htmlProfile === "limited"
-        ? "static-sandbox-v1"
-        : "preserved-only-v1",
+    runtime: htmlProfile === "static" || htmlProfile === "limited" ? "static-sandbox-v1" : "preserved-only-v1",
     files: [
       {
         path: "index.html",

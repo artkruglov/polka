@@ -54,8 +54,7 @@ before(async () => {
   admin = await createAccount(`team-admin-${suffix}`, password);
   member = await createAccount(`team-member-${suffix}`, password);
   stranger = await createAccount(`team-stranger-${suffix}`, password);
-  for (const account of [admin, member, stranger])
-    sessions.set(account.name, await login(account.name));
+  for (const account of [admin, member, stranger]) sessions.set(account.name, await login(account.name));
 });
 
 after(async () => {
@@ -66,10 +65,9 @@ after(async () => {
 });
 
 test("a new personal shelf has its owner as its one member", async () => {
-  const { rows } = await db.query(
-    "SELECT account_id,role,state FROM tenant_members WHERE tenant_id=$1",
-    [admin.tenant],
-  );
+  const { rows } = await db.query("SELECT account_id,role,state FROM tenant_members WHERE tenant_id=$1", [
+    admin.tenant,
+  ]);
   assert.deepEqual(rows, [{ account_id: admin.id, role: "owner", state: "active" }]);
   const missingOwners = await db.query(
     `SELECT t.id FROM tenants t WHERE t.kind='personal' AND NOT EXISTS (
@@ -99,30 +97,30 @@ test("a company admin opens a department shelf; others may not", async () => {
   const shelf = created.json();
   assert.equal(shelf.name, "Отдел продаж");
   assert.equal(shelf.role, "admin");
-  const { rows: [row] } = await db.query(
-    "SELECT kind,owner_id,created_by FROM tenants WHERE id=$1",
-    [shelf.id],
-  );
+  const {
+    rows: [row],
+  } = await db.query("SELECT kind,owner_id,created_by FROM tenants WHERE id=$1", [shelf.id]);
   assert.deepEqual(row, { kind: "team", owner_id: null, created_by: admin.id });
-  const events = await db.query(
-    "SELECT action,new_role FROM tenant_member_events WHERE tenant_id=$1",
-    [shelf.id],
-  );
+  const events = await db.query("SELECT action,new_role FROM tenant_member_events WHERE tenant_id=$1", [shelf.id]);
   assert.deepEqual(events.rows, [{ action: "shelf_created", new_role: "admin" }]);
   const listed = (await call("GET", "/api/shelves", admin)).json().items;
   assert.deepEqual(
     listed.map((item: any) => [item.kind, item.role]),
-    [["personal", "owner"], ["team", "admin"]],
+    [
+      ["personal", "owner"],
+      ["team", "admin"],
+    ],
   );
 });
 
 test("a request follows X-Polka-Shelf only to a shelf the account is a member of", async () => {
   config.TEAM_SHELVES = "on";
   const shelf = (await call("POST", "/api/shelves", admin, { name: "Аналитика" })).json();
-  await db.query(
-    "INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'reader',$3)",
-    [shelf.id, member.id, admin.id],
-  );
+  await db.query("INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'reader',$3)", [
+    shelf.id,
+    member.id,
+    admin.id,
+  ]);
   // Without the option (account-level routes) the header is ignored.
   const personal = await identity(asRequest(member, shelf.id));
   assert.equal(personal.tenant, member.tenant);
@@ -141,22 +139,22 @@ test("a request follows X-Polka-Shelf only to a shelf the account is a member of
   config.TEAM_SHELVES = "off";
   await assert.rejects(identity(asRequest(admin, shelf.id), { shelf: true }), notFound);
   config.TEAM_SHELVES = "on";
-  await db.query(
-    "UPDATE tenant_members SET state='revoked',revoked_at=now() WHERE tenant_id=$1 AND account_id=$2",
-    [shelf.id, member.id],
-  );
+  await db.query("UPDATE tenant_members SET state='revoked',revoked_at=now() WHERE tenant_id=$1 AND account_id=$2", [
+    shelf.id,
+    member.id,
+  ]);
   await assert.rejects(identity(asRequest(member, shelf.id), { shelf: true }), notFound);
 });
 
 test("lockShelf checks the role; a personal shelf's owner passes any", async () => {
   config.TEAM_SHELVES = "on";
   const shelf = (await call("POST", "/api/shelves", admin, { name: "Маркетинг" })).json();
-  await db.query(
-    "INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'reader',$3)",
-    [shelf.id, member.id, admin.id],
-  );
-  const lock = (actor: { id: string; tenant: string }, role: any) =>
-    transaction((c) => lockShelf(c, actor, role));
+  await db.query("INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'reader',$3)", [
+    shelf.id,
+    member.id,
+    admin.id,
+  ]);
+  const lock = (actor: { id: string; tenant: string }, role: any) => transaction((c) => lockShelf(c, actor, role));
   assert.equal((await lock({ id: member.id, tenant: shelf.id }, "reader")).role, "reader");
   await assert.rejects(lock({ id: member.id, tenant: shelf.id }, "author"), (error: any) => error.status === 403);
   await assert.rejects(lock({ id: stranger.id, tenant: shelf.id }, "reader"), notFound);
@@ -166,46 +164,46 @@ test("lockShelf checks the role; a personal shelf's owner passes any", async () 
 
 test("the schema keeps owners and department shelves apart", async () => {
   await assert.rejects(
-    db.query(
-      "INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,$2,'team','Лишний владелец')",
-      [randomUUID(), stranger.id],
-    ),
+    db.query("INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,$2,'team','Лишний владелец')", [
+      randomUUID(),
+      stranger.id,
+    ]),
   );
-  await assert.rejects(
-    db.query("INSERT INTO tenants(id,owner_id,kind) VALUES($1,NULL,'personal')", [randomUUID()]),
-  );
+  await assert.rejects(db.query("INSERT INTO tenants(id,owner_id,kind) VALUES($1,NULL,'personal')", [randomUUID()]));
   const shelf = (await call("POST", "/api/shelves", admin, { name: "Юристы" })).json();
   await assert.rejects(
-    db.query(
-      "INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'owner')",
-      [shelf.id, stranger.id],
-    ),
+    db.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'owner')", [shelf.id, stranger.id]),
     /owner role/,
   );
 });
 
 test("a personal shelf has no members but its owner; a deletion request revokes memberships", async () => {
   await assert.rejects(
-    db.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'reader')", [admin.tenant, stranger.id]),
+    db.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'reader')", [
+      admin.tenant,
+      stranger.id,
+    ]),
     /no members but its owner/,
   );
   config.TEAM_SHELVES = "on";
   const shelf = (await call("POST", "/api/shelves", admin, { name: "Закупки" })).json();
   const leaving = await createAccount(`team-leaving-${randomBytes(5).toString("hex")}`, password);
-  await db.query(
-    "INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'author',$3)",
-    [shelf.id, leaving.id, admin.id],
-  );
+  await db.query("INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'author',$3)", [
+    shelf.id,
+    leaving.id,
+    admin.id,
+  ]);
   await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [leaving.id]);
-  const { rows: [row] } = await db.query(
-    "SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2",
-    [shelf.id, leaving.id],
-  );
+  const {
+    rows: [row],
+  } = await db.query("SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2", [shelf.id, leaving.id]);
   assert.equal(row.state, "revoked");
   // The owner's own row stays: the personal shelf goes with the account.
-  const { rows: [own] } = await db.query(
-    "SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2",
-    [leaving.tenant, leaving.id],
-  );
+  const {
+    rows: [own],
+  } = await db.query("SELECT state FROM tenant_members WHERE tenant_id=$1 AND account_id=$2", [
+    leaving.tenant,
+    leaving.id,
+  ]);
   assert.equal(own.state, "active");
 });

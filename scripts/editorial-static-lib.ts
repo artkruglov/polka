@@ -7,23 +7,22 @@ export const STATIC_SNAPSHOT_NOTE =
   "Статичная версия. Интерактивная версия появится, когда на Полке включится интерактивный просмотр.";
 export const STATIC_NOTICES =
   "Оригинальный учебный материал Редакции Полки. Статичная версия: примеры и данные демонстрационные, интерактивные элементы в ней не работают.";
-export const STATIC_EVIDENCE_PATH =
-  "docs/reviews/2026-09-22-editorial-static/README.md";
+export const STATIC_EVIDENCE_PATH = "docs/reviews/2026-09-22-editorial-static/README.md";
 // Used instead of the snapshot's notices when the original is published
 // through its ready interactive version.
-export const INTERACTIVE_NOTICES =
-  "Оригинальный учебный материал Редакции Полки. Примеры и данные демонстрационные.";
-export const INTERACTIVE_EVIDENCE_PATH =
-  "docs/reviews/2026-09-22-editorial-live/README.md";
+export const INTERACTIVE_NOTICES = "Оригинальный учебный материал Редакции Полки. Примеры и данные демонстрационные.";
+export const INTERACTIVE_EVIDENCE_PATH = "docs/reviews/2026-09-22-editorial-live/README.md";
 
 // The publish service requires the source to be an index.html entry point.
-export const staticSourcePath = (slug: string) =>
-  `content/editorial/${slug}/static/index.html`;
+export const staticSourcePath = (slug: string) => `content/editorial/${slug}/static/index.html`;
 
 const sha = z.string().regex(/^[a-f0-9]{64}$/);
 const path = z.string().startsWith("content/editorial/");
 const metadata = {
-  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .max(80),
   title: z.string().min(1).max(200),
   topic: z.string().min(1).max(120),
   task: z.string().min(1).max(500),
@@ -68,11 +67,7 @@ export const staticCandidatesSchema = z
     items: z.array(staticCandidateSchema).min(1),
   })
   .strict()
-  .refine(
-    (value) =>
-      new Set(value.items.map((item) => item.slug)).size === value.items.length,
-    "Duplicate slug",
-  );
+  .refine((value) => new Set(value.items.map((item) => item.slug)).size === value.items.length, "Duplicate slug");
 
 // Mirrors the operator envelope of apps/server/editorial.ts (which imports
 // DB/config); the seed parses the result again with the server schema.

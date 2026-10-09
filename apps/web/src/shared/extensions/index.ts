@@ -10,7 +10,11 @@ import { Badge, Button, Notice, SelectField, TextField } from "../ui/controls.ts
 import { ErrorNotice } from "../ui/index.tsx";
 
 /** A vertical stack with the app's spacing. */
-function Stack({ children, as = "div", ...props }: { children?: React.ReactNode; as?: "div" | "form" } & Record<string, unknown>) {
+function Stack({
+  children,
+  as = "div",
+  ...props
+}: { children?: React.ReactNode; as?: "div" | "form" } & Record<string, unknown>) {
   return React.createElement(as, { ...props, className: "ext-stack" }, children);
 }
 

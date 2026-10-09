@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ArrowUpRight, Bot, FileUp } from "lucide-react";
-import type {
-  Account,
-  AgentConnection,
-} from "../../../../../packages/contracts/index.ts";
+import type { Account, AgentConnection } from "../../../../../packages/contracts/index.ts";
 import { client } from "../../shared/api/client.ts";
 import { Button } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
@@ -20,22 +17,14 @@ import {
   type HeroClientId,
 } from "../../entities/onboarding/agent-setup.ts";
 import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
-import {
-  readAgentSeen,
-  readDismissed,
-  writeAgentSeen,
-  writeDismissed,
-} from "../../entities/onboarding/dismissal.ts";
+import { readAgentSeen, readDismissed, writeAgentSeen, writeDismissed } from "../../entities/onboarding/dismissal.ts";
 
 /** While the steps are on screen, how often the hero asks whether an agent has connected. */
 export const HERO_POLL_MS = 8000;
 
 const isActive = (c: AgentConnection) => c.status === "issued" || c.status === "seen";
 
-export type Connections =
-  | { status: "loading" }
-  | { status: "ready"; active: AgentConnection[] }
-  | { status: "error" };
+export type Connections = { status: "loading" } | { status: "ready"; active: AgentConnection[] } | { status: "error" };
 
 /** The owner's agent connections; re-read when the tab comes back (after «Разрешить» in another tab). */
 function useAgentConnections(accountId: string, poll: boolean) {
@@ -46,13 +35,11 @@ function useAgentConnections(accountId: string, poll: boolean) {
     client.agentConnections
       .list()
       .then((list) => {
-        if (current === generation.current)
-          setState({ status: "ready", active: list.filter(isActive) });
+        if (current === generation.current) setState({ status: "ready", active: list.filter(isActive) });
       })
       .catch(() => {
         // Keep what is shown; a first failure shows the steps, which work either way.
-        if (current === generation.current)
-          setState((s) => (s.status === "ready" ? s : { status: "error" }));
+        if (current === generation.current) setState((s) => (s.status === "ready" ? s : { status: "error" }));
       });
   }, []);
   useEffect(() => {
@@ -141,12 +128,7 @@ export function AgentHeroView({
           </span>
         </p>
         <div className="agent-hero-actions">
-          <CopyButton
-            value={SAVE_PHRASE}
-            label="Скопировать фразу"
-            successText="Фраза скопирована"
-            variant="quiet"
-          />
+          <CopyButton value={SAVE_PHRASE} label="Скопировать фразу" successText="Фраза скопирована" variant="quiet" />
           <a className="agent-hero-link" href="/settings/agents">
             <Bot aria-hidden="true" /> Агенты
           </a>
@@ -238,17 +220,9 @@ export function AgentHeroView({
 }
 
 /** Data and choices: the connections from the API, the remembered client, the per-browser «Скрыть». */
-export function AgentHero({
-  account,
-  onUpload,
-}: {
-  account: Account;
-  onUpload: () => void;
-}) {
+export function AgentHero({ account, onUpload }: { account: Account; onUpload: () => void }) {
   const [hidden, setHidden] = useState(() => readDismissed(account.id));
-  const [selected, setSelected] = useState<HeroClientId>(() =>
-    heroClient(readStoredClient()),
-  );
+  const [selected, setSelected] = useState<HeroClientId>(() => heroClient(readStoredClient()));
   const [polling, setPolling] = useState(!hidden);
   const connections = useAgentConnections(account.id, polling);
   const connected = connections.status === "ready" && connections.active.length > 0;

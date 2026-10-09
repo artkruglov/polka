@@ -9,105 +9,40 @@ import { Button } from "../../shared/ui/controls.tsx";
 const page = <T extends React.ComponentType>(load: () => Promise<T>) =>
   React.lazy(() => load().then((component) => ({ default: component })));
 
-const Templates = page(() =>
-  import("../../pages/templates/index.tsx").then((m) => m.Templates),
-);
-const Signup = page(() =>
-  import("../../pages/signup/index.tsx").then((m) => m.Signup),
-);
-const SignupChoose = page(() =>
-  import("../../pages/signup/choose.tsx").then((m) => m.SignupChoose),
-);
-const SignupLinked = page(() =>
-  import("../../pages/signup/choose.tsx").then((m) => m.SignupLinked),
-);
-const Claim = page(() =>
-  import("../../pages/claim/index.tsx").then((m) => m.Claim),
-);
-const Enter = page(() =>
-  import("../../pages/enter/index.tsx").then((m) => m.Enter),
-);
-const SignIn = page(() =>
-  import("../../pages/enter/signin.tsx").then((m) => m.SignIn),
-);
-const FirstSave = page(() =>
-  import("../../pages/start/index.tsx").then((m) => m.FirstSave),
-);
-const AgentConnections = page(() =>
-  import("../../pages/agents/index.tsx").then((m) => m.AgentConnections),
-);
-const Recipient = page(() =>
-  import("../../pages/recipient/index.tsx").then((m) => m.Recipient),
-);
-const Bring = page(() =>
-  import("../../pages/bring/index.tsx").then((m) => m.Bring),
-);
-const BringReceive = page(() =>
-  import("../../pages/bring-receive/index.tsx").then((m) => m.BringReceive),
-);
-const BookmarkletPage = page(() =>
-  import("../../pages/bookmarklet/index.tsx").then((m) => m.BookmarkletPage),
-);
-const Landing = page(() =>
-  import("../../pages/landing/index.tsx").then((m) => m.Landing),
-);
-const EditorialPage = page(() =>
-  import("../../pages/discover/index.tsx").then((m) => m.EditorialPage),
-);
-const ShelfSnapshotPage = page(() =>
-  import("../../pages/snapshot/index.tsx").then((m) => m.ShelfSnapshotPage),
-);
-const LibraryInvite = page(() =>
-  import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite),
-);
-const ShelfInvite = page(() =>
-  import("../../pages/shelf-invite/index.tsx").then((m) => m.ShelfInvite),
-);
-const Moderation = page(() =>
-  import("../../pages/moderation/index.tsx").then((m) => m.Moderation),
-);
-const Away = page(() =>
-  import("../../pages/away/index.tsx").then((m) => m.Away),
-);
-const AccountDeleted = page(() =>
-  import("../../pages/account-deleted/index.tsx").then((m) => m.AccountDeleted),
-);
-const MailOff = page(() =>
-  import("../../pages/mail-off/index.tsx").then((m) => m.MailOff),
-);
-const PrivacyPage = page(() =>
-  import("../../pages/legal/index.tsx").then((m) => m.PrivacyPage),
-);
-const TermsPage = page(() =>
-  import("../../pages/legal/index.tsx").then((m) => m.TermsPage),
-);
-const BotPage = page(() =>
-  import("../../pages/legal/index.tsx").then((m) => m.BotPage),
-);
-const Pricing = page(() =>
-  import("../../pages/pricing/index.tsx").then((m) => m.Pricing),
-);
-const Enterprise = page(() =>
-  import("../../pages/enterprise/index.tsx").then((m) => m.Enterprise),
-);
-const CompanyAdmin = page(() =>
-  import("../../pages/company/index.tsx").then((m) => m.CompanyAdmin),
-);
-const OAuthConsent = page(() =>
-  import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent),
-);
-const AgentSessions = page(() =>
-  import("../../pages/sessions/index.tsx").then((m) => m.AgentSessions),
-);
-const NotFound = page(() =>
-  import("../../pages/not-found/index.tsx").then((m) => m.NotFound),
-);
+const Templates = page(() => import("../../pages/templates/index.tsx").then((m) => m.Templates));
+const Signup = page(() => import("../../pages/signup/index.tsx").then((m) => m.Signup));
+const SignupChoose = page(() => import("../../pages/signup/choose.tsx").then((m) => m.SignupChoose));
+const SignupLinked = page(() => import("../../pages/signup/choose.tsx").then((m) => m.SignupLinked));
+const Claim = page(() => import("../../pages/claim/index.tsx").then((m) => m.Claim));
+const Enter = page(() => import("../../pages/enter/index.tsx").then((m) => m.Enter));
+const SignIn = page(() => import("../../pages/enter/signin.tsx").then((m) => m.SignIn));
+const FirstSave = page(() => import("../../pages/start/index.tsx").then((m) => m.FirstSave));
+const AgentConnections = page(() => import("../../pages/agents/index.tsx").then((m) => m.AgentConnections));
+const Recipient = page(() => import("../../pages/recipient/index.tsx").then((m) => m.Recipient));
+const Bring = page(() => import("../../pages/bring/index.tsx").then((m) => m.Bring));
+const BringReceive = page(() => import("../../pages/bring-receive/index.tsx").then((m) => m.BringReceive));
+const BookmarkletPage = page(() => import("../../pages/bookmarklet/index.tsx").then((m) => m.BookmarkletPage));
+const Landing = page(() => import("../../pages/landing/index.tsx").then((m) => m.Landing));
+const EditorialPage = page(() => import("../../pages/discover/index.tsx").then((m) => m.EditorialPage));
+const ShelfSnapshotPage = page(() => import("../../pages/snapshot/index.tsx").then((m) => m.ShelfSnapshotPage));
+const LibraryInvite = page(() => import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite));
+const ShelfInvite = page(() => import("../../pages/shelf-invite/index.tsx").then((m) => m.ShelfInvite));
+const Moderation = page(() => import("../../pages/moderation/index.tsx").then((m) => m.Moderation));
+const Away = page(() => import("../../pages/away/index.tsx").then((m) => m.Away));
+const AccountDeleted = page(() => import("../../pages/account-deleted/index.tsx").then((m) => m.AccountDeleted));
+const MailOff = page(() => import("../../pages/mail-off/index.tsx").then((m) => m.MailOff));
+const PrivacyPage = page(() => import("../../pages/legal/index.tsx").then((m) => m.PrivacyPage));
+const TermsPage = page(() => import("../../pages/legal/index.tsx").then((m) => m.TermsPage));
+const BotPage = page(() => import("../../pages/legal/index.tsx").then((m) => m.BotPage));
+const Pricing = page(() => import("../../pages/pricing/index.tsx").then((m) => m.Pricing));
+const Enterprise = page(() => import("../../pages/enterprise/index.tsx").then((m) => m.Enterprise));
+const CompanyAdmin = page(() => import("../../pages/company/index.tsx").then((m) => m.CompanyAdmin));
+const OAuthConsent = page(() => import("../../pages/oauth-consent/index.tsx").then((m) => m.OAuthConsent));
+const AgentSessions = page(() => import("../../pages/sessions/index.tsx").then((m) => m.AgentSessions));
+const NotFound = page(() => import("../../pages/not-found/index.tsx").then((m) => m.NotFound));
 
 /** A chunk that fails to load (offline, or replaced by a new release) gets a reload, not a blank page. */
-class ChunkBoundary extends React.Component<
-  { children: React.ReactNode },
-  { failed: boolean }
-> {
+class ChunkBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -117,10 +52,7 @@ class ChunkBoundary extends React.Component<
     return (
       <div className="empty" role="alert">
         <h1>Страница не загрузилась</h1>
-        <p>
-          Проверьте подключение или обновите страницу: возможно, Полка
-          обновилась.
-        </p>
+        <p>Проверьте подключение или обновите страницу: возможно, Полка обновилась.</p>
         <Button variant="primary" onClick={() => location.reload()}>
           Обновить страницу
         </Button>

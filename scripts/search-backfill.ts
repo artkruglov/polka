@@ -30,9 +30,7 @@ try {
     batch,
     log: values.verbose ? (line) => console.log(line) : undefined,
   });
-  console.log(
-    JSON.stringify({ event: "backfill.search", dryRun: !!values["dry-run"], ...report }),
-  );
+  console.log(JSON.stringify({ event: "backfill.search", dryRun: !!values["dry-run"], ...report }));
 } finally {
   await db.end();
   s3.destroy();

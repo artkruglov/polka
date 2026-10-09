@@ -10,32 +10,20 @@
  * clipboard and the extension needs no clipboard permission. Everything is
  * restored before returning.
  */
-export async function captureCopy(
-  marker: string,
-  timeoutMs: number,
-): Promise<string | null> {
-  const button = document.querySelector<HTMLElement>(
-    `[data-polka-copy="${CSS.escape(marker)}"]`,
-  );
+export async function captureCopy(marker: string, timeoutMs: number): Promise<string | null> {
+  const button = document.querySelector<HTMLElement>(`[data-polka-copy="${CSS.escape(marker)}"]`);
   if (!button) return null;
   button.removeAttribute("data-polka-copy");
-  const clipboard = navigator.clipboard as
-    | (Clipboard & Record<string, unknown>)
-    | undefined;
-  const ownWriteText =
-    !!clipboard && Object.prototype.hasOwnProperty.call(clipboard, "writeText");
-  const ownWrite =
-    !!clipboard && Object.prototype.hasOwnProperty.call(clipboard, "write");
+  const clipboard = navigator.clipboard as (Clipboard & Record<string, unknown>) | undefined;
+  const ownWriteText = !!clipboard && Object.prototype.hasOwnProperty.call(clipboard, "writeText");
+  const ownWrite = !!clipboard && Object.prototype.hasOwnProperty.call(clipboard, "write");
   const previousWriteText = clipboard?.writeText;
   const previousWrite = clipboard?.write;
   let captured: string | null = null;
   let finish: () => void = () => {};
   const finished = new Promise<void>((resolve) => (finish = resolve));
   const onCopy = (event: ClipboardEvent) => {
-    const text =
-      event.clipboardData?.getData("text/plain") ||
-      document.getSelection()?.toString() ||
-      "";
+    const text = event.clipboardData?.getData("text/plain") || document.getSelection()?.toString() || "";
     if (text) {
       captured = text;
       finish();
@@ -58,10 +46,7 @@ export async function captureCopy(
     }
     window.addEventListener("copy", onCopy);
     button.click();
-    await Promise.race([
-      finished,
-      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
+    await Promise.race([finished, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
     return captured;
   } finally {
     window.removeEventListener("copy", onCopy);

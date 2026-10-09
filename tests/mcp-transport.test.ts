@@ -3,10 +3,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import {
-  Client,
-  StreamableHTTPClientTransport,
-} from "@modelcontextprotocol/client";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
@@ -16,8 +13,7 @@ import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { prepareCapture } from "../scripts/prepare-capture.ts";
 
-if (MCP_AUDIENCE !== `${config.APP_ORIGIN}/mcp`)
-  throw new Error("MCP audience must be the actual mounted endpoint");
+if (MCP_AUDIENCE !== `${config.APP_ORIGIN}/mcp`) throw new Error("MCP audience must be the actual mounted endpoint");
 
 const app = await createApp();
 const password = randomBytes(24).toString("hex");
@@ -53,11 +49,7 @@ async function issue(scopes: string[]) {
   return response.json() as Promise<any>;
 }
 
-async function saveHtml(
-  source: string,
-  title: string,
-  prior?: { artifactId: string; revisionId: string },
-) {
+async function saveHtml(source: string, title: string, prior?: { artifactId: string; revisionId: string }) {
   const bytes = Buffer.from(source);
   const begun = await web("/api/uploads", {
     method: "POST",
@@ -147,44 +139,27 @@ before(async () => {
     for (const [account, tenant, title, updated] of [
       [owner.id, owner.tenant, "Owner newest", "2026-09-20T12:00:02Z"],
       [owner.id, owner.tenant, "Owner older", "2026-09-20T12:00:01Z"],
-      [
-        owner.id,
-        owner.tenant,
-        "Precision newer",
-        "2026-09-20T12:00:00.123200Z",
-      ],
-      [
-        owner.id,
-        owner.tenant,
-        "Precision older",
-        "2026-09-20T12:00:00.123100Z",
-      ],
+      [owner.id, owner.tenant, "Precision newer", "2026-09-20T12:00:00.123200Z"],
+      [owner.id, owner.tenant, "Precision older", "2026-09-20T12:00:00.123100Z"],
       [other.id, other.tenant, "Foreign secret", "2026-09-20T12:00:03Z"],
     ] as const) {
       const artifact = randomUUID();
       const revision = randomUUID();
-      await c.query(
-        "INSERT INTO artifacts(id,tenant_id,created_by,title,updated_at) VALUES($1,$2,$3,$4,$5)",
-        [artifact, tenant, account, title, updated],
-      );
+      await c.query("INSERT INTO artifacts(id,tenant_id,created_by,title,updated_at) VALUES($1,$2,$3,$4,$5)", [
+        artifact,
+        tenant,
+        account,
+        title,
+        updated,
+      ]);
       await c.query(
         `INSERT INTO revisions(
            id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
            object_key,object_version,storage_kind,total_size
          ) VALUES($1,$2,$3,1,$4,'note.txt','text/plain',4,$5,$6,'test-version','single',4)`,
-        [
-          revision,
-          tenant,
-          artifact,
-          account,
-          sha256("note"),
-          `${tenant}/mcp-test/${revision}`,
-        ],
+        [revision, tenant, artifact, account, sha256("note"), `${tenant}/mcp-test/${revision}`],
       );
-      await c.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [
-        artifact,
-        revision,
-      ]);
+      await c.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [artifact, revision]);
       if (title === "Owner newest")
         await c.query(
           `INSERT INTO shares(id,tenant_id,artifact_id,revision_id,token_hash,expires_at)
@@ -241,21 +216,13 @@ test("official client negotiates HTTP and reads honest context, resources, and t
   const guide = await client.readResource({ uri: "polka://guides/capture-v1" });
   assert.match((guide.contents[0] as any).text, /prepare-capture\.ts/);
   assert.match((guide.contents[0] as any).text, /explicit tool call uploads/);
-  assert.match(
-    (guide.contents[0] as any).text,
-    /Preparation alone is not a save/,
-  );
+  assert.match((guide.contents[0] as any).text, /Preparation alone is not a save/);
   const guideText = (guide.contents[0] as any).text as string;
   assert.match(guideText, /sourceUrl = null, or an https:\/\/ URL/);
-  const example = JSON.parse(
-    guideText.slice(guideText.indexOf("{", guideText.indexOf("Minimal valid"))),
-  );
+  const example = JSON.parse(guideText.slice(guideText.indexOf("{", guideText.indexOf("Minimal valid"))));
   assert.equal(example.manifest.files.length, 1);
   assert.equal(example.manifest.provenance.sourceUrl, null);
-  assert.equal(
-    client.getServerVersion()?.version,
-    JSON.parse(readFileSync("package.json", "utf8")).version,
-  );
+  assert.equal(client.getServerVersion()?.version, JSON.parse(readFileSync("package.json", "utf8")).version);
 
   const first = await client.callTool({
     name: "polka_list",
@@ -266,14 +233,7 @@ test("official client negotiates HTTP and reads honest context, resources, and t
   assert.equal(firstPage.items[0].title, "Owner newest");
   assert.ok(firstPage.nextCursor);
   const serialized = JSON.stringify(firstPage);
-  for (const absent of [
-    "Foreign secret",
-    "share",
-    "grant",
-    "token_hash",
-    "object_key",
-    "data",
-  ])
+  for (const absent of ["Foreign secret", "share", "grant", "token_hash", "object_key", "data"])
     assert.equal(serialized.includes(absent), false, absent);
   const second = await client.callTool({
     name: "polka_list",
@@ -345,10 +305,7 @@ test("official client negotiates HTTP and reads honest context, resources, and t
 });
 
 test("official client discovers and performs scoped management without web mutation", async () => {
-  const saved = await saveHtml(
-    "<!doctype html><title>managed</title><p>source</p>",
-    "Managed through MCP",
-  );
+  const saved = await saveHtml("<!doctype html><title>managed</title><p>source</p>", "Managed through MCP");
   const folderId = randomUUID();
   await db.query("INSERT INTO folders(id,tenant_id,name) VALUES($1,$2,$3)", [
     folderId,
@@ -357,36 +314,27 @@ test("official client discovers and performs scoped management without web mutat
   ]);
   const issued = await issue(["context", "read", "manage"]);
   const client = await mcpClient(issued.token);
-  assert.deepEqual(
-    (await client.listTools()).tools.map((tool) => tool.name).sort(),
-    [
-      "polka_comments",
-      "polka_context",
-      "polka_create_folder",
-      "polka_delete_folder",
-      "polka_get_artifact",
-      "polka_list",
-      "polka_list_folders",
-      "polka_move",
-      "polka_rename_folder",
-      "polka_restore",
-      "polka_snapshot",
-      "polka_status",
-      "polka_trash",
-      "polka_update_artifact",
-    ],
-  );
-  const context = (
-    await client.callTool({ name: "polka_context", arguments: {} })
-  ).structuredContent as any;
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name).sort(), [
+    "polka_comments",
+    "polka_context",
+    "polka_create_folder",
+    "polka_delete_folder",
+    "polka_get_artifact",
+    "polka_list",
+    "polka_list_folders",
+    "polka_move",
+    "polka_rename_folder",
+    "polka_restore",
+    "polka_snapshot",
+    "polka_status",
+    "polka_trash",
+    "polka_update_artifact",
+  ]);
+  const context = (await client.callTool({ name: "polka_context", arguments: {} })).structuredContent as any;
   assert.equal(context.capabilities.manage, true);
   assert.equal(context.capabilities.readOnly, false);
   const resources = await client.listResources();
-  assert.ok(
-    resources.resources.some(
-      (resource) => resource.uri === "polka://guides/management-v1",
-    ),
-  );
+  assert.ok(resources.resources.some((resource) => resource.uri === "polka://guides/management-v1"));
 
   const before = (
     await client.callTool({
@@ -492,28 +440,22 @@ test("official client discovers and performs scoped management without web mutat
 
   const manageOnlyIssued = await issue(["manage"]);
   const manageOnly = await mcpClient(manageOnlyIssued.token);
-  assert.deepEqual(
-    (await manageOnly.listTools()).tools.map((tool) => tool.name).sort(),
-    [
-      "polka_create_folder",
-      "polka_delete_folder",
-      "polka_move",
-      "polka_rename_folder",
-      "polka_restore",
-      "polka_trash",
-      "polka_update_artifact",
-    ],
-  );
+  assert.deepEqual((await manageOnly.listTools()).tools.map((tool) => tool.name).sort(), [
+    "polka_create_folder",
+    "polka_delete_folder",
+    "polka_move",
+    "polka_rename_folder",
+    "polka_restore",
+    "polka_trash",
+    "polka_update_artifact",
+  ]);
   await manageOnly.close();
 
-  const revoked = await web(
-    `/api/agent-connections/${issued.connection.id}/revoke`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-polka-csrf": csrf },
-      body: "{}",
-    },
-  );
+  const revoked = await web(`/api/agent-connections/${issued.connection.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-polka-csrf": csrf },
+    body: "{}",
+  });
   assert.equal(revoked.status, 200);
   await assert.rejects(
     client.callTool({
@@ -528,27 +470,22 @@ test("official client discovers and performs scoped management without web mutat
 test("official client captures, prepares, shares, revises, isolates connections, and observes revoke", async () => {
   const issued = await issue(["context", "capture", "revise", "share"]);
   const client = await mcpClient(issued.token);
-  assert.deepEqual(
-    (await client.listTools()).tools.map((tool) => tool.name).sort(),
-    [
-      "polka_capture",
-      "polka_change_files",
-      "polka_context",
-      "polka_note",
-      "polka_prepare_preview",
-      "polka_project_upload",
-      "polka_publish",
-      "polka_resolve_comment",
-      "polka_revise",
-      "polka_revoke_share",
-      "polka_save_link",
-      "polka_share",
-      "polka_status",
-    ],
-  );
-  const context = (
-    await client.callTool({ name: "polka_context", arguments: {} })
-  ).structuredContent as any;
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name).sort(), [
+    "polka_capture",
+    "polka_change_files",
+    "polka_context",
+    "polka_note",
+    "polka_prepare_preview",
+    "polka_project_upload",
+    "polka_publish",
+    "polka_resolve_comment",
+    "polka_revise",
+    "polka_revoke_share",
+    "polka_save_link",
+    "polka_share",
+    "polka_status",
+  ]);
+  const context = (await client.callTool({ name: "polka_context", arguments: {} })).structuredContent as any;
   assert.equal(context.apiVersion, "mcp-capture-v1");
   assert.equal(context.capabilities.readOnly, false);
   assert.equal(context.capabilities.capture, true);
@@ -556,11 +493,12 @@ test("official client captures, prepares, shares, revises, isolates connections,
   assert.equal(context.capabilities.share, true);
   assert.equal(context.capabilities.preview.buildViaMcp, true);
 
-  const prepared = await prepareCapture(
-    "tests/fixtures/bundle-corpus/team-report",
+  const prepared = await prepareCapture("tests/fixtures/bundle-corpus/team-report", "index.html", [
     "index.html",
-    ["index.html", "assets/report.css", "assets/report.js", "assets/mark.svg"],
-  );
+    "assets/report.css",
+    "assets/report.js",
+    "assets/mark.svg",
+  ]);
   const captureInput = {
     ...prepared,
     key: randomUUID(),
@@ -597,11 +535,8 @@ test("official client captures, prepares, shares, revises, isolates connections,
   assert.equal(statusBefore.state, "saved");
   assert.equal(statusBefore.preview, null);
   const derivativeBytesBefore = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        owner.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+      .derivative_used_bytes,
   );
   const preview = (
     await client.callTool({
@@ -614,11 +549,8 @@ test("official client captures, prepares, shares, revises, isolates connections,
   assert.equal(preview.uploadId, receipt.uploadId);
   assert.equal(preview.concurrent, false);
   const derivativeBytesReady = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        owner.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+      .derivative_used_bytes,
   );
   assert.ok(derivativeBytesReady > derivativeBytesBefore);
   const retriedPreview = (
@@ -630,12 +562,8 @@ test("official client captures, prepares, shares, revises, isolates connections,
   assert.equal(retriedPreview.state, "ready");
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT derivative_used_bytes FROM tenants WHERE id=$1",
-          [owner.tenant],
-        )
-      ).rows[0].derivative_used_bytes,
+      (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+        .derivative_used_bytes,
     ),
     derivativeBytesReady,
   );
@@ -727,10 +655,10 @@ test("official client captures, prepares, shares, revises, isolates connections,
 
   const otherIssued = await issue(["context"]);
   const otherClient = await mcpClient(otherIssued.token);
-  assert.deepEqual(
-    (await otherClient.listTools()).tools.map((tool) => tool.name).sort(),
-    ["polka_context", "polka_status"],
-  );
+  assert.deepEqual((await otherClient.listTools()).tools.map((tool) => tool.name).sort(), [
+    "polka_context",
+    "polka_status",
+  ]);
   const hiddenStatus = await otherClient.callTool({
     name: "polka_status",
     arguments: { uploadId: receipt.uploadId },
@@ -796,11 +724,8 @@ test("official client captures, prepares, shares, revises, isolates connections,
   });
 
   const usedBeforeRevokedBuild = Number(
-    (
-      await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [
-        owner.tenant,
-      ])
-    ).rows[0].derivative_used_bytes,
+    (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+      .derivative_used_bytes,
   );
   const revokedBuildPromise = client.callTool({
     name: "polka_prepare_preview",
@@ -809,40 +734,28 @@ test("official client captures, prepares, shares, revises, isolates connections,
   let pending: any;
   for (let attempt = 0; attempt < 200 && !pending; attempt++) {
     pending = (
-      await db.query(
-        "SELECT * FROM revision_derivatives WHERE revision_id=$1 AND state='pending'",
-        [largeReceipt.revisionId],
-      )
+      await db.query("SELECT * FROM revision_derivatives WHERE revision_id=$1 AND state='pending'", [
+        largeReceipt.revisionId,
+      ])
     ).rows[0];
     if (!pending) await new Promise((resolve) => setTimeout(resolve, 2));
   }
   assert.ok(pending, "preview should persist its attempt before worker output");
 
-  const revoked = await web(
-    `/api/agent-connections/${issued.connection.id}/revoke`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-polka-csrf": csrf },
-      body: "{}",
-    },
-  );
+  const revoked = await web(`/api/agent-connections/${issued.connection.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-polka-csrf": csrf },
+    body: "{}",
+  });
   assert.equal(revoked.status, 200);
   assert.equal((await revokedBuildPromise).isError, true);
-  const stopped = (
-    await db.query("SELECT * FROM revision_derivatives WHERE id=$1", [
-      pending.id,
-    ])
-  ).rows[0];
+  const stopped = (await db.query("SELECT * FROM revision_derivatives WHERE id=$1", [pending.id])).rows[0];
   assert.equal(stopped.state, "pending");
   assert.equal(stopped.object_key, null);
   assert.equal(
     Number(
-      (
-        await db.query(
-          "SELECT derivative_used_bytes FROM tenants WHERE id=$1",
-          [owner.tenant],
-        )
-      ).rows[0].derivative_used_bytes,
+      (await db.query("SELECT derivative_used_bytes FROM tenants WHERE id=$1", [owner.tenant])).rows[0]
+        .derivative_used_bytes,
     ),
     usedBeforeRevokedBuild,
   );
@@ -852,26 +765,21 @@ test("official client captures, prepares, shares, revises, isolates connections,
      WHERE id=$1`,
     [pending.id],
   );
-  await assert.rejects(
-    client.callTool({ name: "polka_capture", arguments: captureInput }),
-  );
+  await assert.rejects(client.callTool({ name: "polka_capture", arguments: captureInput }));
   await client.close();
 });
 
 test("share receipts survive a lost response, reject substitution, and replay closed", async () => {
-  const v1 = await saveHtml(
-    "<!doctype html><title>v1</title><p>first</p>",
-    "MCP share source",
-  );
+  const v1 = await saveHtml("<!doctype html><title>v1</title><p>first</p>", "MCP share source");
   const issued = await issue(["context", "share"]);
   const client = await mcpClient(issued.token);
-  assert.deepEqual(
-    (await client.listTools()).tools.map((tool) => tool.name).sort(),
-    ["polka_context", "polka_revoke_share", "polka_share", "polka_status"],
-  );
-  const context = (
-    await client.callTool({ name: "polka_context", arguments: {} })
-  ).structuredContent as any;
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name).sort(), [
+    "polka_context",
+    "polka_revoke_share",
+    "polka_share",
+    "polka_status",
+  ]);
+  const context = (await client.callTool({ name: "polka_context", arguments: {} })).structuredContent as any;
   assert.equal(context.capabilities.share, true);
   assert.equal(context.capabilities.readOnly, false);
 
@@ -883,17 +791,14 @@ test("share receipts survive a lost response, reject substitution, and replay cl
   };
   // Deliberately discard the first successful result, then recover it by key.
   await client.callTool({ name: "polka_share", arguments: shareInput });
-  const recovered = (
-    await client.callTool({ name: "polka_share", arguments: shareInput })
-  ).structuredContent as any;
+  const recovered = (await client.callTool({ name: "polka_share", arguments: shareInput })).structuredContent as any;
   assert.equal(recovered.state, "active");
   // The share URL follows this installation's origin, not a fixed port.
   assert.ok(recovered.url.startsWith(`${config.APP_ORIGIN}/s#`), recovered.url);
   assert.equal(recovered.artifactId, v1.artifactId);
   assert.equal(recovered.revisionId, v1.revisionId);
   assert.deepEqual(
-    (await client.callTool({ name: "polka_share", arguments: shareInput }))
-      .structuredContent,
+    (await client.callTool({ name: "polka_share", arguments: shareInput })).structuredContent,
     recovered,
   );
   const counts = await db.query(
@@ -923,11 +828,10 @@ test("share receipts survive a lost response, reject substitution, and replay cl
   );
   await otherClient.close();
 
-  const v2 = await saveHtml(
-    "<!doctype html><title>v2</title><p>second</p>",
-    "MCP share revision",
-    { artifactId: v1.artifactId, revisionId: v1.revisionId },
-  );
+  const v2 = await saveHtml("<!doctype html><title>v2</title><p>second</p>", "MCP share revision", {
+    artifactId: v1.artifactId,
+    revisionId: v1.revisionId,
+  });
   assert.equal(
     (
       await client.callTool({
@@ -951,11 +855,7 @@ test("share receipts survive a lost response, reject substitution, and replay cl
     true,
   );
   assert.equal(
-    (
-      await db.query("SELECT revision_id FROM shares WHERE id=$1", [
-        recovered.shareId,
-      ])
-    ).rows[0].revision_id,
+    (await db.query("SELECT revision_id FROM shares WHERE id=$1", [recovered.shareId])).rows[0].revision_id,
     v1.revisionId,
   );
 
@@ -968,19 +868,17 @@ test("share receipts survive a lost response, reject substitution, and replay cl
     ).structuredContent,
     { ok: true },
   );
-  const closed = (
-    await client.callTool({ name: "polka_share", arguments: shareInput })
-  ).structuredContent as any;
+  const closed = (await client.callTool({ name: "polka_share", arguments: shareInput })).structuredContent as any;
   assert.equal(closed.shareId, recovered.shareId);
   assert.equal(closed.state, "closed");
   assert.equal(closed.url, null);
   assert.equal(
     Number(
       (
-        await db.query(
-          "SELECT count(*) FROM shares WHERE tenant_id=$1 AND artifact_id=$2",
-          [owner.tenant, v1.artifactId],
-        )
+        await db.query("SELECT count(*) FROM shares WHERE tenant_id=$1 AND artifact_id=$2", [
+          owner.tenant,
+          v1.artifactId,
+        ])
       ).rows[0].count,
     ),
     1,
@@ -996,13 +894,7 @@ test("share receipts survive a lost response, reject substitution, and replay cl
     audit.map((row) => row.action),
     ["share.enabled", "share.revoked"],
   );
-  assert(
-    audit.every(
-      (row) =>
-        row.actor_type === "agent" &&
-        row.connection_id === issued.connection.id,
-    ),
-  );
+  assert(audit.every((row) => row.actor_type === "agent" && row.connection_id === issued.connection.id));
 
   const expiringInput = {
     ...shareInput,
@@ -1010,32 +902,21 @@ test("share receipts survive a lost response, reject substitution, and replay cl
     expectedRevisionId: v2.revisionId,
     expiresInDays: 1,
   };
-  const expiring = (
-    await client.callTool({ name: "polka_share", arguments: expiringInput })
-  ).structuredContent as any;
-  await db.query(
-    "UPDATE shares SET expires_at=now()-interval '1 second' WHERE id=$1",
-    [expiring.shareId],
-  );
-  const expiredReplay = (
-    await client.callTool({ name: "polka_share", arguments: expiringInput })
-  ).structuredContent as any;
+  const expiring = (await client.callTool({ name: "polka_share", arguments: expiringInput })).structuredContent as any;
+  await db.query("UPDATE shares SET expires_at=now()-interval '1 second' WHERE id=$1", [expiring.shareId]);
+  const expiredReplay = (await client.callTool({ name: "polka_share", arguments: expiringInput }))
+    .structuredContent as any;
   assert.equal(expiredReplay.shareId, expiring.shareId);
   assert.equal(expiredReplay.state, "closed");
   assert.equal(expiredReplay.url, null);
 
-  const revoked = await web(
-    `/api/agent-connections/${issued.connection.id}/revoke`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-polka-csrf": csrf },
-      body: "{}",
-    },
-  );
+  const revoked = await web(`/api/agent-connections/${issued.connection.id}/revoke`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-polka-csrf": csrf },
+    body: "{}",
+  });
   assert.equal(revoked.status, 200);
-  await assert.rejects(
-    client.callTool({ name: "polka_share", arguments: shareInput }),
-  );
+  await assert.rejects(client.callTool({ name: "polka_share", arguments: shareInput }));
   await client.close();
 });
 
@@ -1043,10 +924,7 @@ test("scope, revoke, Host, Origin, and web Origin boundaries survive real HTTP w
   const contextOnly = await issue(["context"]);
   const limited = await mcpClient(contextOnly.token);
   const limitedTools = await limited.listTools();
-  assert.deepEqual(limitedTools.tools.map((tool) => tool.name).sort(), [
-    "polka_context",
-    "polka_status",
-  ]);
+  assert.deepEqual(limitedTools.tools.map((tool) => tool.name).sort(), ["polka_context", "polka_status"]);
   await assert.rejects(
     limited.callTool({
       name: "polka_capture",
@@ -1161,15 +1039,9 @@ test("scope, revoke, Host, Origin, and web Origin boundaries survive real HTTP w
   });
   assert.equal(securedResponse.status, 200);
   assert.equal(securedResponse.headers.get("cache-control"), "no-store");
-  assert.equal(
-    securedResponse.headers.get("x-content-type-options"),
-    "nosniff",
-  );
+  assert.equal(securedResponse.headers.get("x-content-type-options"), "nosniff");
   assert.equal(securedResponse.headers.get("referrer-policy"), "no-referrer");
-  assert.equal(
-    securedResponse.headers.get("x-robots-tag"),
-    "noindex, nofollow, noarchive",
-  );
+  assert.equal(securedResponse.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
   assert.equal(
     (
       await web(
@@ -1196,19 +1068,14 @@ test("scope, revoke, Host, Origin, and web Origin boundaries survive real HTTP w
   );
 
   const client = await mcpClient(bearer);
-  assert.equal(
-    (await client.callTool({ name: "polka_context", arguments: {} })).isError,
-    undefined,
-  );
+  assert.equal((await client.callTool({ name: "polka_context", arguments: {} })).isError, undefined);
   const revoked = await web(`/api/agent-connections/${connectionId}/revoke`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-polka-csrf": csrf },
     body: "{}",
   });
   assert.equal(revoked.status, 200);
-  await assert.rejects(
-    client.callTool({ name: "polka_context", arguments: {} }),
-  );
+  await assert.rejects(client.callTool({ name: "polka_context", arguments: {} }));
   await client.close();
 });
 
@@ -1228,19 +1095,12 @@ test("/mcp is rate limited per address, before authentication, and per connectio
       },
       payload: { jsonrpc: "2.0", id: 1, method: "tools/list" },
     });
-  const address = () =>
-    `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
-  assert.equal(
-    (await post(`Bearer ${limited.token}`, address())).statusCode,
-    200,
-  );
+  const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+  assert.equal((await post(`Bearer ${limited.token}`, address())).statusCode, 200);
   await db.query(
     `INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')
      ON CONFLICT(key) DO UPDATE SET attempts=excluded.attempts`,
-    [
-      sha256(`mcp:connection:${limited.connection.id}`),
-      MCP_LIMITS.perConnection,
-    ],
+    [sha256(`mcp:connection:${limited.connection.id}`), MCP_LIMITS.perConnection],
   );
   const byConnection = await post(`Bearer ${limited.token}`, address());
   assert.equal(byConnection.statusCode, 429);
@@ -1248,26 +1108,20 @@ test("/mcp is rate limited per address, before authentication, and per connectio
   const retryAfter = Number(byConnection.headers["retry-after"]);
   assert.ok(retryAfter > 0 && retryAfter <= 600, String(retryAfter));
   // Other connections from the same owner are unaffected.
-  assert.equal(
-    (await post(`Bearer ${unaffected.token}`, address())).statusCode,
-    200,
-  );
+  assert.equal((await post(`Bearer ${unaffected.token}`, address())).statusCode, 200);
   const ip = address();
-  await db.query(
-    "INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')",
-    [sha256(`mcp:ip:${ip}`), MCP_LIMITS.perIp],
-  );
+  await db.query("INSERT INTO login_limits VALUES($1,$2,now()+interval '10 minutes')", [
+    sha256(`mcp:ip:${ip}`),
+    MCP_LIMITS.perIp,
+  ]);
   // Claude.ai and ChatGPT share addresses: a valid token is not limited by
   // the address, only token guesses are.
   assert.equal((await post(`Bearer ${unaffected.token}`, ip)).statusCode, 200);
   assert.equal((await post("Bearer invalid", ip)).statusCode, 429);
   const fresh = address();
-  for (let i = 0; i < 3; i++)
-    assert.equal((await post(`Bearer ${unaffected.token}`, fresh)).statusCode, 200);
+  for (let i = 0; i < 3; i++) assert.equal((await post(`Bearer ${unaffected.token}`, fresh)).statusCode, 200);
   const [{ attempts = 0 } = {}] = (
-    await db.query("SELECT attempts FROM login_limits WHERE key=$1", [
-      sha256(`mcp:ip:${fresh}`),
-    ])
+    await db.query("SELECT attempts FROM login_limits WHERE key=$1", [sha256(`mcp:ip:${fresh}`)])
   ).rows;
   assert.equal(attempts, 0, "authenticated requests are not counted per address");
 });
@@ -1292,15 +1146,12 @@ test("agents read comments, patch the text, move the link and resolve threads", 
      VALUES($1,$2,'unused',$3,'Читатель',now(),now())`,
     [readerId, `email-${readerId}`, `reader-${readerId.slice(0, 8)}@example.test`],
   );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-    randomUUID(),
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [randomUUID(), readerId]);
+  const session = randomBytes(32).toString("base64url");
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(session),
     readerId,
   ]);
-  const session = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(session), readerId],
-  );
   const shared = (path: string, body: unknown) =>
     fetch(`${config.APP_ORIGIN}/api/shared/comments${path}`, {
       method: "POST",
@@ -1377,9 +1228,7 @@ test("agents read comments, patch the text, move the link and resolve threads", 
       key: randomUUID(),
       artifactId: published.artifactId,
       baseRevisionId: published.revisionId,
-      edits: [
-        { oldText: "Выручка выросла на 12%.", newText: "Выручка выросла на 14%." },
-      ],
+      edits: [{ oldText: "Выручка выросла на 12%.", newText: "Выручка выросла на 14%." }],
     },
   });
   assert.equal(revised.isError, undefined, JSON.stringify(revised.content));
@@ -1397,10 +1246,7 @@ test("agents read comments, patch the text, move the link and resolve threads", 
   });
   assert.equal(stale.isError, true);
   assert.equal((stale.structuredContent as any).code, "conflict");
-  assert.equal(
-    (stale.structuredContent as any).currentRevisionId,
-    receipt.revisionId,
-  );
+  assert.equal((stale.structuredContent as any).currentRevisionId, receipt.revisionId);
   // The link moves to the new version with its token and its discussion.
   const moveKey = randomUUID();
   const moved = (
@@ -1462,10 +1308,7 @@ test("agents read comments, patch the text, move the link and resolve threads", 
     })
   ).structuredContent as any;
   assert.deepEqual(after.shares[0].threads, []);
-  assert.equal(
-    ((await (await shared("", {})).json()) as any).threads[0].resolvedAt !== null,
-    true,
-  );
+  assert.equal(((await (await shared("", {})).json()) as any).threads[0].resolvedAt !== null, true);
   await client.close();
 
   // Another shelf's agent sees nothing of this work.

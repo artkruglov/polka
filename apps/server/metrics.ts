@@ -44,12 +44,10 @@ const DEFINITIONS = {
   week: "ISO week (Monday, UTC) of the sign-up or of the event.",
   visitors:
     "Loads of the landing pages (/, /connect, /enterprise, /pricing, /discover, /signup) by anonymous people; bots, previews, prefetches and signed-in people are not counted. A page view, not a unique visitor: there are no identifiers.",
-  signups:
-    "Accounts created that week (email code, Яндекс ID, VK ID, OIDC, operator password).",
+  signups: "Accounts created that week (email code, Яндекс ID, VK ID, OIDC, operator password).",
   funnel:
     "Of the accounts created that week, how many reached each step by now, each step also requiring the previous ones (reached: without that requirement).",
-  agentConnected:
-    "An OAuth connection was granted, or a token connection made its first call.",
+  agentConnected: "An OAuth connection was granted, or a token connection made its first call.",
   firstSave: "A work was saved (web, agent or the HTTP API).",
   firstShare: "A link was made.",
   shareOpened:
@@ -63,22 +61,11 @@ const DEFINITIONS = {
 };
 
 /** The prompt's presses, in the report's column order (analytics.ts). */
-export const RECIPIENT_ACTIONS = [
-  "try",
-  "remix",
-  "copy_phrase",
-  "yandex",
-  "email",
-] as const;
+export const RECIPIENT_ACTIONS = ["try", "remix", "copy_phrase", "yandex", "email"] as const;
 type RecipientAction = (typeof RECIPIENT_ACTIONS)[number];
 
 /** Sign-up sources the prompt sets (apps/web/src/entities/onboarding/arrival.ts). */
-export const RECIPIENT_SOURCES = new Set([
-  "ref:share",
-  "ref:share-remix",
-  "ref:feed",
-  "ref:feed-remix",
-]);
+export const RECIPIENT_SOURCES = new Set(["ref:share", "ref:share-remix", "ref:feed", "ref:feed-remix"]);
 
 export type RecipientWeek = {
   week: string;
@@ -107,10 +94,7 @@ const emptyRecipientWeek = () => ({
   opened: 0,
   barViews: 0,
   cardViews: 0,
-  clicks: Object.fromEntries(RECIPIENT_ACTIONS.map((a) => [a, 0])) as Record<
-    RecipientAction,
-    number
-  >,
+  clicks: Object.fromEntries(RECIPIENT_ACTIONS.map((a) => [a, 0])) as Record<RecipientAction, number>,
   clicksTotal: 0,
   signups: 0,
 });
@@ -136,8 +120,7 @@ export function recipientFunnel(
         entry.clicks[row.detail as RecipientAction] += row.count;
         entry.clicksTotal += row.count;
       }
-    } else if (row.name === "signup_completed" && RECIPIENT_SOURCES.has(row.source))
-      entry.signups += row.count;
+    } else if (row.name === "signup_completed" && RECIPIENT_SOURCES.has(row.source)) entry.signups += row.count;
   }
   const rows: RecipientWeek[] = weeks.map((week) => {
     const entry = byWeek.get(week)!;
@@ -164,17 +147,14 @@ export function recipientFunnel(
 
 const DAY = 86_400_000;
 export const addDays = (day: string, days: number) =>
-  new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY)
-    .toISOString()
-    .slice(0, 10);
+  new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 export function weekOf(day: string) {
   const weekday = (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
   return addDays(day, -weekday);
 }
 export const todayUtc = (now = new Date()) => now.toISOString().slice(0, 10);
 
-const rate = (part: number, whole: number) =>
-  whole ? Math.round((part / whole) * 10_000) / 10_000 : null;
+const rate = (part: number, whole: number) => (whole ? Math.round((part / whole) * 10_000) / 10_000 : null);
 
 // ---------------------------------------------------------------------------
 // Pure computations (tested on synthetic cohorts).
@@ -189,8 +169,7 @@ export function funnelWeeks(
 ) {
   const rows = weeks.map((week) => {
     const cohort = signups.filter((signup) => weekOf(signup.day) === week);
-    const has = (actor: string, step: Step) =>
-      reached.get(actor)?.has(step) ?? false;
+    const has = (actor: string, step: Step) => reached.get(actor)?.has(step) ?? false;
     const nested = {
       agentConnected: 0,
       firstSave: 0,
@@ -225,8 +204,7 @@ export function funnelWeeks(
       },
     };
   });
-  const sum = (key: "visitors" | "signups" | Step) =>
-    rows.reduce((total, row) => total + row[key], 0);
+  const sum = (key: "visitors" | "signups" | Step) => rows.reduce((total, row) => total + row[key], 0);
   const total = {
     visitors: sum("visitors"),
     signups: sum("signups"),
@@ -277,10 +255,7 @@ export function retentionCohorts(
         }
         return [name, { eligible, retained, rate: rate(retained, eligible) }];
       }),
-    ) as Record<
-      keyof typeof RETENTION_WINDOWS,
-      { eligible: number; retained: number; rate: number | null }
-    >;
+    ) as Record<keyof typeof RETENTION_WINDOWS, { eligible: number; retained: number; rate: number | null }>;
     return { week, cohort: cohort.length, ...windows };
   });
 }
@@ -297,16 +272,11 @@ type DailyRow = {
   count: number;
 };
 
-export async function metricsReport(
-  options: { weeks?: number; today?: string } = {},
-  q: Queryable = db,
-) {
+export async function metricsReport(options: { weeks?: number; today?: string } = {}, q: Queryable = db) {
   const count = Math.min(Math.max(Math.trunc(options.weeks ?? 12), 1), 56);
   const today = options.today ?? todayUtc();
   const since = addDays(weekOf(today), -7 * (count - 1));
-  const weeks = Array.from({ length: count }, (_, index) =>
-    addDays(since, 7 * index),
-  );
+  const weeks = Array.from({ length: count }, (_, index) => addDays(since, 7 * index));
 
   const signups: Signup[] = (
     await q.query(
@@ -320,9 +290,7 @@ export async function metricsReport(
   const reached = new Map<string, Set<Step>>();
   const activeDays = new Map<string, Set<string>>();
   if (actors.length) {
-    const byEvent = new Map(
-      Object.entries(STEP_EVENTS).map(([step, name]) => [name, step as Step]),
-    );
+    const byEvent = new Map(Object.entries(STEP_EVENTS).map(([step, name]) => [name, step as Step]));
     for (const row of (
       await q.query(
         `SELECT DISTINCT actor,name FROM analytics_events
@@ -357,9 +325,7 @@ export async function metricsReport(
   const pages = new Map<string, number>();
   const sources = new Map<string, { visits: number; signups: number }>();
   const methods = new Map<string, number>();
-  const activity = new Map<string, Record<string, number>>(
-    weeks.map((week) => [week, {}]),
-  );
+  const activity = new Map<string, Record<string, number>>(weeks.map((week) => [week, {}]));
   for (const row of daily) {
     const week = weekOf(row.day);
     const counts = activity.get(week);
@@ -375,8 +341,7 @@ export async function metricsReport(
       else entry.signups += row.count;
       sources.set(key, entry);
     }
-    if (row.name === "signup_completed")
-      methods.set(row.detail, (methods.get(row.detail) ?? 0) + row.count);
+    if (row.name === "signup_completed") methods.set(row.detail, (methods.get(row.detail) ?? 0) + row.count);
   }
   const activeByWeek = new Map<string, number>(
     (
@@ -420,9 +385,7 @@ export async function metricsReport(
       }))
       .sort((a, b) => b.signups - a.signups || b.visits - a.visits)
       .slice(0, 50),
-    pages: [...pages.entries()]
-      .map(([path, visits]) => ({ path, visits }))
-      .sort((a, b) => b.visits - a.visits),
+    pages: [...pages.entries()].map(([path, visits]) => ({ path, visits })).sort((a, b) => b.visits - a.visits),
     recipients: recipientFunnel(weeks, daily),
     signupMethods: [...methods.entries()]
       .map(([method, signups]) => ({ method, signups }))
@@ -445,12 +408,9 @@ export async function metricsReport(
       };
     }),
     totals: {
-      allTime: Object.fromEntries(
-        allTime.map((row: any) => [row.name, Number(row.count)]),
-      ),
+      allTime: Object.fromEntries(allTime.map((row: any) => [row.name, Number(row.count)])),
       countingSince: allTime.reduce(
-        (first: string | null, row: any) =>
-          !first || row.since < first ? row.since : first,
+        (first: string | null, row: any) => (!first || row.since < first ? row.since : first),
         null,
       ),
     },
@@ -462,29 +422,22 @@ export type MetricsReport = Awaited<ReturnType<typeof metricsReport>>;
 // ---------------------------------------------------------------------------
 // Routes.
 
-const asset = (name: string) =>
-  readFile(new URL(`./ops-metrics/${name}`, import.meta.url), "utf8");
+const asset = (name: string) => readFile(new URL(`./ops-metrics/${name}`, import.meta.url), "utf8");
 
 export function registerOpsMetrics(app: FastifyInstance) {
   app.get("/api/ops/metrics", async (req) => {
     authorizeOpsStatus(req.headers.authorization);
-    const { weeks } = z
-      .object({ weeks: z.coerce.number().int().min(1).max(56).default(12) })
-      .parse(req.query ?? {});
+    const { weeks } = z.object({ weeks: z.coerce.number().int().min(1).max(56).default(12) }).parse(req.query ?? {});
     return metricsReport({ weeks });
   });
   // The page carries no data: it asks for the token (kept in this tab's
   // sessionStorage only) and reads the JSON above. Script and styles are
   // files of this origin, as the app's CSP requires.
-  const page =
-    (name: string, type: string) => async (_req: any, reply: any) => {
-      if (!config.OPS_STATUS_TOKEN) throw missing();
-      return reply.type(type).send(await asset(name));
-    };
+  const page = (name: string, type: string) => async (_req: any, reply: any) => {
+    if (!config.OPS_STATUS_TOKEN) throw missing();
+    return reply.type(type).send(await asset(name));
+  };
   app.get("/ops/metrics", page("index.html", "text/html; charset=utf-8"));
-  app.get(
-    "/ops/metrics.js",
-    page("metrics.js", "text/javascript; charset=utf-8"),
-  );
+  app.get("/ops/metrics.js", page("metrics.js", "text/javascript; charset=utf-8"));
   app.get("/ops/metrics.css", page("metrics.css", "text/css; charset=utf-8"));
 }

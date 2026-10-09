@@ -5,10 +5,7 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-} from "../apps/server/service-auth.ts";
+import { authenticateServiceToken, MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3 } from "../apps/server/storage.ts";
 import { publishToolDescription } from "../apps/server/agent-publish.ts";
 import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
@@ -20,17 +17,13 @@ const origin = config.APP_ORIGIN;
 const mcpHost = new URL(MCP_AUDIENCE).host;
 const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 const password = randomBytes(24).toString("hex");
-const address = () =>
-  `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; name: string; cookie: string };
 let owner: Owner;
 
 async function newOwner(prefix: string): Promise<Owner> {
-  const account = await createAccount(
-    `${prefix}-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const account = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
   const login = await app.inject({
     method: "POST",
     url: "/api/login",
@@ -45,8 +38,7 @@ async function newOwner(prefix: string): Promise<Owner> {
   };
 }
 
-const form = (params: Record<string, string>) =>
-  new URLSearchParams(params).toString();
+const form = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
 async function register(body: unknown, headers: Record<string, string> = {}) {
   return app.inject({
@@ -141,10 +133,7 @@ async function token(params: Record<string, string>, headers = {}) {
 }
 
 /** Register → authorize → approve → code, as Claude.ai drives it. */
-async function approvedCode(
-  who: Owner,
-  options: { scope?: string; grant?: string[]; clientId?: string } = {},
-) {
+async function approvedCode(who: Owner, options: { scope?: string; grant?: string[]; clientId?: string } = {}) {
   const clientId = options.clientId ?? (await publicClient()).client_id;
   const { verifier, challenge } = pkce();
   const state = randomBytes(12).toString("base64url");
@@ -177,10 +166,7 @@ async function approvedCode(
   };
 }
 
-async function connect(
-  who: Owner,
-  options: Parameters<typeof approvedCode>[1] = {},
-) {
+async function connect(who: Owner, options: Parameters<typeof approvedCode>[1] = {}) {
   const grant = await approvedCode(who, options);
   const response = await token({
     grant_type: "authorization_code",
@@ -194,11 +180,7 @@ async function connect(
   return { ...grant, tokens: response.json() as any };
 }
 
-async function mcp(
-  bearer: string,
-  method: string,
-  params: Record<string, unknown> = {},
-) {
+async function mcp(bearer: string, method: string, params: Record<string, unknown> = {}) {
   const response = await app.inject({
     method: "POST",
     url: "/mcp",
@@ -212,11 +194,8 @@ async function mcp(
     },
     payload: { jsonrpc: "2.0", id: 1, method, params },
   });
-  if (response.statusCode !== 200)
-    return { status: response.statusCode, response };
-  const text = String(response.headers["content-type"]).startsWith(
-    "text/event-stream",
-  )
+  if (response.statusCode !== 200) return { status: response.statusCode, response };
+  const text = String(response.headers["content-type"]).startsWith("text/event-stream")
     ? response.body
         .split("\n")
         .filter((line) => line.startsWith("data: "))
@@ -247,11 +226,7 @@ async function publish(bearer: string, heading = "Chat report") {
   });
   assert.equal(called.status, 200);
   assert.equal(called.message.error, undefined, JSON.stringify(called.message));
-  assert.notEqual(
-    called.message.result.isError,
-    true,
-    JSON.stringify(called.message),
-  );
+  assert.notEqual(called.message.result.isError, true, JSON.stringify(called.message));
   return called.message.result.structuredContent as any;
 }
 
@@ -290,10 +265,7 @@ test("analytics: a granted OAuth connection is one agent_connected, by client, f
 });
 
 test("discovery documents describe the MCP resource and its authorization server", async () => {
-  for (const path of [
-    "/.well-known/oauth-protected-resource",
-    "/.well-known/oauth-protected-resource/mcp",
-  ]) {
+  for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
     const response = await app.inject({ method: "GET", url: path });
     assert.equal(response.statusCode, 200, path);
     assert.equal(response.headers["access-control-allow-origin"], "*");
@@ -315,10 +287,7 @@ test("discovery documents describe the MCP resource and its authorization server
   assert.equal(metadata.revocation_endpoint, `${origin}/oauth/revoke`);
   assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
   assert.deepEqual(metadata.response_types_supported, ["code"]);
-  assert.deepEqual(metadata.grant_types_supported, [
-    "authorization_code",
-    "refresh_token",
-  ]);
+  assert.deepEqual(metadata.grant_types_supported, ["authorization_code", "refresh_token"]);
 });
 
 test("unauthenticated /mcp answers 401 with a resource_metadata challenge", async () => {
@@ -330,14 +299,8 @@ test("unauthenticated /mcp answers 401 with a resource_metadata challenge", asyn
   });
   assert.equal(missing.statusCode, 401);
   const metadataUrl = `${origin}/.well-known/oauth-protected-resource/mcp`;
-  assert.equal(
-    missing.headers["www-authenticate"],
-    `Bearer resource_metadata="${metadataUrl}"`,
-  );
-  const invalid = await mcp(
-    randomBytes(32).toString("base64url"),
-    "tools/list",
-  );
+  assert.equal(missing.headers["www-authenticate"], `Bearer resource_metadata="${metadataUrl}"`);
+  const invalid = await mcp(randomBytes(32).toString("base64url"), "tools/list");
   assert.equal(invalid.status, 401);
   assert.equal(
     invalid.response.headers["www-authenticate"],
@@ -349,10 +312,7 @@ test("dynamic client registration accepts https and loopback redirects only", as
   const claude = await register(
     {
       client_name: "Claude",
-      redirect_uris: [
-        CLAUDE_CALLBACK,
-        "https://claude.com/api/mcp/auth_callback",
-      ],
+      redirect_uris: [CLAUDE_CALLBACK, "https://claude.com/api/mcp/auth_callback"],
       grant_types: ["authorization_code", "refresh_token"],
       token_endpoint_auth_method: "none",
       logo_uri: "https://claude.ai/logo.png",
@@ -380,39 +340,18 @@ test("dynamic client registration accepts https and loopback redirects only", as
     redirect_uris: ["http://127.0.0.1:33418/callback"],
   });
   assert.equal(loopback.statusCode, 201, loopback.body);
-  assert.equal(
-    loopback.json().token_endpoint_auth_method,
-    "client_secret_basic",
-  );
+  assert.equal(loopback.json().token_endpoint_auth_method, "client_secret_basic");
   assert.equal(loopback.json().client_name, "MCP-клиент");
 
   for (const [body, error] of [
-    [
-      { redirect_uris: ["http://evil.example/callback"] },
-      "invalid_redirect_uri",
-    ],
+    [{ redirect_uris: ["http://evil.example/callback"] }, "invalid_redirect_uri"],
     [{ redirect_uris: ["myapp://callback"] }, "invalid_redirect_uri"],
-    [
-      { redirect_uris: ["https://claude.ai/cb#fragment"] },
-      "invalid_redirect_uri",
-    ],
-    [
-      { redirect_uris: ["https://user:pw@claude.ai/cb"] },
-      "invalid_redirect_uri",
-    ],
+    [{ redirect_uris: ["https://claude.ai/cb#fragment"] }, "invalid_redirect_uri"],
+    [{ redirect_uris: ["https://user:pw@claude.ai/cb"] }, "invalid_redirect_uri"],
     [{ redirect_uris: [] }, "invalid_client_metadata"],
-    [
-      { redirect_uris: [CLAUDE_CALLBACK], grant_types: ["password"] },
-      "invalid_client_metadata",
-    ],
-    [
-      { redirect_uris: [CLAUDE_CALLBACK], grant_types: ["refresh_token"] },
-      "invalid_client_metadata",
-    ],
-    [
-      { redirect_uris: [CLAUDE_CALLBACK], response_types: ["token"] },
-      "invalid_client_metadata",
-    ],
+    [{ redirect_uris: [CLAUDE_CALLBACK], grant_types: ["password"] }, "invalid_client_metadata"],
+    [{ redirect_uris: [CLAUDE_CALLBACK], grant_types: ["refresh_token"] }, "invalid_client_metadata"],
+    [{ redirect_uris: [CLAUDE_CALLBACK], response_types: ["token"] }, "invalid_client_metadata"],
     [
       {
         redirect_uris: [CLAUDE_CALLBACK],
@@ -465,10 +404,7 @@ test("authorization request errors never redirect to an unregistered URI", async
     });
     // Pre-consent errors stay on Polka: a registered redirect is not trusted
     // enough for an automatic bounce (RFC 9700 §4.11.2).
-    assert.equal(
-      started.location.href,
-      `${origin}/oauth/consent?error=${error}`,
-    );
+    assert.equal(started.location.href, `${origin}/oauth/consent?error=${error}`);
     assert.equal(started.browser, "");
   }
 });
@@ -563,18 +499,10 @@ test("full Claude.ai flow: code + PKCE → token → MCP publish → resolvable 
 
   const listed = await mcp(tokens.access_token, "tools/list");
   const names = listed.message.result.tools.map((tool: any) => tool.name);
-  for (const name of [
-    "polka_context",
-    "polka_list",
-    "polka_capture",
-    "polka_publish",
-    "polka_share",
-  ])
+  for (const name of ["polka_context", "polka_list", "polka_capture", "polka_publish", "polka_share"])
     assert.ok(names.includes(name), name);
   assert.ok(!names.includes("polka_trash"));
-  const publishTool = listed.message.result.tools.find(
-    (tool: any) => tool.name === "polka_publish",
-  );
+  const publishTool = listed.message.result.tools.find((tool: any) => tool.name === "polka_publish");
   assert.equal(publishTool.description, publishToolDescription());
   assert.match(publishTool.description, /React/);
 
@@ -600,17 +528,13 @@ test("full Claude.ai flow: code + PKCE → token → MCP publish → resolvable 
     url: "/api/agent-connections",
     headers: { cookie: owner.cookie },
   });
-  const connection = listing
-    .json()
-    .find((item: any) => item.kind === "oauth" && item.status === "seen");
+  const connection = listing.json().find((item: any) => item.kind === "oauth" && item.status === "seen");
   assert.ok(connection, listing.body);
   assert.equal(connection.name, "Claude");
   assert.equal(connection.audience, MCP_AUDIENCE);
   assert.deepEqual(connection.scopes, ["context", "read", "capture", "share"]);
   // Tokens are audience-bound to this MCP endpoint.
-  await assert.rejects(
-    authenticateServiceToken(tokens.access_token, "https://wrong.example/mcp"),
-  );
+  await assert.rejects(authenticateServiceToken(tokens.access_token, "https://wrong.example/mcp"));
   const stored = (
     await db.query(
       `SELECT
@@ -701,10 +625,9 @@ test("the code is bound to its redirect URI, client, lifetime and resource", asy
   assert.equal(stolen.json().error, "invalid_grant");
 
   const expired = await approvedCode(owner);
-  await db.query(
-    "UPDATE oauth_authorizations SET code_expires_at=now()-interval '1 second' WHERE code_hash=$1",
-    [createHash("sha256").update(expired.code).digest("hex")],
-  );
+  await db.query("UPDATE oauth_authorizations SET code_expires_at=now()-interval '1 second' WHERE code_hash=$1", [
+    createHash("sha256").update(expired.code).digest("hex"),
+  ]);
   const late = await token({
     grant_type: "authorization_code",
     code: expired.code,
@@ -813,10 +736,7 @@ test("the grace window covers only the live token's immediate predecessor", asyn
   const stale = await refresh(connected.tokens.refresh_token);
   assert.equal(stale.json().error, "invalid_grant");
   assert.equal((await initialize(third.access_token)).status, 401);
-  assert.equal(
-    (await refresh(third.refresh_token)).json().error,
-    "invalid_grant",
-  );
+  assert.equal((await refresh(third.refresh_token)).json().error, "invalid_grant");
 });
 
 test("form endpoints refuse JSON posing as form data and non-string values", async () => {
@@ -893,33 +813,16 @@ test("vendor names are reserved for the vendors' own redirect hosts", async () =
   };
   const unverified = " (имя не подтверждено)";
   assert.equal(await name("Claude", [CLAUDE_CALLBACK]), "Claude");
+  assert.equal(await name("ChatGPT", ["https://chatgpt.com/connector_platform_oauth_redirect"]), "ChatGPT");
+  assert.equal(await name("Claude", ["https://evil.example/callback"]), `Claude${unverified}`);
   assert.equal(
-    await name("ChatGPT", [
-      "https://chatgpt.com/connector_platform_oauth_redirect",
-    ]),
-    "ChatGPT",
-  );
-  assert.equal(
-    await name("Claude", ["https://evil.example/callback"]),
-    `Claude${unverified}`,
-  );
-  assert.equal(
-    await name("anthropic  helper", [
-      CLAUDE_CALLBACK,
-      "https://evil.example/cb",
-    ]),
+    await name("anthropic  helper", [CLAUDE_CALLBACK, "https://evil.example/cb"]),
     `anthropic helper${unverified}`,
   );
   // Cyrillic lookalike letters do not get around the check.
   const lookalike = String.fromCharCode(0x0421) + "laude";
-  assert.equal(
-    await name(lookalike, ["https://evil.example/callback"]),
-    `${lookalike}${unverified}`,
-  );
-  assert.equal(
-    await name("Open AI", ["https://claude.ai/api/mcp/auth_callback"]),
-    `Open AI${unverified}`,
-  );
+  assert.equal(await name(lookalike, ["https://evil.example/callback"]), `${lookalike}${unverified}`);
+  assert.equal(await name("Open AI", ["https://claude.ai/api/mcp/auth_callback"]), `Open AI${unverified}`);
   assert.equal(await name("My agent", ["https://evil.example/cb"]), "My agent");
   // Confusable skeletons: capital I for l, Cyrillic ԁ, Greek capital
   // omicron, digits for letters, and Полка's own name in either script.
@@ -937,11 +840,7 @@ test("vendor names are reserved for the vendors' own redirect hosts", async () =
     "P0lka agent",
     "Полочка",
   ])
-    assert.equal(
-      await name(spoof, ["https://evil.example/callback"]),
-      `${spoof}${unverified}`,
-      spoof,
-    );
+    assert.equal(await name(spoof, ["https://evil.example/callback"]), `${spoof}${unverified}`, spoof);
   // Ordinary names, and other forms of the Russian word, stay as they are.
   for (const plain of ["Мой агент", "Cursor", "На полке у агента"])
     assert.equal(await name(plain, ["https://evil.example/cb"]), plain);
@@ -951,10 +850,9 @@ test("vendor names are reserved for the vendors' own redirect hosts", async () =
 
 test("an expired access token needs a refresh", async () => {
   const connected = await connect(owner);
-  await db.query(
-    "UPDATE agent_connections SET access_expires_at=now()-interval '1 second' WHERE token_hash=$1",
-    [createHash("sha256").update(connected.tokens.access_token).digest("hex")],
-  );
+  await db.query("UPDATE agent_connections SET access_expires_at=now()-interval '1 second' WHERE token_hash=$1", [
+    createHash("sha256").update(connected.tokens.access_token).digest("hex"),
+  ]);
   assert.equal((await initialize(connected.tokens.access_token)).status, 401);
   const refreshed = await token({
     grant_type: "refresh_token",
@@ -1040,20 +938,14 @@ test("without the link permission publish saves privately and says why", async (
   assert.equal(result.url, null);
   assert.match(result.linkUnavailableReason, /link permission/);
   assert.equal(
-    Number(
-      (
-        await db.query("SELECT count(*) FROM shares WHERE artifact_id=$1", [
-          result.artifactId,
-        ])
-      ).rows[0].count,
-    ),
+    Number((await db.query("SELECT count(*) FROM shares WHERE artifact_id=$1", [result.artifactId])).rows[0].count),
     0,
   );
   const readOnly = await newOwner("oauth-read");
   const reader = await connect(readOnly, { grant: ["context", "read"] });
-  const readerTools = (
-    await mcp(reader.tokens.access_token, "tools/list")
-  ).message.result.tools.map((tool: any) => tool.name);
+  const readerTools = (await mcp(reader.tokens.access_token, "tools/list")).message.result.tools.map(
+    (tool: any) => tool.name,
+  );
   assert.ok(!readerTools.includes("polka_publish"));
 });
 
@@ -1163,10 +1055,7 @@ test("a failed interactive build keeps the save and a static link, with the reas
   assert.equal(result.scriptsRunForRecipients, false);
   if (config.HTML_LIVE_ENABLED) {
     assert.equal(result.interactiveReady, false);
-    assert.match(
-      result.interactiveUnavailableReason,
-      /unhandled resource-bearing HTML attribute/,
-    );
+    assert.match(result.interactiveUnavailableReason, /unhandled resource-bearing HTML attribute/);
   } else assert.equal(result.interactiveUnavailableReason, undefined);
 });
 
@@ -1219,7 +1108,10 @@ test("a React component is published as source and compiled where the viewer is 
   assert.equal(stored.storage_kind, "bundle");
   assert.deepEqual(
     stored.manifest.files.map((file: any) => [file.path, file.mime]),
-    [["App.jsx", "text/javascript"], ["index.html", "text/html"]],
+    [
+      ["App.jsx", "text/javascript"],
+      ["index.html", "text/html"],
+    ],
   );
   assert.equal(stored.state, "ready");
   assert.equal(stored.builder_version, "bundle-inline-v6");
@@ -1358,11 +1250,7 @@ test("manually issued bearer tokens keep working on /mcp", async () => {
   assert.equal(connection.kind, "token");
   assert.equal((await initialize(bearer)).status, 200);
   const listed = await mcp(bearer, "tools/list");
-  assert.ok(
-    listed.message.result.tools.some(
-      (tool: any) => tool.name === "polka_capture",
-    ),
-  );
+  assert.ok(listed.message.result.tools.some((tool: any) => tool.name === "polka_capture"));
   // A manual token is not an OAuth refresh or revocation credential.
   const asRefresh = await token({
     grant_type: "refresh_token",

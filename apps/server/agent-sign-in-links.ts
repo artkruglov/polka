@@ -20,13 +20,7 @@ import { Problem } from "./errors.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import type { ServiceActor } from "./service-auth.ts";
 import { assertOwnShelf } from "./service-auth.ts";
-import {
-  GENERATED_LOGIN,
-  openValue,
-  providerEnabled,
-  sealValue,
-  type ProviderId,
-} from "./sign-in-providers.ts";
+import { GENERATED_LOGIN, openValue, providerEnabled, sealValue, type ProviderId } from "./sign-in-providers.ts";
 import { sha256 } from "./storage.ts";
 
 export const SIGN_IN_LINK_TTL_SECONDS = 300;
@@ -37,11 +31,7 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const refused = (message: string) => new Problem(403, "forbidden", message);
 
 export const staleLink = () =>
-  new Problem(
-    410,
-    "expired",
-    "Ссылка устарела или уже использована. Попросите агента новую: «Открой мою Полку».",
-  );
+  new Problem(410, "expired", "Ссылка устарела или уже использована. Попросите агента новую: «Открой мою Полку».");
 
 const HINT_LABEL = "polka:shelf-hint:v1";
 const HINT_TTL_MS = 86_400_000;
@@ -70,16 +60,13 @@ export async function describeShelfHint(hint: string) {
     [opened.a],
   );
   if (!account) throw staleHint();
-  const { rows: identities } = await db.query(
-    "SELECT DISTINCT provider FROM account_identities WHERE account_id=$1",
-    [opened.a],
-  );
+  const { rows: identities } = await db.query("SELECT DISTINCT provider FROM account_identities WHERE account_id=$1", [
+    opened.a,
+  ]);
   const email = account.email as string | null;
   return {
     displayName: account.display as string,
-    providers: identities
-      .map((row) => row.provider as ProviderId)
-      .filter((provider) => providerEnabled(provider)),
+    providers: identities.map((row) => row.provider as ProviderId).filter((provider) => providerEnabled(provider)),
     // Enough to recognise one's own address, not to learn someone else's.
     email: email ? maskEmail(email) : null,
     password: !GENERATED_LOGIN.test(account.name),
@@ -92,12 +79,7 @@ function maskEmail(email: string) {
   return `${local.slice(0, Math.min(2, local.length))}…${email.slice(at)}`;
 }
 
-const staleHint = () =>
-  new Problem(
-    410,
-    "expired",
-    "Подсказка устарела. Попросите агента новую: «Открой мою Полку».",
-  );
+const staleHint = () => new Problem(410, "expired", "Подсказка устарела. Попросите агента новую: «Открой мою Полку».");
 
 /**
  * «Открой мою Полку». A claimed shelf gets a sign-in hint (/signin?shelf=…,
@@ -108,11 +90,7 @@ const staleHint = () =>
  */
 export async function issueSignInLink(actor: ServiceActor) {
   assertOwnShelf(actor);
-  await limitAttempts(
-    `sign-in-link:${actor.connectionId}`,
-    SIGN_IN_LINKS_PER_HOUR,
-    "1 hour",
-  );
+  await limitAttempts(`sign-in-link:${actor.connectionId}`, SIGN_IN_LINKS_PER_HOUR, "1 hour");
   const token = randomBytes(32).toString("base64url");
   const issued = await transaction(async (c) => {
     const {
@@ -133,17 +111,13 @@ export async function issueSignInLink(actor: ServiceActor) {
         FOR UPDATE OF connection`,
       [actor.connectionId, actor.tenantId, actor.accountId],
     );
-    if (!connection)
-      throw new Problem(401, "unauthorized", "Подключение агента недействительно.");
+    if (!connection) throw new Problem(401, "unauthorized", "Подключение агента недействительно.");
     if (!connection.provisional) return { kind: "hint" as const };
     if (!connection.oauth_client_id)
       throw refused(
         "Ссылки для входа выдают только агенты, подключённые через OAuth (Claude, ChatGPT, Codex). Для этого подключения откройте Полку в браузере и войдите.",
       );
-    if (
-      !(connection.scopes as string[]).includes("sign_in") ||
-      !connection.sign_in_links
-    )
+    if (!(connection.scopes as string[]).includes("sign_in") || !connection.sign_in_links)
       throw refused(
         "Этому подключению не разрешено давать ссылки для входа. Владелец включает это на странице подключения («Давать ссылку для входа»).",
       );
@@ -226,10 +200,7 @@ export async function consumeSignInLink(token: string, ip: string) {
   return transaction(async (c) => {
     const {
       rows: [link],
-    } = await c.query(
-      LIVE_LINK,
-      [sha256(token)],
-    );
+    } = await c.query(LIVE_LINK, [sha256(token)]);
     if (!link) throw staleLink();
     const owner = { id: link.account_id, tenant: link.tenant_id };
     await lockActiveOwnerTenant(c as PoolClient, owner, staleLink);
@@ -278,4 +249,3 @@ export async function setSignInLinks(
   );
   return !!updated.rowCount;
 }
-

@@ -23,11 +23,7 @@ let gate: Gate | null = null;
 s3.middlewareStack.add(
   (next, context) => async (args: any) => {
     const current = gate;
-    if (
-      current &&
-      context.commandName === current.command &&
-      args.input?.Key === current.key
-    ) {
+    if (current && context.commandName === current.command && args.input?.Key === current.key) {
       gate = null;
       current.entered();
       await current.release;
@@ -38,22 +34,14 @@ s3.middlewareStack.add(
 );
 
 /** Runs `work`, pausing it at `command` on `key`; `during` runs while it waits. */
-async function paused<T>(
-  command: string,
-  key: string,
-  work: () => Promise<T>,
-  during: () => Promise<void>,
-) {
+async function paused<T>(command: string, key: string, work: () => Promise<T>, during: () => Promise<void>) {
   let entered!: () => void;
   let release!: () => void;
   const reached = new Promise<void>((resolve) => (entered = resolve));
   gate = { command, key, entered, release: new Promise((resolve) => (release = resolve)) };
   const running = work();
   try {
-    await Promise.race([
-      reached,
-      running.then(() => assert.fail(`${command} ${key} was never called`)),
-    ]);
+    await Promise.race([reached, running.then(() => assert.fail(`${command} ${key} was never called`))]);
     await during();
   } finally {
     release();
@@ -81,10 +69,7 @@ after(async () => {
 });
 
 async function account() {
-  return createAccount(
-    `outside-lock-${randomBytes(5).toString("hex")}`,
-    randomBytes(24).toString("hex"),
-  );
+  return createAccount(`outside-lock-${randomBytes(5).toString("hex")}`, randomBytes(24).toString("hex"));
 }
 
 test("a single upload writes and reads back its bytes without the shelf lock", async () => {
@@ -145,9 +130,7 @@ test("bytes sent again after the finalize read are the ones saved", async () => 
 
 test("a bundle stores and inspects its files without the shelf lock", async () => {
   const owner = await account();
-  const page = Buffer.from(
-    '<!doctype html><title>Пакет</title><link rel="stylesheet" href="style.css"><p>Пакет</p>',
-  );
+  const page = Buffer.from('<!doctype html><title>Пакет</title><link rel="stylesheet" href="style.css"><p>Пакет</p>');
   const style = Buffer.from("p { color: #333 }\n");
   const manifest = canonicalizeManifest({
     version: 1,
@@ -186,9 +169,8 @@ test("a bundle stores and inspects its files without the shelf lock", async () =
     () => assertShelfFree(owner.tenant),
   );
   assert.equal(receipt.storageKind, "bundle");
-  const files = await db.query(
-    "SELECT count(*)::int AS n FROM revision_files WHERE revision_id=$1",
-    [receipt.revisionId],
-  );
+  const files = await db.query("SELECT count(*)::int AS n FROM revision_files WHERE revision_id=$1", [
+    receipt.revisionId,
+  ]);
   assert.equal(files.rows[0].n, 2);
 });

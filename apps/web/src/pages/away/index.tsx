@@ -5,13 +5,9 @@ import { LegalLinks } from "../../widgets/navigation/index.tsx";
 import "./styles.css";
 
 type Target = { url: string; host: string };
-type State =
-  | { kind: "checking" }
-  | { kind: "ready"; target: Target }
-  | { kind: "refused"; message: string };
+type State = { kind: "checking" } | { kind: "ready"; target: Target } | { kind: "refused"; message: string };
 
-const REFUSED =
-  "Ссылка устарела или повреждена. Полка открывает внешний адрес только по ссылке из страницы на Полке.";
+const REFUSED = "Ссылка устарела или повреждена. Полка открывает внешний адрес только по ссылке из страницы на Полке.";
 
 /**
  * «Вы уходите с Полки»: external links in a user's page lead here. The token
@@ -32,16 +28,14 @@ export function Away() {
         if (abort.signal.aborted) return;
         // The server only signs http(s) addresses; check again before use.
         const url = new URL(target.url);
-        if (url.protocol !== "http:" && url.protocol !== "https:")
-          throw new Error(REFUSED);
+        if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(REFUSED);
         setState({ kind: "ready", target });
       })
       .catch((e) => {
         if (abort.signal.aborted) return;
         setState({
           kind: "refused",
-          message:
-            e instanceof ApiError && e.status !== 404 ? e.message : REFUSED,
+          message: e instanceof ApiError && e.status !== 404 ? e.message : REFUSED,
         });
       });
     return () => abort.abort();
@@ -62,15 +56,11 @@ export function Away() {
           <>
             <h1>Вы уходите с Полки</h1>
             <p>
-              Вы уходите с Полки на <strong>{state.target.host}</strong>. Ссылку
-              разместил автор страницы, Полка её не проверяла.
+              Вы уходите с Полки на <strong>{state.target.host}</strong>. Ссылку разместил автор страницы, Полка её не
+              проверяла.
             </p>
             <p className="away-url">{state.target.url}</p>
-            <LinkButton
-              variant="primary"
-              href={state.target.url}
-              rel="noopener noreferrer"
-            >
+            <LinkButton variant="primary" href={state.target.url} rel="noopener noreferrer">
               Перейти на {state.target.host}
             </LinkButton>
           </>

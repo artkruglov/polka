@@ -12,30 +12,18 @@ import { forgetAccount } from "../apps/server/analytics.ts";
 import { db } from "../apps/server/db.ts";
 import { metricsReport, type MetricsReport } from "../apps/server/metrics.ts";
 
-const USAGE =
-  "Usage: npm run metrics [-- --weeks N] [-- --json] | npm run metrics -- forget <account id|login|email>";
+const USAGE = "Usage: npm run metrics [-- --weeks N] [-- --json] | npm run metrics -- forget <account id|login|email>";
 
-const percent = (value: number | null) =>
-  value === null ? "—" : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+const percent = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`);
 
 function table(headers: string[], rows: Array<Array<string | number>>) {
   const cells = [headers, ...rows.map((row) => row.map(String))];
-  const widths = headers.map((_, column) =>
-    Math.max(...cells.map((row) => [...(row[column] ?? "")].length)),
-  );
+  const widths = headers.map((_, column) => Math.max(...cells.map((row) => [...(row[column] ?? "")].length)));
   const line = (row: string[]) =>
     row
-      .map((cell, column) =>
-        column === 0
-          ? cell.padEnd(widths[column]!)
-          : cell.padStart(widths[column]!),
-      )
+      .map((cell, column) => (column === 0 ? cell.padEnd(widths[column]!) : cell.padStart(widths[column]!)))
       .join("  ");
-  return [
-    line(cells[0]!),
-    widths.map((width) => "-".repeat(width)).join("  "),
-    ...cells.slice(1).map(line),
-  ].join("\n");
+  return [line(cells[0]!), widths.map((width) => "-".repeat(width)).join("  "), ...cells.slice(1).map(line)].join("\n");
 }
 
 /** The report as plain text tables (the page at /ops/metrics shows the same). */
@@ -106,41 +94,30 @@ export function formatReport(report: MetricsReport) {
         "Карт→наж",
         "Наж→рег",
       ],
-      [...report.recipients.weeks, { ...report.recipients.total, week: "Всего" }].map(
-        (row) => [
-          row.week,
-          row.opened,
-          row.barViews,
-          row.cardViews,
-          ...report.recipients.actions.map((action) => row.clicks[action]),
-          row.clicksTotal,
-          row.signups,
-          percent(row.conversion.barToCard),
-          percent(row.conversion.cardToClick),
-          percent(row.conversion.clickToSignup),
-        ],
-      ),
+      [...report.recipients.weeks, { ...report.recipients.total, week: "Всего" }].map((row) => [
+        row.week,
+        row.opened,
+        row.barViews,
+        row.cardViews,
+        ...report.recipients.actions.map((action) => row.clicks[action]),
+        row.clicksTotal,
+        row.signups,
+        percent(row.conversion.barToCard),
+        percent(row.conversion.cardToClick),
+        percent(row.conversion.clickToSignup),
+      ]),
     ),
     "",
     "Источники",
     table(
       ["Источник", "Посещения", "Регистрации", "Конверсия"],
-      report.sources.map((source) => [
-        source.source,
-        source.visits,
-        source.signups,
-        percent(source.signupRate),
-      ]),
+      report.sources.map((source) => [source.source, source.visits, source.signups, percent(source.signupRate)]),
     ),
     "",
     "Агенты",
     table(
       ["Клиент", "Подключений", "Аккаунтов"],
-      report.agentClients.map((client: any) => [
-        client.client,
-        client.connections,
-        client.accounts,
-      ]),
+      report.agentClients.map((client: any) => [client.client, client.connections, client.accounts]),
     ),
     "",
     "Удержание (D1: день 1; D7: дни 7–13; D30: дни 30–36; «из» — у кого окно прошло)",
@@ -160,18 +137,7 @@ export function formatReport(report: MetricsReport) {
     "",
     "Активность по неделям",
     table(
-      [
-        "Неделя",
-        "Активных",
-        "Посещ.",
-        "Рег.",
-        "Подкл.",
-        "Сохр.",
-        "Ссылки",
-        "Откр.",
-        "Заметки",
-        "Заявки",
-      ],
+      ["Неделя", "Активных", "Посещ.", "Рег.", "Подкл.", "Сохр.", "Ссылки", "Откр.", "Заметки", "Заявки"],
       report.activity.map((week) => [
         week.week,
         week.activeAccounts,
@@ -189,10 +155,7 @@ export function formatReport(report: MetricsReport) {
     `За всё время${report.totals.countingSince ? ` (с ${report.totals.countingSince})` : ""}`,
     table(
       ["Событие", "Число"],
-      Object.entries(report.totals.allTime).map(([name, count]) => [
-        name,
-        count as number,
-      ]),
+      Object.entries(report.totals.allTime).map(([name, count]) => [name, count as number]),
     ),
   ];
   return out.join("\n");
@@ -234,16 +197,12 @@ export async function runMetricsCli(argv: string[]) {
   }
   if (command && command !== "summary") throw new Error(USAGE);
   const weeks = values.weeks === undefined ? 12 : Number(values.weeks);
-  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 56)
-    throw new Error("--weeks must be 1–56.");
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > 56) throw new Error("--weeks must be 1–56.");
   const report = await metricsReport({ weeks });
   return values.json ? JSON.stringify(report, null, 2) : formatReport(report);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     console.log(await runMetricsCli(process.argv.slice(2)));
   } catch (error) {

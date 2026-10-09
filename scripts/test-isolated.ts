@@ -1,13 +1,6 @@
 import pg from "pg";
 import { randomBytes } from "node:crypto";
-import {
-  readFile,
-  writeFile,
-  readdir,
-  mkdtemp,
-  symlink,
-  rm,
-} from "node:fs/promises";
+import { readFile, writeFile, readdir, mkdtemp, symlink, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -72,9 +65,7 @@ try {
   const client = new pg.Client({ connectionString: target.href });
   await client.connect();
   try {
-    await runMigrations(client, SCHEMA_MIGRATIONS, (file) =>
-      readFile(migrationFileUrl(file), "utf8"),
-    );
+    await runMigrations(client, SCHEMA_MIGRATIONS, (file) => readFile(migrationFileUrl(file), "utf8"));
   } finally {
     await client.end();
   }
@@ -86,29 +77,16 @@ try {
       VersioningConfiguration: { Status: "Enabled" },
     }),
   );
-  let files: string[] = JSON.parse(
-    await readFile(
-      new URL("../tests/default-suite.json", import.meta.url),
-      "utf8",
-    ),
-  );
-  if (
-    !files.length ||
-    files.some((file) => !/^tests\/[a-z0-9-]+\.test\.ts$/.test(file))
-  )
+  let files: string[] = JSON.parse(await readFile(new URL("../tests/default-suite.json", import.meta.url), "utf8"));
+  if (!files.length || files.some((file) => !/^tests\/[a-z0-9-]+\.test\.ts$/.test(file)))
     throw Error("Invalid test suite manifest");
   // --live runs the named files (default: tests/live-suite.json) with the
   // local interactive viewer enabled, the way the npm test:<live> scripts do.
   const live = process.argv.includes("--live");
-  const requestedFiles = process.argv
-    .slice(2)
-    .filter((argument) => argument !== "--live");
+  const requestedFiles = process.argv.slice(2).filter((argument) => argument !== "--live");
   if (live) {
     const liveFiles: string[] = JSON.parse(
-      await readFile(
-        new URL("../tests/live-suite.json", import.meta.url),
-        "utf8",
-      ),
+      await readFile(new URL("../tests/live-suite.json", import.meta.url), "utf8"),
     );
     if (liveFiles.some((file) => !/^tests\/[a-z0-9-]+\.test\.ts$/.test(file)))
       throw Error("Invalid live test suite manifest");
@@ -116,7 +94,7 @@ try {
     if (!requestedFiles.length) requestedFiles.push(...liveFiles);
   }
   if (requestedFiles.length) {
-    if (requestedFiles.some(file => !files.includes(file)))
+    if (requestedFiles.some((file) => !files.includes(file)))
       throw Error("Select only test files registered in tests/default-suite.json or tests/live-suite.json");
     files = [...new Set(requestedFiles)];
   }
@@ -128,9 +106,7 @@ try {
           files: files.filter((file) => file !== liveLibraryViewerFile),
           liveLibraryViewer: false,
         },
-        ...(files.includes(liveLibraryViewerFile)
-          ? [{ files: [liveLibraryViewerFile], liveLibraryViewer: true }]
-          : []),
+        ...(files.includes(liveLibraryViewerFile) ? [{ files: [liveLibraryViewerFile], liveLibraryViewer: true }] : []),
       ].filter((batch) => batch.files.length);
   console.log(
     JSON.stringify({
@@ -145,11 +121,7 @@ try {
     if ([".local", ".env", ".git"].includes(name)) continue;
     await symlink(join(process.cwd(), name), join(scratchDirectory, name));
   }
-  await writeFile(
-    join(scratchDirectory, ".env"),
-    "# Test children inherit isolated configuration.\n",
-    { mode: 0o600 },
-  );
+  await writeFile(join(scratchDirectory, ".env"), "# Test children inherit isolated configuration.\n", { mode: 0o600 });
   let child: ReturnType<typeof spawn> | undefined;
   const interrupt = () => {
     child?.kill("SIGTERM");
@@ -200,9 +172,7 @@ try {
   // The real cause (a migration that fails, S3 down, a bad manifest): the
   // run is local, against scratch resources this process created.
   const cause = error as { stack?: unknown; code?: unknown } | null;
-  console.error(
-    "Isolated test run failed; configured working resources were not selected.",
-  );
+  console.error("Isolated test run failed; configured working resources were not selected.");
   console.error(
     typeof cause?.code === "string" ? `[${cause.code}]` : "",
     typeof cause?.stack === "string" ? cause.stack : String(error),
@@ -213,13 +183,11 @@ try {
     if (bucketCreated) {
       // This bucket was created by this invocation, never reused or supplied by a user.
       while (true) {
-        const page = await s3.send(
-          new ListObjectVersionsCommand({ Bucket: bucket, MaxKeys: 1000 }),
-        );
-        const objects = [
-          ...(page.Versions ?? []),
-          ...(page.DeleteMarkers ?? []),
-        ].map((x) => ({ Key: x.Key!, VersionId: x.VersionId! }));
+        const page = await s3.send(new ListObjectVersionsCommand({ Bucket: bucket, MaxKeys: 1000 }));
+        const objects = [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])].map((x) => ({
+          Key: x.Key!,
+          VersionId: x.VersionId!,
+        }));
         if (!objects.length) break;
         const deleted = await s3.send(
           new DeleteObjectsCommand({
@@ -227,8 +195,7 @@ try {
             Delete: { Objects: objects, Quiet: true },
           }),
         );
-        if (deleted.Errors?.length)
-          throw Error("Scratch object cleanup failed");
+        if (deleted.Errors?.length) throw Error("Scratch object cleanup failed");
       }
       await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
       try {
@@ -246,16 +213,13 @@ try {
   try {
     if (databaseCreated) {
       await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-      cleanup.databaseRemoved = !(
-        await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])
-      ).rowCount;
+      cleanup.databaseRemoved = !(await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [name])).rowCount;
     }
   } catch {
     console.error("Scratch database cleanup failed.");
     process.exitCode = 1;
   }
-  if (scratchDirectory)
-    await rm(scratchDirectory, { recursive: true, force: true });
+  if (scratchDirectory) await rm(scratchDirectory, { recursive: true, force: true });
   await admin.end();
   s3.destroy();
   console.log(JSON.stringify({ event: "test-suite.cleanup", ...cleanup }));

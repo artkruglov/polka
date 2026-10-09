@@ -8,9 +8,7 @@ const workerRole = process.env.PURGE_TEST_WORKER_ROLE ?? "";
 const ownerRole = `polka_schema_${runId}`;
 const expectedDatabase = `polka_r17_test_${runId}`;
 const workerUrl = new URL(process.env.DATABASE_URL ?? "http://invalid");
-const ownerUrl = new URL(
-  process.env.PURGE_TEST_OWNER_DATABASE_URL ?? "http://invalid",
-);
+const ownerUrl = new URL(process.env.PURGE_TEST_OWNER_DATABASE_URL ?? "http://invalid");
 if (
   !/^[a-z0-9]{10,24}$/.test(runId) ||
   workerRole !== `polka_purge_${runId}` ||
@@ -36,8 +34,7 @@ const options = (connectionString: string) => ({
 });
 const worker = new pg.Client(options(workerUrl.toString()));
 const owner = new pg.Client(options(ownerUrl.toString()));
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const ids = {
   oauthClient: `pc_${runId.padEnd(22, "0").slice(0, 22)}`,
   oauthConnection: randomUUID(),
@@ -117,26 +114,17 @@ before(async () => {
     await owner.query(
       `INSERT INTO accounts(id,name,password_hash,email,display_name,email_verified_at)
        VALUES($1,$2,$3,$4,$5,now())`,
-      [
-        ids.account,
-        name,
-        `${"1".repeat(32)}:${"2".repeat(128)}`,
-        email,
-        "Owner",
-      ],
+      [ids.account, name, `${"1".repeat(32)}:${"2".repeat(128)}`, email, "Owner"],
     );
-    await owner.query(
-      "INSERT INTO tenants(id,owner_id,used_bytes,derivative_used_bytes) VALUES($1,$2,10,20)",
-      [ids.tenant, ids.account],
-    );
-    await owner.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')",
-      [ids.colleague, `library-colleague-${runId}`],
-    );
-    await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-      ids.colleagueTenant,
-      ids.colleague,
+    await owner.query("INSERT INTO tenants(id,owner_id,used_bytes,derivative_used_bytes) VALUES($1,$2,10,20)", [
+      ids.tenant,
+      ids.account,
     ]);
+    await owner.query("INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')", [
+      ids.colleague,
+      `library-colleague-${runId}`,
+    ]);
+    await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [ids.colleagueTenant, ids.colleague]);
     await owner.query(
       "INSERT INTO template_libraries(id,name,created_by) VALUES($1,'Shared team library',$3),($2,'Last admin library',$3)",
       [ids.sharedLibrary, ids.soleLibrary, ids.account],
@@ -165,14 +153,7 @@ before(async () => {
        SELECT $1,$2,$3,'admin',$4,$5,'accepted',now(),now()+interval '1 day',
               now(),$6,joined_at FROM template_library_members
         WHERE library_id=$2 AND account_id=$6 AND state='active'`,
-      [
-        ids.acceptedInvite,
-        ids.sharedLibrary,
-        email,
-        hash("accepted-" + runId),
-        ids.colleague,
-        ids.account,
-      ],
+      [ids.acceptedInvite, ids.sharedLibrary, email, hash("accepted-" + runId), ids.colleague, ids.account],
     );
     await owner.query(
       `INSERT INTO template_library_invitations(
@@ -222,13 +203,31 @@ before(async () => {
       await owner.query(
         `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,parent_id,body,resolved_at,resolved_by)
          VALUES($1,$2,$3,$4,$5,$6::uuid,$7,$8,CASE WHEN $6::uuid=$9::uuid THEN NULL ELSE now() END,CASE WHEN $6::uuid=$9::uuid THEN NULL ELSE $9::uuid END)`,
-        [id, ids.colleagueTenant, ids.colleagueArtifact, ids.colleagueShare, ids.colleagueRevision, author, parent, body, ids.account],
+        [
+          id,
+          ids.colleagueTenant,
+          ids.colleagueArtifact,
+          ids.colleagueShare,
+          ids.colleagueRevision,
+          author,
+          parent,
+          body,
+          ids.account,
+        ],
       );
     for (const author of [ids.account, ids.colleague])
       await owner.query(
         `INSERT INTO comment_reactions(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,anchor_sig,emoji)
          VALUES($1,$2,$3,$4,$5,$6,'',$7)`,
-        [randomUUID(), ids.colleagueTenant, ids.colleagueArtifact, ids.colleagueShare, ids.colleagueRevision, author, "👀"],
+        [
+          randomUUID(),
+          ids.colleagueTenant,
+          ids.colleagueArtifact,
+          ids.colleagueShare,
+          ids.colleagueRevision,
+          author,
+          "👀",
+        ],
       );
     await owner.query(
       "INSERT INTO template_releases(id,artifact_id,revision_id,title,summary,rules,questions) VALUES($1,$2,$3,'Template','Synthetic summary','Synthetic rules','')",
@@ -247,10 +246,10 @@ before(async () => {
     );
     for (const memberId of [ids.account, ids.colleague]) {
       const sessionHash = hash("library-view-session-" + memberId);
-      await owner.query(
-        "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",
-        [sessionHash, memberId],
-      );
+      await owner.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 hour')", [
+        sessionHash,
+        memberId,
+      ]);
       await owner.query(
         `INSERT INTO template_library_viewer_grants(
            hash,session_hash,library_id,publication_id,artifact_id,revision_id,
@@ -317,13 +316,21 @@ before(async () => {
            ARRAY['context'],$8,now()+interval '60 seconds',
            CASE WHEN $5='consumed' THEN now() END,
            CASE WHEN $5='consumed' THEN $9::uuid END)`,
-        [id, ids.oauthClient, "f".repeat(64), "A".repeat(43), status,
-         ids.tenant, ids.account, codeHash, ids.oauthConnection],
+        [
+          id,
+          ids.oauthClient,
+          "f".repeat(64),
+          "A".repeat(43),
+          status,
+          ids.tenant,
+          ids.account,
+          codeHash,
+          ids.oauthConnection,
+        ],
       );
-    await owner.query(
-      "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
-      [ids.account],
-    );
+    await owner.query("UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1", [
+      ids.account,
+    ]);
     await owner.query(
       `UPDATE account_deletions SET state='access_revoked_pending_purge',
          requested_at=clock_timestamp(),revoked_at=clock_timestamp(),
@@ -354,8 +361,7 @@ after(async () => {
 });
 
 test("purge worker is exact session identity with function-only authority", async () => {
-  const identity = (await worker.query("SELECT current_user,session_user"))
-    .rows[0];
+  const identity = (await worker.query("SELECT current_user,session_user")).rows[0];
   assert.equal(identity.current_user, workerRole);
   assert.equal(identity.session_user, workerRole);
   await worker.query("BEGIN");
@@ -370,108 +376,68 @@ test("purge worker is exact session identity with function-only authority", asyn
 });
 
 test("protected SQL lifecycle enforces stale attempts, exact mail inventory and tombstone scrub", async () => {
-  let job = (
-    await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [
-      ids.attempt1,
-      ids.ledger,
-    ])
-  ).rows[0];
+  let job = (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [ids.attempt1, ids.ledger])).rows[0];
   assert.equal(job.deletion_id, ids.deletion);
   assert.equal(job.phase, "awaiting_revoke_ledger");
-  await worker.query(
-    "SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)",
-    [
-      ids.deletion,
-      ids.attempt1,
-      `erasure/v1/${ids.ledger}/${ids.deletion}/revoke.json`,
-      "7".repeat(64),
-      "revoke-v1",
-    ],
-  );
-  await worker.query("SELECT yield_account_purge_attempt($1,$2)", [
+  await worker.query("SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)", [
     ids.deletion,
     ids.attempt1,
+    `erasure/v1/${ids.ledger}/${ids.deletion}/revoke.json`,
+    "7".repeat(64),
+    "revoke-v1",
   ]);
-  job = (
-    await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [
-      ids.attempt2,
-      ids.ledger,
-    ])
-  ).rows[0];
+  await worker.query("SELECT yield_account_purge_attempt($1,$2)", [ids.deletion, ids.attempt1]);
+  job = (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [ids.attempt2, ids.ledger])).rows[0];
   assert.equal(job.phase, "deleting_source");
   await assert.rejects(
-    worker.query(
-      "SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())",
-      [ids.deletion, ids.attempt1],
-    ),
+    worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [ids.deletion, ids.attempt1]),
     /stale purge attempt/,
   );
-  await worker.query(
-    "SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())",
-    [ids.deletion, ids.attempt2],
-  );
+  await worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [ids.deletion, ids.attempt2]);
 
   await owner.query("BEGIN");
-  await owner.query("SELECT id FROM login_challenges WHERE id=$1 FOR UPDATE", [
-    ids.challenge2,
-  ]);
+  await owner.query("SELECT id FROM login_challenges WHERE id=$1 FOR UPDATE", [ids.challenge2]);
   await worker.query("BEGIN");
-  const firstMail = (
-    await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [
-      ids.deletion,
-      ids.attempt2,
-    ])
-  ).rows[0];
+  const firstMail = (await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [ids.deletion, ids.attempt2]))
+    .rows[0];
   assert.deepEqual(
     firstMail.challenges.map((value: any) => value.id),
     [ids.challenge1],
   );
   await owner.query("ROLLBACK");
   await assert.rejects(
-    worker.query(
-      "SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)",
-      [ids.deletion, ids.attempt2, [ids.challenge1]],
-    ),
+    worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [
+      ids.deletion,
+      ids.attempt2,
+      [ids.challenge1],
+    ]),
     /challenges are busy/,
   );
   await worker.query("ROLLBACK");
 
   await worker.query("BEGIN");
-  const secondMail = (
-    await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [
-      ids.deletion,
-      ids.attempt2,
-    ])
-  ).rows[0];
-  assert.deepEqual(
-    secondMail.challenges.map((value: any) => value.id).sort(),
-    [ids.challenge1, ids.challenge2].sort(),
-  );
-  await worker.query(
-    "SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)",
-    [
-      ids.deletion,
-      ids.attempt2,
-      secondMail.challenges.map((value: any) => value.id),
-    ],
-  );
+  const secondMail = (await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [ids.deletion, ids.attempt2]))
+    .rows[0];
+  assert.deepEqual(secondMail.challenges.map((value: any) => value.id).sort(), [ids.challenge1, ids.challenge2].sort());
+  await worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [
+    ids.deletion,
+    ids.attempt2,
+    secondMail.challenges.map((value: any) => value.id),
+  ]);
   await worker.query("COMMIT");
 
   const terminal = (
-    await worker.query(
-      "SELECT * FROM terminal_erase_account_metadata($1,$2,$3)",
-      [ids.deletion, ids.attempt2, `${"8".repeat(32)}:${"9".repeat(128)}`],
-    )
+    await worker.query("SELECT * FROM terminal_erase_account_metadata($1,$2,$3)", [
+      ids.deletion,
+      ids.attempt2,
+      `${"8".repeat(32)}:${"9".repeat(128)}`,
+    ])
   ).rows[0];
   assert.equal(terminal.phase, "metadata_purged");
   assert.equal(
     Number(
-      (
-        await owner.query(
-          "SELECT count(*) FROM template_library_members WHERE account_id=$1",
-          [ids.account],
-        )
-      ).rows[0].count,
+      (await owner.query("SELECT count(*) FROM template_library_members WHERE account_id=$1", [ids.account])).rows[0]
+        .count,
     ),
     0,
   );
@@ -494,10 +460,9 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   }
   assert.deepEqual(
     (
-      await owner.query(
-        "SELECT state,email,token_hash,invited_by FROM template_library_invitations WHERE id=$1",
-        [ids.issuedInvite],
-      )
+      await owner.query("SELECT state,email,token_hash,invited_by FROM template_library_invitations WHERE id=$1", [
+        ids.issuedInvite,
+      ])
     ).rows[0],
     {
       state: "revoked",
@@ -509,10 +474,9 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   assert.equal(
     Number(
       (
-        await owner.query(
-          "SELECT count(*) FROM template_library_viewer_grants WHERE member_account_id=$1",
-          [ids.account],
-        )
+        await owner.query("SELECT count(*) FROM template_library_viewer_grants WHERE member_account_id=$1", [
+          ids.account,
+        ])
       ).rows[0].count,
     ),
     0,
@@ -520,20 +484,15 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   assert.equal(
     Number(
       (
-        await owner.query(
-          "SELECT count(*) FROM template_library_viewer_grants WHERE member_account_id=$1",
-          [ids.colleague],
-        )
+        await owner.query("SELECT count(*) FROM template_library_viewer_grants WHERE member_account_id=$1", [
+          ids.colleague,
+        ])
       ).rows[0].count,
     ),
     1,
   );
-  const shared = (
-    await owner.query(
-      "SELECT state,created_by FROM template_libraries WHERE id=$1",
-      [ids.sharedLibrary],
-    )
-  ).rows[0];
+  const shared = (await owner.query("SELECT state,created_by FROM template_libraries WHERE id=$1", [ids.sharedLibrary]))
+    .rows[0];
   assert.deepEqual(shared, { state: "active", created_by: null });
   const sole = (
     await owner.query(
@@ -548,19 +507,18 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   });
   assert.equal(
     (
-      await owner.query(
-        "SELECT state FROM template_library_members WHERE account_id=$1 AND library_id=$2",
-        [ids.colleague, ids.sharedLibrary],
-      )
+      await owner.query("SELECT state FROM template_library_members WHERE account_id=$1 AND library_id=$2", [
+        ids.colleague,
+        ids.sharedLibrary,
+      ])
     ).rows[0].state,
     "active",
   );
   assert.deepEqual(
     (
-      await owner.query(
-        "SELECT publisher_id,state,revision_id FROM template_library_publications WHERE id=$1",
-        [ids.sharedPublication],
-      )
+      await owner.query("SELECT publisher_id,state,revision_id FROM template_library_publications WHERE id=$1", [
+        ids.sharedPublication,
+      ])
     ).rows[0],
     { publisher_id: null, state: "active", revision_id: ids.colleagueRevision },
   );
@@ -590,33 +548,19 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   assert.equal(
     Number(
       (
-        await owner.query(
-          `SELECT count(*) FROM audit_outbox WHERE target_id=$1 AND action='runtime.synthetic'`,
-          [ids.account],
-        )
-      ).rows[0].count,
-    ),
-    1,
-  );
-  assert.equal(
-    Number(
-      (
-        await owner.query("SELECT count(*) FROM revisions WHERE id=$1", [
-          ids.colleagueRevision,
+        await owner.query(`SELECT count(*) FROM audit_outbox WHERE target_id=$1 AND action='runtime.synthetic'`, [
+          ids.account,
         ])
       ).rows[0].count,
     ),
     1,
   );
   assert.equal(
-    Number(
-      (
-        await owner.query(
-          "SELECT count(*) FROM url_import_jobs WHERE tenant_id=$1",
-          [ids.tenant],
-        )
-      ).rows[0].count,
-    ),
+    Number((await owner.query("SELECT count(*) FROM revisions WHERE id=$1", [ids.colleagueRevision])).rows[0].count),
+    1,
+  );
+  assert.equal(
+    Number((await owner.query("SELECT count(*) FROM url_import_jobs WHERE tenant_id=$1", [ids.tenant])).rows[0].count),
     0,
   );
   const oauthLeft = (
@@ -646,11 +590,7 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
       )
     ).rows.map((row) => [row.id, row]),
   );
-  assert.deepEqual(Object.keys(comments).sort(), [
-    ids.answeredByColleague,
-    ids.colleagueRoot,
-    ids.rootByPurged,
-  ].sort());
+  assert.deepEqual(Object.keys(comments).sort(), [ids.answeredByColleague, ids.colleagueRoot, ids.rootByPurged].sort());
   assert.equal(comments[ids.rootByPurged].body, "");
   assert.equal(comments[ids.rootByPurged].deleted, true);
   assert.equal(comments[ids.answeredByColleague].body, "colleague answer");
@@ -658,69 +598,41 @@ test("protected SQL lifecycle enforces stale attempts, exact mail inventory and 
   assert.equal(comments[ids.colleagueRoot].resolved_by, null);
   assert.deepEqual(
     (
-      await owner.query(
-        "SELECT author_account_id FROM comment_reactions WHERE share_id=$1",
-        [ids.colleagueShare],
-      )
+      await owner.query("SELECT author_account_id FROM comment_reactions WHERE share_id=$1", [ids.colleagueShare])
     ).rows.map((row) => row.author_account_id),
     [ids.colleague],
   );
-  await worker.query(
-    "SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)",
-    [
-      ids.deletion,
-      ids.attempt2,
-      `erasure/v1/${ids.ledger}/${ids.deletion}/purged.json`,
-      "a".repeat(64),
-      "purged-v1",
-    ],
-  );
+  await worker.query("SELECT acknowledge_account_purge_terminal($1,$2,$3,$4,$5)", [
+    ids.deletion,
+    ids.attempt2,
+    `erasure/v1/${ids.ledger}/${ids.deletion}/purged.json`,
+    "a".repeat(64),
+    "purged-v1",
+  ]);
 
-  const account = (
-    await owner.query("SELECT * FROM accounts WHERE id=$1", [ids.account])
-  ).rows[0];
+  const account = (await owner.query("SELECT * FROM accounts WHERE id=$1", [ids.account])).rows[0];
   assert.equal(account.disabled, true);
   assert.equal(account.email, null);
   assert.equal(account.display_name, null);
   assert.equal(account.name, `deleted-${ids.account}`);
   // The shelf's journal is gone except one account.erased, without personal data (069).
   assert.deepEqual(
-    (
-      await owner.query(
-        "SELECT action,target_id,payload FROM audit_outbox WHERE tenant_id=$1",
-        [ids.tenant],
-      )
-    ).rows,
+    (await owner.query("SELECT action,target_id,payload FROM audit_outbox WHERE tenant_id=$1", [ids.tenant])).rows,
     [{ action: "account.erased", target_id: ids.account, payload: {} }],
   );
-  const tenant = (
-    await owner.query("SELECT * FROM tenants WHERE id=$1", [ids.tenant])
-  ).rows[0];
+  const tenant = (await owner.query("SELECT * FROM tenants WHERE id=$1", [ids.tenant])).rows[0];
   assert.equal(Number(tenant.used_bytes), 0);
   assert.equal(Number(tenant.derivative_used_bytes), 0);
-  const receipt = (
-    await owner.query("SELECT * FROM account_deletions WHERE id=$1", [
-      ids.deletion,
-    ])
-  ).rows[0];
+  const receipt = (await owner.query("SELECT * FROM account_deletions WHERE id=$1", [ids.deletion])).rows[0];
   assert.equal(receipt.state, "purged");
   assert.equal(receipt.confirmation_session_hash, null);
   assert.equal(Number(receipt.source_bytes), 0);
   assert.deepEqual(
-    (await owner.query("SELECT key FROM login_limits ORDER BY key")).rows.map(
-      ({ key }) => key,
-    ),
+    (await owner.query("SELECT key FROM login_limits ORDER BY key")).rows.map(({ key }) => key),
     [neighborLimit],
   );
   assert.equal(
-    Number(
-      (
-        await owner.query(
-          "SELECT count(*) FROM login_challenges WHERE email=$1",
-          [email],
-        )
-      ).rows[0].count,
-    ),
+    Number((await owner.query("SELECT count(*) FROM login_challenges WHERE email=$1", [email])).rows[0].count),
     0,
   );
 });
@@ -733,18 +645,15 @@ test("terminal purge redacts a no-email account from another library journal", a
   const attemptId = randomUUID();
   await owner.query("BEGIN");
   try {
-    await owner.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')",
-      [accountId, `no-email-${runId}`],
-    );
-    await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-      tenantId,
+    await owner.query("INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')", [
+      accountId,
+      `no-email-${runId}`,
+    ]);
+    await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenantId, accountId]);
+    await owner.query("INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'reader')", [
+      ids.sharedLibrary,
       accountId,
     ]);
-    await owner.query(
-      "INSERT INTO template_library_members(library_id,account_id,role) VALUES($1,$2,'reader')",
-      [ids.sharedLibrary, accountId],
-    );
     await owner.query(
       `INSERT INTO template_library_events(
          library_id,actor_id,action,target_type,target_account_id,old_role,new_role)
@@ -759,10 +668,9 @@ test("terminal purge redacts a no-email account from another library journal", a
        ) VALUES($1,$2,$3,'planned',$4,now()+interval '10 minutes',0,0,0,0,'test-v1',24,1)`,
       [deletionId, accountId, tenantId, "c".repeat(64)],
     );
-    await owner.query(
-      "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
-      [accountId],
-    );
+    await owner.query("UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1", [
+      accountId,
+    ]);
     await owner.query(
       `UPDATE account_deletions SET state='access_revoked_pending_purge',
          requested_at=clock_timestamp(),revoked_at=clock_timestamp(),
@@ -777,38 +685,19 @@ test("terminal purge redacts a no-email account from another library journal", a
     throw error;
   }
 
-  const claimed = (
-    await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [
-      attemptId,
-      ledgerId,
-    ])
-  ).rows[0];
+  const claimed = (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [attemptId, ledgerId])).rows[0];
   assert.equal(claimed.deletion_id, deletionId);
-  await worker.query(
-    "SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)",
-    [
-      deletionId,
-      attemptId,
-      `erasure/v1/${ledgerId}/${deletionId}/revoke.json`,
-      "e".repeat(64),
-      "revoke-v1",
-    ],
-  );
-  await worker.query(
-    "SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())",
-    [deletionId, attemptId],
-  );
-  const mail = (
-    await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [
-      deletionId,
-      attemptId,
-    ])
-  ).rows[0];
+  await worker.query("SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)", [
+    deletionId,
+    attemptId,
+    `erasure/v1/${ledgerId}/${deletionId}/revoke.json`,
+    "e".repeat(64),
+    "revoke-v1",
+  ]);
+  await worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [deletionId, attemptId]);
+  const mail = (await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [deletionId, attemptId])).rows[0];
   assert.deepEqual(mail.challenges, []);
-  await worker.query(
-    "SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)",
-    [deletionId, attemptId, []],
-  );
+  await worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [deletionId, attemptId, []]);
   await worker.query("SELECT terminal_erase_account_metadata($1,$2,$3)", [
     deletionId,
     attemptId,
@@ -826,11 +715,7 @@ test("terminal purge redacts a no-email account from another library journal", a
     ).rows[0],
     { actor_id: null, target_account_id: null },
   );
-  assert.equal(
-    (await owner.query("SELECT email FROM accounts WHERE id=$1", [accountId]))
-      .rows[0].email,
-    null,
-  );
+  assert.equal((await owner.query("SELECT email FROM accounts WHERE id=$1", [accountId])).rows[0].email, null);
 });
 
 test("terminal purge empties the account's agents on a department shelf and keeps the shelf's works", async () => {
@@ -845,19 +730,19 @@ test("terminal purge empties the account's agents on a department shelf and keep
   const tokenHash = hash(`team-agent-${runId}`);
   await owner.query("BEGIN");
   try {
-    await owner.query(
-      "INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')",
-      [accountId, `team-member-${runId}`],
-    );
+    await owner.query("INSERT INTO accounts(id,name,password_hash) VALUES($1,$2,'synthetic')", [
+      accountId,
+      `team-member-${runId}`,
+    ]);
     await owner.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenantId, accountId]);
-    await owner.query(
-      "INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,NULL,'team',$2)",
-      [teamId, `Отдел ${runId}`],
-    );
-    await owner.query(
-      "INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'author')",
-      [teamId, accountId],
-    );
+    await owner.query("INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,NULL,'team',$2)", [
+      teamId,
+      `Отдел ${runId}`,
+    ]);
+    await owner.query("INSERT INTO tenant_members(tenant_id,account_id,role) VALUES($1,$2,'author')", [
+      teamId,
+      accountId,
+    ]);
     await owner.query(
       `INSERT INTO agent_connections(id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,last_seen_at)
        VALUES($1,$2,$3,$4,'Личный ноутбук Ивана',ARRAY['capture'],'https://example.test/mcp',
@@ -878,10 +763,9 @@ test("terminal purge empties the account's agents on a department shelf and keep
        ) VALUES($1,$2,$3,'planned',$4,now()+interval '10 minutes',0,0,0,0,'test-v1',24,1)`,
       [deletionId, accountId, tenantId, hash(`team-status-${runId}`)],
     );
-    await owner.query(
-      "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
-      [accountId],
-    );
+    await owner.query("UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1", [
+      accountId,
+    ]);
     await owner.query(
       `UPDATE account_deletions SET state='access_revoked_pending_purge',
          requested_at=clock_timestamp(),revoked_at=clock_timestamp(),
@@ -897,8 +781,7 @@ test("terminal purge empties the account's agents on a department shelf and keep
   }
 
   assert.equal(
-    (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [attemptId, ledgerId])).rows[0]
-      .deletion_id,
+    (await worker.query("SELECT * FROM claim_account_purge_job($1,$2)", [attemptId, ledgerId])).rows[0].deletion_id,
     deletionId,
   );
   await worker.query("SELECT acknowledge_account_purge_revoke($1,$2,$3,$4,$5)", [
@@ -908,16 +791,9 @@ test("terminal purge empties the account's agents on a department shelf and keep
     "e".repeat(64),
     "revoke-v1",
   ]);
-  await worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [
-    deletionId,
-    attemptId,
-  ]);
+  await worker.query("SELECT mark_account_purge_source_empty($1,$2,clock_timestamp())", [deletionId, attemptId]);
   await worker.query("SELECT * FROM lock_account_purge_mail($1,$2)", [deletionId, attemptId]);
-  await worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [
-    deletionId,
-    attemptId,
-    [],
-  ]);
+  await worker.query("SELECT complete_account_purge_mail($1,$2,clock_timestamp(),$3)", [deletionId, attemptId, []]);
   await worker.query("SELECT terminal_erase_account_metadata($1,$2,$3)", [
     deletionId,
     attemptId,
@@ -925,10 +801,9 @@ test("terminal purge empties the account's agents on a department shelf and keep
   ]);
 
   const connection = (
-    await owner.query(
-      "SELECT name,token_hash,last_seen_at,revoked_at FROM agent_connections WHERE id=$1",
-      [connectionId],
-    )
+    await owner.query("SELECT name,token_hash,last_seen_at,revoked_at FROM agent_connections WHERE id=$1", [
+      connectionId,
+    ])
   ).rows[0];
   assert.equal(connection.name, "Удалённое подключение");
   assert.notEqual(connection.token_hash, tokenHash);

@@ -20,13 +20,8 @@ function failure(run: () => unknown) {
 const PAGE = `<!doctype html>\r\n<html><body>\r\n<h1>Отчёт за "квартал"</h1>   \r\n<p>Выручка — 12%.</p>\r\n<p>Итог: рост.</p>\r\n</body></html>\r\n`;
 
 test("an exact match replaces only its span", () => {
-  const next = applyEdits(PAGE, [
-    { oldText: "<p>Итог: рост.</p>", newText: "<p>Итог: уверенный рост.</p>" },
-  ]);
-  assert.equal(
-    next,
-    PAGE.replace("<p>Итог: рост.</p>", "<p>Итог: уверенный рост.</p>"),
-  );
+  const next = applyEdits(PAGE, [{ oldText: "<p>Итог: рост.</p>", newText: "<p>Итог: уверенный рост.</p>" }]);
+  assert.equal(next, PAGE.replace("<p>Итог: рост.</p>", "<p>Итог: уверенный рост.</p>"));
   // Line endings and trailing spaces elsewhere are untouched.
   assert.ok(next.includes("</h1>   \r\n"));
 });
@@ -81,21 +76,15 @@ test("refusals name the failing edit", () => {
   assert.equal(notFound.editIndex, 1);
   assert.match(notFound.message, /Правка 2/);
 
-  const ambiguous = failure(() =>
-    applyEdits("<p>да</p><p>да</p>", [{ oldText: "<p>да</p>", newText: "" }]),
-  );
+  const ambiguous = failure(() => applyEdits("<p>да</p><p>да</p>", [{ oldText: "<p>да</p>", newText: "" }]));
   assert.equal(ambiguous.reason, "ambiguous");
   assert.equal(ambiguous.occurrences, 2);
   assert.equal(ambiguous.editIndex, 0);
 
   // Unique exactly? No: two matches after normalization count as ambiguous.
-  const normalizedTwice = failure(() =>
-    applyEdits("«да» и \"да\"", [{ oldText: "'да'", newText: "нет" }]),
-  );
+  const normalizedTwice = failure(() => applyEdits('«да» и "да"', [{ oldText: "'да'", newText: "нет" }]));
   assert.equal(normalizedTwice.reason, "not_found");
-  const twiceAfterNormalizing = failure(() =>
-    applyEdits("«да» и “да”", [{ oldText: '"да"', newText: "нет" }]),
-  );
+  const twiceAfterNormalizing = failure(() => applyEdits("«да» и “да”", [{ oldText: '"да"', newText: "нет" }]));
   assert.equal(twiceAfterNormalizing.reason, "ambiguous");
 
   const overlap = failure(() =>
@@ -142,8 +131,7 @@ test("anchors re-resolve on a new version: moved, duplicated, deleted", () => {
   assert.equal(moved.slice(at[0], at[1]), quote.exact);
   assert.equal(at[0], moved.indexOf(quote.exact));
   // Duplicated: the context picks the right copy.
-  const duplicated =
-    "Резюме: Выручка выросла на 12%. Далее. Введение. Выручка выросла на 12%. Итоги квартала.";
+  const duplicated = "Резюме: Выручка выросла на 12%. Далее. Введение. Выручка выросла на 12%. Итоги квартала.";
   const picked = findQuote(duplicated, quote)!;
   assert.equal(picked[0], duplicated.lastIndexOf(quote.exact));
   // Duplicated with nothing to tell the copies apart: refused, the comment
@@ -165,10 +153,7 @@ test("anchors re-resolve on a new version: moved, duplicated, deleted", () => {
     null,
   );
   // Deleted or rewritten: not found.
-  assert.equal(
-    findQuote("Введение. Выручка выросла на 14%. Итоги квартала.", quote),
-    null,
-  );
+  assert.equal(findQuote("Введение. Выручка выросла на 14%. Итоги квартала.", quote), null);
   // Whitespace reflowed: still found, mapped to the original offsets.
   const reflowed = "Введение.\n  Выручка выросла\n на 12%. Итоги.";
   const loose = findQuote(reflowed, quote)!;

@@ -71,16 +71,18 @@ test("routes: the list, «Секреты», «Расход» and one session are
 });
 
 test("formatting and filters", () => {
-  assert.equal(listQuery({ source: "codex", project: "", secrets: "any", alerts: "" }, null, 50), "source=codex&secrets=any&limit=50");
+  assert.equal(
+    listQuery({ source: "codex", project: "", secrets: "any", alerts: "" }, null, 50),
+    "source=codex&secrets=any&limit=50",
+  );
   assert.equal(formatCost(null), "—");
   assert.equal(formatCost(1.5), "$1.50");
   assert.equal(formatDuration(90 * 60_000), "1 ч 30 мин");
   assert.equal(compactNumber(2_000_000), "2 млн");
-  assert.deepEqual(secretFlags({ seenByModel: true, modelEmitted: true, toCommand: true, toNetwork: true, writtenToFile: false }), [
-    "отправлен в сеть",
-    "в команде",
-    "модель видела",
-  ]);
+  assert.deepEqual(
+    secretFlags({ seenByModel: true, modelEmitted: true, toCommand: true, toNetwork: true, writtenToFile: false }),
+    ["отправлен в сеть", "в команде", "модель видела"],
+  );
 });
 
 test("a session row shows facts, the secrets status and alerts; never more than the server gave", () => {
@@ -99,7 +101,20 @@ test("secrets show type, fingerprint and where they went, never a value", () => 
   const table = html(
     React.createElement(SecretsTable, {
       secrets: [
-        { fingerprint: "a1b2c3d4e5f6", type: "github-token", confidence: "high", prefix: "ghp_", length: 40, occurrences: 2, seenByModel: true, modelEmitted: true, toCommand: false, toNetwork: true, writtenToFile: false, sessions: 3 },
+        {
+          fingerprint: "a1b2c3d4e5f6",
+          type: "github-token",
+          confidence: "high",
+          prefix: "ghp_",
+          length: 40,
+          occurrences: 2,
+          seenByModel: true,
+          modelEmitted: true,
+          toCommand: false,
+          toNetwork: true,
+          writtenToFile: false,
+          sessions: 3,
+        },
       ],
     }),
   );
@@ -111,7 +126,21 @@ test("secrets show type, fingerprint and where they went, never a value", () => 
   assert.match(html(React.createElement(SecretsTable, { secrets: [] })), /не найдено/);
   const fingerprints = html(
     React.createElement(FingerprintTable, {
-      fingerprints: [{ fingerprint: "ffffeeeedddd", type: "assignment", prefix: null, sessions: 4, occurrences: 9, toNetwork: false, toCommand: true, writtenToFile: false, seenByModel: true, lastSeen: session.startedAt, lastSessionId: id }],
+      fingerprints: [
+        {
+          fingerprint: "ffffeeeedddd",
+          type: "assignment",
+          prefix: null,
+          sessions: 4,
+          occurrences: 9,
+          toNetwork: false,
+          toCommand: true,
+          writtenToFile: false,
+          seenByModel: true,
+          lastSeen: session.startedAt,
+          lastSessionId: id,
+        },
+      ],
     }),
   );
   assert.match(fingerprints, new RegExp(`/sessions/${id}`));
@@ -159,7 +188,7 @@ test("the timeline is cut to the first calls until asked; the transcript renders
     React.createElement(TranscriptEvents, {
       events: [
         { type: "prompt", text: "<script>alert(1)</script>" },
-        { type: "tool_call", tool: "Bash", input: "{\"command\":\"ls\"}" },
+        { type: "tool_call", tool: "Bash", input: '{"command":"ls"}' },
       ],
     }),
   );
@@ -196,7 +225,11 @@ test("«Расход» and «Сделано в сессии»", () => {
   assert.match(usage, /без цены: 1 сессия/);
   assert.match(usage, /Скрипт из сети в оболочку/);
   assert.equal(html(React.createElement(WorkSessionsList, { sessions: [] })), "");
-  const linked = html(React.createElement(WorkSessionsList, { sessions: [{ id, source: "codex", projectLabel: "api", startedAt: session.startedAt, secretsStatus: "clean" }] }));
+  const linked = html(
+    React.createElement(WorkSessionsList, {
+      sessions: [{ id, source: "codex", projectLabel: "api", startedAt: session.startedAt, secretsStatus: "clean" }],
+    }),
+  );
   assert.match(linked, /Сделано в сессии/);
   assert.match(linked, new RegExp(`href="/sessions/${id}"`));
 });

@@ -76,8 +76,9 @@ test("passes abort signal through list fetch", async () => {
     seen = init?.signal;
     return Promise.reject(new DOMException("Aborted", "AbortError"));
   };
-  await assert.rejects(fetchEditorial(controller.signal), (error: unknown) =>
-    error instanceof DOMException && error.name === "AbortError",
+  await assert.rejects(
+    fetchEditorial(controller.signal),
+    (error: unknown) => error instanceof DOMException && error.name === "AbortError",
   );
   assert.equal(seen, controller.signal);
 });

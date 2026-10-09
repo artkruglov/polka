@@ -4,14 +4,8 @@
 // Origin check in app.ts applies; the limit counts per hashed client IP.
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type {
-  EnterpriseInterest,
-  EnterpriseTeamSize,
-} from "../../packages/contracts/constants.ts";
-import {
-  enterpriseRequestSchema,
-  isEmailContact,
-} from "../../packages/contracts/enterprise.ts";
+import type { EnterpriseInterest, EnterpriseTeamSize } from "../../packages/contracts/constants.ts";
+import { enterpriseRequestSchema, isEmailContact } from "../../packages/contracts/enterprise.ts";
 import { limitAttempts } from "./auth.ts";
 import { trackEnterpriseRequest } from "./analytics.ts";
 import { config } from "./config.ts";
@@ -56,17 +50,14 @@ export function enterpriseLetter(request: StoredRequest) {
     timeZone: "Europe/Moscow",
   });
   return {
-    subject:
-      `Заявка «Для компаний»: ${request.company ?? request.contact}`.slice(0, 200),
+    subject: `Заявка «Для компаний»: ${request.company ?? request.contact}`.slice(0, 200),
     text: [
       "Новая заявка со страницы «Для компаний» (/enterprise).",
       "",
       `Контакт: ${request.contact}${isEmailContact(request.contact) ? "" : ` (Telegram: https://t.me/${request.contact.slice(1)})`}`,
       ...(request.name ? [`Имя: ${request.name}`] : []),
       ...(request.company ? [`Компания: ${request.company}`] : []),
-      ...(request.team_size
-        ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`]
-        : []),
+      ...(request.team_size ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`] : []),
       `Что интересует: ${INTEREST_LABEL[request.interest]}`,
       "",
       "Комментарий:",
@@ -85,18 +76,10 @@ export function enterpriseLetter(request: StoredRequest) {
 
 export async function createEnterpriseRequest(body: unknown, ip: string) {
   const input = enterpriseRequestSchema.parse(body);
-  await limitAttempts(
-    `enterprise:ip:${ip}`,
-    ENTERPRISE_REQUESTS_PER_IP,
-    "1 hour",
-  );
+  await limitAttempts(`enterprise:ip:${ip}`, ENTERPRISE_REQUESTS_PER_IP, "1 hour");
   // A filled honeypot is a bot: it sees the same answer and nothing is kept.
   if (input.website?.trim()) return { ok: true as const };
-  await limitAttempts(
-    "enterprise:all",
-    ENTERPRISE_REQUESTS_PER_DAY,
-    "24 hours",
-  );
+  await limitAttempts("enterprise:all", ENTERPRISE_REQUESTS_PER_DAY, "24 hours");
   const comment = input.comment || null;
   const {
     rows: [created],
@@ -134,11 +117,7 @@ export async function createEnterpriseRequest(body: unknown, ip: string) {
       old.interest !== input.interest ||
       old.comment !== comment
     )
-      throw new Problem(
-        409,
-        "conflict",
-        "Этот повтор относится к другой заявке. Отправьте форму заново.",
-      );
+      throw new Problem(409, "conflict", "Этот повтор относится к другой заявке. Отправьте форму заново.");
     return { ok: true as const, contact: input.contact };
   }
   // Analytics: that a request came, and what about; nothing about who.
@@ -159,9 +138,7 @@ export function enterpriseTelegramText(request: StoredRequest) {
     `Контакт: ${contact}`,
     ...(request.name ? [`Имя: ${request.name}`] : []),
     ...(request.company ? [`Компания: ${request.company}`] : []),
-    ...(request.team_size
-      ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`]
-      : []),
+    ...(request.team_size ? [`Размер команды: ${TEAM_SIZE_LABEL[request.team_size]}`] : []),
     `Что интересует: ${INTEREST_LABEL[request.interest]}`,
     ...(request.comment ? ["", request.comment] : []),
   ]
@@ -175,19 +152,16 @@ async function notifyTelegram(request: StoredRequest) {
   const chat = config.OPERATOR_TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
   try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chat,
-          text: enterpriseTelegramText(request),
-          disable_web_page_preview: true,
-        }),
-        signal: AbortSignal.timeout(5000),
-      },
-    );
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chat,
+        text: enterpriseTelegramText(request),
+        disable_web_page_preview: true,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
     if (!response.ok) throw new Error(String(response.status));
   } catch (error) {
     // Never the token: it is part of the URL.
@@ -208,17 +182,12 @@ async function notifyByMail(request: StoredRequest) {
   if (!config.OPERATOR_EMAIL || config.MAIL_MODE === "disabled") return;
   try {
     await sendMail({ to: config.OPERATOR_EMAIL, ...enterpriseLetter(request) });
-    await db.query(
-      "UPDATE enterprise_requests SET notified_at=now() WHERE id=$1",
-      [request.id],
-    );
+    await db.query("UPDATE enterprise_requests SET notified_at=now() WHERE id=$1", [request.id]);
   } catch {
     console.error(JSON.stringify({ event: "enterprise_request.mail_failed" }));
   }
 }
 
 export function registerEnterpriseRequests(app: FastifyInstance) {
-  app.post("/api/enterprise-requests", { bodyLimit: 16384 }, async (req) =>
-    createEnterpriseRequest(req.body, req.ip),
-  );
+  app.post("/api/enterprise-requests", { bodyLimit: 16384 }, async (req) => createEnterpriseRequest(req.body, req.ip));
 }

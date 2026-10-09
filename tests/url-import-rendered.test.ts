@@ -89,7 +89,9 @@ test("robots.txt is fetched once per host per hour; 404 allows, 5xx disallows", 
     throw new ImportFetchError("source_unavailable", "x", { status, headers: {} });
   };
   assert.deepEqual(await robotsFor(new URL("https://none.github.io/"), { fetcher: failing(404), now }), { rules: [] });
-  assert.deepEqual(await robotsFor(new URL("https://down.github.io/"), { fetcher: failing(503), now }), { unreachable: true });
+  assert.deepEqual(await robotsFor(new URL("https://down.github.io/"), { fetcher: failing(503), now }), {
+    unreachable: true,
+  });
 });
 
 test("a rendered page becomes one script-free static page with provenance and a warning", async () => {
@@ -130,14 +132,18 @@ test("a snapshot keeps the page when parts of it cannot be copied", async () => 
           '<form action="https://evil.example/collect" method="post"><label>Name <input name="n"></label><button>Send</button></form>' +
           '<img src="https://fonts.example.org/l/font?kit=1"><img data-src="https://cdn.example.org/lazy.png" src="/logo.png">' +
           '<svg><image src="https://ssl.example.org/icon.png"/></svg><iframe src="https://embed.example.org/"></iframe>' +
-          "<main><h1>Plan</h1><p>" + "A long enough paragraph of the page. ".repeat(4) + "</p></main>",
+          "<main><h1>Plan</h1><p>" +
+          "A long enough paragraph of the page. ".repeat(4) +
+          "</p></main>",
       ),
     fetcher: async (url) => {
-      if (url === "https://demo.lovable.app/assets/index.css") return { url, contentType: "text/css", bytes: Buffer.from("h1{color:teal}") };
+      if (url === "https://demo.lovable.app/assets/index.css")
+        return { url, contentType: "text/css", bytes: Buffer.from("h1{color:teal}") };
       if (url === "https://demo.lovable.app/logo.png")
         return { url, contentType: "image/png", bytes: Buffer.from("89504e470d0a1a0a0000000d49484452", "hex") };
       // A font service answering HTML to a non-browser: the image is left out, not the page.
-      if (url.startsWith("https://fonts.example.org/")) return { url, contentType: "text/html", bytes: Buffer.from("<html>") };
+      if (url.startsWith("https://fonts.example.org/"))
+        return { url, contentType: "text/html", bytes: Buffer.from("<html>") };
       throw Error(`unexpected ${url}`);
     },
   });
@@ -149,13 +155,19 @@ test("a snapshot keeps the page when parts of it cannot be copied", async () => 
   assert.match(html, /src="data:image\/png;base64,/);
   assert.match(html, /\.ok\{color:red\}/);
   for (const warning of [/iframe/, /escape/, /ресурсы страницы не сохранились/])
-    assert.ok(result.warnings.some((w) => warning.test(w)), `${warning}: ${JSON.stringify(result.warnings)}`);
+    assert.ok(
+      result.warnings.some((w) => warning.test(w)),
+      `${warning}: ${JSON.stringify(result.warnings)}`,
+    );
   // A plain import (not a snapshot) still refuses the same page.
   const { captureHtmlDocument } = await import("../apps/server/url-import/html-capture.ts");
   await assert.rejects(
-    captureHtmlDocument({ url: PAGE, contentType: "text/html", bytes: Buffer.from('<img src="https://fonts.example.org/l/font?kit=1">') }, {
-      fetcher: async (url) => ({ url, contentType: "text/html", bytes: Buffer.from("<html>") }),
-    }),
+    captureHtmlDocument(
+      { url: PAGE, contentType: "text/html", bytes: Buffer.from('<img src="https://fonts.example.org/l/font?kit=1">') },
+      {
+        fetcher: async (url) => ({ url, contentType: "text/html", bytes: Buffer.from("<html>") }),
+      },
+    ),
     { code: "unsupported_asset" },
   );
 });
@@ -167,13 +179,22 @@ test("the renderer's refusals stop an import; nothing is retried", async () => {
     return result;
   };
   // robots.txt is read by the renderer, from the machine that opens the page.
-  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_disallowed" }) }), { code: "robots_disallowed" });
-  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_unavailable" }) }), { code: "robots_unavailable" });
-  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "source_blocked", detail: "cloudflare_challenge" }) }), {
-    code: "source_blocked",
+  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_disallowed" }) }), {
+    code: "robots_disallowed",
   });
+  await assert.rejects(captureRendered(PAGE, { render: answer({ error: "robots_unavailable" }) }), {
+    code: "robots_unavailable",
+  });
+  await assert.rejects(
+    captureRendered(PAGE, { render: answer({ error: "source_blocked", detail: "cloudflare_challenge" }) }),
+    {
+      code: "source_blocked",
+    },
+  );
   assert.equal(renders, 3, "one request each");
-  await assert.rejects(captureRendered("https://example.com/", { render: answer(snapshot("<h1>x</h1>")) }), { code: "not_allowed" });
+  await assert.rejects(captureRendered("https://example.com/", { render: answer(snapshot("<h1>x</h1>")) }), {
+    code: "not_allowed",
+  });
   assert.equal(renders, 3, "a host outside the allowlist is never sent to the renderer");
   await assert.rejects(
     captureRendered(PAGE, { render: async () => snapshot("<h1>x</h1>", { finalUrl: "https://evil.example/" }) }),
@@ -200,8 +221,14 @@ test("a Claude artifact: one try; its frame is the snapshot, a challenge is sour
         title: "Budget planner | Claude",
         html: "<!doctype html><title>Claude</title><div id=app>chat app shell</div>",
         frames: [
-          { url: "https://www.claudeusercontent.com/artifact/x", html: "<html><body><iframe srcdoc></iframe></body></html>" },
-          { url: "about:srcdoc", html: "<!doctype html><html><head><title>Planner</title></head><body><h1>Budget planner</h1><p>Income and expenses per month.</p><script>calc()</script></body></html>" },
+          {
+            url: "https://www.claudeusercontent.com/artifact/x",
+            html: "<html><body><iframe srcdoc></iframe></body></html>",
+          },
+          {
+            url: "about:srcdoc",
+            html: "<!doctype html><html><head><title>Planner</title></head><body><h1>Budget planner</h1><p>Income and expenses per month.</p><script>calc()</script></body></html>",
+          },
         ],
       };
     },
@@ -220,19 +247,29 @@ test("a Claude artifact: one try; its frame is the snapshot, a challenge is sour
         finalUrl: ARTIFACT,
         title: "Planner | Claude",
         html: "<div>app</div>",
-        frames: [{ url: "https://www.claudeusercontent.com/", html: "<html><head><title>Claude User Content</title></head><body></body></html>" }],
+        frames: [
+          {
+            url: "https://www.claudeusercontent.com/",
+            html: "<html><head><title>Claude User Content</title></head><body></body></html>",
+          },
+        ],
       }),
     }),
     { code: "source_blocked" },
   );
   // No artifact frame (Cloudflare, or the chat app without the artifact): source_blocked.
   await assert.rejects(
-    captureRendered(ARTIFACT, { render: async () => ({ finalUrl: ARTIFACT, title: "Claude", html: "<div>app</div>", frames: [] }) }),
+    captureRendered(ARTIFACT, {
+      render: async () => ({ finalUrl: ARTIFACT, title: "Claude", html: "<div>app</div>", frames: [] }),
+    }),
     { code: "source_blocked" },
   );
-  await assert.rejects(captureRendered(ARTIFACT, { render: async () => ({ error: "source_blocked", detail: "cloudflare_turnstile" }) }), {
-    code: "source_blocked",
-  });
+  await assert.rejects(
+    captureRendered(ARTIFACT, { render: async () => ({ error: "source_blocked", detail: "cloudflare_turnstile" }) }),
+    {
+      code: "source_blocked",
+    },
+  );
 });
 
 test("the import dispatcher sends allowlisted SPA hosts to the renderer only when it is enabled", async () => {
@@ -243,9 +280,12 @@ test("the import dispatcher sends allowlisted SPA hosts to the renderer only whe
   await assert.rejects(prepareImport("https://gemini.google.com/share/abc123", { renderedEnabled: false, rendered }), {
     code: "renderer_disabled",
   });
-  await assert.rejects(prepareImport("https://claude.ai/share/0b5c2f0e-1111-4222-8333-444455556666", { renderedEnabled: true, rendered }), {
-    code: "provider_adapter_required",
-  });
+  await assert.rejects(
+    prepareImport("https://claude.ai/share/0b5c2f0e-1111-4222-8333-444455556666", { renderedEnabled: true, rendered }),
+    {
+      code: "provider_adapter_required",
+    },
+  );
   assert.equal(used, 1);
 });
 
@@ -261,9 +301,21 @@ test("renderer answers are checked; RENDERER_URL must be https outside loopback 
   assert.deepEqual(parseRenderAnswer(200, JSON.stringify({ finalUrl: PAGE, title: "", html: big, frames: [] })), {
     error: "too_large",
   });
-  for (const url of ["https://renderer.example.com", "http://127.0.0.1:4395", "http://localhost:4395", "http://renderer:4395", "http://172.29.0.2:4395"])
+  for (const url of [
+    "https://renderer.example.com",
+    "http://127.0.0.1:4395",
+    "http://localhost:4395",
+    "http://renderer:4395",
+    "http://172.29.0.2:4395",
+  ])
     assert.equal(rendererUrlAllowed(url), true, url);
-  for (const url of ["http://renderer.example.com", "http://10.0.0.5:4395", "http://8.8.8.8", "ftp://renderer", "https://u:p@renderer.example.com"])
+  for (const url of [
+    "http://renderer.example.com",
+    "http://10.0.0.5:4395",
+    "http://8.8.8.8",
+    "ftp://renderer",
+    "https://u:p@renderer.example.com",
+  ])
     assert.equal(rendererUrlAllowed(url), false, url);
 });
 

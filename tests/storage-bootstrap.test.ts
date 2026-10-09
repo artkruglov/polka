@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import {
-  assertLocalStorageBootstrapTarget,
-  runLocalStorageBootstrap,
-} from "../scripts/local-storage-bootstrap-lib.ts";
+import { assertLocalStorageBootstrapTarget, runLocalStorageBootstrap } from "../scripts/local-storage-bootstrap-lib.ts";
 
 const generatedTarget = {
   endpoint: "http://127.0.0.1:9038",
@@ -37,10 +34,7 @@ test("local storage bootstrap accepts only the generated loopback target", () =>
     { ...generatedTarget, bucket: "production" },
     { ...generatedTarget, accessKey: "production" },
   ])
-    assert.throws(
-      () => assertLocalStorageBootstrapTarget(target),
-      /generated loopback target/,
-    );
+    assert.throws(() => assertLocalStorageBootstrapTarget(target), /generated loopback target/);
 });
 
 test("local bootstrap provisions storage before running its capability check", async () => {
@@ -70,10 +64,7 @@ test("local bootstrap provisions storage before running its capability check", a
 });
 
 test("database migrator has no storage provisioning dependency", async () => {
-  const source = await readFile(
-    new URL("../scripts/migrate.ts", import.meta.url),
-    "utf8",
-  );
+  const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /prepareBucket|storage\.ts|\bS3_/);
   assert.match(source, /SCHEMA_MIGRATIONS/);
 });

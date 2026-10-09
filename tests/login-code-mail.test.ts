@@ -3,11 +3,7 @@
 // address in the HTML but the installation's own.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  escapeMailHtml,
-  groupCode,
-  loginCodeMail,
-} from "../apps/server/mail-templates/login-code.ts";
+import { escapeMailHtml, groupCode, loginCodeMail } from "../apps/server/mail-templates/login-code.ts";
 
 test("the code is grouped as two fours", () => {
   assert.equal(groupCode("12345678"), "1234 5678");
@@ -42,10 +38,7 @@ test("no image, script, web font or address other than polochka.app", () => {
 });
 
 test("everything interpolated is escaped", () => {
-  assert.equal(
-    escapeMailHtml(`<a href="x">'&'</a>`),
-    "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;",
-  );
+  assert.equal(escapeMailHtml(`<a href="x">'&'</a>`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
   const mail = loginCodeMail({
     code: "<b>1234</b>",
     origin: 'https://evil.test/"><script>',
@@ -53,10 +46,7 @@ test("everything interpolated is escaped", () => {
   });
   assert.doesNotMatch(mail.html, /<b>|<script>|<i>/);
   assert.match(mail.html, /&lt;i&gt;x&lt;\/i&gt;@example\.test/);
-  assert.match(
-    mail.html,
-    /href="https:\/\/evil\.test\/&quot;&gt;&lt;script&gt;"/,
-  );
+  assert.match(mail.html, /href="https:\/\/evil\.test\/&quot;&gt;&lt;script&gt;"/);
 });
 
 test("a self-hosted installation names itself, and a missing contact is left out", () => {

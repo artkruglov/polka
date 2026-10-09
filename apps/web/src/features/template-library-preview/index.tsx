@@ -28,18 +28,15 @@ type PreviewResponse = Partial<LiveView> & {
   build?: Preparation | null;
 } & Preparation;
 class PreviewRequestError extends Error {
-  constructor(public status: number, public payload: PreviewResponse) {
+  constructor(
+    public status: number,
+    public payload: PreviewResponse,
+  ) {
     super(payload.message || `Ошибка запуска (${status})`);
   }
 }
 
-export function TemplateLibraryPreview({
-  template,
-  onClose,
-}: {
-  template: PreviewTemplate;
-  onClose: () => void;
-}) {
+export function TemplateLibraryPreview({ template, onClose }: { template: PreviewTemplate; onClose: () => void }) {
   const [state, setState] = useState<"loading" | "preparation" | "preparing" | "ready" | "error">("loading");
   const [liveView, setLiveView] = useState<LiveView | null>(null);
   const [preparation, setPreparation] = useState<Preparation | null>(null);
@@ -67,7 +64,11 @@ export function TemplateLibraryPreview({
       setState("ready");
     } catch (reason) {
       if (controller.signal.aborted) return;
-      if (reason instanceof PreviewRequestError && reason.status === 409 && reason.payload.status === "preparation_required") {
+      if (
+        reason instanceof PreviewRequestError &&
+        reason.status === 409 &&
+        reason.payload.status === "preparation_required"
+      ) {
         const build = reason.payload.build ?? null;
         setPreparation(build);
         if (build?.state === "unsupported" || build?.state === "failed") {
@@ -79,7 +80,9 @@ export function TemplateLibraryPreview({
         }
       } else {
         setError(previewError(reason));
-        setRetryAction(reason instanceof PreviewRequestError && (reason.status === 403 || reason.status === 404) ? "none" : "load");
+        setRetryAction(
+          reason instanceof PreviewRequestError && (reason.status === 403 || reason.status === 404) ? "none" : "load",
+        );
         setState("error");
       }
     }
@@ -111,7 +114,9 @@ export function TemplateLibraryPreview({
     } catch (reason) {
       if (controller.signal.aborted) return;
       setError(preparationError(reason));
-      setRetryAction(reason instanceof PreviewRequestError && (reason.status === 403 || reason.status === 404) ? "none" : "prepare");
+      setRetryAction(
+        reason instanceof PreviewRequestError && (reason.status === 403 || reason.status === 404) ? "none" : "prepare",
+      );
       setState("error");
     }
   }
@@ -138,15 +143,27 @@ export function TemplateLibraryPreview({
         {state === "preparation" && (
           <>
             <div className="template-library-preview-status-block" role="status" aria-live="polite">
-              <strong>{preparation?.state === "pending" ? "Подготовка уже выполняется" : "Интерактивный просмотр ещё не подготовлен"}</strong>
-              <p>{preparation?.state === "pending" ? "Подождите завершения подготовки и проверьте готовность вручную." : "Подготовьте просмотр для этого выпуска."}</p>
+              <strong>
+                {preparation?.state === "pending"
+                  ? "Подготовка уже выполняется"
+                  : "Интерактивный просмотр ещё не подготовлен"}
+              </strong>
+              <p>
+                {preparation?.state === "pending"
+                  ? "Подождите завершения подготовки и проверьте готовность вручную."
+                  : "Подготовьте просмотр для этого выпуска."}
+              </p>
               {preparation?.reason && <p className="fine">{preparation.reason}</p>}
             </div>
             <div className="template-library-preview-actions">
               {preparation?.state === "pending" ? (
-                <Button variant="primary" onClick={() => void loadLiveView()}>Проверить готовность</Button>
+                <Button variant="primary" onClick={() => void loadLiveView()}>
+                  Проверить готовность
+                </Button>
               ) : (
-                <Button variant="primary" onClick={() => void prepareLiveView()}>Подготовить просмотр</Button>
+                <Button variant="primary" onClick={() => void prepareLiveView()}>
+                  Подготовить просмотр
+                </Button>
               )}
               <Button onClick={onClose}>Закрыть</Button>
             </div>
@@ -157,7 +174,10 @@ export function TemplateLibraryPreview({
             <ErrorNotice error={error} />
             <div className="template-library-preview-actions">
               {retryAction !== "none" && preparation?.state !== "unsupported" && (
-                <Button variant="primary" onClick={() => void (retryAction === "prepare" ? prepareLiveView() : loadLiveView())}>
+                <Button
+                  variant="primary"
+                  onClick={() => void (retryAction === "prepare" ? prepareLiveView() : loadLiveView())}
+                >
                   {retryAction === "prepare" ? "Подготовить повторно" : "Повторить"}
                 </Button>
               )}
@@ -190,15 +210,18 @@ export function TemplateLibraryPreview({
 function previewError(reason: unknown) {
   if (reason instanceof PreviewRequestError) {
     if (reason.status === 403) return "У вас больше нет доступа к этому выпуску.";
-    if (reason.status === 404)
-      return "Этот выпуск больше недоступен в общей библиотеке.";
-    if (reason.status === 413 || reason.status === 429 || reason.payload.code === "quota" || reason.payload.status === "quota" || reason.payload.reason === "quota")
+    if (reason.status === 404) return "Этот выпуск больше недоступен в общей библиотеке.";
+    if (
+      reason.status === 413 ||
+      reason.status === 429 ||
+      reason.payload.code === "quota" ||
+      reason.payload.status === "quota" ||
+      reason.payload.reason === "quota"
+    )
       return "Достигнут лимит подготовки просмотров. Повторите позже.";
     return reason.message || "Не удалось загрузить предпросмотр.";
   }
-  return reason instanceof Error && reason.message
-    ? reason.message
-    : "Не удалось загрузить предпросмотр.";
+  return reason instanceof Error && reason.message ? reason.message : "Не удалось загрузить предпросмотр.";
 }
 
 function preparationError(reason: unknown) {
@@ -206,13 +229,18 @@ function preparationError(reason: unknown) {
     const preparation = reason as Preparation;
     if (preparation.state === "unsupported" || preparation.reason === "unsupported")
       return "Эту работу нельзя подготовить для интерактивного просмотра.";
-    if (preparation.state === "failed")
-      return preparation.reason || "Не удалось подготовить просмотр.";
+    if (preparation.state === "failed") return preparation.reason || "Не удалось подготовить просмотр.";
   }
   if (reason instanceof PreviewRequestError) {
     if (reason.status === 403) return "У вас больше нет доступа к этому выпуску.";
     if (reason.status === 404) return "Этот выпуск больше недоступен в общей библиотеке.";
-    if (reason.status === 413 || reason.status === 429 || reason.payload.code === "quota" || reason.payload.status === "quota" || reason.payload.reason === "quota")
+    if (
+      reason.status === 413 ||
+      reason.status === 429 ||
+      reason.payload.code === "quota" ||
+      reason.payload.status === "quota" ||
+      reason.payload.reason === "quota"
+    )
       return "Достигнут лимит подготовки просмотров. Повторите позже.";
     if (reason.payload.state === "unsupported" || reason.payload.reason === "unsupported")
       return "Эту работу нельзя подготовить для интерактивного просмотра.";
@@ -266,7 +294,6 @@ async function requestPreparation(template: PreviewTemplate, signal: AbortSignal
 
 async function fetchLiveView(template: PreviewTemplate, signal: AbortSignal): Promise<LiveView> {
   const payload = await postPublication(template, "live-view", signal);
-  if (typeof payload.url !== "string" || !payload.url.trim())
-    throw new Error("Сервер не вернул адрес предпросмотра.");
+  if (typeof payload.url !== "string" || !payload.url.trim()) throw new Error("Сервер не вернул адрес предпросмотра.");
   return { url: payload.url, expiresAt: payload.expiresAt, profile: payload.profile };
 }

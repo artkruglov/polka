@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  createMaintenanceLogFilter,
-  type SafeMaintenanceLog,
-} from "../scripts/maintenance-log-filter.ts";
+import { createMaintenanceLogFilter, type SafeMaintenanceLog } from "../scripts/maintenance-log-filter.ts";
 
 test("only allowlisted fields survive chunked child output", () => {
   const output: SafeMaintenanceLog[] = [];
@@ -19,8 +16,7 @@ test("only allowlisted fields survive chunked child output", () => {
       }) +
       "\n",
   );
-  for (let i = 0; i < input.length; i += 7)
-    filter.push(input.subarray(i, i + 7));
+  for (let i = 0; i < input.length; i += 7) filter.push(input.subarray(i, i + 7));
   filter.end();
   assert.deepEqual(output, [
     {
@@ -41,9 +37,7 @@ test("reject malformed counts/reasons and recover after oversized lines", () => 
   ])
     filter.push(Buffer.from(JSON.stringify(row) + "\n"));
   filter.push(Buffer.alloc(100000, 65));
-  filter.push(
-    Buffer.from('\n{"event":"maintenance.skipped","reason":"busy"}\n'),
-  );
+  filter.push(Buffer.from('\n{"event":"maintenance.skipped","reason":"busy"}\n'));
   filter.end();
   assert.deepEqual(output, [{ event: "maintenance.skipped", reason: "busy" }]);
 });

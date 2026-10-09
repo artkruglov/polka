@@ -32,18 +32,12 @@ export type MaintenanceObjectStore = {
     },
     signal: AbortSignal,
   ) => Promise<MaintenanceObjectPage>;
-  deleteVersion: (
-    key: string,
-    versionId: string,
-    signal: AbortSignal,
-  ) => Promise<void>;
+  deleteVersion: (key: string, versionId: string, signal: AbortSignal) => Promise<void>;
 };
 
 export type MaintenanceScope = {
   signal: AbortSignal;
-  transaction: <R>(
-    operation: (client: MaintenanceClient) => Promise<R>,
-  ) => Promise<R>;
+  transaction: <R>(operation: (client: MaintenanceClient) => Promise<R>) => Promise<R>;
 };
 
 export type MaintenanceCounters = {
@@ -76,10 +70,7 @@ export async function storedVersions(
   let versionIdMarker: string | undefined;
   for (let page = 0; page < 100; page++) {
     assertActive(signal);
-    const result = await storage.listVersions(
-      { prefix, keyMarker, versionIdMarker, maxKeys: 100 },
-      signal,
-    );
+    const result = await storage.listVersions({ prefix, keyMarker, versionIdMarker, maxKeys: 100 }, signal);
     assertActive(signal);
     for (const value of [...result.versions, ...result.deleteMarkers]) {
       if (!value.key || !expected.has(value.key)) continue;
@@ -87,11 +78,7 @@ export async function storedVersions(
       found.push({ key: value.key, versionId: value.versionId });
     }
     if (!result.truncated) return found;
-    if (
-      !result.nextKeyMarker ||
-      (result.nextKeyMarker === keyMarker &&
-        result.nextVersionIdMarker === versionIdMarker)
-    )
+    if (!result.nextKeyMarker || (result.nextKeyMarker === keyMarker && result.nextVersionIdMarker === versionIdMarker))
       throw new MaintenanceStorageFailure();
     keyMarker = result.nextKeyMarker;
     versionIdMarker = result.nextVersionIdMarker;
@@ -123,12 +110,8 @@ export async function eraseDeletedAccountsAnalytics(
   actorKey: (accountId: string) => string,
   check: () => void = () => undefined,
 ) {
-  const deleted = await c.query(
-    "SELECT id FROM accounts WHERE deletion_requested_at IS NOT NULL",
-  );
-  const keys = ((deleted.rows ?? []) as Array<{ id: string }>).map((row) =>
-    actorKey(row.id),
-  );
+  const deleted = await c.query("SELECT id FROM accounts WHERE deletion_requested_at IS NOT NULL");
+  const keys = ((deleted.rows ?? []) as Array<{ id: string }>).map((row) => actorKey(row.id));
   check();
   if (!keys.length) return;
   for (const sql of [
@@ -160,11 +143,7 @@ export type MaintenanceOptions = {
 };
 
 /** Every version (and delete marker) under `prefix`, deleted. */
-async function deleteEveryVersion(
-  storage: MaintenanceObjectStore,
-  prefix: string,
-  signal: AbortSignal,
-) {
+async function deleteEveryVersion(storage: MaintenanceObjectStore, prefix: string, signal: AbortSignal) {
   for (let round = 0; round < 1000; round++) {
     assertActive(signal);
     const page = await storage.listVersions({ prefix, maxKeys: 100 }, signal);
@@ -174,8 +153,7 @@ async function deleteEveryVersion(
       return;
     }
     for (const value of all) {
-      if (!value.key?.startsWith(prefix) || !validVersion(value.versionId))
-        throw new MaintenanceStorageFailure();
+      if (!value.key?.startsWith(prefix) || !validVersion(value.versionId)) throw new MaintenanceStorageFailure();
       assertActive(signal);
       await storage.deleteVersion(value.key, value.versionId, signal);
     }
@@ -202,9 +180,7 @@ export async function runMaintenanceCleanup(
   let expiredUploadsReconciled = 0;
   for (const candidate of uploadCandidates) {
     const committed = await scope.transaction(async (c) => {
-      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
-        candidate.tenant_id,
-      ]);
+      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [candidate.tenant_id]);
       const lockedUpload = await c.query(
         `SELECT * FROM uploads
          WHERE id=$1 AND tenant_id=$2 AND receipt IS NULL
@@ -220,11 +196,7 @@ export async function runMaintenanceCleanup(
         const request = upload.request as { manifest?: unknown };
         const manifest = canonicalizeManifest(request.manifest);
         for (const [index, file] of manifest.files.entries())
-          expected.add(
-            file.path === manifest.entrypoint
-              ? prefix
-              : `${prefix}/files/${index}`,
-          );
+          expected.add(file.path === manifest.entrypoint ? prefix : `${prefix}/files/${index}`);
       }
       const referenced = await c.query(
         `SELECT object_key FROM revisions WHERE object_key=ANY($1::text[])
@@ -233,8 +205,7 @@ export async function runMaintenanceCleanup(
          LIMIT 1`,
         [[...expected]],
       );
-      if (referenced.rows?.length)
-        throw new Error("Receipt reconciliation required");
+      if (referenced.rows?.length) throw new Error("Receipt reconciliation required");
       await deleteStoredVersions(storage, prefix, expected, scope.signal);
       assertActive(scope.signal);
       await c.query(
@@ -261,9 +232,7 @@ export async function runMaintenanceCleanup(
   let expiredDerivativesReconciled = 0;
   for (const candidate of derivativeCandidates) {
     const committed = await scope.transaction(async (c) => {
-      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [
-        candidate.tenant_id,
-      ]);
+      await c.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [candidate.tenant_id]);
       const lockedDerivative = await c.query(
         `SELECT * FROM revision_derivatives
          WHERE id=$1 AND tenant_id=$2 AND state='pending'
@@ -298,9 +267,7 @@ export async function runMaintenanceCleanup(
     });
     for (const shelf of idle) {
       assertActive(scope.signal);
-      const closed = await scope.transaction((c) =>
-        closeProvisionalShelf(c, shelf, idleDays),
-      );
+      const closed = await scope.transaction((c) => closeProvisionalShelf(c, shelf, idleDays));
       if (!closed.closed) continue;
       provisionalShelvesRetired++;
       if (!closed.erase) continue;
@@ -316,10 +283,7 @@ export async function runMaintenanceCleanup(
     });
     for (const shelf of idle) {
       assertActive(scope.signal);
-      if (
-        await scope.transaction((c) => retireProvisionalShelf(c, shelf, policy))
-      )
-        provisionalShelvesRetired++;
+      if (await scope.transaction((c) => retireProvisionalShelf(c, shelf, policy))) provisionalShelvesRetired++;
     }
   }
 
@@ -362,9 +326,7 @@ export async function runMaintenanceCleanup(
       assertActive(scope.signal);
     }
     if (options.analyticsActorKey)
-      await eraseDeletedAccountsAnalytics(c, options.analyticsActorKey, () =>
-        assertActive(scope.signal),
-      );
+      await eraseDeletedAccountsAnalytics(c, options.analyticsActorKey, () => assertActive(scope.signal));
     return cleanupEmailChallengesInTransaction(
       c as Parameters<typeof cleanupEmailChallengesInTransaction>[0],
       100,

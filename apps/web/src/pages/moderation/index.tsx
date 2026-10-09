@@ -1,20 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Eye, ShieldAlert } from "lucide-react";
 import type { Viewer } from "../../../../../packages/contracts/index.ts";
-import {
-  ApiError,
-  client,
-  type ModerationInspection,
-} from "../../shared/api/client.ts";
+import { ApiError, client, type ModerationInspection } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import "./styles.css";
 
 type State =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; details: ModerationInspection };
+  { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; details: ModerationInspection };
 
 const STATE_LABEL: Record<ModerationInspection["share"]["state"], string> = {
   none: "открыта для получателей",
@@ -33,9 +27,7 @@ const date = (value: string) =>
   });
 
 const failure = (error: unknown) =>
-  error instanceof ApiError
-    ? error.message
-    : "Не удалось связаться с Полкой. Повторите попытку.";
+  error instanceof ApiError ? error.message : "Не удалось связаться с Полкой. Повторите попытку.";
 
 /**
  * The operator's confirmation page for a button in a moderation letter.
@@ -50,16 +42,13 @@ export function Moderation() {
       ? { kind: "loading" }
       : {
           kind: "error",
-          message:
-            "Эта страница открывается кнопкой из письма модерации Полки.",
+          message: "Эта страница открывается кнопкой из письма модерации Полки.",
         },
   );
   const [preview, setPreview] = useState<Viewer | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ message: string; changed: boolean } | null>(
-    null,
-  );
+  const [done, setDone] = useState<{ message: string; changed: boolean } | null>(null);
   const [actError, setActError] = useState<string | null>(null);
   // «Заблокировать»: keep the content as evidence, decided before the block.
   const [legalHold, setLegalHold] = useState(false);
@@ -122,33 +111,22 @@ export function Moderation() {
             <p className="moderation-eyebrow">
               <ShieldAlert aria-hidden="true" /> Модерация Полки
             </p>
-            <h1>
-              {state.details.action === "preview"
-                ? "Просмотр ссылки"
-                : state.details.actionLabel}
-            </h1>
+            <h1>{state.details.action === "preview" ? "Просмотр ссылки" : state.details.actionLabel}</h1>
             <dl className="moderation-facts">
               <dt>Работа</dt>
               <dd>
-                «{state.details.share.title}», версия{" "}
-                {state.details.share.version}
+                «{state.details.share.title}», версия {state.details.share.version}
               </dd>
               <dt>Автор</dt>
               <dd>
                 {state.details.author.label}
-                {state.details.author.operatorCreated
-                  ? " · создан оператором"
-                  : ""}
+                {state.details.author.operatorCreated ? " · создан оператором" : ""}
                 {" · "}
                 {state.details.author.createdAt
                   ? `с ${date(state.details.author.createdAt)}`
                   : "аккаунт старше 23.09.2026"}
                 {" · "}
-                {state.details.author.disabled
-                  ? "отключён"
-                  : state.details.author.trusted
-                    ? "доверенный"
-                    : "новый"}
+                {state.details.author.disabled ? "отключён" : state.details.author.trusted ? "доверенный" : "новый"}
               </dd>
               <dt>Ссылка</dt>
               <dd>{STATE_LABEL[state.details.share.state]}</dd>
@@ -180,21 +158,14 @@ export function Moderation() {
               )}
             </dl>
             {state.details.share.content && (
-              <p className="moderation-effect">
-                Фильтр содержимого: {state.details.share.content}
-              </p>
+              <p className="moderation-effect">Фильтр содержимого: {state.details.share.content}</p>
             )}
             <p className="moderation-effect">{state.details.effect}</p>
             {state.details.action === "block" && !done && (
               <div className="moderation-hold">
                 <label>
-                  <input
-                    type="checkbox"
-                    checked={legalHold}
-                    onChange={(event) => setLegalHold(event.target.checked)}
-                  />{" "}
-                  Сохранить как доказательство (legal hold): не удалять, пока
-                  удержание не снято
+                  <input type="checkbox" checked={legalHold} onChange={(event) => setLegalHold(event.target.checked)} />{" "}
+                  Сохранить как доказательство (legal hold): не удалять, пока удержание не снято
                 </label>
                 {legalHold && (
                   <label>
@@ -221,17 +192,15 @@ export function Moderation() {
                   {state.details.actionLabel}
                 </Button>
               )}
-              {!preview &&
-                !state.details.share.csam &&
-                state.details.share.state !== "blocked" && (
+              {!preview && !state.details.share.csam && state.details.share.state !== "blocked" && (
                 <Button onClick={() => void showPreview()} disabled={busy}>
                   <Eye aria-hidden="true" /> Посмотреть страницу
                 </Button>
               )}
             </div>
             <p className="moderation-fine">
-              Открытие этой страницы ничего не меняет. Кнопка действует до{" "}
-              {date(state.details.tokenExpiresAt)}; повторное нажатие безопасно.
+              Открытие этой страницы ничего не меняет. Кнопка действует до {date(state.details.tokenExpiresAt)};
+              повторное нажатие безопасно.
             </p>
             {previewError && <Notice tone="error">{previewError}</Notice>}
           </section>
@@ -251,11 +220,7 @@ export function Moderation() {
             <Preview
               revision={preview.revision}
               grant={preview.grant}
-              readingTitle={
-                preview.revision.mime === "text/plain"
-                  ? preview.title
-                  : undefined
-              }
+              readingTitle={preview.revision.mime === "text/plain" ? preview.title : undefined}
             />
           </section>
         )}

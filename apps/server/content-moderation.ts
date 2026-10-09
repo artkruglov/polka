@@ -47,8 +47,7 @@ export function retentionOf(category: Category | "other"): Retention {
 export function retentionText(category: Category | "other", legalHold: boolean) {
   if (legalHold) return "Содержимое сохранено как доказательство (legal hold) до снятия.";
   const retention = retentionOf(category);
-  if (!retention.isolate)
-    return "Ссылки закрыты, отправить работу заново нельзя; у владельца она остаётся.";
+  if (!retention.isolate) return "Ссылки закрыты, отправить работу заново нельзя; у владельца она остаётся.";
   if (retention.days === null)
     return "Содержимое изолировано (недоступно никому, включая владельца) до решения оператора.";
   if (retention.days === 0)
@@ -65,13 +64,7 @@ import { levelOf, type FilterResult } from "./content-filter/scanner.ts";
 type Queryable = Pick<PoolClient, "query">;
 
 export type EventActor =
-  | "filter"
-  | "model"
-  | "operator-mail"
-  | "operator-script"
-  | "maintenance"
-  | "reports"
-  | "signup";
+  "filter" | "model" | "operator-mail" | "operator-script" | "maintenance" | "reports" | "signup";
 
 export type ModerationEvent = {
   actor: EventActor;
@@ -162,10 +155,7 @@ export function signalsForJournal(filter: FilterResult | null | undefined) {
   const out: Record<string, { score: number; terms?: string[] }> = {};
   for (const [category, hit] of Object.entries(filter?.hits ?? {}))
     if (hit && levelOf(category as Category, hit.score) !== "none")
-      out[category] =
-        category === "csam"
-          ? { score: hit.score }
-          : { score: hit.score, terms: hit.terms };
+      out[category] = category === "csam" ? { score: hit.score } : { score: hit.score, terms: hit.terms };
   return out;
 }
 
@@ -183,10 +173,7 @@ export async function freezeAccountInTransaction(
 ) {
   const {
     rows: [account],
-  } = await c.query(
-    "SELECT id,disabled FROM accounts WHERE id=$1 FOR UPDATE",
-    [owner.accountId],
-  );
+  } = await c.query("SELECT id,disabled FROM accounts WHERE id=$1 FOR UPDATE", [owner.accountId]);
   if (!account || account.disabled) return false;
   // The account's own shelf, even when the work was saved on a department
   // shelf: a freeze is the author's, never the colleagues' (TEAM_SHELVES.md).
@@ -204,13 +191,9 @@ export async function freezeAccountInTransaction(
   ).rows;
   await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.accountId]);
   await c.query("DELETE FROM sessions WHERE account_id=$1", [owner.accountId]);
-  for (const connection of connections)
-    await revokeConnectionInTransaction(c, connection);
+  for (const connection of connections) await revokeConnectionInTransaction(c, connection);
   const shares = (
-    await c.query(
-      "UPDATE shares SET revoked=true WHERE tenant_id=$1 AND NOT revoked RETURNING id",
-      [personal],
-    )
+    await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1 AND NOT revoked RETURNING id", [personal])
   ).rows;
   const self = { id: owner.accountId, tenant: personal };
   for (const share of shares) await audit(c, self, "share.revoked", share.id);
@@ -258,33 +241,24 @@ export type BlockOutcome = {
  * categories only close the links. Idempotent: a second block of the same
  * revision changes only the legal hold.
  */
-export async function blockRevisionInTransaction(
-  c: PoolClient,
-  input: BlockInput,
-): Promise<BlockOutcome> {
+export async function blockRevisionInTransaction(c: PoolClient, input: BlockInput): Promise<BlockOutcome> {
   const {
     rows: [revision],
-  } = await c.query(
-    "SELECT id,sha256 FROM revisions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
-    [input.revisionId, input.tenantId],
-  );
+  } = await c.query("SELECT id,sha256 FROM revisions WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [
+    input.revisionId,
+    input.tenantId,
+  ]);
   if (!revision) throw new Error("Blocked revision not found");
   const {
     rows: [existing],
-  } = await c.query(
-    "SELECT * FROM moderation_blocks WHERE revision_id=$1 FOR UPDATE",
-    [input.revisionId],
-  );
+  } = await c.query("SELECT * FROM moderation_blocks WHERE revision_id=$1 FOR UPDATE", [input.revisionId]);
   let blockId: string;
   let created = false;
   const retention = retentionOf(input.category);
   if (existing && !existing.released_at) {
     blockId = existing.id;
     if (input.legalHold && !existing.legal_hold && !existing.purged_at) {
-      await c.query("UPDATE moderation_blocks SET legal_hold=$2 WHERE id=$1", [
-        blockId,
-        input.legalHold,
-      ]);
+      await c.query("UPDATE moderation_blocks SET legal_hold=$2 WHERE id=$1", [blockId, input.legalHold]);
       await recordEvent(c, {
         actor: input.actor,
         action: "legal_hold.set",
@@ -391,8 +365,7 @@ export async function blockRevisionInTransaction(
         input.category,
       )
     : false;
-  if (created && !input.legalHold && retention.days === 0)
-    afterCommit(c, () => purgeBlock(blockId));
+  if (created && !input.legalHold && retention.days === 0) afterCommit(c, () => purgeBlock(blockId));
   return { blockId, created, shareIds, frozen };
 }
 
@@ -426,20 +399,11 @@ export async function blockCommentInTransaction(
   if (!comment || comment.blocked_at) return false;
   const blockId = randomUUID();
   const retention = retentionOf(input.category);
-  await c.query("UPDATE comments SET blocked_at=clock_timestamp() WHERE id=$1", [
-    input.commentId,
-  ]);
+  await c.query("UPDATE comments SET blocked_at=clock_timestamp() WHERE id=$1", [input.commentId]);
   await c.query(
     `INSERT INTO moderation_blocks(id,tenant_id,comment_id,sha256,category,isolated,delete_after)
      VALUES($1,$2,$3,$4,$5,true,now()+$6*interval '1 day')`,
-    [
-      blockId,
-      input.tenantId,
-      input.commentId,
-      comment.sha256,
-      input.category,
-      retention.days,
-    ],
+    [blockId, input.tenantId, input.commentId, comment.sha256, input.category, retention.days],
   );
   await recordEvent(c, {
     actor: input.actor,
@@ -494,10 +458,9 @@ export async function purgeBlock(
 ) {
   const {
     rows: [probe],
-  } = await db.query(
-    "SELECT revision_id,comment_id FROM moderation_blocks WHERE id=$1 AND purged_at IS NULL",
-    [blockId],
-  );
+  } = await db.query("SELECT revision_id,comment_id FROM moderation_blocks WHERE id=$1 AND purged_at IS NULL", [
+    blockId,
+  ]);
   if (!probe) return { purged: false, versions: 0 };
   const key = blockContentKey(probe);
   // A session lock on its own connection: it must outlive the S3 deletion,
@@ -516,10 +479,7 @@ export async function purgeBlock(
   }
 }
 
-async function purgeBlockLocked(
-  blockId: string,
-  options: { now?: boolean; actor?: EventActor; reason?: string },
-) {
+async function purgeBlockLocked(blockId: string, options: { now?: boolean; actor?: EventActor; reason?: string }) {
   const {
     rows: [block],
   } = await db.query(
@@ -536,46 +496,32 @@ async function purgeBlockLocked(
   if (block.revision_id && block.object_key) {
     const prefixes = new Set<string>([block.object_key]);
     for (const row of (
-      await db.query(
-        "SELECT object_key FROM revision_files WHERE revision_id=$1",
-        [block.revision_id],
-      )
+      await db.query("SELECT object_key FROM revision_files WHERE revision_id=$1", [block.revision_id])
     ).rows)
       prefixes.add(row.object_key);
     for (const row of (
-      await db.query(
-        "SELECT id,tenant_id FROM revision_derivatives WHERE revision_id=$1",
-        [block.revision_id],
-      )
+      await db.query("SELECT id,tenant_id FROM revision_derivatives WHERE revision_id=$1", [block.revision_id])
     ).rows)
       prefixes.add(`${row.tenant_id}/derivatives/${row.id}/`);
     for (const prefix of prefixes)
       versions += await deleteAllVersions(prefix, (key) =>
-        prefix.endsWith("/")
-          ? key.startsWith(prefix)
-          : key === prefix || key.startsWith(`${prefix}/`),
+        prefix.endsWith("/") ? key.startsWith(prefix) : key === prefix || key.startsWith(`${prefix}/`),
       );
   }
   await transaction(async (c) => {
     const {
       rows: [locked],
-    } = await c.query(
-      "SELECT id FROM moderation_blocks WHERE id=$1 AND purged_at IS NULL FOR UPDATE",
-      [blockId],
-    );
+    } = await c.query("SELECT id FROM moderation_blocks WHERE id=$1 AND purged_at IS NULL FOR UPDATE", [blockId]);
     if (!locked) return;
     // The shelf cover (its text and picture) is derived content: it goes too.
-    if (block.revision_id)
-      await c.query("DELETE FROM revision_covers WHERE revision_id=$1", [block.revision_id]);
+    if (block.revision_id) await c.query("DELETE FROM revision_covers WHERE revision_id=$1", [block.revision_id]);
     if (block.revision_id) {
       await c.query(
         "UPDATE revisions SET content_purged_at=clock_timestamp() WHERE id=$1 AND content_purged_at IS NULL",
         [block.revision_id],
       );
       // Its text for search goes with the bytes (docs/specs/CONTENT_SEARCH.md).
-      await c.query("DELETE FROM artifact_search WHERE revision_id=$1", [
-        block.revision_id,
-      ]);
+      await c.query("DELETE FROM artifact_search WHERE revision_id=$1", [block.revision_id]);
     }
     if (block.comment_id)
       await c.query(
@@ -584,10 +530,7 @@ async function purgeBlockLocked(
          WHERE id=$1`,
         [block.comment_id],
       );
-    await c.query(
-      "UPDATE moderation_blocks SET purged_at=clock_timestamp() WHERE id=$1",
-      [blockId],
-    );
+    await c.query("UPDATE moderation_blocks SET purged_at=clock_timestamp() WHERE id=$1", [blockId]);
     await recordEvent(c, {
       actor: options.actor ?? "maintenance",
       action: "content.deleted",
@@ -600,9 +543,7 @@ async function purgeBlockLocked(
       details: { objectVersionsDeleted: versions, sha256: block.sha256 },
     });
   });
-  console.info(
-    JSON.stringify({ event: "moderation.content_deleted", versions }),
-  );
+  console.info(JSON.stringify({ event: "moderation.content_deleted", versions }));
   return { purged: true, versions };
 }
 
@@ -637,7 +578,7 @@ export async function remindDueBlocks(limit = 50, send: typeof sendMail = sendMa
           "",
           ...lines,
           "",
-          "Если полиция или суд запросили эти данные: npm run moderation:legal-hold -- <id> on --authority \"…\"",
+          'Если полиция или суд запросили эти данные: npm run moderation:legal-hold -- <id> on --authority "…"',
           "Если данные уже переданы: npm run moderation:handed-over -- <id>",
         ].join("\n"),
       });
@@ -807,9 +748,7 @@ function pump() {
     const revisionId = queue.shift()!;
     running++;
     reviewRevision(revisionId)
-      .catch(() =>
-        console.error(JSON.stringify({ event: "moderation.model_review_failed" })),
-      )
+      .catch(() => console.error(JSON.stringify({ event: "moderation.model_review_failed" })))
       .finally(() => {
         running--;
         queued.delete(revisionId);
@@ -826,9 +765,7 @@ function pump() {
  */
 export async function reviewsSettled() {
   await new Promise((resolve) => setImmediate(resolve));
-  return !running && !queue.length
-    ? Promise.resolve()
-    : new Promise<void>((resolve) => idle.push(resolve));
+  return !running && !queue.length ? Promise.resolve() : new Promise<void>((resolve) => idle.push(resolve));
 }
 
 // Scripts nobody needs a model to read: known library builds (sha256).
@@ -837,10 +774,7 @@ function knownScript(hash: string) {
   if (!knownScripts) {
     knownScripts = new Set();
     try {
-      const source = readFileSync(
-        new URL("./content-filter/lists/known_scripts.txt", import.meta.url),
-        "utf8",
-      );
+      const source = readFileSync(new URL("./content-filter/lists/known_scripts.txt", import.meta.url), "utf8");
       for (const line of source.split("\n")) {
         const value = line.replace(/#.*$/, "").trim();
         if (/^[a-f0-9]{64}$/.test(value)) knownScripts.add(value);
@@ -900,7 +834,10 @@ async function projectMaterial(revision: any) {
       scripts.push(...(inspection.scripts ?? []));
     } else if (PROJECT_TEXT_MIME.has(file.mime) && room > 200) {
       const bytes = await readBlob(file.object_key, file.object_version);
-      text += `\n\n## ${file.path}\n${bytes.subarray(0, room * 4).toString("utf8").slice(0, room - 100)}`;
+      text += `\n\n## ${file.path}\n${bytes
+        .subarray(0, room * 4)
+        .toString("utf8")
+        .slice(0, room - 100)}`;
     } else if (file.mime === "text/javascript" && scripts.join("").length < MAX_CODE_CHARS * 4)
       scripts.push((await readBlob(file.object_key, file.object_version)).toString("utf8"));
     else if (
@@ -916,13 +853,7 @@ async function projectMaterial(revision: any) {
   }
   return { text: text.trim(), images, scripts };
 }
-const PROJECT_TEXT_MIME = new Set([
-  "text/markdown",
-  "text/plain",
-  "application/json",
-  "image/svg+xml",
-  "text/css",
-]);
+const PROJECT_TEXT_MIME = new Set(["text/markdown", "text/plain", "application/json", "image/svg+xml", "text/css"]);
 
 /** What a revision shows: its text, images and scripts, bounded. */
 export async function revisionMaterial(revision: any) {
@@ -1029,14 +960,8 @@ export async function reviewRevision(revisionId: string) {
   if (previous?.state === "unchecked" && previous.attempts >= MAX_ATTEMPTS) return null;
   const material = await revisionMaterial(revision);
   // A project always has something to read; nothing read is not «checked».
-  if (
-    revision.runtime === PROJECT_RUNTIME &&
-    !material.text && !material.code && !material.images.length
-  )
-    return null;
-  const hash = sha256(
-    JSON.stringify([material.text, material.images.map((image) => sha256(image)), material.code]),
-  );
+  if (revision.runtime === PROJECT_RUNTIME && !material.text && !material.code && !material.images.length) return null;
+  const hash = sha256(JSON.stringify([material.text, material.images.map((image) => sha256(image)), material.code]));
   if (previous?.state === "checked" && previous.hash === hash) return previous;
   // The same material checked before (a re-save): its verdict, no new calls.
   const {
@@ -1060,10 +985,7 @@ export async function reviewRevision(revisionId: string) {
       limited = 0;
     const rateLimited = (answer: ModelAnswer | CodeReview | null) =>
       !answer || ("failed" in answer && answer.failed === "rate_limited");
-    const second = async (
-      source: ModelFinding["source"],
-      input: { text?: string; image?: string },
-    ) => {
+    const second = async (source: ModelFinding["source"], input: { text?: string; image?: string }) => {
       calls++;
       const primary = await ask(pair.primary, input);
       let confirm: ModelAnswer | null = null;
@@ -1076,11 +998,9 @@ export async function reviewRevision(revisionId: string) {
           failures++;
           if (rateLimited(primary) && (!canConfirm || rateLimited(confirm))) limited++;
         }
-      } else if (primary.category !== "none" && canConfirm)
-        confirm = await ask(pair.fallback!, input);
+      } else if (primary.category !== "none" && canConfirm) confirm = await ask(pair.fallback!, input);
       answers.push({ source, model: pair.primary.name, answer: describe(primary) });
-      if (confirm)
-        answers.push({ source, model: pair.fallback!.name, answer: describe(confirm) });
+      if (confirm) answers.push({ source, model: pair.fallback!.name, answer: describe(confirm) });
       const flagged = answered(primary) && primary.category !== "none" ? primary : null;
       if (flagged)
         findings.push({
@@ -1098,7 +1018,7 @@ export async function reviewRevision(revisionId: string) {
       if (config.CONTENT_VISION_MODERATION) {
         const vision = await visionModeration(image);
         if (vision && (vision.adult > 0.5 || vision.gruesome > 0.5)) {
-          const category: Category = vision.adult > 0.5 ? "porn" : "other" as never;
+          const category: Category = vision.adult > 0.5 ? "porn" : ("other" as never);
           const same = findings.find((finding) => finding.source === "image" && finding.category === category);
           if (same) same.agreed = true;
           else
@@ -1114,8 +1034,7 @@ export async function reviewRevision(revisionId: string) {
     const codeModel = codeModelClient();
     if (material.code && codeModel) {
       calls++;
-      const review =
-        codeModel.flatRate || (await budgetLeft()) ? await codeModel.review(material.code) : null;
+      const review = codeModel.flatRate || (await budgetLeft()) ? await codeModel.review(material.code) : null;
       if (review) await charge(review.costRub);
       if (!review || "failed" in review) {
         failures++;
@@ -1126,9 +1045,7 @@ export async function reviewRevision(revisionId: string) {
           findings.push({
             category: "malicious_code",
             // Both the rules and the model: a block. The model alone: review.
-            agreed:
-              review.verdict === "malicious" &&
-              !!revision.content_filter?.hits?.malicious_code,
+            agreed: review.verdict === "malicious" && !!revision.content_filter?.hits?.malicious_code,
             source: "code",
             reason: review.reasons.join("; ").slice(0, 150),
           });
@@ -1158,9 +1075,7 @@ export async function reviewRevision(revisionId: string) {
       revisionId,
       details: {
         findings: stored.findings.map((finding) =>
-          finding.category === "csam"
-            ? { category: "csam", agreed: finding.agreed, source: finding.source }
-            : finding,
+          finding.category === "csam" ? { category: "csam", agreed: finding.agreed, source: finding.source } : finding,
         ),
         answers: stored.answers,
       },
@@ -1210,8 +1125,7 @@ async function visionModeration(dataUrl: string) {
     [endpoints?.fallback, config.CONTENT_MODEL_FALLBACK],
     [endpoints?.code, config.CONTENT_CODE_MODEL],
   ].find(([endpoint]) => (endpoint as ModelEndpoint | null)?.provider === "yandex") as
-    | [ModelEndpoint, string | undefined]
-    | undefined;
+    [ModelEndpoint, string | undefined] | undefined;
   const folder = /^gpt:\/\/([^/]+)\//.exec(yandex?.[1] ?? "")?.[1];
   const key = yandex?.[0].key;
   const content = dataUrl.slice(dataUrl.indexOf(",") + 1);
@@ -1239,8 +1153,7 @@ async function visionModeration(dataUrl: string) {
     const body: any = await response.json();
     const properties: Array<{ name: string; probability: number }> =
       body?.results?.[0]?.results?.[0]?.classification?.properties ?? [];
-    const probability = (name: string) =>
-      Number(properties.find((item) => item.name === name)?.probability ?? 0);
+    const probability = (name: string) => Number(properties.find((item) => item.name === name)?.probability ?? 0);
     return { adult: probability("adult"), gruesome: probability("gruesome") };
   } catch {
     return null;

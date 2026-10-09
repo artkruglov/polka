@@ -5,11 +5,7 @@ import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  authenticateServiceToken,
-  MCP_AUDIENCE,
-  withServiceActorTransaction,
-} from "../apps/server/service-auth.ts";
+import { authenticateServiceToken, MCP_AUDIENCE, withServiceActorTransaction } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 const app = await createApp();
@@ -47,12 +43,7 @@ async function login(name: string) {
 }
 
 async function csrf(cookie = ownerCookie) {
-  const response = await call(
-    "POST",
-    "/api/agent-connections/csrf",
-    {},
-    cookie,
-  );
+  const response = await call("POST", "/api/agent-connections/csrf", {}, cookie);
   assert.equal(response.statusCode, 200, response.body);
   assert.match(response.json().csrfToken, /^[A-Za-z0-9_-]{43}$/);
   return response.json().csrfToken as string;
@@ -74,16 +65,7 @@ after(async () => {
 
 test("owner issues a one-time-visible tenant-bound token with default TTL", async () => {
   assert.equal(
-    (
-      await call(
-        "POST",
-        "/api/agent-connections/csrf",
-        {},
-        ownerCookie,
-        undefined,
-        "https://wrong.example",
-      )
-    ).statusCode,
+    (await call("POST", "/api/agent-connections/csrf", {}, ownerCookie, undefined, "https://wrong.example")).statusCode,
     403,
   );
   const ownerCsrf = await csrf();
@@ -164,15 +146,10 @@ test("owner issues a one-time-visible tenant-bound token with default TTL", asyn
   assert.match(token, /^[A-Za-z0-9_-]{43}$/);
   assert.deepEqual(connection.scopes, ["context", "read"]);
   assert.equal(connection.status, "issued");
-  const ttl =
-    Date.parse(connection.expiresAt) - Date.parse(connection.createdAt);
+  const ttl = Date.parse(connection.expiresAt) - Date.parse(connection.createdAt);
   assert.ok(ttl > 6.99 * 86400_000 && ttl <= 7 * 86400_000);
 
-  const stored = (
-    await db.query("SELECT * FROM agent_connections WHERE id=$1", [
-      connection.id,
-    ])
-  ).rows[0];
+  const stored = (await db.query("SELECT * FROM agent_connections WHERE id=$1", [connection.id])).rows[0];
   assert.equal(stored.tenant_id, owner.tenant);
   assert.equal(stored.account_id, owner.id);
   assert.equal(stored.token_hash, sha256(token));
@@ -182,15 +159,8 @@ test("owner issues a one-time-visible tenant-bound token with default TTL", asyn
   assert.equal(listed.statusCode, 200, listed.body);
   assert.equal(listed.json()[0].id, connection.id);
   assert.equal(JSON.stringify(listed.json()).includes(token), false);
-  assert.equal(
-    JSON.stringify(listed.json()).includes(stored.token_hash),
-    false,
-  );
-  assert.equal(
-    (await call("GET", "/api/agent-connections", undefined, otherCookie)).json()
-      .length,
-    0,
-  );
+  assert.equal(JSON.stringify(listed.json()).includes(stored.token_hash), false);
+  assert.equal((await call("GET", "/api/agent-connections", undefined, otherCookie)).json().length, 0);
 });
 
 test("listing always retains every active connection beyond bounded history", async () => {
@@ -201,14 +171,7 @@ test("listing always retains every active connection beyond bounded history", as
         `INSERT INTO agent_connections(
            id,tenant_id,account_id,token_hash,name,scopes,audience,expires_at,revoked_at,created_at
          ) VALUES($1,$2,$3,$4,$5,ARRAY['context'],$6,now()+interval '1 day',now(),now())`,
-        [
-          id,
-          owner.tenant,
-          owner.id,
-          sha256(randomBytes(32)),
-          `revoked-${index}`,
-          MCP_AUDIENCE,
-        ],
+        [id, owner.tenant, owner.id, sha256(randomBytes(32)), `revoked-${index}`, MCP_AUDIENCE],
       );
     }),
   );
@@ -218,21 +181,10 @@ test("listing always retains every active connection beyond bounded history", as
   assert.ok(list.json().length <= 120);
   const ownerCsrf = await csrf();
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/agent-connections/${oldestActiveId}/revoke`,
-        {},
-        ownerCookie,
-        ownerCsrf,
-      )
-    ).statusCode,
+    (await call("POST", `/api/agent-connections/${oldestActiveId}/revoke`, {}, ownerCookie, ownerCsrf)).statusCode,
     200,
   );
-  await db.query(
-    "DELETE FROM agent_connections WHERE tenant_id=$1 AND name LIKE 'revoked-%'",
-    [owner.tenant],
-  );
+  await db.query("DELETE FROM agent_connections WHERE tenant_id=$1 AND name LIKE 'revoked-%'", [owner.tenant]);
 });
 
 test("service authentication enforces audience, scopes, tenant and disabled account", async () => {
@@ -256,10 +208,7 @@ test("service authentication enforces audience, scopes, tenant and disabled acco
     authenticateServiceToken(token, "https://wrong.example/mcp", "context"),
     (error: any) => error.status === 401,
   );
-  await assert.rejects(
-    authenticateServiceToken(token, MCP_AUDIENCE, "share"),
-    (error: any) => error.status === 403,
-  );
+  await assert.rejects(authenticateServiceToken(token, MCP_AUDIENCE, "share"), (error: any) => error.status === 403);
   const actor = await authenticateServiceToken(token, MCP_AUDIENCE, "context");
   assert.deepEqual(
     {
@@ -274,11 +223,7 @@ test("service authentication enforces audience, scopes, tenant and disabled acco
     },
   );
   assert.equal(
-    await withServiceActorTransaction(
-      actor,
-      "capture",
-      async (_c, verified) => verified.connectionId,
-    ),
+    await withServiceActorTransaction(actor, "capture", async (_c, verified) => verified.connectionId),
     connection.id,
   );
   await assert.rejects(
@@ -286,31 +231,17 @@ test("service authentication enforces audience, scopes, tenant and disabled acco
     (error: any) => error.status === 403,
   );
   await assert.rejects(
-    withServiceActorTransaction(
-      { ...actor, tenantId: other.tenant },
-      "context",
-      async () => true,
-    ),
+    withServiceActorTransaction({ ...actor, tenantId: other.tenant }, "context", async () => true),
     (error: any) => error.status === 401,
   );
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/agent-connections/${connection.id}/revoke`,
-        {},
-        otherCookie,
-        await csrf(otherCookie),
-      )
-    ).statusCode,
+    (await call("POST", `/api/agent-connections/${connection.id}/revoke`, {}, otherCookie, await csrf(otherCookie)))
+      .statusCode,
     404,
   );
 
   await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.id]);
-  await assert.rejects(
-    authenticateServiceToken(token, MCP_AUDIENCE, "context"),
-    (error: any) => error.status === 401,
-  );
+  await assert.rejects(authenticateServiceToken(token, MCP_AUDIENCE, "context"), (error: any) => error.status === 401);
   await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [owner.id]);
 });
 
@@ -327,11 +258,7 @@ test("revoke and expiry block both fresh authentication and transactional replay
     ownerCookie,
     ownerCsrf,
   );
-  const actor = await authenticateServiceToken(
-    issued.json().token,
-    MCP_AUDIENCE,
-    "capture",
-  );
+  const actor = await authenticateServiceToken(issued.json().token, MCP_AUDIENCE, "capture");
   const revoke = await call(
     "POST",
     `/api/agent-connections/${issued.json().connection.id}/revoke`,
@@ -341,15 +268,8 @@ test("revoke and expiry block both fresh authentication and transactional replay
   );
   assert.equal(revoke.statusCode, 200, revoke.body);
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/agent-connections/${issued.json().connection.id}/revoke`,
-        {},
-        ownerCookie,
-        ownerCsrf,
-      )
-    ).statusCode,
+    (await call("POST", `/api/agent-connections/${issued.json().connection.id}/revoke`, {}, ownerCookie, ownerCsrf))
+      .statusCode,
     200,
   );
   await assert.rejects(
@@ -385,9 +305,7 @@ test("revoke and expiry block both fresh authentication and transactional replay
     (error: any) => error.status === 401,
   );
   const list = await call("GET", "/api/agent-connections");
-  const expired = list
-    .json()
-    .find((item: any) => item.id === expiring.json().connection.id);
+  const expired = list.json().find((item: any) => item.id === expiring.json().connection.id);
   assert.equal(expired.status, "expired");
 
   await db.query(

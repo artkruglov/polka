@@ -13,12 +13,7 @@ import {
   resetLimiters,
   retryAfterMs,
 } from "../apps/server/content-filter/endpoints.ts";
-import {
-  budgetCost,
-  chatModelClient,
-  costOf,
-  parsePrices,
-} from "../apps/server/content-filter/model.ts";
+import { budgetCost, chatModelClient, costOf, parsePrices } from "../apps/server/content-filter/model.ts";
 import { codeReviewer } from "../apps/server/content-filter/code-model.ts";
 
 const baseEnv = {
@@ -54,9 +49,7 @@ type Endpoints = {
 };
 
 /** The endpoints a configuration yields, or the error it refuses to start with. */
-function endpoints(
-  extra: Record<string, string>,
-): Endpoints | { error: string } {
+function endpoints(extra: Record<string, string>): Endpoints | { error: string } {
   const result = spawnSync(
     process.execPath,
     [
@@ -173,10 +166,7 @@ test("config: hosted.env.example starts on Yandex AI Studio for every role; Neur
       .filter((line) => /^CONTENT_(MODEL|CODE_MODEL)_?[A-Z_]*=/.test(line))
       .map((line) => {
         const at = line.indexOf("=");
-        return [
-          line.slice(0, at),
-          line.slice(at + 1).replaceAll("<folder>", "b1gexample"),
-        ];
+        return [line.slice(0, at), line.slice(at + 1).replaceAll("<folder>", "b1gexample")];
       }),
   );
   const roles = ok(endpoints(example));
@@ -189,24 +179,13 @@ test("config: hosted.env.example starts on Yandex AI Studio for every role; Neur
   // AI Studio prices for the configured models.
   const studio = parsePrices(example.CONTENT_MODEL_PRICES_RUB!);
   for (const model of [example.CONTENT_MODEL_PRIMARY!, example.CONTENT_MODEL_FALLBACK!])
-    assert.ok(
-      costOf(model, { prompt_tokens: 1000, completion_tokens: 0 }, "yandex", studio) <= 0.3,
-      model,
-    );
+    assert.ok(costOf(model, { prompt_tokens: 1000, completion_tokens: 0 }, "yandex", studio) <= 0.3, model);
   // The prices parse, and NeuralDeep's list prices are the built-in ones.
   const table = parsePrices(example.CONTENT_MODEL_PRICES_RUB!);
   const usage = { prompt_tokens: 1000, completion_tokens: 1000 };
-  for (const model of [
-    "qwen3.6-35b-a3b-noreason",
-    "gemma-4-31b",
-    "gpt-oss-120b",
-    "qwen3.8-27b",
-  ])
+  for (const model of ["qwen3.6-35b-a3b-noreason", "gemma-4-31b", "gpt-oss-120b", "qwen3.8-27b"])
     assert.ok(
-      Math.abs(
-        costOf(model, usage, "neuraldeep", table) -
-          costOf(model, usage, "neuraldeep", []),
-      ) < 1e-9,
+      Math.abs(costOf(model, usage, "neuraldeep", table) - costOf(model, usage, "neuraldeep", [])) < 1e-9,
       model,
     );
 });
@@ -231,16 +210,8 @@ test("config: host rules for every role and the NeuralDeep model allowlist", () 
     /CONTENT_MODEL_URL must be https/,
   );
   // Wallet models may be served abroad: a cross-border transfer.
-  for (const model of [
-    "deepseek-v4-flash",
-    "glm-5",
-    "kimi-k2.6",
-    "qwen3.6-35b-a3b-extra",
-  ])
-    refused(
-      endpoints({ ...nd, CONTENT_MODEL_PRIMARY: model }),
-      /not in CONTENT_MODEL_ND_ALLOWED/,
-    );
+  for (const model of ["deepseek-v4-flash", "glm-5", "kimi-k2.6", "qwen3.6-35b-a3b-extra"])
+    refused(endpoints({ ...nd, CONTENT_MODEL_PRIMARY: model }), /not in CONTENT_MODEL_ND_ALLOWED/);
   refused(
     endpoints({ ...nd, CONTENT_MODEL_FALLBACK: "glm-5" }),
     /CONTENT_MODEL_FALLBACK: «glm-5» is not in CONTENT_MODEL_ND_ALLOWED/,
@@ -251,15 +222,9 @@ test("config: host rules for every role and the NeuralDeep model allowlist", () 
   );
   // NeuralDeep's catalogue marks these «вне РФ»: refused by default.
   for (const foreign of ["gpt-oss-120b", "gemma-4-31b-noreason"])
-    refused(
-      endpoints({ ...nd, CONTENT_MODEL_PRIMARY: foreign }),
-      /not in CONTENT_MODEL_ND_ALLOWED/,
-    );
+    refused(endpoints({ ...nd, CONTENT_MODEL_PRIMARY: foreign }), /not in CONTENT_MODEL_ND_ALLOWED/);
   // The operator may narrow the list; empty (as compose passes it) is the default.
-  refused(
-    endpoints({ ...nd, CONTENT_MODEL_ND_ALLOWED: "gemma-4-31b" }),
-    /not in CONTENT_MODEL_ND_ALLOWED/,
-  );
+  refused(endpoints({ ...nd, CONTENT_MODEL_ND_ALLOWED: "gemma-4-31b" }), /not in CONTENT_MODEL_ND_ALLOWED/);
   ok(
     endpoints({
       ...nd,
@@ -274,8 +239,7 @@ test("config: host rules for every role and the NeuralDeep model allowlist", () 
       ...nd,
       CONTENT_MODEL_FALLBACK_PROVIDER: "yandex",
       CONTENT_MODEL_FALLBACK: "gpt://f/gpt-oss-120b/latest",
-      CONTENT_MODEL_FALLBACK_URL:
-        "https://api.neuraldeep.ru/v1/chat/completions",
+      CONTENT_MODEL_FALLBACK_URL: "https://api.neuraldeep.ru/v1/chat/completions",
     }),
     /CONTENT_MODEL_FALLBACK_URL is not a Yandex Cloud address/,
   );
@@ -315,10 +279,7 @@ test("config: host rules for every role and the NeuralDeep model allowlist", () 
 });
 
 type Sent = { url: string; headers: Record<string, string>; body: any };
-function fakeFetch(
-  reply: (sent: Sent) => Response | Promise<Response>,
-  sent: Sent[] = [],
-): typeof fetch {
+function fakeFetch(reply: (sent: Sent) => Response | Promise<Response>, sent: Sent[] = []): typeof fetch {
   return (async (url: string, init: RequestInit) => {
     const request = {
       url,
@@ -329,10 +290,7 @@ function fakeFetch(
     return reply(request);
   }) as unknown as typeof fetch;
 }
-const answer = (
-  content: string,
-  usage = { prompt_tokens: 1000, completion_tokens: 100 },
-) =>
+const answer = (content: string, usage = { prompt_tokens: 1000, completion_tokens: 100 }) =>
   new Response(
     JSON.stringify({
       choices: [{ message: { content }, finish_reason: "stop" }],
@@ -341,11 +299,7 @@ const answer = (
     { status: 200, headers: { "content-type": "application/json" } },
   );
 const SAFE = '{"category":"safe","confidence":1,"reason":""}';
-const endpoint = (
-  provider: "yandex" | "neuraldeep",
-  url: string,
-  extra = {},
-) => ({
+const endpoint = (provider: "yandex" | "neuraldeep", url: string, extra = {}) => ({
   provider,
   url,
   key: `${provider}-key`,
@@ -378,10 +332,7 @@ test("headers: Api-Key and no logging on Yandex, Bearer and no Yandex header on 
     maxTokens: 200,
     fetch: fakeFetch(() => answer(SAFE), sent),
   });
-  assert.equal(
-    ((await nd.classify({ text: "текст" })) as any).category,
-    "none",
-  );
+  assert.equal(((await nd.classify({ text: "текст" })) as any).category, "none");
   assert.equal(sent[0]!.url, ND);
   assert.equal(sent[0]!.headers.authorization, "Bearer neuraldeep-key");
   assert.equal("x-data-logging-enabled" in sent[0]!.headers, false);
@@ -391,10 +342,7 @@ test("headers: Api-Key and no logging on Yandex, Bearer and no Yandex header on 
     model: "gpt://f/deepseek-v4-flash/latest",
     timeoutMs: 1000,
     extra: {},
-    fetch: fakeFetch(
-      () => answer('{"verdict":"safe","category":"","reasons":[]}'),
-      sent,
-    ),
+    fetch: fakeFetch(() => answer('{"verdict":"safe","category":"","reasons":[]}'), sent),
   });
   assert.equal(((await reviewer.review("let a = 1")) as any).verdict, "safe");
   assert.equal(sent[1]!.headers.authorization, "Api-Key yandex-key");
@@ -431,10 +379,7 @@ test("429: rate_limited, not an error, and the endpoint pauses for Retry-After",
   });
   // Paused longer than the request could wait: refused without a request.
   status = 200;
-  assert.equal(
-    ((await client.classify({ text: "b" })) as any).failed,
-    "rate_limited",
-  );
+  assert.equal(((await client.classify({ text: "b" })) as any).failed, "rate_limited");
   assert.equal(sent.length, 1);
   // Another endpoint (another key) is not paused; a 500 is an error.
   resetLimiters();
@@ -461,9 +406,7 @@ test("limiter: parallel requests wait for a slot; a full minute refuses at once"
   const first = await parallel.acquire(1000);
   assert.ok(first);
   const second: { release?: (() => void) | null } = {};
-  const waiting = parallel
-    .acquire(1000)
-    .then((release) => (second.release = release));
+  const waiting = parallel.acquire(1000).then((release) => (second.release = release));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(second.release, undefined, "the second request waits");
   first!();
@@ -489,10 +432,7 @@ test("limiter: parallel requests wait for a slot; a full minute refuses at once"
   assert.equal(a, b);
   assert.equal(a.rpm, 20);
   assert.equal(a.concurrency, 1);
-  assert.notEqual(
-    limiterFor({ url: ND, key: "other", rpm: 20, concurrency: 3 }),
-    a,
-  );
+  assert.notEqual(limiterFor({ url: ND, key: "other", rpm: 20, concurrency: 3 }), a);
 });
 
 test("prices: by model name and provider; NeuralDeep list prices; a flat rate costs nothing", async () => {
@@ -504,19 +444,12 @@ test("prices: by model name and provider; NeuralDeep list prices; a flat rate co
     completion_tokens: 0,
   };
   const none = parsePrices("");
-  const close = (a: number, b: number) =>
-    assert.ok(Math.abs(a - b) < 1e-6, `${a} ≈ ${b}`);
-  close(
-    costOf("qwen3.6-35b-a3b-noreason", usage, "neuraldeep", none),
-    7.14 + 40.8,
-  );
+  const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≈ ${b}`);
+  close(costOf("qwen3.6-35b-a3b-noreason", usage, "neuraldeep", none), 7.14 + 40.8);
   close(costOf("qwen3.6-35b-a3b-noreason", cached, "neuraldeep", none), 0.714);
   close(costOf("gemma-4-31b", usage, "neuraldeep", none), 11 + 37.4);
   close(costOf("gpt-oss-120b", usage, "neuraldeep", none), 5.1 + 20.4);
-  close(
-    costOf("qwen3.8-27b-noreason", usage, "neuraldeep", none),
-    24.48 + 122.4,
-  );
+  close(costOf("qwen3.8-27b-noreason", usage, "neuraldeep", none), 24.48 + 122.4);
   // An unlisted NeuralDeep model: the dearest known price.
   close(costOf("gpt-oss-20b", usage, "neuraldeep", none), 2 * 122.4);
   // The same model on Yandex keeps the Yandex entry; a provider entry wins.
@@ -527,20 +460,10 @@ test("prices: by model name and provider; NeuralDeep list prices; a flat rate co
   close(costOf("gpt-oss-120b", usage, "neuraldeep", table), 5.1 + 20.4);
   close(costOf("gpt://f/qwen3.6-35b-a3b/latest", usage, "yandex", table), 500);
   close(costOf("gemma-4-31b", usage, "neuraldeep", table), 70);
-  close(
-    costOf("gpt://f/unknown/latest", { prompt_tokens: 1000 }, "yandex", table),
-    0.3,
-  );
+  close(costOf("gpt://f/unknown/latest", { prompt_tokens: 1000 }, "yandex", table), 0.3);
   assert.throws(() => parsePrices("qwen=1/2"));
   // A flat-rate key: 0 for the budget whatever the usage.
-  assert.equal(
-    budgetCost(
-      { provider: "neuraldeep", flatRate: true },
-      "qwen3.6-unlim",
-      usage,
-    ),
-    0,
-  );
+  assert.equal(budgetCost({ provider: "neuraldeep", flatRate: true }, "qwen3.6-unlim", usage), 0);
   const flat = chatModelClient({
     endpoint: endpoint("neuraldeep", ND, { flatRate: true }),
     model: "qwen3.6-unlim-noreason",
@@ -557,9 +480,7 @@ test("prices: by model name and provider; NeuralDeep list prices; a flat rate co
     timeoutMs: 1000,
     extra: {},
     maxTokens: 200,
-    fetch: fakeFetch(() =>
-      answer(SAFE, { prompt_tokens: 1000, completion_tokens: 100 }),
-    ),
+    fetch: fakeFetch(() => answer(SAFE, { prompt_tokens: 1000, completion_tokens: 100 })),
   });
   assert.ok((await paid.classify({ text: "a" })).costRub > 0);
 });

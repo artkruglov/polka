@@ -29,14 +29,15 @@ export function parseCodeReview(content: unknown, costRub: number): CodeReview {
   try {
     const start = content.indexOf("{");
     const parsed = JSON.parse(content.slice(start, content.lastIndexOf("}") + 1));
-    if (!["safe", "suspicious", "malicious"].includes(parsed?.verdict))
-      return { failed: "unparseable", costRub };
+    if (!["safe", "suspicious", "malicious"].includes(parsed?.verdict)) return { failed: "unparseable", costRub };
     return {
       verdict: parsed.verdict,
       category: String(parsed.category ?? ""),
-      reasons: (Array.isArray(parsed.reasons) ? parsed.reasons : [])
-        .slice(0, 5)
-        .map((reason: unknown) => String(reason).replace(/[\u0000-\u001f]/g, " ").slice(0, 120)),
+      reasons: (Array.isArray(parsed.reasons) ? parsed.reasons : []).slice(0, 5).map((reason: unknown) =>
+        String(reason)
+          .replace(/[\u0000-\u001f]/g, " ")
+          .slice(0, 120),
+      ),
       costRub,
     };
   } catch {

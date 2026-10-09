@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * A small non-modal panel under an icon button (details, not actions).
@@ -32,10 +26,7 @@ export function Popover({
     const panel = root.current?.querySelector<HTMLElement>(".ui-popover-panel");
     if (!panel) return;
     const rect = panel.getBoundingClientRect();
-    const shift = Math.max(
-      8 - rect.left,
-      Math.min(0, window.innerWidth - 8 - rect.right),
-    );
+    const shift = Math.max(8 - rect.left, Math.min(0, window.innerWidth - 8 - rect.right));
     panel.style.transform = `translateX(${shift}px)`;
   }, [open]);
   useEffect(() => {
@@ -75,13 +66,7 @@ export function Popover({
         {icon}
       </button>
       {/* Rendered while closed too: the details stay in the page's text. */}
-      <div
-        id={id}
-        role="group"
-        aria-label={label}
-        className="ui-popover-panel"
-        hidden={!open}
-      >
+      <div id={id} role="group" aria-label={label} className="ui-popover-panel" hidden={!open}>
         {children}
       </div>
     </div>

@@ -17,9 +17,7 @@ const source = join(root, "docs/assets/og");
 const pub = join(root, "apps/web/public");
 const chrome =
   process.env.CHROME ??
-  (process.platform === "darwin"
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : "google-chrome");
+  (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 
 /** An HTML page that shows one SVG filling the viewport. */
 function page(svgPath) {

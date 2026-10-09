@@ -3,7 +3,13 @@ import { canonicalizeManifest } from "../../../../packages/contracts/bundle.ts";
 import { MAX_TITLE } from "../../../../packages/contracts/index.ts";
 import { fetchable } from "../../../../packages/contracts/link-providers.ts";
 import { componentShell } from "../../../../packages/contracts/runtime.ts";
-import { escapeHtml, htmlTitle, simplePage, sourceBody, type SourceBody } from "../../../../packages/artifact-source.ts";
+import {
+  escapeHtml,
+  htmlTitle,
+  simplePage,
+  sourceBody,
+  type SourceBody,
+} from "../../../../packages/artifact-source.ts";
 import type { FetchResult } from "../../../../packages/renderer-contract.ts";
 import { checkBuildInWorker } from "../../bundle-derivatives.ts";
 import { config } from "../../config.ts";
@@ -31,7 +37,15 @@ import { rendererFailure, rendererUnavailable } from "../rendered.ts";
 
 // ---- turbo-stream (React Router single fetch) ----
 
-const SPECIAL: Record<number, unknown> = { [-1]: undefined, [-2]: Number.NaN, [-3]: -Infinity, [-4]: -0, [-5]: null, [-6]: Infinity, [-7]: undefined };
+const SPECIAL: Record<number, unknown> = {
+  [-1]: undefined,
+  [-2]: Number.NaN,
+  [-3]: -Infinity,
+  [-4]: -0,
+  [-5]: null,
+  [-6]: Infinity,
+  [-7]: undefined,
+};
 const MAX_NODES = 200_000;
 
 /** The first turbo-stream chunk of the page, hydrated into plain values (promises and dates stay opaque). */
@@ -51,7 +65,8 @@ export function turboStreamRoot(html: string): unknown {
     if (typeof index !== "number") return undefined;
     if (index < 0) return SPECIAL[index];
     if (memo.has(index)) return memo.get(index);
-    if (++visited > MAX_NODES) throw new HtmlCaptureError("unsupported_type", "Страница ChatGPT слишком большая для разбора.");
+    if (++visited > MAX_NODES)
+      throw new HtmlCaptureError("unsupported_type", "Страница ChatGPT слишком большая для разбора.");
     const value = flat[index];
     if (Array.isArray(value)) {
       // A tagged value (date, promise, error…): ["D", …]; not needed here.
@@ -81,7 +96,8 @@ type Message = { role: "user" | "assistant"; text: string };
 type Textdoc = { title: string; type: string; content: string };
 export type ChatgptContent = { title: string; canvas: Textdoc | null; messages: Message[] };
 
-const obj = (value: unknown): Record<string, any> | null => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : null);
+const obj = (value: unknown): Record<string, any> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : null;
 
 function find(value: unknown, key: string, depth = 0): any {
   const o = obj(value);
@@ -97,21 +113,36 @@ function find(value: unknown, key: string, depth = 0): any {
 function textdoc(value: unknown): Textdoc | null {
   const doc = obj(value);
   if (!doc || typeof doc.content !== "string" || !doc.content.trim()) return null;
-  return { title: String(doc.title ?? doc.name ?? "").trim(), type: String(doc.type ?? "document"), content: doc.content };
+  return {
+    title: String(doc.title ?? doc.name ?? "").trim(),
+    type: String(doc.type ?? "document"),
+    content: doc.content,
+  };
 }
 
 export function parseChatgpt(html: string): ChatgptContent {
   const root = turboStreamRoot(html);
   const loader = obj(find(root, "loaderData"));
-  if (!loader) throw new HtmlCaptureError("unsupported_type", "На странице ChatGPT не найден сохранённый разговор: возможно, ссылка удалена или формат страницы изменился.");
+  if (!loader)
+    throw new HtmlCaptureError(
+      "unsupported_type",
+      "На странице ChatGPT не найден сохранённый разговор: возможно, ссылка удалена или формат страницы изменился.",
+    );
   const shared = textdoc(find(loader, "sharedTextdoc"));
-  const pageTitle = htmlTitle(html)?.replace(/^ChatGPT\s*[-–—]\s*/, "").trim() ?? "";
+  const pageTitle =
+    htmlTitle(html)
+      ?.replace(/^ChatGPT\s*[-–—]\s*/, "")
+      .trim() ?? "";
   if (shared) return { title: shared.title || pageTitle, canvas: shared, messages: [] };
   const data = obj(obj(find(loader, "serverResponse"))?.data);
   const nodes: unknown[] = Array.isArray(data?.linear_conversation)
     ? data!.linear_conversation
     : Object.values(obj(data?.mapping) ?? {});
-  if (!data || !nodes.length) throw new HtmlCaptureError("unsupported_type", "На странице ChatGPT не найден сохранённый разговор: возможно, ссылка удалена или формат страницы изменился.");
+  if (!data || !nodes.length)
+    throw new HtmlCaptureError(
+      "unsupported_type",
+      "На странице ChatGPT не найден сохранённый разговор: возможно, ссылка удалена или формат страницы изменился.",
+    );
   const messages: Message[] = [];
   let canvas: Textdoc | null = null;
   for (const node of nodes) {
@@ -135,7 +166,9 @@ export function parseChatgpt(html: string): ChatgptContent {
       continue;
     }
     if ((role !== "user" && role !== "assistant") || recipient !== "all") continue;
-    const parts = Array.isArray(content.parts) ? content.parts.filter((part: unknown): part is string => typeof part === "string") : [];
+    const parts = Array.isArray(content.parts)
+      ? content.parts.filter((part: unknown): part is string => typeof part === "string")
+      : [];
     const text = (parts.length ? parts.join("\n") : typeof content.text === "string" ? content.text : "").trim();
     if (text) messages.push({ role, text });
   }
@@ -167,7 +200,12 @@ export function chatgptWork(content: ChatgptContent): { title: string; body: Sou
     for (const block of blocks) {
       const body = sourceBody(title, block.source, block.language);
       // Only a page, a component or a picture is a work; other code stays part of the conversation.
-      const kind = "component" in body ? "component" : /^\s*<!doctype html>\s*<html lang="ru">[\s\S]*<pre>/i.test(body.html) ? "text" : "page";
+      const kind =
+        "component" in body
+          ? "component"
+          : /^\s*<!doctype html>\s*<html lang="ru">[\s\S]*<pre>/i.test(body.html)
+            ? "text"
+            : "page";
       if (kind !== "text") return { title, body, what: "code" };
     }
   }
@@ -196,9 +234,17 @@ const WHAT: Record<string, string> = {
   conversation: "В разговоре нет страницы или компонента: сохранён сам разговор текстом.",
 };
 
-export type ChatgptOptions = { fetch?: FetchCall; fetcher?: Fetcher; onFetching?: () => Promise<void>; signal?: AbortSignal };
+export type ChatgptOptions = {
+  fetch?: FetchCall;
+  fetcher?: Fetcher;
+  onFetching?: () => Promise<void>;
+  signal?: AbortSignal;
+};
 
-export async function captureChatgpt(input: string, { fetch = rendererFetchClient(), fetcher = fetchPublic, onFetching, signal }: ChatgptOptions = {}) {
+export async function captureChatgpt(
+  input: string,
+  { fetch = rendererFetchClient(), fetcher = fetchPublic, onFetching, signal }: ChatgptOptions = {},
+) {
   const target = publicUrl(input);
   if (!fetchable(target)) throw new HtmlCaptureError("not_allowed", "Эту страницу ChatGPT Полка не открывает.");
   await onFetching?.();
@@ -223,12 +269,22 @@ export async function captureChatgpt(input: string, { fetch = rendererFetchClien
 }
 
 /** A React component as publishFromAgent saves it: a shell page and the module, built by the runtime. */
-async function componentCapture(title: string, body: Extract<SourceBody, { component: string }>, sourceUrl: string, warnings: string[]) {
+async function componentCapture(
+  title: string,
+  body: Extract<SourceBody, { component: string }>,
+  sourceUrl: string,
+  warnings: string[],
+) {
   if (!config.HTML_LIVE_ENABLED) {
     const code = sourceBody(title, body.component, "text");
     return captureHtmlDocument(
       { url: sourceUrl, contentType: "text/html", bytes: Buffer.from("html" in code ? code.html : "", "utf8") },
-      { fetcher: fetchPublic, warnings: [...warnings, "Интерактивный просмотр на этой установке выключен: React-компонент сохранён как код."], title, sourceUrl },
+      {
+        fetcher: fetchPublic,
+        warnings: [...warnings, "Интерактивный просмотр на этой установке выключен: React-компонент сохранён как код."],
+        title,
+        sourceUrl,
+      },
     );
   }
   const file = body.componentLanguage === "tsx" ? "App.tsx" : "App.jsx";
@@ -240,12 +296,28 @@ async function componentCapture(title: string, body: Extract<SourceBody, { compo
     version: 1,
     entrypoint: "index.html",
     runtime: "static-sandbox-v1",
-    files: files.map((f) => ({ path: f.path, mime: f.mime, size: f.bytes.length, sha256: createHash("sha256").update(f.bytes).digest("hex") })),
-    provenance: { kind: "url", sourceUrl, capturedAt: new Date().toISOString(), attribution: "Imported from a public URL by the user", license: "unknown" },
+    files: files.map((f) => ({
+      path: f.path,
+      mime: f.mime,
+      size: f.bytes.length,
+      sha256: createHash("sha256").update(f.bytes).digest("hex"),
+    })),
+    provenance: {
+      kind: "url",
+      sourceUrl,
+      capturedAt: new Date().toISOString(),
+      attribution: "Imported from a public URL by the user",
+      license: "unknown",
+    },
     dependencies: { status: "unknown", unresolved: [] },
   });
-  const built = await checkBuildInWorker(manifest, files.map((f) => ({ path: f.path, bytes: f.bytes })));
-  const found = built.ok ? (built.warnings ?? []).map((warning) => `В интерактивной версии: ${warning}`) : [`Интерактивная сборка недоступна: ${built.reason}`];
+  const built = await checkBuildInWorker(
+    manifest,
+    files.map((f) => ({ path: f.path, bytes: f.bytes })),
+  );
+  const found = built.ok
+    ? (built.warnings ?? []).map((warning) => `В интерактивной версии: ${warning}`)
+    : [`Интерактивная сборка недоступна: ${built.reason}`];
   return {
     title,
     manifest,

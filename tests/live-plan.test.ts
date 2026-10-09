@@ -1,10 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Revision } from "../packages/contracts/index.ts";
-import {
-  liveKind,
-  nextLiveSteps,
-} from "../apps/web/src/widgets/artifact-preview/live-plan.ts";
+import { liveKind, nextLiveSteps } from "../apps/web/src/widgets/artifact-preview/live-plan.ts";
 
 const page = (overrides: Partial<Revision>): Revision => ({
   id: "00000000-0000-4000-8000-000000000001",
@@ -29,10 +26,7 @@ const singleFile = {
 
 test("a script-free page gets no interactive controls", () => {
   assert.equal(liveKind(page({})), "none");
-  assert.equal(
-    liveKind(page({ storageKind: "bundle", manifest: singleFile })),
-    "none",
-  );
+  assert.equal(liveKind(page({ storageKind: "bundle", manifest: singleFile })), "none");
   assert.equal(liveKind(page({ mime: "image/png", htmlProfile: null })), "none");
 });
 
@@ -49,18 +43,12 @@ test("scripted pages run directly or after a build", () => {
   // for its build; the upload itself would not run offline.
   assert.equal(liveKind(page({ htmlProfile: "unsupported" })), "build");
   for (const htmlProfile of ["limited", "unsupported"] as const)
-    assert.equal(
-      liveKind(page({ storageKind: "bundle", manifest: singleFile, htmlProfile })),
-      "build",
-    );
+    assert.equal(liveKind(page({ storageKind: "bundle", manifest: singleFile, htmlProfile })), "build");
   const multi = {
     ...singleFile,
     files: [{ path: "index.html" }, { path: "app.css" }],
   } as unknown as Revision["manifest"];
-  assert.equal(
-    liveKind(page({ storageKind: "bundle", manifest: multi })),
-    "build",
-  );
+  assert.equal(liveKind(page({ storageKind: "bundle", manifest: multi })), "build");
 });
 
 test("a link recipient runs only the interactive version the link is bound to", () => {
@@ -97,10 +85,7 @@ const base = {
 test("the interactive version opens by itself once", () => {
   assert.deepEqual(nextLiveSteps(base), ["launch"]);
   assert.deepEqual(nextLiveSteps({ ...base, owner: false }), ["launch"]);
-  assert.deepEqual(
-    nextLiveSteps({ ...base, requiresBuild: true, build: "ready" }),
-    ["launch"],
-  );
+  assert.deepEqual(nextLiveSteps({ ...base, requiresBuild: true, build: "ready" }), ["launch"]);
   assert.deepEqual(nextLiveSteps({ ...base, launched: true }), []);
   assert.deepEqual(nextLiveSteps({ ...base, stopped: true }), []);
   for (const capability of ["loading", "disabled", "error"] as const)

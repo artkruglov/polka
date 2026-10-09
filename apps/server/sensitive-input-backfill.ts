@@ -30,16 +30,12 @@ type Row = {
 };
 
 /** The verdict for one stored revision; null when it cannot be read. */
-export async function sensitiveInputOfRevision(
-  revision: Row,
-): Promise<SensitiveInput | null> {
+export async function sensitiveInputOfRevision(revision: Row): Promise<SensitiveInput | null> {
   if (revision.mime !== "text/html") return { sensitive: false, signals: [] };
   const page = async (key: string, version: string) =>
-    (await inspectHtmlBounded((await readBlob(key, version)).toString("utf8")))
-      .sensitive ?? null;
+    (await inspectHtmlBounded((await readBlob(key, version)).toString("utf8"))).sensitive ?? null;
   try {
-    if (revision.storage_kind !== "bundle")
-      return await page(revision.object_key, revision.object_version);
+    if (revision.storage_kind !== "bundle") return await page(revision.object_key, revision.object_version);
     const files = (
       await db.query(
         `SELECT mime,object_key,object_version FROM revision_files
@@ -54,14 +50,8 @@ export async function sensitiveInputOfRevision(
     if (!files.some((file) => file.object_key === revision.object_key))
       pages.push(await page(revision.object_key, revision.object_version));
     for (const file of files)
-      if (file.mime === "text/html")
-        pages.push(await page(file.object_key, file.object_version));
-      else
-        scripts.script(
-          (await readBlob(file.object_key, file.object_version)).toString(
-            "utf8",
-          ),
-        );
+      if (file.mime === "text/html") pages.push(await page(file.object_key, file.object_version));
+      else scripts.script((await readBlob(file.object_key, file.object_version)).toString("utf8"));
     return mergeSensitive(scripts.result(), ...pages);
   } catch {
     return null;
@@ -118,9 +108,7 @@ export async function backfillSensitiveInput(
       }
       if (verdict.sensitive) report.sensitive++;
       else report.plain++;
-      options.log?.(
-        `${row.id} ${verdict.sensitive ? `sensitive ${verdict.signals.join(",")}` : "plain"}`,
-      );
+      options.log?.(`${row.id} ${verdict.sensitive ? `sensitive ${verdict.signals.join(",")}` : "plain"}`);
       if (options.dryRun) continue;
       try {
         const { rowCount } = await db.query(

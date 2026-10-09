@@ -25,7 +25,8 @@ const ui = manifest.interface ?? {};
 const problems = [];
 const within = (field, max) => {
   if (typeof ui[field] !== "string" || !ui[field].trim()) problems.push(`interface.${field} is missing`);
-  else if (ui[field].length > max) problems.push(`interface.${field} is ${ui[field].length} characters, at most ${max}`);
+  else if (ui[field].length > max)
+    problems.push(`interface.${field} is ${ui[field].length} characters, at most ${max}`);
 };
 within("displayName", 30);
 within("shortDescription", 30);
@@ -34,14 +35,17 @@ within("developerName", 80);
 for (const field of ["websiteURL", "supportURL", "privacyPolicyURL", "termsOfServiceURL"])
   if (!String(ui[field] ?? "").startsWith("https://")) problems.push(`interface.${field} is not an https URL`);
 const prompts = ui.defaultPrompt ?? [];
-if (prompts.length > 3 || prompts.some((p) => p.length > 128)) problems.push("interface.defaultPrompt: at most 3 prompts of 128 characters");
+if (prompts.length > 3 || prompts.some((p) => p.length > 128))
+  problems.push("interface.defaultPrompt: at most 3 prompts of 128 characters");
 for (const field of ["logo", "composerIcon"]) {
   const path = ui[field];
-  if (!path?.startsWith("./") || !existsSync(join(root, path))) problems.push(`interface.${field} is not a file under ./`);
+  if (!path?.startsWith("./") || !existsSync(join(root, path)))
+    problems.push(`interface.${field} is not a file under ./`);
   else if (statSync(join(root, path)).size > 5 * 1024 * 1024) problems.push(`interface.${field} is over 5 MiB`);
 }
 const servers = Object.values(JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8")).mcpServers ?? {});
-if (servers.length !== 1 || !String(servers[0].url ?? "").startsWith("https://")) problems.push(".mcp.json must declare one remote https server");
+if (servers.length !== 1 || !String(servers[0].url ?? "").startsWith("https://"))
+  problems.push(".mcp.json must declare one remote https server");
 if (problems.length) {
   console.error(problems.join("\n"));
   process.exit(1);

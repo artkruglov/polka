@@ -6,10 +6,7 @@
 // publishes nothing.
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
-import {
-  createFeedProposalInput,
-  type FeedProposal,
-} from "../../packages/contracts/feed-proposal.ts";
+import { createFeedProposalInput, type FeedProposal } from "../../packages/contracts/feed-proposal.ts";
 import { audit, type Actor } from "./artifacts.ts";
 import { limitAttempts } from "./auth.ts";
 import { db, transaction } from "./db.ts";
@@ -37,8 +34,7 @@ const view = (row: any): FeedProposal => ({
 });
 
 const teamOnly = (tenant: { kind: string }) => {
-  if (tenant.kind !== "team")
-    throw new Problem(409, "conflict", "В Ленту предлагают работы с полки отдела.");
+  if (tenant.kind !== "team") throw new Problem(409, "conflict", "В Ленту предлагают работы с полки отдела.");
 };
 
 async function latest(c: Pick<PoolClient, "query">, tenantId: string, artifactId: string) {
@@ -69,10 +65,10 @@ export async function readFeedProposal(actor: Actor, artifactId: string) {
   return transaction(async (c) => {
     const { tenant } = await lockShelf(c, actor, "reader", "SHARE");
     if (tenant.kind !== "team") return { proposal: null };
-    const found = await c.query(
-      "SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND purged_at IS NULL",
-      [artifactId, actor.tenant],
-    );
+    const found = await c.query("SELECT 1 FROM artifacts WHERE id=$1 AND tenant_id=$2 AND purged_at IS NULL", [
+      artifactId,
+      actor.tenant,
+    ]);
     if (!found.rowCount) throw missing();
     return { proposal: await latest(c, actor.tenant, artifactId) };
   });
@@ -105,12 +101,10 @@ export async function proposeToFeed(actor: Actor, artifactId: string, body: unkn
         "unsupported",
         "В Ленту можно предложить одну HTML-страницу, которая открывается в обычном просмотре.",
       );
-    const pending = await c.query(
-      "SELECT 1 FROM feed_proposals WHERE artifact_id=$1 AND state='pending'",
-      [artifactId],
-    );
-    if (pending.rowCount)
-      throw new Problem(409, "conflict", "Эта работа уже ждёт решения Редакции.");
+    const pending = await c.query("SELECT 1 FROM feed_proposals WHERE artifact_id=$1 AND state='pending'", [
+      artifactId,
+    ]);
+    if (pending.rowCount) throw new Problem(409, "conflict", "Эта работа уже ждёт решения Редакции.");
     await limitAttempts(`feed-proposal:${actor.id}`, FEED_PROPOSALS_PER_DAY, "24 hours");
     const id = randomUUID();
     await c.query(
@@ -175,7 +169,13 @@ export async function listFeedProposalsForOperator(all = false): Promise<Operato
      ORDER BY p.created_at,p.id LIMIT 500`,
     [all],
   );
-  return rows.map((row) => ({ ...view(row), artifactId: row.artifactId, shelfId: row.shelfId, shelfName: row.shelfName, workTitle: row.workTitle }));
+  return rows.map((row) => ({
+    ...view(row),
+    artifactId: row.artifactId,
+    shelfId: row.shelfId,
+    shelfName: row.shelfName,
+    workTitle: row.workTitle,
+  }));
 }
 
 /** The proposed version's bytes, for the operator to review and copy into content/editorial. */
@@ -190,8 +190,7 @@ export async function feedProposalSource(id: string) {
     [id],
   );
   if (!row) throw missing();
-  if (row.state !== "pending")
-    throw new Problem(409, "conflict", "Предложение уже рассмотрено или отозвано.");
+  if (row.state !== "pending") throw new Problem(409, "conflict", "Предложение уже рассмотрено или отозвано.");
   return { bytes: await readBlob(row.object_key, row.object_version), sha256: row.sha256 as string };
 }
 
@@ -199,11 +198,7 @@ export async function feedProposalSource(id: string) {
  * The operator's decision. «published» only records that the copy went
  * through the editorial path; «rejected» needs a reason the shelf will see.
  */
-export async function decideFeedProposal(
-  id: string,
-  decision: "published" | "rejected",
-  reason: string | null,
-) {
+export async function decideFeedProposal(id: string, decision: "published" | "rejected", reason: string | null) {
   const text = reason?.trim() || null;
   if (decision === "rejected" && !text)
     throw new Problem(422, "invalid", "Объясните кураторам, почему работа не подходит.");

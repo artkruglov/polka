@@ -16,25 +16,16 @@ const TOKEN = /^([A-Za-z0-9_-]{1,16384})\.([A-Za-z0-9_-]{43})$/;
 
 // A key of its own, derived from LINK_KEY: a MAC made for any other purpose
 // never verifies here, and this one verifies nowhere else.
-const key = createHmac("sha256", config.LINK_KEY)
-  .update("polka:away-link:v1")
-  .digest();
-const mac = (payload: string) =>
-  createHmac("sha256", key).update(payload).digest();
+const key = createHmac("sha256", config.LINK_KEY).update("polka:away-link:v1").digest();
+const mac = (payload: string) => createHmac("sha256", key).update(payload).digest();
 
 const httpUrl = (value: unknown) => {
-  if (typeof value !== "string" || value.length > AWAY_URL_MAX_LENGTH)
-    return null;
+  if (typeof value !== "string" || value.length > AWAY_URL_MAX_LENGTH) return null;
   try {
     const url = new URL(value);
     // Only the canonical form that was signed; no credentials to confuse the
     // host shown on the page.
-    if (
-      (url.protocol !== "http:" && url.protocol !== "https:") ||
-      url.href !== value ||
-      url.username ||
-      url.password
-    )
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.href !== value || url.username || url.password)
       return null;
     return url;
   } catch {
@@ -65,8 +56,7 @@ export function verifyAwayToken(token: unknown, now = Date.now()) {
   if (!parts) return null;
   const expected = mac(parts[1]!);
   const given = Buffer.from(parts[2]!, "base64url");
-  if (given.length !== expected.length || !timingSafeEqual(given, expected))
-    return null;
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   let claims: { u?: unknown; e?: unknown };
   try {
     claims = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8"));

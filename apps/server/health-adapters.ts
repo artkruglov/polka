@@ -1,15 +1,7 @@
 import pg from "pg";
-import {
-  GetBucketVersioningCommand,
-  GetObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { GetBucketVersioningCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import {
-  READINESS_BYTES,
-  READINESS_KEY,
-  READINESS_MAX_BYTES,
-} from "../../packages/storage/readiness.ts";
+import { READINESS_BYTES, READINESS_KEY, READINESS_MAX_BYTES } from "../../packages/storage/readiness.ts";
 
 type DbResult = { rows?: Array<Record<string, unknown>> };
 type DbClient = {
@@ -47,8 +39,7 @@ export function createDatabaseHealthAdapter(
   } = {},
 ): HealthAdapter {
   const timeoutMs = Math.min(config.timeoutMs ?? 1000, 1000);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
-    throw new Error("Invalid database health timeout");
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid database health timeout");
   const expected = [...config.expectedMigrations];
   if (
     expected.some((version) => !Number.isInteger(version) || version < 0) ||
@@ -56,9 +47,7 @@ export function createDatabaseHealthAdapter(
   )
     throw new Error("Invalid migration catalog");
   const createPool =
-    dependencies.createPool ??
-    ((options: DatabasePoolOptions) =>
-      new pg.Pool(options) as unknown as DbPool);
+    dependencies.createPool ?? ((options: DatabasePoolOptions) => new pg.Pool(options) as unknown as DbPool);
   const pool = createPool({
     connectionString: config.databaseUrl,
     max: 1,
@@ -92,10 +81,7 @@ export function createDatabaseHealthAdapter(
         });
         if (signal.aborted) return false;
         const actual = (result.rows ?? []).map((row) => Number(row.version));
-        return (
-          actual.length === expected.length &&
-          actual.every((version, index) => version === expected[index])
-        );
+        return actual.length === expected.length && actual.every((version, index) => version === expected[index]);
       } catch {
         return false;
       } finally {
@@ -130,11 +116,7 @@ export type StorageClientOptions = StorageHealthConfig & {
   maxAttempts: 1;
 };
 
-async function readBoundedBody(
-  body: unknown,
-  signal: AbortSignal,
-  maxBytes: number,
-): Promise<Buffer> {
+async function readBoundedBody(body: unknown, signal: AbortSignal, maxBytes: number): Promise<Buffer> {
   if (!(body instanceof Uint8Array) && !body) throw new Error("empty body");
   if (signal.aborted) throw new Error("aborted");
   if (body instanceof Uint8Array) {
@@ -145,8 +127,7 @@ async function readBoundedBody(
     destroy?: () => void;
     cancel?: () => Promise<void>;
   };
-  if (typeof stream[Symbol.asyncIterator] !== "function")
-    throw new Error("unsupported body");
+  if (typeof stream[Symbol.asyncIterator] !== "function") throw new Error("unsupported body");
   let aborted = false;
   const abort = () => {
     aborted = true;
@@ -192,8 +173,7 @@ export function createStorageHealthAdapter(
   } = {},
 ): HealthAdapter {
   const timeoutMs = Math.min(config.timeoutMs ?? 1000, 1000);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
-    throw new Error("Invalid storage health timeout");
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid storage health timeout");
   const createClient =
     dependencies.createClient ??
     ((options: StorageClientOptions) =>
@@ -218,26 +198,20 @@ export function createStorageHealthAdapter(
     async probe(signal) {
       if (closed || signal.aborted) return false;
       try {
-        const versioning = (await client.send(
-          new GetBucketVersioningCommand({ Bucket: config.bucket }),
-          { abortSignal: signal },
-        )) as { Status?: string };
+        const versioning = (await client.send(new GetBucketVersioningCommand({ Bucket: config.bucket }), {
+          abortSignal: signal,
+        })) as { Status?: string };
         if (versioning.Status !== "Enabled" || signal.aborted) return false;
-        const first = (await client.send(
-          new GetObjectCommand({ Bucket: config.bucket, Key: READINESS_KEY }),
-          { abortSignal: signal },
-        )) as { VersionId?: string | null; Body?: unknown };
+        const first = (await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: READINESS_KEY }), {
+          abortSignal: signal,
+        })) as { VersionId?: string | null; Body?: unknown };
         if (!first.VersionId || first.VersionId === "null") {
           disposeBody(first.Body);
           return false;
         }
         let firstBytes: Buffer;
         try {
-          firstBytes = await readBoundedBody(
-            first.Body,
-            signal,
-            READINESS_MAX_BYTES,
-          );
+          firstBytes = await readBoundedBody(first.Body, signal, READINESS_MAX_BYTES);
         } finally {
           disposeBody(first.Body);
         }
@@ -256,11 +230,7 @@ export function createStorageHealthAdapter(
         }
         let exactBytes: Buffer;
         try {
-          exactBytes = await readBoundedBody(
-            exact.Body,
-            signal,
-            READINESS_MAX_BYTES,
-          );
+          exactBytes = await readBoundedBody(exact.Body, signal, READINESS_MAX_BYTES);
         } finally {
           disposeBody(exact.Body);
         }
@@ -277,10 +247,7 @@ export function createStorageHealthAdapter(
   };
 }
 
-export function createHealthAdapters(config: {
-  database: DatabaseHealthConfig;
-  storage: StorageHealthConfig;
-}): {
+export function createHealthAdapters(config: { database: DatabaseHealthConfig; storage: StorageHealthConfig }): {
   database: HealthAdapter;
   storage: HealthAdapter;
   close: () => Promise<void>;

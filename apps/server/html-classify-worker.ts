@@ -1,12 +1,5 @@
 import { parentPort } from "node:worker_threads";
-import {
-  UNREAD,
-  inspectHtml,
-  scanScripts,
-  type HtmlInspection,
-  type InspectOptions,
-  type ScriptScan,
-} from "./html.ts";
+import { UNREAD, inspectHtml, scanScripts, type HtmlInspection, type InspectOptions, type ScriptScan } from "./html.ts";
 import { SCAN_INCOMPLETE, SignalCollector } from "./phishing-signals.ts";
 import { scanText } from "./content-filter/scanner.ts";
 
@@ -27,29 +20,29 @@ parentPort!.once(
     text?: boolean;
     scripts?: string[];
   }) => {
-  // A work's scripts (html.ts, scanScriptsBounded): signals and findings.
-  if (scripts) {
-    let scan: ScriptScan;
-    try {
-      scan = scanScripts(scripts);
-    } catch {
-      scan = { signals: [SCAN_INCOMPLETE], filter: UNREAD.filter };
+    // A work's scripts (html.ts, scanScriptsBounded): signals and findings.
+    if (scripts) {
+      let scan: ScriptScan;
+      try {
+        scan = scanScripts(scripts);
+      } catch {
+        scan = { signals: [SCAN_INCOMPLETE], filter: UNREAD.filter };
+      }
+      parentPort!.postMessage(scan);
+      return;
     }
-    parentPort!.postMessage(scan);
-    return;
-  }
-  // A plain text file: only the content filter.
-  if (text) {
-    parentPort!.postMessage(scanText(source));
-    return;
-  }
-  let inspection: HtmlInspection;
-  try {
-    inspection = inspectHtml(source, new SignalCollector(options ?? {}));
-  } catch {
-    inspection = UNREAD;
-  }
-  parentPort!.postMessage(inspection);
+    // A plain text file: only the content filter.
+    if (text) {
+      parentPort!.postMessage(scanText(source));
+      return;
+    }
+    let inspection: HtmlInspection;
+    try {
+      inspection = inspectHtml(source, new SignalCollector(options ?? {}));
+    } catch {
+      inspection = UNREAD;
+    }
+    parentPort!.postMessage(inspection);
   },
 );
 // Compile and warm the signal patterns (phishing-signals.ts) before the

@@ -109,7 +109,12 @@ const BRANDS: Signal[] = [
   { family: "brand", id: "vtb", label: "ВТБ", pattern: word("втб|vtb") },
   { family: "brand", id: "gazprombank", label: "Газпромбанк", pattern: stem("газпромбанк|gazprombank") },
   { family: "brand", id: "gosuslugi", label: "Госуслуги", pattern: stem("госуслуг|gosuslugi") },
-  { family: "brand", id: "pochta", label: "Почта России", pattern: stem("почт\\p{L}{0,6}\\s{1,3}росси|pochta\\s?rossii") },
+  {
+    family: "brand",
+    id: "pochta",
+    label: "Почта России",
+    pattern: stem("почт\\p{L}{0,6}\\s{1,3}росси|pochta\\s?rossii"),
+  },
   { family: "brand", id: "yandex", label: "Яндекс", pattern: stem("яндекс|yandex") },
   { family: "brand", id: "vk", label: "VK", pattern: word("vk|вк|вконтакте|vkontakte") },
   { family: "brand", id: "telegram", label: "Telegram", pattern: stem("telegram|телеграм") },
@@ -127,13 +132,33 @@ const BRANDS: Signal[] = [
 const URGENCY: Signal[] = [
   { family: "urgency", id: "blocked", label: "«заблокирован»", pattern: stem("заблокир") },
   // «Подтвердите пароль» is the second field of any sign-up form, not pressure.
-  { family: "urgency", id: "confirm", label: "«подтвердите»", pattern: `${word("подтвердите")}(?!\\s{1,3}(?:новый\\s{1,3})?парол)` },
+  {
+    family: "urgency",
+    id: "confirm",
+    label: "«подтвердите»",
+    pattern: `${word("подтвердите")}(?!\\s{1,3}(?:новый\\s{1,3})?парол)`,
+  },
   { family: "urgency", id: "urgent", label: "«срочно»", pattern: stem("срочн") },
-  { family: "urgency", id: "last-warning", label: "«последнее предупреждение»", pattern: stem("последнее\\s{1,3}предупреждение") },
-  { family: "urgency", id: "suspicious-activity", label: "«подозрительная активность»", pattern: stem("подозрительн\\p{L}{0,6}\\s{1,3}(?:активност|вход)") },
+  {
+    family: "urgency",
+    id: "last-warning",
+    label: "«последнее предупреждение»",
+    pattern: stem("последнее\\s{1,3}предупреждение"),
+  },
+  {
+    family: "urgency",
+    id: "suspicious-activity",
+    label: "«подозрительная активность»",
+    pattern: stem("подозрительн\\p{L}{0,6}\\s{1,3}(?:активност|вход)"),
+  },
   { family: "urgency", id: "verify", label: "«verify»", pattern: word("verify|verification required") },
   { family: "urgency", id: "suspended", label: "«suspended»", pattern: word("suspended") },
-  { family: "urgency", id: "unusual-activity", label: "«unusual activity»", pattern: word("unusual\\s{1,3}(?:activity|sign-in|login)") },
+  {
+    family: "urgency",
+    id: "unusual-activity",
+    label: "«unusual activity»",
+    pattern: word("unusual\\s{1,3}(?:activity|sign-in|login)"),
+  },
 ];
 
 // (d) Off-page channels: the page tells the reader to hand something over
@@ -141,8 +166,7 @@ const URGENCY: Signal[] = [
 // A verb as a whole word, the checks behind it made after it matched (a
 // lookbehind before the verb would run at every position of the text).
 const word1 = (verbs: string) => `(?:${verbs})(?<![\\p{L}\\p{N}](?:${verbs}))`;
-const lead = (verbs: string) =>
-  `${word1(verbs)}(?<!(?:не|never|not|n't)\\s{1,3}(?:${verbs}))`;
+const lead = (verbs: string) => `${word1(verbs)}(?<!(?:не|never|not|n't)\\s{1,3}(?:${verbs}))`;
 // Up to three short words between a verb and its object: «сообщите нам
 // полученный код».
 const GAP = "(?:\\s{1,3}[\\p{L}\\p{N}-]{1,14}){0,3}?\\s{1,3}";
@@ -155,15 +179,13 @@ const TELL_RU = "сообщите|сообщи|продиктуйте|проди
 // a button of a sign-in form, «пришлите нам пароль» and «отправьте код из
 // SMS в Telegram» are not.
 const SEND_RU = "отправьте|отправь|пришлите|перешлите|скиньте|скинь|передайте|передай";
-const TO_SOMEONE_RU =
-  "нам|мне|оператору|сотруднику|специалисту|менеджеру|администратору|куратору";
+const TO_SOMEONE_RU = "нам|мне|оператору|сотруднику|специалисту|менеджеру|администратору|куратору";
 const DESTINATION =
   "в\\s{1,3}(?:telegram|телеграм|whatsapp|ватсап|вотсап|viber|вайбер|чат|личн|ответ|поддержк)|на\\s{1,3}(?:почту|email|e-mail|адрес|номер)|(?<![\\p{L}\\p{N}_.])@[a-z][a-z0-9_]{3,31}|t\\.me\\/|wa\\.me\\/|нам|мне|оператор|сотрудник|менеджер|to\\s{1,3}(?:us|me|our|the\\s{1,3}(?:agent|operator|support))";
 const EN_SECRET = `(?:(?:sms|verification|security|one[\\s-]?time|2fa|otp|login|confirmation)\\s{1,3}code|password|pin|cvv|cvc|card\\s{1,3}(?:number|details))${end}`;
 const TRANSFER_RU =
   "переведите|переведи|перечислите|перечисли|оплатите|оплати|пополните|пополни|внесите|внеси|скиньте|скинь|отправьте|отправь";
-const CONTACT_RU =
-  "напишите|напиши|пишите|отправьте|отправь|пришлите|перешлите|сообщите|сообщи|свяжитесь|обратитесь";
+const CONTACT_RU = "напишите|напиши|пишите|отправьте|отправь|пришлите|перешлите|сообщите|сообщи|свяжитесь|обратитесь";
 const CALL_RU = "позвоните|позвони|звоните|звони|перезвоните|перезвони|наберите|набери";
 const PHONE = "\\+?\\d[\\d\\s()-]{8,16}\\d";
 const CHANNELS: Signal[] = [
@@ -224,8 +246,7 @@ const compiled = [...SECRETS, ...BRANDS, ...URGENCY, ...CHANNELS].map((signal) =
   key: `${signal.family}:${signal.id}`,
   regex: new RegExp(signal.pattern, "iu"),
 }));
-const byFamily = (family: SignalFamily) =>
-  compiled.filter((signal) => signal.family === family);
+const byFamily = (family: SignalFamily) => compiled.filter((signal) => signal.family === family);
 const SECRET_SIGNALS = byFamily("secret");
 const CONTEXT_SIGNALS = [...byFamily("brand"), ...byFamily("urgency")];
 const CHANNEL_SIGNALS = byFamily("channel");
@@ -251,15 +272,80 @@ const BRAND_HOSTS: Array<{ id: string; tokens: string[]; official: string[] }> =
   {
     id: "yandex",
     tokens: ["yandex", "yndx"],
-    official: ["yandex.ru", "yandex.com", "yandex.net", "yandex.by", "yandex.kz", "yandex.uz", "yandex.com.tr", "yandex.com.am", "yandex.com.ge", "yandex.cloud", "yandex-team.ru", "yandex.st", "ya.ru", "yastatic.net", "yandex.eu"],
+    official: [
+      "yandex.ru",
+      "yandex.com",
+      "yandex.net",
+      "yandex.by",
+      "yandex.kz",
+      "yandex.uz",
+      "yandex.com.tr",
+      "yandex.com.am",
+      "yandex.com.ge",
+      "yandex.cloud",
+      "yandex-team.ru",
+      "yandex.st",
+      "ya.ru",
+      "yastatic.net",
+      "yandex.eu",
+    ],
   },
-  { id: "apple", tokens: ["apple", "appleid", "icloud"], official: ["apple.com", "icloud.com", "apple.news", "me.com", "mzstatic.com", "cdn-apple.com", "apple-mapkit.com", "apple-cloudkit.com", "apple-dns.net"] },
+  {
+    id: "apple",
+    tokens: ["apple", "appleid", "icloud"],
+    official: [
+      "apple.com",
+      "icloud.com",
+      "apple.news",
+      "me.com",
+      "mzstatic.com",
+      "cdn-apple.com",
+      "apple-mapkit.com",
+      "apple-cloudkit.com",
+      "apple-dns.net",
+    ],
+  },
   {
     id: "google",
     tokens: ["google", "gmail"],
-    official: ["google.com", "google.ru", "google.by", "google.kz", "google.co.uk", "google.de", "googleapis.com", "gstatic.com", "googleusercontent.com", "google-analytics.com", "googletagmanager.com", "gmail.com", "googlemail.com", "withgoogle.com", "googleblog.com", "blog.google", "google.dev", "googlesource.com", "g.co", "goo.gl", "youtube.com"],
+    official: [
+      "google.com",
+      "google.ru",
+      "google.by",
+      "google.kz",
+      "google.co.uk",
+      "google.de",
+      "googleapis.com",
+      "gstatic.com",
+      "googleusercontent.com",
+      "google-analytics.com",
+      "googletagmanager.com",
+      "gmail.com",
+      "googlemail.com",
+      "withgoogle.com",
+      "googleblog.com",
+      "blog.google",
+      "google.dev",
+      "googlesource.com",
+      "g.co",
+      "goo.gl",
+      "youtube.com",
+    ],
   },
-  { id: "microsoft", tokens: ["microsoft", "office365", "outlook"], official: ["microsoft.com", "office.com", "office365.com", "outlook.com", "live.com", "microsoftonline.com", "azure.com", "windows.net"] },
+  {
+    id: "microsoft",
+    tokens: ["microsoft", "office365", "outlook"],
+    official: [
+      "microsoft.com",
+      "office.com",
+      "office365.com",
+      "outlook.com",
+      "live.com",
+      "microsoftonline.com",
+      "azure.com",
+      "windows.net",
+    ],
+  },
   { id: "paypal", tokens: ["paypal"], official: ["paypal.com", "paypal.me", "paypalobjects.com"] },
   { id: "sber", tokens: ["sber", "sberbank"], official: ["sberbank.ru", "sber.ru", "sberbank.com", "sberbank-ast.ru"] },
   { id: "tbank", tokens: ["tbank", "t-bank", "tinkoff"], official: ["tbank.ru", "tinkoff.ru", "tinkoff.com"] },
@@ -268,11 +354,34 @@ const BRAND_HOSTS: Array<{ id: string; tokens: string[]; official: string[] }> =
   { id: "gazprombank", tokens: ["gazprombank"], official: ["gazprombank.ru"] },
   { id: "gosuslugi", tokens: ["gosuslugi", "gosuslugl"], official: ["gosuslugi.ru"] },
   { id: "pochta", tokens: ["pochta"], official: ["pochta.ru"] },
-  { id: "vk", tokens: ["vk", "vkontakte"], official: ["vk.com", "vk.ru", "vk.me", "vk.cc", "vkontakte.ru", "userapi.com", "vk-portal.net", "vk-cdn.net", "vkuser.net", "vk.link"] },
-  { id: "telegram", tokens: ["telegram", "telegramm"], official: ["telegram.org", "telegram.me", "t.me", "telegra.ph"] },
+  {
+    id: "vk",
+    tokens: ["vk", "vkontakte"],
+    official: [
+      "vk.com",
+      "vk.ru",
+      "vk.me",
+      "vk.cc",
+      "vkontakte.ru",
+      "userapi.com",
+      "vk-portal.net",
+      "vk-cdn.net",
+      "vkuser.net",
+      "vk.link",
+    ],
+  },
+  {
+    id: "telegram",
+    tokens: ["telegram", "telegramm"],
+    official: ["telegram.org", "telegram.me", "t.me", "telegra.ph"],
+  },
   { id: "whatsapp", tokens: ["whatsapp"], official: ["whatsapp.com", "whatsapp.net", "wa.me"] },
   { id: "ozon", tokens: ["ozon"], official: ["ozon.ru", "ozon.com", "ozon.kz", "ozon.by", "ozon.travel", "ozone.ru"] },
-  { id: "wildberries", tokens: ["wildberries"], official: ["wildberries.ru", "wildberries.by", "wildberries.kz", "wb.ru"] },
+  {
+    id: "wildberries",
+    tokens: ["wildberries"],
+    official: ["wildberries.ru", "wildberries.by", "wildberries.kz", "wb.ru"],
+  },
   { id: "avito", tokens: ["avito"], official: ["avito.ru", "avito.st"] },
 ];
 // The brand stands as a word of the host: a whole label, or a part set off by
@@ -289,8 +398,24 @@ const isOfficial = (host: string, official: readonly string[]) =>
 const ALL_OFFICIAL = BRAND_HOSTS.flatMap((brand) => brand.official);
 // Latin look-alikes of Cyrillic letters in a host, and digits for letters.
 const HOMOGLYPHS: Record<string, string> = {
-  а: "a", в: "b", е: "e", ё: "e", к: "k", м: "m", н: "h", о: "o", р: "p",
-  с: "c", т: "t", у: "y", х: "x", і: "i", ј: "j", ӏ: "l", ԁ: "d", ɡ: "g",
+  а: "a",
+  в: "b",
+  е: "e",
+  ё: "e",
+  к: "k",
+  м: "m",
+  н: "h",
+  о: "o",
+  р: "p",
+  с: "c",
+  т: "t",
+  у: "y",
+  х: "x",
+  і: "i",
+  ј: "j",
+  ӏ: "l",
+  ԁ: "d",
+  ɡ: "g",
 };
 const LEET: Record<string, string> = { "0": "o", "1": "l", "3": "e" };
 // Words of a sign-in page, in a host or a path: yandex-360-login.ru,
@@ -375,8 +500,7 @@ export class SignalCollector {
       if (!brand.regex.test(latin) && !brand.regex.test(digits)) continue;
       if (isOfficial(raw, brand.official)) continue;
       this.found.add(`lookalike:${brand.id}`);
-      if (LOGIN_WORDS.test(latin) || LOGIN_WORDS.test(rest))
-        this.found.add("channel:lookalike-login");
+      if (LOGIN_WORDS.test(latin) || LOGIN_WORDS.test(rest)) this.found.add("channel:lookalike-login");
     }
     // A sign-in page on another site, linked or named with its scheme.
     if (
@@ -401,17 +525,11 @@ export class SignalCollector {
     for (let at = 0; at < value.length; at += MAX_PIECE - 64) {
       const piece = value.slice(at, at + MAX_PIECE);
       for (const signal of signals)
-        if (!this.found.has(signal.key) && signal.regex.test(piece))
-          this.found.add(signal.key);
+        if (!this.found.has(signal.key) && signal.regex.test(piece)) this.found.add(signal.key);
       if (signals === CONTEXT_SIGNALS && CHANNEL_GATE.test(piece)) {
         for (const signal of CHANNEL_SIGNALS)
-          if (!this.found.has(signal.key) && signal.regex.test(piece))
-            this.found.add(signal.key);
-        if (
-          !this.found.has("channel:crypto") &&
-          WALLET.test(piece) &&
-          WALLET_VERB.test(piece)
-        )
+          if (!this.found.has(signal.key) && signal.regex.test(piece)) this.found.add(signal.key);
+        if (!this.found.has("channel:crypto") && WALLET.test(piece) && WALLET_VERB.test(piece))
           this.found.add("channel:crypto");
       }
       if (at + MAX_PIECE >= value.length) break;
@@ -440,22 +558,17 @@ export const isSuspicious = (signals: readonly string[]) =>
 
 /** Human wording of stored signals, for the operator's mail. */
 export function describeSignals(signals: readonly string[]) {
-  const labels = new Map(
-    compiled.map((signal) => [signal.key, signal.label] as const),
-  );
+  const labels = new Map(compiled.map((signal) => [signal.key, signal.label] as const));
   labels.set("secret:password-field", "поле пароля");
   labels.set("secret:autocomplete", "поле для пароля, кода или карты");
   labels.set("channel:crypto", "просит перевести криптовалюту");
   labels.set("channel:lookalike-login", "вход на сайте под видом бренда");
   labels.set("channel:login-link", "ссылка на страницу входа другого сайта");
-  for (const brand of BRAND_HOSTS)
-    labels.set(`lookalike:${brand.id}`, `адрес под видом ${brand.id}`);
+  for (const brand of BRAND_HOSTS) labels.set(`lookalike:${brand.id}`, `адрес под видом ${brand.id}`);
   const part = (family: SignalFamily, title: string) => {
     const names = [
       ...new Set(
-        signals
-          .filter((signal) => signal.startsWith(`${family}:`))
-          .map((signal) => labels.get(signal) ?? signal),
+        signals.filter((signal) => signal.startsWith(`${family}:`)).map((signal) => labels.get(signal) ?? signal),
       ),
     ];
     return names.length ? `${title}: ${names.join(", ")}` : null;
@@ -480,10 +593,7 @@ export function describeSignals(signals: readonly string[]) {
  * Not a JavaScript parser: a regex literal with a quote may swallow the rest
  * of its line, which only costs a missed or extra phrase.
  */
-export function scriptStrings(
-  source: string,
-  visit: (text: string, kind: "literal" | "jsx-text") => void,
-) {
+export function scriptStrings(source: string, visit: (text: string, kind: "literal" | "jsx-text") => void) {
   const n = source.length;
   let at = 0;
   while (at < n) {

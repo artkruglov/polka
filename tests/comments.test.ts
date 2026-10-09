@@ -18,17 +18,10 @@ import pg from "pg";
 import { createApp } from "../apps/server/app.ts";
 import { commentSignals } from "../apps/server/comments.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
-import {
-  defang,
-  excerpt,
-  setCommentMailTransport,
-} from "../apps/server/comment-mail.ts";
+import { defang, excerpt, setCommentMailTransport } from "../apps/server/comment-mail.ts";
 import { config } from "../apps/server/config.ts";
 import { db, settled } from "../apps/server/db.ts";
-import {
-  LOCAL_COMMENT_MAIL_DIRECTORY,
-  LOCAL_OPERATOR_MAIL_DIRECTORY,
-} from "../apps/server/mailer.ts";
+import { LOCAL_COMMENT_MAIL_DIRECTORY, LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import {
   deleteCommentAsOperator,
   disableAccount,
@@ -40,8 +33,7 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 
 const app = await createApp();
 const origin = config.APP_ORIGIN;
-if (config.MAIL_MODE !== "local")
-  throw new Error("Comment tests read letters from local mail");
+if (config.MAIL_MODE !== "local") throw new Error("Comment tests read letters from local mail");
 const operatorEmail = config.OPERATOR_EMAIL;
 config.OPERATOR_EMAIL = "operator-comments@example.test";
 
@@ -53,8 +45,7 @@ after(async () => {
   s3.destroy();
 });
 
-const address = () =>
-  `2001:db8:c0::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:c0::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Person = {
   id: string;
@@ -66,19 +57,15 @@ type Person = {
 
 async function session(accountId: string) {
   const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), accountId],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
+    accountId,
+  ]);
   return `polka_session=${token}`;
 }
 
 /** An email account; `trusted` as if the operator approved it. */
-async function person(
-  label: string,
-  trusted = true,
-  named = true,
-): Promise<Person> {
+async function person(label: string, trusted = true, named = true): Promise<Person> {
   const id = randomUUID(),
     tenant = randomUUID();
   const email = `${label}-${id.slice(0, 8)}@example.test`;
@@ -88,10 +75,7 @@ async function person(
        CASE WHEN $6::boolean THEN now() END)`,
     [id, `email-${id}`, email, label, trusted, named],
   );
-  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-    tenant,
-    id,
-  ]);
+  await db.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [tenant, id]);
   return { id, tenant, cookie: await session(id), email, name: label };
 }
 
@@ -136,12 +120,7 @@ async function save(owner: Person, html = PAGE) {
     payload: bytes,
   });
   assert.equal(put.statusCode, 200, put.body);
-  const done = await call(
-    "POST",
-    `/api/uploads/${uploadId}/finalize`,
-    {},
-    owner.cookie,
-  );
+  const done = await call("POST", `/api/uploads/${uploadId}/finalize`, {}, owner.cookie);
   assert.equal(done.statusCode, 200, done.body);
   return done.json() as { artifactId: string; revisionId: string };
 }
@@ -163,8 +142,7 @@ async function link(owner: Person, html = PAGE) {
   };
 }
 
-const list = (token: string, cookie = "") =>
-  call("POST", "/api/shared/comments", { token }, cookie);
+const list = (token: string, cookie = "") => call("POST", "/api/shared/comments", { token }, cookie);
 const write = (token: string, cookie: string, body: Record<string, unknown>) =>
   call("POST", "/api/shared/comments/create", { token, ...body }, cookie);
 const react = (token: string, cookie: string, body: Record<string, unknown>) =>
@@ -178,9 +156,7 @@ async function lettersIn(directory: string, match: (letter: Letter) => boolean, 
     const found: Letter[] = [];
     try {
       for (const name of (await readdir(directory)).sort()) {
-        const letter = JSON.parse(
-          await readFile(join(directory, name), "utf8"),
-        ) as Letter;
+        const letter = JSON.parse(await readFile(join(directory, name), "utf8")) as Letter;
         if (match(letter)) found.push(letter);
       }
     } catch (error) {
@@ -209,10 +185,7 @@ test("a guest reads a link's threads; writing needs an account", async () => {
   assert.match(refused.json().message, /Войдите по почте/);
   assert.equal((await react(work.token, "", { emoji: "👍" })).statusCode, 401);
   // A forged or other link's token opens nothing.
-  assert.equal(
-    (await list(randomBytes(32).toString("base64url"))).statusCode,
-    404,
-  );
+  assert.equal((await list(randomBytes(32).toString("base64url"))).statusCode, 404);
   // Browser routes keep the Origin rule.
   const foreign = await app.inject({
     method: "POST",
@@ -240,25 +213,16 @@ test("threads belong to a link: recipients of one never see another's", async ()
   });
   assert.equal(c.statusCode, 200, c.body);
   assert.deepEqual(
-    (await list(elsewhere.token, reader.cookie))
-      .json()
-      .threads.map((thread: any) => thread.body),
+    (await list(elsewhere.token, reader.cookie)).json().threads.map((thread: any) => thread.body),
     ["Замечание к другой работе"],
   );
   assert.deepEqual(
-    (await list(first.token, other.cookie))
-      .json()
-      .threads.map((thread: any) => thread.body),
+    (await list(first.token, other.cookie)).json().threads.map((thread: any) => thread.body),
     ["Замечание к первой ссылке"],
   );
   // A second link of the same work (one link is open at a time: the first
   // closes). Its recipients start with an empty discussion.
-  const again = await call(
-    "POST",
-    `/api/shares/${first.shareId}/revoke`,
-    {},
-    owner.cookie,
-  );
+  const again = await call("POST", `/api/shares/${first.shareId}/revoke`, {}, owner.cookie);
   assert.equal(again.statusCode, 200);
   const second = await call(
     "POST",
@@ -315,69 +279,28 @@ test("threads belong to a link: recipients of one never see another's", async ()
     404,
   );
   // The owner sees both links' threads, grouped.
-  const work = await call(
-    "GET",
-    `/api/artifacts/${first.artifactId}/comments`,
-    undefined,
-    owner.cookie,
-  );
+  const work = await call("GET", `/api/artifacts/${first.artifactId}/comments`, undefined, owner.cookie);
   assert.equal(work.statusCode, 200, work.body);
   const byShare = Object.fromEntries(
-    work
-      .json()
-      .shares.map((share: any) => [
-        share.shareId,
-        share.threads.map((thread: any) => thread.body),
-      ]),
+    work.json().shares.map((share: any) => [share.shareId, share.threads.map((thread: any) => thread.body)]),
   );
   assert.deepEqual(byShare[first.shareId], ["Замечание к первой ссылке"]);
   assert.deepEqual(byShare[secondShareId], ["Замечание ко второй ссылке"]);
   assert.equal(work.json().unread, 2);
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/artifacts/${first.artifactId}/comments/seen`,
-        {},
-        owner.cookie,
-      )
-    ).statusCode,
+    (await call("POST", `/api/artifacts/${first.artifactId}/comments/seen`, {}, owner.cookie)).statusCode,
     200,
   );
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/artifacts/${first.artifactId}/comments`,
-        undefined,
-        owner.cookie,
-      )
-    ).json().unread,
+    (await call("GET", `/api/artifacts/${first.artifactId}/comments`, undefined, owner.cookie)).json().unread,
     0,
   );
   // Another shelf's owner gets nothing.
   assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/artifacts/${first.artifactId}/comments`,
-        undefined,
-        reader.cookie,
-      )
-    ).statusCode,
+    (await call("GET", `/api/artifacts/${first.artifactId}/comments`, undefined, reader.cookie)).statusCode,
     404,
   );
-  assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/comments/${a.json().id}/delete`,
-        {},
-        reader.cookie,
-      )
-    ).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", `/api/comments/${a.json().id}/delete`, {}, reader.cookie)).statusCode, 404);
   // Author shown by display name, never by address.
   const payload = JSON.stringify(seenBySecond);
   assert.ok(!payload.includes(other.email));
@@ -390,9 +313,7 @@ test("replies are one level; resolve and delete follow owner and author", async 
   const alice = await person("alice");
   const bob = await person("bob");
   const work = await link(owner);
-  const root = (
-    await write(work.token, alice.cookie, { body: "Корень", anchor })
-  ).json().id;
+  const root = (await write(work.token, alice.cookie, { body: "Корень", anchor })).json().id;
   const reply = await write(work.token, bob.cookie, {
     body: "Ответ",
     parentId: root,
@@ -421,24 +342,11 @@ test("replies are one level; resolve and delete follow owner and author", async 
   const act = (path: string, cookie: string, body: Record<string, unknown>) =>
     call("POST", `/api/shared/comments/${path}`, { token: work.token, ...body }, cookie);
   // Bob may neither resolve Alice's thread nor delete her comment.
-  assert.equal(
-    (await act("resolve", bob.cookie, { commentId: root })).statusCode,
-    404,
-  );
-  assert.equal(
-    (await act("delete", bob.cookie, { commentId: root })).statusCode,
-    404,
-  );
+  assert.equal((await act("resolve", bob.cookie, { commentId: root })).statusCode, 404);
+  assert.equal((await act("delete", bob.cookie, { commentId: root })).statusCode, 404);
   // A reply is not a thread.
-  assert.equal(
-    (await act("resolve", bob.cookie, { commentId: reply.json().id }))
-      .statusCode,
-    409,
-  );
-  assert.equal(
-    (await act("resolve", alice.cookie, { commentId: root })).statusCode,
-    200,
-  );
+  assert.equal((await act("resolve", bob.cookie, { commentId: reply.json().id })).statusCode, 409);
+  assert.equal((await act("resolve", alice.cookie, { commentId: root })).statusCode, 200);
   let threads = (await list(work.token, alice.cookie)).json().threads;
   assert.ok(threads[0].resolvedAt);
   assert.equal(threads[0].canResolve, true);
@@ -446,21 +354,10 @@ test("replies are one level; resolve and delete follow owner and author", async 
   // The owner reopens it and deletes Alice's root; the reply keeps the
   // thread, which stays as an empty placeholder.
   assert.equal(
-    (
-      await call(
-        "POST",
-        `/api/comments/${root}/resolve`,
-        { resolved: false },
-        owner.cookie,
-      )
-    ).statusCode,
+    (await call("POST", `/api/comments/${root}/resolve`, { resolved: false }, owner.cookie)).statusCode,
     200,
   );
-  assert.equal(
-    (await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie))
-      .statusCode,
-    200,
-  );
+  assert.equal((await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie)).statusCode, 200);
   threads = (await list(work.token, bob.cookie)).json().threads;
   assert.equal(threads.length, 1);
   assert.equal(threads[0].deleted, true);
@@ -469,11 +366,7 @@ test("replies are one level; resolve and delete follow owner and author", async 
   assert.equal(threads[0].resolvedAt, null);
   assert.equal(threads[0].replies[0].body, "Ответ");
   // Bob deletes his own reply: the placeholder goes too.
-  assert.equal(
-    (await act("delete", bob.cookie, { commentId: reply.json().id }))
-      .statusCode,
-    200,
-  );
+  assert.equal((await act("delete", bob.cookie, { commentId: reply.json().id })).statusCode, 200);
   assert.deepEqual((await list(work.token)).json().threads, []);
   const {
     rows: [stored],
@@ -494,13 +387,17 @@ test("the owner cannot delete a comment the moderation keeps as evidence", async
   );
   const refused = await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie);
   assert.equal(refused.statusCode, 409, refused.body);
-  const { rows: [kept] } = await db.query("SELECT body,deleted_at FROM comments WHERE id=$1", [root]);
+  const {
+    rows: [kept],
+  } = await db.query("SELECT body,deleted_at FROM comments WHERE id=$1", [root]);
   assert.equal(kept.body, "Улика");
   assert.equal(kept.deleted_at, null);
   // Released, the same delete goes through and erases it.
   await db.query("UPDATE moderation_blocks SET released_at=now() WHERE comment_id=$1", [root]);
   assert.equal((await call("POST", `/api/comments/${root}/delete`, {}, owner.cookie)).statusCode, 200);
-  const { rows: [erased] } = await db.query("SELECT body,anchor,deleted_at FROM comments WHERE id=$1", [root]);
+  const {
+    rows: [erased],
+  } = await db.query("SELECT body,anchor,deleted_at FROM comments WHERE id=$1", [root]);
   assert.equal(erased.body, "");
   assert.equal(erased.anchor, null);
   assert.ok(erased.deleted_at);
@@ -513,7 +410,11 @@ test("an extension's linkOpen policy closes the discussion as it closes the link
   useExtensions([
     {
       name: "employees-only",
-      policies: { async linkOpen() { return { allow: false, message: "Только для сотрудников." }; } },
+      policies: {
+        async linkOpen() {
+          return { allow: false, message: "Только для сотрудников." };
+        },
+      },
     },
   ]);
   try {
@@ -536,14 +437,8 @@ test("reactions toggle per author, fragment and emoji", async () => {
   const on = await react(work.token, alice.cookie, { emoji: "👍", anchor });
   assert.equal(on.statusCode, 200, on.body);
   assert.equal(on.json().active, true);
-  assert.equal(
-    (await react(work.token, bob.cookie, { emoji: "👍", anchor })).json().active,
-    true,
-  );
-  assert.equal(
-    (await react(work.token, alice.cookie, { emoji: "🎉" })).json().active,
-    true,
-  );
+  assert.equal((await react(work.token, bob.cookie, { emoji: "👍", anchor })).json().active, true);
+  assert.equal((await react(work.token, alice.cookie, { emoji: "🎉" })).json().active, true);
   let groups = (await list(work.token, alice.cookie)).json().reactions;
   const thumbs = groups.find((group: any) => group.emoji === "👍");
   assert.equal(thumbs.count, 2);
@@ -554,25 +449,14 @@ test("reactions toggle per author, fragment and emoji", async () => {
   assert.equal(whole.sig, "");
   assert.equal(whole.anchor, null);
   // Pressing it again takes it back.
-  assert.equal(
-    (await react(work.token, alice.cookie, { emoji: "👍", anchor })).json()
-      .active,
-    false,
-  );
+  assert.equal((await react(work.token, alice.cookie, { emoji: "👍", anchor })).json().active, false);
   groups = (await list(work.token, alice.cookie)).json().reactions;
   assert.equal(groups.find((group: any) => group.emoji === "👍").count, 1);
   assert.equal(groups.find((group: any) => group.emoji === "👍").mine, false);
   // Only the fixed set.
-  assert.equal(
-    (await react(work.token, alice.cookie, { emoji: "💩" })).statusCode,
-    400,
-  );
+  assert.equal((await react(work.token, alice.cookie, { emoji: "💩" })).statusCode, 400);
   // Reactions write no letters.
-  const letters = await lettersIn(
-    LOCAL_COMMENT_MAIL_DIRECTORY,
-    (letter) => letter.to === owner.email,
-    1,
-  );
+  const letters = await lettersIn(LOCAL_COMMENT_MAIL_DIRECTORY, (letter) => letter.to === owner.email, 1);
   assert.equal(letters.length, 0);
 });
 
@@ -580,33 +464,15 @@ test("revoke, expiry and review close a link's discussion for recipients only", 
   const owner = await person("owner");
   const reader = await person("reader");
   const work = await link(owner);
-  const id = (await write(work.token, reader.cookie, { body: "До отзыва" })).json()
-    .id;
-  await db.query(
-    "UPDATE shares SET moderation='paused',moderation_reason='reports' WHERE id=$1",
-    [work.shareId],
-  );
+  const id = (await write(work.token, reader.cookie, { body: "До отзыва" })).json().id;
+  await db.query("UPDATE shares SET moderation='paused',moderation_reason='reports' WHERE id=$1", [work.shareId]);
   assert.equal((await list(work.token, reader.cookie)).statusCode, 404);
-  await db.query("UPDATE shares SET moderation='none' WHERE id=$1", [
-    work.shareId,
-  ]);
+  await db.query("UPDATE shares SET moderation='none' WHERE id=$1", [work.shareId]);
   assert.equal((await list(work.token, reader.cookie)).statusCode, 200);
-  assert.equal(
-    (await call("POST", `/api/shares/${work.shareId}/revoke`, {}, owner.cookie))
-      .statusCode,
-    200,
-  );
+  assert.equal((await call("POST", `/api/shares/${work.shareId}/revoke`, {}, owner.cookie)).statusCode, 200);
   assert.equal((await list(work.token, reader.cookie)).statusCode, 404);
-  assert.equal(
-    (await write(work.token, reader.cookie, { body: "После" })).statusCode,
-    404,
-  );
-  const owned = await call(
-    "GET",
-    `/api/artifacts/${work.artifactId}/comments`,
-    undefined,
-    owner.cookie,
-  );
+  assert.equal((await write(work.token, reader.cookie, { body: "После" })).statusCode, 404);
+  const owned = await call("GET", `/api/artifacts/${work.artifactId}/comments`, undefined, owner.cookie);
   const closed = owned.json().shares.find((s: any) => s.shareId === work.shareId);
   assert.equal(closed.state, "revoked");
   assert.equal(closed.threads[0].id, id);
@@ -618,11 +484,7 @@ test("revoke, expiry and review close a link's discussion for recipients only", 
     owner.cookie,
   );
   assert.equal(refused.statusCode, 410);
-  assert.equal(
-    (await call("POST", `/api/comments/${id}/resolve`, {}, owner.cookie))
-      .statusCode,
-    200,
-  );
+  assert.equal((await call("POST", `/api/comments/${id}/resolve`, {}, owner.cookie)).statusCode, 200);
   // Expiry acts like revoke.
   const later = await link(owner);
   await db.query(
@@ -636,24 +498,10 @@ test("limits: 2000 characters, 60 actions an hour, 200 comments a day on a link"
   const owner = await person("owner");
   const reader = await person("reader");
   const work = await link(owner);
-  assert.equal(
-    (await write(work.token, reader.cookie, { body: "я".repeat(2001) }))
-      .statusCode,
-    400,
-  );
-  assert.equal(
-    (await write(work.token, reader.cookie, { body: "я".repeat(2000) }))
-      .statusCode,
-    200,
-  );
-  assert.equal(
-    (await write(work.token, reader.cookie, { body: "   " })).statusCode,
-    400,
-  );
-  assert.equal(
-    (await write(work.token, reader.cookie, { body: "a‮b" })).statusCode,
-    400,
-  );
+  assert.equal((await write(work.token, reader.cookie, { body: "я".repeat(2001) })).statusCode, 400);
+  assert.equal((await write(work.token, reader.cookie, { body: "я".repeat(2000) })).statusCode, 200);
+  assert.equal((await write(work.token, reader.cookie, { body: "   " })).statusCode, 400);
+  assert.equal((await write(work.token, reader.cookie, { body: "a‮b" })).statusCode, 400);
   // One action is spent; the rest of the hour's allowance, then a refusal.
   for (let i = 1; i < COMMENT_ACTIONS_PER_AUTHOR_PER_HOUR; i++) {
     const response = await react(work.token, reader.cookie, {
@@ -669,14 +517,7 @@ test("limits: 2000 characters, 60 actions an hour, 200 comments a day on a link"
   await db.query(
     `INSERT INTO comments(id,tenant_id,artifact_id,share_id,revision_id,author_account_id,body)
      SELECT gen_random_uuid(),$1,$2,$3,$4,$5,'заполнитель' FROM generate_series(1,$6)`,
-    [
-      owner.tenant,
-      busy.artifactId,
-      busy.shareId,
-      busy.revisionId,
-      reader.id,
-      COMMENTS_PER_SHARE_PER_DAY,
-    ],
+    [owner.tenant, busy.artifactId, busy.shareId, busy.revisionId, reader.id, COMMENTS_PER_SHARE_PER_DAY],
   );
   const full = await write(busy.token, other.cookie, { body: "Ещё один" });
   assert.equal(full.statusCode, 429);
@@ -733,37 +574,15 @@ test("letters: the owner about each comment, the thread about replies, 30 a day"
     ).length,
     1,
   );
-  assert.equal(
-    (
-      await lettersIn(
-        LOCAL_COMMENT_MAIL_DIRECTORY,
-        (letter) => letter.to === bob.email,
-        1,
-      )
-    ).length,
-    0,
-  );
+  assert.equal((await lettersIn(LOCAL_COMMENT_MAIL_DIRECTORY, (letter) => letter.to === bob.email, 1)).length, 0);
   // A full day for this address: no more letters, the comment still saves.
   await db.query(
     "INSERT INTO login_limits VALUES($1,$2,now()+interval '1 day') ON CONFLICT(key) DO UPDATE SET attempts=$2",
     [sha256(`comment-mail:${owner.email}`), COMMENT_MAIL_PER_ADDRESS_PER_DAY],
   );
   const quiet = randomBytes(6).toString("hex");
-  assert.equal(
-    (await write(work.token, alice.cookie, { body: `Тихо ${quiet}` }))
-      .statusCode,
-    200,
-  );
-  assert.equal(
-    (
-      await lettersIn(
-        LOCAL_COMMENT_MAIL_DIRECTORY,
-        (letter) => letter.text.includes(quiet),
-        1,
-      )
-    ).length,
-    0,
-  );
+  assert.equal((await write(work.token, alice.cookie, { body: `Тихо ${quiet}` })).statusCode, 200);
+  assert.equal((await lettersIn(LOCAL_COMMENT_MAIL_DIRECTORY, (letter) => letter.text.includes(quiet), 1)).length, 0);
 });
 
 test("phishing signals hold a new author's comment; operator scripts decide", async () => {
@@ -778,22 +597,11 @@ test("phishing signals hold a new author's comment; operator scripts decide", as
   assert.equal(held.statusCode, 200, held.body);
   const id = held.json().id as string;
   // Its author and the owner see it; nobody else does.
-  assert.equal(
-    (await list(work.token, newcomer.cookie)).json().threads[0].held,
-    true,
-  );
+  assert.equal((await list(work.token, newcomer.cookie)).json().threads[0].held, true);
   assert.deepEqual((await list(work.token, reader.cookie)).json().threads, []);
-  const owned = await call(
-    "GET",
-    `/api/artifacts/${work.artifactId}/comments`,
-    undefined,
-    owner.cookie,
-  );
+  const owned = await call("GET", `/api/artifacts/${work.artifactId}/comments`, undefined, owner.cookie);
   assert.equal(owned.json().shares[0].threads[0].held, true);
-  const toOperator = await lettersIn(
-    LOCAL_OPERATOR_MAIL_DIRECTORY,
-    (letter) => letter.text.includes(id),
-  );
+  const toOperator = await lettersIn(LOCAL_OPERATOR_MAIL_DIRECTORY, (letter) => letter.text.includes(id));
   assert.equal(toOperator.length, 1);
   assert.match(toOperator[0]!.subject, /подозрительный комментарий/);
   assert.match(toOperator[0]!.text, /sber-login\[\.\]ru/);
@@ -810,13 +618,8 @@ test("phishing signals hold a new author's comment; operator scripts decide", as
   const text = await write(work.token, newcomer.cookie, { body: "Обычный" });
   assert.equal(text.statusCode, 200, text.body);
   await react(work.token, newcomer.cookie, { emoji: "👀" });
-  await db.query(
-    "SELECT name FROM accounts WHERE id=$1",
-    [newcomer.id],
-  );
-  const login = (
-    await db.query("SELECT name FROM accounts WHERE id=$1", [newcomer.id])
-  ).rows[0].name;
+  await db.query("SELECT name FROM accounts WHERE id=$1", [newcomer.id]);
+  const login = (await db.query("SELECT name FROM accounts WHERE id=$1", [newcomer.id])).rows[0].name;
   await disableAccount(login, "comment spam");
   const hidden = (await list(work.token, reader.cookie)).json();
   assert.deepEqual(hidden.threads, []);
@@ -829,8 +632,7 @@ test("a report on a comment reaches the operator and never pauses the link", asy
   const owner = await person("owner");
   const reader = await person("reader");
   const work = await link(owner);
-  const id = (await write(work.token, reader.cookie, { body: "Грубость" })).json()
-    .id;
+  const id = (await write(work.token, reader.cookie, { body: "Грубость" })).json().id;
   for (let i = 0; i < 4; i++) {
     const report = await call("POST", "/api/reports", {
       key: randomUUID(),
@@ -842,16 +644,11 @@ test("a report on a comment reaches the operator and never pauses the link", asy
   }
   const {
     rows: [state],
-  } = await db.query("SELECT moderation FROM shares WHERE id=$1", [
-    work.shareId,
-  ]);
+  } = await db.query("SELECT moderation FROM shares WHERE id=$1", [work.shareId]);
   assert.equal(state.moderation, "none");
   const {
     rows: [{ n }],
-  } = await db.query(
-    "SELECT count(*)::int AS n FROM share_reports WHERE comment_id=$1",
-    [id],
-  );
+  } = await db.query("SELECT count(*)::int AS n FROM share_reports WHERE comment_id=$1", [id]);
   assert.equal(n, 4);
   const letters = await lettersIn(
     LOCAL_OPERATOR_MAIL_DIRECTORY,
@@ -881,18 +678,12 @@ test("an author deleting their account disappears from threads at once", async (
   const work = await link(owner);
   await write(work.token, leaving.cookie, { body: "Уйду" });
   await react(work.token, leaving.cookie, { emoji: "❤️" });
-  await db.query(
-    "UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1",
-    [leaving.id],
-  );
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=clock_timestamp() WHERE id=$1", [leaving.id]);
   const view = (await list(work.token, reader.cookie)).json();
   assert.deepEqual(view.threads, []);
   assert.deepEqual(view.reactions, []);
   // Nor can a session of theirs write.
-  assert.equal(
-    (await write(work.token, leaving.cookie, { body: "ещё" })).statusCode,
-    401,
-  );
+  assert.equal((await write(work.token, leaving.cookie, { body: "ещё" })).statusCode, 401);
 });
 
 test("the name under comments is chosen first, never an address", async () => {
@@ -940,16 +731,8 @@ test("the name under comments is chosen first, never an address", async () => {
     nameChosen: true,
     commentMail: false,
   });
-  assert.equal(
-    (await call("POST", "/api/account/comment-settings", {}, fresh.cookie))
-      .statusCode,
-    400,
-  );
-  assert.equal(
-    (await call("POST", "/api/account/comment-settings", { commentMail: true }, ""))
-      .statusCode,
-    401,
-  );
+  assert.equal((await call("POST", "/api/account/comment-settings", {}, fresh.cookie)).statusCode, 400);
+  assert.equal((await call("POST", "/api/account/comment-settings", { commentMail: true }, "")).statusCode, 401);
 });
 
 test("«Не присылать такие письма» turns the letters off with a signed link", async () => {
@@ -966,31 +749,16 @@ test("«Не присылать такие письма» turns the letters off 
   const off = /\/mail-off#(\S+)/.exec(letter.text)?.[1];
   assert.ok(off, letter.text);
   // A damaged token does nothing; the right one turns letters off, twice harmlessly.
-  assert.equal(
-    (await call("POST", "/api/comment-mail/off", { token: off.slice(0, -2) + "xx" })).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", "/api/comment-mail/off", { token: off.slice(0, -2) + "xx" })).statusCode, 404);
   for (let i = 0; i < 2; i++)
-    assert.equal(
-      (await call("POST", "/api/comment-mail/off", { token: off })).statusCode,
-      200,
-    );
+    assert.equal((await call("POST", "/api/comment-mail/off", { token: off })).statusCode, 200);
   const {
     rows: [account],
   } = await db.query("SELECT comment_mail FROM accounts WHERE id=$1", [owner.id]);
   assert.equal(account.comment_mail, false);
   const second = randomBytes(6).toString("hex");
   await write(work.token, reader.cookie, { body: `Второе ${second}` });
-  assert.equal(
-    (
-      await lettersIn(
-        LOCAL_COMMENT_MAIL_DIRECTORY,
-        (item) => item.text.includes(second),
-        1,
-      )
-    ).length,
-    0,
-  );
+  assert.equal((await lettersIn(LOCAL_COMMENT_MAIL_DIRECTORY, (item) => item.text.includes(second), 1)).length, 0);
 });
 
 test("letters defang addresses and cut long text", () => {
@@ -1014,8 +782,7 @@ test("one refused address does not keep the other letters of a reply from leavin
   console.error = (line: unknown) => void errors.push(String(line));
   setCommentMailTransport(async (mail) => {
     // The owner's address is refused; the thread's people still hear.
-    if (mail.to === owner.email)
-      throw Object.assign(new Error("550 mailbox unavailable"), { code: "EENVELOPE" });
+    if (mail.to === owner.email) throw Object.assign(new Error("550 mailbox unavailable"), { code: "EENVELOPE" });
     sent.push(mail.to);
     return true;
   });
@@ -1028,9 +795,7 @@ test("one refused address does not keep the other letters of a reply from leavin
     console.error = logged;
   }
   assert.deepEqual(sent.sort(), [alice.email, bob.email].sort());
-  const failure = errors
-    .map((line) => JSON.parse(line))
-    .find((entry) => entry.event === "comment.mail_failed");
+  const failure = errors.map((line) => JSON.parse(line)).find((entry) => entry.event === "comment.mail_failed");
   assert.deepEqual(
     { sent: failure?.sent, failed: failure?.failed, code: failure?.code },
     { sent: 2, failed: 1, code: "EENVELOPE" },

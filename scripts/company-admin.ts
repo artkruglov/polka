@@ -26,9 +26,7 @@ if (!who || who.startsWith("--")) {
       process.exitCode = 1;
     } else {
       await db.query("UPDATE accounts SET company_admin=$2 WHERE id=$1", [rows[0].id, !revoke]);
-      console.log(
-        JSON.stringify({ event: "company_admin", accountId: rows[0].id, companyAdmin: !revoke }),
-      );
+      console.log(JSON.stringify({ event: "company_admin", accountId: rows[0].id, companyAdmin: !revoke }));
     }
   } finally {
     await db.end();

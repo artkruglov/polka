@@ -31,8 +31,7 @@ const chromePath = [
 ].find((candidate) => candidate && existsSync(candidate));
 const skip = chromePath ? false : "Chrome is not installed here";
 
-const digest = (value: Buffer) =>
-  createHash("sha256").update(value).digest("hex");
+const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex");
 const mimeOf = (file: string) =>
   file.endsWith(".html")
     ? "text/html"
@@ -43,9 +42,7 @@ const mimeOf = (file: string) =>
         : "text/javascript";
 
 async function compile(sources: Record<string, string>) {
-  const bytes = new Map(
-    Object.entries(sources).map(([file, text]) => [file, Buffer.from(text)]),
-  );
+  const bytes = new Map(Object.entries(sources).map(([file, text]) => [file, Buffer.from(text)]));
   const manifest = canonicalizeManifest({
     version: 1,
     entrypoint: "index.html",
@@ -66,8 +63,7 @@ async function compile(sources: Record<string, string>) {
     dependencies: { status: "self-contained", unresolved: [] },
   });
   const result = await buildDerivative(manifest, bytes);
-  if (!result.ok)
-    assert.fail(`build refused: ${result.reason} (${result.path})`);
+  if (!result.ok) assert.fail(`build refused: ${result.reason} (${result.path})`);
   return result.html.toString("utf8");
 }
 
@@ -85,11 +81,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function send(method: string, params: Record<string, unknown> = {}) {
   const id = ++nextId;
   return new Promise<any>((resolve, reject) => {
-    pending.set(id, (message) =>
-      message.error
-        ? reject(new Error(message.error.message))
-        : resolve(message.result),
-    );
+    pending.set(id, (message) => (message.error ? reject(new Error(message.error.message)) : resolve(message.result)));
     socket!.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -115,10 +107,7 @@ async function open(html: string, project = false) {
       returnByValue: true,
       awaitPromise: true,
     });
-    if (value.exceptionDetails)
-      throw new Error(
-        value.exceptionDetails.exception?.description ?? "evaluation failed",
-      );
+    if (value.exceptionDetails) throw new Error(value.exceptionDetails.exception?.description ?? "evaluation failed");
     return value.result?.value;
   };
 }
@@ -177,13 +166,9 @@ before(async () => {
   let targets: any[] = [];
   while (Date.now() < deadline && exited === null) {
     try {
-      port ||= Number(
-        readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0],
-      );
+      port ||= Number(readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]);
       if (port) {
-        targets = (await (
-          await fetch(`http://127.0.0.1:${port}/json`)
-        ).json()) as any[];
+        targets = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()) as any[];
         if (targets.some((target) => target.type === "page")) break;
         // The browser answers but its first tab is not there yet: open one.
         await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" });
@@ -224,14 +209,15 @@ after(async () => {
     chrome.kill();
     await Promise.race([ended, wait(5_000)]);
   }
-  await new Promise<void>(
-    (resolve) => server?.close(() => resolve()) ?? resolve(),
-  );
+  await new Promise<void>((resolve) => server?.close(() => resolve()) ?? resolve());
   // Chrome may still be flushing its profile; a leftover temp directory is
   // not a test failure.
   try {
     // Chrome's helpers outlive the kill and may still write: a leftover temp dir is not a failure.
-    if (profile) try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch {}
+    if (profile)
+      try {
+        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {}
   } catch {
     /* the OS cleans the temp directory */
   }
@@ -242,13 +228,10 @@ const CDN_HEAD = `<script src="https://unpkg.com/react@18/umd/react.production.m
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>`;
 
-test(
-  "a React form submits to its own handler in the viewer sandbox",
-  { skip },
-  async () => {
-    const html = await compile({
-      "index.html": componentShell("Form", "App.jsx"),
-      "App.jsx": `import { useState } from "react";
+test("a React form submits to its own handler in the viewer sandbox", { skip }, async () => {
+  const html = await compile({
+    "index.html": componentShell("Form", "App.jsx"),
+    "App.jsx": `import { useState } from "react";
 export default function App() {
   const [items, setItems] = useState([]);
   const [value, setValue] = useState("");
@@ -260,39 +243,26 @@ export default function App() {
     </form>
   );
 }`,
-    });
-    const evaluate = await open(html);
-    assert.equal(await evaluate("document.querySelectorAll('form').length"), 1);
-    await evaluate(`(() => {
+  });
+  const evaluate = await open(html);
+  assert.equal(await evaluate("document.querySelectorAll('form').length"), 1);
+  await evaluate(`(() => {
     const field = document.getElementById("field");
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     setter.call(field, "Milk");
     field.dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("add").click();
   })()`);
-    await wait(300);
-    assert.equal(
-      await evaluate("document.querySelectorAll('#items li').length"),
-      1,
-    );
-    assert.equal(
-      await evaluate("document.querySelector('#items li').textContent"),
-      "Milk",
-    );
-    // The page itself never navigated: form-action 'none' still holds.
-    assert.equal(
-      await evaluate("location.pathname.startsWith('/page-')"),
-      true,
-    );
-  },
-);
+  await wait(300);
+  assert.equal(await evaluate("document.querySelectorAll('#items li').length"), 1);
+  assert.equal(await evaluate("document.querySelector('#items li').textContent"), "Milk");
+  // The page itself never navigated: form-action 'none' still holds.
+  assert.equal(await evaluate("location.pathname.startsWith('/page-')"), true);
+});
 
-test(
-  "gradients, storage and dialogs work in a compiled page",
-  { skip },
-  async () => {
-    const html = await compile({
-      "index.html": `<!doctype html><html><head><style>.filled{fill:url(#grad)}</style></head>
+test("gradients, storage and dialogs work in a compiled page", { skip }, async () => {
+  const html = await compile({
+    "index.html": `<!doctype html><html><head><style>.filled{fill:url(#grad)}</style></head>
 <body><svg width="40" height="40"><defs><linearGradient id="grad"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient></defs><rect id="box" class="filled" width="40" height="40"/></svg>
 <script type="module">
 localStorage.setItem("note", "kept");
@@ -302,58 +272,33 @@ window.answered = confirm("Delete?");
 alert("Готово");
 window.prompted = prompt("Name?", "Ann");
 </script></body></html>`,
-    });
-    const evaluate = await open(html);
-    assert.equal(
-      await evaluate("getComputedStyle(document.getElementById('box')).fill"),
-      'url("#grad")',
-    );
-    assert.equal(await evaluate("window.saved"), "kept0");
-    assert.equal(await evaluate("window.answered"), true);
-    assert.equal(await evaluate("window.prompted"), "Ann");
-    assert.equal(
-      await evaluate("document.body.innerText.includes('Готово')"),
-      true,
-    );
-  },
-);
+  });
+  const evaluate = await open(html);
+  assert.equal(await evaluate("getComputedStyle(document.getElementById('box')).fill"), 'url("#grad")');
+  assert.equal(await evaluate("window.saved"), "kept0");
+  assert.equal(await evaluate("window.answered"), true);
+  assert.equal(await evaluate("window.prompted"), "Ann");
+  assert.equal(await evaluate("document.body.innerText.includes('Готово')"), true);
+});
 
-test(
-  "Babel scripts share a scope and an inline Tailwind config applies",
-  { skip },
-  async () => {
-    const html = await compile({
-      "index.html": `<!doctype html><html><head>${CDN_HEAD}
+test("Babel scripts share a scope and an inline Tailwind config applies", { skip }, async () => {
+  const html = await compile({
+    "index.html": `<!doctype html><html><head>${CDN_HEAD}
 <script>tailwind.config = { theme: { extend: { colors: { brand: "#123456" } } } };</script>
 </head><body><div id="root"></div>
 <script type="text/babel">const Header = ({ title }) => <h1 id="title" className="bg-brand text-2xl">{title}</h1>;</script>
 <script type="text/babel">ReactDOM.createRoot(document.getElementById("root")).render(<Header title="Второй скрипт видит первый" />);</script>
 </body></html>`,
-    });
-    const evaluate = await open(html);
-    assert.equal(
-      await evaluate("document.getElementById('title')?.textContent"),
-      "Второй скрипт видит первый",
-    );
-    assert.equal(
-      await evaluate(
-        "getComputedStyle(document.getElementById('title')).backgroundColor",
-      ),
-      "rgb(18, 52, 86)",
-    );
-    assert.equal(
-      await evaluate("document.querySelector('[role=alert]') === null"),
-      true,
-    );
-  },
-);
+  });
+  const evaluate = await open(html);
+  assert.equal(await evaluate("document.getElementById('title')?.textContent"), "Второй скрипт видит первый");
+  assert.equal(await evaluate("getComputedStyle(document.getElementById('title')).backgroundColor"), "rgb(18, 52, 86)");
+  assert.equal(await evaluate("document.querySelector('[role=alert]') === null"), true);
+});
 
-test(
-  "a plain scripted page gets the same environment without a compiler",
-  { skip },
-  async () => {
-    const html = await compile({
-      "index.html": `<!doctype html><html><head><meta charset="utf-8"><title>Counter</title></head>
+test("a plain scripted page gets the same environment without a compiler", { skip }, async () => {
+  const html = await compile({
+    "index.html": `<!doctype html><html><head><meta charset="utf-8"><title>Counter</title></head>
 <body><button id="tick">0</button>
 <script>
 document.getElementById("tick").onclick = function () {
@@ -362,73 +307,61 @@ document.getElementById("tick").onclick = function () {
 };
 window.probe = () => localStorage.getItem("count");
 </script></body></html>`,
-    });
-    const evaluate = await open(html);
-    assert.equal(await evaluate("typeof localStorage.setItem"), "function");
-    await evaluate("document.getElementById('tick').click()");
-    assert.equal(
-      await evaluate("document.getElementById('tick').textContent"),
-      "1",
-    );
-    assert.equal(await evaluate("window.probe()"), "1");
-    assert.equal(await evaluate("document.cookie"), "");
-  },
-);
+  });
+  const evaluate = await open(html);
+  assert.equal(await evaluate("typeof localStorage.setItem"), "function");
+  await evaluate("document.getElementById('tick').click()");
+  assert.equal(await evaluate("document.getElementById('tick').textContent"), "1");
+  assert.equal(await evaluate("window.probe()"), "1");
+  assert.equal(await evaluate("document.cookie"), "");
+});
 
-test(
-  "a page in the viewer cannot reach WebRTC, even from a script before its head",
-  { skip },
-  async () => {
-    // Not compiled: served raw, as an owner sees an unbuilt single file.
-    const evaluate = await open(`<!doctype html><script>
+test("a page in the viewer cannot reach WebRTC, even from a script before its head", { skip }, async () => {
+  // Not compiled: served raw, as an owner sees an unbuilt single file.
+  const evaluate = await open(`<!doctype html><script>
 window.early = typeof RTCPeerConnection;
 </script><html><head><title>rtc</title></head><body><p>x</p></body></html>`);
-    assert.equal(await evaluate("window.early"), "undefined");
-    assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
-    assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
-    // It cannot be put back or deleted.
-    assert.equal(
-      await evaluate(
-        "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
-      ),
-      "TypeError",
-    );
-    assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
-    // A fresh realm does not bring it back: the sandbox makes the iframe a
-    // different opaque origin.
-    assert.equal(
-      await evaluate(
-        "(() => { const f = document.createElement('iframe'); document.body.appendChild(f); try { return typeof f.contentWindow.RTCPeerConnection; } catch (e) { return e.name; } })()",
-      ),
-      "SecurityError",
-    );
-  },
-);
+  assert.equal(await evaluate("window.early"), "undefined");
+  assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
+  assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
+  // It cannot be put back or deleted.
+  assert.equal(
+    await evaluate(
+      "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
+    ),
+    "TypeError",
+  );
+  assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
+  // A fresh realm does not bring it back: the sandbox makes the iframe a
+  // different opaque origin.
+  assert.equal(
+    await evaluate(
+      "(() => { const f = document.createElement('iframe'); document.body.appendChild(f); try { return typeof f.contentWindow.RTCPeerConnection; } catch (e) { return e.name; } })()",
+    ),
+    "SecurityError",
+  );
+});
 
-test(
-  "a project page cannot reach WebRTC, even from a script before its head",
-  { skip },
-  async () => {
-    // Served as the project viewer serves a page: its CSP (inline scripts
-    // run) and Полка's scripts placed first.
-    const evaluate = await open(
-      `<!doctype html><script>
+test("a project page cannot reach WebRTC, even from a script before its head", { skip }, async () => {
+  // Served as the project viewer serves a page: its CSP (inline scripts
+  // run) and Полка's scripts placed first.
+  const evaluate = await open(
+    `<!doctype html><script>
 window.early = typeof RTCPeerConnection;
 </script><html><head><title>rtc</title><script>window.inHead = typeof RTCDataChannel;</script></head><body><p>x</p></body></html>`,
-      true,
-    );
-    assert.equal(await evaluate("window.early"), "undefined");
-    assert.equal(await evaluate("window.inHead"), "undefined");
-    assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
-    assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
-    assert.equal(
-      await evaluate(
-        "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
-      ),
-      "TypeError",
-    );
-    assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
-    // Still a project page: its own scripts ran.
-    assert.equal(await evaluate("document.title"), "rtc");
-  },
-);
+    true,
+  );
+  assert.equal(await evaluate("window.early"), "undefined");
+  assert.equal(await evaluate("window.inHead"), "undefined");
+  assert.equal(await evaluate("typeof RTCPeerConnection"), "undefined");
+  assert.equal(await evaluate("typeof webkitRTCPeerConnection"), "undefined");
+  assert.equal(
+    await evaluate(
+      "(() => { try { Object.defineProperty(window, 'RTCPeerConnection', { value: function () {} }); return 'redefined'; } catch (e) { return e.name; } })()",
+    ),
+    "TypeError",
+  );
+  assert.equal(await evaluate("delete window.RTCPeerConnection"), false);
+  // Still a project page: its own scripts ran.
+  assert.equal(await evaluate("document.title"), "rtc");
+});

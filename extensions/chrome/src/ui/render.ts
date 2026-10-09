@@ -17,8 +17,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
 /** The outcome of a save: the link with «Копировать» and «Открыть на полке». */
 export function renderResult(result: Result, onReconnect: () => void): Node[] {
-  if (!result)
-    return [el("p", { className: "error" }, "Расширение не ответило. Попробуйте ещё раз.")];
+  if (!result) return [el("p", { className: "error" }, "Расширение не ответило. Попробуйте ещё раз.")];
   if (!result.ok) {
     const nodes: Node[] = [el("p", { className: "error" }, result.message)];
     if (result.code === "not_connected") {

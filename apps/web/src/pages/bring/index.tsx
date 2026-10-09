@@ -7,10 +7,7 @@ import { Tabs } from "../../shared/ui/Tabs.tsx";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Preview } from "../../widgets/artifact-preview/index.ts";
 import { ConnectAgent } from "../../widgets/connect-agent/index.tsx";
-import {
-  CONNECT_AGENT_LEAD,
-  CONNECT_AGENT_TITLE,
-} from "../../entities/onboarding/agent-setup.ts";
+import { CONNECT_AGENT_LEAD, CONNECT_AGENT_TITLE } from "../../entities/onboarding/agent-setup.ts";
 
 type Capture = "file" | "paste";
 
@@ -24,9 +21,7 @@ export function Bring() {
   const account = useAccount();
   const params = new URLSearchParams(location.search);
   const [initialFolderId] = useState(() => params.get("folder") ?? "");
-  const [capture, setCapture] = useState<Capture>(() =>
-    location.hash === "#paste" ? "paste" : "file",
-  );
+  const [capture, setCapture] = useState<Capture>(() => (location.hash === "#paste" ? "paste" : "file"));
   const renderPreview = (revision: Parameters<typeof Preview>[0]["revision"], compact: boolean) => (
     <Preview revision={revision} compact={compact} />
   );
@@ -50,11 +45,7 @@ export function Bring() {
             ]}
           >
             {capture === "file" ? (
-              <FileSave
-                initialFolderId={initialFolderId}
-                renderPreview={renderPreview}
-                titled={false}
-              />
+              <FileSave initialFolderId={initialFolderId} renderPreview={renderPreview} titled={false} />
             ) : (
               <PasteCode
                 initialFolderId={initialFolderId}

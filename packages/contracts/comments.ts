@@ -39,15 +39,21 @@ export type Reaction = (typeof REACTIONS)[number];
 const noControl = (value: string) =>
   // Tabs and newlines are text; other control and bidi-override characters
   // are not, and could disguise a comment.
-  !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(
-    value,
-  );
+  !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(value);
 
 export const anchorSchema = z
   .object({
     exact: z.string().min(1).max(ANCHOR_EXACT_MAX).refine(noControl),
-    prefix: z.string().max(ANCHOR_CONTEXT_CHARS * 2).refine(noControl).default(""),
-    suffix: z.string().max(ANCHOR_CONTEXT_CHARS * 2).refine(noControl).default(""),
+    prefix: z
+      .string()
+      .max(ANCHOR_CONTEXT_CHARS * 2)
+      .refine(noControl)
+      .default(""),
+    suffix: z
+      .string()
+      .max(ANCHOR_CONTEXT_CHARS * 2)
+      .refine(noControl)
+      .default(""),
   })
   .strict()
   .refine((anchor) => anchor.exact.trim().length > 0, {
@@ -86,12 +92,8 @@ export const commentSettingsSchema = z
     commentMail: z.boolean().optional(),
   })
   .strict()
-  .refine(
-    (value) => value.displayName !== undefined || value.commentMail !== undefined,
-  );
-export const commentMailOffSchema = z
-  .object({ token: z.string().max(400) })
-  .strict();
+  .refine((value) => value.displayName !== undefined || value.commentMail !== undefined);
+export const commentMailOffSchema = z.object({ token: z.string().max(400) }).strict();
 
 /** A recipient's request: the link's own token identifies the thread set. */
 export const sharedCommentsSchema = z.object({ token: shareToken }).strict();
@@ -102,8 +104,7 @@ const commentFields = {
   anchor: anchorSchema.nullable().optional(),
   parentId: uuid.optional(),
 };
-const replyHasNoQuote = (value: { parentId?: string; anchor?: unknown }) =>
-  !(value.parentId && value.anchor);
+const replyHasNoQuote = (value: { parentId?: string; anchor?: unknown }) => !(value.parentId && value.anchor);
 const noQuoteMessage = { message: "A reply has no quote of its own" };
 /** A recipient writes in the thread set of the link they opened. */
 export const sharedCreateCommentSchema = z
@@ -119,15 +120,9 @@ const reactFields = {
   emoji: z.enum(REACTIONS),
   anchor: anchorSchema.nullable().optional(),
 };
-export const sharedReactSchema = z
-  .object({ token: shareToken, ...reactFields })
-  .strict();
-export const ownerReactSchema = z
-  .object({ shareId: uuid, ...reactFields })
-  .strict();
-export const sharedCommentActionSchema = z
-  .object({ token: shareToken, commentId: uuid })
-  .strict();
+export const sharedReactSchema = z.object({ token: shareToken, ...reactFields }).strict();
+export const ownerReactSchema = z.object({ shareId: uuid, ...reactFields }).strict();
+export const sharedCommentActionSchema = z.object({ token: shareToken, commentId: uuid }).strict();
 export const sharedResolveSchema = z
   .object({
     token: shareToken,
@@ -135,9 +130,7 @@ export const sharedResolveSchema = z
     resolved: z.boolean().default(true),
   })
   .strict();
-export const resolveSchema = z
-  .object({ resolved: z.boolean().default(true) })
-  .strict();
+export const resolveSchema = z.object({ resolved: z.boolean().default(true) }).strict();
 
 export type CommentAuthor = {
   /** Display name; never an address. */
@@ -225,12 +218,7 @@ export type EditFailure = {
   code: "edit_failed";
   editIndex: number;
   otherEditIndex?: number;
-  reason:
-    | "empty_old_text"
-    | "not_found"
-    | "ambiguous"
-    | "overlap"
-    | "no_change";
+  reason: "empty_old_text" | "not_found" | "ambiguous" | "overlap" | "no_change";
   occurrences?: number;
   message: string;
 };

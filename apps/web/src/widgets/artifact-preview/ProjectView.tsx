@@ -14,7 +14,11 @@ type ProjectFile = { path: string; mime: string };
 type Node = { name: string; path: string; file?: ProjectFile; children: Map<string, Node> };
 
 const READABLE = (mime: string) =>
-  mime === "text/markdown" || mime === "text/html" || mime === "text/plain" || mime.startsWith("image/") || mime.startsWith("video/");
+  mime === "text/markdown" ||
+  mime === "text/html" ||
+  mime === "text/plain" ||
+  mime.startsWith("image/") ||
+  mime.startsWith("video/");
 const ENTRY_NAMES = ["README.md", "index.md", "index.html"];
 const plural = new Intl.PluralRules("ru");
 export const filesLabel = (count: number) =>
@@ -43,7 +47,15 @@ const ordered = (node: Node) =>
   });
 
 const iconOf = (mime: string) =>
-  mime.startsWith("video/") ? <Film aria-hidden="true" /> : mime.startsWith("image/") ? <Image aria-hidden="true" /> : mime === "text/markdown" || mime === "text/plain" ? <FileText aria-hidden="true" /> : <FileCode2 aria-hidden="true" />;
+  mime.startsWith("video/") ? (
+    <Film aria-hidden="true" />
+  ) : mime.startsWith("image/") ? (
+    <Image aria-hidden="true" />
+  ) : mime === "text/markdown" || mime === "text/plain" ? (
+    <FileText aria-hidden="true" />
+  ) : (
+    <FileCode2 aria-hidden="true" />
+  );
 
 const pathFromHash = () => {
   const match = /(?:^#|&)path=([^&]*)/.exec(location.hash);
@@ -95,7 +107,14 @@ function TreeBranch({
               <span>{child.name}</span>
             </button>
             {open.has(child.path) && (
-              <TreeBranch node={child} current={current} open={open} toggle={toggle} choose={choose} depth={depth + 1} />
+              <TreeBranch
+                node={child}
+                current={current}
+                open={open}
+                toggle={toggle}
+                choose={choose}
+                depth={depth + 1}
+              />
             )}
           </li>
         ),
@@ -232,8 +251,7 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
       return next;
     });
 
-  if (error)
-    return <StatusPanel title="Проект не открылся">{error}</StatusPanel>;
+  if (error) return <StatusPanel title="Проект не открылся">{error}</StatusPanel>;
   const crumbs = page.split("/");
   // One page and nothing to choose: no tree, no bar — just the page.
   const single = readable.children.size === 1 && !![...readable.children.values()][0]!.file;

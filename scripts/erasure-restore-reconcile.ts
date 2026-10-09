@@ -1,8 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type {
-  ErasureEntry,
-  ErasureRecord,
-} from "../packages/erasure-ledger.ts";
+import type { ErasureEntry, ErasureRecord } from "../packages/erasure-ledger.ts";
 import { runAccountPurge, type AccountPurgeCounters } from "./account-purge.ts";
 import type { ErasureLedgerTransport } from "./erasure-ledger-adapter.ts";
 import {
@@ -12,10 +9,7 @@ import {
   type ErasureRestorePlan,
   type ErasureRestoreRecord,
 } from "./erasure-restore.ts";
-import type {
-  MaintenanceObjectStore,
-  MaintenanceScope,
-} from "./maintenance-cleanup.ts";
+import type { MaintenanceObjectStore, MaintenanceScope } from "./maintenance-cleanup.ts";
 
 const MAX_RECONCILIATION_PASSES = 10_000;
 
@@ -41,22 +35,12 @@ function validVersion(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value !== "null";
 }
 
-function immutableRecord(
-  records: readonly ErasureRestoreRecord[],
-  event: ErasureRecord["event"],
-) {
+function immutableRecord(records: readonly ErasureRestoreRecord[], event: ErasureRecord["event"]) {
   const matches = records
     .filter(({ record }) => record.event === event)
-    .sort((left, right) =>
-      left.versionId < right.versionId
-        ? -1
-        : left.versionId > right.versionId
-          ? 1
-          : 0,
-    );
+    .sort((left, right) => (left.versionId < right.versionId ? -1 : left.versionId > right.versionId ? 1 : 0));
   const selected = matches[0];
-  if (!selected)
-    throw new Error(`Erasure restore has no ${event} acknowledgement`);
+  if (!selected) throw new Error(`Erasure restore has no ${event} acknowledgement`);
   return selected;
 }
 
@@ -79,16 +63,9 @@ function statusRow(row: Record<string, unknown> | undefined): RestoreStatus {
   };
 }
 
-async function readStatus(
-  scope: MaintenanceScope,
-  restoreRunId: string,
-  deletionId: string,
-) {
+async function readStatus(scope: MaintenanceScope, restoreRunId: string, deletionId: string) {
   return scope.transaction(async (client) => {
-    const result = await client.query(
-      "SELECT * FROM restored_erasure_status($1,$2)",
-      [restoreRunId, deletionId],
-    );
+    const result = await client.query("SELECT * FROM restored_erasure_status($1,$2)", [restoreRunId, deletionId]);
     return statusRow(result.rows?.[0]);
   });
 }
@@ -101,8 +78,7 @@ async function register(
   records: readonly ErasureRestoreRecord[],
 ) {
   const revoke = immutableRecord(records, "revoke");
-  const purged =
-    entry.state === "purged" ? immutableRecord(records, "purged") : undefined;
+  const purged = entry.state === "purged" ? immutableRecord(records, "purged") : undefined;
   const result = await scope.transaction((client) =>
     client.query(
       `SELECT register_restored_erasure(
@@ -136,42 +112,25 @@ async function register(
     ),
   );
   const metadataPresent = result.rows?.[0]?.metadata_present;
-  if (typeof metadataPresent !== "boolean")
-    throw new Error("Restore registration result is invalid");
+  if (typeof metadataPresent !== "boolean") throw new Error("Restore registration result is invalid");
   return metadataPresent;
 }
 
-async function deleteAbsentPrefixPass(
-  scope: MaintenanceScope,
-  content: MaintenanceObjectStore,
-  tenantId: string,
-) {
+async function deleteAbsentPrefixPass(scope: MaintenanceScope, content: MaintenanceObjectStore, tenantId: string) {
   const prefix = `${tenantId}/`;
   active(scope.signal);
-  const page = await content.listVersions(
-    { prefix, maxKeys: 100 },
-    scope.signal,
-  );
+  const page = await content.listVersions({ prefix, maxKeys: 100 }, scope.signal);
   active(scope.signal);
   const candidates = [...page.versions, ...page.deleteMarkers];
-  if (candidates.length > 100)
-    throw new Error("Restore source page exceeded its bound");
+  if (candidates.length > 100) throw new Error("Restore source page exceeded its bound");
   for (const candidate of candidates) {
     active(scope.signal);
-    if (
-      !candidate.key?.startsWith(prefix) ||
-      !validVersion(candidate.versionId)
-    )
+    if (!candidate.key?.startsWith(prefix) || !validVersion(candidate.versionId))
       throw new Error("Restore source listing is invalid");
-    await content.deleteVersion(
-      candidate.key,
-      candidate.versionId,
-      scope.signal,
-    );
+    await content.deleteVersion(candidate.key, candidate.versionId, scope.signal);
     active(scope.signal);
   }
-  if (!candidates.length && page.truncated)
-    throw new Error("Restore source listing is incomplete");
+  if (!candidates.length && page.truncated) throw new Error("Restore source listing is incomplete");
   return {
     deleted: candidates.length,
     empty: !candidates.length && !page.truncated,
@@ -191,20 +150,18 @@ async function completeAbsent(
     deleted += result.deleted;
     if (!result.empty) continue;
     await scope.transaction(async (client) => {
-      await client.query(
-        "SELECT complete_absent_restore_suppression($1,$2,$3)",
-        [restoreRunId, entry.requestId, now().toISOString()],
-      );
+      await client.query("SELECT complete_absent_restore_suppression($1,$2,$3)", [
+        restoreRunId,
+        entry.requestId,
+        now().toISOString(),
+      ]);
     });
     return deleted;
   }
   throw new Error("Restore source reconciliation exceeded its pass bound");
 }
 
-function sumCounters(
-  target: ErasureRestoreReconciliation,
-  value: AccountPurgeCounters,
-) {
+function sumCounters(target: ErasureRestoreReconciliation, value: AccountPurgeCounters) {
   target.sourceVersionsDeleted += value.sourceVersionsDeleted;
   target.metadataPurged += value.metadataPurged;
 }
@@ -222,9 +179,7 @@ async function completePresent(
   const readOnlyLedger: ErasureLedgerTransport = {
     ...ledger,
     async putIfAbsent() {
-      throw new Error(
-        "Restore reconciliation must not write the erasure ledger",
-      );
+      throw new Error("Restore reconciliation must not write the erasure ledger");
     },
   };
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass++) {
@@ -269,68 +224,42 @@ export async function reconcileErasureRestore(input: {
     metadataPurged: 0,
   };
   const now = input.now ?? (() => new Date());
-  await applyErasureRestorePlan(
-    input.plan,
-    input.scope.signal,
-    async (entry, records) => {
-      active(input.scope.signal);
-      const metadataPresent = await register(
-        input.scope,
-        input.plan,
-        input.restoreRunId,
-        entry,
-        records,
-      );
-      const state = await readStatus(
-        input.scope,
-        input.restoreRunId,
-        entry.requestId,
-      );
-      if (
-        state.tenantId !== entry.tenantId ||
-        state.metadataPresent !== metadataPresent
-      )
-        throw new Error("Restore registration identity changed");
-      if (state.state !== "completed") {
-        if (metadataPresent) {
-          await completePresent(
-            input.scope,
-            input.content,
-            input.ledger,
-            input.plan,
-            input.restoreRunId,
-            entry,
-            counters,
-            now,
-          );
-        } else {
-          counters.sourceVersionsDeleted += await completeAbsent(
-            input.scope,
-            input.content,
-            input.restoreRunId,
-            entry,
-            now,
-          );
-        }
+  await applyErasureRestorePlan(input.plan, input.scope.signal, async (entry, records) => {
+    active(input.scope.signal);
+    const metadataPresent = await register(input.scope, input.plan, input.restoreRunId, entry, records);
+    const state = await readStatus(input.scope, input.restoreRunId, entry.requestId);
+    if (state.tenantId !== entry.tenantId || state.metadataPresent !== metadataPresent)
+      throw new Error("Restore registration identity changed");
+    if (state.state !== "completed") {
+      if (metadataPresent) {
+        await completePresent(
+          input.scope,
+          input.content,
+          input.ledger,
+          input.plan,
+          input.restoreRunId,
+          entry,
+          counters,
+          now,
+        );
+      } else {
+        counters.sourceVersionsDeleted += await completeAbsent(
+          input.scope,
+          input.content,
+          input.restoreRunId,
+          entry,
+          now,
+        );
       }
-      const completed = await readStatus(
-        input.scope,
-        input.restoreRunId,
-        entry.requestId,
-      );
-      if (completed.state !== "completed")
-        throw new Error("Restore suppression did not complete");
-      counters.entriesCompleted++;
-      if (metadataPresent) counters.metadataTenantsCompleted++;
-      else counters.absentTenantsCompleted++;
-    },
-  );
+    }
+    const completed = await readStatus(input.scope, input.restoreRunId, entry.requestId);
+    if (completed.state !== "completed") throw new Error("Restore suppression did not complete");
+    counters.entriesCompleted++;
+    if (metadataPresent) counters.metadataTenantsCompleted++;
+    else counters.absentTenantsCompleted++;
+  });
   active(input.scope.signal);
-  const after = await loadErasureRestorePlan(
-    input.ledger,
-    input.plan.ledgerId,
-    input.scope.signal,
-  );
+  const after = await loadErasureRestorePlan(input.ledger, input.plan.ledgerId, input.scope.signal);
   assertErasureRestorePlanStable(input.plan, after);
   return counters;
 }

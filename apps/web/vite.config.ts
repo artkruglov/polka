@@ -1,10 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import { fileURLToPath } from "node:url";
-import {
-  ORIGIN_PLACEHOLDER,
-  bookmarkletScript,
-  javascriptUrl,
-} from "../../extensions/bookmarklet/build.ts";
+import { ORIGIN_PLACEHOLDER, bookmarkletScript, javascriptUrl } from "../../extensions/bookmarklet/build.ts";
 
 /**
  * virtual:polka-bookmarklet — the «На Полку» bookmark as a javascript:

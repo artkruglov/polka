@@ -20,8 +20,7 @@ export async function runMaintenanceScheduler(options: {
   const deadlineMs = options.deadlineMs ?? 60_000;
   const graceMs = options.graceMs ?? 5_000;
   for (const value of [intervalMs, deadlineMs, graceMs])
-    if (!Number.isFinite(value) || value <= 0)
-      throw new Error("Invalid maintenance timing");
+    if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid maintenance timing");
   const emit = (event: MaintenanceEvent) => {
     try {
       options.onEvent?.(event);

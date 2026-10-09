@@ -1,28 +1,14 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import {
-  MAX_BYTES,
-  uuid,
-  type InlineBuildStatus,
-} from "../../packages/contracts/index.ts";
-import {
-  RUNTIME_IMPORT_LIST,
-  componentShell,
-} from "../../packages/contracts/runtime.ts";
+import { MAX_BYTES, uuid, type InlineBuildStatus } from "../../packages/contracts/index.ts";
+import { RUNTIME_IMPORT_LIST, componentShell } from "../../packages/contracts/runtime.ts";
 import { captureFromAgent } from "./agent-capture.ts";
-import {
-  preparePreviewFromAgent,
-  previewStatusInTransaction,
-} from "./agent-preview.ts";
+import { preparePreviewFromAgent, previewStatusInTransaction } from "./agent-preview.ts";
 import { DERIVATIVE_BUILD_TIMEOUT_MS } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem } from "./errors.ts";
-import {
-  recheckServiceActor,
-  withServiceActorTransaction,
-  type ServiceActor,
-} from "./service-auth.ts";
+import { recheckServiceActor, withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { agentMayMoveLink } from "./link-follow.ts";
 import { moveShareFromAgent, shareFromAgent } from "./shares.ts";
 import { NEW_ACCOUNT_MAX_DAYS, authorStanding } from "./share-moderation.ts";
@@ -40,27 +26,18 @@ export const agentPublishInputSchema = z
     /** A new version of a work saved before: its id and latest revision. */
     artifactId: uuid.optional(),
     baseRevisionId: uuid.optional(),
-    expiresInDays: z
-      .union([z.literal(1), z.literal(7), z.literal(30)])
-      .default(30),
+    expiresInDays: z.union([z.literal(1), z.literal(7), z.literal(30)]).default(30),
   })
   .strict()
-  .refine(
-    (value) => (value.html === undefined) !== (value.component === undefined),
-    {
-      message: "Send exactly one of html or component",
-    },
-  )
-  .refine(
-    (value) => !value.componentLanguage || value.component !== undefined,
-    {
-      message: "componentLanguage goes with component",
-    },
-  )
-  .refine(
-    (value) => (value.artifactId === undefined) === (value.baseRevisionId === undefined),
-    { message: "A new version needs both artifactId and baseRevisionId" },
-  )
+  .refine((value) => (value.html === undefined) !== (value.component === undefined), {
+    message: "Send exactly one of html or component",
+  })
+  .refine((value) => !value.componentLanguage || value.component !== undefined, {
+    message: "componentLanguage goes with component",
+  })
+  .refine((value) => (value.artifactId === undefined) === (value.baseRevisionId === undefined), {
+    message: "A new version needs both artifactId and baseRevisionId",
+  })
   .refine((value) => !value.artifactId || !value.folderId, {
     message: "A new version stays in its folder: folderId goes with a new work only",
   });
@@ -71,9 +48,7 @@ export const agentPublishInputSchema = z
  * guidance names what the interactive builder accepts (bundle-inline and
  * the Полка runtime for component source).
  */
-export function publishToolDescription(
-  liveEnabled: boolean = config.HTML_LIVE_ENABLED,
-) {
+export function publishToolDescription(liveEnabled: boolean = config.HTML_LIVE_ENABLED) {
   return [
     'Save one chat artifact to the owner\'s Polka shelf and, when this connection may manage links, return an unlisted share link in the same call. Use it when the user asks to save/publish an artifact to Polka ("сохрани на Полку").',
     ...(liveEnabled
@@ -123,8 +98,7 @@ export async function prepareInteractive(
       );
     }
   } catch (error) {
-    if (error instanceof Problem)
-      return { ready: false, reason: error.message };
+    if (error instanceof Problem) return { ready: false, reason: error.message };
     throw error;
   }
   if (status?.state === "ready") return { ready: true, reason: null };
@@ -147,10 +121,7 @@ async function capturedAtFor(actor: ServiceActor, key: string) {
        AND connection_id=$3`,
     [actor.tenantId, key, actor.connectionId],
   );
-  return (
-    (prior?.captured_at as string | undefined) ??
-    new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
-  );
+  return (prior?.captured_at as string | undefined) ?? new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 /**
@@ -158,8 +129,7 @@ async function capturedAtFor(actor: ServiceActor, key: string) {
  * next to the Полка shell that the runtime builder compiles.
  */
 function publishedFiles(input: z.infer<typeof agentPublishInputSchema>) {
-  if (input.html !== undefined)
-    return [{ path: "index.html", mime: "text/html", data: input.html }];
+  if (input.html !== undefined) return [{ path: "index.html", mime: "text/html", data: input.html }];
   if (!config.HTML_LIVE_ENABLED)
     throw new Problem(
       422,
@@ -182,11 +152,7 @@ function publishedFiles(input: z.infer<typeof agentPublishInputSchema>) {
  * instead of refusing the first link of every new user it is issued for 7 and
  * the answer says so. A retry keeps the length its first call stored.
  */
-async function publishExpiry(
-  actor: ServiceActor,
-  key: string,
-  requested: number,
-) {
+async function publishExpiry(actor: ServiceActor, key: string, requested: number) {
   if (requested <= NEW_ACCOUNT_MAX_DAYS) return { days: requested };
   const {
     rows: [prior],
@@ -220,9 +186,7 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       key: input.key,
       title: input.title,
       ...(input.folderId ? { folderId: input.folderId } : {}),
-      ...(input.artifactId
-        ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId }
-        : {}),
+      ...(input.artifactId ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId } : {}),
       manifest: {
         version: 1,
         entrypoint: "index.html",
@@ -266,9 +230,7 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
     ...(interactive
       ? {
           interactiveReady: interactive.ready,
-          ...(interactive.reason
-            ? { interactiveUnavailableReason: interactive.reason }
-            : {}),
+          ...(interactive.reason ? { interactiveUnavailableReason: interactive.reason } : {}),
         }
       : {}),
   };
@@ -304,9 +266,7 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
         linkUnavailableReason:
           "Saved as a new version. The work's link is pinned to its version, and only a person moves it (or switches it to follow new versions).",
       };
-    const expiry = open
-      ? { days: input.expiresInDays }
-      : await publishExpiry(current, input.key, input.expiresInDays);
+    const expiry = open ? { days: input.expiresInDays } : await publishExpiry(current, input.key, input.expiresInDays);
     // The same idempotency key names the share operation, so a retry returns
     // the same link instead of issuing another.
     const share = open
@@ -328,8 +288,7 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       url: share.url,
       shareId: share.shareId,
       expiresAt: share.expiresAt,
-      scriptsRunForRecipients:
-        share.url !== null && share.derivativeId !== null,
+      scriptsRunForRecipients: share.url !== null && share.derivativeId !== null,
       ...("moderation" in share
         ? {
             moderation: share.moderation,
@@ -345,16 +304,12 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       ...(share.url
         ? {}
         : {
-            linkUnavailableReason:
-              "The link from this call was revoked or expired; it is not reissued automatically.",
+            linkUnavailableReason: "The link from this call was revoked or expired; it is not reissued automatically.",
           }),
     };
   } catch (error) {
     // A provisional shelf saves, but links only once claimed (provisional.ts).
-    if (
-      error instanceof Problem &&
-      error.details?.reason === "provisional"
-    )
+    if (error instanceof Problem && error.details?.reason === "provisional")
       return {
         ...saved,
         state: "saved" as const,
@@ -364,9 +319,7 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       };
     if (
       error instanceof Problem &&
-      (error.code === "unsupported" ||
-        error.code === "conflict" ||
-        error.code === "quota")
+      (error.code === "unsupported" || error.code === "conflict" || error.code === "quota")
     )
       return {
         ...saved,

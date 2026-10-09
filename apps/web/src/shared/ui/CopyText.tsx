@@ -9,10 +9,7 @@ const clipboard = (text: string) => navigator.clipboard.writeText(text);
  * Clipboard state for one value. «Скопировано» belongs to the value that was
  * copied: a new value starts idle, and a late result for an old value is ignored.
  */
-export function useCopy(
-  value: string,
-  writeText: (text: string) => Promise<void> = clipboard,
-) {
+export function useCopy(value: string, writeText: (text: string) => Promise<void> = clipboard) {
   const [result, setResult] = useState<{
     value: string;
     state: CopyState;
@@ -37,8 +34,7 @@ export function useCopy(
       next = "failed";
     }
     // A late answer for a value that is no longer shown changes nothing.
-    if (request !== attempt.current || currentValue.current !== value)
-      return null;
+    if (request !== attempt.current || currentValue.current !== value) return null;
     setResult({ value, state: next });
     return next;
   };
@@ -71,8 +67,7 @@ export function CopyButton({
         busy={state === "copying"}
         onClick={() => void copy()}
       >
-        {state === "copied" ? <Check /> : <Copy />}{" "}
-        {state === "copied" ? successText : label}
+        {state === "copied" ? <Check /> : <Copy />} {state === "copied" ? successText : label}
       </Button>
       {state === "failed" && (
         <span className="field-note" role="status">
@@ -106,15 +101,7 @@ export function CopyText({
   const { state, copy } = useCopy(value, writeText);
   const area = useRef<HTMLTextAreaElement>(null);
   const preview = useRef<HTMLDetailsElement>(null);
-  const text = (
-    <textarea
-      ref={area}
-      readOnly
-      value={value}
-      rows={rows}
-      aria-label={label}
-    />
-  );
+  const text = <textarea ref={area} readOnly value={value} rows={rows} aria-label={label} />;
   return (
     <div className="copy-text">
       {collapsible ? (
@@ -137,8 +124,7 @@ export function CopyText({
             area.current?.select();
           }}
         >
-          {state === "copied" ? <Check /> : <Copy />}{" "}
-          {state === "copied" ? successText : buttonLabel}
+          {state === "copied" ? <Check /> : <Copy />} {state === "copied" ? successText : buttonLabel}
         </Button>
         {state === "failed" && (
           <span className="field-note" role="status">

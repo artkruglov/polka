@@ -1,12 +1,6 @@
 import type { PoolClient } from "pg";
 import { trackSignup, type VisitSource } from "./analytics.ts";
-import {
-  randomBytes,
-  randomInt,
-  randomUUID,
-  createHmac,
-  timingSafeEqual,
-} from "node:crypto";
+import { randomBytes, randomInt, randomUUID, createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { limitAttempts, passwordHash } from "./auth.ts";
@@ -15,17 +9,10 @@ import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
 import { domainAllowed } from "./mail-domains.ts";
 import { HOSTED_MAIL_SITE, loginCodeMail } from "./mail-templates/login-code.ts";
-import {
-  LOCAL_MAIL_DIRECTORY,
-  LOCAL_MAIL_NOTICE,
-  sendSmtpMail,
-  writeLocalMailFile,
-} from "./mailer.ts";
+import { LOCAL_MAIL_DIRECTORY, LOCAL_MAIL_NOTICE, sendSmtpMail, writeLocalMailFile } from "./mailer.ts";
 
 const fingerprint = (id: string, code: string) =>
-  createHmac("sha256", config.LINK_KEY)
-    .update(`email:${id}:${code}`)
-    .digest("hex");
+  createHmac("sha256", config.LINK_KEY).update(`email:${id}:${code}`).digest("hex");
 
 // Guessing is bounded by the code, not by a lock on the address: any limit
 // counted per address can be spent by a stranger who knows it, which locked
@@ -39,8 +26,17 @@ const CODE_DIGITS = 8;
 // so a refused attempt does not spend the budget. Starting a sign-in only
 // looks, so a new visitor learns about a full day before waiting for a code.
 const signupKeys = (ip: string, email: string | null) => [
-  { key: "email-signup-day", max: () => config.EMAIL_SIGNUP_DAILY_LIMIT, message: "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите." },
-  { key: `email-signup-ip:${ip}`, max: () => config.EMAIL_SIGNUP_DAILY_PER_IP, message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра." },
+  {
+    key: "email-signup-day",
+    max: () => config.EMAIL_SIGNUP_DAILY_LIMIT,
+    message:
+      "Сегодня на Полке уже открыто много новых полок. Регистрация продолжится завтра; если полка у вас уже есть, войдите.",
+  },
+  {
+    key: `email-signup-ip:${ip}`,
+    max: () => config.EMAIL_SIGNUP_DAILY_PER_IP,
+    message: "С этого подключения сегодня уже создано несколько полок. Попробуйте завтра.",
+  },
   // Anti-spam: per network and per mail domain (signup-guards.ts).
   // Anti-spam: per network and, with an address, per mail domain
   // (signup-guards.ts). Provider sign-ups count here too.
@@ -76,9 +72,7 @@ export async function signupRoomLeft(
 /** In invite mode, an address listed exactly or by its @domain. */
 export function emailInvited(email: string) {
   const domain = email.slice(email.lastIndexOf("@"));
-  return config.EMAIL_SIGNUP_ALLOW.some(
-    (entry) => entry === email || entry === domain,
-  );
+  return config.EMAIL_SIGNUP_ALLOW.some((entry) => entry === email || entry === domain);
 }
 
 /**
@@ -95,9 +89,7 @@ export function emailSignupAllowed(email: string) {
 /** Whether an EXISTING account may still get a code on this address. */
 export function emailLoginAllowed(email: string) {
   return (
-    config.EMAIL_LOGIN_DOMAINS === "any" ||
-    emailInvited(email) ||
-    domainAllowed(email, config.EMAIL_SIGNUP_DOMAINS)
+    config.EMAIL_LOGIN_DOMAINS === "any" || emailInvited(email) || domainAllowed(email, config.EMAIL_SIGNUP_DOMAINS)
   );
 }
 
@@ -114,20 +106,14 @@ type LocalDeliveryClient = {
 export async function deliverLocalEmailChallenge(
   input: { id: string; email: string; code: string },
   dependencies: {
-    runTransaction?: <T>(
-      operation: (client: LocalDeliveryClient) => Promise<T>,
-    ) => Promise<T>;
+    runTransaction?: <T>(operation: (client: LocalDeliveryClient) => Promise<T>) => Promise<T>;
     write?: (path: string, body: string) => Promise<void>;
   } = {},
 ) {
-  const run =
-    dependencies.runTransaction ??
-    ((operation) => transaction(operation as any));
+  const run = dependencies.runTransaction ?? ((operation) => transaction(operation as any));
   const write = dependencies.write ?? writeLocalMailFile;
   return run(async (c) => {
-    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-      input.email,
-    ]);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [input.email]);
     const current = await c.query(
       `SELECT 1 FROM login_challenges challenge
        WHERE challenge.id=$1 AND challenge.email=$2
@@ -165,19 +151,13 @@ function loginCodeLetter(code: string) {
   return loginCodeMail({
     code,
     origin: config.APP_ORIGIN,
-    contact: hosted
-      ? HOSTED_MAIL_SITE.contact
-      : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
+    contact: hosted ? HOSTED_MAIL_SITE.contact : (config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null),
   });
 }
 
 export async function beginEmailLogin(email: string, ip: string) {
   if (config.MAIL_MODE === "disabled")
-    throw new Problem(
-      503,
-      "invalid",
-      "Вход по почте ещё не настроен на этой установке.",
-    );
+    throw new Problem(503, "invalid", "Вход по почте ещё не настроен на этой установке.");
   if (config.MAIL_MODE === "local" && !email.endsWith(".test"))
     throw new Problem(
       400,
@@ -190,9 +170,7 @@ export async function beginEmailLogin(email: string, ip: string) {
     code = String(randomInt(10 ** (CODE_DIGITS - 1), 10 ** CODE_DIGITS)),
     browser = randomBytes(32).toString("base64url");
   const stored = await transaction(async (c) => {
-    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-      email,
-    ]);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [email]);
     const blocked = (
       await c.query(
         `SELECT 1 FROM accounts
@@ -205,9 +183,7 @@ export async function beginEmailLogin(email: string, ip: string) {
     // existing accounts and allowed addresses only. The answer is the same
     // either way, so the form does not tell a stranger which addresses have
     // a shelf; the interface explains the domain rule from /api/capabilities.
-    const known = (
-      await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])
-    ).rowCount;
+    const known = (await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount;
     if (known) {
       if (!emailLoginAllowed(email)) return false;
     } else {
@@ -221,8 +197,7 @@ export async function beginEmailLogin(email: string, ip: string) {
     );
     return true;
   });
-  if (!stored)
-    return { id, browser, delivery: config.MAIL_MODE, expiresInSeconds: 600 };
+  if (!stored) return { id, browser, delivery: config.MAIL_MODE, expiresInSeconds: 600 };
   try {
     if (config.MAIL_MODE === "local") {
       const delivered = await deliverLocalEmailChallenge({ id, email, code });
@@ -237,15 +212,8 @@ export async function beginEmailLogin(email: string, ip: string) {
       await sendSmtpMail({ to: email, ...loginCodeLetter(code) });
     }
   } catch {
-    await db.query(
-      "UPDATE login_challenges SET consumed_at=now() WHERE id=$1",
-      [id],
-    );
-    throw new Problem(
-      503,
-      "invalid",
-      "Не удалось отправить код. Попробуйте позже.",
-    );
+    await db.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [id]);
+    throw new Problem(503, "invalid", "Не удалось отправить код. Попробуйте позже.");
   }
   return { id, browser, delivery: config.MAIL_MODE, expiresInSeconds: 600 };
 }
@@ -278,16 +246,12 @@ export async function verifyEmailLogin(
   source?: VisitSource | null,
   options: EmailVerifyOptions = {},
 ): Promise<EmailVerifyResult> {
-  if (config.MAIL_MODE === "disabled")
-    throw new Problem(503, "invalid", "Вход по почте отключён.");
+  if (config.MAIL_MODE === "disabled") throw new Problem(503, "invalid", "Вход по почте отключён.");
   await limitAttempts(`email-verify-ip:${ip}`, 40);
   const result = await transaction(async (c): Promise<EmailVerifyResult | null> => {
     const {
       rows: [challenge],
-    } = await c.query(
-      "SELECT *, expires_at>now() AS fresh FROM login_challenges WHERE id=$1 FOR UPDATE",
-      [id],
-    );
+    } = await c.query("SELECT *, expires_at>now() AS fresh FROM login_challenges WHERE id=$1 FOR UPDATE", [id]);
     if (
       !challenge ||
       !challenge.fresh ||
@@ -297,32 +261,16 @@ export async function verifyEmailLogin(
       challenge.browser_hash !== sha256(browser)
     )
       return null;
-    await c.query(
-      "UPDATE login_challenges SET attempts=attempts+1 WHERE id=$1",
-      [id],
-    );
-    if (
-      !timingSafeEqual(
-        Buffer.from(challenge.code_hash, "hex"),
-        Buffer.from(fingerprint(id, code), "hex"),
-      )
-    )
+    await c.query("UPDATE login_challenges SET attempts=attempts+1 WHERE id=$1", [id]);
+    if (!timingSafeEqual(Buffer.from(challenge.code_hash, "hex"), Buffer.from(fingerprint(id, code), "hex")))
       return null;
     // Serialize two independently issued challenges for the same verified identity.
-    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-      challenge.email,
-    ]);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [challenge.email]);
     let {
       rows: [account],
-    } = await c.query("SELECT * FROM accounts WHERE email=$1", [
-      challenge.email,
-    ]);
+    } = await c.query("SELECT * FROM accounts WHERE email=$1", [challenge.email]);
     if (account) {
-      const tenant = (
-        await c.query("SELECT * FROM tenants WHERE owner_id=$1 FOR UPDATE", [
-          account.id,
-        ])
-      ).rows[0];
+      const tenant = (await c.query("SELECT * FROM tenants WHERE owner_id=$1 FOR UPDATE", [account.id])).rows[0];
       account = (
         await c.query(
           `SELECT * FROM accounts WHERE id=$1 AND email=$2
@@ -338,17 +286,9 @@ export async function verifyEmailLogin(
       if (!emailSignupAllowed(challenge.email)) return null;
       if (options.provisionalId) {
         // The address claims the provisional shelf this browser holds.
-        const claimed = await claimWithEmail(
-          c,
-          options.provisionalId,
-          challenge.email,
-          challenge.delivery === "smtp",
-        );
+        const claimed = await claimWithEmail(c, options.provisionalId, challenge.email, challenge.delivery === "smtp");
         if (!claimed) return null;
-        await c.query(
-          "UPDATE login_challenges SET consumed_at=now() WHERE id=$1",
-          [id],
-        );
+        await c.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [id]);
         return { kind: "claimed", accountId: options.provisionalId };
       }
       // The code is right and stays usable: the person answers the question
@@ -370,32 +310,18 @@ export async function verifyEmailLogin(
         ],
       );
       account = res.rows[0];
-      await c.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [
-        randomUUID(),
-        accountId,
-      ]);
+      await c.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [randomUUID(), accountId]);
       trackSignup(c, accountId, "email", source);
       created = true;
     } else if (challenge.delivery === "smtp")
-      await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [
-        account.id,
-      ]);
-    await c.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [
-      id,
-    ]);
+      await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [account.id]);
+    await c.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [id]);
     const session = randomBytes(32).toString("base64url");
-    await c.query(
-      "INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",
-      [sha256(session), account.id],
-    );
+    await c.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')", [sha256(session), account.id]);
     return { kind: "session", session, accountId: account.id, created };
   });
   if (!result)
-    throw new Problem(
-      401,
-      "unauthorized",
-      "Код неверен, истёк или уже использован. Запросите новый, если нужно.",
-    );
+    throw new Problem(401, "unauthorized", "Код неверен, истёк или уже использован. Запросите новый, если нужно.");
   return result;
 }
 
@@ -403,17 +329,8 @@ export async function verifyEmailLogin(
  * Attaches a verified address to a provisional shelf (tenant, then account
  * locked) and marks it claimed. False when the shelf is gone or claimed.
  */
-async function claimWithEmail(
-  c: PoolClient,
-  accountId: string,
-  email: string,
-  verified: boolean,
-) {
-  const tenant = (
-    await c.query("SELECT id FROM tenants WHERE owner_id=$1 FOR UPDATE", [
-      accountId,
-    ])
-  ).rows[0];
+async function claimWithEmail(c: PoolClient, accountId: string, email: string, verified: boolean) {
+  const tenant = (await c.query("SELECT id FROM tenants WHERE owner_id=$1 FOR UPDATE", [accountId])).rows[0];
   const account = (
     await c.query(
       `SELECT id FROM accounts WHERE id=$1 AND provisional_at IS NOT NULL

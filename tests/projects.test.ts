@@ -21,10 +21,7 @@ import { db } from "../apps/server/db.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { revisionMaterial } from "../apps/server/content-moderation.ts";
-import {
-  MARKDOWN_DEADLINE_MS,
-  renderProjectMarkdownBounded,
-} from "../apps/server/project-markdown.ts";
+import { MARKDOWN_DEADLINE_MS, renderProjectMarkdownBounded } from "../apps/server/project-markdown.ts";
 
 const app = await createApp();
 const password = randomBytes(24).toString("hex");
@@ -52,7 +49,10 @@ const PNG = Buffer.from(
   "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63f8cf00000301010018dd8db40000000049454e44ae426082",
   "hex",
 );
-const GIF = Buffer.from("47494638396101000100800000ffffff00000021f90401000000002c00000000010001000002024401003b", "hex");
+const GIF = Buffer.from(
+  "47494638396101000100800000ffffff00000021f90401000000002c00000000010001000002024401003b",
+  "hex",
+);
 
 const manifestOf = (files: File[], entrypoint: string, runtime = "project-v1") => ({
   version: 1,
@@ -108,9 +108,17 @@ async function upload(secret: string, files: File[], entrypoint: string, extra: 
 }
 
 const research = () => [
-  file("README.md", "text/markdown", "# Исследование рынка\n\nСм. `02-users/stories.md` и [экраны](screens/index.html).\n"),
+  file(
+    "README.md",
+    "text/markdown",
+    "# Исследование рынка\n\nСм. `02-users/stories.md` и [экраны](screens/index.html).\n",
+  ),
   file("02-users/stories.md", "text/markdown", "# Истории\n\nМенеджер готовит коммерческое предложение для клиента.\n"),
-  file("screens/index.html", "text/html", '<!doctype html><title>Экраны</title><link rel="stylesheet" href="shared/ui.css"><h1>Сквозная цепочка экранов</h1><img src="shot.png">'),
+  file(
+    "screens/index.html",
+    "text/html",
+    '<!doctype html><title>Экраны</title><link rel="stylesheet" href="shared/ui.css"><h1>Сквозная цепочка экранов</h1><img src="shot.png">',
+  ),
   file("screens/shared/ui.css", "text/css", "h1{font-family:system-ui}"),
   file("screens/shot.png", "image/png", PNG),
   file("screens/walk.gif", "image/gif", GIF),
@@ -133,7 +141,9 @@ test("a project of documents, pages and pictures is saved as one work", async ()
   assert.equal(finalized!.statusCode, 200, finalized!.body);
   const receipt = finalized!.json();
   assert.match(receipt.shelfUrl, /\/works\/[0-9a-f-]{36}$/);
-  const { rows: [revision] } = await db.query(
+  const {
+    rows: [revision],
+  } = await db.query(
     "SELECT mime,html_profile,storage_kind,total_size,manifest->>'runtime' AS runtime FROM revisions WHERE id=$1",
     [receipt.revisionId],
   );
@@ -147,10 +157,14 @@ test("a project of documents, pages and pictures is saved as one work", async ()
       runtime: "project-v1",
     },
   );
-  const files = await db.query("SELECT count(*)::int AS n FROM revision_files WHERE revision_id=$1", [receipt.revisionId]);
+  const files = await db.query("SELECT count(*)::int AS n FROM revision_files WHERE revision_id=$1", [
+    receipt.revisionId,
+  ]);
   assert.equal(files.rows[0].n, 6);
   // Every document and page is searchable, not only the entry.
-  const { rows: [search] } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [receipt.artifactId]);
+  const {
+    rows: [search],
+  } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [receipt.artifactId]);
   assert.match(search.body, /коммерческое предложение/);
   assert.match(search.body, /Сквозная цепочка экранов/);
 });
@@ -159,13 +173,33 @@ test("a project may hold more than a bundle; a bundle keeps its limits", async (
   const many = Array.from({ length: 70 }, (_, i) =>
     file(`notes/n${String(i).padStart(2, "0")}.md`, "text/markdown", `# Заметка ${i}\n`),
   );
-  const { finalized } = await upload(await token(), [file("README.md", "text/markdown", "# Много заметок\n"), ...many], "README.md");
+  const { finalized } = await upload(
+    await token(),
+    [file("README.md", "text/markdown", "# Много заметок\n"), ...many],
+    "README.md",
+  );
   assert.equal(finalized!.statusCode, 200, finalized!.body);
   // The same shapes as a plain bundle are refused.
-  assert.throws(() => bundleManifestSchema.parse(manifestOf([file("README.md", "text/markdown", "# x"), ...many], "README.md", "preserved-only-v1")));
-  assert.throws(() => bundleManifestSchema.parse(manifestOf([file("index.html", "text/html", "<p>x"), file("a.md", "text/markdown", "x")], "index.html", "preserved-only-v1")));
+  assert.throws(() =>
+    bundleManifestSchema.parse(
+      manifestOf([file("README.md", "text/markdown", "# x"), ...many], "README.md", "preserved-only-v1"),
+    ),
+  );
+  assert.throws(() =>
+    bundleManifestSchema.parse(
+      manifestOf(
+        [file("index.html", "text/html", "<p>x"), file("a.md", "text/markdown", "x")],
+        "index.html",
+        "preserved-only-v1",
+      ),
+    ),
+  );
   // A project's entry is a document or a page, not a stylesheet.
-  const { begun } = await upload(await token(), [file("a.css", "text/css", "p{}"), file("b.md", "text/markdown", "x")], "a.css");
+  const { begun } = await upload(
+    await token(),
+    [file("a.css", "text/css", "p{}"), file("b.md", "text/markdown", "x")],
+    "a.css",
+  );
   assert.equal(begun.statusCode, 400, begun.body);
 });
 
@@ -218,7 +252,8 @@ test("the CLI publishes a folder, skipping what a reader never opens", async () 
       const child = spawn(process.execPath, [cliPath, root, "--json"], {
         env: { ...process.env, POLKA_TOKEN: secret, POLKA_ENDPOINT: endpoint },
       });
-      let out = "", err = "";
+      let out = "",
+        err = "";
       child.stdout.on("data", (chunk) => (out += chunk));
       child.stderr.on("data", (chunk) => (err += chunk));
       child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
@@ -228,10 +263,7 @@ test("the CLI publishes a folder, skipping what a reader never opens", async () 
     assert.equal(result.title, "Исследование рынка");
     assert.equal(result.entry, "README.md");
     assert.equal(result.files, 6);
-    assert.deepEqual(
-      result.skipped.map((item: any) => item.path).sort(),
-      ["build.py", "Отчёт.md"],
-    );
+    assert.deepEqual(result.skipped.map((item: any) => item.path).sort(), ["build.py", "Отчёт.md"]);
     assert.match(result.shelfUrl, new RegExp(`^${config.APP_ORIGIN}/works/`));
   } finally {
     await new Promise<void>((resolve) => app.server.close(() => resolve()));
@@ -241,7 +273,8 @@ test("the CLI publishes a folder, skipping what a reader never opens", async () 
 const runCli = (args: string[], env: Record<string, string>) =>
   new Promise<{ code: number; out: string; err: string }>((resolve) => {
     const child = spawn(process.execPath, [cliPath, ...args], { env: { ...process.env, ...env } });
-    let out = "", err = "";
+    let out = "",
+      err = "";
     child.stdout.on("data", (chunk) => (out += chunk));
     child.stderr.on("data", (chunk) => (err += chunk));
     child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
@@ -254,18 +287,26 @@ test("the CLI saves a folder of one React component as that component, which П�
   await writeFile(join(root, "notes.txt"), "заметки");
   const dry = await runCli([root, "--dry-run"], {});
   assert.equal(dry.code, 0, dry.err);
-  assert.deepEqual({ as: JSON.parse(dry.out).as, entry: JSON.parse(dry.out).entry }, { as: "component", entry: "App.jsx" });
+  assert.deepEqual(
+    { as: JSON.parse(dry.out).as, entry: JSON.parse(dry.out).entry },
+    { as: "component", entry: "App.jsx" },
+  );
   // Components are saved where pages may run (HTML_LIVE_ENABLED).
   const live = config.HTML_LIVE_ENABLED;
   config.HTML_LIVE_ENABLED = true;
   await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
   try {
     const endpoint = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
-    const run = await runCli([root, "--json", "--title", "Прототип"], { POLKA_TOKEN: await token(), POLKA_ENDPOINT: endpoint });
+    const run = await runCli([root, "--json", "--title", "Прототип"], {
+      POLKA_TOKEN: await token(),
+      POLKA_ENDPOINT: endpoint,
+    });
     assert.equal(run.code, 0, run.err);
     const result = JSON.parse(run.out);
     assert.equal(result.as, "component");
-    const { rows: [saved] } = await db.query(
+    const {
+      rows: [saved],
+    } = await db.query(
       "SELECT a.title, r.manifest->>'runtime' AS runtime FROM revisions r JOIN artifacts a ON a.id=r.artifact_id WHERE r.id=$1",
       [result.revisionId],
     );
@@ -290,13 +331,17 @@ test("the CLI explains a React app of many files instead of saving a blank proje
   await writeFile(join(root, "README.md"), "# Приложение\n");
   const beside = await runCli([root, "--dry-run"], {});
   assert.equal(beside.code, 0, beside.err);
-  assert.ok(JSON.parse(beside.out).skipped.some((item: any) => item.path === "src/App.tsx" && /React source/.test(item.reason)));
+  assert.ok(
+    JSON.parse(beside.out).skipped.some((item: any) => item.path === "src/App.tsx" && /React source/.test(item.reason)),
+  );
 });
 
 test("the models read every document and page of a project", async () => {
   const { finalized } = await upload(await token(), research(), "README.md");
   const receipt = finalized!.json();
-  const { rows: [revision] } = await db.query(
+  const {
+    rows: [revision],
+  } = await db.query(
     `SELECT id,mime,filename,storage_kind,object_key,object_version,size,manifest->>'runtime' AS runtime
      FROM revisions WHERE id=$1`,
     [receipt.revisionId],
@@ -361,10 +406,9 @@ test("one file of a project is patched; S3 copies the rest into the new version"
   const rows = async (revisionId: string) =>
     new Map(
       (
-        await db.query(
-          "SELECT path,sha256,object_key,object_version FROM revision_files WHERE revision_id=$1",
-          [revisionId],
-        )
+        await db.query("SELECT path,sha256,object_key,object_version FROM revision_files WHERE revision_id=$1", [
+          revisionId,
+        ])
       ).rows.map((row) => [row.path, row]),
     );
   const before = await rows(first.revisionId);
@@ -376,7 +420,9 @@ test("one file of a project is patched; S3 copies the rest into the new version"
     if (path === "02-users/stories.md") assert.notEqual(row.sha256, before.get(path).sha256);
     else assert.equal(row.sha256, before.get(path).sha256, path);
   }
-  const { rows: [search] } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
+  const {
+    rows: [search],
+  } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
   assert.match(search.body, /договор поставки/);
   assert.doesNotMatch(search.body, /коммерческое предложение/);
 
@@ -402,7 +448,8 @@ test("pull a project into a folder, change it, push: only changed files are sent
   const node = (script: string, args: string[], env: Record<string, string>) =>
     new Promise<{ code: number; out: string; err: string }>((resolve) => {
       const child = spawn(process.execPath, [script, ...args], { env: { ...process.env, ...env } });
-      let out = "", err = "";
+      let out = "",
+        err = "";
       child.stdout.on("data", (chunk) => (out += chunk));
       child.stderr.on("data", (chunk) => (err += chunk));
       child.on("close", (code) => resolve({ code: code ?? 1, out, err }));
@@ -444,7 +491,9 @@ test("pull a project into a folder, change it, push: only changed files are sent
     assert.equal(result.unchanged, research().length - 1);
     const next = JSON.parse(await read(join(folder, ".polka.json"), "utf8"));
     assert.equal(next.revisionId, result.revisionId);
-    const { rows: [search] } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
+    const {
+      rows: [search],
+    } = await db.query("SELECT body FROM artifact_search WHERE artifact_id=$1", [first.artifactId]);
     assert.match(search.body, /договор поставки/);
 
     // Pushing from the old version again is refused: it is not the latest.

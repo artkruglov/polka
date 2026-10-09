@@ -9,8 +9,7 @@ import type { SignInProvider } from "../../entities/capabilities/useCapabilities
 // domain rule from /api/capabilities, can warn: it never learns whether a
 // shelf exists, it only repeats the rule.
 
-export const SPAM_HINT =
-  "Письмо не пришло за минуту? Проверьте «Спам» и «Промоакции».";
+export const SPAM_HINT = "Письмо не пришло за минуту? Проверьте «Спам» и «Промоакции».";
 
 /** The part after the last "@", lower-cased and trimmed; "" when there is none. */
 export function typedDomainOf(email: string) {
@@ -23,15 +22,8 @@ export function typedDomainOf(email: string) {
 }
 
 /** A complete-looking domain that the sign-up list does not name. */
-export function outsideSignupDomains(
-  domain: string,
-  signupDomains: "any" | readonly string[],
-) {
-  return (
-    signupDomains !== "any" &&
-    /\.[a-z]{2,}$/.test(domain) &&
-    !signupDomains.includes(domain)
-  );
+export function outsideSignupDomains(domain: string, signupDomains: "any" | readonly string[]) {
+  return signupDomains !== "any" && /\.[a-z]{2,}$/.test(domain) && !signupDomains.includes(domain);
 }
 
 /** «на почте Яндекса, Mail.ru, Рамблера и VK» for ru-only, else the list. */
@@ -59,12 +51,7 @@ export function codeScreenNotice(input: {
   loginDomains: "any" | "signup";
 }): CodeScreenNotice {
   const domain = typedDomainOf(input.email);
-  if (
-    input.delivery === "local" ||
-    input.inviteOnly ||
-    !outsideSignupDomains(domain, input.signupDomains)
-  )
-    return null;
+  if (input.delivery === "local" || input.inviteOnly || !outsideSignupDomains(domain, input.signupDomains)) return null;
   if (input.loginDomains === "signup")
     return {
       kind: "never",
@@ -100,18 +87,14 @@ export function OutsideDomainHelp({
       <Notice>{notice.text}</Notice>
       {openers.length > 0 && (
         <>
-          <p className="code-help-lead">
-            Войдите одним нажатием — полка откроется сразу:
-          </p>
+          <p className="code-help-lead">Войдите одним нажатием — полка откроется сразу:</p>
           <ProviderButtons providers={openers} next={next} />
         </>
       )}
       <Button type="button" disabled={busy} onClick={onChangeAddress}>
         Изменить адрес
       </Button>
-      {notice.kind === "if-shelf" && (
-        <div className="idp-or">или введите код, если полка уже есть</div>
-      )}
+      {notice.kind === "if-shelf" && <div className="idp-or">или введите код, если полка уже есть</div>}
     </section>
   );
 }

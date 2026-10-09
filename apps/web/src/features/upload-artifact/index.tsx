@@ -3,18 +3,9 @@ import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { updatePhrase } from "../../entities/artifact/agent-phrases.ts";
 import React, { useRef, useState } from "react";
 import { ArrowUpRight, Upload } from "lucide-react";
-import type {
-  Artifact,
-  Folder,
-  Receipt,
-} from "../../../../../packages/contracts/index.ts";
+import type { Artifact, Folder, Receipt } from "../../../../../packages/contracts/index.ts";
 import { currentShelf, saveUpload, type PendingUpload } from "../../shared/api/client.ts";
-import {
-  UPLOAD_ACCEPT,
-  UPLOAD_FORMATS,
-  uploadBlob,
-  uploadProblem,
-} from "../../entities/artifact/upload.ts";
+import { UPLOAD_ACCEPT, UPLOAD_FORMATS, uploadBlob, uploadProblem } from "../../entities/artifact/upload.ts";
 import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
@@ -51,10 +42,7 @@ export function UploadPanel({
   };
   const save = async () => {
     setError("");
-    const current =
-      mode === "file"
-        ? file && uploadBlob(file)
-        : new Blob([text], { type: "text/plain" });
+    const current = mode === "file" ? file && uploadBlob(file) : new Blob([text], { type: "text/plain" });
     if (!current?.size || !title.trim()) {
       setError("Добавьте название и содержимое.");
       return;
@@ -89,13 +77,7 @@ export function UploadPanel({
     }
   };
   return (
-    <Dialog
-      title={
-        artifact ? "Сохранить новую версию" : "Сохранить работу с компьютера"
-      }
-      onClose={onClose}
-      busy={busy}
-    >
+    <Dialog title={artifact ? "Сохранить новую версию" : "Сохранить работу с компьютера"} onClose={onClose} busy={busy}>
       <div className="dialog-body">
         <p className="muted">
           {artifact
@@ -117,99 +99,94 @@ export function UploadPanel({
               buttonLabel="Скопировать фразу"
               successText="Скопировано. Вставьте в чат агента"
             />
-            <p className="fine">
-              Агент найдёт работу по адресу, внесёт правки и сохранит новую версию сам.
-            </p>
+            <p className="fine">Агент найдёт работу по адресу, внесёт правки и сохранит новую версию сам.</p>
           </section>
         )}
         {artifact && (
-          <details
-            className="upload-manual"
-            open={manual}
-            onToggle={(event) => setManual(event.currentTarget.open)}
-          >
+          <details className="upload-manual" open={manual} onToggle={(event) => setManual(event.currentTarget.open)}>
             <summary>Загрузить файл или вставить текст</summary>
           </details>
         )}
-        {manual && (<>
-        <Segmented
-          label="Что сохранить"
-          value={mode}
-          onChange={(next) => {
-            if (busy) return;
-            setMode(next);
-            reset();
-          }}
-          options={[
-            { id: "file", label: "Загрузить файл" },
-            { id: "text", label: "Вставить текст" },
-          ]}
-          wide
-        />
-        <TextField
-          label="Название"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            reset();
-          }}
-          maxLength={160}
-          disabled={busy}
-        />
-        {mode === "file" ? (
-          <label className="file-drop">
-            <Upload />
-            <strong>{file ? file.name : "Выберите файл"}</strong>
-            <span>{UPLOAD_FORMATS}</span>
-            <input
-              type="file"
-              accept={UPLOAD_ACCEPT}
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                setFile(f);
-                if (f && !title) {
-                  const fallback = fallbackTitle(f);
-                  setTitle(fallback);
-                  void suggestTitle(f).then((suggested) =>
-                    setTitle((current) => (current === fallback ? suggested : current)),
-                  );
-                }
+        {manual && (
+          <>
+            <Segmented
+              label="Что сохранить"
+              value={mode}
+              onChange={(next) => {
+                if (busy) return;
+                setMode(next);
                 reset();
               }}
+              options={[
+                { id: "file", label: "Загрузить файл" },
+                { id: "text", label: "Вставить текст" },
+              ]}
+              wide
             />
-          </label>
-        ) : (
-          <TextAreaField
-            label="Содержимое"
-            rows={8}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              reset();
-            }}
-            disabled={busy}
-            placeholder="Вставьте текст, который собрал агент…"
-          />
+            <TextField
+              label="Название"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                reset();
+              }}
+              maxLength={160}
+              disabled={busy}
+            />
+            {mode === "file" ? (
+              <label className="file-drop">
+                <Upload />
+                <strong>{file ? file.name : "Выберите файл"}</strong>
+                <span>{UPLOAD_FORMATS}</span>
+                <input
+                  type="file"
+                  accept={UPLOAD_ACCEPT}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setFile(f);
+                    if (f && !title) {
+                      const fallback = fallbackTitle(f);
+                      setTitle(fallback);
+                      void suggestTitle(f).then((suggested) =>
+                        setTitle((current) => (current === fallback ? suggested : current)),
+                      );
+                    }
+                    reset();
+                  }}
+                />
+              </label>
+            ) : (
+              <TextAreaField
+                label="Содержимое"
+                rows={8}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  reset();
+                }}
+                disabled={busy}
+                placeholder="Вставьте текст, который собрал агент…"
+              />
+            )}
+            {!artifact && folders.length > 0 && (
+              <FolderSelect
+                folders={{ items: folders, loading: false, error: "", retry: () => {} }}
+                value={folder}
+                onChange={(next) => {
+                  setFolder(next);
+                  reset();
+                }}
+                disabled={busy}
+              />
+            )}
+            <p className="fine">
+              Сначала показываем сохранённый вид HTML. Доступность отдельного интерактивного режима и ссылки
+              определяется после сохранения. ZIP, PDF и PPTX эта сборка не принимает.
+            </p>
+            <ErrorNotice error={error} />
+          </>
         )}
-        {!artifact && folders.length > 0 && (
-          <FolderSelect
-            folders={{ items: folders, loading: false, error: "", retry: () => {} }}
-            value={folder}
-            onChange={(next) => {
-              setFolder(next);
-              reset();
-            }}
-            disabled={busy}
-          />
-        )}
-        <p className="fine">
-          Сначала показываем сохранённый вид HTML. Доступность отдельного
-          интерактивного режима и ссылки определяется после сохранения. ZIP, PDF
-          и PPTX эта сборка не принимает.
-        </p>
-        <ErrorNotice error={error} />
-        </>)}
       </div>
       <div className="dialog-footer">
         <Button onClick={onClose} disabled={busy}>
@@ -217,10 +194,7 @@ export function UploadPanel({
         </Button>
         {manual && (
           <Button variant="primary" onClick={save} disabled={busy}>
-            {stage ||
-              (error && operation.current
-                ? "Повторить сохранение"
-                : "Сохранить на полку")}
+            {stage || (error && operation.current ? "Повторить сохранение" : "Сохранить на полку")}
             <ArrowUpRight />
           </Button>
         )}

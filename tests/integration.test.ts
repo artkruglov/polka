@@ -10,27 +10,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registerFrontend } from "../apps/server/frontend.ts";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import {
-  createApp,
-  RESOLVE_LIMIT_PER_IP,
-  TRANSFER_SLOTS,
-} from "../apps/server/app.ts";
+import { createApp, RESOLVE_LIMIT_PER_IP, TRANSFER_SLOTS } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import {
-  s3,
-  bucket,
-  sha256,
-  putImmutable,
-  readBlob,
-} from "../apps/server/storage.ts";
+import { s3, bucket, sha256, putImmutable, readBlob } from "../apps/server/storage.ts";
 const app = await createApp();
 const origin = config.APP_ORIGIN;
 if (!["127.0.0.1", "localhost"].includes(new URL(origin).hostname))
-  throw new Error(
-    "Integration fixtures are only allowed on a local development installation",
-  );
+  throw new Error("Integration fixtures are only allowed on a local development installation");
 let a: any,
   b: any,
   ca = "",
@@ -46,18 +34,12 @@ async function call(method: any, url: string, body?: any, cookie = ca) {
     headers: {
       origin,
       ...(cookie ? { cookie } : {}),
-      ...(Buffer.isBuffer(body)
-        ? { "content-type": "application/octet-stream" }
-        : {}),
+      ...(Buffer.isBuffer(body) ? { "content-type": "application/octet-stream" } : {}),
     },
     payload: body,
   });
 }
-async function save(
-  text: string,
-  patch: Record<string, unknown> = {},
-  cookie = ca,
-) {
+async function save(text: string, patch: Record<string, unknown> = {}, cookie = ca) {
   const bytes = Buffer.from(text);
   const input = {
     key: randomUUID(),
@@ -71,19 +53,9 @@ async function save(
   const begin = await call("POST", "/api/uploads", input, cookie);
   assert.equal(begin.statusCode, 200, begin.body);
   const { uploadId } = begin.json();
-  const put = await call(
-    "PUT",
-    `/api/uploads/${uploadId}/bytes`,
-    bytes,
-    cookie,
-  );
+  const put = await call("PUT", `/api/uploads/${uploadId}/bytes`, bytes, cookie);
   assert.equal(put.statusCode, 200, put.body);
-  const finish = await call(
-    "POST",
-    `/api/uploads/${uploadId}/finalize`,
-    {},
-    cookie,
-  );
+  const finish = await call("POST", `/api/uploads/${uploadId}/finalize`, {}, cookie);
   assert.equal(finish.statusCode, 200, finish.body);
   return { receipt: finish.json(), input, uploadId };
 }
@@ -137,25 +109,12 @@ test("Private upload persists with receipt; duplicate begin/finalize creates one
   const saved = await save("Итоги недели\nЗапустили первую рабочую полку.");
   const retry = await call("POST", "/api/uploads", saved.input);
   assert.deepEqual(retry.json().receipt, saved.receipt);
-  assert.deepEqual(
-    (await call("POST", `/api/uploads/${saved.uploadId}/finalize`, {})).json(),
-    saved.receipt,
-  );
-  const artifact = (
-    await call("GET", `/api/artifacts/${saved.receipt.artifactId}`)
-  ).json();
+  assert.deepEqual((await call("POST", `/api/uploads/${saved.uploadId}/finalize`, {})).json(), saved.receipt);
+  const artifact = (await call("GET", `/api/artifacts/${saved.receipt.artifactId}`)).json();
   assert.equal(artifact.share, null);
+  assert.equal((await call("GET", `/api/artifacts/${artifact.id}/revisions`)).json().length, 1);
   assert.equal(
-    (await call("GET", `/api/artifacts/${artifact.id}/revisions`)).json()
-      .length,
-    1,
-  );
-  assert.equal(
-    +(
-      await db.query("SELECT count(*) FROM audit_outbox WHERE target_id=$1", [
-        saved.receipt.revisionId,
-      ])
-    ).rows[0].count,
+    +(await db.query("SELECT count(*) FROM audit_outbox WHERE target_id=$1", [saved.receipt.revisionId])).rows[0].count,
     1,
   );
   const altered = await call("POST", "/api/uploads", {
@@ -167,31 +126,19 @@ test("Private upload persists with receipt; duplicate begin/finalize creates one
 
 test("Artifact metadata rename and move preserve revisions and shares", async () => {
   const saved = await save("Metadata stays immutable", { title: "Before" });
-  const folder = (
-    await call("POST", "/api/folders", { name: `moved-${randomUUID()}` })
-  ).json();
-  const shared = await call(
-    "POST",
-    `/api/artifacts/${saved.receipt.artifactId}/share`,
-    {
-      expectedRevisionId: saved.receipt.revisionId,
-      expiresInDays: 1,
-    },
-  );
+  const folder = (await call("POST", "/api/folders", { name: `moved-${randomUUID()}` })).json();
+  const shared = await call("POST", `/api/artifacts/${saved.receipt.artifactId}/share`, {
+    expectedRevisionId: saved.receipt.revisionId,
+    expiresInDays: 1,
+  });
   assert.equal(shared.statusCode, 200, shared.body);
-  const before = (
-    await call("GET", `/api/artifacts/${saved.receipt.artifactId}`)
-  ).json();
-  const moved = await call(
-    "PATCH",
-    `/api/artifacts/${saved.receipt.artifactId}`,
-    {
-      title: "After",
-      folderId: folder.id,
-      expectedTitle: "Before",
-      expectedFolderId: null,
-    },
-  );
+  const before = (await call("GET", `/api/artifacts/${saved.receipt.artifactId}`)).json();
+  const moved = await call("PATCH", `/api/artifacts/${saved.receipt.artifactId}`, {
+    title: "After",
+    folderId: folder.id,
+    expectedTitle: "Before",
+    expectedFolderId: null,
+  });
   assert.equal(moved.statusCode, 200, moved.body);
   assert.equal(moved.json().title, "After");
   assert.equal(moved.json().folderId, folder.id);
@@ -200,10 +147,10 @@ test("Artifact metadata rename and move preserve revisions and shares", async ()
   assert.equal(moved.json().share.id, before.share.id);
   assert.equal(
     +(
-      await db.query(
-        "SELECT count(*) FROM audit_outbox WHERE action=$1 AND target_id=$2",
-        ["artifact.metadata_updated", saved.receipt.artifactId],
-      )
+      await db.query("SELECT count(*) FROM audit_outbox WHERE action=$1 AND target_id=$2", [
+        "artifact.metadata_updated",
+        saved.receipt.artifactId,
+      ])
     ).rows[0].count,
     1,
   );
@@ -217,9 +164,7 @@ test("Artifact metadata rename and move preserve revisions and shares", async ()
     ).statusCode,
     409,
   );
-  const foreignFolder = (
-    await call("POST", "/api/folders", { name: `foreign-${randomUUID()}` }, cb)
-  ).json();
+  const foreignFolder = (await call("POST", "/api/folders", { name: `foreign-${randomUUID()}` }, cb)).json();
   assert.equal(
     (
       await call("PATCH", `/api/artifacts/${saved.receipt.artifactId}`, {
@@ -270,13 +215,8 @@ test("Two accounts and anonymous clients cannot obtain private title, revision, 
       assert.ok([401, 404].includes(r.statusCode));
       assert.ok(!r.body.includes("Private-only title"));
     }
-  assert.equal(
-    (await call("GET", "/api/artifacts", undefined, cb)).json().items.length,
-    0,
-  );
-  const folder = (
-    await call("POST", "/api/folders", { name: `private-${randomUUID()}` })
-  ).json();
+  assert.equal((await call("GET", "/api/artifacts", undefined, cb)).json().items.length, 0);
+  const folder = (await call("POST", "/api/folders", { name: `private-${randomUUID()}` })).json();
   const input = {
     key: randomUUID(),
     title: "test",
@@ -304,10 +244,7 @@ test("Checksum, real media type, UTF-8 and unsupported HTML are enforced on serv
         sha256: hash ?? sha256(body),
       })
     ).json();
-    assert.equal(
-      (await call("PUT", `/api/uploads/${u.uploadId}/bytes`, body)).statusCode,
-      422,
-    );
+    assert.equal((await call("PUT", `/api/uploads/${u.uploadId}/bytes`, body)).statusCode, 422);
     await call("DELETE", `/api/uploads/${u.uploadId}`);
   }
   const html = await call("POST", "/api/uploads", {
@@ -319,16 +256,7 @@ test("Checksum, real media type, UTF-8 and unsupported HTML are enforced on serv
     sha256: sha256("a"),
   });
   assert.equal(html.statusCode, 200);
-  assert.equal(
-    (
-      await call(
-        "PUT",
-        `/api/uploads/${html.json().uploadId}/bytes`,
-        Buffer.from("a"),
-      )
-    ).statusCode,
-    422,
-  );
+  assert.equal((await call("PUT", `/api/uploads/${html.json().uploadId}/bytes`, Buffer.from("a"))).statusCode, 422);
 });
 test("Static HTML is served in a sandbox, while unsupported HTML cannot be shared; recipient can report", async () => {
   const body = Buffer.from(
@@ -345,23 +273,12 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
   const begin = await call("POST", "/api/uploads", input);
   assert.equal(begin.statusCode, 200, begin.body);
   const uploadId = begin.json().uploadId;
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode,
-    200,
-  );
-  const receipt = (
-    await call("POST", `/api/uploads/${uploadId}/finalize`, {})
-  ).json();
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode, 200);
+  const receipt = (await call("POST", `/api/uploads/${uploadId}/finalize`, {})).json();
   assert.equal(receipt.htmlProfile, "static");
-  const document = await call(
-    "GET",
-    `/api/revisions/${receipt.revisionId}/document`,
-  );
+  const document = await call("GET", `/api/revisions/${receipt.revisionId}/document`);
   assert.equal(document.statusCode, 200, document.body);
-  assert.match(
-    document.headers["content-security-policy"] as string,
-    /sandbox/,
-  );
+  assert.match(document.headers["content-security-policy"] as string, /sandbox/);
   // The static view copies the page as is, except that external links go
   // through the signed "you are leaving" page.
   const expectedView = withNewTabLinks(Buffer.from(body)).toString();
@@ -397,18 +314,9 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
     "",
   );
   assert.equal(report.statusCode, 200, report.body);
-  assert.equal(
-    +(
-      await db.query("SELECT count(*) FROM share_reports WHERE share_id=$1", [
-        shared.id,
-      ])
-    ).rows[0].count,
-    1,
-  );
+  assert.equal(+(await db.query("SELECT count(*) FROM share_reports WHERE share_id=$1", [shared.id])).rows[0].count, 1);
 
-  const unsupported = Buffer.from(
-    "<html><script>document.body.innerHTML = 'runtime';</script></html>",
-  );
+  const unsupported = Buffer.from("<html><script>document.body.innerHTML = 'runtime';</script></html>");
   const unsupportedBegin = await call("POST", "/api/uploads", {
     key: randomUUID(),
     title: "Runtime HTML",
@@ -419,20 +327,14 @@ test("Static HTML is served in a sandbox, while unsupported HTML cannot be share
   });
   const unsupportedId = unsupportedBegin.json().uploadId;
   await call("PUT", `/api/uploads/${unsupportedId}/bytes`, unsupported);
-  const unsupportedReceipt = (
-    await call("POST", `/api/uploads/${unsupportedId}/finalize`, {})
-  ).json();
+  const unsupportedReceipt = (await call("POST", `/api/uploads/${unsupportedId}/finalize`, {})).json();
   assert.equal(unsupportedReceipt.htmlProfile, "unsupported");
   assert.equal(
     (
-      await call(
-        "POST",
-        `/api/artifacts/${unsupportedReceipt.artifactId}/share`,
-        {
-          expectedRevisionId: unsupportedReceipt.revisionId,
-          expiresInDays: 1,
-        },
-      )
+      await call("POST", `/api/artifacts/${unsupportedReceipt.artifactId}/share`, {
+        expectedRevisionId: unsupportedReceipt.revisionId,
+        expiresInDays: 1,
+      })
     ).statusCode,
     422,
   );
@@ -449,16 +351,8 @@ test("Abort and expiry prevent finalize; concurrent finalize returns one receipt
     };
     const u = (await call("POST", "/api/uploads", input)).json();
     if (abort) await call("DELETE", `/api/uploads/${u.uploadId}`);
-    else
-      await db.query(
-        "UPDATE uploads SET expires_at=now()-interval '1 second' WHERE id=$1",
-        [u.uploadId],
-      );
-    assert.equal(
-      (await call("POST", `/api/uploads/${u.uploadId}/finalize`, {}))
-        .statusCode,
-      410,
-    );
+    else await db.query("UPDATE uploads SET expires_at=now()-interval '1 second' WHERE id=$1", [u.uploadId]);
+    assert.equal((await call("POST", `/api/uploads/${u.uploadId}/finalize`, {})).statusCode, 410);
   }
   const bytes = Buffer.from("race");
   const u = (
@@ -493,54 +387,31 @@ test("Share recipient pins v1; saving v2 does not publish; explicit CAS update g
     artifactId: v1.artifactId,
     baseRevisionId: v1.revisionId,
   });
-  assert.equal(
-    (await call("GET", `/api/artifacts/${v1.artifactId}`)).json().share.status,
-    "behind",
-  );
+  assert.equal((await call("GET", `/api/artifacts/${v1.artifactId}`)).json().share.status, "behind");
   assert.equal((await grant(token)).revision.id, v1.revisionId);
   const change = {
     revisionId: v2.revisionId,
     expectedPublishedRevisionId: v1.revisionId,
   };
-  assert.equal(
-    (await call("POST", `/api/shares/${share.id}/publish`, change, cb))
-      .statusCode,
-    404,
-  );
-  assert.equal(
-    (await call("POST", `/api/shares/${share.id}/publish`, change)).statusCode,
-    200,
-  );
-  assert.equal(
-    (await call("POST", `/api/shares/${share.id}/publish`, change)).statusCode,
-    409,
-  );
+  assert.equal((await call("POST", `/api/shares/${share.id}/publish`, change, cb)).statusCode, 404);
+  assert.equal((await call("POST", `/api/shares/${share.id}/publish`, change)).statusCode, 200);
+  assert.equal((await call("POST", `/api/shares/${share.id}/publish`, change)).statusCode, 409);
   assert.equal((await grant(token)).revision.id, v2.revisionId);
   assert.equal((await content(g1.grant)).body, "first");
 });
 test("Revocation closes resolver and issued grants; a new link never resurrects the old one", async () => {
   const { receipt: r } = await save("revocation");
   const args = { expectedRevisionId: r.revisionId, expiresInDays: 1 };
-  const share = (
-      await call("POST", `/api/artifacts/${r.artifactId}/share`, args)
-    ).json().share,
+  const share = (await call("POST", `/api/artifacts/${r.artifactId}/share`, args)).json().share,
     token = new URL(share.url).hash.slice(1),
     g = await grant(token);
   assert.equal((await content(g.grant)).statusCode, 200);
   await call("POST", `/api/shares/${share.id}/revoke`, {});
   assert.equal((await content(g.grant)).statusCode, 404);
-  assert.equal(
-    (await call("POST", "/api/resolve", { token }, "")).statusCode,
-    404,
-  );
-  const newer = (
-    await call("POST", `/api/artifacts/${r.artifactId}/share`, args)
-  ).json().share;
+  assert.equal((await call("POST", "/api/resolve", { token }, "")).statusCode, 404);
+  const newer = (await call("POST", `/api/artifacts/${r.artifactId}/share`, args)).json().share;
   assert.notEqual(newer.url, share.url);
-  assert.equal(
-    (await call("POST", "/api/resolve", { token }, "")).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", "/api/resolve", { token }, "")).statusCode, 404);
   assert.equal(
     (
       await call("POST", `/api/shares/${share.id}/publish`, {
@@ -561,21 +432,12 @@ test("Expired shares and expired grants deny bytes and disclose no title", async
     ).json().share,
     token = new URL(s.url).hash.slice(1);
   const g = await grant(token);
-  await db.query(
-    "UPDATE grants SET expires_at=now()-interval '1 second' WHERE hash=$1",
-    [sha256(g.grant)],
-  );
+  await db.query("UPDATE grants SET expires_at=now()-interval '1 second' WHERE hash=$1", [sha256(g.grant)]);
   assert.equal((await content(g.grant)).statusCode, 404);
   const g2 = await grant(token);
-  await db.query(
-    "UPDATE shares SET expires_at=now()-interval '1 second' WHERE id=$1",
-    [s.id],
-  );
+  await db.query("UPDATE shares SET expires_at=now()-interval '1 second' WHERE id=$1", [s.id]);
   assert.equal((await content(g2.grant)).statusCode, 404);
-  assert.equal(
-    (await call("POST", "/api/resolve", { token }, "")).statusCode,
-    404,
-  );
+  assert.equal((await call("POST", "/api/resolve", { token }, "")).statusCode, 404);
 });
 test("Stale upload cannot overwrite a concurrently saved version", async () => {
   const { receipt: r } = await save("base"),
@@ -597,28 +459,14 @@ test("Stale upload cannot overwrite a concurrently saved version", async () => {
     artifactId: r.artifactId,
     baseRevisionId: r.revisionId,
   });
-  assert.equal(
-    (await call("POST", `/api/uploads/${u.uploadId}/finalize`, {})).statusCode,
-    409,
-  );
-  assert.equal(
-    (await call("GET", `/api/artifacts/${r.artifactId}`)).json().revision.id,
-    next.revisionId,
-  );
+  assert.equal((await call("POST", `/api/uploads/${u.uploadId}/finalize`, {})).statusCode, 409);
+  assert.equal((await call("GET", `/api/artifacts/${r.artifactId}`)).json().revision.id, next.revisionId);
   await call("DELETE", `/api/uploads/${u.uploadId}`);
 });
 test("Logout invalidates the server session; mutation origin and noindex headers apply", async () => {
-  const login = await call(
-      "POST",
-      "/api/login",
-      { name: b.name, password },
-      "",
-    ),
+  const login = await call("POST", "/api/login", { name: b.name, password }, ""),
     cookie = login.cookies[0].name + "=" + login.cookies[0].value;
-  assert.equal(
-    (await call("GET", "/api/me", undefined, cookie)).statusCode,
-    200,
-  );
+  assert.equal((await call("GET", "/api/me", undefined, cookie)).statusCode, 200);
   // The web app's check: the account signed in, null (still 200) for a guest.
   const session = await call("GET", "/api/session", undefined, cookie);
   assert.equal(session.statusCode, 200);
@@ -639,14 +487,8 @@ test("Logout invalidates the server session; mutation origin and noindex headers
     403,
   );
   await call("POST", "/api/logout", {}, cookie);
-  assert.equal(
-    (await call("GET", "/api/me", undefined, cookie)).statusCode,
-    401,
-  );
-  assert.deepEqual(
-    (await call("GET", "/api/session", undefined, cookie)).json(),
-    { account: null },
-  );
+  assert.equal((await call("GET", "/api/me", undefined, cookie)).statusCode, 401);
+  assert.deepEqual((await call("GET", "/api/session", undefined, cookie)).json(), { account: null });
   const noAccess = await call("GET", "/api/artifacts", undefined, "");
   assert.match(noAccess.headers["x-robots-tag"] as string, /noindex/);
   assert.equal(noAccess.headers["cache-control"], "no-store");
@@ -682,20 +524,11 @@ test("Valid raster upload returns exact bytes; direct anonymous S3 cannot bypass
     sha256: sha256(body),
   });
   const { uploadId } = started.json();
-  assert.equal(
-    (await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode,
-    200,
-  );
-  const r = (
-    await call("POST", `/api/uploads/${uploadId}/finalize`, {})
-  ).json();
+  assert.equal((await call("PUT", `/api/uploads/${uploadId}/bytes`, body)).statusCode, 200);
+  const r = (await call("POST", `/api/uploads/${uploadId}/finalize`, {})).json();
   const delivered = await call("GET", `/api/revisions/${r.revisionId}/bytes`);
   assert.deepEqual(delivered.rawPayload, body);
-  assert.equal(
-    (await fetch(`${config.S3_ENDPOINT}/${bucket}/${a.tenant}/${uploadId}`))
-      .status,
-    403,
-  );
+  assert.equal((await fetch(`${config.S3_ENDPOINT}/${bucket}/${a.tenant}/${uploadId}`)).status, 403);
 });
 test("Shelf is paginated, stable and tenant-scoped; malformed cursor is a client error", async () => {
   for (let i = 0; i < 26; i++)
@@ -705,30 +538,15 @@ test("Shelf is paginated, stable and tenant-scoped; malformed cursor is a client
   const first = (await call("GET", "/api/artifacts?q=Pagination")).json();
   assert.equal(first.items.length, 24);
   assert.ok(first.nextCursor);
-  const second = (
-    await call("GET", `/api/artifacts?q=Pagination&cursor=${first.nextCursor}`)
-  ).json();
+  const second = (await call("GET", `/api/artifacts?q=Pagination&cursor=${first.nextCursor}`)).json();
   assert.equal(second.items.length, 2);
   assert.equal(second.nextCursor, null);
+  assert.equal(new Set([...first.items, ...second.items].map((x) => x.id)).size, 26);
   assert.equal(
-    new Set([...first.items, ...second.items].map((x) => x.id)).size,
-    26,
-  );
-  assert.equal(
-    (
-      await call(
-        "GET",
-        `/api/artifacts?q=Pagination&cursor=${first.nextCursor}`,
-        undefined,
-        cb,
-      )
-    ).json().items.length,
+    (await call("GET", `/api/artifacts?q=Pagination&cursor=${first.nextCursor}`, undefined, cb)).json().items.length,
     0,
   );
-  assert.equal(
-    (await call("GET", "/api/artifacts?cursor=bad")).statusCode,
-    400,
-  );
+  assert.equal((await call("GET", "/api/artifacts?cursor=bad")).statusCode, 400);
 });
 test("Recovery after storage-before-DB failure reuses exact bytes; cleanup removes abandoned bytes but preserves receipts", async () => {
   const body = Buffer.from("recover");
@@ -743,13 +561,8 @@ test("Recovery after storage-before-DB failure reuses exact bytes; cleanup remov
     })
   ).json();
   await putImmutable(`${a.tenant}/${u.uploadId}`, body); // Simulated interruption before upload metadata commits.
-  assert.equal(
-    (await call("PUT", `/api/uploads/${u.uploadId}/bytes`, body)).statusCode,
-    200,
-  );
-  const good = (
-    await call("POST", `/api/uploads/${u.uploadId}/finalize`, {})
-  ).json();
+  assert.equal((await call("PUT", `/api/uploads/${u.uploadId}/bytes`, body)).statusCode, 200);
+  const good = (await call("POST", `/api/uploads/${u.uploadId}/finalize`, {})).json();
   const lost = (
     await call("POST", "/api/uploads", {
       key: randomUUID(),
@@ -762,27 +575,16 @@ test("Recovery after storage-before-DB failure reuses exact bytes; cleanup remov
   ).json();
   const version = await putImmutable(`${a.tenant}/${lost.uploadId}`, body);
   await call("DELETE", `/api/uploads/${lost.uploadId}`);
-  const cleanup = spawnSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"],
-    { encoding: "utf8" },
-  );
+  const cleanup = spawnSync(process.execPath, ["--import", "tsx", "--env-file=.env", "scripts/maintenance.ts"], {
+    encoding: "utf8",
+  });
   assert.equal(cleanup.status, 0, cleanup.stderr);
   await assert.rejects(
     readBlob(`${a.tenant}/${lost.uploadId}`, version),
     (e: any) => e.$metadata.httpStatusCode === 404,
   );
-  assert.equal(
-    (await call("GET", `/api/revisions/${good.revisionId}/bytes`)).body,
-    "recover",
-  );
-  assert.ok(
-    (
-      await db.query("SELECT reconciled_at FROM uploads WHERE id=$1", [
-        lost.uploadId,
-      ])
-    ).rows[0].reconciled_at,
-  );
+  assert.equal((await call("GET", `/api/revisions/${good.revisionId}/bytes`)).body, "recover");
+  assert.ok((await db.query("SELECT reconciled_at FROM uploads WHERE id=$1", [lost.uploadId])).rows[0].reconciled_at);
 });
 
 test("Capabilities state that URL import and HTML runtime are not implemented", async () => {
@@ -793,41 +595,24 @@ test("Capabilities state that URL import and HTML runtime are not implemented", 
   assert.equal(caps.sourceUrl, config.SOURCE_URL);
   assert.match(caps.sourceUrl, /^https:\/\//);
   for (const url of ["/api/imports", "/api/import/url", "/api/mcp"])
-    assert.equal(
-      (await call("POST", url, { url: "https://claude.ai/public/artifacts/x" }))
-        .statusCode,
-      404,
-      url,
-    );
+    assert.equal((await call("POST", url, { url: "https://claude.ai/public/artifacts/x" })).statusCode, 404, url);
 });
 test("Frontend rebuild serves newly created assets; missing assets never return the HTML shell", async () => {
   const root = await mkdtemp(join(tmpdir(), "polka-static-"));
   const web = await createApp();
   try {
     await mkdir(join(root, "assets"));
-    await writeFile(
-      join(root, "index.html"),
-      "<html><body>Polka shell</body></html>",
-    );
+    await writeFile(join(root, "index.html"), "<html><body>Polka shell</body></html>");
     await registerFrontend(web, root);
     await web.ready();
-    await writeFile(
-      join(root, "assets", "after-start.js"),
-      'globalThis.polkaBuild="new";',
-    );
+    await writeFile(join(root, "assets", "after-start.js"), 'globalThis.polkaBuild="new";');
     const js = await web.inject("/assets/after-start.js");
     assert.equal(js.statusCode, 200);
     assert.match(js.headers["content-type"] as string, /javascript/);
     assert.ok(js.body.includes("polkaBuild"));
     assert.equal((await web.inject("/assets/missing.js")).statusCode, 404);
-    assert.match(
-      (await web.inject(`/works/${randomUUID()}`)).body,
-      /Polka shell/,
-    );
-    assert.match(
-      (await web.inject("/s")).headers["x-robots-tag"] as string,
-      /noindex/,
-    );
+    assert.match((await web.inject(`/works/${randomUUID()}`)).body, /Polka shell/);
+    assert.match((await web.inject("/s")).headers["x-robots-tag"] as string, /noindex/);
     for (const route of [
       "/",
       "/bring",
@@ -859,9 +644,7 @@ test(
       assert.equal(start.statusCode, 200, start.body);
       assert.equal(start.json().delivery, "local");
       assert.ok(!("code" in start.json()));
-      const code = JSON.parse(
-        await readFile(`.local/mail/${start.json().id}.json`, "utf8"),
-      ).code;
+      const code = JSON.parse(await readFile(`.local/mail/${start.json().id}.json`, "utf8")).code;
       return {
         id: start.json().id,
         code,
@@ -870,22 +653,10 @@ test(
     }
     const first = await challenge();
     assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/verify",
-          { id: first.id, code: first.code },
-          "",
-        )
-      ).statusCode,
+      (await call("POST", "/api/auth/email/verify", { id: first.id, code: first.code }, "")).statusCode,
       401,
     );
-    const verified = await call(
-      "POST",
-      "/api/auth/email/verify",
-      { id: first.id, code: first.code },
-      first.cookie,
-    );
+    const verified = await call("POST", "/api/auth/email/verify", { id: first.id, code: first.code }, first.cookie);
     assert.equal(verified.statusCode, 200, verified.body);
     const session = verified.cookies.find((c) => c.name === "polka_session")!;
     assert.equal(session.httpOnly, true);
@@ -893,101 +664,40 @@ test(
     const me = await call("GET", "/api/me", undefined, cookie);
     assert.equal(me.statusCode, 200);
     assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/verify",
-          { id: first.id, code: first.code },
-          first.cookie,
-        )
-      ).statusCode,
+      (await call("POST", "/api/auth/email/verify", { id: first.id, code: first.code }, first.cookie)).statusCode,
       401,
     );
-    const receipt = await save(
-      "First artifact from a new email account",
-      {},
-      cookie,
-    );
+    const receipt = await save("First artifact from a new email account", {}, cookie);
     assert.ok(receipt.receipt.artifactId);
     const second = await challenge();
-    const again = await call(
-      "POST",
-      "/api/auth/email/verify",
-      { id: second.id, code: second.code },
-      second.cookie,
-    );
+    const again = await call("POST", "/api/auth/email/verify", { id: second.id, code: second.code }, second.cookie);
     assert.equal(again.statusCode, 200);
     const againCookie = `polka_session=${again.cookies.find((c) => c.name === "polka_session")!.value}`;
-    assert.equal(
-      (await call("GET", "/api/me", undefined, againCookie)).json().id,
-      me.json().id,
-    );
+    assert.equal((await call("GET", "/api/me", undefined, againCookie)).json().id, me.json().id);
     const {
       rows: [identity],
-    } = await db.query(
-      "SELECT email_verified_at FROM accounts WHERE email=$1",
-      [email],
-    );
-    assert.equal(
-      identity.email_verified_at,
-      null,
-      "local fixture must not assert email ownership",
-    );
+    } = await db.query("SELECT email_verified_at FROM accounts WHERE email=$1", [email]);
+    assert.equal(identity.email_verified_at, null, "local fixture must not assert email ownership");
     const third = await challenge();
     const wrong = third.code === "11111111" ? "22222222" : "11111111";
     for (let i = 0; i < 5; i++)
       assert.equal(
-        (
-          await call(
-            "POST",
-            "/api/auth/email/verify",
-            { id: third.id, code: wrong },
-            third.cookie,
-          )
-        ).statusCode,
+        (await call("POST", "/api/auth/email/verify", { id: third.id, code: wrong }, third.cookie)).statusCode,
         401,
       );
     assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/verify",
-          { id: third.id, code: third.code },
-          third.cookie,
-        )
-      ).statusCode,
+      (await call("POST", "/api/auth/email/verify", { id: third.id, code: third.code }, third.cookie)).statusCode,
       401,
     );
+    assert.equal((await call("POST", "/api/auth/email/start", { email }, "")).statusCode, 429);
+    await db.query("UPDATE login_challenges SET attempts=0,expires_at=now()-interval '1 second' WHERE id=$1", [
+      third.id,
+    ]);
     assert.equal(
-      (await call("POST", "/api/auth/email/start", { email }, "")).statusCode,
-      429,
-    );
-    await db.query(
-      "UPDATE login_challenges SET attempts=0,expires_at=now()-interval '1 second' WHERE id=$1",
-      [third.id],
-    );
-    assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/verify",
-          { id: third.id, code: third.code },
-          third.cookie,
-        )
-      ).statusCode,
+      (await call("POST", "/api/auth/email/verify", { id: third.id, code: third.code }, third.cookie)).statusCode,
       401,
     );
-    assert.equal(
-      (
-        await call(
-          "POST",
-          "/api/auth/email/start",
-          { email: "real@example.com" },
-          "",
-        )
-      ).statusCode,
-      400,
-    );
+    assert.equal((await call("POST", "/api/auth/email/start", { email: "real@example.com" }, "")).statusCode, 400);
   },
 );
 
@@ -1012,7 +722,13 @@ test(
     const prior = { day: mutable.EMAIL_SIGNUP_DAILY_LIMIT, ip: mutable.EMAIL_SIGNUP_DAILY_PER_IP };
     const ip = `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
     const post = (url: string, body: unknown, cookie = "") =>
-      app.inject({ remoteAddress: ip, method: "POST", url, headers: { origin, ...(cookie ? { cookie } : {}) }, payload: body as object });
+      app.inject({
+        remoteAddress: ip,
+        method: "POST",
+        url,
+        headers: { origin, ...(cookie ? { cookie } : {}) },
+        payload: body as object,
+      });
     const run = randomUUID().slice(0, 8);
     const signIn = async (email: string) => {
       const start = await post("/api/auth/email/start", { email });
@@ -1060,7 +776,10 @@ test(
       // Invited or not, the answer looks the same.
       assert.equal(start.statusCode, 200, start.body);
       const id = start.json().id as string;
-      const file = await access(`.local/mail/${id}.json`).then(() => true, () => false);
+      const file = await access(`.local/mail/${id}.json`).then(
+        () => true,
+        () => false,
+      );
       const row = (await db.query("SELECT 1 FROM login_challenges WHERE id=$1", [id])).rowCount;
       assert.equal(!!row, file, email);
       return file;
@@ -1127,50 +846,23 @@ test(
   { skip: config.MAIL_MODE !== "local" },
   async () => {
     const { readFile, access } = await import("node:fs/promises");
-    const { cleanupEmailChallenges } =
-      await import("../apps/server/email-maintenance.ts");
-    const start = await call(
-      "POST",
-      "/api/auth/email/start",
-      { email: `resume-${randomUUID()}@example.test` },
-      "",
-    );
+    const { cleanupEmailChallenges } = await import("../apps/server/email-maintenance.ts");
+    const start = await call("POST", "/api/auth/email/start", { email: `resume-${randomUUID()}@example.test` }, "");
     assert.equal(start.statusCode, 200, start.body);
     const id = start.json().id;
     const cookie = `polka_email_challenge=${start.cookies[0].value}`;
-    const resumed = await call(
-      "GET",
-      "/api/auth/email/current",
-      undefined,
-      cookie,
-    );
+    const resumed = await call("GET", "/api/auth/email/current", undefined, cookie);
     assert.equal(resumed.json().id, id);
     assert.ok(resumed.json().retryAfter > 0);
     assert.ok(!("code" in resumed.json()));
-    assert.equal(
-      (await call("GET", "/api/auth/email/current", undefined, "")).json(),
-      null,
-    );
+    assert.equal((await call("GET", "/api/auth/email/current", undefined, "")).json(), null);
     await cleanupEmailChallenges(1000);
     await access(`.local/mail/${id}.json`);
-    const code = JSON.parse(
-      await readFile(`.local/mail/${id}.json`, "utf8"),
-    ).code;
-    assert.equal(
-      (await call("POST", "/api/auth/email/verify", { id, code }, cookie))
-        .statusCode,
-      200,
-    );
-    assert.equal(
-      (await call("GET", "/api/auth/email/current", undefined, cookie)).json(),
-      null,
-    );
+    const code = JSON.parse(await readFile(`.local/mail/${id}.json`, "utf8")).code;
+    assert.equal((await call("POST", "/api/auth/email/verify", { id, code }, cookie)).statusCode, 200);
+    assert.equal((await call("GET", "/api/auth/email/current", undefined, cookie)).json(), null);
     await cleanupEmailChallenges(1000);
-    assert.equal(
-      (await db.query("SELECT 1 FROM login_challenges WHERE id=$1", [id]))
-        .rowCount,
-      0,
-    );
+    assert.equal((await db.query("SELECT 1 FROM login_challenges WHERE id=$1", [id])).rowCount, 0);
     await assert.rejects(access(`.local/mail/${id}.json`), { code: "ENOENT" });
   },
 );
@@ -1185,17 +877,12 @@ test("live experiment disabled refuses owner and recipient issuance for existing
     filename: "disabled.html",
     mime: "text/html",
   });
-  const ownerResult = await call(
-    "POST",
-    `/api/revisions/${saved.receipt.revisionId}/live-view`,
-    {},
-  );
+  const ownerResult = await call("POST", `/api/revisions/${saved.receipt.revisionId}/live-view`, {});
   assert.equal(ownerResult.statusCode, 404);
-  const shared = await call(
-    "POST",
-    `/api/artifacts/${saved.receipt.artifactId}/share`,
-    { expectedRevisionId: saved.receipt.revisionId, expiresInDays: 1 },
-  );
+  const shared = await call("POST", `/api/artifacts/${saved.receipt.artifactId}/share`, {
+    expectedRevisionId: saved.receipt.revisionId,
+    expiresInDays: 1,
+  });
   assert.equal(shared.statusCode, 200);
   const resolved = await grant(new URL(shared.json().share.url).hash.slice(1));
   const recipientResult = await app.inject({
@@ -1246,9 +933,7 @@ test("upload slots go only to signed-in owners, with a cap per shelf and in tota
   // A probe's slot is released when its response closes, which can trail the
   // client seeing it; a held request refused in that moment simply retries.
   const hold = (cookie: string): Promise<number> =>
-    request(cookie, true).then((status) =>
-      status === 429 ? hold(cookie) : status,
-    );
+    request(cookie, true).then((status) => (status === 429 ? hold(cookie) : status));
   // A finished probe releases its slot; 429 means the cap is full.
   const refusedSoon = async (cookie: string, expected: boolean) => {
     for (let attempt = 0; attempt < 200; attempt++) {
@@ -1262,25 +947,16 @@ test("upload slots go only to signed-in owners, with a cap per shelf and in tota
     assert.equal(response.statusCode, 200);
     return `${response.cookies[0].name}=${response.cookies[0].value}`;
   };
-  const third = await createAccount(
-    `test-c-${randomBytes(5).toString("hex")}`,
-    password,
-  );
+  const third = await createAccount(`test-c-${randomBytes(5).toString("hex")}`, password);
   const cc = await login(third.name);
   try {
     // Anonymous requests are refused before a slot is taken.
-    for (let index = 0; index < 6; index++)
-      assert.equal(await request("", false), 401);
+    for (let index = 0; index < 6; index++) assert.equal(await request("", false), 401);
     for (let slot = 0; slot < TRANSFER_SLOTS.perTenant; slot++) void hold(ca);
     await refusedSoon(ca, true);
     // Another shelf still gets the remaining slot.
     await refusedSoon(cb, false);
-    for (
-      let slot = TRANSFER_SLOTS.perTenant;
-      slot < TRANSFER_SLOTS.total;
-      slot++
-    )
-      void hold(cb);
+    for (let slot = TRANSFER_SLOTS.perTenant; slot < TRANSFER_SLOTS.total; slot++) void hold(cb);
     await refusedSoon(cc, true);
     assert.equal(await request("", false), 401);
     for (const req of held.splice(0)) req.destroy();

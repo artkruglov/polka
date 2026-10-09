@@ -18,9 +18,7 @@ if (!parentPort) throw new Error("Bundle build worker needs a parent port");
 // the server process for every build. Keep the handles this worker spawns
 // (esbuild is the only caller here) so reap() can wait for them.
 const children: ChildProcess[] = [];
-const childProcess = createRequire(import.meta.url)(
-  "node:child_process",
-) as typeof import("node:child_process");
+const childProcess = createRequire(import.meta.url)("node:child_process") as typeof import("node:child_process");
 const spawn = childProcess.spawn;
 childProcess.spawn = ((...args: Parameters<typeof spawn>) => {
   const child = (spawn as (...a: unknown[]) => ChildProcess)(...args);
@@ -37,9 +35,7 @@ const port = parentPort;
  */
 port.once("message", async (request: Request) => {
   try {
-    const files = new Map(
-      request.files.map((file) => [file.path, Buffer.from(file.bytes)]),
-    );
+    const files = new Map(request.files.map((file) => [file.path, Buffer.from(file.bytes)]));
     const runtime = needsRuntimeBuild(request.manifest, files);
     if (runtime) {
       const granted = await new Promise<unknown>((resolve) => {

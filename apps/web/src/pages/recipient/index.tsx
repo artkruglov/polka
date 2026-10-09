@@ -17,29 +17,16 @@ import {
   UserRound,
   WifiOff,
 } from "lucide-react";
-import type {
-  Account,
-  Resolved,
-  Viewer,
-} from "../../../../../packages/contracts/index.ts";
+import type { Account, Resolved, Viewer } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { dateTime, kindOf, profileView } from "../../entities/artifact/format.ts";
 import { Button } from "../../shared/ui/controls.tsx";
 import { ReportArtifactPanel } from "../../features/report-artifact/index.tsx";
-import {
-  Preview,
-  type FrameOverlay,
-} from "../../widgets/artifact-preview/index.ts";
+import { Preview, type FrameOverlay } from "../../widgets/artifact-preview/index.ts";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { useSharedComments } from "../../widgets/comments/index.ts";
-import {
-  SHARE_RETURN_PATH,
-  takeShareAfterSignIn,
-} from "../../shared/lib/share-return.ts";
-import {
-  useCapabilities,
-  useSourceUrl,
-} from "../../entities/capabilities/useCapabilities.ts";
+import { SHARE_RETURN_PATH, takeShareAfterSignIn } from "../../shared/lib/share-return.ts";
+import { useCapabilities, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { ProviderButtons } from "../../features/provider-sign-in/index.tsx";
 import {
   ConvertBar,
@@ -110,8 +97,7 @@ export function Recipient() {
         })
         .catch((e) => {
           if (!active || requestGeneration !== generation) return;
-          const unreachable =
-            !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
+          const unreachable = !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
           // An installation's link policy (docs/specs/EXTENSIONS.md): employees
           // only, after signing in here.
           if (e instanceof ApiError && e.status === 401 && e.details?.reason === "sign_in_required") {
@@ -139,11 +125,7 @@ export function Recipient() {
     };
   }, [attempt]);
   // Comments belong to user links; editorial pages have none.
-  const commentable =
-    !!viewer &&
-    !("review" in viewer) &&
-    !("blocked" in viewer) &&
-    viewer.publisher === "user";
+  const commentable = !!viewer && !("review" in viewer) && !("blocked" in viewer) && viewer.publisher === "user";
   // A link under review is asked again, quietly, until it opens (or 30 minutes).
   const reviewing = !!viewer && "review" in viewer;
   useEffect(() => {
@@ -226,10 +208,7 @@ export function RecipientScreen({
   const [reported, setReported] = useState(false);
   const underReview = !!resolved && "review" in resolved;
   const blocked = !!resolved && "blocked" in resolved;
-  const viewer: Viewer | null =
-    resolved && !("review" in resolved) && !("blocked" in resolved)
-      ? resolved
-      : null;
+  const viewer: Viewer | null = resolved && !("review" in resolved) && !("blocked" in resolved) ? resolved : null;
   const plainText = viewer?.revision.mime === "text/plain";
   // The way in for a guest (features/recipient-convert): only once /session
   // has said «guest», and only when a work is actually shown.
@@ -237,9 +216,7 @@ export function RecipientScreen({
   const convert = useRecipientConvert({ enabled: guest && viewer !== null });
   const capabilities = useCapabilities();
   const yandex =
-    capabilities.status === "ready"
-      ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex")
-      : [];
+    capabilities.status === "ready" ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex") : [];
   const [welcome, setWelcome] = useState(returned);
   const report = reported ? (
     <span className="report-sent">Жалоба отправлена</span>
@@ -271,12 +248,14 @@ export function RecipientScreen({
     return (
       <RecipientFrame account={account}>
         <main className="empty recipient-denied">
-          <div className="empty-icon"><LockKeyhole /></div>
+          <div className="empty-icon">
+            <LockKeyhole />
+          </div>
           <h1>Войдите, чтобы открыть</h1>
           <p role="alert">{error.message}</p>
           <p>
-            Войдите в Полку в новой вкладке, затем вернитесь сюда и откройте работу снова. Ссылку
-            при этом копировать не нужно.
+            Войдите в Полку в новой вкладке, затем вернитесь сюда и откройте работу снова. Ссылку при этом копировать не
+            нужно.
           </p>
           <div className="button-row">
             <a className="ui-button ui-button--primary" href="/signin" target="_blank" rel="noopener">
@@ -291,7 +270,9 @@ export function RecipientScreen({
     return (
       <RecipientFrame account={account}>
         <main className="empty recipient-denied">
-          <div className="empty-icon"><WifiOff /></div>
+          <div className="empty-icon">
+            <WifiOff />
+          </div>
           <h1>Не удалось открыть работу</h1>
           <p role="alert">{error.message}</p>
           <Button variant="primary" onClick={onRetry}>
@@ -304,23 +285,20 @@ export function RecipientScreen({
     return (
       <RecipientFrame account={account}>
         <main className="empty recipient-denied">
-          <div className="empty-icon"><LockKeyhole /></div>
+          <div className="empty-icon">
+            <LockKeyhole />
+          </div>
           <h1>{error.message}</h1>
           <p>
-            Владелец мог отозвать ссылку, у неё мог истечь срок, или адрес
-            скопирован не полностью. Мы не показываем, была ли здесь работа.
+            Владелец мог отозвать ссылку, у неё мог истечь срок, или адрес скопирован не полностью. Мы не показываем,
+            была ли здесь работа.
           </p>
           <div className="recipient-request">
             <strong>Запросить новую ссылку у владельца</strong>
             <small>
-              Полка не знает, кто прислал вам ссылку. Отправьте владельцу это
-              сообщение там, где получили ссылку.
+              Полка не знает, кто прислал вам ссылку. Отправьте владельцу это сообщение там, где получили ссылку.
             </small>
-            <CopyText
-              value={accessRequest}
-              label="Сообщение владельцу"
-              rows={3}
-            />
+            <CopyText value={accessRequest} label="Сообщение владельцу" rows={3} />
           </div>
           <a className="recipient-explore" href="/discover">
             <Compass /> Посмотреть публичные примеры
@@ -333,12 +311,11 @@ export function RecipientScreen({
     return (
       <RecipientFrame account={account}>
         <main className="empty recipient-denied recipient-review">
-          <div className="empty-icon"><Ban /></div>
+          <div className="empty-icon">
+            <Ban />
+          </div>
           <h1>Ссылка недоступна</h1>
-          <p>
-            Модератор Полки закрыл доступ по этой ссылке. Содержимое не
-            показывается.
-          </p>
+          <p>Модератор Полки закрыл доступ по этой ссылке. Содержимое не показывается.</p>
           <a className="recipient-explore" href="/">
             Что такое Полка <ArrowUpRight size={15} />
           </a>
@@ -350,16 +327,17 @@ export function RecipientScreen({
     return (
       <RecipientFrame account={account}>
         <main className="empty recipient-denied recipient-review">
-          <div className="empty-icon"><Hourglass /></div>
+          <div className="empty-icon">
+            <Hourglass />
+          </div>
           <h1>Ссылка на проверке у модератора Полки</h1>
           <p>
-            Полка проверяет некоторые ссылки, прежде чем их откроют: новые
-            аккаунты, страницы, похожие на поддельные, и ссылки с жалобами.
-            Если проверка пройдёт, работа откроется по этой же ссылке.
+            Полка проверяет некоторые ссылки, прежде чем их откроют: новые аккаунты, страницы, похожие на поддельные, и
+            ссылки с жалобами. Если проверка пройдёт, работа откроется по этой же ссылке.
           </p>
           <p className="recipient-review-hint" role="status">
-            Это не ошибка. Эта страница проверяет ссылку сама и откроет работу,
-            как только проверка закончится. Можно оставить её открытой.
+            Это не ошибка. Эта страница проверяет ссылку сама и откроет работу, как только проверка закончится. Можно
+            оставить её открытой.
           </p>
           <a className="recipient-explore" href="/">
             Что такое Полка <ArrowUpRight size={15} />
@@ -375,11 +353,7 @@ export function RecipientScreen({
         </main>
       </RecipientFrame>
     );
-  const kind = plainText
-    ? "text"
-    : viewer.revision.mime.startsWith("image/")
-      ? "image"
-      : "page";
+  const kind = plainText ? "text" : viewer.revision.mime.startsWith("image/") ? "image" : "page";
   const card = convert.card;
   return (
     <RecipientFrame
@@ -443,11 +417,7 @@ export function RecipientScreen({
         overlay={overlay}
       />
       {reporting && (
-        <ReportArtifactPanel
-          token={token}
-          onClose={() => setReporting(false)}
-          onSent={() => setReported(true)}
-        />
+        <ReportArtifactPanel token={token} onClose={() => setReporting(false)} onSent={() => setReported(true)} />
       )}
     </RecipientFrame>
   );
@@ -504,8 +474,7 @@ function RecipientFrame({
       host.style.removeProperty("--convert-bar-height");
       return;
     }
-    const measure = () =>
-      host.style.setProperty("--convert-bar-height", `${node.offsetHeight}px`);
+    const measure = () => host.style.setProperty("--convert-bar-height", `${node.offsetHeight}px`);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -572,11 +541,7 @@ function RecipientFrame({
           )}
           {/* Comments rail (stage 3): a right column on wide screens, a bottom sheet on phones. */}
           {comments?.open && (
-            <aside
-              id={railId}
-              className="recipient-comments"
-              aria-label={comments.label ?? "Комментарии"}
-            >
+            <aside id={railId} className="recipient-comments" aria-label={comments.label ?? "Комментарии"}>
               {comments.panel}
             </aside>
           )}
@@ -611,12 +576,7 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
       : null,
   ].filter(Boolean);
   return (
-    <div
-      className="recipient-note"
-      data-tone={note.tone}
-      role="note"
-      aria-label="Об этой странице"
-    >
+    <div className="recipient-note" data-tone={note.tone} role="note" aria-label="Об этой странице">
       <p className="recipient-note-line">
         {note.tone === "editorial" ? (
           <BookOpen aria-hidden="true" />
@@ -649,8 +609,8 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
           )}
         </p>
         <p>
-          {meta.join(" · ")}. Сохранённая версия зафиксирована; владелец может
-          обновить или отозвать ссылку. Аккаунт в исходном сервисе не нужен.
+          {meta.join(" · ")}. Сохранённая версия зафиксирована; владелец может обновить или отозвать ссылку. Аккаунт в
+          исходном сервисе не нужен.
         </p>
         <nav className="recipient-note-links" aria-label="О Полке">
           <a href="/">

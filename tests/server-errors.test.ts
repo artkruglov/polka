@@ -61,7 +61,10 @@ test("the app's connections carry its session limits", async () => {
   assert.deepEqual(DATABASE_SESSION, { statement_timeout: 15_000, idle_in_transaction_session_timeout: 60_000 });
   assert.deepEqual(row, { statement: "15s", idle: "1min" });
   // DATABASE_POOL_MAX, 20 unless the operator sets it (it was a fixed 8).
-  assert.equal((db as unknown as { options: { max: number } }).options.max, process.env.DATABASE_POOL_MAX ? Number(process.env.DATABASE_POOL_MAX) : 20);
+  assert.equal(
+    (db as unknown as { options: { max: number } }).options.max,
+    process.env.DATABASE_POOL_MAX ? Number(process.env.DATABASE_POOL_MAX) : 20,
+  );
 });
 
 test("an unhandled rejection is logged and survived; an uncaught exception is logged and exits", async () => {

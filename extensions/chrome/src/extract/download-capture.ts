@@ -35,22 +35,14 @@ export type DownloadCapture =
  *
  * «Copy as Markdown» is never pressed: it copies rendered text, not source.
  */
-export async function captureDownload(
-  marker: string,
-  timeoutMs: number,
-): Promise<DownloadCapture> {
-  const trigger = document.querySelector<HTMLElement>(
-    `[data-polka-menu="${CSS.escape(marker)}"]`,
-  );
+export async function captureDownload(marker: string, timeoutMs: number): Promise<DownloadCapture> {
+  const trigger = document.querySelector<HTMLElement>(`[data-polka-menu="${CSS.escape(marker)}"]`);
   if (!trigger) return { ok: false, reason: "no_menu" };
   trigger.removeAttribute("data-polka-menu");
 
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const label = (element: Element) =>
-    (element.getAttribute("aria-label") || element.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
+    (element.getAttribute("aria-label") || element.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
   const menuItem = (selector: string, pattern: RegExp, exclude?: Element | null) =>
     document.querySelector<HTMLElement>(`[role="menuitem"]${selector}`) ??
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
@@ -58,8 +50,7 @@ export async function captureDownload(
     ) ??
     null;
   const exportItem = () => menuItem("[data-download-submenu]", /^(export|экспорт)/);
-  const downloadItem = (exclude: Element | null) =>
-    menuItem("[data-download-item]", /^(download|скачать)/, exclude);
+  const downloadItem = (exclude: Element | null) => menuItem("[data-download-item]", /^(download|скачать)/, exclude);
   const menusOpen = () => document.querySelector('[role="menu"]') !== null;
   async function waitFor<T>(find: () => T | null, ms: number): Promise<T | null> {
     const deadline = Date.now() + ms;
@@ -97,9 +88,7 @@ export async function captureDownload(
     );
   const hover = (element: Element) => {
     for (const type of ["pointerover", "pointerenter", "pointermove"])
-      element.dispatchEvent(
-        new PointerEvent(type, { bubbles: type !== "pointerenter", pointerType: "mouse" }),
-      );
+      element.dispatchEvent(new PointerEvent(type, { bubbles: type !== "pointerenter", pointerType: "mouse" }));
     element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     element.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
   };
@@ -153,8 +142,7 @@ export async function captureDownload(
     const filename = anchor.getAttribute("download") || null;
     let blob: Blob | null = blobs.get(href) ?? null;
     try {
-      if (!blob && (href.startsWith("blob:") || href.startsWith("data:")))
-        blob = await (await fetch(href)).blob();
+      if (!blob && (href.startsWith("blob:") || href.startsWith("data:"))) blob = await (await fetch(href)).blob();
     } catch {
       blob = null;
     }

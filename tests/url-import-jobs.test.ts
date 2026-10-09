@@ -1,7 +1,4 @@
-import {
-  runImportOnce,
-  expireImportJobs,
-} from "../apps/server/url-import/worker.ts";
+import { runImportOnce, expireImportJobs } from "../apps/server/url-import/worker.ts";
 import { captureHtmlUrl } from "../apps/server/url-import/html-capture.ts";
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -19,29 +16,15 @@ import {
 } from "../apps/server/url-import/jobs.ts";
 after(() => db.end());
 test("durable URL jobs isolate owners, deduplicate requests, fence stale workers and cancel", async () => {
-  const owner = await createAccount(
-    "job-" + randomBytes(5).toString("hex"),
-    randomBytes(24).toString("hex"),
-  );
-  const other = await createAccount(
-    "job-" + randomBytes(5).toString("hex"),
-    randomBytes(24).toString("hex"),
-  );
+  const owner = await createAccount("job-" + randomBytes(5).toString("hex"), randomBytes(24).toString("hex"));
+  const other = await createAccount("job-" + randomBytes(5).toString("hex"), randomBytes(24).toString("hex"));
   const c = await db.connect();
   const schema = "test_import_" + randomBytes(8).toString("hex");
   try {
     await c.query("BEGIN");
     await c.query(`CREATE SCHEMA ${schema}`);
     await c.query(`SET LOCAL search_path TO ${schema},public`);
-    await c.query(
-      await readFile(
-        new URL(
-          "../deploy/migrations/019_url_import_jobs.sql",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    );
+    await c.query(await readFile(new URL("../deploy/migrations/019_url_import_jobs.sql", import.meta.url), "utf8"));
     const input = {
       key: randomUUID(),
       url: "https://example.org/report?private=value",
@@ -61,28 +44,19 @@ test("durable URL jobs isolate owners, deduplicate requests, fence stale workers
     const claim = await claimImportJob(c);
     assert.equal(claim.id, first.id);
     assert.equal(await claimImportJob(c), null);
-    await c.query(
-      "UPDATE url_import_jobs SET lease_until=now()-interval '1 second' WHERE id=$1",
-      [first.id],
-    );
+    await c.query("UPDATE url_import_jobs SET lease_until=now()-interval '1 second' WHERE id=$1", [first.id]);
     const next = await claimImportJob(c);
     assert.notEqual(next.lease_token, claim.lease_token);
     await assert.rejects(requireImportLease(c, first.id, claim.lease_token), {
       status: 409,
     });
-    assert.equal(
-      (await requireImportLease(c, first.id, next.lease_token)).id,
-      first.id,
-    );
+    assert.equal((await requireImportLease(c, first.id, next.lease_token)).id, first.id);
     const cancelled = await cancelImportJob(c, owner, first.id);
     assert.equal(cancelled.state, "cancelled");
     await assert.rejects(requireImportLease(c, first.id, next.lease_token), {
       status: 409,
     });
-    assert.deepEqual(
-      importJobView(await getImportJob(c, owner, first.id)),
-      cancelled,
-    );
+    assert.deepEqual(importJobView(await getImportJob(c, owner, first.id)), cancelled);
     assert.equal(await claimImportJob(c), null);
     const run = async <T>(fn: (client: typeof c) => Promise<T>) => fn(c);
     const prepared = await captureHtmlUrl("https://example.org/report", {
@@ -104,10 +78,7 @@ test("durable URL jobs isolate owners, deduplicate requests, fence stale workers
       key: randomUUID(),
       url: "https://example.org/one",
     });
-    assert.equal(
-      await runImportOnce({ run, prepare: async () => prepared, persist }),
-      true,
-    );
+    assert.equal(await runImportOnce({ run, prepare: async () => prepared, persist }), true);
     const ready = await getImportJob(c, owner, success.id);
     assert.equal(ready.state, "partial");
     assert.equal(ready.prepared, null);
@@ -116,10 +87,7 @@ test("durable URL jobs isolate owners, deduplicate requests, fence stale workers
       key: randomUUID(),
       url: "https://example.org/two",
     });
-    await c.query(
-      "UPDATE url_import_jobs SET prepared=$2,state='prepared' WHERE id=$1",
-      [resumed.id, prepared],
-    );
+    await c.query("UPDATE url_import_jobs SET prepared=$2,state='prepared' WHERE id=$1", [resumed.id, prepared]);
     await runImportOnce({
       run,
       prepare: async () => {
@@ -141,23 +109,15 @@ test("durable URL jobs isolate owners, deduplicate requests, fence stale workers
       },
       persist,
     });
-    assert.equal(
-      (await getImportJob(c, owner, duringFetch.id)).state,
-      "cancelled",
-    );
+    assert.equal((await getImportJob(c, owner, duringFetch.id)).state, "cancelled");
     assert.equal(persisted, 2);
     const exhausted = await createImportJob(c, owner, {
       key: randomUUID(),
       url: "https://example.org/four",
     });
-    await c.query("UPDATE url_import_jobs SET attempts=3 WHERE id=$1", [
-      exhausted.id,
-    ]);
+    await c.query("UPDATE url_import_jobs SET attempts=3 WHERE id=$1", [exhausted.id]);
     assert.equal(await expireImportJobs(run), 1);
-    assert.equal(
-      (await getImportJob(c, owner, exhausted.id)).error_code,
-      "retry_exhausted",
-    );
+    assert.equal((await getImportJob(c, owner, exhausted.id)).error_code, "retry_exhausted");
   } finally {
     await c.query("ROLLBACK");
     c.release();

@@ -13,10 +13,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import {
-  ClaimCollision,
-  completeProviderSignIn,
-} from "./account-identities.ts";
+import { ClaimCollision, completeProviderSignIn } from "./account-identities.ts";
 import { mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "./account-merge.ts";
 import { trackShelfClaimed } from "./analytics.ts";
 import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
@@ -24,21 +21,12 @@ import { db, transaction } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { peekPending, takePending } from "./sign-in-pending.ts";
 import { IdpError, PROVIDER_NAMES } from "./sign-in-providers.ts";
-import {
-  CLAIM_COOKIE,
-  CLAIM_COOKIE_PATH,
-  holdCollision,
-  sessionCookie,
-} from "./sign-in-routes.ts";
+import { CLAIM_COOKIE, CLAIM_COOKIE_PATH, holdCollision, sessionCookie } from "./sign-in-routes.ts";
 import { sha256 } from "./storage.ts";
 import { provisionalHasContent } from "./provisional.ts";
 
 const gone = () =>
-  new Problem(
-    410,
-    "expired",
-    "Прошло больше 10 минут или вход открыт в другом браузере. Войдите ещё раз.",
-  );
+  new Problem(410, "expired", "Прошло больше 10 минут или вход открыт в другом браузере. Войдите ещё раз.");
 
 const METHOD_NAMES: Record<string, () => string> = {
   email: () => "код на почту",
@@ -51,10 +39,7 @@ const METHOD_NAMES: Record<string, () => string> = {
 
 async function issueSession(accountId: string) {
   const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",
-    [sha256(token), accountId],
-  );
+  await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')", [sha256(token), accountId]);
   return token;
 }
 
@@ -76,11 +61,7 @@ export async function holdSignInCollision(
   } catch {
     return false;
   }
-  if (
-    !current.provisional ||
-    current.id === target.accountId ||
-    !(await provisionalHasContent(db, current.id))
-  )
+  if (!current.provisional || current.id === target.accountId || !(await provisionalHasContent(db, current.id)))
     return false;
   holdCollision(reply, {
     provisionalId: current.id,
@@ -93,8 +74,7 @@ export async function holdSignInCollision(
 }
 
 export function registerClaimRoutes(app: FastifyInstance) {
-  const clear = (reply: FastifyReply) =>
-    reply.clearCookie(CLAIM_COOKIE, { path: CLAIM_COOKIE_PATH });
+  const clear = (reply: FastifyReply) => reply.clearCookie(CLAIM_COOKIE, { path: CLAIM_COOKIE_PATH });
 
   app.get("/api/account/claim", async (req) => {
     const actor = await identity(req);
@@ -136,104 +116,83 @@ export function registerClaimRoutes(app: FastifyInstance) {
           name: item.name as string,
           kind: item.oauth ? ("oauth" as const) : ("token" as const),
           createdAt: new Date(item.created_at).toISOString(),
-          lastSeenAt: item.last_seen_at
-            ? new Date(item.last_seen_at).toISOString()
-            : null,
+          lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toISOString() : null,
         })),
       },
     };
   });
 
-  app.post(
-    "/api/account/claim/merge",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const actor = await identity(req);
-      // A session from an agent's link never merges (auth.ts, weak): whoever
-      // holds the link could sign in to a shelf of their own and move this
-      // shelf's works and agents there. It may only switch to that shelf,
-      // leaving the works here; the pending choice stays for /switch.
-      assertStrongSession(actor);
-      await limitAttempts(`claim-merge:${actor.id}`, 10);
-      const { connections } = z
-        .object({ connections: z.array(z.string().uuid()).max(100).default([]) })
-        .strict()
-        .parse(req.body ?? {});
-      const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
-      clear(reply);
-      if (!entry || entry.provisionalId !== actor.id) throw gone();
-      let report;
-      try {
-        report = await mergeAccounts({
-          from: actor.id,
-          into: entry.targetId,
-          actor: "signup",
-          reason: "claim",
-          keepConnections: connections,
-          maxObjects: WEB_MERGE_MAX_OBJECTS,
-        });
-      } catch (error) {
-        if (error instanceof MergeRefusal)
-          throw new Problem(409, "conflict", error.message);
-        throw error;
-      }
-      // The provider that found the other shelf opens it from now on.
-      if (entry.profile)
-        try {
-          await completeProviderSignIn(entry.profile, entry.targetId, req.ip);
-        } catch (error) {
-          if (!(error instanceof IdpError || error instanceof ClaimCollision))
-            throw error;
-        }
-      await transaction(async (c) => {
-        trackShelfClaimed(c, entry.targetId, "merge");
+  app.post("/api/account/claim/merge", { bodyLimit: 1024 }, async (req, reply) => {
+    const actor = await identity(req);
+    // A session from an agent's link never merges (auth.ts, weak): whoever
+    // holds the link could sign in to a shelf of their own and move this
+    // shelf's works and agents there. It may only switch to that shelf,
+    // leaving the works here; the pending choice stays for /switch.
+    assertStrongSession(actor);
+    await limitAttempts(`claim-merge:${actor.id}`, 10);
+    const { connections } = z
+      .object({ connections: z.array(z.string().uuid()).max(100).default([]) })
+      .strict()
+      .parse(req.body ?? {});
+    const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
+    clear(reply);
+    if (!entry || entry.provisionalId !== actor.id) throw gone();
+    let report;
+    try {
+      report = await mergeAccounts({
+        from: actor.id,
+        into: entry.targetId,
+        actor: "signup",
+        reason: "claim",
+        keepConnections: connections,
+        maxObjects: WEB_MERGE_MAX_OBJECTS,
       });
-      const session = entry.targetSession ?? (await issueSession(entry.targetId));
-      reply.setCookie("polka_session", session, sessionCookie());
-      return {
-        ok: true,
-        into: report.into.name,
-        moved: {
-          artifacts: report.counts.artifacts,
-          agentConnections: report.counts.activeAgentConnections,
-        },
-      };
-    },
-  );
+    } catch (error) {
+      if (error instanceof MergeRefusal) throw new Problem(409, "conflict", error.message);
+      throw error;
+    }
+    // The provider that found the other shelf opens it from now on.
+    if (entry.profile)
+      try {
+        await completeProviderSignIn(entry.profile, entry.targetId, req.ip);
+      } catch (error) {
+        if (!(error instanceof IdpError || error instanceof ClaimCollision)) throw error;
+      }
+    await transaction(async (c) => {
+      trackShelfClaimed(c, entry.targetId, "merge");
+    });
+    const session = entry.targetSession ?? (await issueSession(entry.targetId));
+    reply.setCookie("polka_session", session, sessionCookie());
+    return {
+      ok: true,
+      into: report.into.name,
+      moved: {
+        artifacts: report.counts.artifacts,
+        agentConnections: report.counts.activeAgentConnections,
+      },
+    };
+  });
 
-  app.post(
-    "/api/account/claim/switch",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const actor = await identity(req);
-      const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
-      clear(reply);
-      if (!entry || entry.provisionalId !== actor.id) throw gone();
-      if (entry.profile)
-        try {
-          await completeProviderSignIn(entry.profile, entry.targetId, req.ip);
-        } catch (error) {
-          if (!(error instanceof IdpError || error instanceof ClaimCollision))
-            throw error;
-        }
-      const session = entry.targetSession ?? (await issueSession(entry.targetId));
-      reply.setCookie("polka_session", session, sessionCookie());
-      return { ok: true };
-    },
-  );
+  app.post("/api/account/claim/switch", { bodyLimit: 1024 }, async (req, reply) => {
+    const actor = await identity(req);
+    const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
+    clear(reply);
+    if (!entry || entry.provisionalId !== actor.id) throw gone();
+    if (entry.profile)
+      try {
+        await completeProviderSignIn(entry.profile, entry.targetId, req.ip);
+      } catch (error) {
+        if (!(error instanceof IdpError || error instanceof ClaimCollision)) throw error;
+      }
+    const session = entry.targetSession ?? (await issueSession(entry.targetId));
+    reply.setCookie("polka_session", session, sessionCookie());
+    return { ok: true };
+  });
 
-  app.post(
-    "/api/account/claim/cancel",
-    { bodyLimit: 1024 },
-    async (req, reply) => {
-      const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
-      clear(reply);
-      if (entry?.targetSession)
-        await db.query("DELETE FROM sessions WHERE hash=$1", [
-          sha256(entry.targetSession),
-        ]);
-      return { ok: true };
-    },
-  );
+  app.post("/api/account/claim/cancel", { bodyLimit: 1024 }, async (req, reply) => {
+    const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
+    clear(reply);
+    if (entry?.targetSession) await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(entry.targetSession)]);
+    return { ok: true };
+  });
 }
-

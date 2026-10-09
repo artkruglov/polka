@@ -17,9 +17,7 @@ import { dispatchCommentNotices, type CommentNotice } from "./comment-mail.ts";
  * followed.
  */
 export const reporterHash = (ip: string, shareId: string) =>
-  createHmac("sha256", config.LINK_KEY)
-    .update(`report-reporter:${ip}|${shareId}`)
-    .digest("hex");
+  createHmac("sha256", config.LINK_KEY).update(`report-reporter:${ip}|${shareId}`).digest("hex");
 
 // A recipient reports what the link currently shows, without an account.
 // The response never echoes title, owner or tenant; closed links look missing.
@@ -45,9 +43,7 @@ export async function reportShare(body: unknown, ip: string) {
     // owner paths lock tenant → artifact → share, and this insert's foreign
     // keys wait on the tenant, so holding the share row here could deadlock
     // against a revoke.
-    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-      `share-report:${s.id}`,
-    ]);
+    await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`share-report:${s.id}`]);
     const comment = input.comment || null;
     // A report about one comment of this link: it must be a comment the
     // reporter can see there. It goes to the operator as a comment report
@@ -77,36 +73,21 @@ export async function reportShare(body: unknown, ip: string) {
          reporter_hash,comment_id
        ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT(idempotency_key) DO NOTHING RETURNING id`,
-      [
-        reportId,
-        input.key,
-        s.tenant_id,
-        s.id,
-        s.revision_id,
-        input.reason,
-        comment,
-        reporterHash(ip, s.id),
-        commentId,
-      ],
+      [reportId, input.key, s.tenant_id, s.id, s.revision_id, input.reason, comment, reporterHash(ip, s.id), commentId],
     );
     if (!saved) {
       const {
         rows: [old],
-      } = await c.query(
-        "SELECT share_id,reason,comment,comment_id FROM share_reports WHERE idempotency_key=$1",
-        [input.key],
-      );
+      } = await c.query("SELECT share_id,reason,comment,comment_id FROM share_reports WHERE idempotency_key=$1", [
+        input.key,
+      ]);
       if (
         old.share_id !== s.id ||
         old.reason !== input.reason ||
         old.comment !== comment ||
         old.comment_id !== commentId
       )
-        throw new Problem(
-          409,
-          "conflict",
-          "Этот повтор относится к другой жалобе. Отправьте её заново.",
-        );
+        throw new Problem(409, "conflict", "Этот повтор относится к другой жалобе. Отправьте её заново.");
       return { ok: true };
     }
     if (commentId) {

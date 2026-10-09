@@ -1,12 +1,5 @@
-import {
-  GetObjectCommand,
-  ListObjectVersionsCommand,
-  PutObjectCommand,
-} from "@aws-sdk/client-s3";
-import {
-  ErasureLedgerTransportError,
-  type ErasureLedgerTransport,
-} from "./erasure-ledger-adapter.ts";
+import { GetObjectCommand, ListObjectVersionsCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { ErasureLedgerTransportError, type ErasureLedgerTransport } from "./erasure-ledger-adapter.ts";
 
 const MAX_BYTES = 8192;
 const PAGE_SIZE = 100;
@@ -35,8 +28,18 @@ function makeCursor(prefix: string, keyMarker: string, versionIdMarker: string):
 }
 function parseCursor(cursor: string, prefix: string): { keyMarker: string; versionIdMarker: string } {
   let parsed: any;
-  try { parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")); } catch { throw new Error("invalid ledger listing cursor"); }
-  if (parsed?.prefix !== prefix || typeof parsed.keyMarker !== "string" || !parsed.keyMarker || typeof parsed.versionIdMarker !== "string" || !parsed.versionIdMarker)
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("invalid ledger listing cursor");
+  }
+  if (
+    parsed?.prefix !== prefix ||
+    typeof parsed.keyMarker !== "string" ||
+    !parsed.keyMarker ||
+    typeof parsed.versionIdMarker !== "string" ||
+    !parsed.versionIdMarker
+  )
     throw new Error("invalid ledger listing cursor");
   return { keyMarker: parsed.keyMarker, versionIdMarker: parsed.versionIdMarker };
 }
@@ -56,7 +59,8 @@ async function readBody(body: unknown, signal: AbortSignal, timeoutMs: number): 
   const abort = new Promise<never>((_, reject) => {
     const stop = () => reject(new Error("operation aborted"));
     onAbort = stop;
-    if (signal.aborted) stop(); else signal.addEventListener("abort", stop, { once: true });
+    if (signal.aborted) stop();
+    else signal.addEventListener("abort", stop, { once: true });
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -82,11 +86,16 @@ async function readBody(body: unknown, signal: AbortSignal, timeoutMs: number): 
       const returned = iterator.return?.();
       if (returned && typeof (returned as Promise<unknown>).catch === "function")
         void (returned as Promise<unknown>).catch(() => undefined);
-    } catch { /* cleanup must not replace the bounded body error */ }
+    } catch {
+      /* cleanup must not replace the bounded body error */
+    }
   }
   const result = new Uint8Array(size);
   let offset = 0;
-  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   return result;
 }
 
@@ -99,7 +108,8 @@ async function readVersionedBody(result: any, signal: AbortSignal, timeoutMs: nu
   try {
     active(signal);
     if (!version(result?.VersionId)) throw new Error("storage read returned no version id");
-    if (expectedVersion !== undefined && result.VersionId !== expectedVersion) throw new Error("ledger version mismatch");
+    if (expectedVersion !== undefined && result.VersionId !== expectedVersion)
+      throw new Error("ledger version mismatch");
     handedToReader = true;
     const bytes = await readBody(result.Body, signal, timeoutMs);
     active(signal);
@@ -128,7 +138,10 @@ export function createErasureLedgerS3Transport(input: {
     async putIfAbsent(key, bytes, signal) {
       active(signal);
       try {
-        const result = await send(new PutObjectCommand({ Bucket: input.bucket, Key: key, Body: bytes, IfNoneMatch: "*" }), signal);
+        const result = await send(
+          new PutObjectCommand({ Bucket: input.bucket, Key: key, Body: bytes, IfNoneMatch: "*" }),
+          signal,
+        );
         active(signal);
         if (!version(result.VersionId)) throw new Error("storage write returned no version id");
         return { versionId: result.VersionId };
@@ -147,13 +160,16 @@ export function createErasureLedgerS3Transport(input: {
     async list(prefix, cursor, signal) {
       active(signal);
       const marker = cursor === undefined ? undefined : parseCursor(cursor, prefix);
-      const result = await send(new ListObjectVersionsCommand({
-        Bucket: input.bucket,
-        Prefix: prefix,
-        KeyMarker: marker?.keyMarker,
-        VersionIdMarker: marker?.versionIdMarker,
-        MaxKeys: PAGE_SIZE,
-      }), signal);
+      const result = await send(
+        new ListObjectVersionsCommand({
+          Bucket: input.bucket,
+          Prefix: prefix,
+          KeyMarker: marker?.keyMarker,
+          VersionIdMarker: marker?.versionIdMarker,
+          MaxKeys: PAGE_SIZE,
+        }),
+        signal,
+      );
       active(signal);
       if (typeof result.IsTruncated !== "boolean") throw new Error("ledger listing has invalid truncation flag");
       const deleteMarkers = optionalArray(result.DeleteMarkers, "delete marker page");
@@ -161,15 +177,24 @@ export function createErasureLedgerS3Transport(input: {
       if (deleteMarkers.length) throw new Error("ledger listing contains a delete marker");
       const items: Array<{ key: string; bytes: Uint8Array; versionId: string }> = [];
       for (const listed of versions) {
-        if (typeof listed.Key !== "string" || !listed.Key.startsWith(prefix)) throw new Error("ledger listing key outside prefix");
+        if (typeof listed.Key !== "string" || !listed.Key.startsWith(prefix))
+          throw new Error("ledger listing key outside prefix");
         if (!version(listed.VersionId)) throw new Error("ledger listing version missing");
         active(signal);
-        const read = await send(new GetObjectCommand({ Bucket: input.bucket, Key: listed.Key, VersionId: listed.VersionId }), signal);
+        const read = await send(
+          new GetObjectCommand({ Bucket: input.bucket, Key: listed.Key, VersionId: listed.VersionId }),
+          signal,
+        );
         const resolved = await readVersionedBody(read, signal, bodyTimeoutMs, listed.VersionId);
         items.push({ key: listed.Key, bytes: resolved.bytes, versionId: listed.VersionId });
       }
       if (!result.IsTruncated) return { items };
-      if (!version(result.NextVersionIdMarker) || typeof result.NextKeyMarker !== "string" || !result.NextKeyMarker || !result.NextKeyMarker.startsWith(prefix))
+      if (
+        !version(result.NextVersionIdMarker) ||
+        typeof result.NextKeyMarker !== "string" ||
+        !result.NextKeyMarker ||
+        !result.NextKeyMarker.startsWith(prefix)
+      )
         throw new Error("truncated ledger listing has no continuation cursor");
       return { items, nextCursor: makeCursor(prefix, result.NextKeyMarker, result.NextVersionIdMarker) };
     },

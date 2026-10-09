@@ -1,10 +1,7 @@
 import "./styles.css";
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
-import {
-  BOOKMARKLET_SOURCE_PATH,
-  bookmarkletHref,
-} from "../../entities/bookmarklet/index.tsx";
+import { BOOKMARKLET_SOURCE_PATH, bookmarkletHref } from "../../entities/bookmarklet/index.tsx";
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { onGitHub } from "../../shared/lib/project-links.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
@@ -23,9 +20,7 @@ export function BookmarkletPage() {
   useLayoutEffect(() => {
     if (href) link.current?.setAttribute("href", href);
   }, [href]);
-  const code = onGitHub(sourceUrl)
-    ? `${sourceUrl.replace(/\/$/, "")}/blob/main/${BOOKMARKLET_SOURCE_PATH}`
-    : sourceUrl;
+  const code = onGitHub(sourceUrl) ? `${sourceUrl.replace(/\/$/, "")}/blob/main/${BOOKMARKLET_SOURCE_PATH}` : sourceUrl;
 
   return (
     <AppShell current="bring" account={account} className="bookmarklet-page">
@@ -33,8 +28,8 @@ export function BookmarkletPage() {
         <header className="bookmarklet-heading">
           <h1>Закладка «На Полку»</h1>
           <p>
-            Сохраняет работу из Claude, ChatGPT и других AI-чатов в один клик.
-            Без расширения и без разрешений: это обычная закладка.
+            Сохраняет работу из Claude, ChatGPT и других AI-чатов в один клик. Без расширения и без разрешений: это
+            обычная закладка.
           </p>
         </header>
 
@@ -81,8 +76,7 @@ export function BookmarkletPage() {
           <section className="bookmarklet-howto" aria-labelledby="bookmarklet-copy-title">
             <h2 id="bookmarklet-copy-title">На телефоне или без мыши</h2>
             <p>
-              Добавьте в закладки любую страницу, затем измените закладку: имя —
-              «На Полку», адрес — этот код целиком.
+              Добавьте в закладки любую страницу, затем измените закладку: имя — «На Полку», адрес — этот код целиком.
             </p>
             <CopyText value={href} label="Код закладки" rows={3} buttonLabel="Скопировать код" />
           </section>
@@ -92,8 +86,14 @@ export function BookmarkletPage() {
           <h2 id="bookmarklet-what-title">Что делает закладка</h2>
           <ul>
             <li>Работает, только когда вы её нажали, и только на странице AI-чата.</li>
-            <li>Берёт работу со страницы, как расширение: код из меню Download или кнопки Copy, иначе — снимок страницы без скриптов.</li>
-            <li>Передаёт его только во вкладку вашей Полки ({location.host}); ничего не отправляет на другие серверы, не читает cookies и ваш буфер обмена.</li>
+            <li>
+              Берёт работу со страницы, как расширение: код из меню Download или кнопки Copy, иначе — снимок страницы
+              без скриптов.
+            </li>
+            <li>
+              Передаёт его только во вкладку вашей Полки ({location.host}); ничего не отправляет на другие серверы, не
+              читает cookies и ваш буфер обмена.
+            </li>
             <li>
               Код открыт:{" "}
               <a href={code} target="_blank" rel="noopener noreferrer">

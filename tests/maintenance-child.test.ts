@@ -13,10 +13,7 @@ class FakeChild extends EventEmitter {
   }
 }
 
-function fakeStart(
-  child: FakeChild,
-  seen: { command?: string; args?: string[]; options?: unknown },
-) {
+function fakeStart(child: FakeChild, seen: { command?: string; args?: string[]; options?: unknown }) {
   return (command: string, args: string[], options: unknown) => {
     seen.command = command;
     seen.args = args;
@@ -33,11 +30,7 @@ test("child adapter starts the exact local maintenance command without a shell",
     spawnProcess: fakeStart(child, seen),
   });
   assert.equal(seen.command, process.execPath);
-  assert.deepEqual(seen.args, [
-    "--import",
-    "tsx",
-    "/srv/polka/scripts/maintenance.ts",
-  ]);
+  assert.deepEqual(seen.args, ["--import", "tsx", "/srv/polka/scripts/maintenance.ts"]);
   assert.deepEqual(seen.options, {
     env: process.env,
     shell: false,
@@ -90,12 +83,7 @@ test("child streams forward only safe events while draining raw diagnostics", as
   });
   child.emit("spawn");
   child.stderr.emit("data", Buffer.from("postgres://private:secret@host\n"));
-  child.stdout.emit(
-    "data",
-    Buffer.from(
-      '{"event":"maintenance.skipped","reason":"busy","password":"secret"}\n',
-    ),
-  );
+  child.stdout.emit("data", Buffer.from('{"event":"maintenance.skipped","reason":"busy","password":"secret"}\n'));
   child.stderr.emit("error", new Error("private stream error"));
   child.stdout.emit("end");
   child.stderr.emit("end");
@@ -112,9 +100,7 @@ test("real benign Node child filters output and exits on TERM", async () => {
     started = resolve;
   });
   const adapter = startMaintenanceChild({
-    scriptPath: fileURLToPath(
-      new URL("./fixtures/maintenance-child-smoke.ts", import.meta.url),
-    ),
+    scriptPath: fileURLToPath(new URL("./fixtures/maintenance-child-smoke.ts", import.meta.url)),
     onLog: (event) => {
       logs.push(event);
       if (event.event === "maintenance.started") started();

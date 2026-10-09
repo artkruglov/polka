@@ -48,10 +48,8 @@ export function TabList<T extends string>({
             let next: number;
             if (event.key === "Home") next = 0;
             else if (event.key === "End") next = items.length - 1;
-            else if (event.key === "ArrowRight")
-              next = (index + 1) % items.length;
-            else if (event.key === "ArrowLeft")
-              next = (index - 1 + items.length) % items.length;
+            else if (event.key === "ArrowRight") next = (index + 1) % items.length;
+            else if (event.key === "ArrowLeft") next = (index - 1 + items.length) % items.length;
             else return;
             event.preventDefault();
             const target = items[next];
@@ -87,18 +85,18 @@ export function Tabs<T extends string>({
   const id = useId();
   const selected = items.findIndex((item) => item.id === value);
   const tablist = (
-    <TabList
-      label={label}
-      items={items}
-      value={value}
-      onChange={onChange}
-      idBase={id}
-      panelId={`${id}-panel`}
-    />
+    <TabList label={label} items={items} value={value} onChange={onChange} idBase={id} panelId={`${id}-panel`} />
   );
   return (
     <>
-      {trailing ? <div className="ui-tabs-heading">{tablist}<div className="ui-tabs-trailing">{trailing}</div></div> : tablist}
+      {trailing ? (
+        <div className="ui-tabs-heading">
+          {tablist}
+          <div className="ui-tabs-trailing">{trailing}</div>
+        </div>
+      ) : (
+        tablist
+      )}
       <div
         role="tabpanel"
         id={`${id}-panel`}

@@ -18,11 +18,7 @@ export function useEditorialList(retry: number) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setState("error");
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "Не удалось загрузить материалы.",
-        );
+        setError(reason instanceof Error ? reason.message : "Не удалось загрузить материалы.");
       });
     return () => controller.abort();
   }, [retry]);

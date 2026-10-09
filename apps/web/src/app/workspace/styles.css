@@ -1,29 +1,94 @@
 /* Workspace: the content column next to the rail. */
-.workspace { display: flex; flex-direction: column; min-height: 100dvh; min-width: 0; }
-.workspace > main { width: 100%; max-width: 1560px; margin: 0 auto; padding: 36px var(--gutter) 96px; }
-.workspace > main > .ui-notice:first-child { margin-top: 0; }
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-width: 0;
+}
+.workspace > main {
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 36px var(--gutter) 96px;
+}
+.workspace > main > .ui-notice:first-child {
+  margin-top: 0;
+}
 
 /* The owner's work: exactly one screen — the reader's bar, then the work, which scrolls
    inside. The document links stay on every other page. */
-.reader-layout .workspace { height: 100dvh; min-height: 0; }
-.reader-layout .workspace > main { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-width: none; margin: 0; padding: 0; }
-.reader-layout > .site-footer { display: none; }
-.reader-layout .work-reader > .ui-notice { flex: 0 0 auto; margin: 8px 12px 0; }
-.reader-layout .work-reader > .empty { flex: 1 1 auto; }
+.reader-layout .workspace {
+  height: 100dvh;
+  min-height: 0;
+}
+.reader-layout .workspace > main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+.reader-layout > .site-footer {
+  display: none;
+}
+.reader-layout .work-reader > .ui-notice {
+  flex: 0 0 auto;
+  margin: 8px 12px 0;
+}
+.reader-layout .work-reader > .empty {
+  flex: 1 1 auto;
+}
 
 @media (max-width: 760px) {
-  .workspace { min-height: auto; }
-  .workspace > main { padding: 24px var(--gutter-mobile) 40px; }
+  .workspace {
+    min-height: auto;
+  }
+  .workspace > main {
+    padding: 24px var(--gutter-mobile) 40px;
+  }
   /* Phones: the work page's own bar replaces the app's top bar; the tab bar stays. */
-  .reader-layout .site-rail { display: none; }
-  .reader-layout .workspace { height: calc(100dvh - var(--tabbar-height) - env(safe-area-inset-bottom)); }
-  .reader-layout .workspace > main { padding: 0; }
+  .reader-layout .site-rail {
+    display: none;
+  }
+  .reader-layout .workspace {
+    height: calc(100dvh - var(--tabbar-height) - env(safe-area-inset-bottom));
+  }
+  .reader-layout .workspace > main {
+    padding: 0;
+  }
 }
 
 /* The work's comments (all its links): a drawer on the right, a bottom sheet on phones. */
-.work-comments { position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: flex; width: 360px; border-left: 1px solid var(--line); background: var(--canvas); box-shadow: var(--shadow-md); overflow: auto; }
-.workspace[data-comments="open"] > main { padding-right: 360px; }
+.work-comments {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  width: 360px;
+  border-left: 1px solid var(--line);
+  background: var(--canvas);
+  box-shadow: var(--shadow-md);
+  overflow: auto;
+}
+.workspace[data-comments="open"] > main {
+  padding-right: 360px;
+}
 @media (max-width: 760px) {
-  .work-comments { top: auto; left: 0; width: auto; max-height: 60dvh; border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--shadow-lg); }
-  .workspace[data-comments="open"] > main { padding-right: 0; }
+  .work-comments {
+    top: auto;
+    left: 0;
+    width: auto;
+    max-height: 60dvh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-lg);
+  }
+  .workspace[data-comments="open"] > main {
+    padding-right: 0;
+  }
 }

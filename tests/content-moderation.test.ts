@@ -34,25 +34,14 @@ import {
   type ModelClient,
 } from "../apps/server/content-filter/model.ts";
 import { setCodeReviewer } from "../apps/server/content-filter/code-model.ts";
-import {
-  formatTakedown,
-  listEvents,
-  setLegalHold,
-  takedown,
-  unblock,
-} from "../apps/server/moderation.ts";
+import { formatTakedown, listEvents, setLegalHold, takedown, unblock } from "../apps/server/moderation.ts";
 import { signModerationToken } from "../apps/server/moderation-tokens.ts";
-import {
-  createSharedComment,
-  sharedComments,
-  type Viewer,
-} from "../apps/server/comments.ts";
+import { createSharedComment, sharedComments, type Viewer } from "../apps/server/comments.ts";
 import { beginEmailLogin } from "../apps/server/email-auth.ts";
 
 const app = await createApp();
 const origin = config.APP_ORIGIN;
-if (config.MAIL_MODE !== "local")
-  throw new Error("Content-moderation tests read operator letters from local mail");
+if (config.MAIL_MODE !== "local") throw new Error("Content-moderation tests read operator letters from local mail");
 const defaults = { ...config };
 config.OPERATOR_EMAIL = "operator@example.test";
 
@@ -85,17 +74,16 @@ after(async () => {
   s3.destroy();
 });
 
-const address = () =>
-  `2001:db8:c::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+const address = () => `2001:db8:c::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
 
 type Owner = { id: string; tenant: string; cookie: string };
 
 async function session(accountId: string) {
   const token = randomBytes(32).toString("base64url");
-  await db.query(
-    "INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')",
-    [sha256(token), accountId],
-  );
+  await db.query("INSERT INTO sessions(hash,account_id,expires_at) VALUES($1,$2,now()+interval '1 day')", [
+    sha256(token),
+    accountId,
+  ]);
   return `polka_session=${token}`;
 }
 
@@ -118,10 +106,7 @@ async function trusted(): Promise<Owner> {
 }
 
 async function operatorCreated(): Promise<Owner> {
-  const created = await createAccount(
-    `cf-${randomBytes(4).toString("hex")}`,
-    randomBytes(24).toString("hex"),
-  );
+  const created = await createAccount(`cf-${randomBytes(4).toString("hex")}`, randomBytes(24).toString("hex"));
   return { ...created, cookie: await session(created.id) };
 }
 
@@ -194,9 +179,13 @@ async function sharedLink(owner: Owner, html: string, title?: string) {
 const page = (body: string, title = "Страница") =>
   `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`;
 const HONEST = page(`<h1>Отчёт</h1><p>${"Выручка выросла на 12%, расходы стабильны. ".repeat(4)}</p>`);
-const DRUGS = page("<p>Мефедрон, альфа-пвп — купить с доставкой! Закладки по всему городу, в наличии, оптом. Прайс в боте.</p>");
+const DRUGS = page(
+  "<p>Мефедрон, альфа-пвп — купить с доставкой! Закладки по всему городу, в наличии, оптом. Прайс в боте.</p>",
+);
 const CSAM = page("<p>Скачать детское порно бесплатно, архив pthc, смотреть</p>", "Архив");
-const GAMBLING = page("<p>Онлайн казино Вулкан: фриспины за регистрацию, бонус на депозит, рабочее зеркало. Играть на деньги!</p>");
+const GAMBLING = page(
+  "<p>Онлайн казино Вулкан: фриспины за регистрацию, бонус на депозит, рабочее зеркало. Играть на деньги!</p>",
+);
 
 type Letter = { to: string; subject: string; text: string; html?: string };
 async function lettersWith(needle: string, count = 1) {
@@ -205,9 +194,7 @@ async function lettersWith(needle: string, count = 1) {
     const found: Letter[] = [];
     try {
       for (const name of (await readdir(LOCAL_OPERATOR_MAIL_DIRECTORY)).sort()) {
-        const letter = JSON.parse(
-          await readFile(join(LOCAL_OPERATOR_MAIL_DIRECTORY, name), "utf8"),
-        ) as Letter;
+        const letter = JSON.parse(await readFile(join(LOCAL_OPERATOR_MAIL_DIRECTORY, name), "utf8")) as Letter;
         if (letter.text.includes(needle)) found.push(letter);
       }
     } catch (error) {
@@ -259,7 +246,10 @@ test("honest pages open; a severe category waits for any author; the letter name
   assert.equal(honest.moderation, "none");
   const drugs = await sharedLink(author, DRUGS);
   assert.equal(drugs.moderation, "held");
-  assert.equal((await row("SELECT moderation_reason FROM shares WHERE id=$1", [drugs.shareId])).moderation_reason, "content:drugs");
+  assert.equal(
+    (await row("SELECT moderation_reason FROM shares WHERE id=$1", [drugs.shareId])).moderation_reason,
+    "content:drugs",
+  );
   const resolved = await call("POST", "/api/resolve", { token: drugs.token });
   assert.deepEqual(resolved.json(), { review: true });
   const [letter] = await lettersWith(drugs.shareId);
@@ -325,7 +315,10 @@ test("a legal hold set while the purge of that content runs waits for it and fin
   try {
     await purging.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [blockContentKey(block)]);
     const hold = setLegalHold(link.revisionId, "МВД, запрос №2", true);
-    const early = await Promise.race([hold.then(() => "done"), new Promise((resolve) => setTimeout(() => resolve("waiting"), 400))]);
+    const early = await Promise.race([
+      hold.then(() => "done"),
+      new Promise((resolve) => setTimeout(() => resolve("waiting"), 400)),
+    ]);
     assert.equal(early, "waiting", "the hold waits for the purge");
     await purging.query("UPDATE moderation_blocks SET purged_at=now() WHERE id=$1", [block.id]);
     await purging.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [blockContentKey(block)]);
@@ -339,7 +332,10 @@ test("a legal hold set while the purge of that content runs waits for it and fin
 test("purgeBlock releases its lock: a hold set after it goes through", async () => {
   const owner = await trusted();
   const link = await sharedLink(owner, `${DRUGS}<!-- ${randomBytes(6).toString("hex")} -->`);
-  const act = await call("POST", "/api/moderation/act", { token: signModerationToken("block", link.shareId), legalHold: false });
+  const act = await call("POST", "/api/moderation/act", {
+    token: signModerationToken("block", link.shareId),
+    legalHold: false,
+  });
   assert.equal(act.statusCode, 200, act.body);
   const block = await row("SELECT * FROM moderation_blocks WHERE revision_id=$1", [link.revisionId]);
   assert.equal((await purgeBlock(block.id)).purged, false); // not due: nothing deleted
@@ -368,7 +364,11 @@ test("soft categories close links but the owner keeps the work; unblock reopens 
   assert.ok(reopened.json().grant, reopened.body);
   const events = await listEvents(link.revisionId);
   assert.ok(events.some((event) => event.action === "block.released"));
-  assert.ok((await listEvents()).some((event) => event.action === "takedown" && event.authority === "Роскомнадзор, требование №42"));
+  assert.ok(
+    (await listEvents()).some(
+      (event) => event.action === "takedown" && event.authority === "Роскомнадзор, требование №42",
+    ),
+  );
 });
 
 test("retention: a reminder the day before, deletion when due; the journal is append-only", async () => {
@@ -390,9 +390,7 @@ test("retention: a reminder the day before, deletion when due; the journal is ap
   assert.equal((await row("SELECT reminded_at FROM moderation_blocks WHERE id=$1", [block.id])).reminded_at, null);
   assert.ok((await remindDueBlocks()) >= 1);
   assert.ok((await row("SELECT reminded_at FROM moderation_blocks WHERE id=$1", [block.id])).reminded_at);
-  const reminder = (await lettersWith(link.revisionId, 2)).find((letter) =>
-    /завтра удаляется/.test(letter.subject),
-  );
+  const reminder = (await lettersWith(link.revisionId, 2)).find((letter) => /завтра удаляется/.test(letter.subject));
   assert.ok(reminder, "no reminder");
   await db.query("UPDATE moderation_blocks SET delete_after=now()-interval '1 second' WHERE id=$1", [block.id]);
   assert.ok((await purgeDueBlocks()) >= 1);
@@ -404,7 +402,10 @@ test("retention: a reminder the day before, deletion when due; the journal is ap
 
 test("malicious code: a miner is blocked at save and isolated for 30 days", async () => {
   const owner = await trusted();
-  const receipt = await save(owner, page(`<script>var miner = new CoinHive.Anonymous("site-key"); miner.start();</script><p>Игра</p>`));
+  const receipt = await save(
+    owner,
+    page(`<script>var miner = new CoinHive.Anonymous("site-key"); miner.start();</script><p>Игра</p>`),
+  );
   const block = await row("SELECT * FROM moderation_blocks WHERE revision_id=$1", [receipt.revisionId]);
   assert.equal(block.category, "malicious_code");
   assert.equal(block.isolated, true);
@@ -442,7 +443,15 @@ function fakeModel(name: string, answer: (text: string) => string): ModelClient 
 
 test("models: reviewed after save; agreement holds, one model only asks, CSAM waits hidden; failures stay unchecked", async () => {
   const primary = fakeModel("primary", (text) =>
-    text.includes("СИГНАЛ-А") ? "drugs" : text.includes("СИГНАЛ-Б") ? "gambling" : text.includes("СИГНАЛ-В") ? "csam" : text.includes("СИГНАЛ-Г") ? "fail" : "none",
+    text.includes("СИГНАЛ-А")
+      ? "drugs"
+      : text.includes("СИГНАЛ-Б")
+        ? "gambling"
+        : text.includes("СИГНАЛ-В")
+          ? "csam"
+          : text.includes("СИГНАЛ-Г")
+            ? "fail"
+            : "none",
   );
   const fallback = fakeModel("fallback", (text) =>
     text.includes("СИГНАЛ-А") ? "drugs" : text.includes("СИГНАЛ-Г") ? "fail" : "none",
@@ -456,7 +465,8 @@ test("models: reviewed after save; agreement holds, one model only asks, CSAM wa
   // The rules found nothing; the models answer after the save (here often
   // before the link is made), and a link is decided again when they do.
   await reviewsSettled();
-  const state = async (shareId: string) => (await row("SELECT moderation FROM shares WHERE id=$1", [shareId])).moderation;
+  const state = async (shareId: string) =>
+    (await row("SELECT moderation FROM shares WHERE id=$1", [shareId])).moderation;
   assert.equal(await state(agreed.shareId), "held");
   assert.equal(await state(single.shareId), "none");
   assert.equal(await state(csam.shareId), "held");
@@ -480,9 +490,13 @@ test("a review lost before it wrote a verdict is tried again by the sweep", asyn
   const model = fakeModel("primary", () => "none");
   setContentModels({ primary: model, fallback: model });
   const owner = await trusted();
-  const link = await sharedLink(owner, page(`<p>Невинный текст про садоводство, лист ${randomBytes(4).toString("hex")}.</p>`));
+  const link = await sharedLink(
+    owner,
+    page(`<p>Невинный текст про садоводство, лист ${randomBytes(4).toString("hex")}.</p>`),
+  );
   await reviewsSettled();
-  const verdict = () => row("SELECT content_filter->'model'->>'state' AS state FROM revisions WHERE id=$1", [link.revisionId]);
+  const verdict = () =>
+    row("SELECT content_filter->'model'->>'state' AS state FROM revisions WHERE id=$1", [link.revisionId]);
   assert.equal((await verdict()).state, "checked");
   // The process died before the verdict was stored: nothing says «unchecked».
   await db.query(
@@ -506,7 +520,7 @@ test("a review lost before it wrote a verdict is tried again by the sweep", asyn
 test("models: a rate-limited primary (429) goes to the fallback at once and uses up no attempts; a flat rate ignores the budget", async () => {
   // The review is queued after the save commits: wait for its verdict.
   const verdict = async (revisionId: string) => {
-    for (const deadline = Date.now() + 5000; Date.now() < deadline; ) {
+    for (const deadline = Date.now() + 5000; Date.now() < deadline;) {
       await reviewsSettled();
       const { model } = await row("SELECT content_filter->'model' AS model FROM revisions WHERE id=$1", [revisionId]);
       if (model) return model;
@@ -522,11 +536,19 @@ test("models: a rate-limited primary (429) goes to the fallback at once and uses
   const fallback = fakeModel("fallback", (text) => (fallbackCalls++, text.includes("СИГНАЛ-Ж") ? "drugs" : "none"));
   setContentModels({ primary: limited("primary"), fallback });
   const owner = await trusted();
-  const checked = await verdict((await save(owner, page("<p>Невинный текст СИГНАЛ-Ж про садоводство.</p>"))).revisionId);
+  const checked = await verdict(
+    (await save(owner, page("<p>Невинный текст СИГНАЛ-Ж про садоводство.</p>"))).revisionId,
+  );
   assert.equal(fallbackCalls, 1);
   assert.equal(checked.state, "checked");
-  assert.deepEqual(checked.findings.map((finding: any) => [finding.category, finding.agreed]), [["drugs", false]]);
-  assert.deepEqual(checked.answers.map((answer: any) => answer.answer), ["ошибка: rate_limited", "drugs"]);
+  assert.deepEqual(
+    checked.findings.map((finding: any) => [finding.category, finding.agreed]),
+    [["drugs", false]],
+  );
+  assert.deepEqual(
+    checked.answers.map((answer: any) => answer.answer),
+    ["ошибка: rate_limited", "drugs"],
+  );
   // Both endpoints at their limits: unchecked, retried, attempts untouched.
   setContentModels({ primary: limited("primary"), fallback: limited("fallback") });
   const unchecked = await verdict((await save(owner, page("<p>Другой текст про садоводство.</p>"))).revisionId);
@@ -534,7 +556,10 @@ test("models: a rate-limited primary (429) goes to the fallback at once and uses
   assert.equal(unchecked.attempts, 0);
   // A real failure counts.
   setContentModels({ primary: fakeModel("primary", () => "fail"), fallback: limited("fallback") });
-  assert.equal((await verdict((await save(owner, page("<p>Третий текст про садоводство.</p>"))).revisionId)).attempts, 1);
+  assert.equal(
+    (await verdict((await save(owner, page("<p>Третий текст про садоводство.</p>"))).revisionId)).attempts,
+    1,
+  );
   // Out of budget: a paid model is not asked, a flat-rate one still is.
   config.CONTENT_MODEL_DAILY_BUDGET_RUB = 0;
   let paidCalls = 0,
@@ -592,7 +617,13 @@ test("models with autoblock: both agreeing on a severe category block; the budge
   assert.equal(refused.statusCode, 403, refused.body);
   assert.ok(await row("SELECT 1 FROM moderation_blocks WHERE revision_id=$1", [early.revisionId]));
   // …and a link made before they answer is blocked afterwards.
-  setContentModels({ primary: { name: "slow", classify: async (input) => (await new Promise((r) => setTimeout(r, 300)), agree.classify(input)) }, fallback: agree });
+  setContentModels({
+    primary: {
+      name: "slow",
+      classify: async (input) => (await new Promise((r) => setTimeout(r, 300)), agree.classify(input)),
+    },
+    fallback: agree,
+  });
   const later = await sharedLink(owner, page("<p>Текст СИГНАЛ-Д, второй.</p>"));
   await reviewsSettled();
   assert.equal((await row("SELECT moderation FROM shares WHERE id=$1", [later.shareId])).moderation, "blocked");
@@ -611,12 +642,14 @@ test("comments: a severe one waits, spam is seen only by its author, CSAM is blo
   const link = await sharedLink(owner, HONEST);
   const writer = await signedUp(0);
   const viewer: Viewer = { id: writer.id, name: "Читатель", tenant: writer.tenant };
-  const held = await createSharedComment(link.token, viewer, { body: "Мефедрон купить с доставкой, закладки в наличии, оптом", displayName: "Читатель" });
+  const held = await createSharedComment(link.token, viewer, {
+    body: "Мефедрон купить с доставкой, закладки в наличии, оптом",
+    displayName: "Читатель",
+  });
   const ownerView: Viewer = { id: owner.id, name: "owner", tenant: owner.tenant };
   const other = await signedUp(0);
   const otherView: Viewer = { id: other.id, name: "x", tenant: other.tenant };
-  const bodies = async (viewerOf: Viewer) =>
-    JSON.stringify(await sharedComments(link.token, viewerOf));
+  const bodies = async (viewerOf: Viewer) => JSON.stringify(await sharedComments(link.token, viewerOf));
   assert.doesNotMatch(await bodies(otherView), /Мефедрон/);
   assert.match(await bodies(ownerView), /Мефедрон/);
   // The same text on three links: spam, visible to its author only.
@@ -629,7 +662,11 @@ test("comments: a severe one waits, spam is seen only by its author, CSAM is blo
   assert.doesNotMatch(await bodies(ownerView), /Лучшие окна/);
   assert.match(await bodies(viewer), /Лучшие окна/);
   const csamWriter = await signedUp(0);
-  await createSharedComment(link.token, { id: csamWriter.id, name: "y", tenant: csamWriter.tenant }, { body: "Скачать детское порно бесплатно, архив pthc", displayName: "Y" });
+  await createSharedComment(
+    link.token,
+    { id: csamWriter.id, name: "y", tenant: csamWriter.tenant },
+    { body: "Скачать детское порно бесплатно, архив pthc", displayName: "Y" },
+  );
   assert.equal((await row("SELECT disabled FROM accounts WHERE id=$1", [csamWriter.id])).disabled, true);
   assert.doesNotMatch(await bodies(ownerView), /pthc/);
   assert.ok(held.id);
@@ -645,10 +682,13 @@ test("anti-spam: throwaway mail and per-network sign-ups; the same content from 
   config.EMAIL_SIGNUP_DAILY_PER_SUBNET = 4;
   (config as any).EMAIL_SIGNUP_DAILY_PER_DOMAIN = 5;
   const keys = signupSpamKeys("198.51.100.7", "a@corp.example");
-  assert.deepEqual(keys.map((key) => [key.key, key.max()]), [
-    ["email-signup-subnet:198.51.100.0/24", 4],
-    ["email-signup-domain:corp.example", 5],
-  ]);
+  assert.deepEqual(
+    keys.map((key) => [key.key, key.max()]),
+    [
+      ["email-signup-subnet:198.51.100.0/24", 4],
+      ["email-signup-domain:corp.example", 5],
+    ],
+  );
   assert.equal(signupSpamKeys("198.51.100.7", "a@yandex.ru").length, 1);
   // A provider sign-up without a verified address keeps the network cap.
   const none = signupSpamKeys("198.51.100.7", null);
@@ -657,13 +697,18 @@ test("anti-spam: throwaway mail and per-network sign-ups; the same content from 
   (config as any).EMAIL_SIGNUP_DAILY_PER_DOMAIN = 0;
   // Sign-in itself still works for an ordinary address.
   assert.ok((await beginEmailLogin(`ok-${randomUUID().slice(0, 6)}@example.test`, "198.51.100.8")).id);
-  const spam = page(`<p>${"Уникальное предложение недели: окна и двери со скидкой, доставка и монтаж бесплатно. ".repeat(12)}</p>`);
+  const spam = page(
+    `<p>${"Уникальное предложение недели: окна и двери со скидкой, доставка и монтаж бесплатно. ".repeat(12)}</p>`,
+  );
   const links = [];
   for (let i = 0; i < 3; i++) links.push(await sharedLink(await signedUp(0), spam));
   const states = await Promise.all(
-    links.map(async (link) => (await row("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [link.shareId]))),
+    links.map(async (link) => await row("SELECT moderation,moderation_reason FROM shares WHERE id=$1", [link.shareId])),
   );
-  assert.ok(states.every((state) => state.moderation === "held"), JSON.stringify(states));
+  assert.ok(
+    states.every((state) => state.moderation === "held"),
+    JSON.stringify(states),
+  );
   // Shadow: to recipients the link looks missing.
   assert.equal((await call("POST", "/api/resolve", { token: links[2]!.token })).statusCode, 404);
   config.NEW_ACCOUNT_DAILY_LINKS = 2;
@@ -725,10 +770,7 @@ function gatedModel(answer: string) {
 
 /** A distinct tiny PNG each time (the same bytes would be one material). */
 const PNG = () =>
-  Buffer.concat([
-    Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex"),
-    randomBytes(8),
-  ]);
+  Buffer.concat([Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex"), randomBytes(8)]);
 
 async function imageLink(owner: Owner) {
   const receipt = await save(owner, PNG(), "image/png");
@@ -743,10 +785,7 @@ const shareState = async (shareId: string) => {
 };
 const eventsOf = async (shareId: string, action: string) =>
   (
-    await db.query(
-      "SELECT actor,reason FROM moderation_events WHERE share_id=$1 AND action=$2",
-      [shareId, action],
-    )
+    await db.query("SELECT actor,reason FROM moderation_events WHERE share_id=$1 AND action=$2", [shareId, action])
   ).rows.map((event) => ({ actor: event.actor, reason: event.reason }));
 
 test("auto: a young account's image link waits for the model and opens when it answers clean, without a letter", async () => {
@@ -762,9 +801,7 @@ test("auto: a young account's image link waits for the model and opens when it a
   model.open();
   await reviewsSettled();
   assert.deepEqual(await shareState(link.shareId), { moderation: "none", moderation_reason: null });
-  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [
-    { actor: "filter", reason: "image-unchecked" },
-  ]);
+  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [{ actor: "filter", reason: "image-unchecked" }]);
   // The only letter about this link is the one sent when it was made.
   assert.equal((await lettersWith(link.shareId, 2)).length, 1);
 });
@@ -792,10 +829,10 @@ test("auto: a model that fails keeps the image link waiting; a flag holds it for
     moderation_reason: "content:csam",
   });
   assert.equal((await eventsOf(flagged.shareId, "share.released")).length, 0);
-  assert.deepEqual(
-    (await eventsOf(flagged.shareId, "share.held")).map((event) => event.reason).sort(),
-    ["content:csam", "image-unchecked"],
-  );
+  assert.deepEqual((await eventsOf(flagged.shareId, "share.held")).map((event) => event.reason).sort(), [
+    "content:csam",
+    "image-unchecked",
+  ]);
   // Without any model the image waits, as before.
   setContentModels(null);
   const unconfigured = await imageLink(young);
@@ -824,10 +861,7 @@ test("a clean answer never opens a link held for another reason, or a disabled o
   const links = [];
   for (const [state, reason] of others) {
     const link = await imageLink(young);
-    await db.query(
-      "UPDATE shares SET moderation=$2,moderation_reason=$3 WHERE id=$1",
-      [link.shareId, state, reason],
-    );
+    await db.query("UPDATE shares SET moderation=$2,moderation_reason=$3 WHERE id=$1", [link.shareId, state, reason]);
     links.push({ link, state, reason });
   }
   const disabled = await signedUp(0);
@@ -861,9 +895,7 @@ test("links held as new-account under the old mode: released by the model only u
     ["released"],
   );
   assert.deepEqual(await shareState(link.shareId), { moderation: "none", moderation_reason: null });
-  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [
-    { actor: "filter", reason: "new-account" },
-  ]);
+  assert.deepEqual(await eventsOf(link.shareId, "share.released"), [{ actor: "filter", reason: "new-account" }]);
 });
 
 test("recheck: a dry run changes nothing; the real run decides checked revisions now and sends the rest to the model", async () => {
@@ -875,10 +907,7 @@ test("recheck: a dry run changes nothing; the real run decides checked revisions
   const image = await imageLink(young);
   // Held under the old mode, text only.
   const legacy = await sharedLink(young, HONEST.replace("Отчёт", "Старая сводка"));
-  await db.query(
-    "UPDATE shares SET moderation='held',moderation_reason='new-account' WHERE id=$1",
-    [legacy.shareId],
-  );
+  await db.query("UPDATE shares SET moderation='held',moderation_reason='new-account' WHERE id=$1", [legacy.shareId]);
   const other = await imageLink(young);
   await db.query("UPDATE shares SET moderation_reason='suspicious' WHERE id=$1", [other.shareId]);
 
@@ -911,8 +940,5 @@ test("recheck: a dry run changes nothing; the real run decides checked revisions
   assert.equal(outcome(reviewed, image.shareId), "released");
   assert.match(formatRecheck(reviewed), /Released 1;/);
   assert.equal((await shareState(image.shareId)).moderation, "none");
-  assert.match(
-    formatRecheck(await recheckHeldShares(false, [young.tenant])),
-    /No links wait only for the model/,
-  );
+  assert.match(formatRecheck(await recheckHeldShares(false, [young.tenant])), /No links wait only for the model/);
 });

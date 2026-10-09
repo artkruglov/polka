@@ -64,7 +64,14 @@ async function token(owner: Account, scopes: AgentScope[] = ["read", "source:rea
 
 async function saveFile(
   owner: Account,
-  input: { title: string; filename: string; mime: string; bytes: Buffer; folderId?: string; base?: { artifactId: string; revisionId: string } },
+  input: {
+    title: string;
+    filename: string;
+    mime: string;
+    bytes: Buffer;
+    folderId?: string;
+    base?: { artifactId: string; revisionId: string };
+  },
 ) {
   const begun = await beginUpload(owner, {
     key: randomUUID(),
@@ -73,19 +80,31 @@ async function saveFile(
     mime: input.mime,
     size: input.bytes.length,
     sha256: hex(input.bytes),
-    ...(input.base ? { artifactId: input.base.artifactId, baseRevisionId: input.base.revisionId } : { folderId: input.folderId ?? null }),
+    ...(input.base
+      ? { artifactId: input.base.artifactId, baseRevisionId: input.base.revisionId }
+      : { folderId: input.folderId ?? null }),
   });
   await uploadBytes(owner, begun.uploadId, input.bytes);
   return (await finalizeUpload(owner, begun.uploadId)) as { artifactId: string; revisionId: string; number: number };
 }
 
-async function saveProject(owner: Account, files: Array<[string, string, Buffer]>, base?: { artifactId: string; revisionId: string }) {
+async function saveProject(
+  owner: Account,
+  files: Array<[string, string, Buffer]>,
+  base?: { artifactId: string; revisionId: string },
+) {
   const manifest = {
     version: 1,
     entrypoint: "README.md",
     runtime: "project-v1",
     files: files.map(([path, mime, bytes]) => ({ path, mime, size: bytes.length, sha256: hex(bytes) })),
-    provenance: { kind: "file", sourceUrl: null, capturedAt: "2026-01-02T03:04:05.000Z", attribution: "unknown", license: "unknown" },
+    provenance: {
+      kind: "file",
+      sourceUrl: null,
+      capturedAt: "2026-01-02T03:04:05.000Z",
+      attribution: "unknown",
+      license: "unknown",
+    },
     dependencies: { status: "unknown", unresolved: [] },
   };
   const begun = await beginBundleUpload(owner, {
@@ -96,7 +115,11 @@ async function saveProject(owner: Account, files: Array<[string, string, Buffer]
   });
   for (const [index, file] of begun.manifest.files.entries())
     await uploadBundleFile(owner, begun.uploadId, index, files.find(([path]) => path === file.path)![2]);
-  return (await finalizeBundleUpload(owner, begun.uploadId)) as { artifactId: string; revisionId: string; number: number };
+  return (await finalizeBundleUpload(owner, begun.uploadId)) as {
+    artifactId: string;
+    revisionId: string;
+    number: number;
+  };
 }
 
 const page = (text: string) => Buffer.from(`<!doctype html><title>Отчёт</title><h1>${text}</h1>`);
@@ -148,27 +171,76 @@ before(async () => {
 
   const folder = await transaction((c) => createFolderInTransaction(c, source, "Отчёты"));
   // A page in three versions; the second is accepted.
-  const v1 = await saveFile(source, { title: "Квартальный отчёт", filename: "report.html", mime: "text/html", bytes: page("Выручка 1"), folderId: folder.id });
-  const v2 = await saveFile(source, { title: "Квартальный отчёт", filename: "report.html", mime: "text/html", bytes: page("Выручка 2"), base: v1 });
-  await saveFile(source, { title: "Квартальный отчёт", filename: "report.html", mime: "text/html", bytes: page("Выручка неповторимая 3"), base: v2 });
+  const v1 = await saveFile(source, {
+    title: "Квартальный отчёт",
+    filename: "report.html",
+    mime: "text/html",
+    bytes: page("Выручка 1"),
+    folderId: folder.id,
+  });
+  const v2 = await saveFile(source, {
+    title: "Квартальный отчёт",
+    filename: "report.html",
+    mime: "text/html",
+    bytes: page("Выручка 2"),
+    base: v1,
+  });
+  await saveFile(source, {
+    title: "Квартальный отчёт",
+    filename: "report.html",
+    mime: "text/html",
+    bytes: page("Выручка неповторимая 3"),
+    base: v2,
+  });
   await acceptRevision(source, v1.artifactId, { revisionId: v2.revisionId });
   await setWorkOwner(source, v1.artifactId, { ownerAccountId: source.id });
   ids.report = v1.artifactId;
   // A project in two versions sharing a file.
   const readme = Buffer.from("# Исследование\n\nСм. заметки.\n");
-  const p1 = await saveProject(source, [["README.md", "text/markdown", readme], ["notes.md", "text/markdown", Buffer.from("# Первые\n")]]);
-  await saveProject(source, [["README.md", "text/markdown", readme], ["notes.md", "text/markdown", Buffer.from("# Вторые\n")], ["shot.png", "image/png", PNG]], p1);
+  const p1 = await saveProject(source, [
+    ["README.md", "text/markdown", readme],
+    ["notes.md", "text/markdown", Buffer.from("# Первые\n")],
+  ]);
+  await saveProject(
+    source,
+    [
+      ["README.md", "text/markdown", readme],
+      ["notes.md", "text/markdown", Buffer.from("# Вторые\n")],
+      ["shot.png", "image/png", PNG],
+    ],
+    p1,
+  );
   // A picture, a text, a link.
   await saveFile(source, { title: "Схема", filename: "scheme.png", mime: "image/png", bytes: PNG });
-  await saveFile(source, { title: "Заметка", filename: "note.txt", mime: "text/plain", bytes: Buffer.from("Текст заметки") });
+  await saveFile(source, {
+    title: "Заметка",
+    filename: "note.txt",
+    mime: "text/plain",
+    bytes: Buffer.from("Текст заметки"),
+  });
   await saveLink(source, { key: randomUUID(), url: "https://example.com/article", title: "Статья", note: "прочитать" });
   // A work in the trash.
-  const old = await saveFile(source, { title: "Старьё", filename: "old.txt", mime: "text/plain", bytes: Buffer.from("в корзине") });
+  const old = await saveFile(source, {
+    title: "Старьё",
+    filename: "old.txt",
+    mime: "text/plain",
+    bytes: Buffer.from("в корзине"),
+  });
   ids.trashed = old.artifactId;
   ids.trashedRevision = old.revisionId;
-  await transitionOwnerArtifactLifecycle(source, old.artifactId, { expectedLifecycleVersion: 0, expectedRevisionId: old.revisionId }, "trashed");
+  await transitionOwnerArtifactLifecycle(
+    source,
+    old.artifactId,
+    { expectedLifecycleVersion: 0, expectedRevisionId: old.revisionId },
+    "trashed",
+  );
   // A work moderation isolated: listed, its bytes never given out.
-  const blocked = await saveFile(source, { title: "Заблокировано", filename: "bad.txt", mime: "text/plain", bytes: Buffer.from("плохое") });
+  const blocked = await saveFile(source, {
+    title: "Заблокировано",
+    filename: "bad.txt",
+    mime: "text/plain",
+    bytes: Buffer.from("плохое"),
+  });
   ids.blockedRevision = blocked.revisionId;
   await db.query(
     `INSERT INTO moderation_blocks(id,tenant_id,artifact_id,revision_id,sha256,category,isolated)
@@ -206,13 +278,18 @@ test("polka-export.mjs writes the whole shelf, each file once", async () => {
   const result = JSON.parse(run.stdout);
   assert.equal(result.works, 7);
   assert.equal(result.versions, 10);
-  assert.deepEqual(result.unavailable.map((u: any) => u.reason), ["blocked"]);
+  assert.deepEqual(
+    result.unavailable.map((u: any) => u.reason),
+    ["blocked"],
+  );
   // The project's README is shared by its two versions: downloaded once.
   const blobs = await readdir(join(exportDir, "blobs"));
   assert.equal(blobs.length, result.files);
   assert.ok(blobs.every((name) => /^[a-f0-9]{64}$/.test(name)));
   assert.ok(result.files < 11);
-  const exported = shelfExportFileSchema.parse(JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")));
+  const exported = shelfExportFileSchema.parse(
+    JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")),
+  );
   assert.equal(exported.shelf.cardMd, "# Полка\n\nОтчёты отдела.");
   assert.ok(exported.items.find((item) => item.id === ids.trashed)?.trashedAt);
   const report = exported.items.find((item) => item.id === ids.report)!;
@@ -231,7 +308,10 @@ test("the export routes: scopes, the browser, the upload token, the trash", asyn
     app.inject({ method: "GET", url, headers: { authorization: `Bearer ${secret}`, ...headers } });
   assert.equal((await get("/api/v1/export", await token(source, ["read"]))).statusCode, 403);
   assert.equal((await get("/api/v1/export", await token(source, ["source:read"]))).statusCode, 403);
-  assert.equal((await get("/api/v1/export", await token(source, ["read", "source:read"], PROJECT_UPLOAD_AUDIENCE))).statusCode, 401);
+  assert.equal(
+    (await get("/api/v1/export", await token(source, ["read", "source:read"], PROJECT_UPLOAD_AUDIENCE))).statusCode,
+    401,
+  );
   const secret = await token(source);
   assert.equal((await get("/api/v1/export", secret, { origin: "https://evil.example" })).statusCode, 403);
   // A work in the trash: its file comes through the export only.
@@ -265,8 +345,14 @@ test("importShelf saves every version, date, folder, acceptance, card and the tr
   const target = await createAccount(`import-${randomBytes(5).toString("hex")}`, password);
   const dry = await importShelf({ dir: exportDir, account: target.name, dryRun: true });
   assert.equal(dry.works, 6);
-  assert.deepEqual(dry.skipped.map((s) => s.title), ["Заблокировано"]);
-  assert.equal((await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [target.tenant])).rows[0].n, 0);
+  assert.deepEqual(
+    dry.skipped.map((s) => s.title),
+    ["Заблокировано"],
+  );
+  assert.equal(
+    (await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [target.tenant])).rows[0].n,
+    0,
+  );
 
   const report = await importShelf({ dir: exportDir, account: target.name });
   assert.equal(report.imported.length, 6);
@@ -275,7 +361,9 @@ test("importShelf saves every version, date, folder, acceptance, card and the tr
   const actual = await shelfOf(target.tenant);
   assert.deepEqual(actual, expected);
   assert.equal(actual.find((work) => work.title === "Квартальный отчёт")!.accepted, 2);
-  const { rows: [shelf] } = await db.query("SELECT card_md FROM tenants WHERE id=$1", [target.tenant]);
+  const {
+    rows: [shelf],
+  } = await db.query("SELECT card_md FROM tenants WHERE id=$1", [target.tenant]);
   assert.equal(shelf.card_md, "# Полка\n\nОтчёты отдела.");
   // Every object lives under the new shelf; search finds the text.
   const { rows: keys } = await db.query(
@@ -290,15 +378,19 @@ test("importShelf saves every version, date, folder, acceptance, card and the tr
   );
   assert.equal(found.length, 1);
   // The acceptance is journaled at its original time (the shelf snapshot reads it).
-  const { rows: [event] } = await db.query(
-    "SELECT created_at FROM audit_outbox WHERE tenant_id=$1 AND action='revision.accepted'",
-    [target.tenant],
+  const {
+    rows: [event],
+  } = await db.query("SELECT created_at FROM audit_outbox WHERE tenant_id=$1 AND action='revision.accepted'", [
+    target.tenant,
+  ]);
+  const exported = shelfExportFileSchema.parse(
+    JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")),
   );
-  const exported = shelfExportFileSchema.parse(JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")));
   assert.equal(event.created_at.toISOString(), exported.items.find((item) => item.id === ids.report)!.acceptedAt);
 
   // A rerun saves nothing.
-  const uploads = async () => (await db.query("SELECT count(*)::int AS n FROM uploads WHERE tenant_id=$1", [target.tenant])).rows[0].n;
+  const uploads = async () =>
+    (await db.query("SELECT count(*)::int AS n FROM uploads WHERE tenant_id=$1", [target.tenant])).rows[0].n;
   const before = await uploads();
   const rerun = await importShelf({ dir: exportDir, account: target.name });
   assert.ok(rerun.imported.every((work) => work.saved === 0));
@@ -326,7 +418,10 @@ test("a damaged file or too little space is refused before anything is saved", a
   await assert.rejects(importShelf({ dir: damaged, account: target.name }), ImportRefusal);
   await db.query("UPDATE tenants SET quota_bytes=10 WHERE id=$1", [target.tenant]);
   await assert.rejects(importShelf({ dir: exportDir, account: target.name }), /--raise-quota/);
-  assert.equal((await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [target.tenant])).rows[0].n, 0);
+  assert.equal(
+    (await db.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [target.tenant])).rows[0].n,
+    0,
+  );
   const raised = await importShelf({ dir: exportDir, account: target.name, raiseQuota: true });
   assert.equal(raised.imported.length, 6);
   assert.ok(raised.quota.raisedTo);

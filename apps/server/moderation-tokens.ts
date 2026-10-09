@@ -32,16 +32,10 @@ const payloadSchema = z
   })
   .strict();
 
-const key = () =>
-  createHmac("sha256", config.LINK_KEY).update(PURPOSE).digest();
-const sign = (payload: string) =>
-  createHmac("sha256", key()).update(payload).digest("base64url");
+const key = () => createHmac("sha256", config.LINK_KEY).update(PURPOSE).digest();
+const sign = (payload: string) => createHmac("sha256", key()).update(payload).digest("base64url");
 
-export function signModerationToken(
-  action: ModerationAction,
-  shareId: string,
-  now = Date.now(),
-) {
+export function signModerationToken(action: ModerationAction, shareId: string, now = Date.now()) {
   const payload = Buffer.from(
     JSON.stringify({
       v: 1,
@@ -60,21 +54,15 @@ export type ModerationToken = {
 };
 
 /** The action a genuine, unexpired token names; null for anything else. */
-export function verifyModerationToken(
-  token: string,
-  now = Date.now(),
-): ModerationToken | null {
+export function verifyModerationToken(token: string, now = Date.now()): ModerationToken | null {
   if (typeof token !== "string" || !MODERATION_TOKEN.test(token)) return null;
   const [payload, signature] = token.split(".");
   const expected = Buffer.from(sign(payload), "base64url");
   const given = Buffer.from(signature, "base64url");
-  if (given.length !== expected.length || !timingSafeEqual(given, expected))
-    return null;
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   let parsed: z.infer<typeof payloadSchema>;
   try {
-    parsed = payloadSchema.parse(
-      JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
-    );
+    parsed = payloadSchema.parse(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
   } catch {
     return null;
   }

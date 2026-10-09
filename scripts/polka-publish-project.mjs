@@ -85,14 +85,18 @@ function pulledState(text) {
     return null;
   }
   if (
-    !state || typeof state !== "object" ||
-    !UUID.test(state.artifactId) || !UUID.test(state.revisionId) ||
+    !state ||
+    typeof state !== "object" ||
+    !UUID.test(state.artifactId) ||
+    !UUID.test(state.revisionId) ||
     typeof state.endpoint !== "string"
   )
     return null;
   return {
     ...state,
-    title: String(state.title ?? "").replace(CONTROL, " ").slice(0, 120),
+    title: String(state.title ?? "")
+      .replace(CONTROL, " ")
+      .slice(0, 120),
     runtime: typeof state.runtime === "string" ? state.runtime : null,
   };
 }
@@ -157,8 +161,7 @@ async function walk(root, exclude) {
         continue;
       }
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".") || exclude.has(entry.name))
-          continue;
+        if (SKIP_DIRS.has(entry.name) || entry.name.startsWith(".") || exclude.has(entry.name)) continue;
         await visit(full);
         continue;
       }
@@ -171,7 +174,11 @@ async function walk(root, exclude) {
       const size = (await stat(full)).size;
       if (COMPONENT.test(entry.name)) components.push({ path, full, size });
       else if (!mime) skipped.push({ path, reason: "unsupported type" });
-      else if (!path.split("/").every((segment) => SEGMENT.test(segment) && !segment.endsWith(".")) || path.split("/").length > 8 || path.length > 200)
+      else if (
+        !path.split("/").every((segment) => SEGMENT.test(segment) && !segment.endsWith(".")) ||
+        path.split("/").length > 8 ||
+        path.length > 200
+      )
         skipped.push({ path, reason: "name outside [A-Za-z0-9._-] or too deep" });
       else if (size > (isVideo(mime) ? MAX_VIDEO_FILE : MAX_FILE))
         skipped.push({ path, reason: `larger than ${isVideo(mime) ? 200 : 5} MB (${(size / 1048576).toFixed(1)} MB)` });
@@ -186,8 +193,7 @@ async function walk(root, exclude) {
   const kept = [];
   for (const file of files) {
     const key = file.path.toLowerCase();
-    if (byCase.has(key))
-      skipped.push({ path: file.path, reason: `differs only by case from ${byCase.get(key)}` });
+    if (byCase.has(key)) skipped.push({ path: file.path, reason: `differs only by case from ${byCase.get(key)}` });
     else {
       byCase.set(key, file.path);
       kept.push(file);
@@ -289,14 +295,21 @@ async function publishComponent(values, file, skipped) {
   if (!!values.artifact !== !!values["base-revision"])
     throw new CliError("A new version needs both --artifact and --base-revision.", 2);
   const key = values.key ?? randomUUID();
-  const receipt = await call(endpoint, token, "POST", "/api/v1/publish", JSON.stringify({
-    key,
-    title: report.title,
-    component: source,
-    componentLanguage: /\.tsx$/i.test(file.path) ? "tsx" : "jsx",
-    ...(values.folder ? { folderId: values.folder } : {}),
-    ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
-  }), "application/json");
+  const receipt = await call(
+    endpoint,
+    token,
+    "POST",
+    "/api/v1/publish",
+    JSON.stringify({
+      key,
+      title: report.title,
+      component: source,
+      componentLanguage: /\.tsx$/i.test(file.path) ? "tsx" : "jsx",
+      ...(values.folder ? { folderId: values.folder } : {}),
+      ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
+    }),
+    "application/json",
+  );
   const result = {
     ...report,
     artifactId: receipt.artifactId,
@@ -343,7 +356,8 @@ async function main() {
   if (!info?.isDirectory()) throw new CliError(`${root} is not a folder`, 2);
   // A folder from polka-pull.mjs: its next version, unless told otherwise.
   const statePath = join(root, ".polka.json");
-  const pulled = values.artifact || values.new ? null : pulledState(await readFile(statePath, "utf8").catch(() => null));
+  const pulled =
+    values.artifact || values.new ? null : pulledState(await readFile(statePath, "utf8").catch(() => null));
   if (pulled) {
     if (pulled.runtime !== "project-v1")
       throw new CliError(
@@ -417,8 +431,7 @@ async function main() {
     file.bytes = await readFile(file.full);
     file.sha256 = createHash("sha256").update(file.bytes).digest("hex");
   }
-  const title =
-    values.title ?? (entryFile.mime === "text/markdown" ? titleOf(entryFile.bytes.toString("utf8")) : "");
+  const title = values.title ?? (entryFile.mime === "text/markdown" ? titleOf(entryFile.bytes.toString("utf8")) : "");
   const report = {
     title: (title.trim() || basename(resolve(root))).slice(0, 160),
     entry,
@@ -438,7 +451,10 @@ async function main() {
   if (!endpoint) throw new CliError("Pass --endpoint or set POLKA_ENDPOINT.", 2);
   assertHttps(endpoint);
   if (pulled?.endpoint && originOf(pulled.endpoint) !== originOf(endpoint))
-    throw new CliError(`This folder was pulled from ${pulled.endpoint}, not ${endpoint}. Pass --new to save it there as a new project.`, 2);
+    throw new CliError(
+      `This folder was pulled from ${pulled.endpoint}, not ${endpoint}. Pass --new to save it there as a new project.`,
+      2,
+    );
   const manifest = {
     version: 1,
     entrypoint: entry,
@@ -456,48 +472,88 @@ async function main() {
   if (!!values.artifact !== !!values["base-revision"])
     throw new CliError("A new version needs both --artifact and --base-revision.", 2);
   const key = values.key ?? randomUUID();
-  const begun = await call(endpoint, token, "POST", "/api/v1/projects", JSON.stringify({
-    key,
-    title: report.title,
-    manifest,
-    ...(values.folder ? { folderId: values.folder } : {}),
-    ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
-  }), "application/json");
+  const begun = await call(
+    endpoint,
+    token,
+    "POST",
+    "/api/v1/projects",
+    JSON.stringify({
+      key,
+      title: report.title,
+      manifest,
+      ...(values.folder ? { folderId: values.folder } : {}),
+      ...(values.artifact ? { artifactId: values.artifact, baseRevisionId: values["base-revision"] } : {}),
+    }),
+    "application/json",
+  );
   let receipt = begun.receipt;
   // After the upload has begun, a rerun with the same key continues it.
-  if (!receipt) try {
-    const byPath = new Map(files.map((file) => [file.path, file]));
-    // A new version: Полка copies the files the base version already has.
-    const reused = new Set(
-      values.artifact
-        ? (await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/reuse`, "{}", "application/json")).reused ?? []
-        : [],
-    );
-    report.unchanged = reused.size;
-    const toSend = begun.files.filter(({ index }) => !reused.has(index));
-    // A terminal gets one updating line; an agent's log gets a line now and then.
-    let sent = 0;
-    const total = toSend.length;
-    for (const { index, path } of toSend) {
-      const file = byPath.get(path);
-      if (isVideo(file.mime)) {
-        if (process.stderr.isTTY) process.stderr.write(`\r${path} (${(file.size / 1048576).toFixed(0)} MB)…`);
-        await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/media/${index}`, undefined, "application/octet-stream", { path: file.full, size: file.size });
-      } else await call(endpoint, token, "PUT", `/api/v1/projects/${begun.uploadId}/files/${index}`, file.bytes, "application/octet-stream");
-      sent++;
-      if (process.stderr.isTTY) process.stderr.write(`\r${sent}/${total} files sent`);
-      else if (sent % 25 === 0 || sent === total) process.stderr.write(`${sent}/${total} files sent\n`);
+  if (!receipt)
+    try {
+      const byPath = new Map(files.map((file) => [file.path, file]));
+      // A new version: Полка copies the files the base version already has.
+      const reused = new Set(
+        values.artifact
+          ? ((await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/reuse`, "{}", "application/json"))
+              .reused ?? [])
+          : [],
+      );
+      report.unchanged = reused.size;
+      const toSend = begun.files.filter(({ index }) => !reused.has(index));
+      // A terminal gets one updating line; an agent's log gets a line now and then.
+      let sent = 0;
+      const total = toSend.length;
+      for (const { index, path } of toSend) {
+        const file = byPath.get(path);
+        if (isVideo(file.mime)) {
+          if (process.stderr.isTTY) process.stderr.write(`\r${path} (${(file.size / 1048576).toFixed(0)} MB)…`);
+          await call(
+            endpoint,
+            token,
+            "PUT",
+            `/api/v1/projects/${begun.uploadId}/media/${index}`,
+            undefined,
+            "application/octet-stream",
+            { path: file.full, size: file.size },
+          );
+        } else
+          await call(
+            endpoint,
+            token,
+            "PUT",
+            `/api/v1/projects/${begun.uploadId}/files/${index}`,
+            file.bytes,
+            "application/octet-stream",
+          );
+        sent++;
+        if (process.stderr.isTTY) process.stderr.write(`\r${sent}/${total} files sent`);
+        else if (sent % 25 === 0 || sent === total) process.stderr.write(`${sent}/${total} files sent\n`);
+      }
+      if (process.stderr.isTTY) process.stderr.write("\n");
+      receipt = await call(
+        endpoint,
+        token,
+        "POST",
+        `/api/v1/projects/${begun.uploadId}/finalize`,
+        "{}",
+        "application/json",
+      );
+    } catch (error) {
+      if (error instanceof CliError) error.message += `\nRetry with --key ${key} to continue this upload.`;
+      throw error;
     }
-    if (process.stderr.isTTY) process.stderr.write("\n");
-    receipt = await call(endpoint, token, "POST", `/api/v1/projects/${begun.uploadId}/finalize`, "{}", "application/json");
-  } catch (error) {
-    if (error instanceof CliError) error.message += `\nRetry with --key ${key} to continue this upload.`;
-    throw error;
-  }
-  const result = { ...report, artifactId: receipt.artifactId, revisionId: receipt.revisionId, shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}` };
+  const result = {
+    ...report,
+    artifactId: receipt.artifactId,
+    revisionId: receipt.revisionId,
+    shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}`,
+  };
   // The pulled folder now holds this version: the next publish builds on it.
   if (pulled)
-    await writeFile(statePath, `${JSON.stringify({ ...pulled, revisionId: receipt.revisionId, number: receipt.number ?? pulled.number, title: report.title, pushedAt: new Date().toISOString() }, null, 2)}\n`);
+    await writeFile(
+      statePath,
+      `${JSON.stringify({ ...pulled, revisionId: receipt.revisionId, number: receipt.number ?? pulled.number, title: report.title, pushedAt: new Date().toISOString() }, null, 2)}\n`,
+    );
   if (values.json) console.log(JSON.stringify(result, null, 2));
   else {
     console.log(
@@ -512,6 +568,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof CliError ? error.message : error?.stack ?? String(error));
+  console.error(error instanceof CliError ? error.message : (error?.stack ?? String(error)));
   process.exitCode = error instanceof CliError ? error.code : 1;
 });

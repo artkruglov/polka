@@ -12,26 +12,12 @@ import {
   type MaintenanceCounters,
   type MaintenanceObjectStore,
 } from "./maintenance-cleanup.ts";
-import {
-  runMaintenanceGuard,
-  type MaintenanceRunResult,
-} from "./maintenance-guard.ts";
+import { runMaintenanceGuard, type MaintenanceRunResult } from "./maintenance-guard.ts";
 
-type SafeReason =
-  | "busy"
-  | "deadline"
-  | "stopping"
-  | "guard_lost"
-  | "database"
-  | "storage"
-  | "internal";
+type SafeReason = "busy" | "deadline" | "stopping" | "guard_lost" | "database" | "storage" | "internal";
 
 type SafeEvent = {
-  event:
-    | "maintenance.started"
-    | "maintenance.completed"
-    | "maintenance.failed"
-    | "maintenance.skipped";
+  event: "maintenance.started" | "maintenance.completed" | "maintenance.failed" | "maintenance.skipped";
   reason?: SafeReason;
   durationMs?: number;
   expiredUploadsReconciled?: number;
@@ -97,11 +83,8 @@ export async function runMaintenanceCli(
 ) {
   const startedAt = performance.now();
   const deadlineMs = Math.min(dependencies.deadlineMs ?? 60_000, 60_000);
-  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0)
-    throw new Error("Invalid maintenance deadline");
-  const emit =
-    dependencies.emit ??
-    ((event: SafeEvent) => console.log(JSON.stringify(event)));
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) throw new Error("Invalid maintenance deadline");
+  const emit = dependencies.emit ?? ((event: SafeEvent) => console.log(JSON.stringify(event)));
   const safeEmit = (event: SafeEvent) => {
     try {
       emit(event);
@@ -134,11 +117,8 @@ export async function runMaintenanceCli(
   };
   let exitCode = 1;
   try {
-    if (controller.signal.aborted)
-      throw new Error("Maintenance stopped before setup");
-    database =
-      dependencies.createDatabase?.() ??
-      createMaintenanceDatabase(config.DATABASE_URL);
+    if (controller.signal.aborted) throw new Error("Maintenance stopped before setup");
+    database = dependencies.createDatabase?.() ?? createMaintenanceDatabase(config.DATABASE_URL);
     phase = "storage";
     storage =
       dependencies.createStorage?.() ??
@@ -153,8 +133,7 @@ export async function runMaintenanceCli(
     database.on?.("error", beforeGuardError);
     database.on?.("end", beforeGuardError);
     await database.connect();
-    if (controller.signal.aborted)
-      throw new Error("Maintenance stopped before guard");
+    if (controller.signal.aborted) throw new Error("Maintenance stopped before guard");
     phase = "run";
     const pending = runMaintenanceOnce({
       database,
@@ -191,13 +170,7 @@ export async function runMaintenanceCli(
     const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
     safeEmit({
       event: "maintenance.failed",
-      reason:
-        stopReason ??
-        (phase === "storage"
-          ? "storage"
-          : phase === "run"
-            ? "internal"
-            : "database"),
+      reason: stopReason ?? (phase === "storage" ? "storage" : phase === "run" ? "internal" : "database"),
       durationMs,
     });
   } finally {
@@ -208,8 +181,7 @@ export async function runMaintenanceCli(
       process.removeListener("SIGTERM", processStop);
     }
     const databaseToClose = database;
-    if (databaseToClose && !guardStarted)
-      await boundedSetupClose(() => databaseToClose.end?.());
+    if (databaseToClose && !guardStarted) await boundedSetupClose(() => databaseToClose.end?.());
     try {
       storage?.close();
     } catch {

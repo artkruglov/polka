@@ -46,7 +46,16 @@ if (shardArg >= 0) {
     const report = secretsReport(redactor.findings());
     const sid = `${source}:${index.sessionId ?? index.file}:${index.file}`;
     const { toolCalls, ...facts } = index;
-    sessions.write(JSON.stringify({ sid, ...facts, toolCallCount: toolCalls.length, secretsStatus: report.status, findings: report.items.length, parseMs: Math.round(performance.now() - started) }) + "\n");
+    sessions.write(
+      JSON.stringify({
+        sid,
+        ...facts,
+        toolCallCount: toolCalls.length,
+        secretsStatus: report.status,
+        findings: report.items.length,
+        parseMs: Math.round(performance.now() - started),
+      }) + "\n",
+    );
     for (const call of toolCalls) calls.write(JSON.stringify({ sid, ...call }) + "\n");
     for (const item of report.items) secrets.write(JSON.stringify({ sid, ...item }) + "\n");
     for (const sample of redactor.samples()) samples.write(JSON.stringify(sample) + "\n");
@@ -63,11 +72,17 @@ if (shardArg >= 0) {
   const shards = Number(rest[rest.indexOf("--shards") + 1]) || 4;
   const started = Date.now();
   await Promise.all(
-    Array.from({ length: shards }, (_, shard) =>
-      new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [fileURLToPath(import.meta.url), out, "--shard", `${shard}/${shards}`], { stdio: "inherit" });
-        child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`shard ${shard} exited ${code}`))));
-      }),
+    Array.from(
+      { length: shards },
+      (_, shard) =>
+        new Promise((resolve, reject) => {
+          const child = spawn(
+            process.execPath,
+            [fileURLToPath(import.meta.url), out, "--shard", `${shard}/${shards}`],
+            { stdio: "inherit" },
+          );
+          child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`shard ${shard} exited ${code}`))));
+        }),
     ),
   );
   console.log(JSON.stringify({ files: files.length, shards, seconds: Math.round((Date.now() - started) / 1000) }));
