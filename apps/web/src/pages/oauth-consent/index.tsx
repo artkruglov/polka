@@ -84,7 +84,7 @@ export function OAuthConsent() {
         });
       });
     return () => controller.abort();
-  }, [state.kind]);
+  }, [state.kind, requestId]);
 
   const decide = async (decision: "approve" | "deny") => {
     if (state.kind !== "ready" || sending.current) return;

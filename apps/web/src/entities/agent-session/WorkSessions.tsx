@@ -28,18 +28,18 @@ export function WorkSessionsList({ sessions }: { sessions: Linked[] }) {
 }
 
 export function WorkSessions({ artifactId }: { artifactId: string }) {
-  const [sessions, setSessions] = useState<Linked[]>([]);
+  // Tagged with the work they belong to: another work starts empty until its answer.
+  const [loaded, setLoaded] = useState<{ artifactId: string; sessions: Linked[] } | null>(null);
   useEffect(() => {
     let live = true;
-    setSessions([]);
     sessionsApi
       .ofWork(artifactId)
-      .then((page) => live && setSessions(page.sessions))
+      .then((page) => live && setLoaded({ artifactId, sessions: page.sessions }))
       // A shelf without sessions, or someone else's: the block stays empty.
       .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [artifactId]);
-  return <WorkSessionsList sessions={sessions} />;
+  return <WorkSessionsList sessions={loaded?.artifactId === artifactId ? loaded.sessions : []} />;
 }

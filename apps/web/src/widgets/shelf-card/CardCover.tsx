@@ -52,10 +52,16 @@ const askCover = (revisionId: string, fresh = false) => {
 export function useCover(a: Artifact, near: boolean) {
   const initial = a.revision.link ? null : a.revision.cover;
   const [cover, setCover] = useState<RevisionCover | null | undefined>(initial ?? undefined);
-  useEffect(() => setCover(initial ?? undefined), [a.revision.id]);
+  // A new version starts from its own stored cover.
+  const [coverOf, setCoverOf] = useState(a.revision.id);
+  if (coverOf !== a.revision.id) {
+    setCoverOf(a.revision.id);
+    setCover(initial ?? undefined);
+  }
+  const isLink = !!a.revision.link;
   const polls = useRef(0);
   useEffect(() => {
-    if (!near || a.revision.link) return;
+    if (!near || isLink) return;
     if (cover && cover.image !== "pending") return;
     let live = true;
     // A picture being drawn: ask again a few times, then keep the text cover.
@@ -71,7 +77,8 @@ export function useCover(a: Artifact, near: boolean) {
       live = false;
       clearTimeout(timer);
     };
-  }, [near, a.revision.id, cover?.image]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- follows the picture's state, not each cover object the server returns
+  }, [near, isLink, a.revision.id, cover?.image]);
   return cover;
 }
 

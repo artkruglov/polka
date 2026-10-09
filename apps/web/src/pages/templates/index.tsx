@@ -64,8 +64,11 @@ export function Templates() {
   const [personalReleases, setPersonalReleases] = useState<Template[]>([]),
     [personalError, setPersonalError] = useState(""),
     [personalAttempt, setPersonalAttempt] = useState(0);
+  // The lists reload for another account, not for a fresh copy of the same one.
+  const accountId = account?.id;
   useEffect(() => {
-    if (!account) {
+    if (!accountId) {
+      // oxlint-disable-next-line react/set-state-in-effect -- signed out: the libraries of the previous account go away
       setLibraries([]);
       setLibraryId("");
       return;
@@ -93,9 +96,10 @@ export function Templates() {
     return () => {
       live = false;
     };
-  }, [account?.id, libraryAttempt]);
+  }, [accountId, libraryAttempt]);
   useEffect(() => {
     let live = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- every new query clears the list before its request; six pieces of state would need one keyed state
     setItems([]);
     setLoaded(false);
     setError("");
@@ -103,7 +107,7 @@ export function Templates() {
     setPreview(null);
     setHasMore(false);
     const validLibrary = !libraryId || libraries.some((library) => library.id === libraryId);
-    if (account && validLibrary && !libraryError)
+    if (accountId && validLibrary && !libraryError)
       request<{ items: Template[]; hasMore: boolean }>(
         `/templates?${new URLSearchParams({ query, includePrevious: String(includePrevious), ...(libraryId ? { libraryId } : {}) })}`,
       )
@@ -120,11 +124,12 @@ export function Templates() {
     return () => {
       live = false;
     };
-  }, [account?.id, attempt, query, includePrevious, libraryId, libraries, libraryError]);
+  }, [accountId, attempt, query, includePrevious, libraryId, libraries, libraryError]);
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- another account or library clears the personal releases before its request
     setPersonalReleases([]);
     setPersonalError("");
-    if (!account || !libraryId) {
+    if (!accountId || !libraryId) {
       return;
     }
     let live = true;
@@ -134,7 +139,7 @@ export function Templates() {
     return () => {
       live = false;
     };
-  }, [account?.id, libraryId, personalAttempt]);
+  }, [accountId, libraryId, personalAttempt]);
   function selectLibrary(value: string) {
     setLibraryId(value);
     setItems([]);

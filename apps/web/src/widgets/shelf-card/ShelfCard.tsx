@@ -25,14 +25,11 @@ export type CardAction = "share" | "metadata" | "trash";
 /** True once the element comes near the viewport; covers below the fold load nothing until then. */
 function useNearViewport<T extends Element>() {
   const ref = useRef<T>(null);
-  const [near, setNear] = useState(false);
+  // Without IntersectionObserver every cover counts as near.
+  const [near, setNear] = useState(() => typeof IntersectionObserver !== "function");
   useEffect(() => {
     const node = ref.current;
     if (near || !node) return;
-    if (typeof IntersectionObserver !== "function") {
-      setNear(true);
-      return;
-    }
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {

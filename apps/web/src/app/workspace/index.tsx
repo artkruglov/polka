@@ -7,7 +7,7 @@ import { ArtifactReader, readerTabFromSearch, withReaderTab } from "../../widget
 import { downloadRevision } from "../../features/download-artifact/index.ts";
 import { CompareRevisions } from "../../features/compare-revisions/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useWorkComments } from "../../widgets/comments/index.ts";
@@ -115,15 +115,23 @@ export function App() {
   };
   // The tab names the open work (the owner's own title) or the trash.
   useDocumentTitle(selected ? (work?.title ?? "Работа") : trashView ? "Корзина" : null);
-  useEffect(() => setTrashActionError(""), [panel, selected]);
+  // Another dialog or work drops the trash action's error.
+  const [errorScope, setErrorScope] = useState({ panel, selected });
+  if (errorScope.panel !== panel || errorScope.selected !== selected) {
+    setErrorScope({ panel, selected });
+    setTrashActionError("");
+  }
   const shelfGeneration = useRef(0);
   const trashGeneration = useRef(0);
   const routeGeneration = useRef(0);
   const selectedRef = useRef(selected);
   const accountRef = useRef(account);
   const trashBusyRef = useRef(false);
-  selectedRef.current = selected;
-  accountRef.current = account;
+  // Synced at commit, before any request started by this render can answer.
+  useLayoutEffect(() => {
+    selectedRef.current = selected;
+    accountRef.current = account;
+  });
   const [trashItems, setTrashItems] = useState<Artifact[]>([]),
     [trashCursor, setTrashCursor] = useState<string | null>(null),
     [trashLoading, setTrashLoading] = useState(false),
@@ -191,6 +199,7 @@ export function App() {
   );
   useEffect(() => {
     let live = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- the old account's folders go as the new list is asked for
     setFolders([]);
     if (account)
       client
@@ -207,6 +216,7 @@ export function App() {
   }, [account, refresh]);
   useEffect(() => {
     shelfGeneration.current++;
+    // oxlint-disable-next-line react/set-state-in-effect -- the request starts here: a newer list cancels «Показать ещё» and shows loading
     setLoadingMore(false);
     if (!account || selected || trashView) return;
     let live = true;
@@ -259,6 +269,7 @@ export function App() {
   useEffect(() => {
     if (!account || !trashView) return;
     trashGeneration.current++;
+    // oxlint-disable-next-line react/set-state-in-effect -- the request starts here; the old trash list goes with it
     setTrashItems([]);
     setTrashCursor(null);
     void loadTrash();
@@ -285,6 +296,7 @@ export function App() {
     const expectedAccount = account;
     const generation = routeGeneration.current;
     let live = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- the request starts here; the flags say the work is loading
     setLoading(true);
     setWorkMissing(false);
     Promise.all([client.artifact(selected), client.revisions(selected)])

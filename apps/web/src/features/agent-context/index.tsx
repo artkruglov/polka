@@ -22,31 +22,34 @@ export function AgentContextPanel({
   onClose: () => void;
 }) {
   const [purpose, setPurpose] = useState(""),
-    [context, setContext] = useState<AgentContext | null>(null),
-    [error, setError] = useState(""),
+    [loaded, setLoaded] = useState<{ path: string; refresh: number; context?: AgentContext; error?: string } | null>(
+      null,
+    ),
+    [saveError, setSaveError] = useState<{ path: string; refresh: number; message: string } | null>(null),
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState(false),
     [refresh, setRefresh] = useState(0);
   const [summary, setSummary] = useState(""),
     [rules, setRules] = useState(""),
     [questions, setQuestions] = useState("");
+  const path = `/artifacts/${artifactId}/agent-context?${new URLSearchParams({ revisionId, ...(libraryId ? { libraryId } : {}), ...(publicationId ? { publicationId } : {}), ...(purpose ? { purpose } : {}) })}`;
   useEffect(() => {
     let live = true;
-    setContext(null);
-    setError("");
-    request<AgentContext>(
-      `/artifacts/${artifactId}/agent-context?${new URLSearchParams({ revisionId, ...(libraryId ? { libraryId } : {}), ...(publicationId ? { publicationId } : {}), ...(purpose ? { purpose } : {}) })}`,
-    )
+    request<AgentContext>(path)
       .then((x) => {
-        if (live) setContext(x);
+        if (live) setLoaded({ path, refresh, context: x });
       })
       .catch((e) => {
-        if (live) setError(e.message);
+        if (live) setLoaded({ path, refresh, error: e.message });
       });
     return () => {
       live = false;
     };
-  }, [artifactId, revisionId, libraryId, publicationId, purpose, refresh]);
+  }, [path, refresh]);
+  // Another version, purpose or a refresh starts empty until its own answer, and drops a failed save's message.
+  const current = loaded?.path === path && loaded.refresh === refresh ? loaded : null;
+  const context = current?.context ?? null,
+    error = current?.error || (saveError?.path === path && saveError.refresh === refresh ? saveError.message : "");
   const imageOnly =
     context !== null &&
     context.availableContent.length > 0 &&
@@ -195,7 +198,7 @@ export function AgentContextPanel({
                       e.preventDefault();
                       if (busy) return;
                       setBusy(true);
-                      setError("");
+                      setSaveError(null);
                       try {
                         await request(`/artifacts/${artifactId}/template-releases`, {
                           revisionId,
@@ -207,7 +210,7 @@ export function AgentContextPanel({
                         setPurpose("");
                         setRefresh((x) => x + 1);
                       } catch (e) {
-                        setError((e as Error).message);
+                        setSaveError({ path, refresh, message: (e as Error).message });
                       } finally {
                         setBusy(false);
                       }

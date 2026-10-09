@@ -59,7 +59,6 @@ function SessionsList() {
   const [error, setError] = useState("");
   useEffect(() => {
     let live = true;
-    setError("");
     const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value) as [string, string][]);
     history.replaceState(null, "", `/sessions${query.size ? `?${query}` : ""}`);
     sessionsApi
@@ -99,7 +98,11 @@ function SessionsList() {
         <SessionsStart origin={location.origin} />
       </>
     );
-  const set = (patch: Partial<SessionFilters>) => setFilters((was) => ({ ...was, ...patch }));
+  // A new filter clears the last error before its list loads.
+  const set = (patch: Partial<SessionFilters>) => {
+    setError("");
+    setFilters((was) => ({ ...was, ...patch }));
+  };
   return (
     <>
       {notice}
@@ -173,18 +176,18 @@ function PeriodChoice({ days, onChange }: { days: number; onChange: (days: numbe
 }
 
 function useStats(days: number) {
-  const [state, setState] = useState<{ stats?: SessionStats; error?: string; off?: boolean }>({});
+  const [state, setState] = useState<{ days?: number; stats?: SessionStats; error?: string; off?: boolean }>({});
   useEffect(() => {
     let live = true;
-    setState({});
     Promise.all([sessionsApi.list({}, null), sessionsApi.stats(days)])
-      .then(([list, stats]) => live && setState({ stats, off: !list.enabled }))
-      .catch((e) => live && setState({ error: message(e) }));
+      .then(([list, stats]) => live && setState({ days, stats, off: !list.enabled }))
+      .catch((e) => live && setState({ days, error: message(e) }));
     return () => {
       live = false;
     };
   }, [days]);
-  return state;
+  // Another period starts empty until its own answer.
+  return state.days === days ? state : {};
 }
 
 function SecretsView() {

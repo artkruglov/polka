@@ -47,47 +47,56 @@ type WorkState =
 function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry: () => void }) {
   const account = useAccount();
   const [item, setItem] = useState<EditorialPublicResponse | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
-  const [error, setError] = useState<string | null>(null);
+  // The outcome of one attempt: another slug or a retry reads as «loading» until its own answer.
+  const [outcome, setOutcome] = useState<{
+    slug: string;
+    retry: number;
+    state: "ready" | "missing" | "error";
+    error: string | null;
+  } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    setState("loading");
-    setError(null);
     fetchEditorialItem(slug, controller.signal)
       .then((next) => {
         if (controller.signal.aborted) return;
         setItem(next);
-        setState(next ? "ready" : "missing");
+        setOutcome({ slug, retry, state: next ? "ready" : "missing", error: null });
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        setState("error");
-        setError(reason instanceof Error ? reason.message : "Не удалось загрузить материал.");
+        setOutcome({
+          slug,
+          retry,
+          state: "error",
+          error: reason instanceof Error ? reason.message : "Не удалось загрузить материал.",
+        });
       });
     return () => controller.abort();
   }, [retry, slug]);
+  const { state, error } =
+    outcome?.slug === slug && outcome.retry === retry ? outcome : { state: "loading" as const, error: null };
   useDocumentTitle(item?.title ?? "Лента");
   const url = item ? safeEditorialRecipientUrl(item.recipientUrl) : null;
   const token = editorialShareToken(url);
 
   // The work itself, through the link's token, as the recipient page opens it.
-  const [work, setWork] = useState<WorkState>({ status: "loading" });
+  const [resolvedWork, setResolvedWork] = useState<{ token: string; retry: number; work: WorkState } | null>(null);
   useEffect(() => {
     if (!token) return;
     let live = true;
-    setWork({ status: "loading" });
+    const settle = (work: WorkState) => setResolvedWork({ token, retry, work });
     client
       .resolve(token)
       .then((resolved: Resolved) => {
         if (!live) return;
         if ("review" in resolved || "blocked" in resolved)
-          setWork({ status: "unavailable", message: "Материал сейчас недоступен." });
-        else setWork({ status: "ready", viewer: resolved });
+          settle({ status: "unavailable", message: "Материал сейчас недоступен." });
+        else settle({ status: "ready", viewer: resolved });
       })
       .catch((e: unknown) => {
         if (!live) return;
         const unreachable = !(e instanceof ApiError) || e.status === 0 || e.status === 429 || e.status >= 500;
-        setWork({
+        settle({
           status: "unavailable",
           message: unreachable
             ? "Полка сейчас не отвечает. Попробуйте ещё раз."
@@ -98,11 +107,17 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
       live = false;
     };
   }, [token, retry]);
+  // Another link or a retry reads as «loading» until its own answer.
+  const work: WorkState =
+    resolvedWork && resolvedWork.token === token && resolvedWork.retry === retry
+      ? resolvedWork.work
+      : { status: "loading" };
 
   const path = `/discover/${slug}`;
   const guest = account === null;
   const shown = work.status === "ready" ? work.viewer : null;
-  const convert = useRecipientConvert({ enabled: guest && shown !== null, page: "feed" });
+  // Destructured: the stage ref is only handed to the element, never read in render.
+  const { stageRef, card, press, close } = useRecipientConvert({ enabled: guest && shown !== null, page: "feed" });
   const capabilities = useCapabilities();
   const yandex =
     capabilities.status === "ready" ? capabilities.capabilities.signInProviders.filter((p) => p.id === "yandex") : [];
@@ -127,7 +142,6 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
     return () => observer.disconnect();
   }, [withBar]);
 
-  const card = convert.card;
   return (
     <AppShell current="discover" account={account} className="feed-reader">
       {state !== "ready" || !item ? (
@@ -170,7 +184,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
                 aria-label="Открыть на весь экран"
                 title="Открыть на весь экран"
                 disabled={shown === null}
-                onClick={() => void convert.stageRef.current?.requestFullscreen?.()}
+                onClick={() => void stageRef.current?.requestFullscreen?.()}
               >
                 <Maximize2 aria-hidden="true" /> <span>Открыть на весь экран</span>
               </Button>
@@ -187,7 +201,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
               onClose={() => setWelcome(false)}
             />
           )}
-          <main ref={convert.stageRef} className="feed-stage" aria-label={item.title}>
+          <main ref={stageRef} className="feed-stage" aria-label={item.title}>
             {!token ? (
               <p className="feed-state" role="alert">
                 Ссылка на материал недоступна.
@@ -219,10 +233,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
           </footer>
           {withBar && (
             <div ref={footerBox} className="feed-convert">
-              <ConvertBar
-                onTry={(opener) => convert.press("try", opener)}
-                onRemix={(opener) => convert.press("remix", opener)}
-              />
+              <ConvertBar onTry={(opener) => press("try", opener)} onRemix={(opener) => press("remix", opener)} />
             </div>
           )}
           {withBar && card && shown && (
@@ -241,7 +252,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
                   />
                 ) : undefined
               }
-              onClose={convert.close}
+              onClose={close}
             />
           )}
         </div>

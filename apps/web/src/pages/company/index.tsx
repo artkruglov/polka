@@ -55,7 +55,7 @@ function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => 
       .members(shelf.id)
       .then((page) => setMembers(page.items))
       .catch((e) => setError((e as Error).message));
-  }, [open]);
+  }, [open, members, shelf.id]);
   return (
     <li className="company-shelf">
       <div className="company-shelf-head">

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { client, type Shelf, type ShelfMember } from "../../shared/api/client.ts";
@@ -89,19 +89,19 @@ export function ShelfMembersPanel({
   const live = useRef(true);
   const admin = role === "admin";
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     const page = await client.shelfMembers(shelf.id);
     if (!live.current) return;
     setMembers(page.items);
     setRole(page.role);
-  };
+  }, [shelf.id]);
   useEffect(() => {
     live.current = true;
     reload().catch((e) => live.current && setError((e as Error).message));
     return () => {
       live.current = false;
     };
-  }, [shelf.id]);
+  }, [shelf.id, reload]);
 
   const act = async (work: () => Promise<unknown>, done?: string) => {
     if (busy) return;

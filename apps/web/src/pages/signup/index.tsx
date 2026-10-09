@@ -47,9 +47,10 @@ export function Signup() {
   // A code for an address without a shelf, in a browser that knows one.
   const [askNew, setAskNew] = useState(false);
   // A provisional shelf is claimed on /claim; this page is its email step.
+  const claiming = query.get("claim") === "1";
   useEffect(() => {
-    if (account?.provisional && query.get("claim") !== "1") location.replace(`/claim?${new URLSearchParams({ next })}`);
-  }, [account]);
+    if (account?.provisional && !claiming) location.replace(`/claim?${new URLSearchParams({ next })}`);
+  }, [account, claiming, next]);
   useEffect(() => {
     loadCapabilities()
       .then(async (c) => {

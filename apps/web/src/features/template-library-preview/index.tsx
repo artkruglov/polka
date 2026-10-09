@@ -122,9 +122,11 @@ export function TemplateLibraryPreview({ template, onClose }: { template: Previe
   }
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- another version starts from a clean preview before its request
     setPreparation(null);
     void loadLiveView();
     return () => requestRef.current?.abort();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- reloads only for another version: loadLiveView is a new function every render
   }, [template.libraryId, template.publicationId, template.artifactId, template.revisionId]);
 
   return (

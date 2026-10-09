@@ -15,14 +15,14 @@ const REFUSED = "Ссылка устарела или повреждена. По
  * own, the reader decides with the button.
  */
 export function Away() {
-  const [state, setState] = useState<State>({ kind: "checking" });
+  // The token is read once, on arrival; without one there is nothing to check.
+  const [token] = useState(() => location.hash.slice(1));
+  const [state, setState] = useState<State>(() =>
+    token ? { kind: "checking" } : { kind: "refused", message: REFUSED },
+  );
   useEffect(() => {
+    if (!token) return;
     const abort = new AbortController();
-    const token = location.hash.slice(1);
-    if (!token) {
-      setState({ kind: "refused", message: REFUSED });
-      return;
-    }
     request<Target>("/away", { token }, "POST", abort.signal)
       .then((target) => {
         if (abort.signal.aborted) return;
@@ -39,7 +39,7 @@ export function Away() {
         });
       });
     return () => abort.abort();
-  }, []);
+  }, [token]);
   return (
     <>
       <main className="away-page">

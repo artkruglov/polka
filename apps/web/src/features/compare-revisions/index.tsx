@@ -61,13 +61,16 @@ export function CompareRevisions({
 
   // A new version on screen or a new list resets the pair and the result.
   const key = `${shown.id}:${revisions.map((r) => r.id).join(",")}`;
-  useEffect(() => {
+  const [shownKey, setShownKey] = useState(key);
+  if (shownKey !== key) {
+    setShownKey(key);
     const next = defaults();
     setFromId(next.from);
     setToId(next.to);
     setState({ status: "idle" });
-    return () => abort.current?.abort();
-  }, [key]);
+  }
+  // A comparison still running for the previous pair is dropped.
+  useEffect(() => () => abort.current?.abort(), [key]);
 
   if (revisions.length < 2)
     return <p className="revision-compare-empty">Сравнивать пока не с чем: у работы одна версия.</p>;

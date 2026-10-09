@@ -80,27 +80,15 @@ export function LivePreview({
   const collapseButton = useRef<HTMLButtonElement | null>(null);
   const focusBeforeExpand = useRef<HTMLElement | null>(null);
   const onBuildChangeRef = useRef(onInlineBuildChange);
-  onBuildChangeRef.current = onInlineBuildChange;
-
   useEffect(() => {
-    const abort = new AbortController();
+    onBuildChangeRef.current = onInlineBuildChange;
+  });
+
+  // Preview keys this component by revision and grant, so another revision or
+  // grant is a new mount with fresh state; leaving one drops its requests.
+  useEffect(() => {
     ++generation.current;
-    launchAbort.current?.abort();
-    launchAbort.current = null;
-    setCapability("loading");
-    setLive(null);
-    setExpanded(false);
-    setBusy(false);
-    setBuildBusy(false);
-    setError("");
-    setPollPaused("");
-    setStopped(false);
-    autoLaunched.current = false;
-    autoPrepared.current = false;
-    relaunchedForBuild.current = false;
-    setBuild(revision.inlineBuild ?? null);
     return () => {
-      abort.abort();
       launchAbort.current?.abort();
       launchAbort.current = null;
       buildAbort.current?.abort();
@@ -329,6 +317,7 @@ export function LivePreview({
       autoPrepared.current = true;
       void prepare();
     }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- launch and prepare are new each render; the plan's inputs decide, the refs keep it to once
   }, [build?.state, buildForLink, capability, grant, requiresBuild, stopped]);
 
   // The owner's upload was running while its build was prepared: switch to
@@ -338,6 +327,7 @@ export function LivePreview({
       return;
     relaunchedForBuild.current = true;
     void launch();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- launch is new each render; the relaunch follows the build and the profile, once
   }, [build?.state, live?.profile, grant, stopped]);
 
   // A ready build may list what it left out (remote fonts, images, hints).

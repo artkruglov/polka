@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Button, Notice, TextField } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
@@ -28,19 +28,23 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
   const [confirming, setConfirming] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
+  // Read by reload after its request: the list was shown at least once.
+  const shown = useRef(false);
 
   const reload = useCallback(async () => {
     try {
       setItems((await client.serviceAccounts.list()).items);
       setLoaded(true);
+      shown.current = true;
     } catch (cause) {
       // Off on this installation (404), or not a curator here: nothing to show.
       // Off here (404), or no right: nothing to show, unless it was shown already.
-      if (cause instanceof ApiError && [403, 404].includes(cause.status) && !loaded) setItems(null);
+      if (cause instanceof ApiError && [403, 404].includes(cause.status) && !shown.current) setItems(null);
       else setError("Не удалось загрузить сервисные доступы.");
     }
   }, []);
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- reload sets state only after the awaited request
     void reload();
   }, [reload]);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import type { Artifact, Folder } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Button, TextField, SelectField } from "../../shared/ui/controls.tsx";
@@ -25,16 +25,18 @@ export function ArtifactMetadataPanel({
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
 
-  useEffect(() => {
+  // Another artifact resets the form. A refreshed snapshot updates the expected
+  // values explicitly below; keep the user draft while resolving a conflict on the same artifact.
+  const [formFor, setFormFor] = useState(artifact.id);
+  if (formFor !== artifact.id) {
+    setFormFor(artifact.id);
     setTitle(artifact.title);
     setFolderId(artifact.folderId);
     setExpectedTitle(artifact.title);
     setExpectedFolderId(artifact.folderId);
     setError("");
     setConflict(false);
-    // A refreshed snapshot updates the expected values explicitly below; keep the
-    // user draft while resolving a conflict on the same artifact.
-  }, [artifact.id]);
+  }
 
   const reloadSnapshot = async () => {
     setBusy(true);

@@ -39,11 +39,17 @@ export function Preview({
 }) {
   const [content, setContent] = useState<{ url?: string; text?: string }>({}),
     [error, setError] = useState("");
+  // Another revision or grant shows nothing until its own bytes arrive.
+  const source = `${revision.id}:${grant ?? ""}`;
+  const [shown, setShown] = useState(source);
+  if (shown !== source) {
+    setShown(source);
+    setContent({});
+    setError("");
+  }
   useEffect(() => {
     const abort = new AbortController();
     let url: string | undefined;
-    setContent({});
-    setError("");
     if (revision.mime === "text/html" || revision.storageKind === "bundle") return () => abort.abort();
     // A link's cover needs only its host and service, which the revision carries.
     if (revision.mime === LINK_MIME && compact) return () => abort.abort();
@@ -65,6 +71,7 @@ export function Preview({
       abort.abort();
       if (url) URL.revokeObjectURL(url);
     };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- read once per revision and grant: its type never changes, and a compact toggle must not read again
   }, [revision.id, grant]);
   if (error) return <div className="preview-error">{error}</div>;
   if (revision.mime === LINK_MIME) {
@@ -248,13 +255,20 @@ function SandboxFrame({
   const [loaded, setLoaded] = useState(false);
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => {
-    const abort = new AbortController();
+  const comments = !!overlay;
+  // Another page, grant or overlay starts a new frame.
+  const source = `${revisionId}:${grant ?? ""}:${comments}`;
+  const [shown, setShown] = useState(source);
+  if (shown !== source) {
+    setShown(source);
     setSrc("");
     setLoaded(false);
     setError("");
+  }
+  useEffect(() => {
+    const abort = new AbortController();
     // With a viewer domain the page never loads from Полка's own origin.
-    staticView(revisionId, grant, abort.signal, { comments: !!overlay })
+    staticView(revisionId, grant, abort.signal, { comments })
       .then((url) => {
         if (!abort.signal.aborted) setSrc(url);
       })
@@ -262,7 +276,7 @@ function SandboxFrame({
         if (!abort.signal.aborted) setError(e.message);
       });
     return () => abort.abort();
-  }, [revisionId, grant, !!overlay]);
+  }, [revisionId, grant, comments]);
   // The overlay is the one script of a static view, and only on the viewer's
   // own domain: a same-origin frame (single-domain install) gets none.
   const scripted = !!overlay && !!src && new URL(src, location.href).origin !== location.origin;

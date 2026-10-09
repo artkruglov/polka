@@ -123,12 +123,20 @@ function TreeBranch({
   );
 }
 
+/** The folders with every folder above the page added. */
+function withAncestors(folders: Set<string>, path: string) {
+  const next = new Set(folders);
+  const parts = path.split("/");
+  for (let i = 1; i < parts.length; i++) next.add(parts.slice(0, i).join("/"));
+  return next;
+}
+
 export function ProjectView({ revision, grant }: { revision: Revision; grant?: string }) {
   const manifest = revision.manifest!;
   const files = manifest.files as ProjectFile[];
-  const readable = useMemo(() => buildTree(files.filter((file) => READABLE(file.mime))), [revision.id]);
-  const resources = useMemo(() => files.filter((file) => !READABLE(file.mime)), [revision.id]);
-  const paths = useMemo(() => new Set(files.map((file) => file.path)), [revision.id]);
+  const readable = useMemo(() => buildTree(files.filter((file) => READABLE(file.mime))), [files]);
+  const resources = useMemo(() => files.filter((file) => !READABLE(file.mime)), [files]);
+  const paths = useMemo(() => new Set(files.map((file) => file.path)), [files]);
   // A recipient's address holds the link's token, so only the owner's keeps the page.
   const [page, setPage] = useState(() => {
     const wanted = grant ? "" : pathFromHash();
@@ -136,11 +144,13 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
   });
   // The open page for the renewal timer, which must not restart on every page.
   const current = useRef(page);
-  current.current = page;
+  useEffect(() => {
+    current.current = page;
+  }, [page]);
   const [open, setOpen] = useState(() => {
     const folders = new Set<string>();
     for (const child of readable.children.values()) if (!child.file) folders.add(child.path);
-    return folders;
+    return withAncestors(folders, page);
   });
   const [view, setView] = useState<{ url: string; expiresAt: string } | null>(null);
   const [error, setError] = useState("");
@@ -170,10 +180,16 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
         }),
     [revision.id, grant],
   );
-  useEffect(() => {
-    const abort = new AbortController();
+  // Another grant drops the view of the old one while the new one is asked for.
+  const source = `${revision.id}:${grant ?? ""}`;
+  const [shown, setShown] = useState(source);
+  if (shown !== source) {
+    setShown(source);
     setView(null);
     setError("");
+  }
+  useEffect(() => {
+    const abort = new AbortController();
     issue(abort.signal);
     return () => abort.abort();
   }, [issue]);
@@ -201,19 +217,17 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
     };
   }, [view]);
 
-  const reveal = (path: string) =>
-    setOpen((was) => {
-      const next = new Set(was);
-      const parts = path.split("/");
-      for (let i = 1; i < parts.length; i++) next.add(parts.slice(0, i).join("/"));
-      return next;
-    });
+  // The tree opens the folders of the page the reader goes to.
+  const [revealed, setRevealed] = useState(page);
+  if (revealed !== page) {
+    setRevealed(page);
+    setOpen((was) => withAncestors(was, page));
+  }
   useEffect(() => {
-    reveal(page);
     // The owner's address keeps the page, once the reader has left the entry.
     if (!grant && (page !== manifest.entrypoint || /(?:^#|&)path=/.test(location.hash)))
       history.replaceState(null, "", `#path=${encodeURIComponent(page)}`);
-  }, [page, grant]);
+  }, [page, grant, manifest.entrypoint]);
 
   // Messages from the frame are hints from an untrusted page: a path of this
   // project to highlight, or a signed /away link to open in a new tab.
@@ -235,7 +249,7 @@ export function ProjectView({ revision, grant }: { revision: Revision; grant?: s
     };
     addEventListener("message", listen);
     return () => removeEventListener("message", listen);
-  }, [paths]);
+  }, [paths, manifest.entrypoint]);
 
   const choose = (path: string) => {
     anchor.current = "";
