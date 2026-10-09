@@ -343,7 +343,7 @@ after(async () => {
       (resolve) => each?.close(() => resolve()) ?? resolve(),
     );
   try {
-    if (profile) rmSync(profile, { recursive: true, force: true });
+    if (profile) rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); // Chrome's helpers may still write after the kill
   } catch {
     /* the OS cleans the temp directory */
   }

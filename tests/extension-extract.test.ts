@@ -289,7 +289,7 @@ after(async () => {
   chrome?.kill("SIGKILL");
   await new Promise((resolve) => (chrome ? chrome.once("exit", resolve) : resolve(null)));
   server?.close();
-  if (profile) rmSync(profile, { recursive: true, force: true });
+  if (profile) rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); // Chrome's helpers may still write after the kill
 });
 
 test("Claude chat: the panel's title and Copy button, not the message's", { skip }, async () => {
