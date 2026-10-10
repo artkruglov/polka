@@ -6,9 +6,7 @@ import { isAppPage, isMachinePath } from "../../packages/contracts/app-routes.ts
 import { trackPageView } from "./analytics.ts";
 import { config } from "./config.ts";
 import { indexable } from "./indexing.ts";
-
-const escape = (value: string) =>
-  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+import { escapeHtml } from "../../packages/contracts/html.ts";
 
 // Link previews (Telegram, Slack, WhatsApp read these). A share link is
 // /s#<token>: the fragment never reaches the server or a crawler, so the /s
@@ -35,7 +33,7 @@ const CARDS = {
 export function linkPreviewTags(path: string, origin = config.APP_ORIGIN) {
   const card = path === "/s" ? CARDS.share : CARDS.default;
   const meta = (key: "property" | "name", name: string, content: string) =>
-    `<meta ${key}="${name}" content="${escape(content)}" />`;
+    `<meta ${key}="${name}" content="${escapeHtml(content)}" />`;
   return [
     meta("property", "og:type", "website"),
     meta("property", "og:site_name", "Полка"),

@@ -1,3 +1,4 @@
+import { escapeHtml } from "../../../packages/contracts/html.ts";
 // The sign-in code letter (email-auth.ts → beginEmailLogin). A pure function:
 // the same code gives the same letter, and nothing here reads config.
 //
@@ -16,16 +17,6 @@ export const HOSTED_MAIL_SITE = Object.freeze({
 });
 
 export type LoginCodeMail = { subject: string; text: string; html: string };
-
-const ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-/** Text or attribute value → HTML; everything interpolated goes through this. */
-export const escapeMailHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ESCAPES[c]);
 
 /** «12345678» → «1234 5678»: two groups of four, easier to read aloud and type. */
 export function groupCode(code: string) {
@@ -70,7 +61,7 @@ export function loginCodeMail(input: {
     "",
   ].join("\n");
 
-  const e = escapeMailHtml;
+  const e = escapeHtml;
   const sans = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
   const mono = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace";
   const html = `<!doctype html>

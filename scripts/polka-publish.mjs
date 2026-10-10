@@ -55,6 +55,7 @@ class CliError extends Error {
   }
 }
 
+// A copy of packages/contracts/html.ts: this CLI is served as one self-contained file.
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 

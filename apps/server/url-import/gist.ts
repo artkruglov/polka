@@ -2,6 +2,7 @@ import { MAX_BYTES } from "../../../packages/contracts/index.ts";
 import { config } from "../config.ts";
 import { captureHtmlDocument, HtmlCaptureError } from "./html-capture.ts";
 import { fetchPublic, ImportFetchError, type FetchOptions, type PublicResponse } from "./public-fetch.ts";
+import { escapeHtml } from "../../../packages/contracts/html.ts";
 
 /*
  * A GitHub Gist is read through GitHub's official REST API
@@ -71,8 +72,6 @@ const MIMES: Record<string, string> = {
 };
 const extension = (name: string) => name.toLowerCase().split(".").pop() ?? "";
 const isHtml = (file: GistFile) => ["html", "htm"].includes(extension(file.filename));
-const escape = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 function rateLimited(error: ImportFetchError) {
   const http = error.http;
@@ -168,9 +167,9 @@ export async function captureGist(
   // No page in the gist: its files as code, one static page without scripts.
   const title = description ?? files[0].filename;
   const html =
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title>` +
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>` +
     `<style>body{font:16px/1.5 system-ui,sans-serif;max-width:960px;margin:0 auto;padding:24px 16px;color:#1f2328}h1{font-size:24px}h2{font:600 14px ui-monospace,monospace;margin:28px 0 8px}pre{overflow:auto;padding:16px;background:#f6f8fa;border:1px solid #d0d7de;border-radius:6px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}</style></head>` +
-    `<body><h1>${escape(title)}</h1>${files.map((f) => `<h2>${escape(f.filename)}</h2><pre><code>${escape(f.content!)}</code></pre>`).join("")}</body></html>`;
+    `<body><h1>${escapeHtml(title)}</h1>${files.map((f) => `<h2>${escapeHtml(f.filename)}</h2><pre><code>${escapeHtml(f.content!)}</code></pre>`).join("")}</body></html>`;
   return captureHtmlDocument(
     { url: page, contentType: "text/html", bytes: Buffer.from(html, "utf8") },
     {

@@ -1,3 +1,4 @@
+import { escapeHtml } from "./html.ts";
 /**
  * The Полка runtime (react-runtime-v1): what a chat artifact written as React
  * or module JavaScript may import. The derivative builder resolves exactly
@@ -134,9 +135,6 @@ export const RUNTIME_MODULE_LOADERS = {
  * get Tailwind utilities for the classes they use but keep their own base.
  */
 export const RUNTIME_TAILWIND_META = "polka-tailwind" as const;
-
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 
 /**
  * The HTML entrypoint Полка stores next to a component published as source:

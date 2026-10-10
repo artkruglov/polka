@@ -14,9 +14,9 @@ import { pathToFileURL } from "node:url";
 import { db } from "../apps/server/db.ts";
 import { decideFeedProposal, feedProposalSource, listFeedProposalsForOperator } from "../apps/server/feed-proposals.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
+import { UUID_RE } from "../packages/contracts/uuid.ts";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const usage = `Use:
   npm run admin -- feed proposals list [--all]
   npm run admin -- feed proposals export <id> <slug>
@@ -30,7 +30,7 @@ export async function runFeedProposals(argv: string[], root = process.cwd()) {
     if (!items.length) console.log("No proposals waiting.");
     return 0;
   }
-  if (command === "export" && id && UUID.test(id) && third && SLUG.test(third) && third.length <= 80) {
+  if (command === "export" && id && UUID_RE.test(id) && third && SLUG.test(third) && third.length <= 80) {
     const directory = resolve(root, "content/editorial", third);
     const target = resolve(directory, "index.html");
     if (
@@ -57,7 +57,7 @@ export async function runFeedProposals(argv: string[], root = process.cwd()) {
     );
     return 0;
   }
-  if (command === "decide" && id && UUID.test(id) && (third === "published" || third === "rejected")) {
+  if (command === "decide" && id && UUID_RE.test(id) && (third === "published" || third === "rejected")) {
     const result = await decideFeedProposal(id, third, rest.join(" ") || null);
     console.log(JSON.stringify({ event: "feed_proposal.decided", ...result }));
     return 0;

@@ -13,6 +13,7 @@ import { CATEGORY_LABEL, describeFindings, findingsOf, type ContentDecision } fr
 import { modelView } from "./content-moderation.ts";
 import { authorStanding, SIGNED_UP_SQL, type ModerationNotice } from "./share-moderation.ts";
 import { log } from "./log.ts";
+import { escapeHtml } from "../../packages/contracts/html.ts";
 
 const REPORT_REASON: Record<string, string> = {
   phishing: "фишинг или выдаёт себя за другого",
@@ -83,9 +84,6 @@ const PROFILE: Record<string, string> = {
   limited: "со скриптами, показывается статично",
   unsupported: "только интерактивная версия",
 };
-
-const escape = (value: string) =>
-  value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
 function accountAge(createdAt: Date | null) {
   if (!createdAt) return "создан до 23.09.2026 (дата не записана)";
@@ -234,22 +232,22 @@ function compose(notice: Exclude<ModerationNotice, { kind: "blocked" }>, facts: 
     `Без почты то же делают скрипты: admin moderation queue, admin moderation approve, admin moderation revoke-share (share ${notice.shareId}).`,
   ].join("\n");
   const html = `<!doctype html><html lang="ru"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1d1d1f">
-<p>${escape(letter.lead)}</p>
+<p>${escapeHtml(letter.lead)}</p>
 <table cellpadding="4" style="border-collapse:collapse">${rows
     .map(
       ([label, value]) =>
-        `<tr><td style="color:#6e6e73;vertical-align:top">${escape(label)}</td><td>${escape(value)}</td></tr>`,
+        `<tr><td style="color:#6e6e73;vertical-align:top">${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`,
     )
     .join("")}</table>
 <p>${links
     .map(
       ([label, url], index) =>
-        `<a href="${escape(url)}" style="display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:8px;text-decoration:none;${
+        `<a href="${escapeHtml(url)}" style="display:inline-block;margin:4px 6px 4px 0;padding:8px 14px;border-radius:8px;text-decoration:none;${
           index === 0 ? "border:1px solid #1d1d1f;color:#1d1d1f" : "background:#1d1d1f;color:#fff"
-        }">${escape(label)}</a>`,
+        }">${escapeHtml(label)}</a>`,
     )
     .join("")}</p>
-<p style="color:#6e6e73;font-size:13px">Каждая кнопка открывает страницу подтверждения: само открытие ничего не меняет. Ссылки действуют 7 дней, повтор безопасен. Share ${escape(notice.shareId)}.</p>
+<p style="color:#6e6e73;font-size:13px">Каждая кнопка открывает страницу подтверждения: само открытие ничего не меняет. Ссылки действуют 7 дней, повтор безопасен. Share ${escapeHtml(notice.shareId)}.</p>
 </body></html>`;
   return {
     subject: `Полка: ${letter.subject} — «${clean(title, 60)}»`,
@@ -320,7 +318,7 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
     subject: csam ? "Полка: сигнал CSAM — работа заблокирована" : `Полка: заблокировано (${label})`,
     text: lines.join("\n"),
     html: `<!doctype html><html lang="ru"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1d1d1f">${lines
-      .map((line) => (line ? `<p style="margin:4px 0">${escape(line)}</p>` : "<br>"))
+      .map((line) => (line ? `<p style="margin:4px 0">${escapeHtml(line)}</p>` : "<br>"))
       .join("")}</body></html>`,
   };
 }

@@ -6,9 +6,7 @@
 import { posix } from "node:path";
 import { Marked, type Tokens } from "marked";
 import { awayHref } from "./away-links.ts";
-
-export const escapeHtml = (text: string) =>
-  text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+import { escapeHtml } from "../../packages/contracts/html.ts";
 
 /**
  * Where a reference written in `from` points inside the project: relative to
