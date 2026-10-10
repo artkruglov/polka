@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Полка's isolated headless renderer for allowlisted public links (docs/specs/URL_IMPORT_SUPPORT.md).",
   "dependencies": {
-    "playwright-core": "1.63.0"
+    "playwright-core": "1.64.0"
   }
 }
