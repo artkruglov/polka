@@ -3,6 +3,13 @@ import { test } from "node:test";
 import { createDatabaseHealthAdapter, createStorageHealthAdapter } from "../apps/server/health-adapters.ts";
 import { READINESS_BYTES, READINESS_KEY } from "../packages/storage/readiness.ts";
 
+/** A promise the test settles itself (Promise.withResolvers, outside this tsconfig's lib). */
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
 const databaseConfig = {
   databaseUrl: "postgres://health:test@127.0.0.1/polka",
   expectedMigrations: [1, 2, 3],
@@ -75,13 +82,15 @@ test("database adapter rejects a missing, extra, or duplicated migration", async
 test("database adapter returns false on an aborted probe and closes the pool", async () => {
   let ended = false;
   let destroyed = false;
-  let queryStarted = false;
+  // The query starts and waits for the test: the abort lands while it runs.
+  const started = deferred();
+  const release = deferred();
   const adapter = createDatabaseHealthAdapter(databaseConfig, {
     createPool: () => ({
       connect: async () => ({
         query: async () => {
-          queryStarted = true;
-          await new Promise((resolve) => setTimeout(resolve, 10));
+          started.resolve();
+          await release.promise;
           return { rows: [] };
         },
         release(force) {
@@ -96,8 +105,10 @@ test("database adapter returns false on an aborted probe and closes the pool", a
   });
   const controller = new AbortController();
   const pending = adapter.probe(controller.signal);
-  while (!queryStarted) await new Promise((resolve) => setTimeout(resolve, 1));
+  await started.promise;
   controller.abort();
+  // The adapter lets the running query finish, then answers false.
+  release.resolve();
   assert.equal(await pending, false);
   await adapter.close();
   assert.equal(ended, true);
@@ -207,6 +218,9 @@ test("storage adapter disposes bodies when versions are invalid or do not match"
 
 test("storage adapter aborts and destroys an overlong canary stream", async () => {
   let destroyed = false;
+  // The canary's bytes arrive, then the stream stalls until the test lets it go.
+  const readyRead = deferred();
+  const release = deferred();
   const adapter = createStorageHealthAdapter(storageConfig, {
     createClient: () => ({
       async send(command) {
@@ -216,7 +230,8 @@ test("storage adapter aborts and destroys an overlong canary stream", async () =
           Body: {
             async *[Symbol.asyncIterator]() {
               yield READINESS_BYTES;
-              await new Promise((resolve) => setTimeout(resolve, 20));
+              readyRead.resolve();
+              await release.promise;
               yield Buffer.from("late");
             },
             destroy() {
@@ -230,8 +245,10 @@ test("storage adapter aborts and destroys an overlong canary stream", async () =
   });
   const controller = new AbortController();
   const pending = adapter.probe(controller.signal);
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  await readyRead.promise;
   controller.abort();
+  // The adapter may be waiting for the next chunk: let it come.
+  release.resolve();
   assert.equal(await pending, false);
   assert.equal(destroyed, true);
   await adapter.close();

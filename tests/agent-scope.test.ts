@@ -277,18 +277,20 @@ test("a limited agent's events feed holds the events of its folders only", async
     folderId: other,
   });
   assert.equal(inside.error || outside.error, false);
-  let seen: string[] = [];
-  for (let tries = 0; tries < 60 && !seen.length; tries++) {
-    seen = (await listEventsForAgent(actorOf(limited.id), { after: tail.nextCursor })).events.map(
-      (event) => event.artifactId,
-    );
-    if (!seen.length) await new Promise((resolve) => setTimeout(resolve, 100));
+  // Events show once their transaction is settled for every reader: wait
+  // until the unlimited connection sees both, then ask the limited one.
+  const both = [inside.value.artifactId, outside.value.artifactId].sort();
+  let all: string[] = [];
+  for (const deadline = Date.now() + 10_000; ;) {
+    all = (await listEventsForAgent(actorOf(whole.id), { after: tail.nextCursor })).events
+      .map((event) => event.artifactId)
+      .sort();
+    if (all.length >= 2 || Date.now() > deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  assert.deepEqual(seen, [inside.value.artifactId]);
-  // The unlimited connection sees both.
-  const all = await listEventsForAgent(actorOf(whole.id), { after: tail.nextCursor });
-  assert.deepEqual(
-    all.events.map((event) => event.artifactId).sort(),
-    [inside.value.artifactId, outside.value.artifactId].sort(),
+  assert.deepEqual(all, both, "the unlimited connection sees both");
+  const seen = (await listEventsForAgent(actorOf(limited.id), { after: tail.nextCursor })).events.map(
+    (event) => event.artifactId,
   );
+  assert.deepEqual(seen, [inside.value.artifactId]);
 });
