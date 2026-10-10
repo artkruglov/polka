@@ -141,6 +141,12 @@ sudo iptables -I DOCKER-USER -s 172.29.0.0/24 -d 192.168.0.0/16 -j DROP
 sudo netfilter-persistent save
 ```
 
+**Песочница Chromium.** Рендерер запускает Chromium с его собственной песочницей, а ей нужны непривилегированные user namespaces на хосте. Проверьте до включения: `sysctl kernel.unprivileged_userns_clone` должен быть `1` (или такого параметра нет). На образе Ubuntu 24.04 в Yandex Cloud он `0`, и контейнер падает с `No usable sandbox!` и перезапускается по кругу — проверено 10.10.2026 на polochka.app; `seccomp=unconfined` и `apparmor=unconfined` этого не меняют. Тогда два пути, оба — решение владельца установки:
+- разрешить их на хосте (`kernel.unprivileged_userns_clone=1` в `/etc/sysctl.d/`) — это ослабляет хост для всех процессов, user namespaces — частый путь повышения привилегий в ядре;
+- `RENDERER_CHROMIUM_SANDBOX=false` в `hosted.env` — песочницы Chromium нет, остаются ограничения контейнера: без capabilities, `no-new-privileges`, файловая система только для чтения, своя сеть без доступа к postgres и metadata, запросы наружу только через egress-прокси. Страницы в рендерере — содержимое пользователей, то есть недоверенный код.
+
+Рендерер на отдельной VM с подходящим ядром этого выбора не требует.
+
 **Память.** Лимит контейнера — 1,5 ГБ RAM, 1 CPU, 256 процессов. Chromium с одной страницей занимает 300–700 МБ, пиково до 1 ГБ; страницы рендерятся по одной. На одной VM с приложением (1,5 ГБ), maintenance (768 МБ) и postgres нужно от 4 ГБ RAM, спокойнее 6 ГБ. С российского IP chatgpt.com отвечает 403, а claude.ai — «недоступно в регионе», поэтому для ChatGPT и Gemini рендерер нужен за рубежом (см. «Регион» в [deploy/renderer/README.md](../renderer/README.md#регион)).
 
 **Проверка:** `curl -s https://<APP_HOST>/api/imports/capabilities` → в `sources` есть `rendered-spa`, `server-fetch`, `server-try`. **Откат:** `RENDERED_IMPORT_ENABLED=false` и `up -d`.

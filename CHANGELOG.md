@@ -15,6 +15,7 @@
 ### Fixed
 
 - **Рендерер не запускался** в 0.14.0: Dependabot (#49) поднял образ Playwright до 1.64, а `playwright-core` остался 1.63, и Chromium нужной сборки в образе не было — контейнер перезапускался по кругу. Обе версии теперь 1.64.0, а тест `tests/renderer-playwright-version.test.ts` не пропустит такое расхождение снова.
+- Рендерер на той же VM: в `deploy/hosted/compose.yml` передаётся `RENDERER_CHROMIUM_SANDBOX`, а в [deploy/hosted](deploy/hosted/README.md#рендерер-ссылок) описано, что песочнице Chromium нужны непривилегированные user namespaces на хосте; на Ubuntu 24.04 в Yandex Cloud их нет.
 
 ## [0.14.0] — 2026-10-10
 

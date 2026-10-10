@@ -497,6 +497,10 @@ services:
     restart: unless-stopped
     environment:
       RENDERER_SECRET: ${RENDERER_SECRET:-}
+      # Chromium's own sandbox needs unprivileged user namespaces on the host
+      # (deploy/hosted/README.md, «Рендерер ссылок»); false only on a host
+      # that refuses them, and the container's limits below stay.
+      RENDERER_CHROMIUM_SANDBOX: ${RENDERER_CHROMIUM_SANDBOX:-true}
     networks: [render]
     ports: ["127.0.0.1:4395:4395"]
     read_only: true
