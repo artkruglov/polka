@@ -19,7 +19,11 @@ async function capture(run: () => Promise<void>) {
   } finally {
     console.error = logged;
   }
-  return lines.map((line) => JSON.parse(line));
+  // The log's own level and time (log.ts) are not what these tests check.
+  return lines.map((line) => {
+    const { level: _level, time: _time, ...event } = JSON.parse(line);
+    return event;
+  });
 }
 
 test("work after a commit that fails is logged with its name, code and message", async () => {

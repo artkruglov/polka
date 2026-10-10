@@ -693,7 +693,10 @@ test("every failed provider return is logged by provider and code only", async (
 
   const logged = lines.filter((line) => line.includes("idp.callback_failed"));
   assert.deepEqual(
-    logged.map((line) => JSON.parse(line)),
+    logged.map((line) => {
+      const { level: _level, time: _time, ...event } = JSON.parse(line);
+      return event;
+    }),
     [
       { event: "idp.callback_failed", provider: "yandex", code: "provider" },
       { event: "idp.callback_failed", provider: "yandex", code: "denied" },

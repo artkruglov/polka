@@ -6,6 +6,7 @@ import { config } from "./config.ts";
 import { authenticateServiceToken, MCP_AUDIENCE, type ServiceActor } from "./service-auth.ts";
 import { createMcpServer } from "./mcp-server.ts";
 import { PROTECTED_RESOURCE_METADATA_URL } from "./oauth.ts";
+import { log } from "./log.ts";
 
 const endpoint = new URL(MCP_AUDIENCE);
 const MCP_BODY_LIMIT = 8 * 1024 * 1024;
@@ -43,7 +44,7 @@ export async function registerMcpTransport(app: FastifyInstance) {
     },
   };
   const nodeHandler = toNodeHandler(securedHandler, {
-    onerror: () => console.error(JSON.stringify({ event: "mcp.transport.failed" })),
+    onerror: () => log.error({ event: "mcp.transport.failed" }),
   });
   await app.register(async (mcp) => {
     mcp.all("/mcp", { bodyLimit: MCP_BODY_LIMIT }, async (request, reply) => {

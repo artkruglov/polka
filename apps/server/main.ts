@@ -11,6 +11,7 @@ import { s3 } from "./storage.ts";
 import { EXPECTED_MIGRATION_VERSIONS } from "../../packages/migrations.ts";
 import { assertRestoreStartupGate } from "./restore-gate.ts";
 import { installProcessErrorHandlers } from "./process-errors.ts";
+import { log } from "./log.ts";
 installProcessErrorHandlers();
 async function closeRefusedStartup() {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -65,7 +66,7 @@ try {
   await shutdown();
   throw error;
 }
-console.log(`Polka is available at ${config.APP_ORIGIN}`);
+log.info({ event: "server.started", origin: config.APP_ORIGIN });
 // The moderation sweep (docs/specs/CONTENT_FILTER.md, «Изоляция и удаление»):
 // reminders a day before a scheduled deletion, deletions that are due, and
 // revisions the models could not check yet. Hourly, and once after start.
@@ -77,7 +78,7 @@ const sweep = async () => {
     // A work deleted for good whose objects a crash left behind (artifact-purge.ts).
     await (await import("./artifact-purge.ts")).finishPendingArtifactPurges();
   } catch {
-    console.error(JSON.stringify({ event: "moderation.sweep_failed" }));
+    log.error({ event: "moderation.sweep_failed" });
   }
 };
 // Letters to the author about a link under review (review-mail.ts): every few minutes.
@@ -85,13 +86,13 @@ const reviewLetters = async () => {
   try {
     await (await import("./review-mail.ts")).sendReviewLetters();
   } catch {
-    console.error(JSON.stringify({ event: "review_mail.failed" }));
+    log.error({ event: "review_mail.failed" });
   }
 };
 setInterval(reviewLetters, 5 * 60 * 1000).unref();
 setTimeout(sweep, 30_000).unref();
 setInterval(sweep, 60 * 60 * 1000).unref();
-if (viewer) console.log(`Experimental ${config.HTML_LIVE_MODE} HTML viewer is enabled.`);
+if (viewer) log.info({ event: "viewer.started", mode: config.HTML_LIVE_MODE });
 let closing = false;
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {

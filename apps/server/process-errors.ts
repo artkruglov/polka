@@ -4,6 +4,7 @@
 // leaves the process in an unknown state: it is logged and the process
 // exits, for the supervisor (Docker, systemd) to start a clean one.
 import { errorFacts } from "./db.ts";
+import { log } from "./log.ts";
 
 type Target = Pick<NodeJS.Process, "on">;
 
@@ -12,10 +13,10 @@ export function installProcessErrorHandlers(
   exit: (code: number) => void = (code) => process.exit(code),
 ) {
   target.on("unhandledRejection", (reason: unknown) => {
-    console.error(JSON.stringify({ event: "process.unhandled_rejection", ...errorFacts(reason) }));
+    log.error({ event: "process.unhandled_rejection", ...errorFacts(reason) });
   });
   target.on("uncaughtException", (error: unknown) => {
-    console.error(JSON.stringify({ event: "process.uncaught_exception", ...errorFacts(error) }));
+    log.error({ event: "process.uncaught_exception", ...errorFacts(error) });
     exit(1);
   });
 }

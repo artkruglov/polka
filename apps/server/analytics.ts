@@ -16,6 +16,7 @@ import type { PoolClient } from "pg";
 import { actorKey, shareKey } from "./analytics-keys.ts";
 import { config } from "./config.ts";
 import { afterCommit, db } from "./db.ts";
+import { log } from "./log.ts";
 
 export { actorKey } from "./analytics-keys.ts";
 
@@ -192,7 +193,7 @@ function write(row: Row, q: Queryable = db) {
     .then(
       () => undefined,
       () => {
-        console.error(JSON.stringify({ event: "analytics.write_failed", name: row.name }));
+        log.error({ event: "analytics.write_failed", name: row.name });
       },
     );
   pending.add(work);
@@ -438,7 +439,7 @@ export function markActive(accountId: string) {
       () => undefined,
       () => {
         seen.delete(actor);
-        console.error(JSON.stringify({ event: "analytics.active_failed" }));
+        log.error({ event: "analytics.active_failed" });
       },
     );
   pending.add(work);
@@ -467,7 +468,7 @@ export function forgetAccountLater(c: PoolClient, accountId: string) {
     const work = forgetAccount(db, accountId).then(
       () => undefined,
       () => {
-        console.error(JSON.stringify({ event: "analytics.forget_failed" }));
+        log.error({ event: "analytics.forget_failed" });
       },
     );
     pending.add(work);

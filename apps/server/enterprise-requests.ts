@@ -12,6 +12,7 @@ import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem } from "./errors.ts";
 import { sendMail } from "./mailer.ts";
+import { log } from "./log.ts";
 
 /** Requests per client IP per hour. */
 export const ENTERPRISE_REQUESTS_PER_IP = 5;
@@ -165,12 +166,10 @@ async function notifyTelegram(request: StoredRequest) {
     if (!response.ok) throw new Error(String(response.status));
   } catch (error) {
     // Never the token: it is part of the URL.
-    console.error(
-      JSON.stringify({
-        event: "enterprise_request.telegram_failed",
-        reason: error instanceof Error && /^\d+$/.test(error.message) ? error.message : "network",
-      }),
-    );
+    log.error({
+      event: "enterprise_request.telegram_failed",
+      reason: error instanceof Error && /^\d+$/.test(error.message) ? error.message : "network",
+    });
   }
 }
 
@@ -184,7 +183,7 @@ async function notifyByMail(request: StoredRequest) {
     await sendMail({ to: config.OPERATOR_EMAIL, ...enterpriseLetter(request) });
     await db.query("UPDATE enterprise_requests SET notified_at=now() WHERE id=$1", [request.id]);
   } catch {
-    console.error(JSON.stringify({ event: "enterprise_request.mail_failed" }));
+    log.error({ event: "enterprise_request.mail_failed" });
   }
 }
 

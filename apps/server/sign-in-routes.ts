@@ -46,6 +46,7 @@ import {
   type ProviderProfile,
 } from "./sign-in-providers.ts";
 import { sha256 } from "./storage.ts";
+import { log } from "./log.ts";
 
 const providerParam = z.object({ provider: z.enum(PROVIDER_IDS) });
 
@@ -143,7 +144,7 @@ function failure(reply: FastifyReply, code: string, next: string | null) {
  * provider and the refusal code, never tokens, addresses or the query.
  */
 function logCallbackFailure(provider: ProviderId, code: string) {
-  console.error(JSON.stringify({ event: "idp.callback_failed", provider, code }));
+  log.error({ event: "idp.callback_failed", provider, code });
 }
 
 export function registerSignInRoutes(app: FastifyInstance) {

@@ -1,4 +1,5 @@
 import { db } from "./db.ts";
+import { log } from "./log.ts";
 
 /**
  * Counts one agent read of a shelf (list, one work, the events feed) for the
@@ -21,7 +22,7 @@ export async function countAgentRead(tenantId: string, principal: "human" | "ser
     // operator who migrated without re-running the grants) must not stay silent.
     if (!warned && (error?.code === "42501" || error?.code === "42P01")) {
       warned = true;
-      console.warn(JSON.stringify({ event: "agent_read_counter_unavailable", code: error.code }));
+      log.warn({ event: "agent_read_counter_unavailable", code: error.code });
     }
   }
 }

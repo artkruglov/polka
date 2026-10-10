@@ -24,6 +24,7 @@ import {
   derivativeVersionSql,
   type BuildFailureCategory,
 } from "./bundle-runtime-contract.ts";
+import { log } from "./log.ts";
 
 const BUILD_RETRY_COOLDOWN_MS = 30_000;
 const BUILDER_FAILURES = new Set<string>(Object.values(BUILD_FAILURE_MESSAGES));
@@ -122,14 +123,12 @@ export class BuildWorkerError extends Error {
  * paths and error text stay out of the logs.
  */
 function logBuildFailure(category: string, stage: string) {
-  console.error(
-    JSON.stringify({
-      event: "derivative.build.failed",
-      category,
-      stage,
-      builderVersion: BUNDLE_BUILDER_VERSION,
-    }),
-  );
+  log.error({
+    event: "derivative.build.failed",
+    category,
+    stage,
+    builderVersion: BUNDLE_BUILDER_VERSION,
+  });
 }
 
 const requireFromHere = createRequire(import.meta.url);
@@ -555,7 +554,7 @@ async function discardVersion(key: string, version: string) {
   try {
     await deleteVersion(key, version);
   } catch {
-    console.error(JSON.stringify({ event: "derivative.discard_failed" }));
+    log.error({ event: "derivative.discard_failed" });
   }
 }
 

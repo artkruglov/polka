@@ -660,8 +660,10 @@ journalctl --disk-usage
 ```sh
 # app за последние N часов, включая контейнеры до последнего деплоя
 sudo journalctl -t polka-hosted-app-1 --since "6 hours ago" -o short-iso
-# только события-ошибки приложения (JSON-строки) за сутки
-sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '^{"event"'
+# ошибки и предупреждения приложения за сутки (строки {"level":…,"time":…,"event":…})
+sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep -E '^\{"level":"(error|warn|fatal)"'
+# все события приложения за сутки
+sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '"event":'
 # все сервисы Полки за час, вперемешку по времени
 sudo journalctl -t polka-hosted-app-1 -t polka-hosted-maintenance-1 -t polka-hosted-caddy-1 -t polka-hosted-backup-1 --since "1 hour ago"
 # следить в реальном времени

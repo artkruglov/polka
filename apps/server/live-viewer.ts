@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
@@ -19,6 +19,7 @@ import { readLibraryLiveDocument } from "./template-library-viewer.ts";
 import { registerStaticViewerRoutes } from "./static-viewer.ts";
 import { registerProjectViewerRoutes } from "./project-viewer.ts";
 import { withLiveOverlay } from "./comment-overlay.ts";
+import { log } from "./log.ts";
 
 export const LIVE_HTML_PROFILE = "inline-live-experimental-v1" as const;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -229,7 +230,9 @@ async function authorizedRevision(token: string) {
 
 export async function createLiveViewerApp() {
   const viewer = Fastify({
-    logger: false,
+    // The server's log (log.ts); no line per request: URLs carry tokens.
+    loggerInstance: log as FastifyBaseLogger,
+    disableRequestLogging: true,
     requestTimeout: 30000,
     connectionTimeout: 30000,
   });
@@ -247,15 +250,13 @@ export async function createLiveViewerApp() {
     // Forwarded authority is deliberately ignored.
     if (req.headers.host !== config.VIEWER_UPSTREAM_HOST) throw missing();
   });
-  viewer.setErrorHandler((error: any, _req, reply) => {
+  viewer.setErrorHandler((error: any, req, reply) => {
     if (error instanceof Problem) return reply.code(error.status).send({ code: error.code, message: error.message });
     // Capability paths and stored HTML are intentionally absent from logs.
-    console.error(
-      JSON.stringify({
-        event: "viewer.request.failed",
-        code: typeof error.code === "string" ? error.code : "internal",
-      }),
-    );
+    req.log.error({
+      event: "viewer.request.failed",
+      code: typeof error.code === "string" ? error.code : "internal",
+    });
     return reply.code(500).send({
       code: "internal",
       message: "Не удалось открыть сохранённую версию.",

@@ -12,6 +12,7 @@ import { describeSignals } from "./phishing-signals.ts";
 import { CATEGORY_LABEL, describeFindings, findingsOf, type ContentDecision } from "./content-filter/policy.ts";
 import { modelView } from "./content-moderation.ts";
 import { authorStanding, SIGNED_UP_SQL, type ModerationNotice } from "./share-moderation.ts";
+import { log } from "./log.ts";
 
 const REPORT_REASON: Record<string, string> = {
   phishing: "фишинг или выдаёт себя за другого",
@@ -337,13 +338,11 @@ export async function sendModerationNotice(notice: ModerationNotice) {
     const letter = compose(notice, facts, await letterFor(notice, facts));
     return await sendMail({ to: config.OPERATOR_EMAIL, ...letter });
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "moderation.mail_failed",
-        kind: notice.kind,
-        code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
-      }),
-    );
+    log.error({
+      event: "moderation.mail_failed",
+      kind: notice.kind,
+      code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
+    });
     return null;
   }
 }

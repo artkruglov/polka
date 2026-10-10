@@ -1,5 +1,6 @@
 import pg from "pg";
 import { config } from "./config.ts";
+import { log } from "./log.ts";
 
 /**
  * The app role's session limits, sent with every new connection:
@@ -35,7 +36,7 @@ export const db = new pg.Pool({
 });
 // An idle connection can disappear during a database restart. The pool replaces
 // it on the next checkout; do not turn its error event into a process crash.
-db.on("error", () => console.error(JSON.stringify({ event: "database.connection_lost" })));
+db.on("error", () => log.error({ event: "database.connection_lost" }));
 const committed = new WeakMap<pg.PoolClient, Array<() => unknown>>();
 
 /**
@@ -64,7 +65,7 @@ function runLater(work: () => unknown) {
   return inBackground(
     Promise.resolve()
       .then(work)
-      .catch((error) => console.error(JSON.stringify({ event: "database.after_commit_failed", ...errorFacts(error) }))),
+      .catch((error) => log.error({ event: "database.after_commit_failed", ...errorFacts(error) })),
   );
 }
 

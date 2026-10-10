@@ -15,7 +15,7 @@ import { indexable } from "./indexing.ts";
 import { runInChannel } from "./analytics.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { registerUrlImports } from "./url-import/routes.ts";
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import cookie from "@fastify/cookie";
 import { z } from "zod";
 import { config } from "./config.ts";
@@ -47,6 +47,7 @@ import { registerShelfRoutes } from "./shelf-routes.ts";
 import { registerWorkRoutes } from "./work-routes.ts";
 import { registerViewRoutes } from "./view-routes.ts";
 import { registerServiceAccountRoutes } from "./service-account-routes.ts";
+import { log } from "./log.ts";
 
 /** The first frame of a stack below its message: where it was thrown. */
 export function firstStackFrame(error: unknown) {
@@ -63,7 +64,9 @@ export { anonymous } from "./route-helpers.ts";
 
 export async function createApp() {
   const app = Fastify({
-    logger: false,
+    // The server's log (log.ts); no line per request: URLs carry tokens.
+    loggerInstance: log as FastifyBaseLogger,
+    disableRequestLogging: true,
     bodyLimit: MAX_BYTES,
     // A video upload (publish-api.ts) is streamed and may take minutes; every
     // other request has 30 s to arrive (the onRequest hook below).
@@ -131,7 +134,7 @@ export async function createApp() {
     // A statement cancelled while it waited for a row another request holds
     // (statement_timeout counts lock waits). Nothing was committed.
     if (error.code === "57014" || error.code === "55P03") {
-      console.error(JSON.stringify({ event: "request.busy", code: error.code }));
+      req.log.error({ event: "request.busy", code: error.code });
       return reply.code(503).header("retry-after", "5").send({
         code: "busy",
         message: "Полка сейчас занята другим действием с этими работами. Повторите через несколько секунд.",
@@ -150,17 +153,15 @@ export async function createApp() {
     // The route pattern (never the URL with its ids or tokens), the request
     // id, the error's kind and where it was thrown; no body, credentials or
     // provider diagnostics.
-    console.error(
-      JSON.stringify({
-        event: "request.failed",
-        code: typeof error.code === "string" ? error.code : "internal",
-        route: req.routeOptions?.url ?? null,
-        method: req.method,
-        requestId: req.id,
-        error: typeof error?.name === "string" ? error.name : typeof error,
-        at: firstStackFrame(error),
-      }),
-    );
+    req.log.error({
+      event: "request.failed",
+      code: typeof error.code === "string" ? error.code : "internal",
+      route: req.routeOptions?.url ?? null,
+      method: req.method,
+      requestId: req.id,
+      error: typeof error?.name === "string" ? error.name : typeof error,
+      at: firstStackFrame(error),
+    });
     return reply.code(500).send({
       code: "internal",
       message: "Не удалось завершить действие. Сохранённые данные остаются на полке.",
@@ -222,7 +223,7 @@ export async function createApp() {
       transaction,
       fail: (status, code, message) => new Problem(status, code, message),
       settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
-      log: (event) => console.log(JSON.stringify({ extension: extension.name, ...event })),
+      log: (event) => log.info({ extension: extension.name, ...event }),
       content: {
         revision: revisionForExtension,
         openFile: openFileForExtension,
