@@ -81,7 +81,7 @@ single PUT/finalize проверяют active target под tenant lock. Не о
 begin: старый upload мог существовать до trash. Receipted replay не создаёт
 версию и может вернуть прежний immutable receipt; он не означает active artifact.
 
-`apps/server/app.ts`: default shelf SQL исключает trash; отдельный
+`apps/server/work-routes.ts`: default shelf SQL исключает trash; отдельный
 `GET /api/trash?cursor=...` с лимитом 24+1 и microsecond `(trashed_at,id)` cursor.
 Owner detail/revision list/download остаются tenant-bound; owner `/document`
 отказывает для trash. `/api/resolve`, общий `granted` для recipient bytes/document
