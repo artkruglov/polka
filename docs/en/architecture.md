@@ -6,7 +6,7 @@ How Полка (Polka) is put together as of 0.12 (October 2026): what runs wher
 
 To understand the server, read these first, in this order:
 
-1. [`apps/server/app.ts`](../../apps/server/app.ts): `createApp()` registers every web, OAuth, MCP and publish API route, then agent sessions, then extensions, so it is the map of what the server answers and in which order.
+1. [`apps/server/app.ts`](../../apps/server/app.ts): `createApp()` sets the shared hooks and error handler, then registers every web, OAuth, MCP and publish API route module, then agent sessions, then extensions, so it is the map of what the server answers and in which order. The web routes live in `register*Routes` modules by area: `site-routes.ts` (public pages, health, capabilities), `account-routes.ts` (sign-in, session, deletion, agent connections), `shelf-routes.ts` (shelves, members, invitations, folders), `work-routes.ts` (the shelf's works, trash, uploads), `view-routes.ts` (opening versions, views, links), `service-account-routes.ts`, plus the older comment, moderation, sign-in, claim and template library modules. Their shared helpers (`SHELF`, `id`, `strongIdentity`, `withComments`) are in `route-helpers.ts`.
 2. [`apps/server/artifacts.ts`](../../apps/server/artifacts.ts): the core service, uploads becoming immutable versions; it defines the `Actor` type and `audit()` that almost every other service imports.
 3. [`apps/server/mcp-server.ts`](../../apps/server/mcp-server.ts): the agent surface, where each `polka_*` tool checks its scope and calls the same services as the web UI, which is the "one service per action" rule in practice.
 

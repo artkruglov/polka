@@ -6,7 +6,7 @@ Setup, checks and rules are in [CONTRIBUTING.md](CONTRIBUTING.md) — read it be
 
 ## Map
 
-- `apps/server` — Fastify app: one service per action, shared by the web UI, MCP (`/mcp`) and the publish API.
+- `apps/server` — Fastify app: one service per action, shared by the web UI, MCP (`/mcp`) and the publish API. Web routes live in `*-routes.ts` modules registered by `createApp()` in `app.ts`; add a route to its area's module, not to `createApp()`.
 - `apps/web/src` — React, layers `app → pages → widgets → features → entities → shared` (`npm run check:layers`). Public site pages use `widgets/site-header` and `mkt-*` classes, not `site-*`.
 - `apps/renderer` — snapshots and PDF. `packages/contracts` — zod schemas shared by server and client.
 - `deploy/migrations` + `packages/migrations.ts` — schema; `deploy/*-grants.sql` — role recipes.
