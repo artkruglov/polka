@@ -60,7 +60,7 @@ ActionMenu в shared/ui используется reader («Ещё») и dev-ка
 
 ### Проверка архитектурных границ
 
-scripts/check-frontend-layers.mjs использует parseSync из rolldown/utils; версия уже используемого сборкой Rolldown закреплена как прямая devDependency. Комментарии и строки, похожие на import, не создают ложных ошибок. tests/frontend-layers.test.ts проверяет lazy import, re-export, import type, TS import type, require, server escape, похожий префикс contracts-private, вычисляемый путь и синтаксическую ошибку. Корневые legacy-модули по-прежнему нужно мигрировать; успешный check не означает, что весь фронтенд уже перенесён.
+scripts/check-frontend-layers.ts использует parseSync из rolldown/utils; версия уже используемого сборкой Rolldown закреплена как прямая devDependency. Комментарии и строки, похожие на import, не создают ложных ошибок. tests/frontend-layers.test.ts проверяет lazy import, re-export, import type, TS import type, require, server escape, похожий префикс contracts-private, вычисляемый путь и синтаксическую ошибку. Корневые legacy-модули по-прежнему нужно мигрировать; успешный check не означает, что весь фронтенд уже перенесён.
 
 Проверка после усиления gate: 219/219 тестов в изолированной БД/S3, без пропусков; TypeScript и production build прошли. Полный прогон обнаружил прямой CSS-import в ActionMenu, мешавший renderToStaticMarkup тестам reader; подключение перенесено в shared/ui/controls.css. Компонент вновь импортируется в Node без специального CSS-loader. Тестовые ресурсы удалены, рабочая БД не менялась.
 

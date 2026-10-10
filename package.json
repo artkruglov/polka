@@ -41,7 +41,7 @@
     "test:renderer-runtime": "tsx scripts/test-renderer-runtime.ts",
     "storage:bootstrap-local": "tsx --env-file=.env scripts/local-storage-bootstrap.ts --confirm-local-bootstrap",
     "maintenance:watch": "tsx --env-file=.env scripts/maintenance-runner.ts",
-    "check:layers": "node scripts/check-frontend-layers.mjs",
+    "check:layers": "tsx scripts/check-frontend-layers.ts",
     "lint": "oxlint apps packages scripts tests extensions",
     "check:links": "node scripts/check-doc-links.mjs",
     "ops:uptime": "node scripts/ci/uptime.mjs",
