@@ -38,6 +38,13 @@ import { signModerationToken } from "../apps/server/moderation-tokens.ts";
 import { createSharedComment, sharedComments, type Viewer } from "../apps/server/comments.ts";
 import { beginEmailLogin } from "../apps/server/email-auth.ts";
 
+/** A promise the test settles itself (Promise.withResolvers, outside this tsconfig's lib). */
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
 const app = await createApp();
 const origin = config.APP_ORIGIN;
 if (config.MAIL_MODE !== "local") throw new Error("Content-moderation tests read operator letters from local mail");
@@ -310,12 +317,22 @@ test("a legal hold set while the purge of that content runs waits for it and fin
   const purging = await db.connect();
   try {
     await purging.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [blockContentKey(block)]);
-    const hold = setLegalHold(link.revisionId, "МВД, запрос №2", true);
-    const early = await Promise.race([
-      hold.then(() => "done"),
-      new Promise((resolve) => setTimeout(() => resolve("waiting"), 400)),
-    ]);
-    assert.equal(early, "waiting", "the hold waits for the purge");
+    let settled = false;
+    const hold = setLegalHold(link.revisionId, "МВД, запрос №2", true).finally(() => (settled = true));
+    // The hold's own connection is seen waiting for the purge's lock.
+    for (const deadline = Date.now() + 5000; ;) {
+      const { rows } = await db.query(
+        `SELECT 1 FROM pg_locks, hashtextextended($1,0) AS key
+         WHERE locktype='advisory' AND NOT granted AND objsubid=1
+           AND classid=((key>>32)&4294967295)::oid AND objid=(key&4294967295)::oid`,
+        [blockContentKey(block)],
+      );
+      if (rows.length) break;
+      assert.ok(Date.now() < deadline, "the hold never asked for the purge's lock");
+      assert.equal(settled, false, "the hold did not wait for the purge");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(settled, false, "the hold waits for the purge");
     await purging.query("UPDATE moderation_blocks SET purged_at=now() WHERE id=$1", [block.id]);
     await purging.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [blockContentKey(block)]);
     assert.match(await hold, /already deleted/);
@@ -612,15 +629,19 @@ test("models with autoblock: both agreeing on a severe category block; the budge
   const refused = await share(owner, early);
   assert.equal(refused.statusCode, 403, refused.body);
   assert.ok(await row("SELECT 1 FROM moderation_blocks WHERE revision_id=$1", [early.revisionId]));
-  // …and a link made before they answer is blocked afterwards.
+  // …and a link made before they answer is blocked afterwards: the model
+  // answers only once the link exists.
+  const linked = deferred();
   setContentModels({
     primary: {
       name: "slow",
-      classify: async (input) => (await new Promise((r) => setTimeout(r, 300)), agree.classify(input)),
+      classify: async (input) => (await linked.promise, agree.classify(input)),
     },
     fallback: agree,
   });
   const later = await sharedLink(owner, page("<p>Текст СИГНАЛ-Д, второй.</p>"));
+  assert.notEqual((await row("SELECT moderation FROM shares WHERE id=$1", [later.shareId])).moderation, "blocked");
+  linked.resolve();
   await reviewsSettled();
   assert.equal((await row("SELECT moderation FROM shares WHERE id=$1", [later.shareId])).moderation, "blocked");
   // Out of budget: one letter, then rules only.
