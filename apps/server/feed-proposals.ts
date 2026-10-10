@@ -1,7 +1,7 @@
 // Proposals to «Лента» from a department shelf (docs/specs/DISCOVER_V2.md,
 // «Предложение с полки отдела»). «Лента» is the operator's editorial
 // selection: a curator or admin of the shelf proposes one version of a work,
-// the operator reviews it by hand (npm run feed:proposals) and, if it fits,
+// the operator reviews it by hand (npm run admin -- feed proposals) and, if it fits,
 // publishes a copy through the existing editorial path. The proposal itself
 // publishes nothing.
 import type { PoolClient } from "pg";

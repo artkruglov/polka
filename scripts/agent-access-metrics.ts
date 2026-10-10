@@ -1,7 +1,7 @@
 // Operator report for docs/specs/AGENT_ACCESS_AND_MEMORY.md, «Метрики»: counts
 // only, read-only, no names, no content. Run on the installation's database.
 //
-//   npm run metrics:agent-access
+//   npm run admin -- metrics agent-access
 //
 // Main metric: accepted versions that someone other than the author opened in
 // the last 7 days through a link on that very version (share_open_days counts

@@ -45,9 +45,9 @@
 Обложки заполняются лениво при первом показе. Заранее их можно заполнить скриптом (от роли runtime, права в deploy/runtime-grants.sql):
 
 ```
-npm run covers:backfill -- --dry-run      # сколько и каких, ничего не пишет
-npm run covers:backfill                   # решения и тексты
-npm run covers:backfill -- --snapshots    # плюс снимки, по одному, через рендерер
+npm run admin -- backfill covers --dry-run      # сколько и каких, ничего не пишет
+npm run admin -- backfill covers                   # решения и тексты
+npm run admin -- backfill covers --snapshots    # плюс снимки, по одному, через рендерер
 ```
 
 Скрипт идемпотентен: читает только последние версии работ не из корзины без обложки текущей версии.

@@ -8,7 +8,7 @@
 // The folder gets polka-export.json (every work with all its versions) and
 // blobs/<sha256> (each file once). Run it again to continue: files already
 // there are checked and kept. On the other installation the operator runs
-//   npm run shelf:import -- --dir ./polka-export --account <email>
+//   npm run admin -- shelf import --dir ./polka-export --account <email>
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -299,7 +299,7 @@ async function main() {
           .map((f) => `${f.file} (${f.error})`)
           .join("; ")}. Run the command again.`,
       );
-    else console.log("Next, on your installation: npm run shelf:import -- --dir <this folder> --account <email>");
+    else console.log("Next, on your installation: npm run admin -- shelf import --dir <this folder> --account <email>");
   }
   if (failed.length) process.exitCode = 1;
 }

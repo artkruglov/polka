@@ -2,7 +2,7 @@
 // content/editorial): Полка publishes these itself, so the operator answers
 // for them as a publisher (docs/EDITORIAL_CHECKLIST.md). Reads files only; no
 // database, no network, no model.
-//   npm run editorial:content-scan
+//   npm run admin -- editorial content-scan
 import { readFile, readdir, stat } from "node:fs/promises";
 import { inspectHtml } from "../apps/server/html.ts";
 import { CATEGORY_LABEL, findingsOf, describeFindings } from "../apps/server/content-filter/policy.ts";

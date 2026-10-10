@@ -183,7 +183,7 @@ npm run local:setup              # .env with unique secrets and the local intera
 npm run infra:up                 # PostgreSQL 16 + MinIO, bound to 127.0.0.1; the first run builds MinIO from source, ~10 min
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket and a capability check
-npm run account:create -- demo --generate   # login and password in .local/demo-account.txt
+npm run admin -- account create demo --generate   # login and password in .local/demo-account.txt
 npm run build
 npm run dev                      # http://127.0.0.1:4390
 ```

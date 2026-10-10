@@ -68,7 +68,7 @@ Next, in this order:
   npm run infra:up                           PostgreSQL and MinIO in Docker
   npm run db:migrate
   npm run storage:bootstrap-local            versioned bucket and its check
-  npm run account:create -- demo --generate  login and password in .local/demo-account.txt
+  npm run admin -- account create demo --generate  login and password in .local/demo-account.txt
   npm run build
   npm run dev
 ${created ? `\nThen open http://127.0.0.1:${ports.PORT}/ (interactive pages on http://localhost:${ports.VIEWER_PORT}).\n` : ""}

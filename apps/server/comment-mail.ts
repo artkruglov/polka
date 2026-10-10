@@ -255,8 +255,8 @@ async function sendOperatorLetter(notice: CommentNotice) {
         `Автор комментария: ${clean(row.author_login, 60)}`,
         `Категория: ${found.replace(/:.*$/, "") || "—"}`,
         "",
-        `Журнал: npm run moderation:events -- ${row.id}`,
-        `Снять блокировку: npm run moderation:unblock -- ${row.id}`,
+        `Журнал: npm run admin -- moderation events ${row.id}`,
+        `Снять блокировку: npm run admin -- moderation unblock ${row.id}`,
       ].join("\n"),
     });
   }
@@ -287,10 +287,10 @@ async function sendOperatorLetter(notice: CommentNotice) {
     `Текст: \u00ab${excerpt(row.body)}\u00bb`,
     "",
     "Решения \u2014 скриптами на сервере:",
-    `  npm run moderation:comments -- ${row.share_id}`,
-    `  npm run moderation:delete-comment -- ${row.id}`,
-    ...(row.held_at ? [`  npm run moderation:release-comment -- ${row.id}`] : []),
-    `  npm run moderation:disable -- ${clean(row.author_login, 60)}   (скрывает все комментарии автора)`,
+    `  npm run admin -- moderation comments ${row.share_id}`,
+    `  npm run admin -- moderation delete-comment ${row.id}`,
+    ...(row.held_at ? [`  npm run admin -- moderation release-comment ${row.id}`] : []),
+    `  npm run admin -- moderation disable ${clean(row.author_login, 60)}   (скрывает все комментарии автора)`,
   ].join("\n");
   return sendMail({
     to: config.OPERATOR_EMAIL,

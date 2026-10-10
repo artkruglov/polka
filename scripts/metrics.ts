@@ -1,9 +1,9 @@
 // Product metrics for the operator (apps/server/metrics.ts, analytics.ts).
 // Runs as the runtime database role; prints counts only, never identifiers.
-//   npm run metrics                      the report for the last 12 weeks
-//   npm run metrics -- --weeks 26        a longer window (1–56)
-//   npm run metrics -- --json            the same JSON as GET /api/ops/metrics
-//   npm run metrics -- forget <account>  an objection (privacy policy): delete
+//   npm run admin -- metrics summary                      the report for the last 12 weeks
+//   npm run admin -- metrics summary --weeks 26        a longer window (1–56)
+//   npm run admin -- metrics summary --json            the same JSON as GET /api/ops/metrics
+//   npm run admin -- metrics summary forget <account>  an objection (privacy policy): delete
 //        the account's usage events and stop recording new ones. <account> is
 //        the account id, login or email.
 import { parseArgs } from "node:util";
@@ -12,7 +12,8 @@ import { forgetAccount } from "../apps/server/analytics.ts";
 import { db } from "../apps/server/db.ts";
 import { metricsReport, type MetricsReport } from "../apps/server/metrics.ts";
 
-const USAGE = "Usage: npm run metrics [-- --weeks N] [-- --json] | npm run metrics -- forget <account id|login|email>";
+const USAGE =
+  "Usage: npm run admin -- metrics summary [--weeks N] [-- --json] | npm run admin -- metrics summary forget <account id|login|email>";
 
 const percent = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`);
 

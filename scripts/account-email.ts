@@ -1,6 +1,6 @@
 // Operator: attach an email address to an existing account, so signing in by
 // emailed code opens that account's shelf instead of creating a new one.
-//   npm run account:email -- <login> <email>
+//   npm run admin -- account email <login> <email>
 // The address counts as verified only after the first sign-in by code.
 import { z } from "zod";
 import { db } from "../apps/server/db.ts";
@@ -8,7 +8,7 @@ import { db } from "../apps/server/db.ts";
 const [name, rawEmail] = process.argv.slice(2);
 const email = z.string().trim().email().max(254).safeParse(rawEmail);
 if (!name || !email.success) {
-  console.error("Usage: npm run account:email -- <login> <email>");
+  console.error("Usage: npm run admin -- account email <login> <email>");
   process.exitCode = 1;
 } else {
   const address = email.data.toLowerCase();

@@ -6,7 +6,7 @@ const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 /**
  * «Перенести полку» in the settings (docs/specs/SHELF_TRANSFER.md): the whole
  * shelf into a folder with polka-export.mjs, then the operator of the other
- * installation saves it there with npm run shelf:import.
+ * installation saves it there with npm run admin -- shelf import.
  */
 export function MoveShelf({ origin }: { origin: string }) {
   const commands = [
@@ -34,7 +34,7 @@ export function MoveShelf({ origin }: { origin: string }) {
       </div>
       <p className="agent-help">
         На своей установке оператор сохраняет папку на полку командой{" "}
-        <code>npm run shelf:import -- --dir ./polka-export --account &lt;почта&gt;</code>.
+        <code>npm run admin -- shelf import --dir ./polka-export --account &lt;почта&gt;</code>.
       </p>
     </section>
   );

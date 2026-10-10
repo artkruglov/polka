@@ -12,7 +12,7 @@ npm run local:setup              # создаёт .env с уникальными
 npm run infra:up                 # PostgreSQL 16 (127.0.0.1:54388) и MinIO (127.0.0.1:9038)
 npm run db:migrate
 npm run storage:bootstrap-local  # создаёт versioned bucket и проверяет его возможности
-npm run account:create -- demo --generate
+npm run admin -- account create demo --generate
 npm run build
 npm run dev
 ```

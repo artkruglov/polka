@@ -373,7 +373,7 @@ Google (отдельный пункт политики): получаем `sub`,
 
 ## 9. Объединение двух полок одного человека
 
-`scripts/account-merge.ts --from <логин|почта|id> --into <логин|почта|id> --proof <номер обращения> [--dry-run] [--reason "…"] [--json]` (`npm run account:merge`) и «Объединить» из § 8 используют `apps/server/account-merge.ts`.
+`scripts/account-merge.ts --from <логин|почта|id> --into <логин|почта|id> --proof <номер обращения> [--dry-run] [--reason "…"] [--json]` (`npm run admin -- account merge`) и «Объединить» из § 8 используют `apps/server/account-merge.ts`.
 
 **Одна транзакция, та же дисциплина блокировок:**
 - два тенанта, затем два аккаунта `FOR UPDATE` в порядке id;

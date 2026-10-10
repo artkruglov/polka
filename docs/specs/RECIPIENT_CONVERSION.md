@@ -21,7 +21,7 @@
 
 `POST /api/recipient-cta` принимает два-три слова: `{event:"view", surface: bar|card}` или `{event:"click", action: try|remix|copy_phrase|yandex|email}`, необязательно `page: share|feed`. Считается только для гостей (без сессии) с браузерным User-Agent; лимит по хешу IP; ответ всегда 204. События `recipient_cta_view` и `recipient_cta_click` — анонимные строки `analytics_events` (`actor`/`subject` NULL, `path=/s` или `/discover`), счётчики в `analytics_daily`. Регистрация, начатая здесь, получает источник `ref:share`, `ref:share-remix`, `ref:feed` или `ref:feed-remix` через обычный механизм источника вкладки (`shared/lib/visit-source.ts`, `setVisitSourceRef`).
 
-Отчёт `/ops/metrics`, `GET /api/ops/metrics` (`recipients`) и `npm run metrics`: блок «Получатели → регистрации» по неделям — открытия ссылок (`share_opened`), показы полосы, открытия карточки, нажатия по действиям, регистрации с этих источников и отношения между ними. Это отношения счётчиков, не долей людей: гость не идентифицируется.
+Отчёт `/ops/metrics`, `GET /api/ops/metrics` (`recipients`) и `npm run admin -- metrics summary`: блок «Получатели → регистрации» по неделям — открытия ссылок (`share_opened`), показы полосы, открытия карточки, нажатия по действиям, регистрации с этих источников и отношения между ними. Это отношения счётчиков, не долей людей: гость не идентифицируется.
 
 ## Что не делаем (пока)
 

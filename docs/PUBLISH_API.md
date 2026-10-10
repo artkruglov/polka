@@ -189,7 +189,7 @@ POLKA_TOKEN=… node polka-publish-project.mjs ./report
 curl -fsSLO https://polochka.app/api/v1/cli/polka-export.mjs
 read -r -s POLKA_TOKEN && export POLKA_TOKEN
 node polka-export.mjs ./polka-export
-# на своей установке: npm run shelf:import -- --dir ./polka-export --account <почта>
+# на своей установке: npm run admin -- shelf import --dir ./polka-export --account <почта>
 ```
 
 - `GET /api/v1/export?cursor=&limit=` — опись: каждая работа (с корзиной) со всеми версиями, их датами, манифестами и списками файлов, папки и карточка полки; формат `polka-shelf-export/1`, `nextCursor` до последней страницы.

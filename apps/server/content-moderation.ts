@@ -163,7 +163,7 @@ export function signalsForJournal(filter: FilterResult | null | undefined) {
 /**
  * Disable an account inside the caller's transaction: sessions end, agent
  * connections are revoked, live links close. Nothing is deleted. The same
- * effect as moderation:disable; returns false when it was disabled already.
+ * effect as admin moderation disable; returns false when it was disabled already.
  */
 export async function freezeAccountInTransaction(
   c: PoolClient,
@@ -579,8 +579,8 @@ export async function remindDueBlocks(limit = 50, send: typeof sendMail = sendMa
           "",
           ...lines,
           "",
-          'Если полиция или суд запросили эти данные: npm run moderation:legal-hold -- <id> on --authority "…"',
-          "Если данные уже переданы: npm run moderation:handed-over -- <id>",
+          'Если полиция или суд запросили эти данные: npm run admin -- moderation legal-hold <id> on --authority "…"',
+          "Если данные уже переданы: npm run admin -- moderation handed-over <id>",
         ].join("\n"),
       });
     } catch {
@@ -610,7 +610,7 @@ export async function remindDueBlocks(limit = 50, send: typeof sendMail = sendMa
 
 /**
  * The moderation sweep, run by the app every hour and by
- * `npm run moderation:sweep`: reminders, then deletions that are due.
+ * `npm run admin -- moderation sweep`: reminders, then deletions that are due.
  */
 export async function sweepBlocks() {
   const reminded = await remindDueBlocks();

@@ -88,7 +88,7 @@ test("the settings say how to move the shelf to another installation", () => {
     html,
     /curl -fsSLo polka-export\.mjs &#x27;https:\/\/polochka\.app\/api\/v1\/cli\/polka-export\.mjs&#x27;/,
   );
-  assert.match(html, /npm run shelf:import/);
+  assert.match(html, /npm run admin -- shelf import/);
   assert.match(render(React.createElement(DeleteShelf, { contact: null })), /href="#move-shelf"/);
 });
 

@@ -392,7 +392,7 @@ export async function approveShareAsOperator(
       return {
         shareId,
         changed: false,
-        message: "Ссылка заблокирована; одобрение её не откроет. Снять блокировку — moderation:unblock.",
+        message: "Ссылка заблокирована; одобрение её не откроет. Снять блокировку — admin moderation unblock.",
       };
     if (!share.live) notes.push("Ссылка уже закрыта или истекла; открывать нечего.");
     else if (share.moderation !== "none") {
@@ -516,7 +516,7 @@ export async function closeAndDisableAsOperator(
     changed: !disabled.alreadyDisabled,
     message: disabled.alreadyDisabled
       ? "Автор уже был отключён, его ссылки закрыты; ничего не изменилось."
-      : `Автор отключён: сессии завершены, подключения агентов отозваны, закрыто ссылок: ${disabled.liveShares + disabled.expiredShares}. Данные не удалены; вернуть доступ — moderation:enable.`,
+      : `Автор отключён: сессии завершены, подключения агентов отозваны, закрыто ссылок: ${disabled.liveShares + disabled.expiredShares}. Данные не удалены; вернуть доступ — admin moderation enable.`,
   };
 }
 
@@ -589,7 +589,7 @@ export function formatModerationQueue(queue: Awaited<ReturnType<typeof listModer
       ].join("  "),
     ),
     "",
-    `${queue.length} link(s) wait. Approve: moderation:approve -- <shareId> [--trust]; unpause: moderation:unpause -- <shareId>; close: moderation:revoke-share -- <shareId>.`,
+    `${queue.length} link(s) wait. Approve: admin moderation approve <shareId> [--trust]; unpause: admin moderation unpause <shareId>; close: admin moderation revoke-share <shareId>.`,
   ].join("\n");
 }
 
@@ -665,7 +665,7 @@ export function formatShareComments(comments: Awaited<ReturnType<typeof listShar
         .join("  "),
     ),
     "",
-    `${comments.length} comment(s). Delete: moderation:delete-comment -- <id>; show a held one: moderation:release-comment -- <id>; hide all of an author's: moderation:disable -- <login>.`,
+    `${comments.length} comment(s). Delete: admin moderation delete-comment <id>; show a held one: admin moderation release-comment <id>; hide all of an author's: admin moderation disable <login>.`,
   ].join("\n");
 }
 
@@ -995,7 +995,7 @@ export function formatTakedown(receipt: TakedownReceipt) {
     ...receipt.blocked.map((item) => `  версия ${item.revisionId}${item.shareId ? `, ссылка ${item.shareId}` : ""}`),
     retentionText(receipt.category, receipt.legalHold),
     receipt.disabled ? `Аккаунт отключён: ${clean(receipt.disabled, 80)}` : "Аккаунт не отключался.",
-    "Запись в журнале модерации: moderation:events.",
+    "Запись в журнале модерации: admin moderation events.",
   ].join("\n");
 }
 
