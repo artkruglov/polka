@@ -21,6 +21,20 @@ The first `infra:up` builds MinIO from source (`deploy/minio/Dockerfile`, about 
 
 The server serves the built `dist`. After a UI change run `npm run build` and reload the page; after a backend change restart `npm run dev`.
 
+### UI with hot reload
+
+To skip rebuilding `dist` after every UI change, run this in a second terminal next to `npm run dev`:
+
+```bash
+npm run dev:web                  # Vite on http://127.0.0.1:4392
+```
+
+Open http://127.0.0.1:4392/ and sign in there. An edit to a component under `apps/web/src` shows up on the open page without a reload (React Fast Refresh), and the page keeps its state.
+
+Vite itself serves the app's pages (the list in `packages/contracts/app-routes.ts`), the sources and the files in `apps/web/public`. Everything else — `/api`, `/mcp`, `/oauth`, `/.well-known`, `/connect`, `/login`, `/robots.txt` and the server's other addresses — it passes to the server on `PORT` from `.env`. The server accepts a write only with an `Origin` equal to `APP_ORIGIN`, so the proxy puts `APP_ORIGIN` into requests from Vite's own pages; a request with any other `Origin` is still refused. The server and its checks are unchanged, and Vite plays no part in production.
+
+Vite listens on `PORT + 2` (4392 with the default ports); `WEB_DEV_PORT` sets another. Addresses the server builds itself — links for recipients, e-mails, OAuth, the interactive view in a frame (it may only be embedded in `APP_ORIGIN`) — lead to `APP_ORIGIN`, that is to the built `dist`. A backend change still needs a restart of `npm run dev`.
+
 To stop the containers and keep the data: `npm run infra:stop`. Do not delete the volumes, `.env` or `LINK_KEY`: without that key old links stop opening.
 
 `.env.example` documents every variable `local:setup` writes and the optional ones (mail, the viewer, import by URL, the renderer). Prefer `local:setup` to copying it: it generates the secrets.
