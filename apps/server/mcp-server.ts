@@ -1,4 +1,5 @@
 import { shelfSnapshotForAgent } from "./shelf-snapshot.ts";
+import { withRuntimePages } from "./project-runtime.ts";
 import { agentFolderScope } from "./agent-scope.ts";
 import { issueProjectUploadToken } from "./project-upload.ts";
 import { issueSignInLink } from "./agent-sign-in-links.ts";
@@ -817,7 +818,7 @@ export function createMcpServer(actor: ServiceActor) {
           openWorldHint: false,
         },
       },
-      async (input) => asToolResult(await captureFromAgent(actor, input, "capture")),
+      async (input) => asToolResult(await withRuntimePages(await captureFromAgent(actor, input, "capture"))),
     );
   if (actor.scopes.includes("capture"))
     server.registerTool(
@@ -871,16 +872,18 @@ export function createMcpServer(actor: ServiceActor) {
         toolResult(async () => {
           if (input.edits) {
             const { key, artifactId, baseRevisionId, edits, path } = input;
-            return reviseWithEdits(actor, {
-              key,
-              artifactId,
-              baseRevisionId,
-              edits,
-              ...(path ? { path } : {}),
-            });
+            return withRuntimePages(
+              await reviseWithEdits(actor, {
+                key,
+                artifactId,
+                baseRevisionId,
+                edits,
+                ...(path ? { path } : {}),
+              }),
+            );
           }
           const { edits: _edits, path: _path, ...capture } = input;
-          return (await captureFromAgent(actor, capture, "revise")) as Record<string, unknown>;
+          return (await withRuntimePages(await captureFromAgent(actor, capture, "revise"))) as Record<string, unknown>;
         }),
     );
     server.registerTool(
@@ -900,10 +903,9 @@ export function createMcpServer(actor: ServiceActor) {
       async (input) =>
         toolResult(
           async () =>
-            (await changeFiles(actor, { ...input, artifactId: artifactIdOf(input.artifactId) })) as Record<
-              string,
-              unknown
-            >,
+            (await withRuntimePages(
+              await changeFiles(actor, { ...input, artifactId: artifactIdOf(input.artifactId) }),
+            )) as Record<string, unknown>,
         ),
     );
     if (curates)

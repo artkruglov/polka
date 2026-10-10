@@ -176,6 +176,7 @@ export function workerMessageKind(message: unknown): "runtime" | "result" | "inv
 async function runBuilder(
   manifest: ReturnType<typeof canonicalizeManifest>,
   files: Array<{ path: string; bytes: Buffer }>,
+  project = false,
 ) {
   return new Promise<WorkerResult>((resolve, reject) => {
     const worker = new Worker(new URL("./bundle-build-worker.mjs", import.meta.url), {
@@ -221,7 +222,7 @@ async function runBuilder(
     worker.once("exit", () => {
       void settle(() => reject(new BuildWorkerError("crash")));
     });
-    worker.postMessage({ manifest, files });
+    worker.postMessage({ manifest, files, project });
   });
 }
 
@@ -233,7 +234,7 @@ async function runBuilder(
 export async function checkBuildInWorker(
   manifest: ReturnType<typeof canonicalizeManifest>,
   files: Array<{ path: string; bytes: Buffer }>,
-  { waitMs = 10_000 }: { waitMs?: number } = {},
+  { waitMs = 10_000, project = false }: { waitMs?: number; project?: boolean } = {},
 ): Promise<WorkerResult> {
   const deadline = Date.now() + waitMs;
   while (!acquireWorkerSlot()) {
@@ -250,7 +251,7 @@ export async function checkBuildInWorker(
     for (;;) {
       let result: WorkerResult;
       try {
-        result = await runBuilder(manifest, files);
+        result = await runBuilder(manifest, files, project);
       } catch (error) {
         const category = error instanceof BuildWorkerError ? error.category : "crash";
         logBuildFailure(category, "check");

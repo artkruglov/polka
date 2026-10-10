@@ -114,7 +114,10 @@ links between them. Prints the project's address on the shelf.
 
 A folder whose only page is one React component (App.jsx or App.tsx, without
 README.md, index.md or index.html) is saved as that component instead: Полка
-builds it and it runs. A project does not build .jsx/.tsx files.
+builds it and it runs. A project takes no .jsx/.tsx files, but its HTML pages
+may load React, Babel or Tailwind from a CDN or use <script type=module> (.js
+files with JSX): Полка compiles those pages offline with its own copies of the
+libraries and names any page it could not compile.
 
 Options:
   --title <text>     Title on the shelf (default: the first heading of README.md or the folder name)
@@ -547,6 +550,7 @@ async function main() {
     artifactId: receipt.artifactId,
     revisionId: receipt.revisionId,
     shelfUrl: receipt.shelfUrl ?? `${endpoint.replace(/\/$/, "")}/works/${receipt.artifactId}`,
+    ...(receipt.pagesNotBuilt ? { pagesNotBuilt: receipt.pagesNotBuilt } : {}),
   };
   // The pulled folder now holds this version: the next publish builds on it.
   if (pulled)
@@ -560,6 +564,10 @@ async function main() {
       `Saved «${result.title}»: ${result.files} files, ${result.megabytes} MB${result.unchanged ? ` (${result.unchanged} unchanged, copied by Полка)` : ""}.`,
     );
     console.log(result.shelfUrl);
+    if (result.pagesNotBuilt?.length) {
+      console.log(`Not compiled, shown as saved (${result.pagesNotBuilt.length}):`);
+      for (const page of result.pagesNotBuilt) console.log(`  ${page.path} — ${page.reason}`);
+    }
     if (skipped.length) {
       console.log(`Skipped ${skipped.length}:`);
       for (const item of skipped) console.log(`  ${item.path} — ${item.reason}`);

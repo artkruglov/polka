@@ -4,11 +4,13 @@ import { parentPort } from "node:worker_threads";
 import { stop as stopEsbuild } from "esbuild";
 import type { BundleManifest } from "../../packages/contracts/bundle.ts";
 import { BUILD_FAILURE_MESSAGES } from "./bundle-runtime-contract.ts";
-import { buildDerivative, needsRuntimeBuild } from "./react-runtime.ts";
+import { buildDerivative, buildRuntimeBundle, needsRuntimeBuild } from "./react-runtime.ts";
 
 type Request = {
   manifest: BundleManifest;
   files: Array<{ path: string; bytes: Uint8Array }>;
+  /** A page of a project: only a runtime page is built, its resources stay files. */
+  project?: boolean;
 };
 
 if (!parentPort) throw new Error("Bundle build worker needs a parent port");
@@ -54,9 +56,15 @@ port.once("message", async (request: Request) => {
         return;
       }
     }
-    const result = await buildDerivative(request.manifest, files, {
-      allowRuntime: runtime,
-    });
+    const result = request.project
+      ? (runtime &&
+          (await buildRuntimeBundle(request.manifest, files, { allowRuntime: true, keepResources: true }))) || {
+          ok: false,
+          reason: "not a runtime page",
+        }
+      : await buildDerivative(request.manifest, files, {
+          allowRuntime: runtime,
+        });
     await reap();
     port.postMessage({ type: "result", result });
   } catch {

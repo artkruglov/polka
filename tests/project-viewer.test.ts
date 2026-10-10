@@ -28,7 +28,7 @@ const origin = config.APP_ORIGIN;
 const password = randomBytes(24).toString("hex");
 let owner: Awaited<ReturnType<typeof createAccount>>;
 let cookie = "";
-let saved: { artifactId: string; revisionId: string };
+let saved: { artifactId: string; revisionId: string; pagesNotBuilt?: Array<{ path: string; reason: string }> };
 
 const PNG = Buffer.from(
   "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63f8cf00000301010018dd8db40000000049454e44ae426082",
@@ -48,6 +48,16 @@ const files = [
   ],
   ["screens/shared/ui.css", "text/css", "h1{color:red}"],
   ["screens/shot.png", "image/png", PNG],
+  [
+    "app/index.html",
+    "text/html",
+    `<!doctype html><html><head><script src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><link rel="stylesheet" href="../screens/shared/ui.css"></head><body><div id="root"></div><img src="../screens/shot.png" alt=""><script type="text/babel">ReactDOM.createRoot(document.getElementById("root")).render(<h1 className="font-bold">Полка</h1>);</script></body></html>`,
+  ],
+  [
+    "app/broken.html",
+    "text/html",
+    '<!doctype html><html><head></head><body><script type="module">import pad from "left-pad"; document.body.textContent = pad("1", 3);</script></body></html>',
+  ],
 ] as const;
 
 const view = (url: string, dest = "iframe", mode = "navigate") =>
@@ -226,6 +236,31 @@ test("a page is served as it is, sandboxed, with its own resources only", async 
   assert.equal((await view(url + "__polka/nav.js", "script", "no-cors")).statusCode, 200);
   assert.equal((await view(url + "../../etc/passwd")).statusCode, 404);
   assert.equal((await view(url + "missing.md")).statusCode, 404);
+});
+
+test("a page with React from a CDN is served compiled, its files stay files of the project", async () => {
+  const url = await issue();
+  const page = await view(url + "app/index.html");
+  assert.equal(page.statusCode, 200, page.body);
+  assert.ok(
+    page.body.toLowerCase().startsWith(`<!doctype html>${VIEWER_GUARD}`.toLowerCase()),
+    page.body.slice(0, 120),
+  );
+  assert.doesNotMatch(page.body, /unpkg\.com|babel\.min|type="text\/babel"/);
+  assert.match(page.body, /\.font-bold/);
+  assert.ok(page.body.includes('src="../screens/shot.png"'));
+  assert.ok(page.body.includes('href="../screens/shared/ui.css"'));
+  assert.match(String(page.headers["content-security-policy"]), new RegExp(`script-src ${url} 'unsafe-inline'`));
+  // The agent that saved the project heard which page does not build, and why.
+  assert.deepEqual(
+    saved.pagesNotBuilt?.map((page) => page.path),
+    ["app/broken.html"],
+  );
+  assert.match(saved.pagesNotBuilt![0].reason, /left-pad/);
+  // A page the builder refuses is served as it was saved.
+  const broken = await view(url + "app/broken.html");
+  assert.equal(broken.statusCode, 200);
+  assert.match(broken.body, /import pad from "left-pad"/);
 });
 
 test("placing Полка's scripts is linear in the page size", () => {

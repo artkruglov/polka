@@ -162,7 +162,7 @@ curl -sS "https://polochka.app/api/v1/works?since=2026-10-01T00:00:00Z" \
 | `PUT /api/v1/projects/:uploadId/files/:index` | Байты одного файла, `Content-Type: application/octet-stream` (иначе `415`), до 5 МиБ. Отдельный лимит частоты: вдвое больше файлов, чем помещается в проект |
 | `PUT /api/v1/projects/:uploadId/media/:index` | Видео (`video/mp4`, `video/webm`) потоком, до 200 МиБ, с `Content-Length`. Полка кладёт байты в хранилище по мере поступления и принимает файл, только если он совпал с манифестом (размер, SHA-256, заголовок MP4/WebM), иначе ничего не остаётся ([PROJECT_VIDEO](specs/PROJECT_VIDEO.md)). Видео в проекте включается для полки оператором; без этого `POST /api/v1/projects` отвечает `403` |
 | `POST /api/v1/projects/:uploadId/reuse` | Только для новой версии: файлы, у которых путь, тип, размер и SHA-256 совпадают с файлом базовой версии, хранилище копирует само. Ответ — `reused` (их индексы); остальные файлы отправляются как обычно |
-| `POST /api/v1/projects/:uploadId/finalize` | Сохранение версии; ответ — квитанция и `shelfUrl` |
+| `POST /api/v1/projects/:uploadId/finalize` | Сохранение версии; ответ — квитанция и `shelfUrl`, плюс `pagesNotBuilt: [{path, reason}]`, если страница с React или module-скриптами не собралась ([PROJECTS](specs/PROJECTS.md#страницы-с-react)) |
 
 ### `polka pull` и `push`
 

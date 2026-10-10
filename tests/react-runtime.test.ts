@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalizeManifest } from "../packages/contracts/bundle.ts";
 import { RUNTIME_LIBRARIES, runtimeLibraryFor } from "../packages/contracts/runtime.ts";
 import { buildInlineBundle } from "../apps/server/bundle-inline.ts";
-import { buildDerivative } from "../apps/server/react-runtime.ts";
+import { buildDerivative, buildRuntimeBundle } from "../apps/server/react-runtime.ts";
 import { componentShell } from "../packages/contracts/runtime.ts";
 
 const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex");
@@ -263,6 +263,40 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   assert.doesNotMatch(html, /unpkg|tailwindcss\.com\/|babel\.min/);
   assert.equal(html.match(/<\/script>/g)?.length, 2);
   assertSelfContained(html);
+});
+
+test("a page of a project compiles its scripts and keeps its files as references", async () => {
+  const value = fixture({
+    "index.html": `<!doctype html><html><head><meta charset="utf-8">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="stylesheet" href="ui.css"></head>
+<body><div id="root"></div><img src="shot.png" alt=""><a href="other.html">дальше</a>
+<script src="plain.js"></script>
+<script type="text/babel">
+function App() { return <h1 className="font-bold">{label}</h1>; }
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script></body></html>`,
+    "ui.css": "h1{color:red}",
+    "plain.js": "var label = 'Полка';",
+  });
+  const result = await buildRuntimeBundle(value.manifest, value.bytes, { keepResources: true });
+  assert.ok(result?.ok, result && !result.ok ? result.reason : "not a runtime page");
+  if (!result?.ok) return;
+  const html = result.html.toString("utf8");
+  assert.doesNotMatch(html, /unpkg|babel\.min/);
+  assert.match(html, /\.font-bold/);
+  // The project viewer serves these files; nothing is inlined, no offline prelude.
+  for (const reference of ['href="ui.css"', 'src="shot.png"', 'href="other.html"', 'src="plain.js"'])
+    assert.ok(html.includes(reference), reference);
+  assert.doesNotMatch(html, /window\.fetch=offline/);
+  // A page without runtime scripts is not built at all.
+  const plain = fixture({
+    "index.html": '<!doctype html><html><head></head><body><script src="plain.js"></script></body></html>',
+    "plain.js": "1",
+  });
+  assert.equal(await buildRuntimeBundle(plain.manifest, plain.bytes, { keepResources: true }), null);
 });
 
 test("a page with only a Tailwind CDN stylesheet or an importmap is compiled", async () => {

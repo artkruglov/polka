@@ -446,11 +446,14 @@ const scriptLine = (node: Node) =>
 /**
  * Builds a runtime page, or returns null when the entrypoint has no module,
  * JSX or known-CDN script (the caller then applies the v4 rules as before).
+ * With keepResources (a page of a project) only the scripts are compiled:
+ * styles, images, links and classic scripts stay references to the
+ * project's files, which the project viewer serves, and no prelude is added.
  */
 export async function buildRuntimeBundle(
   manifest: BundleManifest,
   sourceBytes: Map<string, Buffer>,
-  { allowRuntime = true }: { allowRuntime?: boolean } = {},
+  { allowRuntime = true, keepResources = false }: { allowRuntime?: boolean; keepResources?: boolean } = {},
 ): Promise<BundleInlineResult | null> {
   let canonical: BundleManifest;
   try {
@@ -620,7 +623,12 @@ export async function buildRuntimeBundle(
   const siblings = parent.childNodes!;
   if (anchor) siblings.splice(siblings.indexOf(anchor), 1, runtimeScript);
   else siblings.push(runtimeScript);
-  insertIntoHead(head, [element("script", PRELUDE, head), element("style", placeholderCss, head)]);
+  insertIntoHead(
+    head,
+    keepResources
+      ? [element("style", placeholderCss, head)]
+      : [element("script", PRELUDE, head), element("style", placeholderCss, head)],
+  );
 
   // The rest of the page (styles, images, links, classic scripts) is checked
   // and inlined by the v4 rules on the rewritten entrypoint.
@@ -631,10 +639,12 @@ export async function buildRuntimeBundle(
       file.path === entryPath ? { ...file, size: rewritten.length, sha256: digest(rewritten) } : file,
     ),
   };
-  const page = buildInlineBundle(rewrittenManifest, new Map([...sourceBytes, [entryPath, rewritten]]), {
-    prelude: false,
-  });
-  if (!page.ok) return page;
+  const page = keepResources
+    ? { html: rewritten, consumedPaths: [] as string[], warnings: [] as string[] }
+    : buildInlineBundle(rewrittenManifest, new Map([...sourceBytes, [entryPath, rewritten]]), {
+        prelude: false,
+      });
+  if (!("html" in page)) return page;
   for (const warning of page.warnings) warnings.add(warning);
 
   /** A compiled file and line as the page's own file and line. */

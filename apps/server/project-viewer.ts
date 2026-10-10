@@ -25,6 +25,7 @@ import { assertEditorialShareAccessible } from "./editorial.ts";
 import { missing } from "./errors.ts";
 import { VIEWER_GUARD, withLeadingMarkup } from "./html.ts";
 import { escapeHtml, projectDocumentPage, renderProjectMarkdownBounded } from "./project-markdown.ts";
+import { projectRuntimePage } from "./project-runtime.ts";
 import { bump } from "./runtime-stats.ts";
 import { readBlob, readStream, sha256 } from "./storage.ts";
 
@@ -435,7 +436,14 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     const bytes = isVideoMime(file.mime) ? Buffer.alloc(0) : await readBlob(stored.object_key, stored.object_version);
     const name = posix.basename(file.path);
     if (file.mime === "text/html") {
-      const page = withSignedAwayLinks(bytes, base(token) + file.path);
+      // A page with React, Babel or Tailwind from a CDN, or module scripts, is served compiled.
+      const runtime = await projectRuntimePage(revision.id, revision.manifest, file.path, async (other) => {
+        if (other === file.path) return bytes;
+        const entry = (await storedFiles(revision.id)).get(other);
+        if (!entry) throw missing();
+        return readBlob(entry.object_key, entry.object_version);
+      });
+      const page = withSignedAwayLinks(runtime?.ok ? runtime.html : bytes, base(token) + file.path);
       return reply
         .type("text/html; charset=utf-8")
         .header("content-security-policy", pageCsp(token))
