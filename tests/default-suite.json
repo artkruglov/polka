@@ -5,6 +5,7 @@
   "tests/admin-cli.test.ts",
   "tests/contracts-helpers.test.ts",
   "tests/renderer-playwright-version.test.ts",
+  "tests/renderer-seccomp.test.ts",
   "tests/mcp-tools-documented.test.ts",
   "tests/web-launch.test.ts",
   "tests/browser-icons.test.ts",

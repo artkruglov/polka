@@ -10,12 +10,14 @@
 
 ### Changed
 
+- **Обложки-снимки на polochka.app включены** ([SHELF_COVERS](docs/specs/SHELF_COVERS.md), #31): у визуальных работ на полке — картинка первого экрана. Рендерер стоит на отдельной VM в Yandex Cloud `ru-central1`.
 - **Проверка слоёв фронтенда читается** (#12). `scripts/check-frontend-layers.mjs` переписан на TypeScript (`scripts/check-frontend-layers.ts`, запускается через `tsx`): понятные имена, короткие функции, правила перечислены в заголовке файла. Поведение не менялось: те же 162 проверенных модуля, те же сообщения и коды выхода.
 
 ### Fixed
 
 - **Рендерер не запускался** в 0.14.0: Dependabot (#49) поднял образ Playwright до 1.64, а `playwright-core` остался 1.63, и Chromium нужной сборки в образе не было — контейнер перезапускался по кругу. Обе версии теперь 1.64.0, а тест `tests/renderer-playwright-version.test.ts` не пропустит такое расхождение снова.
 - Рендерер на той же VM: в `deploy/hosted/compose.yml` передаётся `RENDERER_CHROMIUM_SANDBOX`, а в [deploy/hosted](deploy/hosted/README.md#рендерер-ссылок) описано, что песочнице Chromium нужны непривилегированные user namespaces на хосте; на Ubuntu 24.04 в Yandex Cloud их нет.
+- **Песочница Chromium в контейнере рендерера:** стандартный профиль seccomp Docker закрывал вызовы, без которых она не запускается, даже на хосте, где user namespaces разрешены. Compose обоих вариантов подключает [`deploy/renderer/seccomp-chromium.json`](deploy/renderer/seccomp-chromium.json) — стандартный профиль, в котором разрешены `clone`, `unshare`, `setns` и `chroot`, без новых capabilities. В [deploy/renderer](deploy/renderer/README.md#yandex-cloud) исправлены правила `DOCKER-USER` (они отрезали DNS облака и ответы на внутренние запросы), добавлены DNS для Docker, работа по IP (`default_sni`) и формат `RENDERER_CA`.
 
 ## [0.14.0] — 2026-10-10
 

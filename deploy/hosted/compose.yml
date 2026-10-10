@@ -507,7 +507,9 @@ services:
     tmpfs: ["/tmp:rw,nosuid,size=256m"]
     shm_size: 256m
     cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    # Docker's default seccomp profile plus what Chromium's sandbox needs
+    # (deploy/renderer/README.md, «Песочница Chromium»).
+    security_opt: ["no-new-privileges:true", "seccomp=../renderer/seccomp-chromium.json"]
     deploy:
       resources:
         limits: {cpus: "1.0", memory: 1536M, pids: 256}
