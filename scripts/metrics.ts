@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import { forgetAccount } from "../apps/server/analytics.ts";
 import { db } from "../apps/server/db.ts";
 import { metricsReport, type MetricsReport } from "../apps/server/metrics.ts";
+import { UUID_RE } from "../packages/contracts/uuid.ts";
 
 const USAGE =
   "Usage: npm run admin -- metrics summary [--weeks N] [-- --json] | npm run admin -- metrics summary forget <account id|login|email>";
@@ -162,14 +163,12 @@ export function formatReport(report: MetricsReport) {
   return out.join("\n");
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** An account by id, login or email; null when there is none. */
 async function accountId(reference: string) {
   const {
     rows: [account],
   } = await db.query(
-    UUID.test(reference)
+    UUID_RE.test(reference)
       ? "SELECT id FROM accounts WHERE id=$1"
       : "SELECT id FROM accounts WHERE name=$1 OR email=lower($1)",
     [reference],
@@ -191,7 +190,7 @@ export async function runMetricsCli(argv: string[]) {
     if (!reference || rest.length) throw new Error(USAGE);
     // A deleted account's tombstone keeps its id, so an id is accepted as
     // given; a login or email must name an existing account.
-    const id = UUID.test(reference) ? reference : await accountId(reference);
+    const id = UUID_RE.test(reference) ? reference : await accountId(reference);
     if (!id) throw new Error("No such account.");
     const removed = await forgetAccount(db, id.toLowerCase(), true);
     return `Deleted ${removed.events} events and ${removed.activeDays} active days; new events of this account are not recorded.`;

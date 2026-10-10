@@ -1,3 +1,4 @@
+import { escapeHtml } from "./contracts/html.ts";
 /*
  * What an AI chat's code block or canvas is, and the page Полка saves from it.
  * Shared by the «На Полку» extension (extensions/chrome/src/shared/payload.ts)
@@ -51,8 +52,7 @@ function typed(text: string) {
   );
 }
 
-export const escapeHtml = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export { escapeHtml };
 
 /** A minimal page around a body, as the extension and the CLI build it. */
 export function simplePage(title: string, body: string, style = "") {

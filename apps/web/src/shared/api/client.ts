@@ -20,6 +20,7 @@ import type {
   SharedComments,
   WorkComments,
 } from "../../../../../packages/contracts/comments.ts";
+import { UUID_RE } from "../../../../../packages/contracts/uuid.ts";
 
 export type NewComment = {
   body: string;
@@ -88,7 +89,6 @@ function fallbackMessage(status: number) {
 // memory, and goes to the server as X-Polka-Shelf on every request; routes
 // that are not the shelf's own ignore it.
 const SHELF_KEY = "polka:shelf";
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Only the shelf's own pages follow it: «Сохранить», templates and the rest
 // work with the account's own shelf, as their pages say.
 const SHELF_PAGES = /^\/(?:$|trash$|snapshot$|works\/)/;
@@ -97,7 +97,7 @@ let shelf: string | null = (() => {
   const fromUrl = new URLSearchParams(location.search).get("shelf");
   if (fromUrl !== null) {
     // ?shelf= (empty) is the account's own shelf, and this tab forgets the other.
-    if (!UUID.test(fromUrl)) {
+    if (!UUID_RE.test(fromUrl)) {
       try {
         sessionStorage.removeItem(SHELF_KEY);
       } catch {
@@ -109,7 +109,7 @@ let shelf: string | null = (() => {
   }
   try {
     const kept = sessionStorage.getItem(SHELF_KEY);
-    return kept && UUID.test(kept) ? kept : null;
+    return kept && UUID_RE.test(kept) ? kept : null;
   } catch {
     return null;
   }
@@ -120,7 +120,7 @@ export function rememberedShelf() {
   if (shelf) return shelf;
   try {
     const kept = sessionStorage.getItem(SHELF_KEY);
-    return kept && UUID.test(kept) ? kept : null;
+    return kept && UUID_RE.test(kept) ? kept : null;
   } catch {
     return null;
   }

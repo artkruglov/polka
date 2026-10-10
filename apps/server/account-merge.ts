@@ -31,6 +31,7 @@ import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
 import { requestDeletionRows } from "./provisional-maintenance.ts";
 import { bucket, copyVersion, s3 } from "./storage.ts";
+import { UUID_RE } from "../../packages/contracts/uuid.ts";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -60,12 +61,10 @@ export type MergeAccount = {
   provisional: boolean;
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** An account by its id, address or login. */
 export async function findMergeAccount(ref: string, q: Queryable = db): Promise<MergeAccount | null> {
   const value = ref.trim();
-  const column = UUID.test(value) ? "a.id::text" : value.includes("@") ? "a.email" : "a.name";
+  const column = UUID_RE.test(value) ? "a.id::text" : value.includes("@") ? "a.email" : "a.name";
   const {
     rows: [row],
   } = await q.query(

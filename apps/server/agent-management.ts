@@ -29,6 +29,7 @@ import { transitionArtifactLifecycleInTransaction } from "./artifact-trash.ts";
 import { recheckServiceActor, type ServiceActor, withServiceActorTransaction } from "./service-auth.ts";
 import { sha256 } from "./storage.ts";
 import { linkOfRevision } from "./saved-link-format.ts";
+import { UUID_SOURCE } from "../../packages/contracts/uuid.ts";
 
 const stateSchema = z.enum(["active", "trashed"]);
 const datedCursorSchema = z
@@ -73,7 +74,7 @@ export const agentArtifactListInputSchema = z
   .strict();
 
 /** …/works/<id>: the page of a work on the owner's shelf, as the owner copies it. */
-const WORKS_PATH = /\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
+const WORKS_PATH = new RegExp(`/works/(${UUID_SOURCE})(?:[/?#]|$)`, "i");
 
 /**
  * A work named the way the owner names it: by id, or by the address of its

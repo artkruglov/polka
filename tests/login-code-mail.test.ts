@@ -3,7 +3,8 @@
 // address in the HTML but the installation's own.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { escapeMailHtml, groupCode, loginCodeMail } from "../apps/server/mail-templates/login-code.ts";
+import { escapeHtml } from "../packages/contracts/html.ts";
+import { groupCode, loginCodeMail } from "../apps/server/mail-templates/login-code.ts";
 
 test("the code is grouped as two fours", () => {
   assert.equal(groupCode("12345678"), "1234 5678");
@@ -38,7 +39,7 @@ test("no image, script, web font or address other than polochka.app", () => {
 });
 
 test("everything interpolated is escaped", () => {
-  assert.equal(escapeMailHtml(`<a href="x">'&'</a>`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+  assert.equal(escapeHtml(`<a href="x">'&'</a>`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
   const mail = loginCodeMail({
     code: "<b>1234</b>",
     origin: 'https://evil.test/"><script>',

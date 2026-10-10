@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
 import { PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
 import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
+import { UUID_RE } from "../../packages/contracts/uuid.ts";
 const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
@@ -512,12 +513,11 @@ const domainList = (value: string, name: string) =>
         throw new Error(`${name}: not a domain: ${entry}`);
       return entry;
     });
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 type OrgRole = "reader" | "curator";
 /** libraryId[:reader|curator]; admin is never granted automatically. */
 function libraryGrant(value: string, name: string) {
   const [libraryId, role = "reader", ...rest] = value.trim().split(":");
-  if (rest.length || !UUID.test(libraryId) || !["reader", "curator"].includes(role))
+  if (rest.length || !UUID_RE.test(libraryId) || !["reader", "curator"].includes(role))
     throw new Error(`${name}: expected <library uuid>[:reader|curator]`);
   return { libraryId, role: role as OrgRole };
 }

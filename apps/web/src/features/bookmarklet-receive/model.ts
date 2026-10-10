@@ -10,6 +10,7 @@ import {
   type BookmarkletSource,
 } from "../../../../../packages/contracts/bookmarklet.ts";
 import { looksLikeHtml } from "../../../../../packages/contracts/constants.ts";
+import { escapeHtml } from "../../../../../packages/contracts/html.ts";
 
 /**
  * What the bookmark sent survives the sign-in round trip here, in this tab's
@@ -98,9 +99,6 @@ export function useBookmarkletMessage(nonce: string | null, waitMs = 20_000): Re
   }, [nonce, waitMs]);
   return received;
 }
-
-const escapeHtml = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /**
  * The file saved for a source. Always an HTML page, so the source address

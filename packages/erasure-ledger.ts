@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 const MAX_BYTES = 8192;
+// Lower case only, unlike UUID_RE (contracts/uuid.ts): the ledger compares ids as strings.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const POLICY = /^[A-Za-z0-9._-]{1,80}$/;

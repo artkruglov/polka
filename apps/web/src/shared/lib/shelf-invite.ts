@@ -1,6 +1,8 @@
 /** An invitation link to a department shelf: its secret and the shelf. */
 export type ShelfInvitationLink = { token: string; shelfId: string };
 
+// Stricter than UUID_RE (contracts/uuid.ts): the server issues these as randomUUID (v1–5,
+// RFC variant), so a link with any other id is a broken copy, not a shelf to look up.
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const tokenPattern = /^[A-Za-z0-9_-]{32,512}$/;
 
