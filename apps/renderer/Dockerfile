@@ -1,8 +1,8 @@
 # Полка's headless renderer (docs/specs/URL_IMPORT_SUPPORT.md, «Рендерер»).
 # Built from the repository root:
 #   docker build -f apps/renderer/Dockerfile -t polka-renderer:local .
-# The official Playwright image, pinned by digest (v1.63.0-noble, multi-arch):
-# Chromium 1243 matching playwright-core 1.63.0 in package.json, Node 24 which
+# The official Playwright image, pinned by digest (v1.64.0-noble, multi-arch):
+# Chromium 1248 matching playwright-core 1.64.0 in package.json, Node 24 which
 # runs these TypeScript files directly (type stripping, no build step).
 FROM mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
 
