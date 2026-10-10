@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { runtimePageProblems } from "./project-runtime.ts";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -492,6 +493,7 @@ export async function registerPublishApi(app: FastifyInstance) {
       number: receipt.number,
       htmlProfile: receipt.htmlProfile ?? null,
       shelfUrl: `${config.APP_ORIGIN}/works/${artifactId}`,
+      ...(await runtimePagesOf(receipt.revisionId)),
     };
   });
   // polka pull: a version's files, listed, then one by one (work-files.ts).
@@ -529,6 +531,7 @@ export async function registerPublishApi(app: FastifyInstance) {
     const receipt = await finalizeProjectUpload(actor, uploadId);
     return {
       ...receipt,
+      ...(await runtimePagesOf(receipt.revisionId)),
       shelfUrl: `${config.APP_ORIGIN}/works/${receipt.artifactId}`,
     };
   });
@@ -668,4 +671,10 @@ export async function registerPublishApi(app: FastifyInstance) {
       .header("content-disposition", 'attachment; filename="polka-sessions.mjs"')
       .send(sessionsCli),
   );
+}
+
+/** `pagesNotBuilt` for a saved project whose runtime pages do not all build. */
+async function runtimePagesOf(revisionId: string) {
+  const problems = await runtimePageProblems(revisionId);
+  return problems.length ? { pagesNotBuilt: problems } : {};
 }
