@@ -15,7 +15,7 @@ import { indexable } from "./indexing.ts";
 import { runInChannel } from "./analytics.ts";
 import { registerTemplateLibraryRoutes } from "./template-library-routes.ts";
 import { registerUrlImports } from "./url-import/routes.ts";
-import Fastify, { type FastifyBaseLogger } from "fastify";
+import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import cookie from "@fastify/cookie";
 import { z } from "zod";
 import { config } from "./config.ts";
@@ -66,7 +66,7 @@ export async function createApp() {
   const app = Fastify({
     // The server's log (log.ts); no line per request: URLs carry tokens.
     loggerInstance: log as FastifyBaseLogger,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
     bodyLimit: MAX_BYTES,
     // A video upload (publish-api.ts) is streamed and may take minutes; every
     // other request has 30 s to arrive (the onRequest hook below).

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { answeringAccountSql, linkShelfOpenSql } from "./owner-state.ts";
-import Fastify, { type FastifyBaseLogger } from "fastify";
+import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { config } from "./config.ts";
@@ -232,7 +232,7 @@ export async function createLiveViewerApp() {
   const viewer = Fastify({
     // The server's log (log.ts); no line per request: URLs carry tokens.
     loggerInstance: log as FastifyBaseLogger,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
     requestTimeout: 30000,
     connectionTimeout: 30000,
   });
