@@ -1,28 +1,28 @@
 // Operator moderation. Runs as the runtime database role; prints no tokens.
-//   npm run moderation:reports [-- --days N]
-//   npm run moderation:revoke-share -- <shareId>
-//   npm run moderation:disable -- <login|email> [--reason "…"]
-//   npm run moderation:enable -- <login|email>
-//   npm run moderation:queue
-//   npm run moderation:approve -- <shareId> [--trust]
-//   npm run moderation:unpause -- <shareId>
-//   npm run moderation:trust -- <login|email>
-//   npm run moderation:comments -- <shareId>
-//   npm run moderation:delete-comment -- <commentId>
-//   npm run moderation:release-comment -- <commentId>
+//   npm run admin -- moderation reports [--days N]
+//   npm run admin -- moderation revoke-share <shareId>
+//   npm run admin -- moderation disable <login|email> [--reason "…"]
+//   npm run admin -- moderation enable <login|email>
+//   npm run admin -- moderation queue
+//   npm run admin -- moderation approve <shareId> [--trust]
+//   npm run admin -- moderation unpause <shareId>
+//   npm run admin -- moderation trust <login|email>
+//   npm run admin -- moderation comments <shareId>
+//   npm run admin -- moderation delete-comment <commentId>
+//   npm run admin -- moderation release-comment <commentId>
 // Blocking (docs/specs/CONTENT_FILTER.md):
-//   npm run moderation:takedown -- <link|shareId|artifactId|login> --reason "…"
+//   npm run admin -- moderation takedown <link|shareId|artifactId|login> --reason "…"
 //        [--authority "Роскомнадзор, требование №…"] [--category other|copyright|…]
 //        [--disable] [--legal-hold]
-//   npm run moderation:block -- <shareId> --reason "…" [--category …] [--legal-hold]
-//   npm run moderation:unblock -- <id> [--reason "…"]
-//   npm run moderation:legal-hold -- <id> on --authority "…" | off
-//   npm run moderation:handed-over -- <id> [--reason "…"]
-//   npm run moderation:purge-artifact -- <id> [--reason "…"]
-//   npm run moderation:events [-- <id>]
-//   npm run moderation:sweep
-//   npm run moderation:recheck [-- --dry-run]
-//   npm run moderation:recheck -- --fraud [--dry-run]
+//   npm run admin -- moderation block <shareId> --reason "…" [--category …] [--legal-hold]
+//   npm run admin -- moderation unblock <id> [--reason "…"]
+//   npm run admin -- moderation legal-hold <id> on --authority "…" | off
+//   npm run admin -- moderation handed-over <id> [--reason "…"]
+//   npm run admin -- moderation purge-artifact <id> [--reason "…"]
+//   npm run admin -- moderation events [<id>]
+//   npm run admin -- moderation sweep
+//   npm run admin -- moderation recheck [--dry-run]
+//   npm run admin -- moderation recheck --fraud [--dry-run]
 import { parseArgs } from "node:util";
 import { db } from "../apps/server/db.ts";
 import {

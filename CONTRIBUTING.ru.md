@@ -21,7 +21,7 @@ npm run local:setup              # .env с локальными секретам
 npm run infra:up                 # PostgreSQL и MinIO в Docker, только 127.0.0.1; MinIO в первый раз собирается ~10 минут
 npm run db:migrate
 npm run storage:bootstrap-local
-npm run account:create -- demo --generate
+npm run admin -- account create demo --generate
 npm run build
 npm run dev                      # http://127.0.0.1:4390
 ```

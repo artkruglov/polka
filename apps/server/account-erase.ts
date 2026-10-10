@@ -109,7 +109,7 @@ export async function requestAccountErasure(input: {
     if (report.state !== "would_request") return report;
     if (counts.blocked)
       throw new ErasureRefusal(
-        "На полке есть заблокированное содержимое: модерация хранит его как доказательство. Сначала разберите блокировку (moderation:events), затем удаляйте.",
+        "На полке есть заблокированное содержимое: модерация хранит его как доказательство. Сначала разберите блокировку (admin moderation events), затем удаляйте.",
       );
     if (counts.last_admin)
       throw new ErasureRefusal(

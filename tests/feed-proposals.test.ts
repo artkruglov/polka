@@ -1,6 +1,6 @@
 // Proposals to «Лента» from a department shelf (docs/specs/DISCOVER_V2.md,
 // «Предложение с полки отдела»): a curator proposes one version, the operator
-// decides with npm run feed:proposals; nothing is published by the proposal.
+// decides with npm run admin -- feed proposals; nothing is published by the proposal.
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";

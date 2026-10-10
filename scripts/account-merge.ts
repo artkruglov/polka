@@ -3,7 +3,7 @@
 // Runs as the runtime database role, like the moderation scripts; prints no
 // tokens and no content.
 //
-//   npm run account:merge -- --from <login|email|id> --into <login|email|id> --proof <ticket> [--dry-run] [--reason "…"]
+//   npm run admin -- account merge --from <login|email|id> --into <login|email|id> --proof <ticket> [--dry-run] [--reason "…"]
 //
 // Start with --dry-run: it prints what would move and changes nothing.
 import { parseArgs } from "node:util";

@@ -174,7 +174,7 @@ async function refuseUnsafeSource(c: Queryable, from: MergeAccount) {
   );
   if (row.blocked_blocks || row.blocked_shares || row.blocked_comments)
     throw new MergeRefusal(
-      "В источнике есть заблокированное содержимое. Объединение запрещено: сначала разберите блокировку (moderation:events).",
+      "В источнике есть заблокированное содержимое. Объединение запрещено: сначала разберите блокировку (admin moderation events).",
     );
   if (row.editorial) throw new MergeRefusal("У источника есть публикации в «Открытиях». Объединение не переносит их.");
   if (row.uploads || row.imports || row.builds)

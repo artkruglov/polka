@@ -3,7 +3,7 @@
 // apps/server/shelf-import.ts). Runs as the runtime database role; prints no
 // content, only titles and counts.
 //
-//   npm run shelf:import -- --dir <export folder> --account <login|email|id> [--dry-run] [--raise-quota] [--replace-card] [--json]
+//   npm run admin -- shelf import --dir <export folder> --account <login|email|id> [--dry-run] [--raise-quota] [--replace-card] [--json]
 //
 // Start with --dry-run: it checks every file and prints what would be saved.
 // Rerunning after an interruption continues where the last run stopped.

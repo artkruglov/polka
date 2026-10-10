@@ -231,7 +231,7 @@ function compose(notice: Exclude<ModerationNotice, { kind: "blocked" }>, facts: 
     ...links.map(([label, url]) => `${label}: ${url}`),
     "",
     "Каждая кнопка открывает страницу подтверждения: само открытие ничего не меняет. Ссылки действуют 7 дней, повтор безопасен.",
-    `Без почты то же делают скрипты: moderation:queue, moderation:approve, moderation:revoke-share (share ${notice.shareId}).`,
+    `Без почты то же делают скрипты: admin moderation queue, admin moderation approve, admin moderation revoke-share (share ${notice.shareId}).`,
   ].join("\n");
   const html = `<!doctype html><html lang="ru"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1d1d1f">
 <p>${escape(letter.lead)}</p>
@@ -311,10 +311,10 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
     "",
     ...rows.map(([name, value]) => `${name}: ${value}`),
     "",
-    `Снять блокировку: npm run moderation:unblock -- ${row.id}`,
+    `Снять блокировку: npm run admin -- moderation unblock ${row.id}`,
     `Сохранить доказательства (legal hold): npm run moderation:hold -- ${row.id} --authority "…"`,
-    ...(notice.frozen ? [`Вернуть доступ автору: npm run moderation:enable -- ${clean(row.name, 60)}`] : []),
-    `Журнал: npm run moderation:events -- ${row.artifact_id}`,
+    ...(notice.frozen ? [`Вернуть доступ автору: npm run admin -- moderation enable ${clean(row.name, 60)}`] : []),
+    `Журнал: npm run admin -- moderation events ${row.artifact_id}`,
   ];
   return {
     subject: csam ? "Полка: сигнал CSAM — работа заблокирована" : `Полка: заблокировано (${label})`,

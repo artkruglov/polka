@@ -2,12 +2,12 @@
 // (docs/specs/DISCOVER_V2.md, «Предложение с полки отдела»). Nothing here
 // publishes: an accepted work is copied into content/editorial and goes
 // through the usual editorial path (EDITORIAL_CHECKLIST, candidates.json,
-// editorial:content-scan, editorial-seed-hosted.ts --only <slug>).
+// admin editorial content-scan, editorial-seed-hosted.ts --only <slug>).
 //
-//   npm run feed:proposals -- list [--all]
-//   npm run feed:proposals -- export <id> <slug>
-//   npm run feed:proposals -- decide <id> published
-//   npm run feed:proposals -- decide <id> rejected "<причина для кураторов>"
+//   npm run admin -- feed proposals list [--all]
+//   npm run admin -- feed proposals export <id> <slug>
+//   npm run admin -- feed proposals decide <id> published
+//   npm run admin -- feed proposals decide <id> rejected "<причина для кураторов>"
 import { mkdir, writeFile, access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,9 +18,9 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const usage = `Use:
-  npm run feed:proposals -- list [--all]
-  npm run feed:proposals -- export <id> <slug>
-  npm run feed:proposals -- decide <id> published|rejected ["reason"]`;
+  npm run admin -- feed proposals list [--all]
+  npm run admin -- feed proposals export <id> <slug>
+  npm run admin -- feed proposals decide <id> published|rejected ["reason"]`;
 
 export async function runFeedProposals(argv: string[], root = process.cwd()) {
   const [command, id, third, ...rest] = argv;
@@ -52,7 +52,7 @@ export async function runFeedProposals(argv: string[], root = process.cwd()) {
         id,
         sourcePath: `content/editorial/${third}/index.html`,
         sha256: expected,
-        next: "Check it by EDITORIAL_CHECKLIST, add it to candidates.json, run editorial:content-scan, publish with editorial-seed-hosted.ts --only, then decide <id> published.",
+        next: "Check it by EDITORIAL_CHECKLIST, add it to candidates.json, run admin editorial content-scan, publish with editorial-seed-hosted.ts --only, then decide <id> published.",
       }),
     );
     return 0;

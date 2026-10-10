@@ -323,7 +323,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/accou
 
 Откажет, если одна из полок отключена или удаляется, если у источника есть заблокированное содержимое или публикации в «Ленте», и пока у источника идёт загрузка, импорт или сборка.
 
-Адрес почты источника переезжает, только если у основной полки почты нет; иначе он стирается вместе с источником, и вход по коду на него откроет новую полку. Скрипт об этом пишет. Локально: `npm run account:merge -- --from … --into … --proof … --dry-run`.
+Адрес почты источника переезжает, только если у основной полки почты нет; иначе он стирается вместе с источником, и вход по коду на него откроет новую полку. Скрипт об этом пишет. Локально: `npm run admin -- account merge --from … --into … --proof … --dry-run`.
 
 ## Перенос полки из облака
 
@@ -342,7 +342,7 @@ docker compose --env-file hosted.env run --rm -T --no-deps -v /srv/polka-export:
 - Каждая версия проходит фильтр содержимого и проверку модерации как новое сохранение. Работа, которую фильтр отклонил или чья версия была заблокирована на старой установке, пропускается и называется в отчёте.
 - Обложки строятся при первом показе; заранее — `node --import tsx scripts/backfill-covers.ts`.
 
-Локально: `npm run shelf:import -- --dir ./polka-export --account <почта> --dry-run`.
+Локально: `npm run admin -- shelf import --dir ./polka-export --account <почта> --dry-run`.
 
 ## Удаление аккаунта
 
@@ -438,7 +438,7 @@ docker compose --env-file hosted.env logs -f account-purge                  # ac
 | `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки (UTC, с 03:00 по Москве); дальше только правила и одно письмо вам. Расход хранится в базе, перезапуск и деплой его не обнуляют |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 
-Аккаунты, созданные оператором (`account:create`, вход по паролю), и все аккаунты, существовавшие до миграции 029, доверенные. Письма и кнопки подписаны ключом из `LINK_KEY`: смена `LINK_KEY` делает недействительными и кнопки в уже отправленных письмах.
+Аккаунты, созданные оператором (`admin account create`, вход по паролю), и все аккаунты, существовавшие до миграции 029, доверенные. Письма и кнопки подписаны ключом из `LINK_KEY`: смена `LINK_KEY` делает недействительными и кнопки в уже отправленных письмах.
 
 ```sh
 # после правки hosted.env
@@ -454,7 +454,7 @@ docker compose --env-file hosted.env exec -T app printenv SHARE_MODERATION OPERA
 - «Посмотреть» — страница так, как её увидит получатель (песочница, грант на 60 секунд), даже пока ссылка ждёт;
 - «Одобрить ссылку»; «Одобрить и доверять автору» — дальше его ссылки открываются без проверки (кроме `SHARE_MODERATION=all`);
 - «Снять паузу» — после жалоб;
-- «Закрыть ссылку»; «Закрыть и отключить автора» — то же, что `moderation:disable`;
+- «Закрыть ссылку»; «Закрыть и отключить автора» — то же, что `admin moderation disable`;
 - «Заблокировать» — `blocked`: получатели видят «Ссылка недоступна», содержимое изолируется и удаляется по сроку категории. На странице подтверждения можно отметить «Сохранить как доказательство (legal hold)» и указать основание — тогда удаления нет до снятия.
 
 Кнопка ведёт на `https://polochka.app/moderation#<токен>`. Открытие страницы ничего не меняет (почтовые сканеры открывают ссылки сами): она показывает, что будет сделано, и действие выполняется только нажатием кнопки на странице. Повтор безопасен. Кнопки действуют 7 дней; после этого — скрипты. Каждое действие пишется в лог приложения как `{"event":"moderation.action",...}`.
@@ -462,6 +462,8 @@ docker compose --env-file hosted.env exec -T app printenv SHARE_MODERATION OPERA
 Если письма не приходят: `docker compose --env-file hosted.env logs app | grep moderation.mail_failed`. Ошибка письма не мешает ссылке и жалобе: очередь всегда видна скриптом `queue`.
 
 ### Скрипты
+
+Все команды оператора собраны в `scripts/admin.ts`: `node --import tsx scripts/admin.ts` без аргументов печатает список (модерация, аккаунты, дозаполнение, метрики, перенос полки), а `… scripts/admin.ts moderation queue` равно `… scripts/moderation.ts queue`. Локально то же — `npm run admin -- <группа> <команда>`. Ниже команды записаны прямыми вызовами скриптов, они работают как раньше.
 
 Работают от runtime-роли БД и не печатают токены.
 
@@ -548,14 +550,14 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/moder
 docker compose --env-file hosted.env exec -T app node --import tsx scripts/editorial-content-scan.ts
 ```
 
-`disable` ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` записывается в журнал модерации (`moderation_events`, команда `events`). `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run moderation:reports`, `moderation:queue`, `moderation:approve`, `moderation:unpause`, `moderation:trust`, `moderation:revoke-share`, `moderation:disable`, `moderation:enable`, `moderation:comments`, `moderation:delete-comment`, `moderation:release-comment`, `moderation:takedown`, `moderation:block`, `moderation:unblock`, `moderation:legal-hold`, `moderation:handed-over`, `moderation:purge-artifact`, `moderation:events`, `moderation:sweep`, `editorial:content-scan`.
+`disable` ничего не удаляет: работы и версии остаются, владелец снова видит их после `enable`. Причина `--reason` записывается в журнал модерации (`moderation_events`, команда `events`). `revoke-share` отмечает жалобы на ссылку рассмотренными. Локально те же команды: `npm run admin -- moderation reports`, `admin moderation queue`, `admin moderation approve`, `admin moderation unpause`, `admin moderation trust`, `admin moderation revoke-share`, `admin moderation disable`, `admin moderation enable`, `admin moderation comments`, `admin moderation delete-comment`, `admin moderation release-comment`, `admin moderation takedown`, `admin moderation block`, `admin moderation unblock`, `admin moderation legal-hold`, `admin moderation handed-over`, `admin moderation purge-artifact`, `admin moderation events`, `admin moderation sweep`, `admin editorial content-scan`.
 
 ### Требование госоргана или правообладателя: порядок на 24 часа
 
 Цель — исполнить за 1–4 часа в рабочее время и не позже 24 часов всегда. После суток провайдер хостинга (Yandex Cloud) обязан ограничить доступ сам и может закрыть весь ресурс.
 
 1. **Проверить подлинность.** Мошенники рассылают письма «от Роскомнадзора». Запись о ресурсе проверяется на [eais.rkn.gov.ru](https://eais.rkn.gov.ru/) и [blocklist.rkn.gov.ru](https://blocklist.rkn.gov.ru/); требование через Yandex Cloud приходит в консоль аккаунта. Правообладатель должен указать, кто он, что нарушено, ссылку Полки и что не разрешал использование (Соглашение, п. 8).
-2. **Найти, что закрыть.** Ссылка из требования (`https://polochka.app/s#…`) — это цель для `takedown`. Если указана работа или автор — их id: `moderation:events -- <id>` и `moderation:reports` помогают сопоставить.
+2. **Найти, что закрыть.** Ссылка из требования (`https://polochka.app/s#…`) — это цель для `takedown`. Если указана работа или автор — их id: `admin moderation events <id>` и `admin moderation reports` помогают сопоставить.
 3. **Заблокировать** одной командой — она закрывает все ссылки на версию, изолирует содержимое по категории, пишет событие в журнал с основанием и печатает квитанцию:
 
    ```sh
@@ -635,9 +637,9 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
 - **Страница** `https://<домен>/ops/metrics` — спрашивает `OPS_STATUS_TOKEN` (хранит его только во вкладке) и показывает таблицы: воронку по неделям регистрации (посещения → регистрации → подключили агента → первое сохранение → первая ссылка → ссылку открыли) с конверсиями, блок «Получатели → регистрации» (открытия ссылок → показы подсказки → карточка → нажатия по действиям → регистрации с `ref:share`/`ref:share-remix`), источники → регистрации, клиенты агентов, удержание D1/D7/D30 по неделям регистрации, активность по неделям и итоги за всё время. Без токена в конфигурации страницы нет (404).
 - **JSON** — `GET /api/ops/metrics?weeks=12` с `Authorization: Bearer <OPS_STATUS_TOKEN>` (1–56 недель); определения метрик — в поле `definitions`.
-- **CLI** — `npm run metrics` (или `docker compose --env-file hosted.env exec app npx tsx scripts/metrics.ts`), `-- --weeks 26`, `-- --json`.
+- **CLI** — `npm run admin -- metrics summary` (или `docker compose --env-file hosted.env exec app npx tsx scripts/admin.ts metrics summary`), с `--weeks 26` или `--json`.
 
-Возражение против статистики (политика, раздел 3): `npm run metrics -- forget <id|логин|почта>` удаляет события аккаунта и больше их не записывает.
+Возражение против статистики (политика, раздел 3): `npm run admin -- metrics summary forget <id|логин|почта>` удаляет события аккаунта и больше их не записывает.
 
 ## Логи
 

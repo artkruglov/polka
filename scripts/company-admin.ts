@@ -2,14 +2,14 @@
 // TEAM_SHELVES.md). Finds the account by login or e-mail and sets or clears
 // accounts.company_admin. Prints the account id only.
 //
-//   npm run company:admin -- anna@example.ru
-//   npm run company:admin -- anna@example.ru --revoke
+//   npm run admin -- company admin anna@example.ru
+//   npm run admin -- company admin anna@example.ru --revoke
 import { db } from "../apps/server/db.ts";
 
 const who = process.argv[2];
 const revoke = process.argv.includes("--revoke");
 if (!who || who.startsWith("--")) {
-  console.error("Use npm run company:admin -- <login or e-mail> [--revoke]");
+  console.error("Use npm run admin -- company admin <login or e-mail> [--revoke]");
   process.exitCode = 2;
 } else {
   try {

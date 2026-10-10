@@ -169,7 +169,7 @@ npm run local:setup              # .env с уникальными секрета
 npm run infra:up                 # PostgreSQL 16 + MinIO, только 127.0.0.1; первый раз MinIO собирается из исходников, ~10 минут
 npm run db:migrate
 npm run storage:bootstrap-local  # versioned bucket и проверка его возможностей
-npm run account:create -- demo --generate   # логин и пароль в .local/demo-account.txt
+npm run admin -- account create demo --generate   # логин и пароль в .local/demo-account.txt
 npm run build
 npm run dev                      # http://127.0.0.1:4390
 ```
