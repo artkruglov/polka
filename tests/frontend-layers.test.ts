@@ -3,8 +3,7 @@ import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-// @ts-expect-error Build-time JS checker is deliberately importable without invoking its CLI.
-import { checkSource, checkTree } from "../scripts/check-frontend-layers.mjs";
+import { checkSource, checkTree } from "../scripts/check-frontend-layers.ts";
 const root = resolve("apps/web/src"),
   file = resolve(root, "features/example/index.tsx");
 const check = (source: string) => checkSource(file, source, root);
