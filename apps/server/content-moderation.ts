@@ -60,6 +60,7 @@ export function resetRetention() {
   retentionTable = null;
 }
 import { levelOf, type FilterResult } from "./content-filter/scanner.ts";
+import { log } from "./log.ts";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -543,7 +544,7 @@ async function purgeBlockLocked(blockId: string, options: { now?: boolean; actor
       details: { objectVersionsDeleted: versions, sha256: block.sha256 },
     });
   });
-  console.info(JSON.stringify({ event: "moderation.content_deleted", versions }));
+  log.info({ event: "moderation.content_deleted", versions });
   return { purged: true, versions };
 }
 
@@ -583,7 +584,7 @@ export async function remindDueBlocks(limit = 50, send: typeof sendMail = sendMa
         ].join("\n"),
       });
     } catch {
-      console.error(JSON.stringify({ event: "moderation.mail_failed", kind: "reminder" }));
+      log.error({ event: "moderation.mail_failed", kind: "reminder" });
       return 0;
     }
   }
@@ -631,7 +632,7 @@ export async function purgeDueBlocks(limit = 50) {
     try {
       if ((await purgeBlock(row.id)).purged) purged++;
     } catch {
-      console.error(JSON.stringify({ event: "moderation.delete_failed" }));
+      log.error({ event: "moderation.delete_failed" });
     }
   }
   return purged;
@@ -748,7 +749,7 @@ function pump() {
     const revisionId = queue.shift()!;
     running++;
     reviewRevision(revisionId)
-      .catch(() => console.error(JSON.stringify({ event: "moderation.model_review_failed" })))
+      .catch(() => log.error({ event: "moderation.model_review_failed" }))
       .finally(() => {
         running--;
         queued.delete(revisionId);
@@ -917,7 +918,7 @@ export async function revisionMaterial(revision: any) {
 async function charge(costRub: number) {
   // spend() is true once a day, for the call that used the budget up.
   if (!(await spend(costRub))) return;
-  console.error(JSON.stringify({ event: "moderation.model_budget_spent" }));
+  log.error({ event: "moderation.model_budget_spent" });
   if (config.OPERATOR_EMAIL && config.MAIL_MODE !== "disabled")
     await sendMail({
       to: config.OPERATOR_EMAIL,

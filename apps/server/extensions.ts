@@ -19,6 +19,7 @@ import type {
 import { createRedactor } from "../../scripts/polka-sessions.mjs";
 import { config } from "./config.ts";
 import { Problem } from "./errors.ts";
+import { log } from "./log.ts";
 
 let loaded: PolkaExtension[] = [];
 let configured = false;
@@ -110,14 +111,12 @@ export function emitEvent(event: PolkaEvent) {
     Promise.resolve()
       .then(() => extension.onEvent!(event))
       .catch((error) =>
-        console.error(
-          JSON.stringify({
-            event: "extension.event_failed",
-            extension: extension.name,
-            type: event.type,
-            error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
-          }),
-        ),
+        log.error({
+          event: "extension.event_failed",
+          extension: extension.name,
+          type: event.type,
+          error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+        }),
       );
   }
 }

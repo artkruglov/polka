@@ -21,6 +21,7 @@ import { limitAttempts } from "./auth.ts";
 import { sendMail } from "./mailer.ts";
 import { libraryInviteMail } from "./mail-templates/library-invite.ts";
 import { HOSTED_MAIL_SITE } from "./mail-templates/login-code.ts";
+import { log } from "./log.ts";
 
 // Mutations take FOR UPDATE; read-only listings take FOR SHARE, which still
 // waits for (and rechecks after) a concurrent revoke, disable or archive but
@@ -382,7 +383,7 @@ async function sendInvitationMail(
     );
     return "sent";
   } catch {
-    console.error(JSON.stringify({ event: "template_library.invitation_mail_failed" }));
+    log.error({ event: "template_library.invitation_mail_failed" });
     return "failed";
   }
 }

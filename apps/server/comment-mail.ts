@@ -17,6 +17,7 @@ import { db, errorFacts, inBackground } from "./db.ts";
 import { LOCAL_COMMENT_MAIL_DIRECTORY, sendMail } from "./mailer.ts";
 import { clean } from "./moderation.ts";
 import { describeFindings, findingsOf } from "./content-filter/policy.ts";
+import { log } from "./log.ts";
 
 export type CommentNotice =
   | { kind: "comment"; commentId: string }
@@ -224,15 +225,13 @@ async function sendCommentLetters(commentId: string) {
   }
   // One line per comment with a lost letter: how many left, how many not.
   if (failed)
-    console.error(
-      JSON.stringify({
-        event: "comment.mail_failed",
-        kind: "comment",
-        sent: sent.filter(Boolean).length,
-        failed,
-        code: failure?.code ?? "internal",
-      }),
-    );
+    log.error({
+      event: "comment.mail_failed",
+      kind: "comment",
+      sent: sent.filter(Boolean).length,
+      failed,
+      code: failure?.code ?? "internal",
+    });
   return sent;
 }
 
@@ -305,13 +304,11 @@ export async function sendCommentNotice(notice: CommentNotice) {
   try {
     return notice.kind === "comment" ? await sendCommentLetters(notice.commentId) : await sendOperatorLetter(notice);
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "comment.mail_failed",
-        kind: notice.kind,
-        code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
-      }),
-    );
+    log.error({
+      event: "comment.mail_failed",
+      kind: notice.kind,
+      code: typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "internal",
+    });
     return null;
   }
 }

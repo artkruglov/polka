@@ -79,6 +79,7 @@ import {
   renameFolderFromAgent,
 } from "./agent-folders.ts";
 import { agentPublishInputSchema, publishFromAgent, publishToolDescription } from "./agent-publish.ts";
+import { log } from "./log.ts";
 
 const API_VERSION = "mcp-capture-v1";
 // serverInfo reports the release the operator deployed, not a separate label.
@@ -339,15 +340,13 @@ export function toolErrorDetail(error: unknown): Record<string, unknown> & {
 function toolFailure(tool: string, error: unknown) {
   const detail = toolErrorDetail(error);
   const facts = errorFacts(error);
-  console.error(
-    JSON.stringify({
-      event: "mcp.tool.failed",
-      tool,
-      code: detail.code,
-      // An unexpected failure: its kind (never its text) for the operator.
-      ...(detail.code === "internal" ? { error: facts.name, sqlstate: facts.code } : {}),
-    }),
-  );
+  log.error({
+    event: "mcp.tool.failed",
+    tool,
+    code: detail.code,
+    // An unexpected failure: its kind (never its text) for the operator.
+    ...(detail.code === "internal" ? { error: facts.name, sqlstate: facts.code } : {}),
+  });
   return {
     content: [{ type: "text" as const, text: JSON.stringify(detail) }],
     structuredContent: detail,

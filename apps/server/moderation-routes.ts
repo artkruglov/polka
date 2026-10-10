@@ -26,6 +26,7 @@ import { verifyModerationToken, type ModerationAction, type ModerationToken } fr
 import { describeSignals } from "./phishing-signals.ts";
 import { issueShareGrant } from "./share-grants.ts";
 import { authorStanding, SIGNED_UP_SQL } from "./share-moderation.ts";
+import { log } from "./log.ts";
 
 const body = z
   .object({
@@ -246,14 +247,12 @@ export function registerModerationRoutes(app: FastifyInstance) {
     const token = await verified(req);
     try {
       const outcome = await perform(token, blockOptions(req));
-      console.info(
-        JSON.stringify({
-          event: "moderation.action",
-          action: token.action,
-          shareId: token.shareId,
-          changed: outcome.changed,
-        }),
-      );
+      log.info({
+        event: "moderation.action",
+        action: token.action,
+        shareId: token.shareId,
+        changed: outcome.changed,
+      });
       return { action: token.action, ...outcome };
     } catch (error) {
       if (error instanceof ModerationError) throw missing();

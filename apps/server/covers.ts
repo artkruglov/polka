@@ -21,6 +21,7 @@ import {
   derivativePreferenceSql,
 } from "./bundle-runtime-contract.ts";
 import { isStaticSingleFileBundle } from "./revision-manifest.ts";
+import { log } from "./log.ts";
 
 /*
  * Shelf covers (docs/specs/SHELF_COVERS.md). A card asks once per version
@@ -271,7 +272,7 @@ async function pump() {
       try {
         await drawCover(next!);
       } catch {
-        console.error(JSON.stringify({ event: "cover.snapshot_failed" }));
+        log.error({ event: "cover.snapshot_failed" });
       }
     }
   } finally {
