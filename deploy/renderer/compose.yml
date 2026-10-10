@@ -31,7 +31,9 @@ services:
     tmpfs: ["/tmp:rw,nosuid,size=256m"]
     shm_size: 256m
     cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    # Docker's default seccomp profile plus the namespaces and chroot that
+    # Chromium's own sandbox needs (README.md, «Песочница Chromium»).
+    security_opt: ["no-new-privileges:true", "seccomp=./seccomp-chromium.json"]
     stop_grace_period: 20s
     logging: *logging
     deploy:

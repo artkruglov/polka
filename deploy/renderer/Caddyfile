@@ -2,6 +2,9 @@
 # group is the first gate (README.md), the HMAC signature the last.
 {
 	admin off
+	# A client that reaches the renderer by IP (tls internal, README.md) sends
+	# no server name; the renderer's own name is the default.
+	default_sni {$RENDERER_HOST}
 }
 
 {$RENDERER_HOST} {

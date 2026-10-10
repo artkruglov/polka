@@ -42,14 +42,25 @@
    yc compute instance update <имя-vm> \
      --metadata-options gce-http-endpoint=disabled,aws-v1-http-endpoint=disabled
    ```
-   Дополнительно закройте контейнерам путь к metadata и приватным сетям правилом `DOCKER-USER`, на случай если Chromium когда-нибудь обойдёт прокси:
+   Дополнительно закройте контейнерам путь к metadata и приватным сетям правилом `DOCKER-USER`, на случай если Chromium когда-нибудь обойдёт прокси. Первые три правила обязательны: без них в Yandex Cloud перестают работать DNS (резолвер облака — `<подсеть>.2`, в 10.0.0.0/8) и ответы Caddy основной VM, если она ходит по внутреннему адресу:
    ```bash
-   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d 169.254.0.0/16 -j DROP
-   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d 10.0.0.0/8 -j DROP
    sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d 192.168.0.0/16 -j DROP
+   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d 10.0.0.0/8 -j DROP
+   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d 169.254.0.0/16 -j DROP
+   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d <адрес резолвера>/32 -p udp --dport 53 -j RETURN
+   sudo iptables -I DOCKER-USER -s 172.16.0.0/12 -d <адрес резолвера>/32 -p tcp --dport 53 -j RETURN
+   sudo iptables -I DOCKER-USER 1 -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
    sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save
    ```
-4. **Docker.** Установите Docker Engine и плагин compose по [официальной инструкции](https://docs.docker.com/engine/install/ubuntu/).
+   Если группа безопасности выпускает DNS только к резолверу облака, скажите Docker ходить к нему же: `{"dns": ["<адрес резолвера>"]}` в `/etc/docker/daemon.json`. Иначе сборка образа обращается к 8.8.8.8 и `npm ci` падает с `EAI_AGAIN`.
+4. **Docker.** Установите Docker Engine и плагин compose по [официальной инструкции](https://docs.docker.com/engine/install/ubuntu/) или из пакетов Ubuntu (`docker.io docker-compose-v2`).
+   **Песочница Chromium.** Ей нужны непривилегированные user namespaces, а образ Ubuntu 24.04 в Yandex Cloud их запрещает (`kernel.unprivileged_userns_clone = 0` в `/etc/sysctl.conf`); тогда рендерер падает с `No usable sandbox!` и перезапускается по кругу. На машине, где нет ничего, кроме рендерера, разрешите их:
+   ```bash
+   sudo sed -i '/unprivileged_userns/d' /etc/sysctl.conf
+   printf 'kernel.unprivileged_userns_clone=1\nkernel.apparmor_restrict_unprivileged_userns=0\n' | sudo tee /etc/sysctl.d/99-zz-renderer-userns.conf
+   sudo sysctl --system
+   ```
+   Внутри контейнера те же вызовы закрывает стандартный профиль seccomp Docker. Поэтому compose подключает [seccomp-chromium.json](seccomp-chromium.json): это стандартный профиль Docker ([moby/profiles](https://github.com/moby/profiles/blob/245180c51918481c0525424b3ee025d2b435d46c/seccomp/default.json), seccomp/v0.2.4), в котором дополнительно разрешены только `clone`, `unshare`, `setns` и `chroot`, без `CAP_SYS_ADMIN`. Capabilities контейнеру по-прежнему не даются.
 5. **Код и env.** Нужен только этот репозиторий, без секретов Полки:
    ```bash
    git clone https://github.com/artkruglov/polka.git && cd polka/deploy/renderer
@@ -71,7 +82,7 @@
    ```
    Затем `docker compose --env-file hosted.env up -d`. Проверьте, что в `curl -s https://<APP_HOST>/api/imports/capabilities` в `sources` есть `rendered-spa`.
 
-**Без Let's Encrypt (порт 80 закрыт).** В `Caddyfile` добавьте в блок сайта `tls internal`. Затем скопируйте корневой сертификат Caddy (`docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt`) в `RENDERER_CA` основной VM (PEM, одной строкой с `\n`). Приложение будет доверять только ему. Если основная VM и рендерер в одной сети VPC, `RENDERER_URL` может указывать на внутренний адрес. TLS при этом остаётся, HTTP разрешён только для loopback и адресов Docker-сети.
+**Без Let's Encrypt (порт 80 закрыт).** В `Caddyfile` добавьте в блок сайта `tls internal`. `RENDERER_HOST` может быть и IP-адресом (внутренним в VPC): тогда клиент не присылает имя сервера (SNI), и Caddy берёт его из `default_sni`. Затем скопируйте корневой сертификат Caddy (`docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt`) в `RENDERER_CA` основной VM (PEM одной строкой, переводы строк — `\n` с одной обратной косой чертой; с двумя проверка сертификата падает с `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`). Приложение будет доверять только ему. Если основная VM и рендерер в одной сети VPC, `RENDERER_URL` может указывать на внутренний адрес. TLS при этом остаётся, HTTP разрешён только для loopback и адресов Docker-сети.
 
 **Ресурсы.** Chromium с одной страницей занимает 300–700 МБ, пиково до 1 ГБ. Лимит контейнера — 1,5 ГБ RAM, 1,5 CPU, 256 процессов. 2 ГБ на VM хватает, 4 ГБ дают запас для тяжёлых страниц. Одна ссылка рендерится 6–14 с.
 
