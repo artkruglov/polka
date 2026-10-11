@@ -50,8 +50,9 @@ function servedByVite(method: string, url: string) {
  * through unchanged and the server refuses it as before.
  */
 function serverProxy(env: Record<string, string>, webOrigin: string): ProxyOptions {
-  const server = `http://127.0.0.1:${env.PORT ?? 4390}`;
-  const appOrigin = env.APP_ORIGIN ?? server;
+  // An empty value in .env (`APP_ORIGIN=`) counts as unset.
+  const server = `http://127.0.0.1:${env.PORT || 4390}`;
+  const appOrigin = env.APP_ORIGIN || server;
   return {
     target: server,
     changeOrigin: true,
@@ -69,7 +70,8 @@ export default defineConfig(({ command, mode }) => {
   // The repository's .env (PORT, APP_ORIGIN, WEB_DEV_PORT) for this config
   // only; nothing from it reaches the client.
   const env = loadEnv(mode, join(root, "../.."), "");
-  const port = Number(env.WEB_DEV_PORT ?? Number(env.PORT ?? 4390) + 2);
+  // `WEB_DEV_PORT=` left empty means the default, not port 0.
+  const port = Number(env.WEB_DEV_PORT || Number(env.PORT || 4390) + 2);
   return {
     root,
     // React Fast Refresh in the dev server only; the build stays as it was.
