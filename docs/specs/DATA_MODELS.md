@@ -83,7 +83,7 @@ ALTER TABLE audit_outbox ADD COLUMN payload jsonb NULL;
 - Новые: `owner.changed`, `revision.accepted`.
 - `payload` только типизированный и без содержимого работы: тип, id, актор, id ревизии.
 - Чтение: `GET /api/v1/events?after=<cursor>`; курсор `tx_id:id` (транзакция записи и `bigserial`). Порядок по `(tx_id, id)`, видны только записи транзакций старше любой ещё открытой (`pg_snapshot_xmin`): так запись, закоммиченная позже соседей с меньшим номером, не теряется (колонка `tx_id xid8`, миграция 055). Долгая открытая транзакция в базе задерживает ленту. Без `after` лента отдаёт пустой список и текущий конец; `after=0` — с начала истории. Реализовано 01.10.2026: в ленте `revision.saved`, `revision.accepted`, `owner.changed` и `artifact.metadata_updated/moved/trashed/restored`, права `read`, токен с ограничением по папкам видит только их работы по текущей папке работы; `payload` пишут `revision.saved`, `revision.accepted`, `owner.changed` (только id).
-- Вебхуки позже: `webhook_subscriptions` и `webhook_deliveries` (подпись HMAC, повторы, `delivery_id`, запрет приватных адресов), только когда пилот потребует push.
+- Вебхуки — с 12.10.2026 ([WEBHOOKS](WEBHOOKS.md), миграция 071): `webhook_endpoints` и `webhook_deliveries` (подпись HMAC, повторы, `Polka-Delivery`, запрет непубличных адресов) и курсор рассылки `webhook_dispatch_cursor` по тому же `(tx_id, id)`. Тело — событие этой ленты; вебхуку доступны ещё `share.enabled`, `share.revoked` и `comment.created` (строку `comment.created` ядро пишет в `audit_outbox` с 12.10.2026).
 
 ## 6. Карточка полки
 

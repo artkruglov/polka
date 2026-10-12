@@ -59,6 +59,8 @@ x-runtime-env: &runtime-env
   TEAM_SHELVES: ${TEAM_SHELVES:-off}
   # installation (the installation is one company) | organisation (a shared cloud).
   TEAM_SHELVES_SCOPE: ${TEAM_SHELVES_SCOPE:-installation}
+  # Webhooks (docs/specs/WEBHOOKS.md): off | on.
+  WEBHOOKS: ${WEBHOOKS:-off}
   # Agent sessions (docs/specs/AGENT_SESSIONS.md): bytes every personal shelf
   # may hold (0: only shelves the operator enabled), model prices for the cost
   # estimate, fingerprints per shelf or for the installation, the notice people

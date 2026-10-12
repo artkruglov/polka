@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 70 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 70);
+test("migration catalog is the complete contiguous schema 71 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 71);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -114,12 +114,27 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>70\n/, recipe);
-    assert.match(text, /001 through 070/, recipe);
+    assert.match(text, /schema_migrations\)<>71\n/, recipe);
+    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>71 THEN/, recipe);
+    assert.match(text, /001 through 071/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
   assert.match(video, /mime IN \('video\/mp4','video\/webm'\) AND size <= 209715200/);
+});
+
+test("071 webhooks: no work content, encrypted secret, erased with the account", async () => {
+  const sql = await readFile(migrationFileUrl("071_webhooks.sql"), "utf8");
+  assert.match(sql, /CREATE TABLE webhook_endpoints/);
+  assert.match(sql, /secret_enc bytea NOT NULL/);
+  assert.doesNotMatch(sql.replace(/^--.*$/gm, ""), /\bsecret text\b/);
+  assert.match(sql, /response_snippet text CHECK \(char_length\(response_snippet\) <= 200\)/);
+  assert.match(sql, /endpoint_id uuid NOT NULL REFERENCES webhook_endpoints\(id\) ON DELETE CASCADE/);
+  assert.match(sql, /LANGUAGE plpgsql SECURITY DEFINER\nSET search_path=pg_catalog,public,pg_temp/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION erase_account_webhooks\(\) FROM PUBLIC/);
+  assert.match(sql, /AFTER UPDATE OF deletion_requested_at,name ON accounts/);
+  const grants = await readFile(new URL("../deploy/runtime-grants.sql", import.meta.url), "utf8");
+  assert.match(grants, /public\.webhook_endpoints, public\.webhook_deliveries/);
 });
 
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {

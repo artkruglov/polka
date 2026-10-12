@@ -20,6 +20,7 @@ import { UploadPanel } from "../../features/upload-artifact/index.tsx";
 import { SharePanel } from "../../features/share-artifact/index.tsx";
 import { ServiceAccountsSection } from "../../features/service-accounts/index.tsx";
 import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
+import { WebhooksSection } from "../../features/webhooks/index.tsx";
 import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
 import { ProposeToFeedPanel } from "../../features/propose-to-feed/index.tsx";
 import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
@@ -629,6 +630,7 @@ export function App() {
           {shelfAccess(team, account.id).curate && (
             <ServiceAccountsSection accountId={account.id} admin={team.role === "admin"} />
           )}
+          {team.role === "admin" && <WebhooksSection />}
         </ShelfMembersPanel>
       )}
       {(panel === "upload" || panel === "version") && (

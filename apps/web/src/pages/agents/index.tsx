@@ -33,6 +33,7 @@ import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { useShelves } from "../../entities/shelf/model.ts";
 import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
+import { WebhooksSection } from "../../features/webhooks/index.tsx";
 import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
 
 const clientDefaults = {
@@ -847,6 +848,7 @@ export function AgentConnections() {
         </details>
 
         {account && !account.provisional && <ShelfCardSection canEdit />}
+        {account && !account.provisional && <WebhooksSection />}
 
         <section className="agent-card agent-existing" aria-labelledby="agent-list-title">
           <div className="agent-card-heading">

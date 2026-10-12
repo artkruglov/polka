@@ -67,6 +67,8 @@
   "tests/agent-workspace.test.ts",
   "tests/rest-mcp-parity.test.ts",
   "tests/service-accounts.test.ts",
+  "tests/webhooks-send.test.ts",
+  "tests/webhooks.test.ts",
   "tests/team-shelves-agents.test.ts",
   "tests/company-admin.test.ts",
   "tests/organisations.test.ts",

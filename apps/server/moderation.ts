@@ -708,8 +708,27 @@ export async function releaseCommentAsOperator(id: string) {
         changed: false,
         message: "Комментарий не скрыт; ничего не изменилось.",
       };
-    await c.query("UPDATE comments SET held_at=NULL WHERE id=$1", [id]);
+    const {
+      rows: [shown],
+    } = await c.query(
+      `UPDATE comments SET held_at=NULL WHERE id=$1
+       RETURNING tenant_id,author_account_id,artifact_id,revision_id,shadow,blocked_at`,
+      [id],
+    );
     await c.query("UPDATE share_reports SET status='dismissed' WHERE comment_id=$1 AND status='new'", [id]);
+    // Now others see it: the shelf's journal gets it, as an unheld comment
+    // would have at once (comments.ts; webhooks, docs/specs/WEBHOOKS.md).
+    if (!shown.shadow && !shown.blocked_at)
+      await c.query(
+        `INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,payload)
+         VALUES($1,$2,'comment.created',$3,'human',$4)`,
+        [
+          shown.tenant_id,
+          shown.author_account_id,
+          id,
+          { artifactId: shown.artifact_id, revisionId: shown.revision_id },
+        ],
+      );
     return {
       id,
       changed: true,

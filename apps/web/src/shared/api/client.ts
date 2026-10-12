@@ -14,6 +14,7 @@ import type {
 import type { ReportReason } from "../../../../../packages/contracts/constants.ts";
 import type { RevisionCover } from "../../../../../packages/contracts/cover.ts";
 import type { FeedProposal } from "../../../../../packages/contracts/feed-proposal.ts";
+import type { Webhook, WebhookDelivery, WebhookEvent } from "../../../../../packages/contracts/webhooks.ts";
 import type {
   CommentAnchor,
   Reaction,
@@ -372,6 +373,17 @@ export const client = {
     disable: (id: string) => request<{ ok: true }>(`/service-accounts/${id}/disable`, {}),
     setResponsible: (id: string, accountId: string) =>
       request<{ token: string }>(`/service-accounts/${id}/responsible`, { accountId }, "PUT"),
+  },
+  webhooks: {
+    list: () => request<{ items: Webhook[]; events: WebhookEvent[] }>("/webhooks"),
+    create: (input: { url: string; description: string; events: WebhookEvent[] }) =>
+      request<{ webhook: Webhook; secret: string }>("/webhooks", input),
+    update: (id: string, input: { url?: string; description?: string; events?: WebhookEvent[]; enabled?: boolean }) =>
+      request<{ webhook: Webhook }>(`/webhooks/${id}`, input, "PATCH"),
+    remove: (id: string) => request<{ ok: true }>(`/webhooks/${id}`, undefined, "DELETE"),
+    rotate: (id: string) => request<{ webhook: Webhook; secret: string }>(`/webhooks/${id}/rotate`, {}),
+    ping: (id: string) => request<{ delivery: WebhookDelivery }>(`/webhooks/${id}/ping`, {}),
+    deliveries: (id: string) => request<{ items: WebhookDelivery[] }>(`/webhooks/${id}/deliveries`),
   },
   shelfCard: () => request<{ cardMd: string | null }>("/shelf/card"),
   setShelfCard: (cardMd: string | null) => request<{ cardMd: string | null }>("/shelf/card", { cardMd }, "PUT"),
