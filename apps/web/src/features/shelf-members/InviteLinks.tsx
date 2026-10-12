@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link2 } from "lucide-react";
-import { client, type ShelfInvitation } from "../../shared/api/client.ts";
+import { client, type ShelfDirectAdd, type ShelfInvitation } from "../../shared/api/client.ts";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
 import { Button, SelectField } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
@@ -43,12 +43,24 @@ export function invitationSummary(item: ShelfInvitation) {
 }
 
 /**
+ * Whom a link is for. With the organisation rule (TEAM_SHELVES_SCOPE=organisation)
+ * only its staff with a verified work address are added directly, so a link
+ * is also for people who have signed in already.
+ */
+export function inviteAudience(directAdd: ShelfDirectAdd = { scope: "installation" }) {
+  return directAdd.scope === "installation"
+    ? "Для тех, кто ещё ни разу не входил в Полку."
+    : "Для всех, кого нельзя добавить сразу: кто ещё не входил в Полку, у кого нет подтверждённой рабочей почты или кто не из вашей организации.";
+}
+
+/**
  * The form and the list, without loading: what the panel shows and the
  * render test checks.
  */
 export function InviteLinksView({
   inviter,
   accountId,
+  directAdd,
   items,
   created,
   busy,
@@ -58,6 +70,7 @@ export function InviteLinksView({
 }: {
   inviter: Inviter;
   accountId: string;
+  directAdd?: ShelfDirectAdd;
   items: ShelfInvitation[] | null;
   created: { id: string; url: string; summary: string } | null;
   busy: boolean;
@@ -74,8 +87,8 @@ export function InviteLinksView({
     <section className="shelf-invite-links" aria-label="Приглашение ссылкой">
       <h3>Пригласить ссылкой</h3>
       <p className="shelf-members-lead">
-        Для тех, кто ещё ни разу не входил в Полку. Отправьте ссылку в рабочий чат: кто откроет её и войдёт, окажется на
-        полке с выбранной ролью.
+        {inviteAudience(directAdd)} Отправьте ссылку в рабочий чат: кто откроет её и войдёт, окажется на полке с
+        выбранной ролью.
         {inviter === "curator" && " Кураторов приглашает администратор."}
       </p>
       <form
@@ -144,7 +157,7 @@ export function InviteLinksView({
               <li key={item.id}>
                 <span>
                   {invitationSummary(item)}
-                  {item.inviterName && <small>создал {item.inviterName}</small>}
+                  {item.inviterName && <small>автор ссылки: {item.inviterName}</small>}
                 </span>
                 {(inviter === "admin" || item.invitedBy === accountId) && (
                   <Button variant="quiet" disabled={busy} onClick={() => onRevoke(item)}>
@@ -165,10 +178,15 @@ export function ShelfInviteLinks({
   shelfId,
   inviter,
   accountId,
+  directAdd,
+  onCreated,
 }: {
   shelfId: string;
   inviter: Inviter;
   accountId: string;
+  directAdd?: ShelfDirectAdd;
+  /** A link is ready: the panel drops the direct-add error it answered. */
+  onCreated?: () => void;
 }) {
   const [items, setItems] = useState<ShelfInvitation[] | null>(null),
     [created, setCreated] = useState<{ id: string; url: string; summary: string } | null>(null),
@@ -203,6 +221,7 @@ export function ShelfInviteLinks({
     <InviteLinksView
       inviter={inviter}
       accountId={accountId}
+      directAdd={directAdd}
       items={items}
       created={created}
       busy={busy}
@@ -210,7 +229,9 @@ export function ShelfInviteLinks({
       onCreate={(input) =>
         void act(async () => {
           const link = await client.createShelfInvitation(shelfId, input);
-          if (live.current) setCreated({ id: link.id, url: link.invitationUrl, summary: invitationSummary(link) });
+          if (!live.current) return;
+          setCreated({ id: link.id, url: link.invitationUrl, summary: invitationSummary(link) });
+          onCreated?.();
         })
       }
       onRevoke={(item) =>

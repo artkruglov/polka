@@ -7,6 +7,7 @@ import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { ROLE_LABEL, switchShelf } from "../../entities/shelf/model.ts";
 import type { ShelfRole } from "../../shared/api/client.ts";
 import { ensureExtensions, useSlot } from "../../shared/extensions/index.ts";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import "./styles.css";
 
 // The company admin's page (docs/specs/TEAM_SHELVES.md, stage 4): every
@@ -117,10 +118,22 @@ function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => 
 }
 
 /**
+ * What happens to the person's sign-in. Offboarding closes department shelves
+ * only: sign-in itself is closed by the company's SSO when an extension
+ * provides one; on a shared cloud the person keeps the account and personal
+ * shelf; on an own installation its operator disables the account.
+ */
+export function signInAfterOffboarding(sso: boolean, cloud: boolean) {
+  if (sso) return "Вход в Полку закрывается в SSO компании.";
+  if (cloud) return "Аккаунт и личная полка остаются у человека: компания закрывает доступ только к своим полкам.";
+  return "Чтобы закрыть и вход в Полку, попросите того, кто обслуживает установку, отключить аккаунт.";
+}
+
+/**
  * everywhere: «со всех полок отделов», or on a shared cloud «… компании»: the
  * other companies' shelves are not this admin's.
  */
-function Offboarding({ everywhere }: { everywhere: string }) {
+function Offboarding({ everywhere, signIn }: { everywhere: string; signIn: string }) {
   const [who, setWho] = useState("");
   const [person, setPerson] = useState<Employee | null>(null);
   const [busy, setBusy] = useState(false);
@@ -154,7 +167,7 @@ function Offboarding({ everywhere }: { everywhere: string }) {
       const { removed } = await company.offboard(person.accountId);
       setDone(
         removed.length
-          ? `${person.name} убран с полок: ${removed.map((shelf) => `«${shelf.name}»`).join(", ")}. Его агенты на этих полках отключены, работы остались.`
+          ? `${person.name} больше не на полках ${removed.map((shelf) => `«${shelf.name}»`).join(", ")}. Агенты сотрудника на этих полках отключены, работы остались.`
           : `${person.name} уже не состоит ни в одной полке отдела.`,
       );
       setPerson({ ...person, shelves: [], teamAgents: 0 });
@@ -169,8 +182,8 @@ function Offboarding({ everywhere }: { everywhere: string }) {
     <section className="company-card" aria-labelledby="offboard-title">
       <h2 id="offboard-title">Сотрудник уходит</h2>
       <p className="company-muted">
-        Уберите его {everywhere} одним действием: участие и его агенты на этих полках закроются, работы останутся у
-        отделов. Вход в Полку закрывается в SSO компании.
+        Уберите сотрудника {everywhere} одним действием: участие и агенты сотрудника на этих полках закроются, работы
+        останутся у отделов. {signIn}
       </p>
       <form className="company-find" onSubmit={find}>
         <label className="ui-search">
@@ -214,8 +227,8 @@ function Offboarding({ everywhere }: { everywhere: string }) {
         <Dialog title={`Убрать ${person.name} ${everywhere}?`} busy={busy} onClose={() => !busy && setConfirm(false)}>
           <div className="dialog-body">
             <p>
-              {person.name} перестанет видеть полки {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")}, его
-              агенты на них отключатся. Работы останутся на полках. Где он был единственным администратором,
+              {person.name} перестанет видеть полки {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")},
+              агенты сотрудника на них отключатся. Работы останутся на полках. Там, где других администраторов не было,
               администратором станете вы.
             </p>
           </div>
@@ -235,6 +248,8 @@ function Offboarding({ everywhere }: { everywhere: string }) {
 
 export function CompanyAdmin() {
   const account = useAccount();
+  const capabilities = useCapabilities();
+  const sso = capabilities.status === "ready" && capabilities.capabilities.extensionSignIn.length > 0;
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "denied"; cloud: boolean; contact: string | null }
@@ -254,26 +269,30 @@ export function CompanyAdmin() {
       location.assign(`/signin?next=${encodeURIComponent("/settings/company")}`);
       return;
     }
-    company
+    // Only a company admin (canCreate) asks for the company's shelves: anyone
+    // else would get a 404. On a shared cloud the page says whom a company
+    // writes to.
+    const denied = (shelves: Awaited<ReturnType<typeof client.shelves>> | null) =>
+      setState({ kind: "denied", cloud: shelves?.scope === "organisation", contact: shelves?.contact ?? null });
+    client
       .shelves()
-      .then((page) => setState({ kind: "ready", shelves: page.items, organisation: page.organisation ?? null }))
-      .catch(async (e) => {
-        if (!(e instanceof ApiError && e.status === 404))
-          return setState({ kind: "error", message: (e as Error).message });
-        // On a shared cloud the page says whom a company writes to.
-        const shelves = await client.shelves().catch(() => null);
-        setState({
-          kind: "denied",
-          cloud: shelves?.scope === "organisation",
-          contact: shelves?.contact ?? null,
-        });
+      .catch(() => null)
+      .then(async (shelves) => {
+        if (!shelves?.canCreate) return denied(shelves);
+        try {
+          const page = await company.shelves();
+          setState({ kind: "ready", shelves: page.items, organisation: page.organisation ?? null });
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 404) denied(shelves);
+          else setState({ kind: "error", message: (e as Error).message });
+        }
       });
   }, [account, refresh]);
   return (
     <AppShell current="shelf" account={account}>
       <main className="company-page">
         <header>
-          <span className="eyebrow">Администратор компании</span>
+          {state.kind === "ready" && <span className="eyebrow">Администратор компании</span>}
           <h1>Полки компании</h1>
         </header>
         {state.kind === "loading" && (
@@ -284,7 +303,7 @@ export function CompanyAdmin() {
         {state.kind === "denied" &&
           (state.cloud ? (
             <StatusPanel title="Полки отделов для вашей компании">
-              Полки отделов создаёт и ведёт администратор компании: он заводит полки, добавляет сотрудников и приглашает
+              Полки отделов создаёт и ведёт администратор компании: заводит полки, добавляет сотрудников и приглашает
               коллег ссылкой. Чтобы ваша компания получила полки,{" "}
               {state.contact ? (
                 <>
@@ -293,17 +312,21 @@ export function CompanyAdmin() {
               ) : (
                 "напишите оператору Полки"
               )}{" "}
-              — назначим администратора компании. Он увидит только полки и сотрудников своей компании.
+              — назначим администратора компании. Администратору видны только полки и сотрудники своей компании.
             </StatusPanel>
           ) : (
             <StatusPanel title="Эта страница — для администратора компании">
-              Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
+              Полки отделов создаёт и ведёт администратор компании. Назначает администратора тот, кто обслуживает
+              установку Полки.
             </StatusPanel>
           ))}
         {state.kind === "error" && <StatusPanel title="Не удалось загрузить">{state.message}</StatusPanel>}
         {state.kind === "ready" && (
           <>
-            <Offboarding everywhere={state.organisation ? "со всех полок отделов компании" : "со всех полок отделов"} />
+            <Offboarding
+              everywhere={state.organisation ? "со всех полок отделов компании" : "со всех полок отделов"}
+              signIn={signInAfterOffboarding(sso, Boolean(state.organisation))}
+            />
             {extensionSections.map(({ id, title, Component }) => (
               <section key={id} className="company-card" aria-label={title}>
                 <h2>{title}</h2>

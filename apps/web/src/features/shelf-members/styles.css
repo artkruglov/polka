@@ -135,11 +135,15 @@ span.shelf-members-role {
   margin: 0;
   font-size: var(--text-md);
 }
+/* The role reads «Автор — сохраняет…»: a row of its own, so it is not cut off. */
 .shelf-invite-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
+}
+.shelf-invite-form > .ui-field:first-child {
+  grid-column: 1 / -1;
 }
 .shelf-invite-form > .ui-button {
   grid-column: 1 / -1;

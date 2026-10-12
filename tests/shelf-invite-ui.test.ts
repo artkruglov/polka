@@ -55,6 +55,13 @@ test("the admin offers every role but admin; a curator, readers and authors", ()
   assert.match(admin, /Создать ссылку/);
   for (const text of ["сутки", "3 дня", "неделю", "один человек", "до 50 человек"])
     assert.match(admin, new RegExp(text));
+  // With the organisation rule a link is for anyone not added directly,
+  // people who have signed in already included.
+  const organisation = render({
+    directAdd: { scope: "organisation", organisation: "Acme", domains: ["acme.test"] },
+  });
+  assert.doesNotMatch(organisation, /ещё ни разу не входил/);
+  assert.match(organisation, /кого нельзя добавить сразу/);
   const curator = render({ inviter: "curator" });
   assert.doesNotMatch(curator, /<option value="curator">/);
   assert.match(curator, /Кураторов приглашает администратор/);
@@ -89,7 +96,7 @@ test("active links are listed; a curator revokes only its own", () => {
   const admin = render({ items });
   assert.equal(admin.match(/Отозвать/g)?.length, 2);
   assert.match(admin, /пришли 3 из 10/);
-  assert.match(admin, /создал Борис/);
+  assert.match(admin, /автор ссылки: Борис/);
   const curator = render({ inviter: "curator", items });
   assert.equal(curator.match(/Отозвать/g)?.length, 1);
   assert.match(render({ items: null }), /Загружаем приглашения/);

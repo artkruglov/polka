@@ -667,17 +667,21 @@ test(
       (await call("POST", "/api/auth/email/verify", { id: first.id, code: first.code }, first.cookie)).statusCode,
       401,
     );
+    // A code sign-in proves the address in every mail mode, local included.
+    const verifiedAt = async () =>
+      (await db.query("SELECT email_verified_at FROM accounts WHERE email=$1", [email])).rows[0].email_verified_at;
+    assert.ok(await verifiedAt(), "a sign-up by code marks the address verified");
     const receipt = await save("First artifact from a new email account", {}, cookie);
     assert.ok(receipt.receipt.artifactId);
+    // An address an operator attached (npm run admin -- account email) stays
+    // unverified until its owner signs in by code.
+    await db.query("UPDATE accounts SET email_verified_at=NULL WHERE email=$1", [email]);
     const second = await challenge();
     const again = await call("POST", "/api/auth/email/verify", { id: second.id, code: second.code }, second.cookie);
     assert.equal(again.statusCode, 200);
     const againCookie = `polka_session=${again.cookies.find((c) => c.name === "polka_session")!.value}`;
     assert.equal((await call("GET", "/api/me", undefined, againCookie)).json().id, me.json().id);
-    const {
-      rows: [identity],
-    } = await db.query("SELECT email_verified_at FROM accounts WHERE email=$1", [email]);
-    assert.equal(identity.email_verified_at, null, "local fixture must not assert email ownership");
+    assert.ok(await verifiedAt(), "a sign-in by code marks an unverified address verified");
     const third = await challenge();
     const wrong = third.code === "11111111" ? "22222222" : "11111111";
     for (let i = 0; i < 5; i++)

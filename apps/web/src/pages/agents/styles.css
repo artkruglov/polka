@@ -285,6 +285,9 @@
 /* «Удалить полку»: the last section of the settings. */
 .agent-move-shelf {
   display: grid;
+  /* One shrinkable column: the long curl line scrolls inside its block
+     instead of widening the page on a phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-top: 40px;
   padding-top: 28px;
@@ -531,6 +534,7 @@
   overflow-wrap: anywhere;
 }
 .agent-instruction-block {
+  min-width: 0;
   margin-top: 12px;
 }
 .agent-instruction-block h4 {
@@ -539,6 +543,7 @@
   font-weight: 500;
 }
 .agent-instruction-block pre {
+  max-width: 100%;
   margin-bottom: 10px;
   padding: 14px 16px;
   border: 1px solid var(--line);

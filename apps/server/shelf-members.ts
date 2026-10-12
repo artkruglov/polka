@@ -178,7 +178,7 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
         "not_found",
         scoped
           ? "Сразу добавить можно только сотрудника вашей организации, который уже входил в Полку. Остальных пригласите ссылкой."
-          : "Такого сотрудника нет в Полке. Пусть он один раз войдёт, затем добавьте его снова.",
+          : "Такого сотрудника нет в Полке. Попросите коллегу один раз войти и добавьте снова — или пригласите ссылкой.",
       );
     const target = found.rows[0] as { id: string; name: string };
     const active = await lockAccounts(c, [actor.id, target.id]);

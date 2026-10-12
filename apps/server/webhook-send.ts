@@ -91,10 +91,9 @@ export function webhookUrl(input: string): URL {
   try {
     url = new URL(input.trim());
   } catch {
-    throw new WebhookUrlError("invalid_url", "Нужен полный адрес, начинающийся с https://.");
+    throw new WebhookUrlError("invalid_url", "Нужен полный адрес вебхука, вместе с https в начале.");
   }
-  if (url.protocol !== "https:")
-    throw new WebhookUrlError("invalid_url", "Вебхуки отправляются только на адреса https://.");
+  if (url.protocol !== "https:") throw new WebhookUrlError("invalid_url", "Вебхуки отправляются только по https.");
   if (url.username || url.password)
     throw new WebhookUrlError("invalid_url", "Логин и пароль в адресе не поддерживаются: проверяйте подпись запроса.");
   if (url.port && url.port !== "443")
@@ -102,7 +101,11 @@ export function webhookUrl(input: string): URL {
   const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   // A name without a dot, localhost, .local and .internal name an internal network.
   const internalName = !host.includes(".") || /(^|\.)localhost$|\.local$|\.internal$/.test(host);
-  if (!isIP(host) && internalName) throw new WebhookUrlError("blocked_address", "Адрес указывает на внутреннюю сеть.");
+  if (!isIP(host) && internalName)
+    throw new WebhookUrlError(
+      "blocked_address",
+      "Адрес во внутренней сети: вебхуки отправляются только на адреса в интернете.",
+    );
   url.hash = "";
   if (url.href.length > WEBHOOK_URL_MAX) throw new WebhookUrlError("invalid_url", "Адрес — до 2000 символов.");
   return url;
@@ -125,7 +128,10 @@ export async function resolveWebhookTarget(input: string, resolver: Resolver = n
     }
   if (!addresses.length) throw new WebhookUrlError("dns", "Имя сервера не находится в DNS.");
   if (addresses.some((entry) => !publicAddress(entry.address)))
-    throw new WebhookUrlError("blocked_address", "Адрес указывает на внутреннюю или зарезервированную сеть.");
+    throw new WebhookUrlError(
+      "blocked_address",
+      "Адрес во внутренней сети: вебхуки отправляются только на адреса в интернете.",
+    );
   const ordered = [
     ...addresses.filter((entry) => entry.family === 4),
     ...addresses.filter((entry) => entry.family !== 4),

@@ -775,7 +775,7 @@ function WithdrawDialog({
           required
           maxLength={500}
         />
-        <p className="fine">Личный оригинал автора останется у него. Уже скачанные копии удалить нельзя.</p>
+        <p className="fine">Личный оригинал останется на полке автора. Уже скачанные копии удалить нельзя.</p>
         <ErrorNotice error={error} />
         <Button type="submit" variant="primary" busy={busy}>
           Убрать из библиотеки
