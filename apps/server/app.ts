@@ -265,10 +265,11 @@ export async function createApp() {
         get: getAccount,
         findByEmail: findAccountByEmail,
         provision: provisionAccount,
-        update: updateAccount,
+        update: (id, input) => updateAccount(extension.name, id, input),
         deprovision: (id, input) => deprovisionAccount(extension.name, id, input),
         reactivate: (id) => reactivateAccount(extension.name, id),
-        startSession: (reply, accountId) => startSessionForExtension(extension.name, reply, accountId),
+        startSession: (reply, accountId, previous) =>
+          startSessionForExtension(extension.name, reply, accountId, previous),
       },
       teamShelves: {
         list: listTeamShelves,

@@ -111,7 +111,7 @@ test("a freeze from a department shelf stops the author's agents, not the collea
   assert.equal(await revoked(authorOnShelf), true);
   assert.equal(await revoked(authorOwn), true);
   assert.equal(await revoked(colleagues), false);
-  await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [author.id]);
+  await db.query("UPDATE accounts SET disabled=false,operator_disabled_at=NULL WHERE id=$1", [author.id]);
   // The frozen author's session ended; sign in again for the next tests.
   author = await account("review-author2");
   await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: author.name, role: "author" });

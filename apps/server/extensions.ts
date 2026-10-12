@@ -100,7 +100,17 @@ export const isExtensionSignInPath = (pathname: string) =>
  * The first refusal wins: an extension may keep the core's own sign-in from
  * opening a session (e.g. the address's company signs in through its SSO).
  */
-export async function checkSignIn(attempt: SignInAttempt, c: Pick<PoolClient, "query">) {
+export async function checkSignIn(
+  input: Omit<SignInAttempt, "accountEmail" | "email"> & { email: string | null },
+  c: Pick<PoolClient, "query">,
+) {
+  if (!loaded.some((extension) => extension.policies?.signIn)) return;
+  // The account's own address: a provider or a code may prove another one.
+  const accountEmail = input.accountId
+    ? (((await c.query("SELECT email FROM accounts WHERE id=$1", [input.accountId])).rows[0]?.email as
+        string | null | undefined) ?? null)
+    : null;
+  const attempt: SignInAttempt = { ...input, email: input.email?.toLowerCase() ?? null, accountEmail };
   for (const extension of loaded) {
     const decision: SignInDecision | undefined = await extension.policies?.signIn?.(attempt, c);
     if (decision && !decision.allow)

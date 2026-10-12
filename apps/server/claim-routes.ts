@@ -18,9 +18,10 @@ import { mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "./account-me
 import { trackShelfClaimed } from "./analytics.ts";
 import { assertStrongSession, identity, limitAttempts } from "./auth.ts";
 import { db, transaction } from "./db.ts";
+import { checkSignIn } from "./extensions.ts";
 import { Problem } from "./errors.ts";
-import { peekPending, takePending } from "./sign-in-pending.ts";
-import { IdpError, PROVIDER_NAMES } from "./sign-in-providers.ts";
+import { peekPending, takePending, type CollisionEntry } from "./sign-in-pending.ts";
+import { IdpError, PROVIDER_IDS, PROVIDER_NAMES } from "./sign-in-providers.ts";
 import { CLAIM_COOKIE, CLAIM_COOKIE_PATH, holdCollision, sessionCookie } from "./sign-in-routes.ts";
 import { sha256 } from "./storage.ts";
 import { provisionalHasContent } from "./provisional.ts";
@@ -36,6 +37,29 @@ const METHOD_NAMES: Record<string, () => string> = {
   google: PROVIDER_NAMES.google,
   oidc: PROVIDER_NAMES.oidc,
 };
+
+/**
+ * The extensions' sign-in rules for opening the other shelf (e.g. «только
+ * через SSO» for its address): /claim must not open or merge into a shelf its
+ * own sign-in would refuse. A refused held session is ended.
+ */
+async function assertClaimSignIn(entry: CollisionEntry) {
+  const provider = PROVIDER_IDS.find((id) => id === entry.method);
+  try {
+    await checkSignIn(
+      {
+        method: entry.method === "email" || entry.method === "password" ? entry.method : (provider ?? "link"),
+        ...(provider ? { provider } : {}),
+        email: entry.profile?.email && entry.profile.emailVerified ? entry.profile.email : null,
+        accountId: entry.targetId,
+      },
+      db,
+    );
+  } catch (error) {
+    if (entry.targetSession) await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(entry.targetSession)]);
+    throw error;
+  }
+}
 
 async function issueSession(accountId: string) {
   const token = randomBytes(32).toString("base64url");
@@ -137,6 +161,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
     const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
     clear(reply);
     if (!entry || entry.provisionalId !== actor.id) throw gone();
+    await assertClaimSignIn(entry);
     let report;
     try {
       report = await mergeAccounts({
@@ -178,6 +203,7 @@ export function registerClaimRoutes(app: FastifyInstance) {
     const entry = takePending(req.cookies[CLAIM_COOKIE], "collision");
     clear(reply);
     if (!entry || entry.provisionalId !== actor.id) throw gone();
+    await assertClaimSignIn(entry);
     if (entry.profile)
       try {
         await completeProviderSignIn(entry.profile, entry.targetId, req.ip);

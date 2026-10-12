@@ -260,7 +260,12 @@ export async function disableAccount(login: string, reason?: string) {
       )
     ).rows;
 
-    await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [actor.id]);
+    // The operator's own reason (migration 072): an extension's deprovision
+    // is another, and lifting either never lifts this one.
+    await c.query(
+      "UPDATE accounts SET disabled=true,operator_disabled_at=COALESCE(operator_disabled_at,clock_timestamp()) WHERE id=$1",
+      [actor.id],
+    );
     const sessions = await c.query("DELETE FROM sessions WHERE account_id=$1", [actor.id]);
     let tokenConnections = 0,
       oauthConnections = 0;
@@ -278,7 +283,7 @@ export async function disableAccount(login: string, reason?: string) {
       if (share.unexpired) liveShares++;
       else expiredShares++;
     }
-    if (!account.disabled) {
+    if (!account.operator_disabled_at) {
       await audit(c, actor, "account.disabled", actor.id);
       await recordEvent(c, {
         actor: "operator-script",
@@ -291,7 +296,7 @@ export async function disableAccount(login: string, reason?: string) {
     return {
       name: account.name as string,
       email: account.email as string | null,
-      alreadyDisabled: account.disabled as boolean,
+      alreadyDisabled: !!account.operator_disabled_at,
       reason: reason?.trim() || null,
       sessions: sessions.rowCount ?? 0,
       tokenConnections,
@@ -322,8 +327,12 @@ export async function enableAccount(login: string) {
     const { account } = await lockTenantAccount(c, actor);
     if (account.deletion_requested_at)
       throw new ModerationError(`${account.name} is being deleted and cannot be enabled`);
-    if (account.disabled) {
-      await c.query("UPDATE accounts SET disabled=false WHERE id=$1", [actor.id]);
+    if (account.operator_disabled_at) {
+      // Only the operator's reason: an extension's deprovision keeps it disabled.
+      await c.query(
+        "UPDATE accounts SET operator_disabled_at=NULL,disabled=(deprovisioned_at IS NOT NULL) WHERE id=$1",
+        [actor.id],
+      );
       await audit(c, actor, "account.enabled", actor.id);
       await recordEvent(c, {
         actor: "operator-script",
@@ -335,7 +344,9 @@ export async function enableAccount(login: string) {
     return {
       name: account.name as string,
       email: account.email as string | null,
-      alreadyEnabled: !account.disabled,
+      alreadyEnabled: !account.operator_disabled_at,
+      /** Still disabled: an extension's directory deprovisioned the account. */
+      deprovisionedBy: (account.deprovisioned_by as string | null) ?? null,
     };
   });
 }
@@ -345,6 +356,10 @@ export function formatEnabled(result: Awaited<ReturnType<typeof enableAccount>>)
     result.alreadyEnabled
       ? "was not disabled; nothing changed."
       : "is enabled. Closed shares and revoked agent connections stay closed."
+  }${
+    result.deprovisionedBy
+      ? ` It stays disabled: the ${clean(result.deprovisionedBy, 40)} extension deprovisioned it (its directory brings it back).`
+      : ""
   }`;
 }
 

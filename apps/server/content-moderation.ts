@@ -174,8 +174,10 @@ export async function freezeAccountInTransaction(
 ) {
   const {
     rows: [account],
-  } = await c.query("SELECT id,disabled FROM accounts WHERE id=$1 FOR UPDATE", [owner.accountId]);
-  if (!account || account.disabled) return false;
+  } = await c.query("SELECT id,operator_disabled_at FROM accounts WHERE id=$1 FOR UPDATE", [owner.accountId]);
+  // Already frozen by moderation. An account an extension deprovisioned is
+  // frozen all the same: that reason may be lifted, this one stays.
+  if (!account || account.operator_disabled_at) return false;
   // The account's own shelf, even when the work was saved on a department
   // shelf: a freeze is the author's, never the colleagues' (TEAM_SHELVES.md).
   const {
@@ -190,7 +192,10 @@ export async function freezeAccountInTransaction(
       [owner.accountId],
     )
   ).rows;
-  await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [owner.accountId]);
+  await c.query(
+    "UPDATE accounts SET disabled=true,operator_disabled_at=COALESCE(operator_disabled_at,clock_timestamp()) WHERE id=$1",
+    [owner.accountId],
+  );
   await c.query("DELETE FROM sessions WHERE account_id=$1", [owner.accountId]);
   for (const connection of connections) await revokeConnectionInTransaction(c, connection);
   const shares = (

@@ -67,15 +67,22 @@ export type SessionDeleteDecision = { allow: true } | { allow: false; message: s
 
 /**
  * A person about to sign in by one of the core's own methods: an emailed code
- * (asked for and checked), a password, or a provider (Яндекс ID, VK ID,
- * Google, OIDC). The address is lowercased; null where the method has none.
- * The extension's own sign-in (context.accounts.startSession) is never asked.
+ * (asked for and checked), a password, a provider (Яндекс ID, VK ID, Google,
+ * OIDC), or a provider being linked to an account ("link": from the
+ * settings, or claiming a provisional shelf, or the provisional shelf's
+ * «войти в существующую» and «объединить»). The extension's own sign-in
+ * (context.accounts.startSession) is never asked.
  */
 export type SignInAttempt = {
-  method: "email" | "password" | "yandex" | "vk" | "google" | "oidc";
+  method: "email" | "password" | "yandex" | "vk" | "google" | "oidc" | "link";
+  /** The provider of a "link" or a provider's sign-in. */
+  provider?: "yandex" | "vk" | "google" | "oidc";
+  /** The address the method proves, lowercased (a provider's only when verified); null where it proves none. */
   email: string | null;
-  /** The account the sign-in would open; null for a new one or an unknown address. */
+  /** The account the sign-in would open or the link would join; null for a new one. */
   accountId: string | null;
+  /** That account's own address, which may differ from `email` (e.g. a linked provider). */
+  accountEmail: string | null;
 };
 
 export type SignInDecision = { allow: true } | { allow: false; message: string };
@@ -101,9 +108,16 @@ export type ExtensionAccount = {
   /** The display name, or the login. */
   name: string;
   email: string | null;
-  /** disabled: deprovisioned, or disabled by the operator or moderation. */
+  emailVerified: boolean;
+  /** disabled: deprovisioned by an extension, or by the operator or moderation (both may hold). */
   state: "active" | "disabled" | "deleting";
+  /** The operator or moderation disabled it: no extension can lift that. */
+  operatorDisabled: boolean;
+  /** The extension whose deprovision holds, or null. */
+  deprovisionedBy: string | null;
   companyAdmin: boolean;
+  /** The organisation a company admin administers (TEAM_SHELVES_SCOPE=organisation). */
+  companyOrganisationId: string | null;
   personalShelfId: string | null;
 };
 
@@ -341,52 +355,79 @@ export type ExtensionContext = {
     get(id: string): Promise<ExtensionAccount | null>;
     findByEmail(email: string): Promise<ExtensionAccount | null>;
     /**
-     * The account with this address, or a new one with a personal shelf. The
-     * extension vouches for the address: it is verified, no sign-up cap
-     * applies. An existing account comes back as it is (created: false),
-     * disabled included.
+     * The account with this address, or a new one with a personal shelf. Only
+     * an address on one of the organisation's domains (organisation_domains;
+     * 403 otherwise): the organisation vouches for it, so it is verified and
+     * no sign-up cap applies. An existing account comes back as it is
+     * (created: false), disabled or company admin included: whether to link
+     * it is the extension's decision.
      */
-    provision(input: { email: string; name?: string | null }): Promise<{ account: ExtensionAccount; created: boolean }>;
-    /** A new address (another account's: 409) or display name (null: none). */
-    update(id: string, input: { email?: string; name?: string | null }): Promise<ExtensionAccount>;
+    provision(input: {
+      email: string;
+      name?: string | null;
+      organisationId: string;
+    }): Promise<{ account: ExtensionAccount; created: boolean }>;
     /**
-     * The person is gone: the account is disabled, every session ends, every
-     * agent connection is revoked and the person leaves every department
-     * shelf (member.revoked for each). Nothing is deleted; idempotent.
+     * A new address (only on the organisation's domains; another account's:
+     * 409) or display name (null: none). A new address ends every session
+     * and pending code and is written to the journal (account.email_changed).
      */
-    deprovision(id: string, input?: { reason?: string }): Promise<ExtensionDeprovision>;
+    update(
+      id: string,
+      input: { email?: string; name?: string | null; organisationId: string },
+    ): Promise<ExtensionAccount>;
     /**
-     * Lifts a deprovision. An account the operator or moderation disabled
-     * stays so (403, reason "operator_disabled"). Shelves are not given back.
+     * The person is gone for the organisation's directory: the extension's
+     * own reason to disable the account (apart from the operator's). Every
+     * session ends, every agent connection is revoked and the person leaves
+     * the organisation's department shelves (member.revoked for each).
+     * Nothing is deleted; idempotent.
+     */
+    deprovision(id: string, input: { organisationId: string; reason?: string }): Promise<ExtensionDeprovision>;
+    /**
+     * Lifts this extension's deprovision and only it: an account the operator
+     * or moderation disabled stays disabled (state "disabled",
+     * operatorDisabled). Another extension's deprovision: 409. Shelves are
+     * not given back.
      */
     reactivate(id: string): Promise<ExtensionAccount>;
     /**
      * Signs the verified person in: a new core session in the polka_session
-     * cookie on this reply (7 days). A disabled account: 403. The extension
-     * then redirects (303) where the person was going.
+     * cookie on this reply (7 days), as the core's sign-in does (the
+     * browser's earlier session given as `previous` ends; the journal gets
+     * account.signed_in). A disabled account: 403. The extension then
+     * redirects (303) where the person was going.
      */
-    startSession(reply: FastifyReply, accountId: string): Promise<void>;
+    startSession(reply: FastifyReply, accountId: string, previous?: string): Promise<void>;
   };
   /**
-   * Department shelves (docs/specs/TEAM_SHELVES.md) for a directory's groups;
-   * 404 while TEAM_SHELVES is off. Changes go to the shelf's journal with no
-   * person as the actor. The directory is the source of truth: removeMember
-   * takes off even the last admin (the company admin's page offers to step in).
+   * Department shelves (docs/specs/TEAM_SHELVES.md) of one organisation, for
+   * a directory's groups; 404 while TEAM_SHELVES is off, and for another
+   * organisation's shelf. In installation scope a shelf without an
+   * organisation counts as every organisation's. Changes go to the shelf's
+   * journal with no person as the actor. The directory is the source of
+   * truth: removeMember takes off even the last admin (the company admin's
+   * page offers to step in).
    */
   teamShelves: {
-    list(): Promise<ExtensionTeamShelf[]>;
-    get(id: string): Promise<ExtensionTeamShelf | null>;
-    /** A new shelf with no members. */
-    create(name: string): Promise<ExtensionTeamShelf>;
-    rename(id: string, name: string): Promise<ExtensionTeamShelf>;
-    members(id: string): Promise<ExtensionTeamMember[]>;
-    /** Adds the person with this role or changes it; a disabled account: 409. */
+    list(organisationId: string): Promise<ExtensionTeamShelf[]>;
+    get(organisationId: string, id: string): Promise<ExtensionTeamShelf | null>;
+    /** A new shelf of the organisation, with no members. */
+    create(organisationId: string, name: string): Promise<ExtensionTeamShelf>;
+    rename(organisationId: string, id: string, name: string): Promise<ExtensionTeamShelf>;
+    members(organisationId: string, id: string): Promise<ExtensionTeamMember[]>;
+    /**
+     * Adds the person with this role or changes it. As a shelf admin's
+     * direct add on a shared cloud: only an account with a verified address
+     * on one of the organisation's domains (403); a disabled account: 409.
+     */
     setMember(
+      organisationId: string,
       id: string,
       accountId: string,
       role: ExtensionTeamRole,
     ): Promise<{ accountId: string; role: ExtensionTeamRole; added: boolean }>;
-    removeMember(id: string, accountId: string): Promise<{ removed: boolean }>;
+    removeMember(organisationId: string, id: string, accountId: string): Promise<{ removed: boolean }>;
   };
   auditFeed: {
     read(
@@ -430,9 +471,12 @@ export interface PolkaExtension {
   policies?: {
     /**
      * Before the core's own sign-in (code, password, provider) opens a
-     * session, and before a code is sent: refuse with a message the person
-     * reads, e.g. «вход для этой почты — только через SSO компании». 403 with
-     * reason "sign_in_policy"; a provider's return shows its own text.
+     * session, before a code is sent, before a provider is linked to an
+     * account, and before /claim opens or merges into an existing shelf:
+     * refuse with a message the person reads, e.g. «вход для этой почты —
+     * только через SSO компании». 403 with reason "sign_in_policy"; a
+     * provider's return shows its own text (idp_error=policy). `c` is the
+     * sign-in's own transaction where there is one: read through it.
      */
     signIn?(attempt: SignInAttempt, c: Pick<PoolClient, "query">): Promise<SignInDecision>;
     /** Before a link is issued or moved: refuse with a message the person reads. */
