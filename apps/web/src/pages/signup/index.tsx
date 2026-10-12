@@ -20,7 +20,7 @@ import {
   typedDomainOf,
 } from "./code-help.tsx";
 import { ProviderButtons, providerErrorMessage } from "../../features/provider-sign-in/index.tsx";
-import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
+import type { ExtensionSignIn, SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 export function Signup() {
   const account = useAccount();
   const sending = useRef(false);
@@ -33,6 +33,7 @@ export function Signup() {
   const [mode, setMode] = useState("loading");
   const [inviteOnly, setInviteOnly] = useState(false);
   const [providers, setProviders] = useState<SignInProvider[]>([]);
+  const [extensionMethods, setExtensionMethods] = useState<ExtensionSignIn[]>([]);
   const [signupDomains, setSignupDomains] = useState<"any" | string[]>("any");
   const [loginDomains, setLoginDomains] = useState<"any" | "signup">("any");
   const query = new URLSearchParams(location.search);
@@ -57,6 +58,7 @@ export function Signup() {
         setMode(c.emailLogin);
         setInviteOnly(c.emailSignup === "invite");
         setProviders(c.signInProviders);
+        setExtensionMethods(c.extensionSignIn);
         setSignupDomains(c.emailSignupDomains);
         setLoginDomains(c.emailLoginDomains);
         if (c.emailLogin === "disabled") return;
@@ -195,10 +197,10 @@ export function Signup() {
                   ? "Войдите одним нажатием или по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."
                   : "Войдите по почте. Если вы здесь впервые, создадим личную полку — без пароля и заполнения профиля."}
         </p>
-        {!challenge && mode !== "loading" && providers.length > 0 && (
+        {!challenge && mode !== "loading" && (providers.length > 0 || extensionMethods.length > 0) && (
           <>
             {passwordOnly && error && <Notice tone="error">{error}</Notice>}
-            <ProviderButtons providers={providers} next={next} />
+            <ProviderButtons providers={providers} extensionMethods={extensionMethods} next={next} />
             {mode !== "error" && <div className="idp-or">{passwordOnly ? "или" : "или по почте"}</div>}
           </>
         )}

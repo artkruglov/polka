@@ -7,6 +7,7 @@ import { limitAttempts, passwordHash } from "./auth.ts";
 import { assertNotDisposable, signupSpamKeys } from "./signup-guards.ts";
 import { sha256 } from "./storage.ts";
 import { Problem } from "./errors.ts";
+import { checkSignIn } from "./extensions.ts";
 import { domainAllowed } from "./mail-domains.ts";
 import { HOSTED_MAIL_SITE, loginCodeMail } from "./mail-templates/login-code.ts";
 import { LOCAL_MAIL_DIRECTORY, LOCAL_MAIL_NOTICE, sendSmtpMail, writeLocalMailFile } from "./mailer.ts";
@@ -183,7 +184,11 @@ export async function beginEmailLogin(email: string, ip: string) {
     // existing accounts and allowed addresses only. The answer is the same
     // either way, so the form does not tell a stranger which addresses have
     // a shelf; the interface explains the domain rule from /api/capabilities.
-    const known = (await c.query("SELECT 1 FROM accounts WHERE email=$1", [email])).rowCount;
+    const knownAccount = (await c.query("SELECT id FROM accounts WHERE email=$1", [email])).rows[0];
+    const known = !!knownAccount;
+    // An extension may send this address elsewhere (e.g. the company's SSO):
+    // its rule is about the address, so saying it reveals no shelf.
+    await checkSignIn({ method: "email", email, accountId: knownAccount?.id ?? null }, c);
     if (known) {
       if (!emailLoginAllowed(email)) return false;
     } else {
@@ -269,6 +274,8 @@ export async function verifyEmailLogin(
     let {
       rows: [account],
     } = await c.query("SELECT * FROM accounts WHERE email=$1", [challenge.email]);
+    // A code asked for before the extension's rule changed is refused too.
+    await checkSignIn({ method: "email", email: challenge.email, accountId: account?.id ?? null }, c);
     if (account) {
       const tenant = (await c.query("SELECT * FROM tenants WHERE owner_id=$1 FOR UPDATE", [account.id])).rows[0];
       account = (

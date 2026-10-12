@@ -1,4 +1,4 @@
-import { extensions } from "./extensions.ts";
+import { extensionSignInMethods, extensions } from "./extensions.ts";
 import { connectGuide } from "./connect-guide.ts";
 import { robotsTxt, sitemapXml } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
@@ -90,6 +90,8 @@ export function registerSiteRoutes(app: FastifyInstance) {
       // false: signs in only to a shelf it is linked to (GOOGLE_SIGNUP).
       signup: !linkOnly(id),
     })),
+    // An extension's own sign-in (e.g. a company's SSO), after the providers.
+    extensionSignIn: (await extensionSignInMethods()).map(({ id, name, start }) => ({ id, name, start })),
     commentsMode: config.COMMENTS_MODE,
     // Where an owner asks to delete the shelf and its data (settings,
     // «Удалить полку»); null: the page says «оператору этой установки».

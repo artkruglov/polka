@@ -65,6 +65,61 @@ export type SessionDelete = {
 
 export type SessionDeleteDecision = { allow: true } | { allow: false; message: string };
 
+/**
+ * A person about to sign in by one of the core's own methods: an emailed code
+ * (asked for and checked), a password, or a provider (Яндекс ID, VK ID,
+ * Google, OIDC). The address is lowercased; null where the method has none.
+ * The extension's own sign-in (context.accounts.startSession) is never asked.
+ */
+export type SignInAttempt = {
+  method: "email" | "password" | "yandex" | "vk" | "google" | "oidc";
+  email: string | null;
+  /** The account the sign-in would open; null for a new one or an unknown address. */
+  accountId: string | null;
+};
+
+export type SignInDecision = { allow: true } | { allow: false; message: string };
+
+/** A sign-in button of the extension on the core's sign-in pages. */
+export type ExtensionSignInMethod = {
+  /** Latin letters, digits and hyphens, up to 40. */
+  id: string;
+  /** The button's text, e.g. «Войти через SSO компании»; up to 60 characters. */
+  name: string;
+  /**
+   * Where the button leads: a GET route of the extension under
+   * /api/ext/<name>/. The page appends ?next=<a path of this installation>.
+   */
+  start: string;
+};
+
+/** An account as context.accounts reports it. */
+export type ExtensionAccount = {
+  id: string;
+  /** The core's login: generated (sso-<id>, email-<id>, …) unless the operator chose one. */
+  login: string;
+  /** The display name, or the login. */
+  name: string;
+  email: string | null;
+  /** disabled: deprovisioned, or disabled by the operator or moderation. */
+  state: "active" | "disabled" | "deleting";
+  companyAdmin: boolean;
+  personalShelfId: string | null;
+};
+
+export type ExtensionDeprovision = {
+  /** already: the account was disabled before; deleting: the person is deleting it, nothing changed. */
+  state: "deprovisioned" | "already" | "deleting";
+  sessions: number;
+  connections: number;
+  /** The department shelves the person was taken off. */
+  shelves: string[];
+};
+
+export type ExtensionTeamShelf = { id: string; name: string };
+export type ExtensionTeamRole = "reader" | "author" | "curator" | "admin";
+export type ExtensionTeamMember = { accountId: string; role: ExtensionTeamRole };
+
 export type PolkaEvent =
   | { type: "revision.saved"; tenantId: string; artifactId: string; revisionId: string; accountId: string; at: string }
   | {
@@ -275,6 +330,64 @@ export type ExtensionContext = {
    * keys (the default) the two never match. Synchronous, no I/O.
    */
   redact(text: string): RedactResult;
+  /**
+   * Accounts for the extension's own sign-in and provisioning (an enterprise
+   * SSO, a SCIM directory). The core does the work as for its own sign-in
+   * and the operator's disable; the extension keeps its mapping of external
+   * ids to account ids in its own tables. Invalid input throws the core's 400,
+   * a missing account 404.
+   */
+  accounts: {
+    get(id: string): Promise<ExtensionAccount | null>;
+    findByEmail(email: string): Promise<ExtensionAccount | null>;
+    /**
+     * The account with this address, or a new one with a personal shelf. The
+     * extension vouches for the address: it is verified, no sign-up cap
+     * applies. An existing account comes back as it is (created: false),
+     * disabled included.
+     */
+    provision(input: { email: string; name?: string | null }): Promise<{ account: ExtensionAccount; created: boolean }>;
+    /** A new address (another account's: 409) or display name (null: none). */
+    update(id: string, input: { email?: string; name?: string | null }): Promise<ExtensionAccount>;
+    /**
+     * The person is gone: the account is disabled, every session ends, every
+     * agent connection is revoked and the person leaves every department
+     * shelf (member.revoked for each). Nothing is deleted; idempotent.
+     */
+    deprovision(id: string, input?: { reason?: string }): Promise<ExtensionDeprovision>;
+    /**
+     * Lifts a deprovision. An account the operator or moderation disabled
+     * stays so (403, reason "operator_disabled"). Shelves are not given back.
+     */
+    reactivate(id: string): Promise<ExtensionAccount>;
+    /**
+     * Signs the verified person in: a new core session in the polka_session
+     * cookie on this reply (7 days). A disabled account: 403. The extension
+     * then redirects (303) where the person was going.
+     */
+    startSession(reply: FastifyReply, accountId: string): Promise<void>;
+  };
+  /**
+   * Department shelves (docs/specs/TEAM_SHELVES.md) for a directory's groups;
+   * 404 while TEAM_SHELVES is off. Changes go to the shelf's journal with no
+   * person as the actor. The directory is the source of truth: removeMember
+   * takes off even the last admin (the company admin's page offers to step in).
+   */
+  teamShelves: {
+    list(): Promise<ExtensionTeamShelf[]>;
+    get(id: string): Promise<ExtensionTeamShelf | null>;
+    /** A new shelf with no members. */
+    create(name: string): Promise<ExtensionTeamShelf>;
+    rename(id: string, name: string): Promise<ExtensionTeamShelf>;
+    members(id: string): Promise<ExtensionTeamMember[]>;
+    /** Adds the person with this role or changes it; a disabled account: 409. */
+    setMember(
+      id: string,
+      accountId: string,
+      role: ExtensionTeamRole,
+    ): Promise<{ accountId: string; role: ExtensionTeamRole; added: boolean }>;
+    removeMember(id: string, accountId: string): Promise<{ removed: boolean }>;
+  };
   auditFeed: {
     read(
       after: AuditCursor | null,
@@ -294,10 +407,34 @@ export interface PolkaExtension {
    * Exact paths of the extension's machine routes, under /api/ext/<name>/:
    * called by agents and collectors (e.g. OTLP exporters) with an agent
    * token, without a browser Origin. The core exempts them from its Origin
-   * rule; their handlers authenticate with context.agent only.
+   * rule; their handlers authenticate with a bearer token only: an agent's
+   * through context.agent, or the extension's own (e.g. a SCIM directory's).
+   * A path ending in "/*" covers everything below it (e.g. SCIM's
+   * /Users/{id}).
    */
   machinePaths?: string[];
+  /**
+   * Exact paths under /api/ext/<name>/ that an identity provider's page
+   * posts the browser to (a SAML assertion consumer service): exempt from the
+   * core's Origin rule like machinePaths. context.identity refuses there; the
+   * handler verifies the provider's answer itself and signs in with
+   * context.accounts.startSession.
+   */
+  signInPaths?: string[];
+  /**
+   * The extension's sign-in buttons for the core's sign-in pages, asked on
+   * every /api/capabilities: e.g. one per configured SSO connection, none
+   * while nothing is configured. A failure is logged and shows no button.
+   */
+  signInMethods?(): Promise<ExtensionSignInMethod[]> | ExtensionSignInMethod[];
   policies?: {
+    /**
+     * Before the core's own sign-in (code, password, provider) opens a
+     * session, and before a code is sent: refuse with a message the person
+     * reads, e.g. «вход для этой почты — только через SSO компании». 403 with
+     * reason "sign_in_policy"; a provider's return shows its own text.
+     */
+    signIn?(attempt: SignInAttempt, c: Pick<PoolClient, "query">): Promise<SignInDecision>;
     /** Before a link is issued or moved: refuse with a message the person reads. */
     linkIssue?(issue: LinkIssue, c: PoolClient): Promise<LinkIssueDecision>;
     /** Before a link opens for a recipient. */

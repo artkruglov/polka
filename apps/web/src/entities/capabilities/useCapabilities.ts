@@ -13,6 +13,8 @@ export type InstallationCapabilities = {
   sourceUrl: string;
   /** External sign-in that is configured here, in button order. */
   signInProviders: SignInProvider[];
+  /** An extension's own sign-in (e.g. the company's SSO), after the providers. */
+  extensionSignIn: ExtensionSignIn[];
   /** Where a NEW shelf opens by an emailed code: "any" or these domains. */
   emailSignupDomains: "any" | string[];
   /** "signup": existing accounts outside those domains get no code either. */
@@ -34,6 +36,26 @@ export type SignInProvider = {
    */
   signup: boolean;
 };
+
+/** A button of an extension: it leads to the extension's route under /api/ext/. */
+export type ExtensionSignIn = { id: string; name: string; start: string };
+
+const extensionSignIn = (raw: unknown): ExtensionSignIn[] =>
+  Array.isArray(raw)
+    ? raw
+        .filter(
+          (item): item is ExtensionSignIn =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as ExtensionSignIn).id === "string" &&
+            /^[a-z0-9-]{1,40}$/.test((item as ExtensionSignIn).id) &&
+            typeof (item as ExtensionSignIn).name === "string" &&
+            typeof (item as ExtensionSignIn).start === "string" &&
+            /^\/api\/ext\/[a-z][a-z0-9-]{1,30}\/[\w/.?=&%-]*$/.test((item as ExtensionSignIn).start) &&
+            !(item as ExtensionSignIn).start.includes(".."),
+        )
+        .map((item) => ({ id: item.id, name: item.name.slice(0, 60), start: item.start }))
+    : [];
 
 const PROVIDER_IDS = new Set(["yandex", "vk", "google", "oidc"]);
 
@@ -78,6 +100,7 @@ export function loadCapabilities() {
                 signup: (item as { signup?: unknown }).signup !== false,
               }))
           : [],
+        extensionSignIn: extensionSignIn(raw.extensionSignIn),
         emailSignupDomains: Array.isArray(raw.emailSignupDomains)
           ? raw.emailSignupDomains.filter((item): item is string => typeof item === "string")
           : "any",

@@ -118,6 +118,7 @@ const IDP_PROBLEMS: Partial<Record<IdpError["code"], string>> = {
   signup: "Новые полки сейчас не открываются: регистрация закрыта на сегодня или только по приглашению.",
   domain: "Вход разрешён только сотрудникам компании с почтой её домена.",
   link_only: LINK_ONLY_MESSAGE,
+  policy: "Для этой почты этот способ входа закрыт. Войдите так, как принято в вашей компании, например через её SSO.",
 };
 
 function idpProblem(error: IdpError) {

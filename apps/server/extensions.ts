@@ -15,6 +15,9 @@ import type {
   RedactResult,
   SessionDelete,
   SessionDeleteDecision,
+  ExtensionSignInMethod,
+  SignInAttempt,
+  SignInDecision,
 } from "../../packages/extension-api/index.ts";
 import { createRedactor } from "../../scripts/polka-sessions.mjs";
 import { config } from "./config.ts";
@@ -43,9 +46,17 @@ export async function loadExtensions(list: string | undefined) {
     if (!extension || typeof extension !== "object" || !NAME.test(extension.name ?? ""))
       throw new Error(`POLKA_EXTENSIONS: ${specifier} does not export a Полка extension`);
     const own = `/api/ext/${extension.name}/`;
+    const bad = (path: unknown, wildcard: boolean) =>
+      typeof path !== "string" ||
+      !path.startsWith(own) ||
+      !(wildcard ? /^[\w/.-]+(\/\*)?$/ : /^[\w/.-]+$/).test(path) ||
+      path.includes("..");
     for (const path of extension.machinePaths ?? [])
-      if (typeof path !== "string" || !path.startsWith(own) || !/^[\w/.-]+$/.test(path) || path.includes(".."))
+      if (bad(path, true))
         throw new Error(`POLKA_EXTENSIONS: ${extension.name}'s machine path ${String(path)} is not under ${own}`);
+    for (const path of extension.signInPaths ?? [])
+      if (bad(path, false))
+        throw new Error(`POLKA_EXTENSIONS: ${extension.name}'s sign-in path ${String(path)} is not under ${own}`);
     if (extensions.some((other) => other.name === extension.name))
       throw new Error(`POLKA_EXTENSIONS: ${extension.name} is loaded twice`);
     extensions.push(extension);
@@ -69,8 +80,71 @@ export const extensions = () => loaded;
  */
 export const isExtensionMachinePath = (pathname: string) =>
   loaded.some((extension) =>
-    extension.machinePaths?.some((path) => path === pathname && path.startsWith(`/api/ext/${extension.name}/`)),
+    extension.machinePaths?.some(
+      (path) =>
+        path.startsWith(`/api/ext/${extension.name}/`) &&
+        (path.endsWith("/*") ? pathname.startsWith(path.slice(0, -1)) && !pathname.includes("..") : path === pathname),
+    ),
   );
+
+/**
+ * An extension's sign-in route an identity provider's page posts the browser
+ * to (signInPaths): no Origin rule, no cookie identity.
+ */
+export const isExtensionSignInPath = (pathname: string) =>
+  loaded.some((extension) =>
+    extension.signInPaths?.some((path) => path === pathname && path.startsWith(`/api/ext/${extension.name}/`)),
+  );
+
+/**
+ * The first refusal wins: an extension may keep the core's own sign-in from
+ * opening a session (e.g. the address's company signs in through its SSO).
+ */
+export async function checkSignIn(attempt: SignInAttempt, c: Pick<PoolClient, "query">) {
+  for (const extension of loaded) {
+    const decision: SignInDecision | undefined = await extension.policies?.signIn?.(attempt, c);
+    if (decision && !decision.allow)
+      throw new Problem(403, "forbidden", decision.message, { reason: "sign_in_policy", extension: extension.name });
+  }
+}
+
+const METHOD_ID = /^[a-z0-9-]{1,40}$/;
+
+/** The extensions' sign-in buttons; a failing or malformed one shows nothing. */
+export async function extensionSignInMethods() {
+  const out: Array<ExtensionSignInMethod & { extension: string }> = [];
+  for (const extension of loaded) {
+    if (!extension.signInMethods) continue;
+    try {
+      for (const method of await extension.signInMethods()) {
+        if (
+          !method ||
+          !METHOD_ID.test(method.id) ||
+          typeof method.name !== "string" ||
+          !method.name.trim() ||
+          typeof method.start !== "string" ||
+          !method.start.startsWith(`/api/ext/${extension.name}/`) ||
+          !/^[\w/.?=&%-]+$/.test(method.start) ||
+          method.start.includes("..")
+        )
+          continue;
+        out.push({
+          extension: extension.name,
+          id: method.id,
+          name: method.name.trim().slice(0, 60),
+          start: method.start,
+        });
+      }
+    } catch (error) {
+      log.error({
+        event: "extension.sign_in_methods_failed",
+        extension: extension.name,
+        error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      });
+    }
+  }
+  return out.slice(0, 20);
+}
 
 /** The first refusal wins: any extension may forbid a link. */
 export async function checkLinkIssue(issue: LinkIssue, c: PoolClient) {

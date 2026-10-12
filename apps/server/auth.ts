@@ -7,6 +7,7 @@ import { Problem, missing } from "./errors.ts";
 import { memberShelf, type ShelfRole } from "./shelves.ts";
 import { uuid } from "../../packages/contracts/index.ts";
 import { markActive, trackSignup } from "./analytics.ts";
+import { checkSignIn } from "./extensions.ts";
 const derive = promisify(scrypt);
 export async function passwordHash(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -70,6 +71,8 @@ export async function signIn(name: string, password: string, ip: string) {
     ).rows[0];
     if (!tenant || !account || account.password_hash !== candidate.password_hash)
       throw new Problem(401, "unauthorized", "Не удалось войти. Проверьте логин и пароль.");
+    // After the password is right: a refusal tells nothing to a guesser.
+    await checkSignIn({ method: "password", email: account.email ?? null, accountId: account.id }, c);
     await c.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')", [sha256(token), account.id]);
   });
   return token;

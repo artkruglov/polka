@@ -14,6 +14,7 @@ import { db, transaction } from "./db.ts";
 import { emailInvited, signupRoomLeft } from "./email-auth.ts";
 import { missing, Problem } from "./errors.ts";
 import { emailDomain } from "./mail-domains.ts";
+import { checkSignIn } from "./extensions.ts";
 import { sha256 } from "./storage.ts";
 import { joinLibraryByOrganisation } from "./template-libraries.ts";
 import {
@@ -181,6 +182,22 @@ export async function completeProviderSignIn(
         if (!account) throw new IdpError("blocked");
       }
     }
+    // Signing in (not linking): an extension may send this person elsewhere,
+    // e.g. to the company's SSO. Asked before any shelf is opened.
+    if (!linkAccountId)
+      try {
+        await checkSignIn(
+          {
+            method: profile.provider,
+            email: profile.email && profile.emailVerified ? profile.email.toLowerCase() : null,
+            accountId: account?.id ?? null,
+          },
+          c,
+        );
+      } catch (error) {
+        if (error instanceof Problem && error.details?.reason === "sign_in_policy") throw new IdpError("policy");
+        throw error;
+      }
     account ??= await createShelf(c, profile, ip, source);
     // hosted_domain: the Google Workspace domain as Google reports it now.
     const hostedDomain = profile.provider === "google" ? (profile.hostedDomain ?? null) : null;

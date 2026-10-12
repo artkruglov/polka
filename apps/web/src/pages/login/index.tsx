@@ -15,6 +15,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
   const emailLogin = capabilities.status === "ready" && capabilities.capabilities.emailLogin !== "disabled";
   const inviteOnly = capabilities.status === "ready" && capabilities.capabilities.emailSignup === "invite";
   const providers = capabilities.status === "ready" ? capabilities.capabilities.signInProviders : [];
+  const extensionMethods = capabilities.status === "ready" ? capabilities.capabilities.extensionSignIn : [];
   const toFileSave = safeNext(new URLSearchParams(location.search).get("next"))?.startsWith("/bring#file");
   return (
     <AppShell current="shelf" account={null} className="mkt-page" bare>
@@ -51,9 +52,13 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
               ? "Войдите с логином и паролем или по почте."
               : "Аккаунт выдаёт администратор этой Полки. Войдите с логином и паролем, которые вам передали."}
           </p>
-          {providers.length > 0 && (
+          {(providers.length > 0 || extensionMethods.length > 0) && (
             <>
-              <ProviderButtons providers={providers} next={authReturnTo(location)} />
+              <ProviderButtons
+                providers={providers}
+                extensionMethods={extensionMethods}
+                next={authReturnTo(location)}
+              />
               <div className="idp-or">или с логином и паролем</div>
             </>
           )}
