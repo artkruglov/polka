@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   newWebhookSecret,
   openWebhookSecret,
+  postTo,
   postWebhook,
   resolveWebhookTarget,
   sealWebhookSecret,
@@ -142,4 +143,22 @@ test("postWebhook connects to nothing when the name turns private (DNS rebinding
   });
   assert.equal(asked, 1);
   assert.deepEqual(result, { ok: false, status: null, error: "blocked_address", snippet: null });
+});
+
+test("postTo survives an address the host has no route to", async () => {
+  // 100::/64 is discard-only: on a host without that route the connect fails
+  // at once. With the lookup answered synchronously that failure escaped as
+  // an uncaught EHOSTUNREACH and the server exited (0.15.0 on polochka.app,
+  // which has no IPv6). Where the address is routable it fails later; either
+  // way the attempt ends as a "connection" or "timeout" result.
+  const result = await postTo(
+    new URL("https://hooks.example.com/x"),
+    { address: "100::1", family: 6 },
+    "{}",
+    {},
+    AbortSignal.timeout(2000),
+  );
+  assert.equal(result.ok, false);
+  assert.ok(["connection", "timeout"].includes(result.error ?? ""), String(result.error));
+  await new Promise((resolve) => setTimeout(resolve, 100));
 });

@@ -103,7 +103,11 @@ export async function fetchPublic(
             agent: false,
             family: target.family,
             signal: abort,
-            lookup: (_host, _opts, cb) => cb(null, target.address, target.family),
+            // On the next tick, as a real lookup answers: answered at once, a
+            // connect that fails at once (no route to an IPv6 address) throws
+            // inside request() and its socket error has no listener — the
+            // process would exit (see webhook-send.ts).
+            lookup: (_host, _opts, cb) => process.nextTick(() => cb(null, target.address, target.family)),
             headers: hopHeaders(input, target.url, { accept, authorization, userAgent }),
           },
           (res) => {
