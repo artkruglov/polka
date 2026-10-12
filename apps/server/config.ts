@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
-import { PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
+import { DOMAIN_RE, PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
 import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
 import { UUID_RE } from "../../packages/contracts/uuid.ts";
 const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
@@ -514,8 +514,7 @@ const domainList = (value: string, name: string) =>
     .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
     .filter(Boolean)
     .map((entry) => {
-      if (!/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry))
-        throw new Error(`${name}: not a domain: ${entry}`);
+      if (!DOMAIN_RE.test(entry)) throw new Error(`${name}: not a domain: ${entry}`);
       return entry;
     });
 type OrgRole = "reader" | "curator";

@@ -54,7 +54,11 @@ export async function listCompanyShelves(actor: Actor) {
      LIMIT 500`,
     [org],
   );
-  return { items: rows };
+  // The admin's organisation, named on the page (organisation scope only).
+  const organisation = org
+    ? ((await db.query("SELECT name FROM organisations WHERE id=$1", [org])).rows[0]?.name as string)
+    : null;
+  return { items: rows, organisation };
 }
 
 /** One shelf's members, for a company admin who need not be on it. */
@@ -87,8 +91,9 @@ const whoSchema = z.object({ who: z.string().trim().min(1).max(320) });
 
 /**
  * An employee by address or login, and the department shelves they are on.
- * In organisation scope only a person of the admin's organisation is found,
- * with its shelves only; anyone else is «not found», like a missing account.
+ * In organisation scope only a person of the admin's organisation is found
+ * (an employee, or a member of one of its shelves by login only), with its
+ * shelves only; anyone else is «not found», like a missing account.
  */
 export async function findEmployee(actor: Actor, query: unknown) {
   const org = await assertCompanyAdmin(db, actor);
@@ -97,7 +102,10 @@ export async function findEmployee(actor: Actor, query: unknown) {
     `SELECT id,COALESCE(display_name,name) AS name,
             CASE WHEN ${emailVisibleSql("accounts.id", "$2::uuid")} THEN email END AS email,
             disabled,deletion_requested_at IS NOT NULL AS leaving
-     FROM accounts WHERE (email=$1 OR lower(name)=$1)
+     FROM accounts
+     -- By address only where the address is the organisation's to see: a
+     -- hidden one cannot be confirmed by guessing it.
+     WHERE (lower(name)=$1 OR (email=$1 AND ${emailVisibleSql("accounts.id", "$2::uuid")}))
        AND ($2::uuid IS NULL OR ${ofOrganisationSql("accounts.id", "$2::uuid")})
      LIMIT 2`,
     [who, org],

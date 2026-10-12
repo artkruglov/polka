@@ -65,7 +65,7 @@ export const COMMANDS: Record<string, Record<string, Command>> = {
     },
     org: {
       script: "company-org.ts",
-      about: "an organisation on a shared cloud: <name> [--domain d]… [--remove-domain d]… [--shelf <uuid>]…",
+      about: "an organisation on a shared cloud: <name> [--domain d]… [--remove-domain d]… [--shelf <uuid>]… [--move]",
     },
   },
   feed: {

@@ -135,16 +135,14 @@ export async function createTeamShelfInTransaction(
   if (config.TEAM_SHELVES !== "on") throw missing();
   const name = teamShelfNameSchema.parse(rawName);
   // In organisation scope the shelf belongs to the admin's organisation, and
-  // an admin without one is not a company admin (organisations.ts).
+  // an admin without one is not a company admin (organisations.ts). In
+  // installation scope it belongs to none (organisationId is null).
   const admin = await companyAdminOf(c, actor.id, true);
   if (!admin) throw new Problem(403, "forbidden", "Полки отделов создаёт администратор компании.");
-  const {
-    rows: [account],
-  } = await c.query("SELECT company_organisation_id FROM accounts WHERE id=$1", [actor.id]);
   const id = randomUUID();
   await c.query(
     `INSERT INTO tenants(id,owner_id,kind,name,created_by,organisation_id) VALUES($1,NULL,'team',$2,$3,$4)`,
-    [id, name, actor.id, account.company_organisation_id],
+    [id, name, actor.id, admin.organisationId],
   );
   await c.query(
     `INSERT INTO tenant_members(tenant_id,account_id,role,invited_by)

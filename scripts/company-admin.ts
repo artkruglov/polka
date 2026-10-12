@@ -7,8 +7,9 @@
 //   npm run admin -- company admin anna@example.ru --org "ООО Пример"
 //   npm run admin -- company admin anna@example.ru --revoke
 //
-// With TEAM_SHELVES_SCOPE=organisation (polochka.app) --org is required: the
-// organisation is created when missing (company org adds its domains).
+// With TEAM_SHELVES_SCOPE=organisation (polochka.app) --org is required. The
+// organisation must exist (company org creates it): a misspelt name is an
+// error, never a new organisation.
 import { db, transaction } from "../apps/server/db.ts";
 import { setCompanyAdmin } from "../apps/server/organisations.ts";
 

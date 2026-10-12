@@ -19,7 +19,8 @@ import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import cookie from "@fastify/cookie";
 import { z } from "zod";
 import { config } from "./config.ts";
-import { transaction } from "./db.ts";
+import { db, transaction } from "./db.ts";
+import { companyAdminOf } from "./organisations.ts";
 import { identity } from "./auth.ts";
 import { Problem, missing } from "./errors.ts";
 import { reportShare } from "./reports.ts";
@@ -227,6 +228,7 @@ export async function createApp() {
         teamShelves: config.TEAM_SHELVES === "on",
         teamShelvesScope: config.TEAM_SHELVES_SCOPE,
       },
+      companyAdmin: async (accountId) => (config.TEAM_SHELVES === "on" ? companyAdminOf(db, accountId) : null),
       log: (event) => log.info({ extension: extension.name, ...event }),
       content: {
         revision: revisionForExtension,

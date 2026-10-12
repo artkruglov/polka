@@ -13,7 +13,7 @@ import { Problem, missing } from "./errors.ts";
 import { teamShelfNameSchema, type ShelfRole } from "./shelves.ts";
 import { config } from "./config.ts";
 import { emitEvent } from "./extensions.ts";
-import { directAddRule, emailVisibleSql, ofOrganisationSql, organisationScope } from "./organisations.ts";
+import { directAddRule, emailVisibleSql, orgDomainSql, organisationScope } from "./organisations.ts";
 
 type Actor = { id: string };
 
@@ -141,10 +141,12 @@ export async function listShelfMembers(actor: Actor, shelfId: string) {
  * An admin adds a colleague by address or login. Within one company's
  * installation every account is a colleague, so the member is added at once;
  * someone who has never signed in is not found yet. On a shared cloud
- * (organisation scope) only a person of the shelf's organisation is added
- * this way; for anyone else, and for an address with no account, the answer
- * is the same, so it tells nothing about who has an account. They join
- * through an invitation link they accept themselves.
+ * (organisation scope) only an employee of the shelf's organisation (a
+ * verified address on its domain) is added this way, by address or login;
+ * for anyone else, a member of its other shelves by a link included, and for
+ * an address with no account, the answer is the same, so it tells nothing
+ * about who has an account. They join through an invitation link they accept
+ * themselves.
  */
 export async function addShelfMember(actor: Actor, shelfId: string, body: unknown) {
   const input = addInput.parse(body);
@@ -166,7 +168,7 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
       `SELECT id,COALESCE(display_name,name) AS name FROM accounts
        WHERE (email=$1 OR lower(name)=$1)
          AND NOT disabled AND deletion_requested_at IS NULL
-         AND (NOT $2::boolean OR ${ofOrganisationSql("accounts.id", "$3::uuid")})
+         AND (NOT $2::boolean OR ${orgDomainSql("accounts.id", "$3::uuid")})
        LIMIT 2`,
       [who, scoped, shelf.organisationId],
     );

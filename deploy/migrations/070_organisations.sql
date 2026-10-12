@@ -13,6 +13,10 @@
 --                         shelf (never of a personal one).
 -- accounts                + company_organisation_id: the organisation a
 --                         company admin administers.
+-- tenant_member_events    + action shelf_organisation_changed.
+--
+-- Organisation names are unique by lower(name), which follows the database's
+-- ctype (en_US.utf8 on polochka.app: Cyrillic folds too).
 --
 -- Erasure: an organisation and its domains are not personal data and stay.
 -- The rename that ends an account's erasure (030, also replayed by the
@@ -36,6 +40,17 @@ ALTER TABLE tenants
   ADD COLUMN organisation_id uuid NULL REFERENCES organisations(id),
   ADD CONSTRAINT tenants_organisation_team CHECK (organisation_id IS NULL OR kind = 'team');
 CREATE INDEX tenants_organisation ON tenants (organisation_id) WHERE organisation_id IS NOT NULL;
+
+-- The operator attaching a shelf to an organisation, or moving it to another
+-- one, is recorded in the shelf's journal (no actor: the operator has no
+-- account here).
+ALTER TABLE tenant_member_events
+  DROP CONSTRAINT tenant_member_events_action_check,
+  ADD CONSTRAINT tenant_member_events_action_check CHECK (action IN (
+    'shelf_created','shelf_renamed','shelf_archived',
+    'member_added','member_role_changed','member_revoked',
+    'invitation_created','invitation_revoked','invitation_accepted',
+    'shelf_organisation_changed'));
 
 ALTER TABLE accounts
   ADD COLUMN company_organisation_id uuid NULL REFERENCES organisations(id),

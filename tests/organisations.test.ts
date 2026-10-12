@@ -32,6 +32,7 @@ const address = () => `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes
 type Account = Awaited<ReturnType<typeof createAccount>> & { cookie: string; email: string | null };
 let adminA: Account, adminB: Account, colleagueA: Account, unverifiedA: Account, outsider: Account, memberB: Account;
 let shelfA: string, shelfB: string;
+const outsiderEmail = `outsider-${tag}@gmail.com`;
 
 async function account(prefix: string, email: string | null = null, verified = true): Promise<Account> {
   const created = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
@@ -96,7 +97,7 @@ before(async () => {
   adminB = await account("org-admin-b", `boss@${domainB}`);
   colleagueA = await account("org-colleague-a", `colleague@${domainA}`);
   unverifiedA = await account("org-unverified-a", `claims@${domainA}`, false);
-  outsider = await account("org-outsider", `someone@${domainB}`);
+  outsider = await account("org-outsider", outsiderEmail);
   memberB = await account("org-member-b", `member@${domainB}`);
   await transaction(async (c) => {
     await configureOrganisation(c, orgA, { addDomains: [domainA] });
@@ -138,6 +139,13 @@ test("the operator command: organisations by name, own domains only, --org requi
     transaction((c) => setCompanyAdmin(c, outsider.name, {})),
     /--org/,
   );
+  // A misspelt organisation is an error, never a new one.
+  const typo = `Альфаа ${tag}`;
+  await assert.rejects(
+    transaction((c) => setCompanyAdmin(c, outsider.name, { org: typo })),
+    /company org/,
+  );
+  assert.equal((await db.query("SELECT 1 FROM organisations WHERE lower(name)=lower($1)", [typo])).rowCount, 0);
   // A company admin without an organisation administers nothing on a cloud.
   await db.query("UPDATE accounts SET company_admin=true WHERE id=$1", [outsider.id]);
   try {
@@ -187,7 +195,8 @@ test("direct adding: only people of the organisation; the refusal tells nothing 
   assert.equal(ok.statusCode, 200, ok.body);
   const refusals = await Promise.all(
     [
-      `someone@${domainB}`, // an account, of another organisation
+      outsiderEmail, // an account on a public mail service
+      `member@${domainB}`, // an account of another organisation
       outsider.name, // the same account by login
       `nobody-${tag}@${domainB}`, // no account at all
       `nobody-${tag}@${domainA}`, // no account, the organisation's domain
@@ -229,6 +238,22 @@ test("an outsider joins only through the link; the address stays hidden, then th
     found.json().shelves.map((item: any) => item.id),
     [shelfA],
   );
+  // Their hidden address cannot be confirmed by guessing it: the same 404 as
+  // an address nobody has, on the company page and when adding.
+  const people = (who: string) => call("GET", `/api/company/people?who=${encodeURIComponent(who)}`, adminA);
+  const [guessed, nobody] = [await people(outsiderEmail), await people(`nobody-${tag}@gmail.com`)];
+  assert.equal(guessed.statusCode, 404, guessed.body);
+  assert.deepEqual(guessed.json(), nobody.json());
+  // Membership by a link does not make them addable to the organisation's
+  // other shelves: those need their own invitation.
+  const other = await newShelf(adminA, "Закупки А");
+  const add = (who: string) => call("POST", `/api/shelves/${other}/members`, adminA, { who, role: "reader" });
+  const refusals = [await add(outsiderEmail), await add(outsider.name), await add(`nobody-${tag}@gmail.com`)];
+  for (const refused of refusals) {
+    assert.equal(refused.statusCode, 404, refused.body);
+    assert.deepEqual(refused.json(), refusals[0].json());
+  }
+  assert.equal((await add(colleagueA.name)).statusCode, 200);
 });
 
 test("search across shelves and service accounts stay within membership", async () => {
@@ -264,10 +289,28 @@ test("installation scope: one company, every shelf, anyone added directly (self-
     assert.equal(added.statusCode, 200, added.body);
     const members = (await call("GET", `/api/shelves/${shelfA}/members`, adminA)).json();
     assert.deepEqual(members.directAdd, { scope: "installation" });
-    assert.equal(members.items.find((item: any) => item.accountId === outsider.id)?.email, `someone@${domainB}`);
+    assert.equal(members.items.find((item: any) => item.accountId === outsider.id)?.email, outsiderEmail);
   } finally {
     config.TEAM_SHELVES_SCOPE = "organisation";
   }
+});
+
+test("a shelf of another organisation moves only with --move, and the move is in its journal", async () => {
+  await assert.rejects(
+    transaction((c) => configureOrganisation(c, orgA, { shelves: [shelfB] })),
+    (error: Error) => error.message.includes(orgB) && error.message.includes("--move"),
+  );
+  const moved = await transaction((c) => configureOrganisation(c, orgA, { shelves: [shelfB], move: true }));
+  assert.deepEqual(moved.shelves, [{ id: shelfB, name: "Продажи Б", previous: orgB }]);
+  const journal = await db.query(
+    "SELECT actor_id FROM tenant_member_events WHERE tenant_id=$1 AND action='shelf_organisation_changed'",
+    [shelfB],
+  );
+  assert.deepEqual(journal.rows, [{ actor_id: null }]);
+  // Attaching a shelf already there changes and records nothing.
+  const again = await transaction((c) => configureOrganisation(c, orgA, { shelves: [shelfB] }));
+  assert.deepEqual(again.shelves, []);
+  await transaction((c) => configureOrganisation(c, orgB, { shelves: [shelfB], move: true }));
 });
 
 test("erasing an account clears its company admin role", async () => {
