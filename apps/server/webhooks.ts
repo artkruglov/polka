@@ -59,6 +59,8 @@ const BREAKER_MAX_MINUTES = 60;
 /** Attempts in flight at once: per address (one while it is failing), and in all. */
 export const MAX_IN_FLIGHT_PER_ENDPOINT = 2;
 export const SEND_CONCURRENCY = 10;
+/** And per shelf: a shelf of slow (but answering) receivers cannot fill the pool. */
+export const MAX_IN_FLIGHT_PER_SHELF = 4;
 /** Deliveries one address may have waiting; events beyond it are counted and not queued. */
 export const MAX_PENDING_PER_ENDPOINT = 1000;
 /** Events older than this are not sent: a shelf that turned webhooks on late gets no backlog. */
@@ -486,36 +488,64 @@ export async function dispatchAllWebhookEvents(maxPages = 25) {
 /**
  * Deliveries due now, claimed for one attempt each. Several instances take
  * different rows; an address has at most MAX_IN_FLIGHT_PER_ENDPOINT attempts
- * in flight (one while it is failing), so one slow receiver cannot take
- * every slot. An address the breaker paused, a shelf no longer active, and a
+ * in flight (one while it is failing) and a shelf MAX_IN_FLIGHT_PER_SHELF,
+ * so one slow receiver cannot take every slot. The caps are counted from
+ * leases, not locked: two instances claiming at the same moment may exceed
+ * them briefly. An address the breaker paused, a shelf no longer active, and a
  * webhook nobody answers for wait.
  */
 async function claimDue(limit: number) {
   if (limit <= 0) return [];
   return transaction(async (c) => {
     const { rows } = await c.query(
+      // In flight now, per address and per shelf (the small leased index).
+      // Then per address that may send: at most its room of due deliveries
+      // (the (endpoint_id, next_attempt_at) index), never a scan of the whole
+      // backlog; then at most the shelf's room of those, oldest first.
       `WITH busy AS (
-         SELECT endpoint_id,count(*)::int AS n FROM webhook_deliveries
-          WHERE state='pending' AND leased_until>now() GROUP BY endpoint_id
+         SELECT endpoint_id,tenant_id,count(*)::int AS n FROM webhook_deliveries
+          WHERE state='pending' AND leased_until IS NOT NULL AND leased_until>now()
+          GROUP BY endpoint_id,tenant_id
        ),
-       ready AS (
-         SELECT d.id,d.next_attempt_at,
-                row_number() OVER (PARTITION BY d.endpoint_id ORDER BY d.next_attempt_at,d.id) AS rank,
+       shelf_busy AS (SELECT tenant_id,sum(n)::int AS n FROM busy GROUP BY tenant_id),
+       senders AS (
+         SELECT w.id,w.tenant_id,
                 CASE WHEN w.consecutive_failures>=$3 THEN 1 ELSE $2 END-COALESCE(busy.n,0) AS room
-           FROM webhook_deliveries d
-           JOIN webhook_endpoints w ON w.id=d.endpoint_id AND w.status='active'
-                AND (w.paused_until IS NULL OR w.paused_until<=now())
-           JOIN tenants tenant ON tenant.id=d.tenant_id AND tenant.state='active'
+           FROM webhook_endpoints w
+           JOIN tenants tenant ON tenant.id=w.tenant_id AND tenant.state='active'
                 AND ($4::boolean OR tenant.kind='personal')
-           LEFT JOIN busy ON busy.endpoint_id=d.endpoint_id
-          WHERE d.state='pending' AND d.next_attempt_at<=now()
-            AND (d.leased_until IS NULL OR d.leased_until<=now())
+           LEFT JOIN busy ON busy.endpoint_id=w.id
+          WHERE w.status='active' AND (w.paused_until IS NULL OR w.paused_until<=now())
             AND ${ANSWERED_SQL}
+            AND EXISTS(SELECT 1 FROM webhook_deliveries due
+                        WHERE due.endpoint_id=w.id AND due.state='pending' AND due.next_attempt_at<=now())
+       ),
+       candidates AS (
+         SELECT pick.id,pick.next_attempt_at,s.tenant_id FROM senders s
+         CROSS JOIN LATERAL (
+           SELECT d.id,d.next_attempt_at FROM webhook_deliveries d
+            WHERE d.endpoint_id=s.id AND d.state='pending' AND d.next_attempt_at<=now()
+              AND (d.leased_until IS NULL OR d.leased_until<=now())
+            ORDER BY d.next_attempt_at,d.id LIMIT GREATEST(s.room,0)
+         ) pick
+         WHERE s.room>0
+       ),
+       ranked AS (
+         SELECT c.id,c.next_attempt_at,
+                row_number() OVER (PARTITION BY c.tenant_id ORDER BY c.next_attempt_at,c.id) AS rank,
+                $5-COALESCE(shelf_busy.n,0) AS room
+           FROM candidates c LEFT JOIN shelf_busy ON shelf_busy.tenant_id=c.tenant_id
        )
        SELECT d.id FROM webhook_deliveries d
-        WHERE d.id IN (SELECT id FROM ready WHERE rank<=room ORDER BY next_attempt_at LIMIT $1)
+        WHERE d.id IN (SELECT id FROM ranked WHERE rank<=room ORDER BY next_attempt_at LIMIT $1)
         FOR UPDATE OF d SKIP LOCKED`,
-      [limit, MAX_IN_FLIGHT_PER_ENDPOINT, BREAKER_AFTER_FAILURES, config.TEAM_SHELVES === "on"],
+      [
+        limit,
+        MAX_IN_FLIGHT_PER_ENDPOINT,
+        BREAKER_AFTER_FAILURES,
+        config.TEAM_SHELVES === "on",
+        MAX_IN_FLIGHT_PER_SHELF,
+      ],
     );
     if (!rows.length) return [];
     const { rows: claimed } = await c.query(

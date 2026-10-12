@@ -94,9 +94,13 @@ setInterval(reviewLetters, 5 * 60 * 1000).unref();
 // deliveries out, each on its own timer so a slow receiver never holds up
 // the journal. Expiring old deliveries runs hourly whatever the flag.
 if (config.WEBHOOKS === "on") {
-  const webhooks = import("./webhooks.ts");
-  setInterval(() => void webhooks.then((module) => module.runWebhookDispatch()), 5_000).unref();
-  setInterval(() => void webhooks.then((module) => module.runWebhookSend()), 5_000).unref();
+  // A module that fails to load is logged once; the timers then do nothing.
+  const webhooks = import("./webhooks.ts").catch(() => {
+    log.error({ event: "webhooks.load_failed" });
+    return null;
+  });
+  setInterval(() => void webhooks.then((module) => module?.runWebhookDispatch()), 5_000).unref();
+  setInterval(() => void webhooks.then((module) => module?.runWebhookSend()), 5_000).unref();
 }
 const webhookHousekeeping = async () => {
   try {

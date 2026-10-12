@@ -491,6 +491,56 @@ test("one slow or failing address cannot starve the others: in-flight cap, pool 
   assert.ok(listed.pausedUntil);
 });
 
+test("one shelf of slow receivers holds at most four slots of the pool", async () => {
+  const first = await hook("hooks-busy-shelf", "busy-0");
+  const ids = [first.webhook.id];
+  for (const n of [1, 2]) {
+    const more = await session(first.who, "POST", "/api/webhooks", {
+      url: `https://hooks.example.com/busy-${n}`,
+      events: ["revision.saved"],
+    });
+    assert.equal(more.statusCode, 200, more.body);
+    ids.push(more.json().webhook.id);
+  }
+  for (const id of ids) await queue(id, first.who.tenant, 3);
+  let live = 0;
+  let most = 0;
+  setWebhookNetwork({
+    resolver,
+    transport: async (request) => {
+      const ours = request.url.includes("/busy-");
+      if (ours) most = Math.max(most, ++live);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      if (ours) live--;
+      return { ok: true, status: 200, error: null, snippet: null };
+    },
+  });
+  try {
+    await deliverDueWebhooks();
+  } finally {
+    setWebhookNetwork({ resolver, transport: async (request) => (sent.push(request), answer) });
+  }
+  assert.ok(most <= 4 && most >= 3, `at most four in flight for the shelf, saw ${most}`);
+  for (const id of ids) assert.ok((await deliveries(id)).every((row) => row.state === "delivered"));
+});
+
+test("a personal shelf's owner frozen for a while: webhooks pause and come back on", async () => {
+  const { who, webhook } = await hook("hooks-frozen", "frozen");
+  await queue(webhook.id, who.tenant, 1);
+  await db.query("UPDATE accounts SET disabled=true WHERE id=$1", [who.id]);
+  const state = async () =>
+    (await db.query("SELECT status,disabled_reason FROM webhook_endpoints WHERE id=$1", [webhook.id])).rows[0];
+  assert.deepEqual(await state(), { status: "active", disabled_reason: null });
+  sent.length = 0;
+  await deliverDueWebhooks();
+  assert.equal(sent.length, 0, "nothing is sent while the owner is frozen");
+  assert.equal((await deliveries(webhook.id))[0].state, "pending");
+  await db.query("UPDATE accounts SET disabled=false WHERE id=$1", [who.id]);
+  await deliverDueWebhooks();
+  assert.equal(sent.length, 1);
+  assert.equal((await deliveries(webhook.id))[0].state, "delivered");
+});
+
 test("an address with too many waiting deliveries skips new events and counts them", async () => {
   const full = await hook("hooks-full", "full");
   await db.query(

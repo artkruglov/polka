@@ -63,7 +63,10 @@ CREATE TABLE webhook_deliveries (
   CHECK ((state = 'pending') = (next_attempt_at IS NOT NULL))
 );
 CREATE INDEX webhook_deliveries_due ON webhook_deliveries (next_attempt_at) WHERE state = 'pending';
-CREATE INDEX webhook_deliveries_pending ON webhook_deliveries (endpoint_id) WHERE state = 'pending';
+-- The sender picks a few due deliveries per address, then counts what is in flight.
+CREATE INDEX webhook_deliveries_pending ON webhook_deliveries (endpoint_id, next_attempt_at) WHERE state = 'pending';
+CREATE INDEX webhook_deliveries_leased ON webhook_deliveries (endpoint_id)
+  WHERE state = 'pending' AND leased_until IS NOT NULL;
 CREATE INDEX webhook_deliveries_log ON webhook_deliveries (endpoint_id, created_at DESC);
 CREATE INDEX webhook_deliveries_age ON webhook_deliveries (created_at);
 
@@ -101,9 +104,12 @@ CREATE TRIGGER erase_account_webhooks
   EXECUTE FUNCTION erase_account_webhooks();
 
 -- A webhook answers to the person who registered it (or last switched it on):
--- when that person leaves the shelf, stops being its admin or is disabled,
--- it is switched off ('creator') with whatever waits; another admin may
--- switch it on again and answers for it from then on.
+-- when that person leaves a department shelf, stops being its admin or is
+-- disabled, it is switched off ('creator') with whatever waits; another admin
+-- may switch it on again and answers for it from then on. A personal shelf's
+-- owner who is disabled (often for a while: a moderation or content-filter
+-- freeze) is not switched off: the sender skips the shelf while the owner is
+-- disabled (webhooks.ts) and resumes after.
 CREATE FUNCTION webhooks_lose_creator() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$
@@ -122,6 +128,8 @@ BEGIN
        SET status='disabled',disabled_reason='creator',updated_at=now()
      WHERE endpoint.created_by=person AND endpoint.status='active'
        AND (shelf IS NULL OR endpoint.tenant_id=shelf)
+       AND EXISTS(SELECT 1 FROM public.tenants tenant
+                   WHERE tenant.id=endpoint.tenant_id AND tenant.kind='team')
     RETURNING endpoint.id
   )
   UPDATE public.webhook_deliveries delivery
