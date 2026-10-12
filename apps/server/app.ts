@@ -222,7 +222,11 @@ export async function createApp() {
       },
       transaction,
       fail: (status, code, message) => new Problem(status, code, message),
-      settings: { appOrigin: config.APP_ORIGIN, teamShelves: config.TEAM_SHELVES === "on" },
+      settings: {
+        appOrigin: config.APP_ORIGIN,
+        teamShelves: config.TEAM_SHELVES === "on",
+        teamShelvesScope: config.TEAM_SHELVES_SCOPE,
+      },
       log: (event) => log.info({ extension: extension.name, ...event }),
       content: {
         revision: revisionForExtension,

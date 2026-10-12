@@ -281,6 +281,12 @@ export type ShelfMember = {
   role: Exclude<ShelfRole, "owner">;
   joinedAt: string;
 };
+/**
+ * Whom a shelf's admin adds by address or login: anyone who signs in
+ * (installation) or only people of the shelf's organisation (a shared cloud).
+ */
+export type ShelfDirectAdd =
+  { scope: "installation" } | { scope: "organisation"; organisation: string | null; domains: string[] };
 /** A link that brings a colleague onto a department shelf (TEAM_SHELVES.md). */
 export type ShelfInvitation = {
   id: string;
@@ -306,11 +312,15 @@ export type ShelfEvent = {
 };
 
 export const client = {
-  shelves: () => request<{ items: Shelf[]; canCreate: boolean }>("/shelves"),
+  /** scope and contact: on a shared cloud, whom a company asks for a company admin. */
+  shelves: () =>
+    request<{ items: Shelf[]; canCreate: boolean; scope?: "organisation"; contact?: string | null }>("/shelves"),
   createShelf: (name: string) => request<Shelf>("/shelves", { name }),
   renameShelf: (id: string, name: string) => request<{ id: string; name: string }>(`/shelves/${id}`, { name }, "PATCH"),
   shelfMembers: (id: string) =>
-    request<{ role: ShelfRole; items: ShelfMember[]; hasMore: boolean }>(`/shelves/${id}/members`),
+    request<{ role: ShelfRole; items: ShelfMember[]; hasMore: boolean; directAdd?: ShelfDirectAdd }>(
+      `/shelves/${id}/members`,
+    ),
   addShelfMember: (id: string, who: string, role: ShelfMember["role"]) =>
     request<{ accountId: string; name: string; role: ShelfMember["role"] }>(`/shelves/${id}/members`, { who, role }),
   changeShelfMemberRole: (id: string, accountId: string, role: ShelfMember["role"]) =>

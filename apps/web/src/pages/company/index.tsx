@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Search, ShieldCheck, UserMinus, Users } from "lucide-react";
-import { ApiError, request } from "../../shared/api/client.ts";
+import { ApiError, client, request } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Button, Notice, StatusPanel } from "../../shared/ui/controls.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
@@ -236,7 +236,7 @@ export function CompanyAdmin() {
   const account = useAccount();
   const [state, setState] = useState<
     | { kind: "loading" }
-    | { kind: "denied" }
+    | { kind: "denied"; cloud: boolean; contact: string | null }
     | { kind: "error"; message: string }
     | { kind: "ready"; shelves: CompanyShelf[] }
   >({ kind: "loading" });
@@ -256,13 +256,17 @@ export function CompanyAdmin() {
     company
       .shelves()
       .then((page) => setState({ kind: "ready", shelves: page.items }))
-      .catch((e) =>
-        setState(
-          e instanceof ApiError && e.status === 404
-            ? { kind: "denied" }
-            : { kind: "error", message: (e as Error).message },
-        ),
-      );
+      .catch(async (e) => {
+        if (!(e instanceof ApiError && e.status === 404))
+          return setState({ kind: "error", message: (e as Error).message });
+        // On a shared cloud the page says whom a company writes to.
+        const shelves = await client.shelves().catch(() => null);
+        setState({
+          kind: "denied",
+          cloud: shelves?.scope === "organisation",
+          contact: shelves?.contact ?? null,
+        });
+      });
   }, [account, refresh]);
   return (
     <AppShell current="shelf" account={account}>
@@ -276,11 +280,25 @@ export function CompanyAdmin() {
             Загружаем…
           </p>
         )}
-        {state.kind === "denied" && (
-          <StatusPanel title="Эта страница — для администратора компании">
-            Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
-          </StatusPanel>
-        )}
+        {state.kind === "denied" &&
+          (state.cloud ? (
+            <StatusPanel title="Полки отделов для вашей компании">
+              Полки отделов создаёт и ведёт администратор компании: он заводит полки, добавляет сотрудников и приглашает
+              коллег ссылкой. Чтобы ваша компания получила полки,{" "}
+              {state.contact ? (
+                <>
+                  напишите на <a href={`mailto:${state.contact}`}>{state.contact}</a>
+                </>
+              ) : (
+                "напишите оператору Полки"
+              )}{" "}
+              — назначим администратора компании. Он увидит только полки и сотрудников своей компании.
+            </StatusPanel>
+          ) : (
+            <StatusPanel title="Эта страница — для администратора компании">
+              Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
+            </StatusPanel>
+          ))}
         {state.kind === "error" && <StatusPanel title="Не удалось загрузить">{state.message}</StatusPanel>}
         {state.kind === "ready" && (
           <>

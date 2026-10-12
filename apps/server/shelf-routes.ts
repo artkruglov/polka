@@ -4,6 +4,7 @@ import { type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
+import { companyAdminOf, companyContact, organisationScope } from "./organisations.ts";
 import { assertStrongSession, identity } from "./auth.ts";
 import { uuid } from "../../packages/contracts/index.ts";
 import {
@@ -37,13 +38,14 @@ export function registerShelfRoutes(app: FastifyInstance) {
   // department shelves while TEAM_SHELVES is on.
   app.get("/api/shelves", async (req) => {
     const actor = await identity(req);
-    const {
-      rows: [account],
-    } = await db.query("SELECT company_admin FROM accounts WHERE id=$1", [actor.id]);
+    const on = config.TEAM_SHELVES === "on";
     return {
       items: await shelvesOf(actor.id),
-      // A company admin opens department shelves (TEAM_SHELVES on).
-      canCreate: config.TEAM_SHELVES === "on" && Boolean(account?.company_admin),
+      // A company admin opens department shelves (TEAM_SHELVES on); in
+      // organisation scope, of their organisation (organisations.ts).
+      canCreate: on && Boolean(await companyAdminOf(db, actor.id)),
+      // On a shared cloud a company asks the operator for a company admin.
+      ...(on && organisationScope() ? { scope: "organisation" as const, contact: companyContact() } : {}),
     };
   });
   app.post("/api/shelves", async (req) => {

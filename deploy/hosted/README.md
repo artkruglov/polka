@@ -411,7 +411,9 @@ docker compose --env-file hosted.env logs -f account-purge                  # ac
 
 ## Прочие настройки
 
-- `TEAM_SHELVES` (`off` по умолчанию и на polochka.app) — полки отделов ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md)).
+- `TEAM_SHELVES` (`off` по умолчанию, на polochka.app `on` с 12.10.2026) — полки отделов ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md)).
+- `TEAM_SHELVES_SCOPE` (`organisation` по умолчанию в этом `compose.yml`, `installation` в коде и в `deploy/compose.base.yml`) — чьи полки отделов видит администратор компании. `organisation` — облако для многих компаний: у администратора компании есть организация, он видит и ведёт только её полки, сразу добавить на полку можно только сотрудника организации (подтверждённая почта на её домене или участие в её полке), остальных — только ссылкой-приглашением. `installation` — одна компания на установку, как раньше. Организацию и её администратора заводит оператор: `npm run admin -- company org "<название>" --domain company.ru`, затем `npm run admin -- company admin <логин|почта> --org "<название>"` ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md#организации-в-облаке-миграция-070)).
+- `SERVICE_ACCOUNTS` (`off` по умолчанию, на polochka.app `on` с 12.10.2026) — сервисные доступы для cron и CI на полках отделов ([PUBLISH_API.md](../../docs/PUBLISH_API.md)).
 - `BROWSER_EXTENSION_IDS` — ID официальной сборки расширения «На Полку»; её страница согласия подписана «Расширение браузера «На Полку»». Пусто — любое расширение показывается со своим ID.
 - `POLKA_EXTENSIONS` — модули расширений открытого ядра, установленные в образ ([EXTENSIONS.md](../../docs/specs/EXTENSIONS.md)). Пусто — только ядро.
 - `S3_SECRET_KEY` — не короче 16 символов, иначе приложение не запустится.
