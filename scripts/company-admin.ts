@@ -1,33 +1,40 @@
 // Operator script: who may create department shelves (docs/specs/
 // TEAM_SHELVES.md). Finds the account by login or e-mail and sets or clears
-// accounts.company_admin. Prints the account id only.
+// accounts.company_admin and the organisation it administers. Prints the
+// account id and the organisation only.
 //
 //   npm run admin -- company admin anna@example.ru
+//   npm run admin -- company admin anna@example.ru --org "ООО Пример"
 //   npm run admin -- company admin anna@example.ru --revoke
-import { db } from "../apps/server/db.ts";
+//
+// With TEAM_SHELVES_SCOPE=organisation (polochka.app) --org is required. The
+// organisation must exist (company org creates it): a misspelt name is an
+// error, never a new organisation.
+import { db, transaction } from "../apps/server/db.ts";
+import { setCompanyAdmin } from "../apps/server/organisations.ts";
 
-const who = process.argv[2];
-const revoke = process.argv.includes("--revoke");
-if (!who || who.startsWith("--")) {
-  console.error("Use npm run admin -- company admin <login or e-mail> [--revoke]");
+const args = process.argv.slice(2);
+const who = args[0];
+const revoke = args.includes("--revoke");
+const orgAt = args.indexOf("--org");
+const org = orgAt >= 0 ? args[orgAt + 1] : undefined;
+if (!who || who.startsWith("--") || (orgAt >= 0 && (!org || org.startsWith("--")))) {
+  console.error("Use npm run admin -- company admin <login or e-mail> [--org <organisation>] [--revoke]");
   process.exitCode = 2;
 } else {
   try {
-    // Exactly one account, or nothing changes: a login, or the stored
-    // (lowercase) e-mail matched exactly.
-    const { rows } = await db.query(
-      `SELECT id FROM accounts
-       WHERE (name=$1 OR email=lower($1))
-         AND NOT disabled AND deletion_requested_at IS NULL`,
-      [who],
+    const result = await transaction((c) => setCompanyAdmin(c, who, { org, revoke }));
+    console.log(
+      JSON.stringify({
+        event: "company_admin",
+        accountId: result.accountId,
+        companyAdmin: result.companyAdmin,
+        organisation: result.organisation,
+      }),
     );
-    if (rows.length !== 1) {
-      console.error(rows.length ? "More than one account matches; nothing changed." : "No active account matches.");
-      process.exitCode = 1;
-    } else {
-      await db.query("UPDATE accounts SET company_admin=$2 WHERE id=$1", [rows[0].id, !revoke]);
-      console.log(JSON.stringify({ event: "company_admin", accountId: rows[0].id, companyAdmin: !revoke }));
-    }
+  } catch (error) {
+    console.error((error as Error).message);
+    process.exitCode = 1;
   } finally {
     await db.end();
   }

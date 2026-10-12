@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { HTML_LIVE_MODES, parseViewerConfig } from "./viewer-config.ts";
-import { PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
+import { DOMAIN_RE, PUBLIC_MAIL_DOMAINS, parseSignupDomains } from "./mail-domains.ts";
 import { rendererUrlAllowed } from "./url-import/renderer-url.ts";
 import { UUID_RE } from "../../packages/contracts/uuid.ts";
 const MODEL_PROVIDERS = ["yandex", "neuraldeep", "openai-compatible"] as const;
@@ -163,6 +163,11 @@ const env = z
     COMMENTS_MODE: z.enum(["on", "owner-notes", "off"]).default("on"),
     // Department shelves (docs/specs/TEAM_SHELVES.md): off until a pilot.
     TEAM_SHELVES: z.enum(["off", "on"]).default("off"),
+    // Who a company admin administers (docs/specs/TEAM_SHELVES.md,
+    // «Организации в облаке»): installation — the installation is one company,
+    // every department shelf; organisation — a shared cloud, the shelves of the
+    // admin's organisation only, and direct adding only within it.
+    TEAM_SHELVES_SCOPE: z.enum(["installation", "organisation"]).default("installation"),
     // Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off until a pilot asks.
     SERVICE_ACCOUNTS: z.enum(["off", "on"]).default("off"),
     // Agent sessions (docs/specs/AGENT_SESSIONS.md): the allowance of every
@@ -509,8 +514,7 @@ const domainList = (value: string, name: string) =>
     .map((entry) => entry.trim().toLowerCase().replace(/^@/, ""))
     .filter(Boolean)
     .map((entry) => {
-      if (!/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry))
-        throw new Error(`${name}: not a domain: ${entry}`);
+      if (!DOMAIN_RE.test(entry)) throw new Error(`${name}: not a domain: ${entry}`);
       return entry;
     });
 type OrgRole = "reader" | "curator";

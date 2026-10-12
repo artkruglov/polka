@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>69
+     OR (SELECT count(*) FROM public.schema_migrations)<>70
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>69 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 069';
+     OR (SELECT max(version) FROM public.schema_migrations)<>70 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 070';
   END IF;
 END $$;
 
@@ -224,6 +224,13 @@ GRANT SELECT, INSERT, UPDATE ON TABLE public.feed_proposals TO :"runtime_role";
 -- with their shelf (ON DELETE CASCADE). tenant_member_events gains a column,
 -- already granted.
 GRANT SELECT, INSERT, UPDATE ON TABLE public.tenant_invitations TO :"runtime_role";
+-- Organisations (070): the application reads them; the operator command
+-- (npm run admin -- company org|admin, run as the runtime) creates an
+-- organisation, renames none, and adds or removes its domains. tenants and
+-- accounts gain a column each, already granted; the erasure trigger only
+-- changes the row being updated (BEFORE), no grants.
+GRANT SELECT, INSERT ON TABLE public.organisations TO :"runtime_role";
+GRANT SELECT, INSERT, DELETE ON TABLE public.organisation_domains TO :"runtime_role";
 -- Allowed shelves of a connection (059): a column of agent_connections, already granted.
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;

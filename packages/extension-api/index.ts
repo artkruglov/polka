@@ -209,7 +209,19 @@ export type ExtensionContext = {
     message: string,
   ) => Error;
   /** The core's installation settings an extension may read. */
-  settings: { appOrigin: string; teamShelves: boolean };
+  settings: {
+    appOrigin: string;
+    teamShelves: boolean;
+    /** installation: one company; organisation: a shared cloud, a company admin administers one organisation (docs/specs/TEAM_SHELVES.md). */
+    teamShelvesScope: "installation" | "organisation";
+  };
+  /**
+   * The account's company admin role (docs/specs/TEAM_SHELVES.md): null when
+   * it is not a company admin, or TEAM_SHELVES is off. organisationId is the
+   * organisation it administers; null in installation scope, meaning every
+   * department shelf of the installation.
+   */
+  companyAdmin: (accountId: string) => Promise<{ organisationId: string | null } | null>;
   log: (event: Record<string, unknown>) => void;
   /**
    * Saved versions of any shelf of the installation (an extension is trusted

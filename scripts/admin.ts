@@ -59,7 +59,14 @@ export const COMMANDS: Record<string, Record<string, Command>> = {
     },
   },
   company: {
-    admin: { script: "company-admin.ts", about: "who may create department shelves: <login|email> [--revoke]" },
+    admin: {
+      script: "company-admin.ts",
+      about: "who may create department shelves: <login|email> [--org <name>] [--revoke]",
+    },
+    org: {
+      script: "company-org.ts",
+      about: "an organisation on a shared cloud: <name> [--domain d]… [--remove-domain d]… [--shelf <uuid>]… [--move]",
+    },
   },
   feed: {
     proposals: {

@@ -13,6 +13,7 @@ import { Problem, missing } from "./errors.ts";
 import { teamShelfNameSchema, type ShelfRole } from "./shelves.ts";
 import { config } from "./config.ts";
 import { emitEvent } from "./extensions.ts";
+import { directAddRule, emailVisibleSql, orgDomainSql, organisationScope } from "./organisations.ts";
 
 type Actor = { id: string };
 
@@ -30,9 +31,13 @@ export async function lockTeamShelf(c: PoolClient, shelfId: string) {
   if (config.TEAM_SHELVES !== "on") throw missing();
   const {
     rows: [shelf],
-  } = await c.query(`SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`, [shelfId]);
+  } = await c.query(
+    `SELECT id,name,organisation_id AS "organisationId" FROM tenants
+     WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`,
+    [shelfId],
+  );
   if (!shelf) throw missing();
-  return shelf as { id: string; name: string };
+  return shelf as { id: string; name: string; organisationId: string | null };
 }
 
 /** Locks the accounts by id and returns the active ones. */
@@ -100,16 +105,20 @@ const event = (
     [shelfId, actor.id, action, target, oldRole, newRole],
   );
 
-/** Everyone on the shelf; any member sees who else is there. */
+/**
+ * Everyone on the shelf; any member sees who else is there, its admin sees
+ * their addresses (in organisation scope, only addresses on the
+ * organisation's domains) and what may be added directly.
+ */
 export async function listShelfMembers(actor: Actor, shelfId: string) {
   return transaction(async (c) => {
-    await lockTeamShelf(c, shelfId);
+    const shelf = await lockTeamShelf(c, shelfId);
     const active = await lockAccounts(c, [actor.id]);
     const role = roleOf(await lockMemberships(c, shelfId, [actor.id]), active, actor.id);
     const { rows } = await c.query(
       `SELECT member.account_id AS "accountId",
               COALESCE(account.display_name,account.name) AS name,
-              CASE WHEN $2 THEN account.email END AS email,
+              CASE WHEN $2 AND ${emailVisibleSql("account.id", "$3::uuid")} THEN account.email END AS email,
               member.role,member.joined_at AS "joinedAt"
        FROM tenant_members member
        JOIN accounts account ON account.id=member.account_id
@@ -117,22 +126,33 @@ export async function listShelfMembers(actor: Actor, shelfId: string) {
          AND NOT account.disabled AND account.deletion_requested_at IS NULL
        ORDER BY lower(COALESCE(account.display_name,account.name)),member.account_id
        LIMIT 1001`,
-      [shelfId, role === "admin"],
+      [shelfId, role === "admin", shelf.organisationId],
     );
-    return { role, items: rows.slice(0, 1000), hasMore: rows.length > 1000 };
+    return {
+      role,
+      items: rows.slice(0, 1000),
+      hasMore: rows.length > 1000,
+      ...(role === "admin" ? { directAdd: await directAddRule(c, shelfId) } : {}),
+    };
   });
 }
 
 /**
  * An admin adds a colleague by address or login. Within one company's
  * installation every account is a colleague, so the member is added at once;
- * someone who has never signed in is not found yet.
+ * someone who has never signed in is not found yet. On a shared cloud
+ * (organisation scope) only an employee of the shelf's organisation (a
+ * verified address on its domain) is added this way, by address or login;
+ * for anyone else, a member of its other shelves by a link included, and for
+ * an address with no account, the answer is the same, so it tells nothing
+ * about who has an account. They join through an invitation link they accept
+ * themselves.
  */
 export async function addShelfMember(actor: Actor, shelfId: string, body: unknown) {
   const input = addInput.parse(body);
   const who = input.who.toLowerCase();
   return transaction(async (c) => {
-    await lockTeamShelf(c, shelfId);
+    const shelf = await lockTeamShelf(c, shelfId);
     // Only the shelf's admin may look people up: nobody else learns from the
     // answer which addresses and logins exist. Rechecked under lock below.
     const {
@@ -143,18 +163,22 @@ export async function addShelfMember(actor: Actor, shelfId: string, body: unknow
     ]);
     if (!asker) throw missing();
     adminOnly(asker.role);
+    const scoped = organisationScope();
     const found = await c.query(
       `SELECT id,COALESCE(display_name,name) AS name FROM accounts
        WHERE (email=$1 OR lower(name)=$1)
          AND NOT disabled AND deletion_requested_at IS NULL
+         AND (NOT $2::boolean OR ${orgDomainSql("accounts.id", "$3::uuid")})
        LIMIT 2`,
-      [who],
+      [who, scoped, shelf.organisationId],
     );
     if (found.rows.length !== 1)
       throw new Problem(
         404,
         "not_found",
-        "Такого сотрудника нет в Полке. Пусть он один раз войдёт, затем добавьте его снова.",
+        scoped
+          ? "Сразу добавить можно только сотрудника вашей организации, который уже входил в Полку. Остальных пригласите ссылкой."
+          : "Такого сотрудника нет в Полке. Пусть он один раз войдёт, затем добавьте его снова.",
       );
     const target = found.rows[0] as { id: string; name: string };
     const active = await lockAccounts(c, [actor.id, target.id]);

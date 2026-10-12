@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Search, ShieldCheck, UserMinus, Users } from "lucide-react";
-import { ApiError, request } from "../../shared/api/client.ts";
+import { ApiError, client, request } from "../../shared/api/client.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
 import { Button, Notice, StatusPanel } from "../../shared/ui/controls.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
@@ -31,7 +31,8 @@ type Employee = {
 };
 
 const company = {
-  shelves: () => request<{ items: CompanyShelf[] }>("/company/shelves"),
+  /** organisation: on a shared cloud, the one this admin runs. */
+  shelves: () => request<{ items: CompanyShelf[]; organisation?: string | null }>("/company/shelves"),
   members: (id: string) => request<{ items: Member[] }>(`/company/shelves/${id}/members`),
   admin: (id: string) => request(`/company/shelves/${id}/admin`, {}),
   find: (who: string) => request<Employee>(`/company/people?${new URLSearchParams({ who })}`),
@@ -115,7 +116,11 @@ function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => 
   );
 }
 
-function Offboarding() {
+/**
+ * everywhere: «со всех полок отделов», or on a shared cloud «… компании»: the
+ * other companies' shelves are not this admin's.
+ */
+function Offboarding({ everywhere }: { everywhere: string }) {
   const [who, setWho] = useState("");
   const [person, setPerson] = useState<Employee | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,8 +169,8 @@ function Offboarding() {
     <section className="company-card" aria-labelledby="offboard-title">
       <h2 id="offboard-title">Сотрудник уходит</h2>
       <p className="company-muted">
-        Уберите его со всех полок отделов одним действием: участие и его агенты на этих полках закроются, работы
-        останутся у отделов. Вход в Полку закрывается в SSO компании.
+        Уберите его {everywhere} одним действием: участие и его агенты на этих полках закроются, работы останутся у
+        отделов. Вход в Полку закрывается в SSO компании.
       </p>
       <form className="company-find" onSubmit={find}>
         <label className="ui-search">
@@ -197,7 +202,7 @@ function Offboarding() {
                   : ""}
               </p>
               <Button variant="primary" onClick={() => setConfirm(true)} disabled={busy}>
-                <UserMinus /> Убрать со всех полок отделов
+                <UserMinus /> Убрать {everywhere}
               </Button>
             </>
           ) : (
@@ -206,11 +211,7 @@ function Offboarding() {
         </div>
       )}
       {confirm && person && (
-        <Dialog
-          title={`Убрать ${person.name} со всех полок отделов?`}
-          busy={busy}
-          onClose={() => !busy && setConfirm(false)}
-        >
+        <Dialog title={`Убрать ${person.name} ${everywhere}?`} busy={busy} onClose={() => !busy && setConfirm(false)}>
           <div className="dialog-body">
             <p>
               {person.name} перестанет видеть полки {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")}, его
@@ -236,9 +237,9 @@ export function CompanyAdmin() {
   const account = useAccount();
   const [state, setState] = useState<
     | { kind: "loading" }
-    | { kind: "denied" }
+    | { kind: "denied"; cloud: boolean; contact: string | null }
     | { kind: "error"; message: string }
-    | { kind: "ready"; shelves: CompanyShelf[] }
+    | { kind: "ready"; shelves: CompanyShelf[]; organisation: string | null }
   >({ kind: "loading" });
   const [refresh, setRefresh] = useState(0);
   // Sections of extensions, e.g. the commercial edition's link policy.
@@ -255,14 +256,18 @@ export function CompanyAdmin() {
     }
     company
       .shelves()
-      .then((page) => setState({ kind: "ready", shelves: page.items }))
-      .catch((e) =>
-        setState(
-          e instanceof ApiError && e.status === 404
-            ? { kind: "denied" }
-            : { kind: "error", message: (e as Error).message },
-        ),
-      );
+      .then((page) => setState({ kind: "ready", shelves: page.items, organisation: page.organisation ?? null }))
+      .catch(async (e) => {
+        if (!(e instanceof ApiError && e.status === 404))
+          return setState({ kind: "error", message: (e as Error).message });
+        // On a shared cloud the page says whom a company writes to.
+        const shelves = await client.shelves().catch(() => null);
+        setState({
+          kind: "denied",
+          cloud: shelves?.scope === "organisation",
+          contact: shelves?.contact ?? null,
+        });
+      });
   }, [account, refresh]);
   return (
     <AppShell current="shelf" account={account}>
@@ -276,15 +281,29 @@ export function CompanyAdmin() {
             Загружаем…
           </p>
         )}
-        {state.kind === "denied" && (
-          <StatusPanel title="Эта страница — для администратора компании">
-            Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
-          </StatusPanel>
-        )}
+        {state.kind === "denied" &&
+          (state.cloud ? (
+            <StatusPanel title="Полки отделов для вашей компании">
+              Полки отделов создаёт и ведёт администратор компании: он заводит полки, добавляет сотрудников и приглашает
+              коллег ссылкой. Чтобы ваша компания получила полки,{" "}
+              {state.contact ? (
+                <>
+                  напишите на <a href={`mailto:${state.contact}`}>{state.contact}</a>
+                </>
+              ) : (
+                "напишите оператору Полки"
+              )}{" "}
+              — назначим администратора компании. Он увидит только полки и сотрудников своей компании.
+            </StatusPanel>
+          ) : (
+            <StatusPanel title="Эта страница — для администратора компании">
+              Полки отделов создаёт и ведёт администратор компании. Его назначает тот, кто обслуживает установку Полки.
+            </StatusPanel>
+          ))}
         {state.kind === "error" && <StatusPanel title="Не удалось загрузить">{state.message}</StatusPanel>}
         {state.kind === "ready" && (
           <>
-            <Offboarding />
+            <Offboarding everywhere={state.organisation ? "со всех полок отделов компании" : "со всех полок отделов"} />
             {extensionSections.map(({ id, title, Component }) => (
               <section key={id} className="company-card" aria-label={title}>
                 <h2>{title}</h2>

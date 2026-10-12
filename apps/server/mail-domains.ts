@@ -60,6 +60,9 @@ export const PUBLIC_MAIL_DOMAINS = Object.freeze([
   "163.com",
 ]);
 
+/** A lower-case mail domain: labels of a-z, 0-9 and "-", 3–253 characters. */
+export const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/;
+
 /** The part after the last "@", lower-cased; "" when there is none. */
 export function emailDomain(email: string) {
   const at = email.lastIndexOf("@");
@@ -94,7 +97,7 @@ export function parseSignupDomains(value: string, appOrigin: string): SignupDoma
     if (entry === "ru-only") {
       RU_MAIL_DOMAINS.forEach((domain) => domains.add(domain));
       installationDomains(appOrigin).forEach((domain) => domains.add(domain));
-    } else if (/^(?=.{3,253}$)([a-z0-9-]+\.)+[a-z0-9-]{2,63}$/.test(entry)) domains.add(entry);
+    } else if (DOMAIN_RE.test(entry)) domains.add(entry);
     else throw new Error(`EMAIL_SIGNUP_DOMAINS: not a domain: ${entry}`);
   }
   return Object.freeze([...domains].sort());

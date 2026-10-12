@@ -8,6 +8,7 @@ import { z } from "zod";
 import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
+import { companyAdminOf } from "./organisations.ts";
 
 export const SHELF_ROLES = ["reader", "author", "curator", "admin", "owner"] as const;
 export type ShelfRole = (typeof SHELF_ROLES)[number];
@@ -133,21 +134,16 @@ export async function createTeamShelfInTransaction(
 ): Promise<Shelf> {
   if (config.TEAM_SHELVES !== "on") throw missing();
   const name = teamShelfNameSchema.parse(rawName);
-  const {
-    rows: [admin],
-  } = await c.query(
-    `SELECT company_admin FROM accounts
-     WHERE id=$1 AND NOT disabled AND deletion_requested_at IS NULL FOR UPDATE`,
-    [actor.id],
-  );
-  if (!admin) throw missing();
-  if (!admin.company_admin) throw new Problem(403, "forbidden", "Полки отделов создаёт администратор компании.");
+  // In organisation scope the shelf belongs to the admin's organisation, and
+  // an admin without one is not a company admin (organisations.ts). In
+  // installation scope it belongs to none (organisationId is null).
+  const admin = await companyAdminOf(c, actor.id, true);
+  if (!admin) throw new Problem(403, "forbidden", "Полки отделов создаёт администратор компании.");
   const id = randomUUID();
-  await c.query(`INSERT INTO tenants(id,owner_id,kind,name,created_by) VALUES($1,NULL,'team',$2,$3)`, [
-    id,
-    name,
-    actor.id,
-  ]);
+  await c.query(
+    `INSERT INTO tenants(id,owner_id,kind,name,created_by,organisation_id) VALUES($1,NULL,'team',$2,$3,$4)`,
+    [id, name, actor.id, admin.organisationId],
+  );
   await c.query(
     `INSERT INTO tenant_members(tenant_id,account_id,role,invited_by)
      VALUES($1,$2,'admin',$2)`,

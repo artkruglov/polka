@@ -118,6 +118,9 @@ x-runtime-env: &runtime-env
   COMMENTS_MODE: ${COMMENTS_MODE:-owner-notes}
   # Department shelves (docs/specs/TEAM_SHELVES.md): off | on.
   TEAM_SHELVES: ${TEAM_SHELVES:-off}
+  # installation (one company) | organisation (a shared cloud: a company admin
+  # administers one organisation's shelves). polochka.app: organisation.
+  TEAM_SHELVES_SCOPE: ${TEAM_SHELVES_SCOPE:-organisation}
   # Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off | on.
   SERVICE_ACCOUNTS: ${SERVICE_ACCOUNTS:-off}
   # Agent sessions (docs/specs/AGENT_SESSIONS.md): bytes every personal shelf

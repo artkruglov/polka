@@ -5,7 +5,9 @@
 // company's SSO's business: this does not close the account.
 //
 // Only an account with accounts.company_admin, while TEAM_SHELVES is on; for
-// anyone else these routes do not exist (404).
+// anyone else these routes do not exist (404). With TEAM_SHELVES_SCOPE=
+// organisation (a shared cloud) the admin sees and changes the shelves of
+// their organisation only, and finds only people of it (organisations.ts).
 //
 // Lock order: the shelves by id, then the accounts by id, then memberships —
 // the order of shelf-members.ts and lockShelf.
@@ -15,22 +17,27 @@ import { config } from "./config.ts";
 import { emitEvent } from "./extensions.ts";
 import { db, transaction } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
+import { companyAdminOf, emailVisibleSql, ofOrganisationSql } from "./organisations.ts";
 
 type Actor = { id: string };
 
+/**
+ * The admin's organisation id, or null for «every department shelf»
+ * (installation scope). Pass it as the parameter of inScope().
+ */
 async function assertCompanyAdmin(c: Pick<PoolClient, "query">, actor: Actor) {
   if (config.TEAM_SHELVES !== "on") throw missing();
-  const { rowCount } = await c.query(
-    `SELECT 1 FROM accounts WHERE id=$1 AND company_admin
-       AND NOT disabled AND deletion_requested_at IS NULL`,
-    [actor.id],
-  );
-  if (!rowCount) throw missing();
+  const admin = await companyAdminOf(c, actor.id);
+  if (!admin) throw missing();
+  return admin.organisationId;
 }
+
+/** SQL: the shelf (alias) is within the admin's scope (a uuid parameter, null: all). */
+const inScope = (shelf: string, param: string) => `(${param}::uuid IS NULL OR ${shelf}.organisation_id=${param}::uuid)`;
 
 /** Every active department shelf: members, works, who administers it. */
 export async function listCompanyShelves(actor: Actor) {
-  await assertCompanyAdmin(db, actor);
+  const org = await assertCompanyAdmin(db, actor);
   const { rows } = await db.query(
     `SELECT tenant.id,tenant.name,tenant.created_at AS "createdAt",
             (SELECT count(*)::int FROM tenant_members m
@@ -42,42 +49,66 @@ export async function listCompanyShelves(actor: Actor) {
               WHERE m.tenant_id=tenant.id AND m.state='active' AND m.role='admin'),
               '{}') AS admins
      FROM tenants tenant
-     WHERE tenant.kind='team' AND tenant.state='active'
+     WHERE tenant.kind='team' AND tenant.state='active' AND ${inScope("tenant", "$1")}
      ORDER BY lower(tenant.name),tenant.id
      LIMIT 500`,
+    [org],
   );
-  return { items: rows };
+  // The admin's organisation, named on the page (organisation scope only).
+  const organisation = org
+    ? ((await db.query("SELECT name FROM organisations WHERE id=$1", [org])).rows[0]?.name as string)
+    : null;
+  return { items: rows, organisation };
 }
 
 /** One shelf's members, for a company admin who need not be on it. */
 export async function listCompanyShelfMembers(actor: Actor, shelfId: string) {
-  await assertCompanyAdmin(db, actor);
+  const org = await assertCompanyAdmin(db, actor);
+  // Another organisation's shelf is «not found», like a missing one.
+  const { rowCount } = await db.query(
+    `SELECT 1 FROM tenants tenant
+     WHERE id=$1 AND kind='team' AND state='active' AND ${inScope("tenant", "$2")}`,
+    [shelfId, org],
+  );
+  if (!rowCount) throw missing();
   const { rows } = await db.query(
     `SELECT member.account_id AS "accountId",
             COALESCE(account.display_name,account.name) AS name,
-            account.email,member.role,member.joined_at AS "joinedAt"
+            CASE WHEN ${emailVisibleSql("account.id", "$2::uuid")} THEN account.email END AS email,
+            member.role,member.joined_at AS "joinedAt"
      FROM tenants tenant
      JOIN tenant_members member ON member.tenant_id=tenant.id AND member.state='active'
      JOIN accounts account ON account.id=member.account_id
-     WHERE tenant.id=$1 AND tenant.kind='team' AND tenant.state='active'
+     WHERE tenant.id=$1 AND tenant.kind='team' AND tenant.state='active' AND ${inScope("tenant", "$2")}
      ORDER BY lower(COALESCE(account.display_name,account.name)),member.account_id
      LIMIT 1000`,
-    [shelfId],
+    [shelfId, org],
   );
   return { items: rows };
 }
 
 const whoSchema = z.object({ who: z.string().trim().min(1).max(320) });
 
-/** An employee by address or login, and the department shelves they are on. */
+/**
+ * An employee by address or login, and the department shelves they are on.
+ * In organisation scope only a person of the admin's organisation is found
+ * (an employee, or a member of one of its shelves by login only), with its
+ * shelves only; anyone else is «not found», like a missing account.
+ */
 export async function findEmployee(actor: Actor, query: unknown) {
-  await assertCompanyAdmin(db, actor);
+  const org = await assertCompanyAdmin(db, actor);
   const who = whoSchema.parse(query).who.toLowerCase();
   const { rows: found } = await db.query(
-    `SELECT id,COALESCE(display_name,name) AS name,email,disabled,
-            deletion_requested_at IS NOT NULL AS leaving
-     FROM accounts WHERE email=$1 OR lower(name)=$1 LIMIT 2`,
-    [who],
+    `SELECT id,COALESCE(display_name,name) AS name,
+            CASE WHEN ${emailVisibleSql("accounts.id", "$2::uuid")} THEN email END AS email,
+            disabled,deletion_requested_at IS NOT NULL AS leaving
+     FROM accounts
+     -- By address only where the address is the organisation's to see: a
+     -- hidden one cannot be confirmed by guessing it.
+     WHERE (lower(name)=$1 OR (email=$1 AND ${emailVisibleSql("accounts.id", "$2::uuid")}))
+       AND ($2::uuid IS NULL OR ${ofOrganisationSql("accounts.id", "$2::uuid")})
+     LIMIT 2`,
+    [who, org],
   );
   if (found.length !== 1) throw missing();
   const person = found[0];
@@ -85,9 +116,9 @@ export async function findEmployee(actor: Actor, query: unknown) {
     `SELECT tenant.id,tenant.name,member.role
      FROM tenant_members member JOIN tenants tenant ON tenant.id=member.tenant_id
      WHERE member.account_id=$1 AND member.state='active'
-       AND tenant.kind='team' AND tenant.state='active'
+       AND tenant.kind='team' AND tenant.state='active' AND ${inScope("tenant", "$2")}
      ORDER BY lower(tenant.name)`,
-    [person.id],
+    [person.id, org],
   );
   const {
     rows: [agents],
@@ -95,9 +126,9 @@ export async function findEmployee(actor: Actor, query: unknown) {
     `SELECT count(*)::int AS count FROM agent_connections connection
      JOIN tenants tenant ON tenant.id=connection.tenant_id AND tenant.kind='team'
      WHERE connection.account_id=$1 AND connection.parent_id IS NULL
-       AND connection.principal_type='human'
+       AND connection.principal_type='human' AND ${inScope("tenant", "$2")}
        AND connection.revoked_at IS NULL AND connection.expires_at>now()`,
-    [person.id],
+    [person.id, org],
   );
   return {
     accountId: person.id,
@@ -125,24 +156,26 @@ async function offboardInTransaction(actor: Actor, accountId: string) {
   if (accountId === actor.id)
     throw new Problem(409, "conflict", "Себя так убрать нельзя: сначала назначьте другого администратора компании.");
   return transaction(async (c) => {
-    await assertCompanyAdmin(c, actor);
+    const org = await assertCompanyAdmin(c, actor);
     const { rows: candidates } = await c.query(
       `SELECT member.tenant_id FROM tenant_members member
        JOIN tenants tenant ON tenant.id=member.tenant_id AND tenant.kind='team'
-       WHERE member.account_id=$1 AND member.state='active'`,
-      [accountId],
+       WHERE member.account_id=$1 AND member.state='active' AND ${inScope("tenant", "$2")}`,
+      [accountId, org],
     );
     const shelfIds = candidates.map((row) => row.tenant_id as string);
     if (!shelfIds.length) return { removed: [] as { id: string; name: string; role: string }[] };
     const { rows: shelves } = await c.query(
-      `SELECT id,name FROM tenants WHERE id=ANY($1::uuid[]) AND kind='team'
+      `SELECT id,name FROM tenants tenant
+       WHERE id=ANY($1::uuid[]) AND kind='team' AND ${inScope("tenant", "$2")}
        ORDER BY id FOR UPDATE`,
-      [shelfIds],
+      [shelfIds, org],
     );
     await c.query("SELECT id FROM accounts WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE", [
       [...new Set([actor.id, accountId])],
     ]);
-    await assertCompanyAdmin(c, actor);
+    // Rechecked under lock: still a company admin, of the same organisation.
+    if ((await assertCompanyAdmin(c, actor)) !== org) throw missing();
     const removed: { id: string; name: string; role: string }[] = [];
     for (const shelf of shelves) {
       const { rows: members } = await c.query(
@@ -209,12 +242,14 @@ async function offboardInTransaction(actor: Actor, accountId: string) {
  */
 export async function adminCompanyShelf(actor: Actor, shelfId: string) {
   return transaction(async (c) => {
-    await assertCompanyAdmin(c, actor);
+    const org = await assertCompanyAdmin(c, actor);
     const {
       rows: [shelf],
-    } = await c.query(`SELECT id,name FROM tenants WHERE id=$1 AND kind='team' AND state='active' FOR UPDATE`, [
-      shelfId,
-    ]);
+    } = await c.query(
+      `SELECT id,name FROM tenants tenant
+       WHERE id=$1 AND kind='team' AND state='active' AND ${inScope("tenant", "$2")} FOR UPDATE`,
+      [shelfId, org],
+    );
     if (!shelf) throw missing();
     await c.query("SELECT id FROM accounts WHERE id=$1 FOR UPDATE", [actor.id]);
     const {

@@ -110,7 +110,7 @@ Each time Полка opens: sign in to your shelf (or start without signing up) 
     </td>
     <td valign="top">
       <h4>Department shelves</h4>
-      A department gets its own shelf: members and roles, the agent picks the shelf when it connects, links and discussions, a company admin page. Turned on with <code>TEAM_SHELVES=on</code>; off on polochka.app until a pilot.
+      A department gets its own shelf: members and roles, the agent picks the shelf when it connects, links and discussions, a company admin page. Turned on with <code>TEAM_SHELVES=on</code>. On polochka.app since 12.10.2026: each company is its own organisation and its company admin sees only its shelves. To get a department shelf in the cloud, write to hello@polochka.app and we will appoint your company admin.
     </td>
     <td valign="top">
       <h4>Calm moderation</h4>
@@ -170,7 +170,7 @@ A project work is a folder with versions: an agent takes it, edits it and saves 
 - **Accepted version and an owner** per work (the work menu, «Принятая версия»). Marking a version does not move any link, and a new version does not clear the mark.
 - **Agents read the shelf:** `GET /api/v1/works` (text search with ranking, `since` for what changed), `GET /api/v1/events` (a change feed to poll), `polka_list` with the same parameters; the shelf's «how we do things here» note arrives in `polka_context`.
 - **Link mode:** an unattended agent (a service account) does not move a pinned link until a curator switches it to follow new versions; an agent with your own token works as before.
-- **On your own installation** (`TEAM_SHELVES=on`, `SERVICE_ACCOUNTS=on`): search across department shelves, service accounts with a responsible person, and short task tokens for cron and CI.
+- **On polochka.app and on your own installation** (`TEAM_SHELVES=on`, `SERVICE_ACCOUNTS=on`): search across department shelves, service accounts with a responsible person, and short task tokens for cron and CI.
 
 ## Quick start
 
@@ -218,7 +218,7 @@ A deployment is one Docker image plus external PostgreSQL and versioned S3 stora
 |---|---|---|---|
 | Price | Free during the pilot | Free under the AGPL-3.0 | By agreement |
 | Where the data lives | Yandex Cloud, Russia | Your servers | Your servers |
-| What's included | The open core; department shelves are off until a pilot (`TEAM_SHELVES=off`) | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: an agent control centre (employees' sessions, secrets, addresses and MCP, dangerous commands, spend), employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM, Jira and Bitrix24 comments, export of accepted versions; next — SAML and SCIM, offline installation |
+| What's included | The open core: department shelves with roles (we appoint a company admin on request to hello@polochka.app), service accounts for cron and CI | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: an agent control centre (employees' sessions, secrets, addresses and MCP, dangerous commands, spend), employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM, Jira and Bitrix24 comments, export of accepted versions; next — SAML and SCIM, offline installation |
 | Your code changes | — | If people use your modified Полка, publish them under the AGPL-3.0 | May stay private |
 | Support and SLA | — | — | By contract |
 

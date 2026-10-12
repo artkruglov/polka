@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, ChevronsUpDown, Home, Plus, UserMinus, UserPlus, Users } from "lucide-react";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
-import { client, type Shelf, type ShelfMember } from "../../shared/api/client.ts";
+import { client, type Shelf, type ShelfDirectAdd, type ShelfMember } from "../../shared/api/client.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { Avatar, Button, SelectField, TextField } from "../../shared/ui/controls.tsx";
 import { ROLE_HINT, ROLE_LABEL, loadShelves, switchShelf } from "../../entities/shelf/model.ts";
@@ -61,6 +61,20 @@ export function CreateShelfPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+const INSTALLATION: ShelfDirectAdd = { scope: "installation" };
+
+/** Whom the admin may add directly; everyone else comes by an invitation link. */
+function directAddHint(rule: ShelfDirectAdd) {
+  if (rule.scope === "installation")
+    return "Коллега должен хотя бы раз войти в Полку. Кто ещё не входил — пригласите ссылкой.";
+  if (!rule.organisation)
+    return "Полка не привязана к организации: сразу добавить никого нельзя. Пригласите коллег ссылкой — они примут приглашение сами.";
+  const domains = rule.domains.map((domain) => `@${domain}`).join(", ");
+  return domains
+    ? `Сразу добавляются сотрудники с подтверждённой почтой ${domains}. Остальных пригласите ссылкой — они примут приглашение сами.`
+    : "У организации пока нет рабочих доменов, поэтому сразу добавить никого нельзя. Пригласите коллег ссылкой — они примут приглашение сами.";
+}
+
 /**
  * Who is on a department shelf and with which role. Everyone sees the list;
  * its admin adds colleagues, changes roles, removes members and renames the
@@ -82,6 +96,7 @@ export function ShelfMembersPanel({
     [role, setRole] = useState(shelf.role),
     [who, setWho] = useState(""),
     [newRole, setNewRole] = useState<TeamRole>("author"),
+    [directAdd, setDirectAdd] = useState<ShelfDirectAdd>(INSTALLATION),
     [name, setName] = useState(shelf.name ?? ""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -94,6 +109,7 @@ export function ShelfMembersPanel({
     if (!live.current) return;
     setMembers(page.items);
     setRole(page.role);
+    setDirectAdd(page.directAdd ?? INSTALLATION);
   }, [shelf.id]);
   useEffect(() => {
     live.current = true;
@@ -180,7 +196,7 @@ export function ShelfMembersPanel({
           >
             <TextField
               label="Почта или логин коллеги"
-              hint="Коллега должен хотя бы раз войти в Полку. Кто ещё не входил — пригласите ссылкой."
+              hint={directAddHint(directAdd)}
               value={who}
               onChange={(event) => setWho(event.target.value)}
               disabled={busy}
