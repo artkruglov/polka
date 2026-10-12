@@ -245,7 +245,8 @@ export async function postWebhook(
   return result;
 }
 
-function postTo(
+/** One attempt to one pinned address; exported for the no-route test. */
+export function postTo(
   url: URL,
   pinned: { address: string; family: number },
   body: string,
@@ -259,45 +260,57 @@ function postTo(
       settled = true;
       resolve(result);
     };
-    const req = request(
-      url,
-      {
-        method: "POST",
-        agent: false,
-        family: pinned.family,
-        signal,
-        lookup: (_host, options, callback: (...args: any[]) => void) =>
-          options?.all
-            ? callback(null, [{ address: pinned.address, family: pinned.family }])
-            : callback(null, pinned.address, pinned.family),
-        headers: { ...headers, "Content-Length": String(Buffer.byteLength(body)) },
-      },
-      (res) => {
-        const status = res.statusCode ?? 0;
-        const chunks: Buffer[] = [];
-        let size = 0;
-        const done = () => {
-          res.destroy();
-          const ok = status >= 200 && status < 300;
-          finish({
-            ok,
-            status,
-            error: ok ? null : status >= 300 && status < 400 ? "redirect" : "http",
-            snippet: snippet(Buffer.concat(chunks)),
+    const fail = () =>
+      finish({ ok: false, status: null, error: signal.aborted ? "timeout" : "connection", snippet: null });
+    let req;
+    try {
+      req = request(
+        url,
+        {
+          method: "POST",
+          agent: false,
+          family: pinned.family,
+          signal,
+          // Answered on the next tick, as a real lookup is: answered at once, an
+          // address the host has no route to fails the connect inside request()
+          // (TLS has no socket yet), and the socket's error, with no listener,
+          // would take the whole process down (Node 22, EHOSTUNREACH on IPv6).
+          lookup: (_host, options, callback: (...args: any[]) => void) =>
+            process.nextTick(() =>
+              options?.all
+                ? callback(null, [{ address: pinned.address, family: pinned.family }])
+                : callback(null, pinned.address, pinned.family),
+            ),
+          headers: { ...headers, "Content-Length": String(Buffer.byteLength(body)) },
+        },
+        (res) => {
+          const status = res.statusCode ?? 0;
+          const chunks: Buffer[] = [];
+          let size = 0;
+          const done = () => {
+            res.destroy();
+            const ok = status >= 200 && status < 300;
+            finish({
+              ok,
+              status,
+              error: ok ? null : status >= 300 && status < 400 ? "redirect" : "http",
+              snippet: snippet(Buffer.concat(chunks)),
+            });
+          };
+          res.on("data", (chunk: Buffer) => {
+            if (size < READ_BYTES) chunks.push(chunk.subarray(0, READ_BYTES - size));
+            size += chunk.length;
+            if (size >= READ_BYTES) done();
           });
-        };
-        res.on("data", (chunk: Buffer) => {
-          if (size < READ_BYTES) chunks.push(chunk.subarray(0, READ_BYTES - size));
-          size += chunk.length;
-          if (size >= READ_BYTES) done();
-        });
-        res.on("end", done);
-        res.on("error", done);
-      },
-    );
-    req.on("error", () =>
-      finish({ ok: false, status: null, error: signal.aborted ? "timeout" : "connection", snippet: null }),
-    );
+          res.on("end", done);
+          res.on("error", done);
+        },
+      );
+    } catch {
+      fail();
+      return;
+    }
+    req.on("error", fail);
     req.end(body);
   });
 }
