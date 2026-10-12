@@ -29,7 +29,7 @@ import {
   type SharedComments,
   type WorkComments,
 } from "../../packages/contracts/comments.ts";
-import type { Actor } from "./artifacts.ts";
+import { audit, type Actor } from "./artifacts.ts";
 import { limitAttempts } from "./auth.ts";
 import { trackNoteAdded, viaFor } from "./analytics.ts";
 import { config } from "./config.ts";
@@ -46,7 +46,13 @@ import { fraudScore, scanText } from "./content-filter/scanner.ts";
 import { sha256 } from "./storage.ts";
 import { dispatchCommentNotices, type CommentNotice } from "./comment-mail.ts";
 
-export type Viewer = { id: string; name: string; tenant: string };
+export type Viewer = {
+  id: string;
+  name: string;
+  tenant: string;
+  /** The owner's agent writing a note (its connection): the journal names it an agent. */
+  connectionId?: string;
+};
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -722,6 +728,22 @@ async function createInContext(
   // Held comments reach no one else until the operator releases them.
   // Owner notes send no letters: recipients are not a discussion to notify.
   if (!held && commentsMode() === "on") notices.push({ kind: "comment", commentId: id });
+  // The shelf's journal, for webhooks (docs/specs/WEBHOOKS.md): a comment others
+  // can see, by its id and its work's, never its text.
+  // A held comment is written to the journal when the operator releases it
+  // (moderation.ts). An agent's note is the agent's (actorType agent).
+  if (!held && !content.shadow)
+    await audit(
+      c,
+      {
+        id: writer.id,
+        tenant: share.tenant_id,
+        ...(writer.connectionId && writer.tenant === share.tenant_id ? { connectionId: writer.connectionId } : {}),
+      },
+      "comment.created",
+      id,
+      { artifactId: share.artifact_id, revisionId: share.revision_id },
+    );
   trackNoteAdded(c, writer.id, context.ownerIds.includes(writer.id) ? "owner" : "reader", viaFor());
   return { id: created.id as string };
 }
@@ -924,6 +946,7 @@ const ownerAsViewer = (owner: Actor & { name?: string }): Viewer => ({
   id: owner.id,
   name: owner.name ?? "",
   tenant: owner.tenant,
+  ...(owner.connectionId ? { connectionId: owner.connectionId } : {}),
 });
 
 export async function createOwnerComment(

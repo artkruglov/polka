@@ -90,6 +90,26 @@ const reviewLetters = async () => {
   }
 };
 setInterval(reviewLetters, 5 * 60 * 1000).unref();
+// Webhooks (webhooks.ts, WEBHOOKS=on): new events to deliveries, and due
+// deliveries out, each on its own timer so a slow receiver never holds up
+// the journal. Expiring old deliveries runs hourly whatever the flag.
+if (config.WEBHOOKS === "on") {
+  // A module that fails to load is logged once; the timers then do nothing.
+  const webhooks = import("./webhooks.ts").catch(() => {
+    log.error({ event: "webhooks.load_failed" });
+    return null;
+  });
+  setInterval(() => void webhooks.then((module) => module?.runWebhookDispatch()), 5_000).unref();
+  setInterval(() => void webhooks.then((module) => module?.runWebhookSend()), 5_000).unref();
+}
+const webhookHousekeeping = async () => {
+  try {
+    await (await import("./webhooks.ts")).expireWebhookDeliveries();
+  } catch {
+    log.error({ event: "webhooks.housekeeping_failed" });
+  }
+};
+setInterval(webhookHousekeeping, 60 * 60 * 1000).unref();
 setTimeout(sweep, 30_000).unref();
 setInterval(sweep, 60 * 60 * 1000).unref();
 if (viewer) log.info({ event: "viewer.started", mode: config.HTML_LIVE_MODE });

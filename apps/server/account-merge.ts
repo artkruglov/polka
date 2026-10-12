@@ -729,6 +729,11 @@ export async function mergeAccounts(input: {
       );
       await c.query("UPDATE comments SET author_account_id=$2 WHERE author_account_id=$1", [from.id, into.id]);
       await c.query("UPDATE comments SET resolved_by=$2 WHERE resolved_by=$1", [from.id, into.id]);
+      // Webhooks (docs/specs/WEBHOOKS.md): the source shelf's addresses do not
+      // move (they would start receiving the target's events); those the
+      // person registered on department shelves stay, now under the target.
+      await c.query("DELETE FROM webhook_endpoints WHERE tenant_id=$1", [from.tenant]);
+      await c.query("UPDATE webhook_endpoints SET created_by=$2 WHERE created_by=$1", [from.id, into.id]);
       await moveMemberships(c, from, into);
       await moveShelfMemberships(c, from, into);
       await c.query(

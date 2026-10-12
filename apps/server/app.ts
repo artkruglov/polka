@@ -48,6 +48,7 @@ import { registerShelfRoutes } from "./shelf-routes.ts";
 import { registerWorkRoutes } from "./work-routes.ts";
 import { registerViewRoutes } from "./view-routes.ts";
 import { registerServiceAccountRoutes } from "./service-account-routes.ts";
+import { registerWebhookRoutes } from "./webhook-routes.ts";
 import { log } from "./log.ts";
 
 /** The first frame of a stack below its message: where it was thrown. */
@@ -179,6 +180,7 @@ export async function createApp() {
   registerWorkRoutes(app);
   registerViewRoutes(app);
   registerServiceAccountRoutes(app);
+  registerWebhookRoutes(app);
   app.post("/api/reports", { bodyLimit: 4096 }, async (req) => reportShare(req.body, req.ip));
   registerModerationRoutes(app);
   registerCommentRoutes(app);

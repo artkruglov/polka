@@ -170,6 +170,9 @@ const env = z
     TEAM_SHELVES_SCOPE: z.enum(["installation", "organisation"]).default("installation"),
     // Service accounts (docs/specs/AGENT_ACCESS_AND_MEMORY.md): off until a pilot asks.
     SERVICE_ACCOUNTS: z.enum(["off", "on"]).default("off"),
+    // Webhooks (docs/specs/WEBHOOKS.md): signed POSTs of a shelf's events to
+    // public HTTPS addresses its owner registers. Off: no routes, no sending.
+    WEBHOOKS: z.enum(["off", "on"]).default("off"),
     // Agent sessions (docs/specs/AGENT_SESSIONS.md): the allowance of every
     // personal shelf in bytes; 0 keeps them off except on shelves the
     // operator enabled (tenants.session_quota_bytes).
