@@ -147,6 +147,9 @@ test("072 keeps an account disabled while the operator's or an extension's reaso
   assert.match(sql, /ADD COLUMN operator_disabled_at timestamptz/);
   assert.match(sql, /ADD COLUMN deprovisioned_by text CHECK/);
   assert.match(sql, /CHECK \(disabled OR \(operator_disabled_at IS NULL AND deprovisioned_at IS NULL\)\)/);
-  // Every account disabled before 072 was the operator's to lift.
-  assert.match(sql, /UPDATE accounts SET operator_disabled_at = now\(\) WHERE disabled;/);
+  // An account disabled before 072 was the operator's, unless its deletion request disabled it.
+  assert.match(
+    sql,
+    /UPDATE accounts SET operator_disabled_at = now\(\) WHERE disabled AND deletion_requested_at IS NULL;/,
+  );
 });

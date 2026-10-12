@@ -10,16 +10,18 @@
 --             extension's reactivate.
 --
 -- The account stays disabled while either reason holds (the CHECK). An
--- account being deleted is disabled by its deletion request, as before.
--- Existing disabled accounts are recorded as the operator's: only the
--- operator could disable one until now.
+-- account being deleted is disabled by its deletion request
+-- (deletion_requested_at), as before: that is neither reason, and nothing
+-- lifts it. Of the accounts disabled before 072, those with no deletion
+-- request are recorded as the operator's: only the operator or moderation
+-- could disable one otherwise.
 ALTER TABLE accounts
   ADD COLUMN operator_disabled_at timestamptz,
   ADD COLUMN deprovisioned_at timestamptz,
   ADD COLUMN deprovisioned_by text CHECK (deprovisioned_by ~ '^[a-z][a-z0-9-]{1,30}$'),
   ADD CONSTRAINT accounts_deprovision_shape CHECK ((deprovisioned_at IS NULL) = (deprovisioned_by IS NULL));
 
-UPDATE accounts SET operator_disabled_at = now() WHERE disabled;
+UPDATE accounts SET operator_disabled_at = now() WHERE disabled AND deletion_requested_at IS NULL;
 
 ALTER TABLE accounts
   ADD CONSTRAINT accounts_disabled_while_held
