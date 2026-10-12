@@ -18,6 +18,7 @@ import { db } from "../apps/server/db.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { pendingForTests } from "../apps/server/sign-in-pending.ts";
+import { useExtensions } from "../apps/server/extensions.ts";
 import { providerEndpoints } from "../apps/server/sign-in-providers.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { runMaintenanceCleanup } from "../scripts/maintenance-cleanup.ts";
@@ -1286,4 +1287,98 @@ test("a sign-in check that fails is the request's failure, not a guest; the 500 
   assert.ok(entry.requestId);
   assert.match(entry.at, /^at /);
   assert.doesNotMatch(JSON.stringify(entry), /missing_sessions_table/);
+});
+
+// ---------------------------------------------------------------------------
+// An extension's sign-in rules (docs/specs/EXTENSIONS.md, policies.signIn):
+// «только через SSO» for a company's addresses holds on every path into the
+// shelf, /claim and linking included.
+
+const ssoOnly = (seen: Array<Record<string, unknown>> = []) => ({
+  name: "sso-only",
+  policies: {
+    async signIn(attempt: { method: string; email: string | null; accountEmail: string | null }) {
+      seen.push(attempt);
+      return [attempt.email, attempt.accountEmail].some((address) => address?.endsWith("@sso-only.test"))
+        ? { allow: false as const, message: "Только через SSO компании." }
+        : { allow: true as const };
+    },
+  },
+});
+
+/** A password owner whose own address is a company's, with Яндекс ID linked. */
+async function companyOwner() {
+  const owner = await passwordOwner("company");
+  await db.query("UPDATE accounts SET email=$2,email_verified_at=now() WHERE id=$1", [
+    owner.id,
+    `p${randomBytes(4).toString("hex")}@sso-only.test`,
+  ]);
+  const sub = `ya-${randomUUID()}`;
+  await db.query(
+    `INSERT INTO account_identities(id,account_id,provider,subject,email,email_verified)
+     VALUES($1,$2,'yandex',$3,NULL,false)`,
+    [randomUUID(), owner.id, sub],
+  );
+  return { ...owner, sub };
+}
+
+async function provisionalLinksYandex(sub: string) {
+  const shelf = await startProvisional();
+  const link = await post("/api/auth/idp/yandex/link", shelf.cookie);
+  const back = await returnFromYandex(
+    { location: new URL(link.json().location), flow: cookieOf(link, "polka_idp")!.value, ip: address() },
+    { sub },
+  );
+  return { shelf, back };
+}
+
+test("SSO only: a provisional shelf's claim never opens or merges into a company's shelf", async () => {
+  const owner = await companyOwner();
+  // Recorded before the rule: /claim itself asks again.
+  const { shelf, back } = await provisionalLinksYandex(owner.sub);
+  assert.equal(back.headers.location, "/claim?collision=1");
+  const claimCookie = `polka_claim=${cookieOf(back, "polka_claim")!.value}`;
+  const seen: Array<Record<string, unknown>> = [];
+  useExtensions([ssoOnly(seen) as never]);
+  try {
+    const switched = await post("/api/account/claim/switch", `${shelf.cookie}; ${claimCookie}`);
+    assert.equal(switched.statusCode, 403, switched.body);
+    assert.equal(switched.json().reason, "sign_in_policy");
+    assert.equal(cookieOf(switched, "polka_session"), undefined);
+    assert.ok(seen.some((attempt) => attempt.accountId === owner.id));
+
+    // With the rule on, the collision is refused before /claim.
+    const again = await provisionalLinksYandex(owner.sub);
+    assert.equal(again.back.headers.location, "/claim?idp_error=policy");
+    assert.equal(cookieOf(again.back, "polka_claim"), undefined);
+  } finally {
+    useExtensions([]);
+  }
+});
+
+test("SSO only: linking a provider to a company's shelf is refused like signing in with it", async () => {
+  const owner = await passwordOwner("linker");
+  await db.query("UPDATE accounts SET email=$2,email_verified_at=now() WHERE id=$1", [
+    owner.id,
+    `l${randomBytes(4).toString("hex")}@sso-only.test`,
+  ]);
+  const seen: Array<Record<string, unknown>> = [];
+  useExtensions([ssoOnly(seen) as never]);
+  try {
+    const link = await post("/api/auth/idp/yandex/link", owner.cookie);
+    assert.equal(link.statusCode, 200, link.body);
+    const sub = `ya-${randomUUID()}`;
+    const back = await returnFromYandex(
+      { location: new URL(link.json().location), flow: cookieOf(link, "polka_idp")!.value, ip: address() },
+      { sub, email: `someone.${sub.slice(3, 9)}@yandex.ru` },
+    );
+    assert.equal(back.headers.location, "/settings/agents?idp_error=policy#sign-in");
+    assert.equal((await db.query("SELECT 1 FROM account_identities WHERE subject=$1", [sub])).rowCount, 0);
+    const attempt = seen.find((item) => item.method === "link");
+    assert.equal(attempt?.provider, "yandex");
+    assert.equal(attempt?.accountId, owner.id);
+    assert.match(String(attempt?.accountEmail), /@sso-only\.test$/);
+  } finally {
+    useExtensions([]);
+  }
 });

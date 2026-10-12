@@ -307,6 +307,7 @@ test("enable lifts the disable but leaves shares and connections closed", async 
     name: owner.name,
     email: null,
     alreadyEnabled: false,
+    deprovisionedBy: null,
   });
   assert.match(formatEnabled(result), /is enabled\. Closed shares/);
   await assertActiveOwner(db, { id: owner.id, tenant: owner.tenant });

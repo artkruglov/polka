@@ -14,6 +14,7 @@ import { db, transaction } from "./db.ts";
 import { emailInvited, signupRoomLeft } from "./email-auth.ts";
 import { missing, Problem } from "./errors.ts";
 import { emailDomain } from "./mail-domains.ts";
+import { checkSignIn } from "./extensions.ts";
 import { sha256 } from "./storage.ts";
 import { joinLibraryByOrganisation } from "./template-libraries.ts";
 import {
@@ -57,6 +58,29 @@ export async function wouldOpenNewShelf(profile: ProviderProfile) {
 }
 
 type Account = { id: string; tenant: string };
+
+/** The extensions' sign-in rules for this provider's sign-in or link; a refusal is IdpError("policy"). */
+async function signInPolicy(
+  c: PoolClient,
+  profile: ProviderProfile,
+  method: ProviderId | "link",
+  accountId: string | null,
+) {
+  try {
+    await checkSignIn(
+      {
+        method,
+        provider: profile.provider,
+        email: profile.email && profile.emailVerified ? profile.email : null,
+        accountId,
+      },
+      c,
+    );
+  } catch (error) {
+    if (error instanceof Problem && error.details?.reason === "sign_in_policy") throw new IdpError("policy");
+    throw error;
+  }
+}
 
 /** Tenant, then account, as email-auth.ts and signIn lock them. */
 async function lockActiveAccount(c: PoolClient, accountId: string): Promise<Account | null> {
@@ -159,15 +183,22 @@ export async function completeProviderSignIn(
     if (linkOnly(profile.provider) && (linkAccountId ? claiming : !linked)) throw new IdpError("link_only");
     if (linkAccountId) {
       if (linked && linked.account_id !== linkAccountId) {
-        // The person owns the other shelf too: offer to merge.
-        if (claiming) throw new ClaimCollision(linked.account_id);
+        // The person owns the other shelf too: offer to merge. /claim would
+        // open that shelf, so its sign-in rules apply first.
+        if (claiming) {
+          await signInPolicy(c, profile, profile.provider, linked.account_id);
+          throw new ClaimCollision(linked.account_id);
+        }
         throw new IdpError("linked");
       }
       if (claiming && !linked && profile.email && profile.emailVerified) {
         const owner = (
           await c.query("SELECT id FROM accounts WHERE email=$1 AND id<>$2", [profile.email, linkAccountId])
         ).rows[0];
-        if (owner) throw new ClaimCollision(owner.id);
+        if (owner) {
+          await signInPolicy(c, profile, profile.provider, owner.id);
+          throw new ClaimCollision(owner.id);
+        }
       }
       account = await lockActiveAccount(c, linkAccountId);
       if (!account) throw new IdpError("blocked");
@@ -181,6 +212,10 @@ export async function completeProviderSignIn(
         if (!account) throw new IdpError("blocked");
       }
     }
+    // An extension may send this person elsewhere, e.g. to the company's
+    // SSO: asked before any shelf is opened, and before a provider is linked
+    // to an account (a linked provider would sign in to it later).
+    await signInPolicy(c, profile, linkAccountId ? "link" : profile.provider, account?.id ?? null);
     account ??= await createShelf(c, profile, ip, source);
     // hosted_domain: the Google Workspace domain as Google reports it now.
     const hostedDomain = profile.provider === "google" ? (profile.hostedDomain ?? null) : null;

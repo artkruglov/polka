@@ -65,6 +65,75 @@ export type SessionDelete = {
 
 export type SessionDeleteDecision = { allow: true } | { allow: false; message: string };
 
+/**
+ * A person about to sign in by one of the core's own methods: an emailed code
+ * (asked for and checked), a password, a provider (Яндекс ID, VK ID, Google,
+ * OIDC), or a provider being linked to an account ("link": from the
+ * settings, or claiming a provisional shelf, or the provisional shelf's
+ * «войти в существующую» and «объединить»). The extension's own sign-in
+ * (context.accounts.startSession) is never asked.
+ */
+export type SignInAttempt = {
+  method: "email" | "password" | "yandex" | "vk" | "google" | "oidc" | "link";
+  /** The provider of a "link" or a provider's sign-in. */
+  provider?: "yandex" | "vk" | "google" | "oidc";
+  /** The address the method proves, lowercased (a provider's only when verified); null where it proves none. */
+  email: string | null;
+  /** The account the sign-in would open or the link would join; null for a new one. */
+  accountId: string | null;
+  /** That account's own address, which may differ from `email` (e.g. a linked provider). */
+  accountEmail: string | null;
+};
+
+export type SignInDecision = { allow: true } | { allow: false; message: string };
+
+/** A sign-in button of the extension on the core's sign-in pages. */
+export type ExtensionSignInMethod = {
+  /** Latin letters, digits and hyphens, up to 40. */
+  id: string;
+  /** The button's text, e.g. «Войти через SSO компании»; up to 60 characters. */
+  name: string;
+  /**
+   * Where the button leads: a GET route of the extension under
+   * /api/ext/<name>/. The page appends ?next=<a path of this installation>.
+   */
+  start: string;
+};
+
+/** An account as context.accounts reports it. */
+export type ExtensionAccount = {
+  id: string;
+  /** The core's login: generated (sso-<id>, email-<id>, …) unless the operator chose one. */
+  login: string;
+  /** The display name, or the login. */
+  name: string;
+  email: string | null;
+  emailVerified: boolean;
+  /** disabled: deprovisioned by an extension, or by the operator or moderation (both may hold). */
+  state: "active" | "disabled" | "deleting";
+  /** The operator or moderation disabled it: no extension can lift that. */
+  operatorDisabled: boolean;
+  /** The extension whose deprovision holds, or null. */
+  deprovisionedBy: string | null;
+  companyAdmin: boolean;
+  /** The organisation a company admin administers (TEAM_SHELVES_SCOPE=organisation). */
+  companyOrganisationId: string | null;
+  personalShelfId: string | null;
+};
+
+export type ExtensionDeprovision = {
+  /** already: the account was disabled before; deleting: the person is deleting it, nothing changed. */
+  state: "deprovisioned" | "already" | "deleting";
+  sessions: number;
+  connections: number;
+  /** The department shelves the person was taken off. */
+  shelves: string[];
+};
+
+export type ExtensionTeamShelf = { id: string; name: string };
+export type ExtensionTeamRole = "reader" | "author" | "curator" | "admin";
+export type ExtensionTeamMember = { accountId: string; role: ExtensionTeamRole };
+
 export type PolkaEvent =
   | { type: "revision.saved"; tenantId: string; artifactId: string; revisionId: string; accountId: string; at: string }
   | {
@@ -275,6 +344,91 @@ export type ExtensionContext = {
    * keys (the default) the two never match. Synchronous, no I/O.
    */
   redact(text: string): RedactResult;
+  /**
+   * Accounts for the extension's own sign-in and provisioning (an enterprise
+   * SSO, a SCIM directory). The core does the work as for its own sign-in
+   * and the operator's disable; the extension keeps its mapping of external
+   * ids to account ids in its own tables. Invalid input throws the core's 400,
+   * a missing account 404.
+   */
+  accounts: {
+    get(id: string): Promise<ExtensionAccount | null>;
+    findByEmail(email: string): Promise<ExtensionAccount | null>;
+    /**
+     * The account with this address, or a new one with a personal shelf. Only
+     * an address on one of the organisation's domains (organisation_domains;
+     * 403 otherwise): the organisation vouches for it, so it is verified and
+     * no sign-up cap applies. An existing account comes back as it is
+     * (created: false), disabled or company admin included: whether to link
+     * it is the extension's decision.
+     */
+    provision(input: {
+      email: string;
+      name?: string | null;
+      organisationId: string;
+    }): Promise<{ account: ExtensionAccount; created: boolean }>;
+    /**
+     * A new address (only on the organisation's domains; another account's:
+     * 409) or display name (null: none). A new address ends every session
+     * and pending code and is written to the journal (account.email_changed).
+     */
+    update(
+      id: string,
+      input: { email?: string; name?: string | null; organisationId: string },
+    ): Promise<ExtensionAccount>;
+    /**
+     * The person is gone for the organisation's directory: the extension's
+     * own reason to disable the account (apart from the operator's). Every
+     * session ends, every agent connection is revoked and the person leaves
+     * the organisation's department shelves (member.revoked for each).
+     * Nothing is deleted; idempotent.
+     */
+    deprovision(id: string, input: { organisationId: string; reason?: string }): Promise<ExtensionDeprovision>;
+    /**
+     * Lifts this extension's deprovision and only it: an account the operator
+     * or moderation disabled stays disabled (state "disabled",
+     * operatorDisabled). Another extension's deprovision: 409. Shelves are
+     * not given back.
+     */
+    reactivate(id: string): Promise<ExtensionAccount>;
+    /**
+     * Signs the verified person in: a new core session in the polka_session
+     * cookie on this reply (7 days), as the core's sign-in does (the
+     * browser's earlier session given as `previous` ends; the journal gets
+     * account.signed_in). A disabled account: 403. The extension then
+     * redirects (303) where the person was going.
+     */
+    startSession(reply: FastifyReply, accountId: string, previous?: string): Promise<void>;
+  };
+  /**
+   * Department shelves (docs/specs/TEAM_SHELVES.md) of one organisation, for
+   * a directory's groups; 404 while TEAM_SHELVES is off, and for another
+   * organisation's shelf. In installation scope a shelf without an
+   * organisation counts as every organisation's. Changes go to the shelf's
+   * journal with no person as the actor. The directory is the source of
+   * truth: removeMember takes off even the last admin (the company admin's
+   * page offers to step in).
+   */
+  teamShelves: {
+    list(organisationId: string): Promise<ExtensionTeamShelf[]>;
+    get(organisationId: string, id: string): Promise<ExtensionTeamShelf | null>;
+    /** A new shelf of the organisation, with no members. */
+    create(organisationId: string, name: string): Promise<ExtensionTeamShelf>;
+    rename(organisationId: string, id: string, name: string): Promise<ExtensionTeamShelf>;
+    members(organisationId: string, id: string): Promise<ExtensionTeamMember[]>;
+    /**
+     * Adds the person with this role or changes it. As a shelf admin's
+     * direct add on a shared cloud: only an account with a verified address
+     * on one of the organisation's domains (403); a disabled account: 409.
+     */
+    setMember(
+      organisationId: string,
+      id: string,
+      accountId: string,
+      role: ExtensionTeamRole,
+    ): Promise<{ accountId: string; role: ExtensionTeamRole; added: boolean }>;
+    removeMember(organisationId: string, id: string, accountId: string): Promise<{ removed: boolean }>;
+  };
   auditFeed: {
     read(
       after: AuditCursor | null,
@@ -294,10 +448,37 @@ export interface PolkaExtension {
    * Exact paths of the extension's machine routes, under /api/ext/<name>/:
    * called by agents and collectors (e.g. OTLP exporters) with an agent
    * token, without a browser Origin. The core exempts them from its Origin
-   * rule; their handlers authenticate with context.agent only.
+   * rule; their handlers authenticate with a bearer token only: an agent's
+   * through context.agent, or the extension's own (e.g. a SCIM directory's).
+   * A path ending in "/*" covers everything below it (e.g. SCIM's
+   * /Users/{id}).
    */
   machinePaths?: string[];
+  /**
+   * Exact paths under /api/ext/<name>/ that an identity provider's page
+   * posts the browser to (a SAML assertion consumer service): exempt from the
+   * core's Origin rule like machinePaths. context.identity refuses there; the
+   * handler verifies the provider's answer itself and signs in with
+   * context.accounts.startSession.
+   */
+  signInPaths?: string[];
+  /**
+   * The extension's sign-in buttons for the core's sign-in pages, asked on
+   * every /api/capabilities: e.g. one per configured SSO connection, none
+   * while nothing is configured. A failure is logged and shows no button.
+   */
+  signInMethods?(): Promise<ExtensionSignInMethod[]> | ExtensionSignInMethod[];
   policies?: {
+    /**
+     * Before the core's own sign-in (code, password, provider) opens a
+     * session, before a code is sent, before a provider is linked to an
+     * account, and before /claim opens or merges into an existing shelf:
+     * refuse with a message the person reads, e.g. «вход для этой почты —
+     * только через SSO компании». 403 with reason "sign_in_policy"; a
+     * provider's return shows its own text (idp_error=policy). `c` is the
+     * sign-in's own transaction where there is one: read through it.
+     */
+    signIn?(attempt: SignInAttempt, c: Pick<PoolClient, "query">): Promise<SignInDecision>;
     /** Before a link is issued or moved: refuse with a message the person reads. */
     linkIssue?(issue: LinkIssue, c: PoolClient): Promise<LinkIssueDecision>;
     /** Before a link opens for a recipient. */

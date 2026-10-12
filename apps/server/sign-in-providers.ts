@@ -38,7 +38,16 @@ export type ProviderProfile = {
 export class IdpError extends Error {
   constructor(
     readonly code:
-      "state" | "denied" | "provider" | "blocked" | "signup" | "domain" | "linked" | "link_only" | "unavailable",
+      | "state"
+      | "denied"
+      | "provider"
+      | "blocked"
+      | "signup"
+      | "domain"
+      | "linked"
+      | "link_only"
+      | "unavailable"
+      | "policy",
   ) {
     super(code);
   }
@@ -86,7 +95,7 @@ export const PROVIDER_NAMES: Record<ProviderId, () => string> = {
 export const linkOnly = (provider: ProviderId) => provider === "google" && config.GOOGLE_SIGNUP === "link-only";
 
 /** A login self sign-up generated (`<way>-<account id>`), not one to type. */
-export const GENERATED_LOGIN = /^(email|yandex|vk|google|oidc|guest)-[0-9a-f-]{36}$/;
+export const GENERATED_LOGIN = /^(email|yandex|vk|google|oidc|guest|sso)-[0-9a-f-]{36}$/;
 
 export function providerEnabled(provider: string): provider is ProviderId {
   return (config.SIGN_IN_PROVIDERS as string[]).includes(provider);

@@ -4,7 +4,7 @@ import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, Notice } from "../../shared/ui/controls.tsx";
 import { visitSourceQuery } from "../../shared/lib/visit-source.ts";
 import { knownShelf, rememberSignInMethod } from "../../shared/lib/known-shelf.ts";
-import type { SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
+import type { ExtensionSignIn, SignInProvider } from "../../entities/capabilities/useCapabilities.ts";
 import { loadIdentities, type AccountIdentities } from "../../entities/account/model/identities.ts";
 
 /**
@@ -99,15 +99,18 @@ function LinkOnlyNote({ providers }: { providers: SignInProvider[] }) {
  */
 export function ProviderButtons({
   providers,
+  extensionMethods = [],
   next,
   onLeave,
 }: {
   providers: SignInProvider[];
+  /** An extension's sign-in (e.g. the company's SSO), after the providers. */
+  extensionMethods?: ExtensionSignIn[];
   next: string;
   /** Just before the browser leaves for the provider (a count, a token to keep). */
   onLeave?: (provider: SignInProvider) => void;
 }) {
-  if (!providers.length) return null;
+  if (!providers.length && !extensionMethods.length) return null;
   const known = knownShelf() ? "&known=1" : "";
   return (
     <div className="idp-buttons" role="group" aria-label="Войти через другой сервис">
@@ -123,6 +126,16 @@ export function ProviderButtons({
         >
           <Mark id={provider.id} />
           <span>{label(provider)}</span>
+        </a>
+      ))}
+      {extensionMethods.map((method) => (
+        <a
+          key={`ext-${method.id}`}
+          className="idp-button idp-button--oidc"
+          href={`${method.start}${method.start.includes("?") ? "&" : "?"}next=${encodeURIComponent(next)}`}
+        >
+          <Building2 className="idp-mark" aria-hidden="true" />
+          <span>{method.name}</span>
         </a>
       ))}
       <LinkOnlyNote providers={providers} />
@@ -189,6 +202,8 @@ const ERRORS: Record<string, string> = {
   link_only:
     "Через Google можно войти только в полку, к которой он уже привязан. Войдите через Яндекс ID, VK ID или по почте и привяжите Google в «Способах входа».",
   unavailable: "Этот способ входа сейчас выключен.",
+  policy: "Для этой почты этот способ входа закрыт. Войдите так, как принято в вашей компании, например через её SSO.",
+  sso: "Не удалось войти через SSO компании. Попробуйте ещё раз или напишите администратору компании.",
 };
 
 /** The sign-in page's explanation of ?idp_error=<code>. */

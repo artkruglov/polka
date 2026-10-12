@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>71
+     OR (SELECT count(*) FROM public.schema_migrations)<>72
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>71 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 071';
+     OR (SELECT max(version) FROM public.schema_migrations)<>72 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 072';
   END IF;
 END $$;
 
@@ -175,6 +175,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.revision_covers TO :"runtim
 -- shelf and deletes it when the content is purged; everything else goes
 -- with the work (ON DELETE CASCADE).
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtime_role";
+-- Disable reasons (072): accounts gains columns, covered by its table grant.
 -- Department shelves (042): tenants and accounts gain columns, covered by
 -- their table grants above. The application adds and updates members (a
 -- member leaves by state='revoked', never DELETE; rows go with their shelf or

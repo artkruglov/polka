@@ -1,11 +1,28 @@
 import { readFile } from "node:fs/promises";
 import { openFileForExtension, revisionForExtension } from "./extension-content.ts";
+import {
+  createTeamShelf,
+  deprovisionAccount,
+  findAccountByEmail,
+  getAccount,
+  getTeamShelf,
+  listTeamMembers,
+  listTeamShelves,
+  provisionAccount,
+  reactivateAccount,
+  removeTeamMember,
+  renameTeamShelf,
+  setTeamMember,
+  startSessionForExtension,
+  updateAccount,
+} from "./extension-accounts.ts";
 import { auditFeedHead, readAuditFeed } from "./extension-feed.ts";
 import { pdfConfigured, pdfForExtension } from "./renderer-pdf.ts";
 import {
   extensions,
   extensionsConfigured,
   isExtensionMachinePath,
+  isExtensionSignInPath,
   loadExtensions,
   redactForExtension,
 } from "./extensions.ts";
@@ -106,6 +123,7 @@ export async function createApp() {
       !OAUTH_MACHINE_PATHS.has(pathname) &&
       !isPublishApiPath(pathname) &&
       !isExtensionMachinePath(pathname) &&
+      !isExtensionSignInPath(pathname) &&
       !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
       req.headers.origin !== config.APP_ORIGIN
     )
@@ -210,9 +228,12 @@ export async function createApp() {
   for (const extension of extensions())
     await extension.register?.(app, {
       identity: (req, options) => {
-        // A machine route has no Origin check: a cookie there would be forgeable.
-        if (isExtensionMachinePath(new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname))
+        // A machine or sign-in route has no Origin check: a cookie there would be forgeable.
+        const pathname = new URL(req.raw.url ?? "/", config.APP_ORIGIN).pathname;
+        if (isExtensionMachinePath(pathname))
           throw new Problem(403, "forbidden", "Этот адрес принимает только токен агента.");
+        if (isExtensionSignInPath(pathname))
+          throw new Problem(403, "forbidden", "Этот адрес принимает только ответ сервиса входа.");
         return identity(req, options ?? {});
       },
       agent: async (req, reply, scope) => {
@@ -240,6 +261,25 @@ export async function createApp() {
       auditFeed: { read: readAuditFeed, head: auditFeedHead },
       sessions: sessionsForExtension,
       redact: redactForExtension,
+      accounts: {
+        get: getAccount,
+        findByEmail: findAccountByEmail,
+        provision: provisionAccount,
+        update: (id, input) => updateAccount(extension.name, id, input),
+        deprovision: (id, input) => deprovisionAccount(extension.name, id, input),
+        reactivate: (id) => reactivateAccount(extension.name, id),
+        startSession: (reply, accountId, previous) =>
+          startSessionForExtension(extension.name, reply, accountId, previous),
+      },
+      teamShelves: {
+        list: listTeamShelves,
+        get: getTeamShelf,
+        create: createTeamShelf,
+        rename: renameTeamShelf,
+        members: listTeamMembers,
+        setMember: setTeamMember,
+        removeMember: removeTeamMember,
+      },
     });
   return app;
 }
