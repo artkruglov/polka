@@ -208,6 +208,14 @@ SQL
 docker compose --env-file hosted.env exec -T postgres \
   pg_restore --no-owner --exit-on-error -U polka_schema -d polka < polka.dump
 
+# 3a. Номера транзакций в журнале событий — от старого кластера. В новом они
+# «из будущего»: лента /api/v1/events не видит такие записи, пока счётчик
+# транзакций их не догонит (11.10.2026 — 59 записей, несколько недель), а
+# рассылка вебхуков каждые 5 секунд пишет webhooks.cursor_skipped_stale.
+# Без номера запись встаёт в начало ленты, как журнал до миграции 055.
+docker compose --env-file hosted.env exec -T postgres \
+  psql -U polka_schema -d polka -c "UPDATE audit_outbox SET tx_id=NULL WHERE tx_id IS NOT NULL"
+
 # 4. Миграции и grants, приложение пока не запускать
 docker compose --env-file hosted.env run --rm migrate
 docker compose --env-file hosted.env run --rm grants
