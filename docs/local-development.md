@@ -87,7 +87,7 @@ Viewer поднимается отдельным listener на http://localhost:
 
 ## Вход по коду из письма
 
-По умолчанию `MAIL_MODE=disabled`. На loopback можно включить `MAIL_MODE=local`: тогда `/signup` принимает только вымышленные адреса в зоне `.test`, а одноразовый код появляется в `.local/mail/<challenge-id>.json`, а не в HTTP-ответе. Для настоящих писем нужен `MAIL_MODE=smtp` с `SMTP_HOST` и `MAIL_FROM`, при необходимости ещё `SMTP_USER` и `SMTP_PASS` (порт 587 STARTTLS или 465 TLS). Письма и секреты не коммитьте.
+По умолчанию `MAIL_MODE=disabled`. На loopback можно включить `MAIL_MODE=local`: тогда `/signup` принимает только вымышленные адреса в зоне `.test`, а одноразовый код появляется в `.local/mail/<challenge-id>.json`, а не в HTTP-ответе. Верный код подтверждает адрес (`accounts.email_verified_at`), как и при настоящих письмах: так локально проверяются правила, которым нужна подтверждённая почта (домены организации, библиотеки шаблонов). Для настоящих писем нужен `MAIL_MODE=smtp` с `SMTP_HOST` и `MAIL_FROM`, при необходимости ещё `SMTP_USER` и `SMTP_PASS` (порт 587 STARTTLS или 465 TLS). Письма и секреты не коммитьте.
 
 ## Подключить локального агента
 

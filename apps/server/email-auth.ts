@@ -293,7 +293,7 @@ export async function verifyEmailLogin(
       if (!emailSignupAllowed(challenge.email)) return null;
       if (options.provisionalId) {
         // The address claims the provisional shelf this browser holds.
-        const claimed = await claimWithEmail(c, options.provisionalId, challenge.email, challenge.delivery === "smtp");
+        const claimed = await claimWithEmail(c, options.provisionalId, challenge.email);
         if (!claimed) return null;
         await c.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [id]);
         return { kind: "claimed", accountId: options.provisionalId };
@@ -306,21 +306,17 @@ export async function verifyEmailLogin(
       // Unused random password keeps legacy password login separate from email identities.
       const password = await passwordHash(randomBytes(32).toString("hex"));
       const res = await c.query(
-        `INSERT INTO accounts(id,name,password_hash,email,display_name,email_verified_at) VALUES($1,$2,$3,$4,$5,CASE WHEN $6='smtp' THEN now() ELSE NULL END) RETURNING *`,
-        [
-          accountId,
-          `email-${accountId}`,
-          password,
-          challenge.email,
-          challenge.email.split("@")[0].slice(0, 40),
-          challenge.delivery,
-        ],
+        `INSERT INTO accounts(id,name,password_hash,email,display_name,email_verified_at) VALUES($1,$2,$3,$4,$5,now()) RETURNING *`,
+        [accountId, `email-${accountId}`, password, challenge.email, challenge.email.split("@")[0].slice(0, 40)],
       );
       account = res.rows[0];
       await c.query("INSERT INTO tenants(id,owner_id) VALUES($1,$2)", [randomUUID(), accountId]);
       trackSignup(c, accountId, "email", source);
       created = true;
-    } else if (challenge.delivery === "smtp")
+    } else
+      // The right code proves the address, in every mail mode: local mail on
+      // a loopback install behaves like SMTP, so organisation-domain rules
+      // can be tried locally.
       await c.query("UPDATE accounts SET email_verified_at=now() WHERE id=$1", [account.id]);
     await c.query("UPDATE login_challenges SET consumed_at=now() WHERE id=$1", [id]);
     const session = randomBytes(32).toString("base64url");
@@ -336,7 +332,7 @@ export async function verifyEmailLogin(
  * Attaches a verified address to a provisional shelf (tenant, then account
  * locked) and marks it claimed. False when the shelf is gone or claimed.
  */
-async function claimWithEmail(c: PoolClient, accountId: string, email: string, verified: boolean) {
+async function claimWithEmail(c: PoolClient, accountId: string, email: string) {
   const tenant = (await c.query("SELECT id FROM tenants WHERE owner_id=$1 FOR UPDATE", [accountId])).rows[0];
   const account = (
     await c.query(
@@ -347,12 +343,7 @@ async function claimWithEmail(c: PoolClient, accountId: string, email: string, v
     )
   ).rows[0];
   if (!tenant || !account) return false;
-  await c.query(
-    `UPDATE accounts SET email=$2,
-            email_verified_at=CASE WHEN $3::boolean THEN now() ELSE NULL END
-      WHERE id=$1`,
-    [accountId, email, verified],
-  );
+  await c.query("UPDATE accounts SET email=$2,email_verified_at=now() WHERE id=$1", [accountId, email]);
   const { markClaimed } = await import("./provisional.ts");
   return markClaimed(c, accountId, "email", email.split("@")[0]);
 }

@@ -89,7 +89,7 @@ export function ShelfMembersPanel({
   shelf: Shelf;
   accountId: string;
   onClose: () => void;
-  /** More for the shelf's dialog: the department's card (workspace). */
+  /** More for the shelf's dialog, below the members: the department's card (workspace). */
   children?: React.ReactNode;
 }) {
   const [members, setMembers] = useState<ShelfMember[] | null>(null),
@@ -100,6 +100,8 @@ export function ShelfMembersPanel({
     [name, setName] = useState(shelf.name ?? ""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    // The direct-add answer belongs under its field, not with the list.
+    [addError, setAddError] = useState(""),
     [notice, setNotice] = useState("");
   const live = useRef(true);
   const admin = role === "admin";
@@ -119,17 +121,18 @@ export function ShelfMembersPanel({
     };
   }, [shelf.id, reload]);
 
-  const act = async (work: () => Promise<unknown>, done?: string) => {
+  const act = async (work: () => Promise<unknown>, done?: string, onError = setError) => {
     if (busy) return;
     setBusy(true);
     setError("");
+    setAddError("");
     setNotice("");
     try {
       await work();
       await reload();
       if (done && live.current) setNotice(done);
     } catch (e) {
-      if (live.current) setError((e as Error).message);
+      if (live.current) onError((e as Error).message);
     } finally {
       if (live.current) setBusy(false);
     }
@@ -156,7 +159,6 @@ export function ShelfMembersPanel({
   return (
     <Dialog title={`Участники · ${shelf.name ?? "полка отдела"}`} busy={busy} onClose={() => !busy && onClose()}>
       <div className="dialog-body shelf-members">
-        {children}
         {admin && (
           <form
             className="shelf-members-rename"
@@ -186,19 +188,27 @@ export function ShelfMembersPanel({
             className="shelf-members-add"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!who.trim()) return setError("Укажите почту или логин коллеги.");
-              void act(async () => {
-                const added = await client.addShelfMember(shelf.id, who.trim(), newRole);
-                setWho("");
-                setNotice(`${added.name} добавлен: ${ROLE_LABEL[added.role].toLowerCase()}.`);
-              });
+              if (!who.trim()) return setAddError("Укажите почту или логин коллеги.");
+              void act(
+                async () => {
+                  const added = await client.addShelfMember(shelf.id, who.trim(), newRole);
+                  setWho("");
+                  setNotice(`${added.name} теперь на полке: ${ROLE_LABEL[added.role].toLowerCase()}.`);
+                },
+                undefined,
+                setAddError,
+              );
             }}
           >
             <TextField
               label="Почта или логин коллеги"
               hint={directAddHint(directAdd)}
+              error={addError}
               value={who}
-              onChange={(event) => setWho(event.target.value)}
+              onChange={(event) => {
+                setWho(event.target.value);
+                setAddError("");
+              }}
               disabled={busy}
               autoComplete="off"
             />
@@ -220,7 +230,13 @@ export function ShelfMembersPanel({
           </form>
         )}
         {(role === "admin" || role === "curator") && (
-          <ShelfInviteLinks shelfId={shelf.id} inviter={role} accountId={accountId} />
+          <ShelfInviteLinks
+            shelfId={shelf.id}
+            inviter={role}
+            accountId={accountId}
+            directAdd={directAdd}
+            onCreated={() => setAddError("")}
+          />
         )}
         {notice && (
           <p className="shelf-members-notice" role="status">
@@ -272,7 +288,7 @@ export function ShelfMembersPanel({
                     onClick={() =>
                       void act(
                         () => client.revokeShelfMember(shelf.id, member.accountId),
-                        `${member.name} больше не на полке. Его работы остались.`,
+                        `${member.name} больше не на полке. Сохранённые работы остались.`,
                       )
                     }
                   >
@@ -283,6 +299,7 @@ export function ShelfMembersPanel({
             ))}
           </ul>
         )}
+        {children}
       </div>
       <div className="dialog-footer">
         {leaving ? (

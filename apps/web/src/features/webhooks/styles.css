@@ -26,17 +26,45 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* Same look as the app's other choice groups: no browser fieldset frame. */
 .webhooks-events {
   display: grid;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 12px;
+  gap: 10px;
+  min-width: 0;
+  margin: 16px 0;
+  padding: 0;
+  border: 0;
+}
+.webhooks-events > legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font: 500 var(--text-base) / 1.4 var(--font-sans);
+  color: var(--ink-2);
 }
 .webhooks-events label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  cursor: pointer;
+}
+.webhooks-events input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.webhooks-events label > span {
+  display: grid;
+  min-width: 0;
+}
+/* The event id on its own line: a long id does not break the label mid-line. */
+.webhooks-events code {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 .webhooks-log {
   display: grid;
@@ -54,5 +82,47 @@
   color: var(--muted);
 }
 .webhooks-new {
+  display: grid;
+  gap: 16px;
   margin-top: 16px;
+}
+.webhooks-new h3 {
+  margin: 0;
+}
+.webhooks-new .webhooks-events {
+  margin: 0;
+}
+.webhooks-new > .ui-button {
+  justify-self: start;
+}
+.webhooks-new .ui-notice,
+.webhooks-item .ui-notice {
+  margin: 0;
+}
+.webhooks-result {
+  margin: 0;
+  color: var(--ink-2);
+}
+.webhooks-confirm {
+  display: grid;
+  gap: 8px;
+}
+.webhooks-secret {
+  margin: 0;
+}
+.webhooks-secret-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.webhooks-secret-value code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.webhooks-list-result {
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }

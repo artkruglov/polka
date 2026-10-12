@@ -601,8 +601,9 @@ test("a code to a new address claims the provisional shelf in the same browser",
   assert.deepEqual(verified.json(), { ok: true, claimed: true });
   const {
     rows: [account],
-  } = await db.query("SELECT email,claimed_at FROM accounts WHERE id=$1", [shelf.id]);
+  } = await db.query("SELECT email,email_verified_at,claimed_at FROM accounts WHERE id=$1", [shelf.id]);
   assert.equal(account.email, email);
+  assert.ok(account.email_verified_at, "the code proves the address");
   assert.ok(account.claimed_at);
   assert.equal(await accountsWithEmail(email), 1);
 });

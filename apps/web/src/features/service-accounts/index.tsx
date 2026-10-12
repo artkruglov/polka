@@ -68,8 +68,9 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
     <section className="agent-card" aria-labelledby="service-accounts-title">
       <h2 id="service-accounts-title">Сервисные доступы</h2>
       <p>
-        Агент для расписания или CI без человека за клавиатурой. За него отвечает человек: если он уйдёт с полки, доступ
-        заморозится, пока администратор не назначит другого. Нельзя давать права «читать» и «ссылки» вместе.
+        Агент для расписания или CI без человека за клавиатурой. За него отвечает человек с полки; когда ответственный
+        уходит с полки, доступ замораживается, пока администратор не назначит нового ответственного. Нельзя давать права
+        «читать» и «ссылки» вместе.
       </p>
       {(items ?? []).map((item) => (
         <div key={item.id} className="agent-existing service-accounts-row">
@@ -108,6 +109,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
               <>
                 <Button
                   type="button"
+                  variant="danger"
                   disabled={busy}
                   onClick={() => {
                     setConfirming(null);

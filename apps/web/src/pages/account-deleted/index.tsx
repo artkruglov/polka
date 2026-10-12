@@ -90,7 +90,8 @@ export function AccountDeleted() {
         <>
           <h1>Удаление остановилось</h1>
           <p>
-            Доступ к аккаунту уже закрыт. Оператор видит сбой и продолжит; напишите ему, если ждёте дольше обычного.
+            Доступ к аккаунту уже закрыт. Оператор видит сбой и продолжит; если ждёте дольше обычного, напишите
+            оператору.
           </p>
         </>
       ) : (
@@ -103,7 +104,7 @@ export function AccountDeleted() {
               : `Данные удалит оператор этой установки не позже ${day(receipt.workingDataPolicyDeadline)}.`}{" "}
             {/* oxlint-disable-next-line react/purity -- the page re-renders on every poll, so the clock is fresh enough */}
             {receipt.workingDataPolicyDeadline && new Date(receipt.workingDataPolicyDeadline).getTime() < Date.now()
-              ? "Срок уже прошёл: напишите оператору, он увидит сбой в журнале. "
+              ? "Срок уже прошёл: напишите оператору — сбой виден в журнале. "
               : ""}
             Страница обновится сама, пока вы её не закроете.
           </p>

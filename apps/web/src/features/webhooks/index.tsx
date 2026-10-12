@@ -38,7 +38,7 @@ const ERROR_LABEL: Record<string, string> = {
 const DISABLED_LABEL = {
   owner: "выключен",
   failures: "выключен: адрес не отвечал",
-  creator: "выключен: добавивший его больше не администратор полки",
+  creator: "выключен: его автор больше не администратор полки",
 } as const;
 const STATE_LABEL = { pending: "ждёт повтора", delivered: "доставлено", failed: "не доставлено" } as const;
 
@@ -48,7 +48,7 @@ const time = (iso: string) =>
 function deliveryLine(delivery: WebhookDelivery) {
   const parts = [
     time(delivery.lastAttemptAt ?? delivery.createdAt),
-    delivery.action === "ping" ? "проверка" : delivery.action,
+    delivery.action === "ping" ? "проверка" : (EVENT_LABEL[delivery.action as WebhookEvent] ?? delivery.action),
     STATE_LABEL[delivery.state],
   ];
   if (delivery.lastStatus) parts.push(`HTTP ${delivery.lastStatus}`);
@@ -71,8 +71,11 @@ function EventChoice({ value, onChange }: { value: WebhookEvent[]; onChange: (ne
             onChange={(change) =>
               onChange(change.target.checked ? [...value, event] : value.filter((item) => item !== event))
             }
-          />{" "}
-          {EVENT_LABEL[event]} <code>{event}</code>
+          />
+          <span>
+            {EVENT_LABEL[event]}
+            <code>{event}</code>
+          </span>
         </label>
       ))}
     </fieldset>
@@ -108,6 +111,13 @@ function DeliveryLog({ id }: { id: string }) {
 }
 
 /**
+ * Where an action's answer is shown: under the webhook it was about (its id),
+ * under the list once that webhook is gone, or under the new-webhook form.
+ */
+type Place = string;
+type Result = { place: Place; text: string; tone: "info" | "error" };
+
+/**
  * «Вебхуки» of the open shelf (docs/specs/WEBHOOKS.md): addresses that receive
  * the shelf's events, signed. Its owner, or an admin of a department shelf;
  * hidden when the installation has them off (WEBHOOKS=off answers 404).
@@ -117,15 +127,16 @@ export function WebhooksSection() {
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [events, setEvents] = useState<WebhookEvent[]>(DEFAULT_EVENTS);
-  const [secret, setSecret] = useState<{ url: string; value: string } | null>(null);
+  // A secret is shown once, under its webhook; `rotated` — it replaced an older one.
+  const [secret, setSecret] = useState<{ id: string; value: string; rotated: boolean } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editEvents, setEditEvents] = useState<WebhookEvent[]>([]);
   const [log, setLog] = useState<string | null>(null);
   const [logVersion, setLogVersion] = useState(0);
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ id: string; action: "rotate" | "remove" } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [result, setResult] = useState<Result | null>(null);
   const shown = useRef(false);
 
   const reload = useCallback(async () => {
@@ -135,7 +146,7 @@ export function WebhooksSection() {
     } catch (cause) {
       // Off here (404) or not this shelf's owner or admin (403): nothing to show.
       if (cause instanceof ApiError && [403, 404].includes(cause.status) && !shown.current) setItems(null);
-      else setError("Не удалось загрузить вебхуки.");
+      else setLoadError("Не удалось загрузить вебхуки.");
     }
   }, []);
   useEffect(() => {
@@ -143,23 +154,35 @@ export function WebhooksSection() {
     void reload();
   }, [reload]);
 
-  if (items === null && !error) return null;
+  if (items === null && !loadError) return null;
 
-  const run = async (action: () => Promise<string | void>) => {
+  const run = async (place: Place, action: () => Promise<string | void>) => {
     setBusy(true);
-    setError("");
-    setNotice("");
+    setResult(null);
     try {
       const message = await action();
-      if (message) setNotice(message);
+      if (message) setResult({ place, text: message, tone: "info" });
       await reload();
       setLogVersion((value) => value + 1);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не удалось выполнить действие.");
+      setResult({
+        place,
+        text: cause instanceof Error ? cause.message : "Не удалось выполнить действие.",
+        tone: "error",
+      });
     } finally {
       setBusy(false);
     }
   };
+  const resultAt = (place: Place) =>
+    result?.place === place &&
+    (result.tone === "error" ? (
+      <Notice tone="error">{result.text}</Notice>
+    ) : (
+      <p className="webhooks-result" role="status">
+        {result.text}
+      </p>
+    ));
 
   return (
     <section className="agent-card" id="webhooks" aria-labelledby="webhooks-title">
@@ -184,11 +207,23 @@ export function WebhooksSection() {
             {item.pausedUntil && <> Отправка приостановлена до {time(item.pausedUntil)}.</>}
             {item.skippedEvents > 0 && <> Пропущено событий (очередь была полна): {item.skippedEvents}.</>}
           </p>
-          {editing === item.id && (
+          {secret?.id === item.id && (
+            <Notice onDismiss={() => setSecret(null)}>
+              <p className="webhooks-secret">
+                Секрет показывается только сейчас — сохраните его у получателя:
+                <span className="webhooks-secret-value">
+                  <code>{secret.value}</code>
+                  <CopyButton value={secret.value} />
+                </span>
+                {secret.rotated && "Прежний секрет больше не подписывает запросы."}
+              </p>
+            </Notice>
+          )}
+          {editing === item.id ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                void run(async () => {
+                void run(item.id, async () => {
                   await client.webhooks.update(item.id, { events: editEvents });
                   setEditing(null);
                   return "События сохранены.";
@@ -205,101 +240,117 @@ export function WebhooksSection() {
                 </Button>
               </div>
             </form>
-          )}
-          <div className="webhooks-actions">
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const { delivery } = await client.webhooks.ping(item.id);
-                  setLog(item.id);
-                  return delivery.state === "delivered"
-                    ? `Проверка доставлена: HTTP ${delivery.lastStatus}.`
-                    : `Проверка не доставлена: ${delivery.lastStatus ? `HTTP ${delivery.lastStatus}` : (ERROR_LABEL[delivery.lastError ?? ""] ?? "ошибка")}.`;
-                })
-              }
-            >
-              Проверить
-            </Button>
-            <Button type="button" onClick={() => setLog(log === item.id ? null : item.id)}>
-              {log === item.id ? "Скрыть журнал" : "Журнал доставок"}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setEditing(item.id);
-                setEditEvents(item.events);
-              }}
-            >
-              События
-            </Button>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await client.webhooks.update(item.id, { enabled: item.status !== "active" });
-                  return item.status === "active" ? "Вебхук выключен." : "Вебхук включён.";
-                })
-              }
-            >
-              {item.status === "active" ? "Выключить" : "Включить"}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const rotated = await client.webhooks.rotate(item.id);
-                  setSecret({ url: item.url, value: rotated.secret });
-                })
-              }
-            >
-              Новый секрет
-            </Button>
-            {confirming === item.id ? (
-              <>
+          ) : confirming?.id === item.id ? (
+            <div className="webhooks-confirm" role="group" aria-label="Подтверждение">
+              <p className="webhooks-meta">
+                {confirming.action === "rotate"
+                  ? "Прежний секрет перестанет действовать сразу: получатель не примет запросы, пока вы не поставите у него новый."
+                  : "Вебхук удалится вместе с журналом доставок."}
+              </p>
+              <div className="webhooks-actions">
                 <Button
                   type="button"
+                  variant="danger"
                   disabled={busy}
                   onClick={() => {
                     setConfirming(null);
-                    void run(async () => {
-                      await client.webhooks.remove(item.id);
-                      return "Вебхук удалён вместе с журналом.";
-                    });
+                    if (confirming.action === "rotate")
+                      void run(item.id, async () => {
+                        const rotated = await client.webhooks.rotate(item.id);
+                        setSecret({ id: item.id, value: rotated.secret, rotated: true });
+                      });
+                    else
+                      void run("list", async () => {
+                        await client.webhooks.remove(item.id);
+                        return `Вебхук ${item.url} удалён вместе с журналом.`;
+                      });
                   }}
                 >
-                  Точно удалить
+                  {confirming.action === "rotate" ? "Выдать новый секрет" : "Удалить вебхук"}
                 </Button>
                 <Button type="button" onClick={() => setConfirming(null)}>
                   Отмена
                 </Button>
-              </>
-            ) : (
-              <Button type="button" disabled={busy} onClick={() => setConfirming(item.id)}>
+              </div>
+            </div>
+          ) : (
+            <div className="webhooks-actions">
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void run(item.id, async () => {
+                    const { delivery } = await client.webhooks.ping(item.id);
+                    setLog(item.id);
+                    return delivery.state === "delivered"
+                      ? `Проверка доставлена: HTTP ${delivery.lastStatus}.`
+                      : `Проверка не доставлена: ${delivery.lastStatus ? `HTTP ${delivery.lastStatus}` : (ERROR_LABEL[delivery.lastError ?? ""] ?? "ошибка")}.`;
+                  })
+                }
+              >
+                Проверить
+              </Button>
+              <Button type="button" onClick={() => setLog(log === item.id ? null : item.id)}>
+                {log === item.id ? "Скрыть журнал" : "Журнал доставок"}
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setResult(null);
+                  setEditing(item.id);
+                  setEditEvents(item.events);
+                }}
+              >
+                События
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void run(item.id, async () => {
+                    await client.webhooks.update(item.id, { enabled: item.status !== "active" });
+                    return item.status === "active" ? "Вебхук выключен." : "Вебхук включён.";
+                  })
+                }
+              >
+                {item.status === "active" ? "Выключить" : "Включить"}
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setResult(null);
+                  setConfirming({ id: item.id, action: "rotate" });
+                }}
+              >
+                Новый секрет
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setResult(null);
+                  setConfirming({ id: item.id, action: "remove" });
+                }}
+              >
                 Удалить
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          {resultAt(item.id)}
           {log === item.id && <DeliveryLog key={logVersion} id={item.id} />}
         </article>
       ))}
-      {secret && (
-        <Notice onDismiss={() => setSecret(null)}>
-          Секрет вебхука {secret.url} показывается только сейчас: <code>{secret.value}</code>{" "}
-          <CopyButton value={secret.value} />. Прежний секрет больше не подписывает запросы.
-        </Notice>
-      )}
+      {result?.place === "list" && <div className="webhooks-list-result">{resultAt("list")}</div>}
+      {loadError && <Notice tone="error">{loadError}</Notice>}
       <form
         className="webhooks-new"
         onSubmit={(event) => {
           event.preventDefault();
-          void run(async () => {
+          void run("new", async () => {
             const made = await client.webhooks.create({ url: url.trim(), description: description.trim(), events });
-            setSecret({ url: made.webhook.url, value: made.secret });
+            setSecret({ id: made.webhook.id, value: made.secret, rotated: false });
             setUrl("");
             setDescription("");
             setEvents(DEFAULT_EVENTS);
@@ -328,9 +379,8 @@ export function WebhooksSection() {
         <Button variant="primary" type="submit" disabled={busy || !url.trim() || !events.length}>
           Добавить вебхук
         </Button>
+        {resultAt("new")}
       </form>
-      {notice && <p role="status">{notice}</p>}
-      {error && <Notice tone="error">{error}</Notice>}
     </section>
   );
 }

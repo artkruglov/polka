@@ -89,7 +89,7 @@ The viewer runs as a separate listener on http://localhost:4391 (`VIEWER_PORT`).
 
 ## Sign-in by e-mailed code
 
-By default `MAIL_MODE=disabled`. On loopback you can set `MAIL_MODE=local`: `/signup` then accepts only made-up addresses in the `.test` zone, and the one-time code appears in `.local/mail/<challenge-id>.json`, not in the HTTP response. Real e-mail needs `MAIL_MODE=smtp` with `SMTP_HOST` and `MAIL_FROM`, plus `SMTP_USER` and `SMTP_PASS` if required (port 587 STARTTLS or 465 TLS). Do not commit e-mails or secrets.
+By default `MAIL_MODE=disabled`. On loopback you can set `MAIL_MODE=local`: `/signup` then accepts only made-up addresses in the `.test` zone, and the one-time code appears in `.local/mail/<challenge-id>.json`, not in the HTTP response. The right code marks the address verified (`accounts.email_verified_at`), as with real e-mail, so rules that need a verified address (organisation domains, template libraries) can be tried locally. Real e-mail needs `MAIL_MODE=smtp` with `SMTP_HOST` and `MAIL_FROM`, plus `SMTP_USER` and `SMTP_PASS` if required (port 587 STARTTLS or 465 TLS). Do not commit e-mails or secrets.
 
 ## Connecting a local agent
 

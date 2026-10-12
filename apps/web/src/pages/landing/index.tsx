@@ -218,7 +218,7 @@ polka_change_files      put docs/risks.md
               <span className="lp-icon">
                 <Bot />
               </span>
-              <h3>Один диск для любого агента</h3>
+              <h3>Одна полка для любого агента</h3>
               <p>
                 Начатое в одном чате продолжает другой чат или другой агент: ищет работу, спрашивает, что изменилось,
                 читает заметку полки.
@@ -311,8 +311,8 @@ polka_change_files      put docs/risks.md
             ))}
           </ul>
           <p className="lp-control-note">
-            <Eye aria-hidden="true" size={18} /> Сотрудник заранее видит, кто читает его сессии, а каждое чтение
-            расшифровки записывается в журнал.
+            <Eye aria-hidden="true" size={18} /> Сотрудник заранее видит, кто читает сессии, а каждое чтение расшифровки
+            записывается в журнал.
           </p>
           <div className="lp-cta">
             <a className="lp-button lp-button--primary" href="/enterprise">
