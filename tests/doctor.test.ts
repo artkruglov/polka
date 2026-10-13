@@ -105,6 +105,8 @@ test("sign-in: some way in, and an administrator", () => {
     signInChecks({ ...base, passwordAccounts: 0, companyAdmins: 0, ...facts }).map((check) => check.mark);
   assert.deepEqual(marks({}), ["fail", "fail"]);
   assert.deepEqual(marks({ mailMode: "smtp", companyAdmins: 1 }), ["ok", "ok"]);
+  // A cloud for many companies: admins belong to organisations, none is missing.
+  assert.deepEqual(marks({ mailMode: "smtp", teamShelvesScope: "organisation" }), ["ok", "info"]);
   assert.deepEqual(marks({ providers: ["oidc"], companyAdmins: 1, teamShelves: "off" }), ["ok", "ok", "warn"]);
   assert.deepEqual(marks({ passwordAccounts: 2, companyAdmins: 1 }), ["warn", "ok"]);
   // The database was unreachable: only the configuration is judged.

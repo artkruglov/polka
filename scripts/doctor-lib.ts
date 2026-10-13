@@ -303,6 +303,8 @@ export type SignInFacts = {
   passwordAccounts: number | null;
   companyAdmins: number | null;
   teamShelves: string;
+  /** organisation: a cloud for many companies, whose admins come with each organisation. */
+  teamShelvesScope?: string;
 };
 
 /** At least one way in for people, and someone who administers the company. */
@@ -331,6 +333,17 @@ export function signInChecks(facts: SignInFacts): Check[] {
       ),
     );
   if (facts.companyAdmins === null) return checks;
+  if (facts.teamShelvesScope === "organisation") {
+    checks.push(
+      info(
+        "Администраторы компаний",
+        facts.companyAdmins > 0
+          ? `${facts.companyAdmins}, по организациям`
+          : "по организациям: scripts/admin.ts company org, затем company admin",
+      ),
+    );
+    return checks;
+  }
   if (facts.companyAdmins > 0) checks.push(ok("Администратор компании", `${facts.companyAdmins}`));
   else
     checks.push(
