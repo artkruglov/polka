@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-13
+
 ### Added
 
 - **Гайд «Полка в компании: запуск за один день»** ([docs/company-launch.md](docs/company-launch.md)): облако, своя установка или коммерческая редакция; что подготовить (VM, два домена, S3, почта, IdP, документы); установка `install.sh`, первый администратор `account bootstrap`, проверка `ops doctor`; настройки для одной компании и подключение сотрудников фразой `Подключи Полку: https://<ваш домен>/connect`.
@@ -710,7 +712,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/artkruglov/polka/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/artkruglov/polka/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/artkruglov/polka/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/artkruglov/polka/compare/v0.13.0...v0.14.0
