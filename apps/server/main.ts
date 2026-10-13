@@ -2,7 +2,7 @@ import { registerFrontend } from "./frontend.ts";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
-import { db } from "./db.ts";
+import { db, inBackground, settled } from "./db.ts";
 import { createHealthAdapters } from "./health-adapters.ts";
 import { registerHealthRoutes } from "./health-routes.ts";
 import { createHealthCoordinator } from "./health.ts";
@@ -12,6 +12,8 @@ import { EXPECTED_MIGRATION_VERSIONS } from "../../packages/migrations.ts";
 import { assertRestoreStartupGate } from "./restore-gate.ts";
 import { installProcessErrorHandlers } from "./process-errors.ts";
 import { log } from "./log.ts";
+import { installShutdown } from "./shutdown.ts";
+import { startEventLoopWatchdog, startPoolWatchdog } from "./watchdog.ts";
 installProcessErrorHandlers();
 async function closeRefusedStartup() {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -50,11 +52,25 @@ const health = createHealthCoordinator({
   storage: healthAdapters.storage.probe,
 });
 let viewer: Awaited<ReturnType<typeof createLiveViewerApp>> | null = null;
-async function shutdown() {
+// Background timers, cleared first on shutdown so no new job starts.
+const timers: Array<ReturnType<typeof setInterval>> = [];
+const every = (ms: number, job: () => unknown) => timers.push(setInterval(job, ms).unref());
+// A job is tracked (db.ts inBackground), so shutdown waits for a running one.
+const background = (job: () => Promise<unknown>) => () => void inBackground(job());
+let stopWatchdogs = () => undefined as void;
+const intake = async () => {
   health.stop();
+  stopWatchdogs();
+  for (const timer of timers) clearInterval(timer);
   await Promise.allSettled([app.close(), viewer?.close()]);
+};
+const close = async () => {
   await Promise.allSettled([healthAdapters.close(), db.end()]);
   s3.destroy();
+};
+async function shutdown() {
+  await intake();
+  await close();
 }
 try {
   await registerHealthRoutes(app, health);
@@ -89,7 +105,7 @@ const reviewLetters = async () => {
     log.error({ event: "review_mail.failed" });
   }
 };
-setInterval(reviewLetters, 5 * 60 * 1000).unref();
+every(5 * 60 * 1000, background(reviewLetters));
 // Webhooks (webhooks.ts, WEBHOOKS=on): new events to deliveries, and due
 // deliveries out, each on its own timer so a slow receiver never holds up
 // the journal. Expiring old deliveries runs hourly whatever the flag.
@@ -99,8 +115,14 @@ if (config.WEBHOOKS === "on") {
     log.error({ event: "webhooks.load_failed" });
     return null;
   });
-  setInterval(() => void webhooks.then((module) => module?.runWebhookDispatch()), 5_000).unref();
-  setInterval(() => void webhooks.then((module) => module?.runWebhookSend()), 5_000).unref();
+  every(
+    5_000,
+    background(() => webhooks.then((module) => module?.runWebhookDispatch())),
+  );
+  every(
+    5_000,
+    background(() => webhooks.then((module) => module?.runWebhookSend())),
+  );
 }
 const webhookHousekeeping = async () => {
   try {
@@ -109,15 +131,24 @@ const webhookHousekeeping = async () => {
     log.error({ event: "webhooks.housekeeping_failed" });
   }
 };
-setInterval(webhookHousekeeping, 60 * 60 * 1000).unref();
-setTimeout(sweep, 30_000).unref();
-setInterval(sweep, 60 * 60 * 1000).unref();
+every(60 * 60 * 1000, background(webhookHousekeeping));
+timers.push(setTimeout(background(sweep), 30_000).unref());
+every(60 * 60 * 1000, background(sweep));
 if (viewer) log.info({ event: "viewer.started", mode: config.HTML_LIVE_MODE });
-let closing = false;
-for (const signal of ["SIGINT", "SIGTERM"])
-  process.on(signal, async () => {
-    if (closing) return;
-    closing = true;
-    await shutdown();
-    process.exit(0);
-  });
+// SIGTERM/SIGINT: stop taking work, let the running work finish, close
+// (shutdown.ts). The deadline stays below stop_grace_period in compose.
+const stop = installShutdown({
+  steps: { intake, drain: settled, close },
+  deadlineMs: config.SHUTDOWN_GRACE_SECONDS * 1000,
+});
+// Self-healing (watchdog.ts): a process that hangs exits for Docker to restart it.
+const stopLoopWatchdog = startEventLoopWatchdog({ limitMs: config.WATCHDOG_EVENT_LOOP_SECONDS * 1000 });
+const stopPoolWatchdog = startPoolWatchdog({
+  pool: db,
+  limitMs: config.WATCHDOG_POOL_STALL_SECONDS * 1000,
+  onStall: () => void stop(1),
+});
+stopWatchdogs = () => {
+  stopLoopWatchdog();
+  stopPoolWatchdog();
+};

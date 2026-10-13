@@ -397,6 +397,20 @@ const env = z
     // How often the backup job dumps (its BACKUP_INTERVAL_SECONDS): the status
     // turns red when the newest dump is older than this plus two hours.
     OPS_BACKUP_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(31_536_000).default(86_400),
+    // Graceful stop (shutdown.ts): how long running requests and work started
+    // after a commit may take before the process closes anyway. Keep it below
+    // the container's stop_grace_period (30 s in deploy/hosted/compose.yml).
+    SHUTDOWN_GRACE_SECONDS: z.coerce.number().int().min(1).max(600).default(25),
+    // Self-healing (watchdog.ts): the process exits, for Docker to restart it,
+    // when its event loop has been blocked this long, or when the database
+    // pool has been full with requests waiting and no progress this long.
+    // 0 turns a check off.
+    WATCHDOG_EVENT_LOOP_SECONDS: z.coerce.number().int().min(0).max(3600).default(30),
+    WATCHDOG_POOL_STALL_SECONDS: z.coerce.number().int().min(0).max(3600).default(120),
+    // One log line per request (request-log.ts): method, route pattern, status,
+    // duration, request id; never the URL. `debug` hides them at the default
+    // LOG_LEVEL; `off` stops them.
+    ACCESS_LOG: z.enum(["info", "debug", "off"]).default("info"),
     RESTORE_MODE: z.enum(["off", "required"]).default("off"),
     RESTORE_RECEIPT_PATH: z.string().optional(),
     RESTORE_RUN_ID: z.string().uuid().optional(),

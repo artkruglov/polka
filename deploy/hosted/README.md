@@ -739,9 +739,46 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
 ### Что видно в статусе о работе процесса
 
-`/api/ops/status` кроме проверок отдаёт блок `runtime` (не влияет на `ok`): `rssMiB` и `heapUsedMiB` приложения, задержка цикла событий за время с прошлого опроса (`eventLoopMs`: mean, p99, max), очередь пула БД (`pool`: total, idle, waiting), слоты воркеров разбора страниц (`workers`: limit, running, waiting) и счётчики (`counters`, например `viewer.check.cached` и `viewer.file.304`). Значения цикла событий и счётчики обнуляются при каждом чтении. Что тревожно: `pool.waiting` выше нуля дольше нескольких опросов, `eventLoopMs.p99` за сотни миллисекунд, `rssMiB` рядом с лимитом контейнера, `workers.waiting` растёт.
+`/api/ops/status` кроме проверок отдаёт блок `runtime` (не влияет на `ok`): `rssMiB` и `heapUsedMiB` приложения, задержка цикла событий за время с прошлого опроса (`eventLoopMs`: mean, p99, max — сверх периода замера в 10 мс, так что у простаивающего процесса около 0–1 мс; раньше сюда входил сам период, и простой показывал около 20 мс), очередь пула БД (`pool`: total, idle, waiting), слоты воркеров разбора страниц (`workers`: limit, running, waiting) и счётчики (`counters`, например `viewer.check.cached` и `viewer.file.304`). Значения цикла событий и счётчики обнуляются при каждом чтении. Что тревожно: `pool.waiting` выше нуля дольше нескольких опросов, `eventLoopMs.p99` за сотни миллисекунд, `rssMiB` рядом с лимитом контейнера, `workers.waiting` растёт.
 
 Лимиты памяти: app 1,5 ГиБ (куча V8 ограничена `--max-old-space-size=1024`), maintenance 768 МиБ, postgres 1 ГиБ, tmpfs бэкапа 256 МиБ; renderer, если включён, ещё 1,5 ГиБ (лучше на отдельной VM).
+
+### Метрики для Prometheus
+
+`GET /api/ops/metrics/prometheus` с тем же `Authorization: Bearer <OPS_STATUS_TOKEN>` отдаёт текстовый формат Prometheus 0.0.4 (без токена в конфигурации — 404):
+
+| Метрика | Что |
+|---|---|
+| `polka_http_requests_total{method,route,status}` | ответы по шаблону маршрута (`/api/works/:id`, не адрес) и коду; запрос, которому не нашёлся маршрут, — `route="unmatched"` |
+| `polka_http_request_duration_seconds{method,route,status}` | гистограмма времени ответа, корзины от 5 мс до 60 с |
+| `polka_db_pool_connections{state}`, `polka_db_pool_max` | пул БД: `total`, `idle`, `waiting` |
+| `polka_event_loop_delay_seconds{stat}` | задержка цикла событий с прошлого опроса: `mean`, `p99`, `max` (своё окно, опрос статуса его не сбрасывает) |
+| `process_resident_memory_bytes`, `nodejs_heap_used_bytes`, `nodejs_heap_total_bytes`, `process_uptime_seconds` | память и время работы |
+| `polka_worker_slots{state}` | слоты воркеров разбора страниц: `limit`, `running`, `waiting` (очередь) |
+| `polka_webhook_deliveries_pending`, `polka_webhook_deliveries_due` | доставки вебхуков в очереди и из них те, чья попытка уже наступила |
+| `polka_events_total{name}` | счётчики из `counters` статуса, но накопительные с запуска |
+
+Счётчики живут в памяти процесса и начинаются с нуля после перезапуска — `rate()` в Prometheus это учитывает. Пример задания:
+
+```yaml
+scrape_configs:
+  - job_name: polka
+    scheme: https
+    metrics_path: /api/ops/metrics/prometheus
+    authorization: {credentials_file: /etc/prometheus/polka-ops-token}
+    static_configs: [{targets: ["polka.example.com"]}]
+```
+
+### Остановка и самовосстановление
+
+`docker compose stop`/`up -d` шлёт приложению SIGTERM. Оно перестаёт быть готовым (`/readyz` — 503), останавливает фоновые таймеры (модерация, письма о проверке, вебхуки), закрывает порт и дожидается запросов в работе и работы после коммита (письма, удаление объектов, доставки), затем закрывает пул БД. На всё — `SHUTDOWN_GRACE_SECONDS` (25); у контейнера `stop_grace_period: 30s`, у maintenance — 65 с на текущий прогон. Что не уложилось, остаётся несделанным и пишется в лог `server.stop_deadline`; письма и удаления, которые не успели, подбирает следующий прогон своих циклов.
+
+Docker перезапускает контейнер, который завершился (`restart: unless-stopped`), но не тот, что просто «unhealthy». Поэтому приложение само завершается, если зависло:
+
+- **Цикл событий заблокирован** дольше `WATCHDOG_EVENT_LOOP_SECONDS` (30): отдельный поток пишет `{"level":"fatal","event":"watchdog.event_loop_blocked",…}` и убивает процесс (код 137). Для этого у `app` `init: true`: процесс с PID 1 сигнал от самого себя не получает.
+- **Пул БД встал**: все соединения заняты, запросы ждут, и ни одно соединение не выдано и не возвращено `WATCHDOG_POOL_STALL_SECONDS` (120). Таймауты запроса и транзакции (15 и 60 с) обрывают зависший запрос раньше, так что это соединение, которое код не вернул. В лог — `watchdog.pool_stalled`, затем обычная остановка с кодом 1. Недоступная БД сюда не попадает: её соединения выходят из пула, и он не полон.
+
+`0` выключает проверку. Перезапуски видны в `docker ps` (`Up N seconds`) и `docker inspect -f '{{.RestartCount}}' polka-hosted-app-1`; их причина — строка `watchdog.*` в журнале перед ним.
 
 ## Метрики продукта
 
@@ -774,7 +811,9 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
 
 Все сервисы пишут в журнал systemd на VM (драйвер Docker `journald`, `compose.yml`, `x-logging`). Деплой пересоздаёт контейнеры `app` и `maintenance`, и лог `json-file` удалялся бы вместе с контейнером; журнал хоста остаётся. Нужна VM с systemd (Ubuntu, Debian — в том числе образы Yandex Cloud). Первый `up -d` с этой настройкой пересоздаёт все контейнеры, и старые `json-file` логи пропадают один раз.
 
-Содержимое логов не меняется: приложение не пишет адреса страниц, IP-адреса и тела запросов, ошибки — кодом события; у Caddy нет access log и записей `http.log.error` (`Caddyfile`). Размер и срок хранения задаёт journald. Один раз на VM:
+Содержимое логов не меняется: приложение не пишет адреса страниц, IP-адреса и тела запросов, ошибки — кодом события; у Caddy нет access log и записей `http.log.error` (`Caddyfile`).
+
+На каждый запрос приложение пишет одну строку `{"level":"info","event":"request","method":"GET","route":"/api/works/:id","status":200,"ms":12.3,"reqId":"…"}`: шаблон маршрута, а не адрес (в адресах — токены ссылок и id), код, время и id запроса. Тот же id приходит клиенту в заголовке `x-request-id` и стоит в `request.failed`, так что по жалобе с этим заголовком строку ошибки легко найти. Проверки здоровья (`/healthz`, `/readyz`, `/api/health`) пишутся на уровне `debug`. `ACCESS_LOG=debug` прячет все такие строки при обычном `LOG_LEVEL`, `ACCESS_LOG=off` выключает их (метрики считаются всё равно). Размер и срок хранения задаёт journald. Один раз на VM:
 
 ```sh
 sudo mkdir -p /etc/systemd/journald.conf.d /var/log/journal
@@ -793,6 +832,8 @@ journalctl --disk-usage
 sudo journalctl -t polka-hosted-app-1 --since "6 hours ago" -o short-iso
 # ошибки и предупреждения приложения за сутки (строки {"level":…,"time":…,"event":…})
 sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep -E '^\{"level":"(error|warn|fatal)"'
+# ответы 5xx за сутки: шаблон маршрута и id запроса
+sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '"event":"request"' | grep -E '"status":5[0-9]{2}'
 # все события приложения за сутки
 sudo journalctl -t polka-hosted-app-1 --since "24 hours ago" -o cat | grep '"event":'
 # все сервисы Полки за час, вперемешку по времени

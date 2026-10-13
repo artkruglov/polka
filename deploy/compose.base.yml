@@ -55,6 +55,13 @@ x-runtime-env: &runtime-env
   ORG_DOMAINS: ${ORG_DOMAINS:-}
   # on | owner-notes | off (docs/specs/SIGN_IN_PROVIDERS.md § 4).
   COMMENTS_MODE: ${COMMENTS_MODE:-on}
+  # Graceful stop and self-healing (deploy/hosted/README.md «Самовосстановление»): the stop
+  # deadline stays below the app's stop_grace_period; 0 turns a watchdog off.
+  SHUTDOWN_GRACE_SECONDS: ${SHUTDOWN_GRACE_SECONDS:-25}
+  WATCHDOG_EVENT_LOOP_SECONDS: ${WATCHDOG_EVENT_LOOP_SECONDS:-30}
+  WATCHDOG_POOL_STALL_SECONDS: ${WATCHDOG_POOL_STALL_SECONDS:-120}
+  # One log line per request (route pattern, status, ms): info | debug | off.
+  ACCESS_LOG: ${ACCESS_LOG:-info}
   # Department shelves (docs/specs/TEAM_SHELVES.md): off | on.
   TEAM_SHELVES: ${TEAM_SHELVES:-off}
   # installation (the installation is one company) | organisation (a shared cloud).
@@ -126,6 +133,8 @@ services:
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     stop_grace_period: 30s
+    # PID 1 forwards signals and lets the event-loop watchdog kill a hung Node.
+    init: true
     environment:
       <<: *runtime-env
       HOST: 0.0.0.0

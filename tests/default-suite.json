@@ -12,6 +12,8 @@
   "tests/browser-icons.test.ts",
   "tests/away-links.test.ts",
   "tests/ops-status.test.ts",
+  "tests/shutdown.test.ts",
+  "tests/watchdog.test.ts",
   "tests/uptime.test.ts",
   "tests/analytics.test.ts",
   "tests/recipient-cta.test.ts",

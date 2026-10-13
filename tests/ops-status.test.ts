@@ -100,3 +100,77 @@ test("ops status fails when expired rows show maintenance has stopped", async ()
     await db.query("DELETE FROM sessions WHERE hash=$1", [hash]);
   }
 });
+
+test("runtime metrics for Prometheus: behind the ops token, route patterns, no URLs", async () => {
+  mutable.OPS_STATUS_TOKEN = undefined;
+  const scrape = (authorization?: string) =>
+    app.inject({
+      method: "GET",
+      url: "/api/ops/metrics/prometheus",
+      headers: authorization ? { authorization } : {},
+    });
+  assert.equal((await scrape(`Bearer ${token}`)).statusCode, 404);
+  mutable.OPS_STATUS_TOKEN = token;
+  assert.equal((await scrape()).statusCode, 404);
+  // A request with a token in its URL: counted under its pattern, or as unmatched.
+  const secret = randomBytes(12).toString("hex");
+  await app.inject({ method: "GET", url: `/api/no-such-route-${secret}` });
+  await app.inject({ method: "GET", url: `/api/capabilities?token=${secret}` });
+  const answer = await scrape(`Bearer ${token}`);
+  assert.equal(answer.statusCode, 200, answer.body);
+  assert.match(answer.headers["content-type"] as string, /^text\/plain; version=0\.0\.4/);
+  const text = answer.body;
+  assert.doesNotMatch(text, new RegExp(secret));
+  assert.match(text, /^# TYPE polka_http_requests_total counter$/m);
+  assert.match(text, /^polka_http_requests_total\{method="GET",route="\/api\/capabilities",status="200"\} \d+$/m);
+  assert.match(text, /^polka_http_requests_total\{method="GET",route="unmatched",status="404"\} \d+$/m);
+  assert.match(
+    text,
+    /^polka_http_request_duration_seconds_bucket\{method="GET",route="\/api\/capabilities",status="200",le="\+Inf"\} \d+$/m,
+  );
+  assert.match(text, /^polka_db_pool_connections\{state="waiting"\} \d+$/m);
+  assert.match(text, /^polka_event_loop_delay_seconds\{stat="p99"\} [\d.e-]+$/m);
+  assert.match(text, /^process_resident_memory_bytes \d+$/m);
+  assert.match(text, /^polka_worker_slots\{state="waiting"\} \d+$/m);
+  assert.match(text, /^polka_webhook_deliveries_pending \d+$/m);
+  // Every sample line is `name{labels} number`.
+  for (const line of text
+    .trim()
+    .split("\n")
+    .filter((entry) => !entry.startsWith("#")))
+    assert.match(line, /^[a-z_]+(\{[^}]*\})? -?[\d.e+-]+$/, line);
+});
+
+test("every request gets an x-request-id and one log line with its route pattern, never the URL", async (t) => {
+  const lines: string[] = [];
+  t.mock.method(console, "log", (line: string) => lines.push(line));
+  t.mock.method(console, "error", (line: string) => lines.push(line));
+  // The suite runs with ACCESS_LOG=off (scripts/test-isolated.ts); the default is info.
+  const settings = config as { ACCESS_LOG: string };
+  const before = settings.ACCESS_LOG;
+  settings.ACCESS_LOG = "info";
+  t.after(() => {
+    settings.ACCESS_LOG = before;
+  });
+  const secret = randomBytes(12).toString("hex");
+  const answer = await app.inject({ method: "GET", url: `/api/capabilities?token=${secret}` });
+  const id = answer.headers["x-request-id"] as string;
+  assert.match(id, /^[0-9a-f-]{36}$/);
+  const line = lines.map((entry) => JSON.parse(entry)).find((entry) => entry.event === "request" && entry.reqId === id);
+  assert.ok(line, lines.join("\n"));
+  assert.deepEqual(
+    { method: line.method, route: line.route, status: line.status, level: line.level },
+    { method: "GET", route: "/api/capabilities", status: 200, level: "info" },
+  );
+  assert.equal(typeof line.ms, "number");
+  assert.doesNotMatch(lines.join("\n"), new RegExp(secret));
+  // Two requests, two ids.
+  const other = await app.inject({ method: "GET", url: "/api/capabilities" });
+  assert.notEqual(other.headers["x-request-id"], id);
+  // ACCESS_LOG=off: no line, the header stays.
+  settings.ACCESS_LOG = "off";
+  lines.length = 0;
+  const quiet = await app.inject({ method: "GET", url: "/api/capabilities" });
+  assert.ok(quiet.headers["x-request-id"]);
+  assert.equal(lines.filter((entry) => entry.includes('"event":"request"')).length, 0);
+});

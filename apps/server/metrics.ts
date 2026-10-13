@@ -12,6 +12,7 @@ import { config } from "./config.ts";
 import { db } from "./db.ts";
 import { missing } from "./errors.ts";
 import { authorizeOpsStatus } from "./ops-status.ts";
+import { prometheusText } from "./ops-prometheus.ts";
 
 type Queryable = { query: (sql: string, params?: unknown[]) => Promise<any> };
 
@@ -429,6 +430,11 @@ export function registerOpsMetrics(app: FastifyInstance) {
     authorizeOpsStatus(req.headers.authorization);
     const { weeks } = z.object({ weeks: z.coerce.number().int().min(1).max(56).default(12) }).parse(req.query ?? {});
     return metricsReport({ weeks });
+  });
+  // Runtime metrics for a Prometheus scraper (ops-prometheus.ts), the same token.
+  app.get("/api/ops/metrics/prometheus", async (req, reply) => {
+    authorizeOpsStatus(req.headers.authorization);
+    return reply.type("text/plain; version=0.0.4; charset=utf-8").send(await prometheusText());
   });
   // The page carries no data: it asks for the token (kept in this tab's
   // sessionStorage only) and reads the JSON above. Script and styles are

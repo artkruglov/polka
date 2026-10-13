@@ -67,6 +67,7 @@ import { registerViewRoutes } from "./view-routes.ts";
 import { registerServiceAccountRoutes } from "./service-account-routes.ts";
 import { registerWebhookRoutes } from "./webhook-routes.ts";
 import { log } from "./log.ts";
+import { registerRequestLog, requestId } from "./request-log.ts";
 
 /** The first frame of a stack below its message: where it was thrown. */
 export function firstStackFrame(error: unknown) {
@@ -83,9 +84,11 @@ export { anonymous } from "./route-helpers.ts";
 
 export async function createApp() {
   const app = Fastify({
-    // The server's log (log.ts); no line per request: URLs carry tokens.
+    // The server's log (log.ts). Fastify's own request lines are off: they
+    // carry the URL, and URLs carry tokens; request-log.ts writes ours.
     loggerInstance: log as FastifyBaseLogger,
     logController: new LogController({ disableRequestLogging: true }),
+    genReqId: requestId,
     bodyLimit: MAX_BYTES,
     // A video upload (publish-api.ts) is streamed and may take minutes; every
     // other request has 30 s to arrive (the onRequest hook below).
@@ -94,6 +97,7 @@ export async function createApp() {
     trustProxy: config.TRUST_PROXY.length ? config.TRUST_PROXY : false,
   });
   await app.register(cookie);
+  registerRequestLog(app);
   app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
   app.addHook("onRequest", async (req) => {
     if (req.raw.complete || isMediaUploadPath(req.raw.url ?? "")) return;
