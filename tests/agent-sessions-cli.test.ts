@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
-import { commandShape, createRedactor, main, prepareSession } from "../scripts/polka-sessions.mjs";
+import { commandShape, createRedactor, main, prepareSession, scrubTemplate } from "../scripts/polka-sessions.mjs";
 import { FAKE, claudeSession, codexSession } from "./agent-sessions-fixtures.ts";
 
 let dir: string;
@@ -35,7 +35,7 @@ test("a Claude Code session: facts, secrets report and a redacted transcript wit
     body.toolCalls.map((c: { kind: string }) => c.kind),
     ["shell", "shell", "shell", "web", "mcp"],
   );
-  assert.equal(body.toolCalls[1].template, "git push --force origin");
+  assert.equal(body.toolCalls[1].template, "git push --force <arg>");
   assert.equal(body.toolCalls[1].status, "error");
   assert.equal(body.toolCalls[2].pipeToShell, true);
   assert.deepEqual(body.toolCalls[0].hosts, ["db.example.com"]);
@@ -114,13 +114,165 @@ test("the redactor replaces the captured value, not an equal user name", () => {
   // The setup steps of a chain are not the command.
   assert.deepEqual(commandShape('cd "/a b/c"; npm run -s check 2>&1 | tail'), {
     argv0: "npm",
-    template: "npm run -s check",
+    template: "npm run -s <arg>",
   });
   assert.deepEqual(commandShape("export A=1 && source .env && psql -c 'select 1'"), {
     argv0: "psql",
     template: "psql -c <arg>",
   });
   assert.deepEqual(commandShape("cd /tmp"), { argv0: "cd", template: "cd <arg>" });
+});
+
+// Secret-like values assembled at run time, as in the fixtures.
+const GLUED = "S3cret" + "Pass9";
+const NAMED = {
+  dollar: "Pa$$" + "w0rd123!",
+  letters: "correct" + "horsebatterystaple",
+  slash: "/wJalrXUtnFEMI/K7MDENG/" + "bPxRfiCYEXAMPLEKEY",
+};
+const LEAKY_COMMANDS = [
+  `mysql -u root -p${GLUED} app`,
+  ["curl", "-u" + "admin:Hunter22x" + GLUED, "https://api.example.com/x"].join(" "),
+  "sshpass -p hunter-two ssh deploy@example.com",
+  `DB_PASSWORD=${NAMED.dollar} psql -h db`,
+];
+
+test("a command template keeps subcommands and bare flags only, from the redacted command", () => {
+  const redactor = createRedactor(KEY);
+  const shape = (command: string) => commandShape(redactor.redact(command, "x", { quiet: true }));
+  assert.deepEqual(
+    LEAKY_COMMANDS.map((command) => shape(command).template),
+    ["mysql -u <arg> <arg>", "curl <arg> <arg>", "sshpass -p <arg> <arg>", "psql -h <arg>"],
+  );
+  // A quiet pass counts no finding: the scan of the input already did.
+  assert.equal(redactor.findings().length, 0);
+  // What stays: subcommands and flags the server's destructive rules read.
+  for (const [command, template] of [
+    ["npm test", "npm test"],
+    ["git push --force origin main", "git push --force <arg>"],
+    ["rm -rf ./dist", "rm -rf <arg>"],
+    ["terraform apply -auto-approve", "terraform apply -auto-approve"],
+    ["yc compute instance delete web-1", "yc compute instance delete"],
+    ["docker system prune -af", "docker system prune -af"],
+    ["ls --color=auto src", "ls --color=<arg> <arg>"],
+    ["git clean -fdx", "git clean -fdx"],
+  ])
+    assert.equal(shape(command).template, template, command);
+  // The server blanks an older CLI's template the same way, and twice changes nothing.
+  assert.equal(scrubTemplate(`mysql -u root -p${GLUED}`), "mysql -u <arg> <arg>");
+  assert.equal(scrubTemplate("ls --color=<v> <arg>"), "ls --color=<arg> <arg>");
+  for (const template of ["git push --force <arg>", "npm run -s <arg>", "yc compute instance delete"])
+    assert.equal(scrubTemplate(template), template);
+});
+
+test("a strongly named secret is redacted whatever it looks like; code under that name stays", () => {
+  const redactor = createRedactor(KEY);
+  for (const text of [
+    `DB_PASSWORD=${NAMED.dollar}`,
+    `SECRET=${NAMED.letters}`,
+    `AWS_SECRET_ACCESS_KEY=${NAMED.slash}`,
+    `"api_key": "${NAMED.letters}"`,
+  ]) {
+    const out = redactor.redact(text, "x");
+    // The same marker format as before: the server matches fingerprints across sessions.
+    assert.match(out, /\[REDACTED:assignment:[0-9a-f]{12}\]/, text);
+    for (const value of Object.values(NAMED)) assert.ok(!out.includes(value), out);
+  }
+  for (const text of [
+    "password: string",
+    "const secret = loadSecret()",
+    "password = self.password",
+    "accessToken = userToken",
+    'token = os.environ["X"]',
+    "SECRET=$(cat key.txt)",
+    "PASSWORD_FILE=/run/secrets/db",
+    "secretsStatus: sent_out",
+    "PWD=/Users/someone/project2",
+    "max_tokens: 4096",
+  ])
+    assert.equal(redactor.redact(text, "x"), text);
+  // A password on a client's command line; a prompt (`-p` alone) or a variable stays.
+  assert.equal(
+    redactor.redact(`mysql -u root -p${GLUED} app`, "x").replace(/[0-9a-f]{12}/, "…"),
+    "mysql -u root -p[REDACTED:cli-password:…] app",
+  );
+  assert.match(redactor.redact("sshpass -p hunter-two ssh h", "x"), /^sshpass -p \[REDACTED:cli-password:/);
+  assert.match(
+    redactor.redact(["curl -u", `admin:${GLUED}`, "https://x.example"].join(" "), "x"),
+    /^curl -u admin:\[REDACTED:/,
+  );
+  for (const text of ["mysql -u root -p app", "mysql -u root -p$MYSQL_PWD app", "curl -u admin https://x.example"])
+    assert.equal(redactor.redact(text, "x"), text);
+});
+
+test("Claude Code and Codex sessions send no glued password in a template", async () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 7, 12, 0, s)).toISOString();
+  const claudeId = "22222222-3333-4444-8555-666666666666";
+  const claudePath = join(dir, `${claudeId}.jsonl`);
+  await writeFile(
+    claudePath,
+    [
+      { type: "user", sessionId: claudeId, cwd: "/work/db", timestamp: at(0), message: { content: "Check the DB" } },
+      {
+        type: "assistant",
+        sessionId: claudeId,
+        cwd: "/work/db",
+        timestamp: at(1),
+        message: {
+          id: "msg_1",
+          model: "claude-sonnet-4-5",
+          content: LEAKY_COMMANDS.map((command, i) => ({
+            type: "tool_use",
+            id: `t${i}`,
+            name: "Bash",
+            input: { command },
+          })),
+        },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n") + "\n",
+  );
+  const codexId = "019f0000-0000-7000-8000-000000000002";
+  const codexPath = join(dir, `rollout-2026-10-07T12-00-00-${codexId}.jsonl`);
+  await writeFile(
+    codexPath,
+    [
+      { timestamp: at(0), type: "session_meta", payload: { id: codexId, cwd: "/work/db", cli_version: "0.150.0" } },
+      ...LEAKY_COMMANDS.map((command, i) => ({
+        timestamp: at(1 + i),
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "shell",
+          call_id: `c${i}`,
+          arguments: JSON.stringify({ command: ["bash", "-lc", command] }),
+        },
+      })),
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n") + "\n",
+  );
+  for (const file of [
+    { source: "claude-code" as const, path: claudePath, id: claudeId },
+    { source: "codex" as const, path: codexPath, id: codexId },
+  ]) {
+    const { body, transcriptGz } = await prepareSession(file, KEY);
+    assert.deepEqual(
+      body.toolCalls.map((c: { template: string }) => c.template),
+      ["mysql -u <arg> <arg>", "curl <arg> <arg>", "sshpass -p <arg> <arg>", "psql -h <arg>"],
+      file.source,
+    );
+    const everything = JSON.stringify(body) + gunzipSync(transcriptGz).toString();
+    // Neither in the index nor in the transcript.
+    for (const value of [GLUED, NAMED.dollar, "hunter-two"])
+      assert.ok(!everything.includes(value), `${file.source} leaked ${value.slice(0, 3)}…`);
+    // Each password counted once, from the scan of the input: the template's pass is quiet.
+    assert.deepEqual(
+      body.secrets.map((s: { type: string; occurrences: number }) => `${s.type}:${s.occurrences}`).sort(),
+      ["assignment:1", "cli-password:1", "cli-password:1", "cli-password:1"],
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

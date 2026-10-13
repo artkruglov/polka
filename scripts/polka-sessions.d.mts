@@ -1,15 +1,17 @@
 // Types of scripts/polka-sessions.mjs for the tests and the server (the CLI itself stays plain JS).
 export type LocalSession = { source: "claude-code" | "codex"; path: string; id: string; size?: number; mtimeMs?: number };
 export type Redactor = {
-  redact(text: string, where?: string): string;
+  redact(text: string, where?: string, options?: { quiet?: boolean }): string;
   findings(): Array<{ type: string; confidence: string; fp: string; prefix: string; length: number; occurrences: number; where: Record<string, number> }>;
   samples(): unknown[];
 };
 export const MAX_TOOL_CALLS: number;
-export const RULES: Array<{ type: string; confidence: string; group?: number; re: RegExp }>;
+export const RULES: Array<{ type: string; confidence: string; group?: number; nameGroup?: number; always?: boolean; re: RegExp }>;
 export function createRedactor(key: Buffer | string): Redactor;
 export function toolKind(name: string): string;
 export function commandShape(command: string): { argv0: string; template: string };
+export function shapeArgs(words: string[]): string[];
+export function scrubTemplate(template: string): string;
 export function hostsIn(text: string): string[];
 export function parseClaude(file: string, redactor: Redactor, options?: { transcript?: unknown[] | null; thinking?: boolean }): Promise<any>;
 export function parseCodex(file: string, redactor: Redactor, options?: { transcript?: unknown[] | null; thinking?: boolean }): Promise<any>;
