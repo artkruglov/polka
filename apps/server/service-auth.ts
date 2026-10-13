@@ -359,6 +359,31 @@ export async function setConnectionSignInLinks(
   });
 }
 
+/**
+ * last_seen_at («когда подключение работало», the Agents page) is written at
+ * most once a minute per connection: a write per call was a row update on
+ * every /mcp and /api/v1 request. The minute is per process.
+ */
+export const LAST_SEEN_EVERY_MS = 60_000;
+const lastSeenWritten = new Map<string, number>();
+function lastSeenDue(connectionId: string, now = Date.now()) {
+  const written = lastSeenWritten.get(connectionId);
+  if (written !== undefined && now - written < LAST_SEEN_EVERY_MS) return false;
+  // Re-inserted, so the Map stays ordered by write: the stalest goes first.
+  lastSeenWritten.delete(connectionId);
+  if (lastSeenWritten.size >= 10_000) lastSeenWritten.delete(lastSeenWritten.keys().next().value!);
+  lastSeenWritten.set(connectionId, now);
+  return true;
+}
+
+/**
+ * An actor authenticateServiceToken returned moments ago: its connection was
+ * read by the same query a recheck would run, so the first recheck within
+ * FRESH_ACTOR_MS (the same request) uses it instead of reading it again.
+ */
+const FRESH_ACTOR_MS = 1_000;
+const verifiedAt = new WeakMap<ServiceActor, number>();
+
 export async function authenticateServiceToken(
   token: string,
   audience: string,
@@ -386,23 +411,10 @@ export async function authenticateServiceToken(
           )
         ).rowCount
       : false;
-  const seen = await db.query(
-    `UPDATE agent_connections connection
-     SET last_seen_at=clock_timestamp()
-     FROM accounts account,tenants tenant,tenant_members member
-     WHERE connection.token_hash=$1 AND connection.audience=$2
-       AND connection.revoked_at IS NULL AND connection.expires_at>now()
-       AND (connection.access_expires_at IS NULL
-         OR connection.access_expires_at>now())
-       AND ${servicePrincipalActiveSql}
-       AND account.id=connection.account_id AND NOT account.disabled
-       AND account.deletion_requested_at IS NULL
-       AND tenant.id=connection.tenant_id AND tenant.state='active'
-       AND member.tenant_id=tenant.id AND member.account_id=account.id
-       AND member.state='active' ${teamShelvesSql()}`,
-    [tokenHash, audience],
-  );
-  if (!seen.rowCount) throw unauthorized();
+  // The query above checked the connection; the stamp is bookkeeping only.
+  if (!firstCall && lastSeenDue(row.id))
+    await db.query("UPDATE agent_connections SET last_seen_at=clock_timestamp() WHERE id=$1", [row.id]);
+  else if (firstCall) lastSeenDue(row.id);
   markActive(row.account_id);
   if (firstCall) {
     const {
@@ -415,10 +427,20 @@ export async function authenticateServiceToken(
     );
     trackAgentConnected(null, row.account_id, transport === "http" ? "token-http" : "token-mcp", !earlier.found);
   }
-  return serviceActorFromRow(row);
+  const actor = serviceActorFromRow(row);
+  verifiedAt.set(actor, Date.now());
+  return actor;
 }
 
 export async function recheckServiceActor(actor: ServiceActor, scope: AgentScope) {
+  // Once: the request's first recheck. A later one (a long tool call, a
+  // replayed actor) reads the connection again.
+  const checked = verifiedAt.get(actor);
+  verifiedAt.delete(actor);
+  if (checked !== undefined && Date.now() - checked < FRESH_ACTOR_MS) {
+    requireScope(actor.scopes, scope);
+    return actor;
+  }
   const {
     rows: [connection],
   } = await db.query(liveConnectionSql(CONNECTION_BY_ID), connectionIdParams(actor));

@@ -6,6 +6,7 @@ import { db } from "../apps/server/db.ts";
 import { acceptRevision, setWorkOwner } from "../apps/server/artifact-acceptance.ts";
 import { shelfSnapshotForAgent } from "../apps/server/shelf-snapshot.ts";
 import { listEventsForAgent } from "../apps/server/agent-events.ts";
+import { countAgentRead, flushAgentReads } from "../apps/server/agent-read-counter.ts";
 import {
   getArtifactForAgent,
   listArtifactsForAgent,
@@ -530,8 +531,10 @@ test("a curator marks the accepted version and the owner; agents read both and s
 test("agent reads are counted per shelf and day, nothing else", async () => {
   const actor = await connection(owner, ["context", "read"]);
   const work = await artifact(owner, "Counted work");
-  const count = async () =>
-    Number(
+  // Counts are written in batches (agent-read-counter.ts): flush, then read.
+  const count = async () => {
+    await flushAgentReads();
+    return Number(
       (
         await db.query(
           "SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1 AND day=(now() AT TIME ZONE 'UTC')::date",
@@ -539,6 +542,7 @@ test("agent reads are counted per shelf and day, nothing else", async () => {
         )
       ).rows[0].n,
     );
+  };
   const before = await count();
   await listArtifactsForAgent(actor, {});
   await getArtifactForAgent(actor, { artifactId: work.artifactId });
@@ -669,9 +673,37 @@ test("the shelf snapshot shows works, versions, trash and accepted marks as they
   assert.ok(!foreign.items.some((item) => mine.includes(item.id)));
   assert.ok(foreign.items.some((item) => item.id === theirs.artifactId));
   // A snapshot is a read: it is counted.
+  await flushAgentReads();
   const counted = Number(
     (await db.query("SELECT COALESCE(sum(reads),0) AS n FROM agent_read_days WHERE tenant_id=$1", [owner.tenant]))
       .rows[0].n,
   );
   assert.ok(counted > 0);
+});
+
+test("agent reads are added up in memory and written in one statement", async () => {
+  const shelf = await createAccount(`reads-${randomBytes(4).toString("hex")}`, randomBytes(24).toString("hex"));
+  const reads = async () =>
+    (
+      await db.query("SELECT principal_type,reads FROM agent_read_days WHERE tenant_id=$1 ORDER BY principal_type", [
+        shelf.tenant,
+      ])
+    ).rows;
+  for (let i = 0; i < 5; i++) await countAgentRead(shelf.tenant, "human");
+  await countAgentRead(shelf.tenant, "service");
+  assert.deepEqual(await reads(), [], "nothing is written per read");
+  await flushAgentReads();
+  assert.deepEqual(await reads(), [
+    { principal_type: "human", reads: 5 },
+    { principal_type: "service", reads: 1 },
+  ]);
+  await countAgentRead(shelf.tenant, "human");
+  await flushAgentReads();
+  assert.equal((await reads())[0].reads, 6);
+  // A shelf whose owner asked to delete the account gets no new count.
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [shelf.id]);
+  await db.query("DELETE FROM agent_read_days WHERE tenant_id=$1", [shelf.tenant]);
+  await countAgentRead(shelf.tenant, "human");
+  await flushAgentReads();
+  assert.deepEqual(await reads(), []);
 });
