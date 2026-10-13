@@ -1,29 +1,35 @@
 import React from "react";
 import { Button } from "../../shared/ui/controls.tsx";
+import { loadOnce } from "../../shared/lib/load-once.ts";
 
 /**
  * Route-level code splitting: each page below is its own chunk, so the first
- * screen downloads only what it shows. Zod and the editorial client stay out of
- * the initial chunk because only lazy pages import them.
+ * screen downloads only what it shows. Zod, the editorial client and the
+ * workspace stay out of the initial chunk because only lazy chunks import
+ * them; tests/web-entry-chunk.test.ts builds the app and checks it.
  */
 const page = <T extends React.ComponentType>(load: () => Promise<T>) =>
   React.lazy(() => load().then((component) => ({ default: component })));
+
+const loadLanding = loadOnce(() => import("../../pages/landing/index.tsx"));
+/** A guest's «/» starts the landing's chunk with the entry, not after /api/session answers. */
+export const preloadLanding = () => void loadLanding().catch(() => undefined);
 
 const Templates = page(() => import("../../pages/templates/index.tsx").then((m) => m.Templates));
 const Signup = page(() => import("../../pages/signup/index.tsx").then((m) => m.Signup));
 const SignupChoose = page(() => import("../../pages/signup/choose.tsx").then((m) => m.SignupChoose));
 const SignupLinked = page(() => import("../../pages/signup/choose.tsx").then((m) => m.SignupLinked));
-const Claim = page(() => import("../../pages/claim/index.tsx").then((m) => m.Claim));
+const Claim = page(() => import("./styled-claim.ts").then((m) => m.Claim));
 const Enter = page(() => import("../../pages/enter/index.tsx").then((m) => m.Enter));
 const Welcome = page(() => import("../../pages/enter/welcome.tsx").then((m) => m.Welcome));
 const SignIn = page(() => import("../../pages/enter/signin.tsx").then((m) => m.SignIn));
 const FirstSave = page(() => import("../../pages/start/index.tsx").then((m) => m.FirstSave));
-const AgentConnections = page(() => import("../../pages/agents/index.tsx").then((m) => m.AgentConnections));
+const AgentConnections = page(() => import("./styled-agents.ts").then((m) => m.AgentConnections));
 const Recipient = page(() => import("../../pages/recipient/index.tsx").then((m) => m.Recipient));
 const Bring = page(() => import("../../pages/bring/index.tsx").then((m) => m.Bring));
 const BringReceive = page(() => import("../../pages/bring-receive/index.tsx").then((m) => m.BringReceive));
 const BookmarkletPage = page(() => import("../../pages/bookmarklet/index.tsx").then((m) => m.BookmarkletPage));
-const Landing = page(() => import("../../pages/landing/index.tsx").then((m) => m.Landing));
+const Landing = page(() => loadLanding().then((m) => m.Landing));
 const EditorialPage = page(() => import("../../pages/discover/index.tsx").then((m) => m.EditorialPage));
 const ShelfSnapshotPage = page(() => import("../../pages/snapshot/index.tsx").then((m) => m.ShelfSnapshotPage));
 const LibraryInvite = page(() => import("../../pages/library-invite/index.tsx").then((m) => m.LibraryInvite));

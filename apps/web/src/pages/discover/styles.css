@@ -7,6 +7,10 @@
   flex-direction: column;
   min-height: 100dvh;
 }
+/* Loading or failed: as tall as the material, so the footer does not show first and jump away. */
+.feed-reader > .editorial-catalog-detail {
+  min-height: 100dvh;
+}
 .feed-topbar {
   display: flex;
   flex: 0 0 auto;
@@ -165,7 +169,8 @@
 
 @media (max-width: 760px) {
   /* Under the shell's sticky header (60px); the tab bar is padding on the shell. */
-  .feed-material {
+  .feed-material,
+  .feed-reader > .editorial-catalog-detail {
     min-height: calc(100dvh - 60px - var(--tabbar-height) - env(safe-area-inset-bottom, 0px));
   }
   .feed-topbar {

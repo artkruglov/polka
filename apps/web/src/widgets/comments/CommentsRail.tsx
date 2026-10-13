@@ -12,7 +12,8 @@ import type {
 } from "../../../../../packages/contracts/comments.ts";
 import { dateTime } from "../../entities/artifact/format.ts";
 import { Button } from "../../shared/ui/controls.tsx";
-import type { BridgeAnchor, OverlayBridge } from "./bridge.ts";
+import type { OverlayBridge } from "./bridge.ts";
+export { anchorsOf } from "./bridge.ts";
 
 import type { DiscussionActions } from "./useDiscussion.ts";
 
@@ -70,15 +71,6 @@ const GAP = 8;
  * The quotes the overlay paints: open threads and reactions on fragments no
  * open thread quotes. Sent whether or not the rail is open.
  */
-export function anchorsOf(discussion: ShareDiscussion): BridgeAnchor[] {
-  const open = discussion.threads.filter((thread) => !thread.resolvedAt && thread.anchor && !thread.deleted);
-  const quoted = new Set(open.map((thread) => thread.sig));
-  const fragments = new Map<string, BridgeAnchor>();
-  for (const group of discussion.reactions)
-    if (group.sig && group.anchor && !quoted.has(group.sig))
-      fragments.set(group.sig, { id: `r:${group.sig}`, ...group.anchor });
-  return [...open.map((thread) => ({ id: thread.id, ...thread.anchor! })), ...fragments.values()];
-}
 const quote = (text: string, max = 140) => {
   const chars = [...text.replace(/\s+/g, " ").trim()];
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : chars.join("");

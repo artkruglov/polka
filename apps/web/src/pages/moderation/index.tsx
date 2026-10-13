@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../entities/link/styles.css";
 import React, { useEffect, useState } from "react";
 import { Check, Eye, ShieldAlert } from "lucide-react";
 import type { Viewer } from "../../../../../packages/contracts/index.ts";
@@ -95,7 +97,7 @@ export function Moderation() {
 
   return (
     <AppShell current="shelf" account={account} className="moderation-page">
-      <main className="moderation">
+      <main id="main" className="moderation">
         {state.kind === "loading" && (
           <p role="status" className="moderation-card">
             Проверяем ссылку из письма…

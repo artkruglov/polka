@@ -3,10 +3,26 @@ import type { CommentAnchor, Reaction, ShareDiscussion } from "../../../../../pa
 import { signInFromShare } from "../../shared/lib/share-return.ts";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";
 import { notesPhrase } from "../../entities/artifact/agent-phrases.ts";
-import { useOverlayBridge } from "./bridge.ts";
-import { CommentsRail, anchorsOf, type PendingComment } from "./CommentsRail.tsx";
+import { anchorsOf, useOverlayBridge } from "./bridge.ts";
+import type { PendingComment } from "./CommentsRail.tsx";
 import { SelectionButton } from "./SelectionButton.tsx";
 import { useSharedDiscussion, useWorkDiscussion } from "./useDiscussion.ts";
+
+// The rail is its own chunk: it loads when a discussion is shown, not with the page.
+const Rail = React.lazy(() => import("./CommentsRail.tsx").then((module) => ({ default: module.CommentsRail })));
+function CommentsRail(props: React.ComponentProps<typeof Rail>) {
+  return (
+    <React.Suspense
+      fallback={
+        <p className="comments-empty" role="status">
+          Загружаем комментарии…
+        </p>
+      }
+    >
+      <Rail {...props} />
+    </React.Suspense>
+  );
+}
 
 /** Wide screens get the rail beside the document; phones a bottom sheet. */
 function useWide() {

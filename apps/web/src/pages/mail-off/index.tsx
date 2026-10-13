@@ -17,7 +17,7 @@ export function MailOff() {
   );
   return (
     <>
-      <main className="mail-off-page">
+      <main id="main" className="mail-off-page">
         <span className="eyebrow">Полка</span>
         {state === "done" ? (
           <>

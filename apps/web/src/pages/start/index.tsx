@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../features/first-run/styles.css";
 import "./styles.css";
 import React from "react";
 import { ArrowUpRight } from "lucide-react";
@@ -10,7 +12,7 @@ export function FirstSave() {
   const account = useAccount();
   return (
     <AppShell current="shelf" account={account}>
-      <main className="start-main">
+      <main id="main" className="start-main">
         <header className="start-heading">
           <span className="eyebrow">Ваша полка создана</span>
           <h1>

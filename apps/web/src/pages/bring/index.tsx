@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../entities/link/styles.css";
 import "./styles.css";
 import React, { useState } from "react";
 import { Layers, LockKeyhole } from "lucide-react";

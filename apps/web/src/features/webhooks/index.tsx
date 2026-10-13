@@ -1,10 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  WEBHOOK_EVENTS,
-  type Webhook,
-  type WebhookDelivery,
-  type WebhookEvent,
-} from "../../../../../packages/contracts/webhooks.ts";
+import type { Webhook, WebhookDelivery } from "../../../../../packages/contracts/webhooks.ts";
+import { WEBHOOK_EVENTS, type WebhookEvent } from "../../../../../packages/contracts/webhook-constants.ts";
 import { ApiError, client } from "../../shared/api/client.ts";
 import { Badge, Button, Notice, TextField } from "../../shared/ui/controls.tsx";
 import { CopyButton } from "../../shared/ui/CopyText.tsx";

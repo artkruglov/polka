@@ -1,5 +1,5 @@
 import React from "react";
-import { App } from "../workspace/index.tsx";
+import { Home } from "../workspace/home.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 import { routeTitle } from "./titles.ts";
 import { isAppPage } from "../../../../../packages/contracts/app-routes.ts";
@@ -92,6 +92,6 @@ function Route({ path }: { path: string }) {
 export function AppRoutes({ path = location.pathname }: { path?: string }) {
   useDocumentTitle(routeTitle(path));
   const route = Route({ path });
-  // The workspace («/», /works/…, /trash) stays in the initial chunk: it is the most common entry.
-  return route ? <Lazy>{route}</Lazy> : <App />;
+  // «/», /works/… and /trash: a small gate in the initial chunk loads the landing, sign-in or workspace chunk.
+  return route ? <Lazy>{route}</Lazy> : <Home />;
 }

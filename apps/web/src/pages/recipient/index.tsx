@@ -1,3 +1,6 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../entities/link/styles.css";
+import "../../features/provider-sign-in/styles.css";
 import "./styles.css";
 import "../../features/recipient-convert/styles.css";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
@@ -247,7 +250,7 @@ export function RecipientScreen({
   if (error?.kind === "signIn")
     return (
       <RecipientFrame account={account}>
-        <main className="empty recipient-denied">
+        <main id="main" className="empty recipient-denied">
           <div className="empty-icon">
             <LockKeyhole />
           </div>
@@ -269,7 +272,7 @@ export function RecipientScreen({
   if (error?.kind === "unreachable")
     return (
       <RecipientFrame account={account}>
-        <main className="empty recipient-denied">
+        <main id="main" className="empty recipient-denied">
           <div className="empty-icon">
             <WifiOff />
           </div>
@@ -284,7 +287,7 @@ export function RecipientScreen({
   if (error)
     return (
       <RecipientFrame account={account}>
-        <main className="empty recipient-denied">
+        <main id="main" className="empty recipient-denied">
           <div className="empty-icon">
             <LockKeyhole />
           </div>
@@ -310,7 +313,7 @@ export function RecipientScreen({
     // Blocked by the moderator or the content filter: nothing about the work.
     return (
       <RecipientFrame account={account}>
-        <main className="empty recipient-denied recipient-review">
+        <main id="main" className="empty recipient-denied recipient-review">
           <div className="empty-icon">
             <Ban />
           </div>
@@ -326,7 +329,7 @@ export function RecipientScreen({
     // Held for review or paused after reports: no title, no content.
     return (
       <RecipientFrame account={account}>
-        <main className="empty recipient-denied recipient-review">
+        <main id="main" className="empty recipient-denied recipient-review">
           <div className="empty-icon">
             <Hourglass />
           </div>
@@ -347,8 +350,19 @@ export function RecipientScreen({
     );
   if (!viewer)
     return (
-      <RecipientFrame account={account}>
-        <main className="empty" role="status">
+      <RecipientFrame
+        account={account}
+        pending
+        // The note's line keeps its place too (on a phone it sets the row's height).
+        note={
+          <div className="recipient-note" aria-hidden="true">
+            <p className="recipient-note-line">
+              <span>&nbsp;</span>
+            </p>
+          </div>
+        }
+      >
+        <main id="main" className="empty" role="status">
           Открываем работу…
         </main>
       </RecipientFrame>
@@ -440,9 +454,12 @@ function RecipientFrame({
   banner,
   footer,
   floating,
+  pending = false,
   children,
 }: {
   account: Account | null | undefined;
+  /** While /resolve is on its way: the title bar keeps its place, so nothing below shifts when it arrives. */
+  pending?: boolean;
   title?: string;
   titleAsHeading?: boolean;
   actions?: React.ReactNode;
@@ -492,7 +509,7 @@ function RecipientFrame({
     >
       <div ref={frame} className="recipient-frame" data-guest={guest || undefined}>
         <header className="recipient-topbar">
-          {(title || actions || comments) && (
+          {(title || actions || comments || pending) && (
             <div className="recipient-topbar-row">
               {title ? (
                 <Title className="recipient-title" title={title}>
@@ -507,7 +524,8 @@ function RecipientFrame({
                     variant="quiet"
                     className="recipient-comments-toggle"
                     aria-pressed={comments.open}
-                    aria-controls={railId}
+                    // The rail exists only while open: no reference to a missing element.
+                    aria-controls={comments.open ? railId : undefined}
                     aria-label={`${comments.label ?? "Комментарии"}: ${comments.count}`}
                     onClick={comments.onToggle}
                   >
@@ -529,6 +547,7 @@ function RecipientFrame({
         <div className="recipient-body">
           {kind ? (
             <main
+              id="main"
               ref={(node) => {
                 if (stageRef) stageRef.current = node;
               }}

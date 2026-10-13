@@ -9,9 +9,10 @@
   justify-content: space-between;
   gap: 16px;
 }
-.trash-panel-heading h2 {
+.trash-panel-heading h1 {
   font-size: clamp(30px, 3vw, 40px);
   letter-spacing: -0.04em;
+  line-height: var(--leading-snug);
 }
 .trash-panel-kicker {
   margin-bottom: 8px;
@@ -51,7 +52,7 @@
 .trash-panel-item-copy {
   min-width: 0;
 }
-.trash-panel-item-copy h3 {
+.trash-panel-item-copy h2 {
   font-size: var(--text-lg);
   overflow-wrap: anywhere;
 }

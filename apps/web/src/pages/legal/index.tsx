@@ -23,7 +23,7 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
   }, [target]);
   return (
     <AppShell current="landing" account={account}>
-      <main className="legal-page" aria-busy={view.kind === "loading" || undefined}>
+      <main id="main" className="legal-page" aria-busy={view.kind === "loading" || undefined}>
         <article className="legal-text">
           {view.kind === "text" && <Markdown source={texts[doc]} />}
           {view.kind === "redirect" && doc !== "bot" && <OperatorLink doc={doc} url={view.url} />}

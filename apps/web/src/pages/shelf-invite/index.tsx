@@ -83,7 +83,7 @@ export function ShelfInvite() {
   }
   return (
     <AppShell current="shelf" account={account}>
-      <main className="shelf-invite-page">
+      <main id="main" className="shelf-invite-page">
         <span className="eyebrow">Полка отдела</span>
         <h1>Вас пригласили на полку отдела</h1>
         {invitation === undefined ? null : !invitation ? (

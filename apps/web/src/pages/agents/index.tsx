@@ -224,7 +224,8 @@ export function AgentConnections() {
   useEffect(() => {
     if (!account) return;
     const controller = new AbortController();
-    loadIdentities(controller.signal)
+    // Shared with «Способы входа» below: one request for both.
+    loadIdentities()
       .then((data) => {
         if (!controller.signal.aborted) setIdentities(data);
       })
@@ -450,6 +451,12 @@ export function AgentConnections() {
             Агент будет сохранять ваши работы на эту полку и давать ссылки на них. Вы разрешаете это один раз, в
             браузере.
           </p>
+          {/* Its place is kept while /session answers: the page below does not jump. */}
+          {account === undefined && (
+            <div className="agent-account" aria-hidden="true">
+              <p>&nbsp;</p>
+            </div>
+          )}
           {account && (
             <div className="agent-account" role="note">
               <p>
@@ -1032,7 +1039,8 @@ function InstructionBlock({
   return (
     <div className="agent-instruction-block">
       <h4>{title}</h4>
-      <pre>
+      {/* It may scroll sideways: reachable by keyboard. */}
+      <pre tabIndex={0} aria-label={title}>
         <code>{value}</code>
       </pre>
       <CopyButton value={value} label={copyLabel} successText={copiedLabel} />

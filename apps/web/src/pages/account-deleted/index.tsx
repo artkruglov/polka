@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../features/account-deletion/styles.css";
 import React, { useEffect, useState } from "react";
 import { ApiError, client, type AccountDeletionReceipt } from "../../shared/api/client.ts";
 import { DELETION_CAPABILITY_KEY } from "../../features/account-deletion/index.tsx";
@@ -56,7 +58,7 @@ export function AccountDeleted() {
     };
   }, [capability, receipt?.state]);
   return (
-    <main className="deleted-page">
+    <main id="main" className="deleted-page">
       <span className="eyebrow">Удаление аккаунта</span>
       {failed && !receipt ? (
         <>

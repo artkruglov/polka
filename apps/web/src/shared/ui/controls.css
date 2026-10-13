@@ -176,8 +176,8 @@
   font-weight: 400;
 }
 .ui-chip[aria-pressed="true"] > small {
+  /* No opacity: the count stays readable on --accent-soft (7:1). */
   color: var(--accent-ink);
-  opacity: 0.7;
 }
 .ui-chip svg {
   width: 15px;

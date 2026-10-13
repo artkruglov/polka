@@ -6,6 +6,7 @@
 import React, { useSyncExternalStore } from "react";
 import type { ExtensionHost, ExtensionSlot } from "../../../../../packages/contracts/extensions.ts";
 import { request } from "../api/client.ts";
+import { loadRawCapabilities } from "../api/capabilities.ts";
 import { Badge, Button, Notice, SelectField, TextField } from "../ui/controls.tsx";
 import { ErrorNotice } from "../ui/index.tsx";
 
@@ -104,8 +105,10 @@ let requested: Promise<void> | null = null;
  * without them: a failed request is tried again next time.
  */
 export function ensureExtensions() {
-  requested ??= request<{ extensions?: string[] }>("/capabilities")
-    .then((capabilities) => loadExtensions(capabilities.extensions ?? []))
+  requested ??= loadRawCapabilities()
+    .then((capabilities) =>
+      loadExtensions(Array.isArray(capabilities.extensions) ? (capabilities.extensions as string[]) : []),
+    )
     .catch(() => {
       requested = null;
     });

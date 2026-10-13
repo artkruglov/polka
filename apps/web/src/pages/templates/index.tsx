@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../entities/link/styles.css";
 import React, { useEffect, useState } from "react";
 import { ArrowUpRight, Eye, FileCode2, Search, Sparkles, Upload } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
@@ -163,7 +165,7 @@ export function Templates() {
   const scopes = [{ id: "", label: "Мои" }, ...libraries.map((library) => ({ id: library.id, label: library.name }))];
   return (
     <AppShell current="templates" account={account} className="templates-page">
-      <main className="templates-main">
+      <main id="main" className="templates-main">
         <header className="templates-heading">
           <div>
             <h1>{selectedLibrary?.name || "Шаблоны"}</h1>

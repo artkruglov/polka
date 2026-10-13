@@ -16,5 +16,24 @@ export type AccountIdentities = {
   available: Array<{ provider: ProviderId; name: string; signup?: boolean }>;
 };
 
-export const loadIdentities = (signal?: AbortSignal) =>
-  request<AccountIdentities>("/account/identities", undefined, "GET", signal);
+let cached: Promise<AccountIdentities> | null = null;
+
+/**
+ * One request per page for every consumer (the settings strip and «Способы
+ * входа» ask together); `fresh` asks again after a link or unlink. A
+ * failure is not kept: the next caller retries.
+ */
+export function loadIdentities({ fresh = false }: { fresh?: boolean } = {}) {
+  if (fresh || !cached) {
+    const pending: Promise<AccountIdentities> = request<AccountIdentities>(
+      "/account/identities",
+      undefined,
+      "GET",
+    ).catch((error: unknown) => {
+      if (cached === pending) cached = null;
+      throw error;
+    });
+    cached = pending;
+  }
+  return cached;
+}

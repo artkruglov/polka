@@ -310,7 +310,7 @@ export function CompanyAdmin() {
   }, [account, refresh]);
   return (
     <AppShell current="shelf" account={account}>
-      <main className="company-page">
+      <main id="main" className="company-page">
         <header>
           {state.kind === "ready" && <span className="eyebrow">Администратор компании</span>}
           <h1>Полки компании</h1>

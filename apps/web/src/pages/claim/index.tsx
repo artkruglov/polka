@@ -142,7 +142,7 @@ export function Claim() {
 
   return (
     <AppShell current="shelf" account={account}>
-      <main className="onboard">
+      <main id="main" className="onboard">
         <div className="onboard-icon">
           <ShieldCheck />
         </div>
