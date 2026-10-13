@@ -302,10 +302,13 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   ])
     assert.ok(html.includes(text), text);
   // Automatic moderation is not on main: said, not promised. SSO works
-  // (OpenID Connect, Яндекс ID, domain access), SAML and SCIM do not.
+  // (OpenID Connect, Яндекс ID, domain access); SAML and SCIM are the
+  // commercial edition's, a ready card there.
   assert.ok((html.match(/в разработке/g) ?? []).length >= 1);
   assert.ok(html.includes("OpenID Connect"));
-  assert.ok(html.includes("SAML и SCIM пока"));
+  assert.ok(html.includes("SAML и SCIM — в коммерческой редакции"));
+  assert.ok(!html.includes("SAML и SCIM пока"));
+  assert.ok(html.includes("Вход через SSO и каталог сотрудников"));
   assert.ok(html.includes('id="deploy"'));
   assert.ok(html.includes('id="request"'));
   // What the first pilots shape is not built: every card of it says so.
@@ -317,7 +320,7 @@ test("/enterprise: value, deployment, questions and the request form", () => {
       next.includes("Облако polochka.app работает на открытом ядре"),
   );
   assert.equal((next.match(/в разработке/g) ?? []).length, 1);
-  assert.equal((next.match(/>есть</g) ?? []).length, 4);
+  assert.equal((next.match(/>есть</g) ?? []).length, 5);
   assert.ok(next.indexOf("Центр управления агентами") < next.indexOf("Контроль ссылок"));
   assert.ok(html.includes("Как Полка работает с нашими системами?"));
   // Department shelves work (TEAM_SHELVES stages 1–4): the page lists them

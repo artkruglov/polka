@@ -218,11 +218,11 @@ A deployment is one Docker image plus external PostgreSQL and versioned S3 stora
 |---|---|---|---|
 | Price | Free during the pilot | Free under the AGPL-3.0 | By agreement |
 | Where the data lives | Yandex Cloud, Russia | Your servers | Your servers |
-| What's included | The open core: department shelves with roles (we appoint a company admin on request to hello@polochka.app), service accounts for cron and CI | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP | The core plus a closed extension for organisations: an agent control centre (employees' sessions, secrets, addresses and MCP, dangerous commands, spend), employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM, Jira and Bitrix24 comments, export of accepted versions; next — SAML and SCIM, offline installation |
+| What's included | The open core: department shelves with roles (we appoint a company admin on request to hello@polochka.app), service accounts for cron and CI, webhooks | The whole open core: department shelves, roles, agents per shelf, company admin, sign-in through an IdP over OpenID Connect, webhooks | The core plus a closed extension for organisations: an agent control centre (employees' sessions, secrets, addresses and MCP, dangerous commands, spend), employee-only links, a link policy, an agent limited to a folder, an agents' journal exported to a SIEM, Jira and Bitrix24 comments, export of accepted versions, SAML sign-in and an employee directory over SCIM; next — offline installation |
 | Your code changes | — | If people use your modified Полка, publish them under the AGPL-3.0 | May stay private |
 | Support and SLA | — | — | By contract |
 
-More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). Sign-in through a company IdP (OpenID Connect), Yandex ID, VK ID and Google, and template-library access by e-mail domain already work; there are no team accounts, SAML or SCIM yet ([roadmap](docs/roadmap.md)).
+More on the [For companies](https://polochka.app/enterprise) page and in [COMMERCIAL.md](COMMERCIAL.md). Sign-in through a company IdP (OpenID Connect), Yandex ID, VK ID and Google, and template-library access by e-mail domain already work in the core. SAML and SCIM are in the commercial edition (since 0.9.0); there are no team accounts yet ([roadmap](docs/roadmap.md)).
 
 ## Limitations
 
@@ -230,7 +230,7 @@ More on the [For companies](https://polochka.app/enterprise) page and in [COMMER
 - **Interactive mode needs a separate viewer domain.** Without one (`HTML_LIVE_MODE=disabled`), recipients see a static page with scripts off.
 - **Claude/ChatGPT links can't be imported.** Save through the connector, download the file or paste the code.
 - **Downloaded copies can't be revoked.** Revoking a link closes it, but it can't delete what a recipient already downloaded.
-- **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID, Google or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. There's no SAML or SCIM.
+- **Sign-in is by e-mailed code** (SMTP required), by an operator-issued password, or through Yandex ID, VK ID, Google or a company IdP over OpenID Connect ([SIGN_IN_PROVIDERS](docs/specs/SIGN_IN_PROVIDERS.md), Russian). Sign-up can be open, limited to listed addresses or mail domains, or capped per day. SAML and SCIM aren't in the open core; they're in the commercial edition.
 - **URL import** (`URL_IMPORT_ENABLED`, experimental, server and MCP only; the web app no longer offers it) and **account deletion** (`ACCOUNT_DELETION_ENABLED`) are off by default.
 
 More: [docs/faq.md](docs/faq.md) (Russian).
@@ -240,7 +240,7 @@ More: [docs/faq.md](docs/faq.md) (Russian).
 > [!NOTE]
 > **Current release — `v0.15.1`** ([CHANGELOG](CHANGELOG.md)). A hosted pilot runs at https://polochka.app; e-mail sign-up is open to any address, up to 50 new shelves a day. The API, database schema and UI may still change.
 
-What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot, SAML and SCIM.
+What works and what doesn't: [docs/status.md](docs/status.md) (Russian). Next, per the [roadmap](docs/roadmap.md): running the pilot (a restore drill, an upgrade guide), publishing the browser extension and checking the ChatGPT connector, then variants of a work, a shelf snapshot by date and `polka pull/push`; later a Telegram bot.
 
 ## Documentation
 
