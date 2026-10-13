@@ -29,7 +29,8 @@ export const log = pino(
       ],
       censor: "[redacted]",
     },
-    // Fastify's own request lines are off (createApp): URLs here carry tokens.
+    // Fastify's own request lines are off (createApp): URLs carry tokens.
+    // request-log.ts writes one line per request with the route pattern.
     level: process.env.LOG_LEVEL ?? "info",
   },
   {

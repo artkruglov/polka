@@ -206,6 +206,13 @@ x-runtime-env: &runtime-env
   OPS_BACKUP_BUCKET: ${BACKUP_BUCKET:?}
   # The backup job's interval: the status alarms after it plus two hours.
   OPS_BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+  # Graceful stop and self-healing (README «Самовосстановление»): the stop
+  # deadline stays below the app's stop_grace_period; 0 turns a watchdog off.
+  SHUTDOWN_GRACE_SECONDS: ${SHUTDOWN_GRACE_SECONDS:-25}
+  WATCHDOG_EVENT_LOOP_SECONDS: ${WATCHDOG_EVENT_LOOP_SECONDS:-30}
+  WATCHDOG_POOL_STALL_SECONDS: ${WATCHDOG_POOL_STALL_SECONDS:-120}
+  # One log line per request (route pattern, status, ms): info | debug | off.
+  ACCESS_LOG: ${ACCESS_LOG:-info}
 
 networks:
   polka:
@@ -341,6 +348,12 @@ services:
     command: ["node", "--import", "tsx", "apps/server/main.ts"]
     network_mode: host
     restart: unless-stopped
+    # A small init as PID 1: it forwards SIGTERM, and lets the event-loop
+    # watchdog (apps/server/watchdog.ts) kill a hung Node, which PID 1 cannot.
+    init: true
+    # The app drains requests and after-commit work for up to
+    # SHUTDOWN_GRACE_SECONDS (25) before Docker would kill it.
+    stop_grace_period: 30s
     depends_on:
       storage-check: {condition: service_completed_successfully}
     healthcheck:
@@ -365,6 +378,8 @@ services:
     command: ["node", "--import", "tsx", "scripts/maintenance-runner.ts"]
     network_mode: host
     restart: unless-stopped
+    # A running housekeeping child gets its deadline to finish (as compose.base.yml).
+    stop_grace_period: 65s
     depends_on:
       app: {condition: service_healthy}
     deploy:
