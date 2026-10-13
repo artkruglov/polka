@@ -162,7 +162,8 @@ export async function revokeShelfInvitation(actor: Actor, shelfId: string, invit
 /**
  * The signed-in person who opened the link joins the shelf with its role.
  * Someone already on the shelf keeps the role they have and spends no use.
- * The link works only while whoever issued it may still hand out that role.
+ * The link works only while whoever issued it may still hand out that role,
+ * and never for someone taken off the shelf after the link was made.
  */
 export async function acceptShelfInvitation(actor: Actor, shelfId: string, body: unknown) {
   const { token } = acceptInput.parse(body);
@@ -188,6 +189,24 @@ export async function acceptShelfInvitation(actor: Actor, shelfId: string, body:
     const issuer = inviter ? memberships.get(inviter) : undefined;
     if (!inviter || !active.has(inviter) || issuer?.state !== "active" || !mayInvite(issuer.role, invitation.role))
       throw new Problem(409, "conflict", "Тот, кто пригласил, больше не может выдавать доступ к этой полке.");
+    // Taken off the shelf after the link was made (by an admin, the company
+    // admin's offboarding or the directory): that link does not bring them
+    // back. Compared in SQL, where both times keep their microseconds.
+    if (mine?.state === "revoked") {
+      const { rowCount } = await c.query(
+        `SELECT 1 FROM tenant_members member, tenant_invitations invitation
+         WHERE member.tenant_id=$1 AND member.account_id=$2 AND invitation.id=$3
+           AND member.revoked_at>=invitation.created_at`,
+        [shelfId, actor.id, invitation.id],
+      );
+      if (rowCount)
+        throw new Problem(
+          403,
+          "forbidden",
+          "Вас сняли с этой полки после того, как была создана ссылка. Попросите новое приглашение.",
+          { reason: "removed_after_invitation" },
+        );
+    }
     if (await isUnclaimed(c, actor.id))
       throw new Problem(
         403,

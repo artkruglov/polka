@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 071.
+-- Operator-reviewed recipe for the Polka schema through migration 073.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>72
+     OR (SELECT count(*) FROM public.schema_migrations)<>73
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>72 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 072';
+     OR (SELECT max(version) FROM public.schema_migrations)<>73 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 073';
   END IF;
 END $$;
 
@@ -175,7 +175,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.revision_covers TO :"runtim
 -- shelf and deletes it when the content is purged; everything else goes
 -- with the work (ON DELETE CASCADE).
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.artifact_search TO :"runtime_role";
--- Disable reasons (072): accounts gains columns, covered by its table grant.
+-- Disable reasons (072) and the deprovisioning organisation (073): accounts
+-- gains columns, covered by its table grant.
 -- Department shelves (042): tenants and accounts gain columns, covered by
 -- their table grants above. The application adds and updates members (a
 -- member leaves by state='revoked', never DELETE; rows go with their shelf or
@@ -243,4 +244,4 @@ GRANT SELECT, UPDATE ON TABLE public.webhook_dispatch_cursor TO :"runtime_role";
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;
 
-\echo Runtime grants installed for the reviewed schema through migration 071
+\echo Runtime grants installed for the reviewed schema through migration 073

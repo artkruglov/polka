@@ -267,9 +267,8 @@ export async function createApp() {
         provision: provisionAccount,
         update: (id, input) => updateAccount(extension.name, id, input),
         deprovision: (id, input) => deprovisionAccount(extension.name, id, input),
-        reactivate: (id) => reactivateAccount(extension.name, id),
-        startSession: (reply, accountId, previous) =>
-          startSessionForExtension(extension.name, reply, accountId, previous),
+        reactivate: (id, input) => reactivateAccount(extension.name, id, input),
+        startSession: (reply, accountId, input) => startSessionForExtension(extension.name, reply, accountId, input),
       },
       teamShelves: {
         list: listTeamShelves,

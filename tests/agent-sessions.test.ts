@@ -353,6 +353,26 @@ test("pages of sessions that started at the same moment lose none and repeat non
   // A bare time from before 0.13 still pages by time.
   const old = await sessionsForExtension.list({ accounts: [person.id] }, { before: "2026-10-01T10:00:01.000Z" });
   assert.equal(old.sessions.length, 5);
+  // A cursor PostgreSQL cannot read is the client's mistake (400), never a 500.
+  const own = await cookie(person);
+  for (const bad of [
+    "2026-02-30T10:00:00Z",
+    "2026-10-01T25:00:00Z",
+    "2026-10-01T10:00:00.1234567Z",
+    "2026-10-01T10:::Z",
+    `2026-10-01T10:00:00Z~${"-".repeat(36)}`,
+    "2026-10-01T10:00:00Z~zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+    "0000-01-01T00:00:00Z",
+  ]) {
+    const res = await web("GET", `/api/sessions?before=${encodeURIComponent(bad)}`, own);
+    assert.equal(res.statusCode, 400, `${bad}: ${res.body}`);
+  }
+  const good = await web(
+    "GET",
+    `/api/sessions?before=${encodeURIComponent(`2026-10-01T10:00:01.000Z~${ids[0]}`)}`,
+    own,
+  );
+  assert.equal(good.statusCode, 200, good.body);
 });
 
 test("agents read sessions through MCP with the sessions permission", async () => {

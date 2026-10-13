@@ -529,17 +529,40 @@ const SESSION_COLUMNS = `s.id, s.account_id AS "accountId", s.source, s.external
   s.cost_usd::float8 AS "costUSD", s.cost_estimated AS "costEstimated", s.secrets_status AS "secretsStatus", s.alerts,
   s.transcript_bytes AS "transcriptBytes", s.uploaded_at AS "uploadedAt", s.updated_at AS "updatedAt"`;
 
+const CURSOR =
+  /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d{1,6})?Z(?:~[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/;
+
+/** A real UTC time (no 30 February, no 25:00) and a well-formed id: PostgreSQL's casts never fail on it. */
+function validCursor(value: string) {
+  const match = CURSOR.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const time = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return (
+    year >= 1970 &&
+    time.getUTCFullYear() === year &&
+    time.getUTCMonth() === month - 1 &&
+    time.getUTCDate() === day &&
+    time.getUTCHours() === hour &&
+    time.getUTCMinutes() === minute &&
+    time.getUTCSeconds() === second
+  );
+}
+
 const listQuery = z.object({
   source: z.enum(["claude-code", "codex"]).optional(),
   project: z.string().max(200).optional(),
   secrets: z.enum(["clean", "seen", "used", "sent_out", "any"]).optional(),
   alerts: z.enum(["any"]).optional(),
   // The previous page's next: "<start, µs>~<id>". A bare ISO time (before 0.13) still works.
-  before: z
-    .string()
-    .max(80)
-    .regex(/^\d{4}-\d\d-\d\dT[\d:.]+Z(~[0-9a-f-]{36})?$/)
-    .optional(),
+  before: z.string().max(80).refine(validCursor, "Неверный курсор страницы.").optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 

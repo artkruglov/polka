@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 72 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 72);
+test("migration catalog is the complete contiguous schema 73 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 73);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -114,9 +114,9 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>72\n/, recipe);
-    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>72 THEN/, recipe);
-    assert.match(text, /001 through 072/, recipe);
+    assert.match(text, /schema_migrations\)<>73\n/, recipe);
+    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>73 THEN/, recipe);
+    assert.match(text, /001 through 073/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
@@ -140,6 +140,15 @@ test("071 webhooks: no work content, encrypted secret, erased with the account",
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {
   const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
   assert.match(source, /await client\.query\("SET lock_timeout='5s'"\);\n\s+await runMigrations\(/);
+});
+
+test("073 records which organisation deprovisioned an account", async () => {
+  const sql = await readFile(migrationFileUrl("073_deprovision_organisation.sql"), "utf8");
+  assert.match(
+    sql,
+    /ADD COLUMN deprovisioned_organisation_id uuid NULL REFERENCES organisations\(id\) ON DELETE SET NULL/,
+  );
+  assert.match(sql, /CHECK \(deprovisioned_organisation_id IS NULL OR deprovisioned_at IS NOT NULL\)/);
 });
 
 test("072 keeps an account disabled while the operator's or an extension's reason holds", async () => {

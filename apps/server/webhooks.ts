@@ -560,10 +560,19 @@ async function claimDue(limit: number) {
   });
 }
 
+/**
+ * The endpoint before its deliveries, the order of updateWebhook,
+ * abandonPending and the webhooks_lose_creator trigger: the other order could
+ * deadlock with them.
+ */
+const lockEndpoint = (c: PoolClient, id: string) =>
+  c.query("SELECT 1 FROM webhook_endpoints WHERE id=$1 FOR UPDATE", [id]);
+
 async function record(delivery: any, result: SendResult) {
   const snippet = result.snippet?.slice(0, SNIPPET_CHARS) ?? null;
   if (result.ok) {
     await transaction(async (c) => {
+      await lockEndpoint(c, delivery.endpoint_id);
       const { rowCount } = await c.query(
         `UPDATE webhook_deliveries SET state='delivered',next_attempt_at=NULL,leased_until=NULL,
                 last_status=$2,last_error=NULL,response_snippet=$3
@@ -582,6 +591,7 @@ async function record(delivery: any, result: SendResult) {
   const last = delivery.attempts >= MAX_ATTEMPTS;
   const delay = RETRY_DELAYS_SECONDS[Math.min(delivery.attempts, RETRY_DELAYS_SECONDS.length) - 1]!;
   const disabled = await transaction(async (c) => {
+    await lockEndpoint(c, delivery.endpoint_id);
     const { rowCount } = await c.query(
       `UPDATE webhook_deliveries SET state=$2,next_attempt_at=CASE WHEN $2='pending' THEN now()+$3*interval '1 second' END,
               leased_until=NULL,last_status=$4,last_error=$5,response_snippet=$6
