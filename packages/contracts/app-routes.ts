@@ -11,6 +11,7 @@ export const APP_PAGES = [
   "/signup/linked",
   "/claim",
   "/enter",
+  "/welcome",
   "/signin",
   "/privacy",
   "/terms",
