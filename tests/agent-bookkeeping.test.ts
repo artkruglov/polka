@@ -9,8 +9,8 @@ import { authenticateServiceToken, MCP_AUDIENCE, recheckServiceActor } from "../
 import { s3, sha256 } from "../apps/server/storage.ts";
 
 // What an agent's call costs besides its work (service-auth.ts, mcp-server.ts):
-// last_seen_at at most once a minute, the request's first recheck answered by
-// its own authentication, tool schemas converted once.
+// last_seen_at at most once a minute and tool schemas converted once; access
+// checks themselves are never cached.
 after(async () => {
   await db.end();
   s3.destroy();
@@ -45,21 +45,25 @@ test("last_seen_at is written at most once a minute per connection", async () =>
   assert.deepEqual(await lastSeen(id), stale, "calls within the minute write nothing");
 });
 
-test("the first recheck of a request uses its authentication; a later one reads the connection", async () => {
+test("a recheck always reads the connection: no auth decision outlives its request", async () => {
+  // An actor checked before its owner's account deletion (or a revoke) must be
+  // refused by the next recheck, however soon it comes (the early bearer check
+  // of admission.ts and the throttled bookkeeping must not cache it).
   const { id, secret } = await token();
-  const actor = await authenticateServiceToken(secret, MCP_AUDIENCE);
+  const actor = await authenticateServiceToken(secret, MCP_AUDIENCE, undefined, "http");
   const query = mock.method(db, "query");
   try {
     assert.equal((await recheckServiceActor(actor, "read")).connectionId, id);
-    assert.equal(query.mock.callCount(), 0);
-    await assert.rejects(recheckServiceActor(actor, "capture" as never), { status: 403 });
-    await db.query("UPDATE agent_connections SET revoked_at=now() WHERE id=$1", [id]);
-    const before = query.mock.callCount();
-    await assert.rejects(recheckServiceActor(actor, "read"), { status: 401 });
-    assert.equal(query.mock.callCount(), before + 1);
+    assert.equal(query.mock.callCount(), 1);
   } finally {
     mock.restoreAll();
   }
+  const {
+    rows: [connection],
+  } = await db.query("SELECT account_id FROM agent_connections WHERE id=$1", [id]);
+  await db.query("UPDATE accounts SET disabled=true,deletion_requested_at=now() WHERE id=$1", [connection.account_id]);
+  await assert.rejects(recheckServiceActor(actor, "read"), { status: 401 });
+  await assert.rejects(authenticateServiceToken(secret, MCP_AUDIENCE, undefined, "http"), { status: 401 });
 });
 
 test("a tool's schema is converted to JSON Schema once and validates as before", () => {

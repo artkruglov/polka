@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { db, inBackground, settled } from "./db.ts";
+import { flushAgentReads } from "./agent-read-counter.ts";
 import { createHealthAdapters } from "./health-adapters.ts";
 import { registerHealthRoutes } from "./health-routes.ts";
 import { createHealthCoordinator } from "./health.ts";
@@ -65,6 +66,8 @@ const intake = async () => {
   await Promise.allSettled([app.close(), viewer?.close()]);
 };
 const close = async () => {
+  // Agent read counts held in memory (agent-read-counter.ts), before the pool closes.
+  await flushAgentReads().catch(() => undefined);
   await Promise.allSettled([healthAdapters.close(), db.end()]);
   s3.destroy();
 };

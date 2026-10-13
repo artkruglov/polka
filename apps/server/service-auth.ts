@@ -376,14 +376,6 @@ function lastSeenDue(connectionId: string, now = Date.now()) {
   return true;
 }
 
-/**
- * An actor authenticateServiceToken returned moments ago: its connection was
- * read by the same query a recheck would run, so the first recheck within
- * FRESH_ACTOR_MS (the same request) uses it instead of reading it again.
- */
-const FRESH_ACTOR_MS = 1_000;
-const verifiedAt = new WeakMap<ServiceActor, number>();
-
 export async function authenticateServiceToken(
   token: string,
   audience: string,
@@ -427,20 +419,14 @@ export async function authenticateServiceToken(
     );
     trackAgentConnected(null, row.account_id, transport === "http" ? "token-http" : "token-mcp", !earlier.found);
   }
-  const actor = serviceActorFromRow(row);
-  verifiedAt.set(actor, Date.now());
-  return actor;
+  return serviceActorFromRow(row);
 }
 
+/**
+ * Always reads the connection: no earlier decision is reused, so a revoke or
+ * an account deletion that committed after the token was checked is seen.
+ */
 export async function recheckServiceActor(actor: ServiceActor, scope: AgentScope) {
-  // Once: the request's first recheck. A later one (a long tool call, a
-  // replayed actor) reads the connection again.
-  const checked = verifiedAt.get(actor);
-  verifiedAt.delete(actor);
-  if (checked !== undefined && Date.now() - checked < FRESH_ACTOR_MS) {
-    requireScope(actor.scopes, scope);
-    return actor;
-  }
   const {
     rows: [connection],
   } = await db.query(liveConnectionSql(CONNECTION_BY_ID), connectionIdParams(actor));
