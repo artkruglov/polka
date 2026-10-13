@@ -10,6 +10,8 @@ import {
   SKILL_INSTALL as serverSkillInstall,
   harvestPrompts as serverHarvest,
   connectGuide,
+  connectPage,
+  wantsHtml,
 } from "../apps/server/connect-guide.ts";
 import {
   llmsText,
@@ -267,4 +269,20 @@ test("the work page copies one phrase; the new-version panel asks the agent firs
     }),
   );
   assert.ok(rework.includes(updatePhrase(work.title, url)));
+});
+
+test("/connect: a browser gets a page with the phrase, an agent the plain guide", () => {
+  const chrome = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
+  assert.equal(wantsHtml(chrome), true);
+  assert.equal(wantsHtml("text/html"), true);
+  for (const accept of [undefined, "", "*/*", "text/plain", "text/markdown, text/html, */*", "application/json"])
+    assert.equal(wantsHtml(accept), false, String(accept));
+  assert.equal(wantsHtml("text/plain, text/html;q=0.5"), false);
+  const origin = "https://polka.example";
+  const page = connectPage(origin, "https://github.com/x/y");
+  assert.ok(page.includes(`Подключи Полку: ${origin}/connect`));
+  assert.ok(page.includes(`${origin}/settings/agents?client=chatgpt`));
+  // The agent's instructions are on the page too, escaped.
+  assert.ok(page.includes(`codex mcp add polka --url ${origin}/mcp`));
+  assert.doesNotMatch(page, /<script[^>]*src=/);
 });
