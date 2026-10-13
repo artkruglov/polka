@@ -16,16 +16,22 @@ name: release-images
 on:
   push:
     tags: ["v*"]
+  # Publish an existing release again (or one tagged before this workflow worked).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.16.0"
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-images-${{ github.ref }}
+  group: release-images-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
-# Third-party actions are pinned by commit SHA (see verify.yml); the comment
-# names the release the pin was taken from. Dependabot bumps them.
+# Only GitHub's own actions are allowed in this repository (pinned by SHA,
+# see verify.yml); the build itself is plain docker buildx below.
 jobs:
   publish:
     runs-on: ubuntu-24.04
@@ -49,54 +55,60 @@ jobs:
             description: "pg_dump of a single-VM Полка to a private, versioned S3 bucket (deploy/hosted)."
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
-          platforms: arm64
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
-          # v0.16.0 → 0.16.0 and latest; v0.16.0-rc.1 → 0.16.0-rc.1 only.
-          tags: |
-            type=semver,pattern={{version}}
-          flavor: |
-            latest=auto
-          labels: |
-            org.opencontainers.image.title=${{ matrix.title }}
-            org.opencontainers.image.description=${{ matrix.description }}
-            org.opencontainers.image.licenses=AGPL-3.0-only
-            org.opencontainers.image.vendor=Полка
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/deploy/hosted/README.md
-          annotations: |
-            org.opencontainers.image.title=${{ matrix.title }}
-            org.opencontainers.image.description=${{ matrix.description }}
-            org.opencontainers.image.licenses=AGPL-3.0-only
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-      - name: Published
+          ref: ${{ inputs.tag || github.ref }}
+      # The repository allows GitHub's own actions only, so the docker/* actions
+      # are plain commands here: buildx ships with the runner image, QEMU
+      # comes from the binfmt image pinned by digest (qemu-v9.2.2).
+      - name: QEMU for arm64
+        run: docker run --privileged --rm tonistiigi/binfmt@sha256:1b804311fe87047a4c96d38b4b3ef6f62fca8cd125265917a9e3dc3c996c39e6 --install arm64
+      - name: Builder
+        run: docker buildx create --use --name release --driver docker-container
+      - name: Log in to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Build and push
         env:
           NAME: ${{ matrix.name }}
-          TAGS: ${{ steps.meta.outputs.tags }}
+          CONTEXT: ${{ matrix.context }}
+          FILE: ${{ matrix.file }}
+          TITLE: ${{ matrix.title }}
+          DESCRIPTION: ${{ matrix.description }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          REF: ${{ inputs.tag || github.ref_name }}
         run: |
+          set -eu
+          case "$REF" in v[0-9]*) ;; *) echo "not a release tag: $REF" >&2; exit 1 ;; esac
+          SHA=$(git rev-parse HEAD)
+          version="${REF#v}"
+          image="ghcr.io/$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')/$NAME"
+          # v0.16.0 → 0.16.0 and latest; v0.16.0-rc.1 → 0.16.0-rc.1 only.
+          tags="--tag $image:$version"
+          case "$version" in *-*) ;; *) tags="$tags --tag $image:latest" ;; esac
+          docs="https://github.com/$REPO/blob/$REF/deploy/hosted/README.md"
+          # shellcheck disable=SC2086
+          docker buildx build --push --platform linux/amd64,linux/arm64 \
+            --file "$FILE" $tags \
+            --provenance mode=max --sbom true \
+            --label "org.opencontainers.image.title=$TITLE" \
+            --label "org.opencontainers.image.description=$DESCRIPTION" \
+            --label org.opencontainers.image.licenses=AGPL-3.0-only \
+            --label "org.opencontainers.image.vendor=Полка" \
+            --label "org.opencontainers.image.source=https://github.com/$REPO" \
+            --label "org.opencontainers.image.version=$version" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            --label "org.opencontainers.image.documentation=$docs" \
+            --annotation "index:org.opencontainers.image.title=$TITLE" \
+            --annotation "index:org.opencontainers.image.description=$DESCRIPTION" \
+            --annotation "index:org.opencontainers.image.licenses=AGPL-3.0-only" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/$REPO" \
+            "$CONTEXT"
           {
             echo "### $NAME"
             echo
-            printf '%s\n' "$TAGS" | sed 's/^/    /'
+            echo "    $image:$version"
+            case "$version" in *-*) ;; *) echo "    $image:latest" ;; esac
           } >> "$GITHUB_STEP_SUMMARY"
