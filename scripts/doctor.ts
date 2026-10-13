@@ -314,6 +314,7 @@ checks.push(
     passwordAccounts,
     companyAdmins,
     teamShelves: config.TEAM_SHELVES,
+    teamShelvesScope: config.TEAM_SHELVES_SCOPE,
   }),
   ...settingsChecks({
     teamShelves: config.TEAM_SHELVES,
