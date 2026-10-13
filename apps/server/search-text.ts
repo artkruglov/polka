@@ -85,8 +85,10 @@ export async function indexRevisionText(
     await c.query("DELETE FROM artifact_search WHERE artifact_id=$1", [artifactId]);
     return;
   }
+  // The row carries its work's shelf (migration 075): the index is per shelf.
   await c.query(
-    `INSERT INTO artifact_search(artifact_id,revision_id,body) VALUES($1,$2,$3)
+    `INSERT INTO artifact_search(artifact_id,tenant_id,revision_id,body)
+     SELECT id,tenant_id,$2,$3 FROM artifacts WHERE id=$1
      ON CONFLICT (artifact_id) DO UPDATE
        SET revision_id=EXCLUDED.revision_id,body=EXCLUDED.body,indexed_at=now()`,
     [artifactId, revisionId, body],
@@ -141,29 +143,48 @@ export const HEADLINE_OPTIONS = `MaxFragments=1,MaxWords=24,MinWords=10,ShortWor
 
 /**
  * The search row of a work's latest revision, unless that revision is blocked
- * by moderation: its text neither matches nor shows (`s` in the query).
+ * by moderation: its text neither matches nor shows (`s` in the query). Read
+ * per work (LIMIT 1 keeps it a lookup by the key): a list joins only its own
+ * works, never every row of the installation.
  */
 export const searchJoin = (artifact: string) =>
-  `LEFT JOIN artifact_search s ON s.artifact_id=${artifact}.id
-     AND s.revision_id=${artifact}.latest_revision_id
-     AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
-                     WHERE b.revision_id=s.revision_id AND b.released_at IS NULL)`;
+  `LEFT JOIN LATERAL (
+     SELECT found.* FROM artifact_search found
+      WHERE found.artifact_id=${artifact}.id
+        AND found.revision_id=${artifact}.latest_revision_id
+        AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
+                        WHERE b.revision_id=found.revision_id AND b.released_at IS NULL)
+      LIMIT 1) s ON true`;
+
+/**
+ * The indexed text of a search row and its shelf: the expression of
+ * artifact_search_shelf_document (migration 075). The shelf is one more
+ * lexeme, '~<tenant id>'; a search box never produces a word that starts
+ * with «~» (wordsOf), so only shelfTerms matches it.
+ */
+const shelfDocument = (row: string) => `(${row}.document || ('~' || ${row}.tenant_id::text)::tsvector)`;
+
+/** The shelves ($shelves, a uuid[]) as a tsquery: '~<id>' | '~<id>' … */
+const shelfTerms = (shelves: string) =>
+  `(SELECT string_agg(quote_literal('~' || shelf::text),' | ') FROM unnest(${shelves}) shelf)::tsquery`;
 
 /**
  * Matches by title ($title, a titlePattern; or the words of $query in any
- * order) or by text ($query, a searchQuery). The text is matched in a
- * subquery the GIN index can serve; a row of artifact_search is always its
- * work's latest version. A title is short and the shelf is one tenant's, so
- * its words are parsed in place, with no index of their own.
+ * order) or by text ($query, a searchQuery) on the shelves $shelves (a
+ * uuid[] the caller's own conditions also limit the works to). The text is
+ * matched in a subquery the index serves for those shelves only; a row of
+ * artifact_search is always its work's latest version. A title is short and
+ * the list is one shelf's, so it is matched in place, against its stored
+ * tsvector (artifacts.title_document).
  */
-export const searchMatch = (artifact: string, title: string, query: string) =>
+export const searchMatch = (artifact: string, title: string, query: string, shelves: string) =>
   `((${title}::text IS NULL AND ${query}::text IS NULL)
     OR ${artifact}.title ILIKE ${title} ESCAPE '\\'
-    OR to_tsvector('russian',${artifact}.title) @@ to_tsquery('russian',${query}::text)
+    OR ${artifact}.title_document @@ to_tsquery('russian',${query}::text)
     OR ${artifact}.id IN (
       SELECT found.artifact_id FROM artifact_search found
       WHERE ${query}::text IS NOT NULL
-        AND found.document @@ to_tsquery('russian',${query}::text)
+        AND ${shelfDocument("found")} @@ (to_tsquery('russian',${query}::text) && ${shelfTerms(shelves)})
         AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                         WHERE b.revision_id=found.revision_id AND b.released_at IS NULL)))`;
 
@@ -179,7 +200,7 @@ export const SEARCH_RANK_TIER = 1_000_000;
  */
 export const searchRank = (artifact: string, title: string, query: string) =>
   `((CASE WHEN ${artifact}.title ILIKE ${title} ESCAPE '\\' THEN 2
-          WHEN to_tsvector('russian',${artifact}.title) @@ to_tsquery('russian',${query}::text) THEN 1
+          WHEN ${artifact}.title_document @@ to_tsquery('russian',${query}::text) THEN 1
           ELSE 0 END) * ${SEARCH_RANK_TIER}
     + CASE WHEN s.document @@ to_tsquery('russian',${query}::text)
         THEN 1 + floor(ts_rank_cd(s.document,to_tsquery('russian',${query}::text),1|32)

@@ -285,26 +285,36 @@ export async function listArtifactsForAgent(actor: ServiceActor, raw: z.input<ty
     input.state === "active"
       ? "artifact.trashed_at IS NULL AND artifact.purged_at IS NULL"
       : "artifact.trashed_at IS NOT NULL AND artifact.purged_at IS NULL";
-  const rank = ranked ? searchRank("artifact", "$4", "$8") : "0";
   // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
+  // The page is chosen from the matching works alone; its versions, folders
+  // and snippets are read for that page only. A ranked search computes each
+  // match's rank once (OFFSET 0 keeps that subquery whole).
+  const order = `${ranked ? "artifact.search_rank DESC," : ""}${timestamp} DESC,artifact.id DESC`;
   const { rows } = await db.query(
     `SELECT ${artifactColumns},
             to_char(${timestamp} AT TIME ZONE 'UTC',
                     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_date,
-            ${rank} AS search_rank,
+            artifact.search_rank,
             ${searchSnippet("$8", "$9")}
-     FROM artifacts artifact
+     FROM (
+       SELECT artifact.* FROM (
+         SELECT artifact.*,${ranked ? searchRank("artifact", "$4", "$8") : "0"} AS search_rank
+         FROM artifacts artifact
+         ${ranked ? searchJoin("artifact") : ""}
+         WHERE artifact.tenant_id=ANY($1::uuid[]) AND ${statePredicate}
+           AND artifact.latest_revision_id IS NOT NULL
+           AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
+           AND ${searchMatch("artifact", "$4", "$8", "$1::uuid[]")}
+           AND ${inScopeSql("artifact", "$10")}
+           AND ($11::timestamptz IS NULL OR ${timestamp}>$11)
+         ${ranked ? "OFFSET 0" : ""}) artifact
+       WHERE ($5::timestamptz IS NULL
+              OR (artifact.search_rank,${timestamp},artifact.id)<($12::int,$5,$6::uuid))
+       ORDER BY ${order}
+       LIMIT $7) artifact
      JOIN revisions r ON r.id=artifact.latest_revision_id
      ${searchJoin("artifact")}
-     WHERE artifact.tenant_id=ANY($1::uuid[]) AND ${statePredicate}
-       AND ($2::boolean OR artifact.folder_id IS NOT DISTINCT FROM $3::uuid)
-       AND ${searchMatch("artifact", "$4", "$8")}
-       AND ($5::timestamptz IS NULL
-            OR (${rank},${timestamp},artifact.id)<($12::int,$5,$6::uuid))
-       AND ${inScopeSql("artifact", "$10")}
-       AND ($11::timestamptz IS NULL OR ${timestamp}>$11)
-     ORDER BY ${ranked ? `${rank} DESC,` : ""}${timestamp} DESC,artifact.id DESC
-     LIMIT $7`,
+     ORDER BY ${order}`,
     [
       tenants,
       input.folderId === undefined,
