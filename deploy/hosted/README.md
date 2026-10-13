@@ -76,7 +76,7 @@
    docker build -t polka:<short-commit> .
    ```
 
-4. Создать `hosted.env` одной командой: она берёт `hosted.env.example`, сама генерирует пароли БД, `LINK_KEY` и `OPS_STATUS_TOKEN`, подставляет адреса, S3 и образ из шага 3 и пишет файл с правами 600. S3-ключи передаются через окружение, чтобы не попасть в историю оболочки; секреты команда не печатает. В конце она перечисляет, что ещё не заполнено.
+4. Создать `hosted.env` одной командой: она берёт `hosted.env.example`, сама генерирует пароли БД, `LINK_KEY` и `OPS_STATUS_TOKEN`, подставляет адреса, S3 и образ из шага 3 и пишет файл с правами 600. S3-ключи передаются через окружение, чтобы не попасть в историю оболочки; секреты команда не печатает. В конце она перечисляет, что ещё не заполнено. Значение с `$`, `#`, пробелами или кавычками команда пишет в двойных кавычках с экранированием, и Docker Compose читает его буквально, без подстановки переменных; правите `hosted.env` руками — делайте так же (`S3_SECRET_KEY="ab\$c#d"`).
 
    ```sh
    S3_ACCESS_KEY=… S3_SECRET_KEY=… BACKUP_S3_ACCESS_KEY=… BACKUP_S3_SECRET_KEY=… \
@@ -229,6 +229,22 @@ docker compose --env-file hosted.env up -d --build
 ```
 
 `up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
+
+**Обновление на версию с настройками PostgreSQL и лимитами Caddy** (см. CHANGELOG, «Unreleased»). `compose.yml` теперь запускает `postgres` с `shared_buffers=256MB`, `shared_preload_libraries=pg_stat_statements` и журналом медленных запросов (`log_min_duration_statement=500ms`, без значений параметров). Эти настройки читаются только при старте сервера, поэтому `up -d` один раз пересоздаёт контейнер `postgres`: база недоступна несколько секунд, приложение и обслуживание переподключаются сами, данные в volume `pgdata` не меняются. Делайте это вне пиковых часов и после внеочередного дампа, как любое обновление. Затем два шага один раз:
+
+```sh
+cd /opt/polka/deploy/hosted
+# таймауты сессий по умолчанию для ролей и pg_stat_statements в базе postgres
+# (на новой установке это делает init при первом старте)
+docker compose --env-file hosted.env exec -T postgres \
+  psql -X -v ON_ERROR_STOP=1 -U polka_admin -d postgres < role-settings.sql
+# Caddy читает Caddyfile только при старте: сжатие zstd и лимиты тел запросов
+docker compose --env-file hosted.env restart caddy
+```
+
+Проверка: `docker compose --env-file hosted.env exec postgres psql -U polka_admin -d postgres -c 'SHOW shared_buffers'` → `256MB`; `… -c 'SELECT rolname, rolconfig FROM pg_roles WHERE rolname LIKE $$polka%$$'` показывает `statement_timeout` и `idle_in_transaction_session_timeout`. Самые тяжёлые запросы: `SELECT calls, round(mean_exec_time) AS ms, left(query, 120) FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20` в базе `postgres` (видны запросы всех баз). Расширение живёт в `postgres`, а не в `polka`: так дампы `polka` не содержат расширения, которое создаёт только суперпользователь, и восстанавливаются от владельца схемы.
+
+Роли получают таймауты по умолчанию (`role-settings.sql`): `polka_runtime` — 15 с на запрос и 60 с простоя в транзакции, как приложение ставит себе само; `polka_purge` и `polka_restore` — 60 с и 5 минут; `polka_schema` — только 15 минут простоя в транзакции (миграции задают свой таймаут, `pg_dump` и `pg_restore` отключают оба для своей сессии). Своё соединение может задать другие значения (`SET statement_timeout`), например для ручной проверки в `psql`.
 
 ## Откат
 
@@ -805,4 +821,5 @@ SOURCE_URL=https://git.example.com/team/polka
 - Одна VM, без HA. Для мониторинга есть статус оператора и скрипт проверки (см. «Мониторинг»); расписания и алертов в поставке нет.
 - Почта выключена; импорт по ссылке выключен; интерактивный HTML по умолчанию выключен (`HTML_LIVE_MODE=disabled`).
 - Caddy без admin API: изменения `Caddyfile` применяются `docker compose --env-file hosted.env restart caddy`.
+- Caddy обрывает тело запроса больше лимита ответом 413, не пропуская его в приложение: файл видео проекта — до 201 МиБ, расшифровка сессии агента — до 65 МиБ, остальное — до 9 МиБ (приложение само принимает 200 МиБ, 64 МиБ и не больше 8 МиБ). Пути `/api/ext/*` расширения ограничивает само. Меняете лимиты в приложении — поменяйте и `Caddyfile`.
 - Доступ оператора (SSH-ключи, VPN, bastion) и расположение секретов — вне этого репозитория; ведите их в собственном runbook.

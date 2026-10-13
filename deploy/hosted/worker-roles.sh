@@ -25,6 +25,9 @@ SELECT format('CREATE ROLE %I LOGIN', :'role')
 SELECT format('ALTER ROLE %I PASSWORD %L', :'role', :'password') \gexec
 SELECT format('GRANT CONNECT ON DATABASE polka TO %I', :'role') \gexec
 SELECT format('ALTER ROLE %I SET search_path = pg_catalog, public', :'role') \gexec
+-- The session limits of role-settings.sql.
+SELECT format('ALTER ROLE %I SET statement_timeout = %L', :'role', '60s') \gexec
+SELECT format('ALTER ROLE %I SET idle_in_transaction_session_timeout = %L', :'role', '5min') \gexec
 SQL
   echo "$role: ready"
 done

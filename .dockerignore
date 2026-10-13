@@ -31,6 +31,7 @@
 !deploy/hosted/hosted.env.example
 !deploy/hosted/init-roles.sh
 !deploy/hosted/worker-roles.sh
+!deploy/hosted/role-settings.sql
 !deploy/hosted/install.sh
 !deploy/hosted/backups-bucket-policy.example.json
 !deploy/hosted/backup/Dockerfile

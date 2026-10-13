@@ -275,3 +275,35 @@ test("the hosted proxy sends HSTS with includeSubDomains on every host", () => {
   assert.ok(hsts.length >= 2, "the app and the viewer both send HSTS");
   for (const line of hsts) assert.match(line, /max-age=31536000; includeSubDomains"/, line);
 });
+
+test("the hosted proxy stops bodies a little above the app's own limits, never below", async () => {
+  const { MAX_BYTES, PROJECT_VIDEO_MAX_FILE_BYTES } = await import("../packages/contracts/constants.ts");
+  const caddyfile = readFileSync("deploy/hosted/Caddyfile", "utf8");
+  const limit = (matcher: string) => {
+    const size = caddyfile.match(new RegExp(`request_body @${matcher} \\{\\s*max_size (\\d+)MiB`))?.[1];
+    assert.ok(size, `no request_body @${matcher}`);
+    return Number(size) * 1024 * 1024;
+  };
+  // The app's limits, read from the source the way the routes declare them.
+  const mib = (file: string, pattern: RegExp) => {
+    const match = readFileSync(file, "utf8").match(pattern);
+    assert.ok(match, `${pattern} in ${file}`);
+    return Number(match[1]) * 1024 * 1024;
+  };
+  const transcript = mib("apps/server/agent-sessions.ts", /transcriptBytes: (\d+) \* 1024 \* 1024/);
+  const largest = Math.max(
+    MAX_BYTES,
+    mib("apps/server/agent-sessions.ts", /indexBytes: (\d+) \* 1024 \* 1024/),
+    mib("apps/server/mcp-transport.ts", /MCP_BODY_LIMIT = (\d+) \* 1024 \* 1024/),
+    mib("apps/server/publish-api.ts", /PUBLISH_BODY_LIMIT = (\d+) \* 1024 \* 1024/),
+  );
+  for (const [matcher, app] of [
+    ["video", PROJECT_VIDEO_MAX_FILE_BYTES],
+    ["transcript", transcript],
+    ["rest", largest],
+  ] as const) {
+    assert.ok(limit(matcher) > app, `${matcher}: Caddy must allow what the app accepts`);
+    assert.ok(limit(matcher) <= app + 2 * 1024 * 1024, `${matcher}: Caddy's limit is far above the app's`);
+  }
+  assert.match(caddyfile, /^\s*encode zstd gzip$/m);
+});

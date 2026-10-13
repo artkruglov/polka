@@ -31,7 +31,34 @@ http://{$APP_HOST} {
 }
 
 {$APP_HOST} {
-	encode gzip
+	# Text only (Caddy's default list). zstd first, gzip for the rest; the
+	# stock image has no Brotli encoder.
+	encode zstd gzip
+	# Bodies stop here, a little above what the app accepts on each route
+	# (bodyLimit in apps/server), so an oversized upload gets a 413 from Caddy
+	# instead of streaming into the app. The matchers do not overlap: each
+	# request meets at most one limit.
+	# - a video file of a project (PROJECT_VIDEO_MAX_FILE_BYTES, 200 MiB);
+	# - a session's transcript (SESSION_LIMITS.transcriptBytes, 64 MiB);
+	# - /api/ext/*: the extension's own routes set their own limits;
+	# - everything else: /mcp, the publish API and a session's index take
+	#   up to 8 MiB, the rest of the app 5 MiB (MAX_BYTES) or less.
+	@video path_regexp video (?i)^/api/v1/projects/[^/]+/media/[0-9]+$
+	@transcript path_regexp transcript (?i)^/api/v1/sessions/[^/]+/transcript$
+	@rest {
+		not path_regexp (?i)^/api/v1/projects/[^/]+/media/[0-9]+$
+		not path_regexp (?i)^/api/v1/sessions/[^/]+/transcript$
+		not path /api/ext/*
+	}
+	request_body @video {
+		max_size 201MiB
+	}
+	request_body @transcript {
+		max_size 65MiB
+	}
+	request_body @rest {
+		max_size 9MiB
+	}
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy 127.0.0.1:4390 {
 		# Caddy replaces client-supplied X-Forwarded-For unless the client is a
