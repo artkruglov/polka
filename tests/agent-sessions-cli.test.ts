@@ -205,6 +205,114 @@ test("a strongly named secret is redacted whatever it looks like; code under tha
     assert.equal(redactor.redact(text, "x"), text);
 });
 
+test("tool arguments are redacted decoded: quoted, single-quoted, nested JSON and heredoc values never leave", async () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 8, 12, 0, s)).toISOString();
+  const VALUES = {
+    quoted: "Secr3t123!",
+    single: "Hunter2xyz!",
+    nested: "N3sted-Pass!",
+    deeper: "D33per-Tok3n!",
+    heredoc: "Multi9Line-Token!",
+    keyed: "Key-Value-77!",
+  };
+  const shell = [
+    `PASSWORD="${VALUES.quoted}" npm run task`,
+    `DB_PASSWORD='${VALUES.single}' ./deploy.sh`,
+    `cat > .env <<'EOF'\nAPP_NAME=demo\nAPI_TOKEN="${VALUES.heredoc}"\nEOF`,
+  ];
+  // An MCP tool whose argument is JSON passed on as text, with JSON inside it again.
+  const mcpInput = {
+    request: JSON.stringify({
+      url: "https://api.example.com/login",
+      body: JSON.stringify({ user: "demo", password: VALUES.nested, extra: JSON.stringify({ token: VALUES.deeper }) }),
+    }),
+    env: { SECRET_KEY: VALUES.keyed },
+  };
+  const claudeId = "33333333-4444-4555-8666-777777777777";
+  const claudePath = join(dir, `${claudeId}.jsonl`);
+  await writeFile(
+    claudePath,
+    [
+      { type: "user", sessionId: claudeId, cwd: "/work/app", timestamp: at(0), message: { content: "Run the task" } },
+      {
+        type: "assistant",
+        sessionId: claudeId,
+        cwd: "/work/app",
+        timestamp: at(1),
+        message: {
+          id: "msg_1",
+          model: "claude-sonnet-4-5",
+          content: [
+            ...shell.map((command, i) => ({ type: "tool_use", id: `t${i}`, name: "Bash", input: { command } })),
+            { type: "tool_use", id: "t9", name: "mcp__api__call", input: mcpInput },
+          ],
+        },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n") + "\n",
+  );
+  const codexId = "019f0000-0000-7000-8000-000000000003";
+  const codexPath = join(dir, `rollout-2026-10-08T12-00-00-${codexId}.jsonl`);
+  await writeFile(
+    codexPath,
+    [
+      { timestamp: at(0), type: "session_meta", payload: { id: codexId, cwd: "/work/app", cli_version: "0.150.0" } },
+      ...shell.map((command, i) => ({
+        timestamp: at(1 + i),
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "shell",
+          call_id: `c${i}`,
+          arguments: JSON.stringify({ command: ["bash", "-lc", command] }),
+        },
+      })),
+      {
+        timestamp: at(9),
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "call",
+          namespace: "mcp__api",
+          call_id: "c9",
+          arguments: JSON.stringify(mcpInput),
+        },
+      },
+      {
+        timestamp: at(10),
+        type: "response_item",
+        payload: { type: "function_call_output", call_id: "c9", output: { echo: `PASSWORD="${VALUES.quoted}"` } },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join("\n") + "\n",
+  );
+  for (const file of [
+    { source: "claude-code" as const, path: claudePath, id: claudeId },
+    { source: "codex" as const, path: codexPath, id: codexId },
+  ]) {
+    const { body, transcriptGz } = await prepareSession(file, KEY);
+    const transcript = gunzipSync(transcriptGz).toString();
+    const everything = JSON.stringify(body) + transcript;
+    for (const [name, value] of Object.entries(VALUES))
+      assert.ok(!everything.includes(value), `${file.source}: ${name} leaked`);
+    const markers = transcript.match(/\[REDACTED:[a-z-]+:[0-9a-f]{12}\]/g) ?? [];
+    assert.ok(markers.length >= Object.keys(VALUES).length, `${file.source}: ${markers.length} markers`);
+    // The command keeps its shape around the marker.
+    const first = transcript
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .find((event) => event.type === "tool_call" && event.seq === 0);
+    assert.match(
+      [JSON.parse(first.input).command].flat().at(-1),
+      /^PASSWORD="\[REDACTED:assignment:[0-9a-f]{12}\]" npm run task$/,
+    );
+    assert.equal(body.secrets.length, Object.keys(VALUES).length, file.source);
+  }
+});
+
 test("Claude Code and Codex sessions send no glued password in a template", async () => {
   const at = (s: number) => new Date(Date.UTC(2026, 9, 7, 12, 0, s)).toISOString();
   const claudeId = "22222222-3333-4444-8555-666666666666";

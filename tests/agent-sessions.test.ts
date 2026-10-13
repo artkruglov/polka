@@ -6,19 +6,21 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { AddressInfo } from "node:net";
-import { gzipSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { gunzipSync, gzipSync } from "node:zlib";
+import { HeadObjectCommand, ListObjectVersionsCommand } from "@aws-sdk/client-s3";
 import type { AgentScope } from "../packages/contracts/index.ts";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
-import { sessionsForExtension } from "../apps/server/agent-sessions.ts";
+import { sessionsForExtension, transcriptPage, transcriptUploadForTests } from "../apps/server/agent-sessions.ts";
 import { scrubSessionTemplates } from "../apps/server/session-template-scrub.ts";
 import { auditFeedHead, readAuditFeed } from "../apps/server/extension-feed.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
 import { MCP_AUDIENCE, authenticateServiceToken } from "../apps/server/service-auth.ts";
-import { s3, sha256 } from "../apps/server/storage.ts";
+import { bucket, putImmutableObject, s3, sha256 } from "../apps/server/storage.ts";
 import { main, prepareSession } from "../scripts/polka-sessions.mjs";
 import { FAKE, claudeSession } from "./agent-sessions-fixtures.ts";
 
@@ -345,6 +347,99 @@ test("needs the sessions permission, an enabled shelf and room", async () => {
   assert.equal(bad.statusCode, 400, bad.body);
   const notGzip = await putTranscript(await token(person), randomUUID(), Buffer.from("plain text, not gzip at all"));
   assert.equal(notGzip.statusCode, 400);
+});
+
+/** The stored transcript version a session row points at, and whether the store still has it. */
+async function storedTranscript(sessionId: string) {
+  const {
+    rows: [row],
+  } = await db.query(`SELECT transcript_key, transcript_version FROM agent_sessions WHERE id=$1`, [sessionId]);
+  const exists = await s3
+    .send(new HeadObjectCommand({ Bucket: bucket, Key: row.transcript_key, VersionId: row.transcript_version }))
+    .then(() => true)
+    .catch(() => false);
+  return { key: row.transcript_key as string, version: row.transcript_version as string, exists };
+}
+
+test("a refused transcript upload never deletes the stored transcript", async () => {
+  const person = await owner("sessions-keep");
+  const secret = await token(person);
+  const { saved, prepared } = await upload(secret, await sessionFile());
+  const id = saved.json().id;
+  assert.equal((await putTranscript(secret, id, prepared.transcriptGz)).statusCode, 200);
+  const stored = await storedTranscript(id);
+  assert.ok(stored.exists);
+
+  // The same bytes with a token of the same shelf but without the right.
+  const refused = await putTranscript(await token(person, ["context", "capture"]), id, prepared.transcriptGz);
+  assert.equal(refused.statusCode, 403, refused.body);
+  assert.deepEqual(await storedTranscript(id), stored);
+  const page = await web("GET", `/api/sessions/${id}/transcript?limit=1`, await cookie(person));
+  assert.equal(page.statusCode, 200, page.body);
+  assert.equal(page.json().events.length, 1);
+
+  // New bytes, the token revoked while they upload: the new version is not
+  // kept, the old one still is.
+  const revoked = await token(person);
+  const other = gzipSync(Buffer.from(`${gunzipSync(prepared.transcriptGz).toString("utf8")}{"type":"note"}\n`));
+  transcriptUploadForTests.afterStore = async () => {
+    await db.query(`UPDATE agent_connections SET revoked_at=now() WHERE token_hash=$1`, [sha256(revoked)]);
+  };
+  try {
+    assert.equal((await putTranscript(revoked, id, other)).statusCode, 401);
+  } finally {
+    transcriptUploadForTests.afterStore = undefined;
+  }
+  assert.deepEqual(await storedTranscript(id), stored);
+  const leftovers = await s3.send(
+    new ListObjectVersionsCommand({ Bucket: bucket, Prefix: `${person.tenant}/sessions/${id}/` }),
+  );
+  assert.deepEqual(
+    (leftovers.Versions ?? []).map((v) => v.VersionId),
+    [stored.version],
+  );
+});
+
+test("revoked mid-upload, an upload that found the bytes already stored deletes nothing", async () => {
+  const person = await owner("sessions-race");
+  const secret = await token(person);
+  const { saved, prepared } = await upload(secret, await sessionFile());
+  const id = saved.json().id;
+  // Stored, not yet recorded: what a parallel upload of the same bytes leaves.
+  const key = `${person.tenant}/sessions/${id}/${sha256(prepared.transcriptGz)}.jsonl.gz`;
+  const { version, created } = await putImmutableObject(key, prepared.transcriptGz);
+  assert.equal(created, true);
+
+  const revoked = await token(person);
+  transcriptUploadForTests.afterStore = async () => {
+    await db.query(`UPDATE agent_connections SET revoked_at=now() WHERE token_hash=$1`, [sha256(revoked)]);
+  };
+  try {
+    assert.equal((await putTranscript(revoked, id, prepared.transcriptGz)).statusCode, 401);
+  } finally {
+    transcriptUploadForTests.afterStore = undefined;
+  }
+  // The parallel upload records it, and it is still there.
+  assert.equal((await putTranscript(secret, id, prepared.transcriptGz)).statusCode, 200);
+  assert.deepEqual(await storedTranscript(id), { key, version, exists: true });
+});
+
+test("a transcript page is read from the stream: lines in order, empty ones skipped, a broken file refused", async () => {
+  const text = ['{"schema":1}', ...Array.from({ length: 1000 }, (_, i) => JSON.stringify({ seq: i }))].join("\n\n");
+  const gz = gzipSync(Buffer.from(text));
+  // Small chunks, so lines cross chunk boundaries.
+  const chunks = (bytes: Buffer) =>
+    Readable.from(Array.from({ length: Math.ceil(bytes.length / 7) }, (_, i) => bytes.subarray(i * 7, i * 7 + 7)));
+  const page = await transcriptPage(chunks(gz), 1 + 995, 10);
+  assert.equal(page?.total, 1001);
+  assert.deepEqual(
+    page?.lines.map((line) => JSON.parse(line).seq),
+    [995, 996, 997, 998, 999],
+  );
+  const first = await transcriptPage(Readable.from([gz]), 0, 2);
+  assert.deepEqual(first?.lines, ['{"schema":1}', '{"seq":0}']);
+  assert.equal(await transcriptPage(Readable.from([Buffer.from("not gzip at all, plain text")]), 1, 5), null);
+  assert.equal(await transcriptPage(Readable.from([gz.subarray(0, gz.length - 10)]), 1, 5), null);
 });
 
 test("erasing the account erases its sessions", async () => {

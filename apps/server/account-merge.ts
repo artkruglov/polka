@@ -10,8 +10,10 @@
 // connections with their tokens and refresh tokens (they keep working and now
 // save to the target), upload and import receipts, the audit trail, provider
 // identities the target does not already have, template library
-// memberships, notes and comments the source wrote elsewhere, and its usage
-// analytics (re-keyed; its sign-up event is dropped).
+// memberships, notes and comments the source wrote elsewhere, its usage
+// analytics (re-keyed; its sign-up event is dropped), and its agent sessions
+// with their transcripts, allowance and fingerprint key. MERGE_INVENTORY
+// lists every column that names an account or a shelf and what happens to it.
 //
 // Objects in storage live under `<tenant>/…`, and deletion purges a tenant by
 // that prefix, so every object of the source is copied to the same path
@@ -108,6 +110,10 @@ export type MergeCounts = {
   libraryMemberships: number;
   analyticsEvents: number;
   sessionsEnded: number;
+  /** Agent sessions (docs/specs/AGENT_SESSIONS.md) that move… */
+  agentSessions: number;
+  /** …of which also on the target (same agent, same id): the later upload stays. */
+  agentSessionsTwice: number;
   sourceBytes: number;
   derivativeBytes: number;
 };
@@ -212,7 +218,13 @@ async function count(c: Queryable, from: MergeAccount, into: MergeAccount): Prom
           UNION SELECT f.object_key FROM revision_files f
                   JOIN revisions r ON r.id=f.revision_id WHERE r.tenant_id=$1
           UNION SELECT object_key FROM revision_derivatives
-                 WHERE tenant_id=$1 AND object_key IS NOT NULL) keys) AS objects`,
+                 WHERE tenant_id=$1 AND object_key IS NOT NULL
+          UNION SELECT transcript_key FROM agent_sessions
+                 WHERE tenant_id=$1 AND transcript_key IS NOT NULL) keys) AS objects,
+       (SELECT count(*) FROM agent_sessions WHERE tenant_id=$1) AS agent_sessions,
+       (SELECT count(*) FROM agent_sessions s JOIN agent_sessions t
+           ON t.tenant_id=$3 AND t.source=s.source AND t.external_id=s.external_id
+         WHERE s.tenant_id=$1) AS agent_sessions_twice`,
     [from.tenant, from.id, into.tenant, actorKey(from.id)],
   );
   const { rows: identities } = await c.query(
@@ -241,6 +253,8 @@ async function count(c: Queryable, from: MergeAccount, into: MergeAccount): Prom
     libraryMemberships: n(row.memberships),
     analyticsEvents: n(row.analytics),
     sessionsEnded: n(row.sessions),
+    agentSessions: n(row.agent_sessions),
+    agentSessionsTwice: n(row.agent_sessions_twice),
     sourceBytes: n(row.source_bytes),
     derivativeBytes: n(row.derivative_bytes),
   };
@@ -268,7 +282,10 @@ async function sourceObjects(c: Queryable, tenant: string) {
      UNION
      SELECT f.object_key,f.object_version,false
        FROM upload_files f JOIN uploads u ON u.id=f.upload_id
-      WHERE u.tenant_id=$1 AND u.receipt IS NOT NULL`,
+      WHERE u.tenant_id=$1 AND u.receipt IS NOT NULL
+     UNION
+     SELECT transcript_key,transcript_version,false FROM agent_sessions
+      WHERE tenant_id=$1 AND transcript_key IS NOT NULL AND transcript_version IS NOT NULL`,
     [tenant],
   );
   // One copy per object version, even when several rows name it.
@@ -280,6 +297,144 @@ async function sourceObjects(c: Queryable, tenant: string) {
   }
   return [...unique.values()];
 }
+
+/**
+ * Sessions sent to both shelves (the same agent and session id): the later
+ * upload stays, as a second upload replaces the first; on a tie the
+ * target's. Returns the transcripts of the rows deleted.
+ */
+async function dropTwiceSentSessions(c: Queryable, from: string, into: string) {
+  const { rows } = await c.query(
+    `DELETE FROM agent_sessions d USING agent_sessions s, agent_sessions t
+      WHERE s.tenant_id=$1 AND t.tenant_id=$2 AND t.source=s.source AND t.external_id=s.external_id
+        AND d.id = CASE WHEN s.updated_at > t.updated_at THEN t.id ELSE s.id END
+     RETURNING d.transcript_key AS key, d.transcript_version AS version`,
+    [from, into],
+  );
+  return (rows as Array<{ key: string | null; version: string | null }>).filter(
+    (row): row is { key: string; version: string } => !!row.key && !!row.version,
+  );
+}
+
+/**
+ * Agent sessions move with their transcripts (already copied, `objectMap`),
+ * their allowance and their fingerprint key. Fingerprints are HMACs made on
+ * the person's machine with the shelf's key, and the server never has the
+ * values, so they cannot be re-keyed: a target without a key of its own
+ * takes the source's (every fingerprint stays comparable); a target with
+ * one keeps it, and the moved sessions keep fingerprints of the old key
+ * until they are sent again (docs/specs/AGENT_SESSIONS.md).
+ */
+async function moveAgentSessions(c: Queryable, from: MergeAccount, into: MergeAccount, objectMap: string) {
+  const moved = await c.query(
+    `UPDATE agent_sessions s SET tenant_id=$2, account_id=$3,
+            transcript_key=COALESCE(m.new_key, s.transcript_key),
+            transcript_version=COALESCE(m.new_version, s.transcript_version)
+       FROM agent_sessions o
+       LEFT JOIN (SELECT * FROM jsonb_to_recordset($4::jsonb)
+                    AS x(old_key text,old_version text,new_key text,new_version text)) m
+         ON m.old_key=o.transcript_key AND m.old_version=o.transcript_version
+      WHERE o.id=s.id AND s.tenant_id=$1
+     RETURNING s.transcript_key`,
+    [from.tenant, into.tenant, into.id, objectMap],
+  );
+  if (moved.rows.some((row) => row.transcript_key && !String(row.transcript_key).startsWith(`${into.tenant}/`)))
+    throw new MergeRefusal("Не все расшифровки сессий агентов нашли свои объекты хранилища. Объединение отменено.");
+  // Only a personal shelf holds sessions, so none of the source is elsewhere; just in case.
+  await c.query("UPDATE agent_sessions SET account_id=$2 WHERE account_id=$1", [from.id, into.id]);
+  await c.query(
+    `UPDATE tenants t SET
+            session_quota_bytes=GREATEST(t.session_quota_bytes, s.session_quota_bytes),
+            session_fingerprint_key=COALESCE(t.session_fingerprint_key, s.session_fingerprint_key),
+            session_used_bytes=(SELECT COALESCE(sum(transcript_bytes+index_bytes),0) FROM agent_sessions WHERE tenant_id=t.id)
+       FROM tenants s WHERE t.id=$2 AND s.id=$1`,
+    [from.tenant, into.tenant],
+  );
+  await c.query("UPDATE tenants SET session_used_bytes=0, session_fingerprint_key=NULL WHERE id=$1", [from.tenant]);
+  return moved.rowCount ?? 0;
+}
+
+/**
+ * Every column that ties a row to an account or a shelf (a foreign key to
+ * accounts or tenants, or a column named tenant_id / account_id /
+ * *_account_id), and what a merge does with it. tests/account-merge.test.ts
+ * compares this with the schema: a new such column fails the test until it
+ * is moved here or deliberately left, with the reason.
+ */
+export const MERGE_INVENTORY: Record<string, `moved${string}` | `left: ${string}` | `refused: ${string}`> = {
+  "account_deletions.account_id": "left: the source's own deletion request",
+  "account_deletions.tenant_id": "left: the source's own deletion request",
+  "account_identities.account_id": "moved where the target has no such provider; the rest go with the source",
+  "account_purge_jobs.account_id": "left: the source's own purge",
+  "account_purge_jobs.tenant_id": "left: the source's own purge",
+  "account_restore_suppressions.account_id": "left: about the source's own erasure",
+  "account_restore_suppressions.tenant_id": "left: about the source's own erasure",
+  "agent_connections.account_id": "moved (picked ones; the rest revoked first)",
+  "agent_connections.tenant_id": "moved",
+  "agent_operations.account_id": "moved",
+  "agent_operations.tenant_id": "moved",
+  "agent_read_days.tenant_id": "left: read counts of the source shelf, erased with it",
+  "agent_sessions.account_id": "moved (moveAgentSessions)",
+  "agent_sessions.tenant_id": "moved (moveAgentSessions)",
+  "artifacts.created_by": "moved on the source shelf; left: elsewhere authorship stays, as for any erased author",
+  "artifacts.owner_account_id": "moved, on every shelf",
+  "artifacts.tenant_id": "moved",
+  "audit_outbox.actor_id": "moved on the source shelf; left: elsewhere the journal keeps who it was",
+  "audit_outbox.tenant_id": "moved",
+  "comment_reactions.author_account_id": "moved",
+  "comment_reactions.tenant_id": "moved",
+  "comments.author_account_id": "moved",
+  "comments.resolved_by": "moved",
+  "comments.tenant_id": "moved",
+  "editorial_publications.tenant_id": "refused: a source with publications in «Открытия» is not merged",
+  "feed_proposals.proposed_by": "moved",
+  "feed_proposals.tenant_id": "left: proposals come from department shelves, which do not move",
+  "folders.tenant_id": "moved (same name: joined)",
+  "moderation_blocks.tenant_id": "moved (released ones; an active block refuses the merge)",
+  "moderation_events.account_id": "left: the moderation record of the source, account.merged included",
+  "moderation_events.tenant_id": "left: the moderation record of the source",
+  "oauth_authorizations.account_id": "moved",
+  "oauth_authorizations.tenant_id": "moved",
+  "oauth_refresh_tokens.account_id": "moved",
+  "oauth_refresh_tokens.tenant_id": "moved",
+  "operator_sign_in_links.account_id": "left: an operator's sign-in link opens the source only, which is closed",
+  "revision_derivatives.tenant_id": "moved",
+  "revisions.created_by": "moved on the source shelf; left: elsewhere authorship stays, as for any erased author",
+  "revisions.tenant_id": "moved",
+  "service_principals.created_by": "left: history on a department shelf",
+  "service_principals.responsible_account_id":
+    "left: department shelves only; the source's erasure freezes them for a shelf admin to reassign",
+  "service_principals.tenant_id": "left: department shelves only, which do not move",
+  "sessions.account_id": "left: the source's sign-ins are ended",
+  "share_reports.tenant_id": "moved",
+  "shares.created_by": "moved on the source shelf",
+  "shares.tenant_id": "moved",
+  "template_libraries.created_by": "moved",
+  "template_library_events.actor_id": "left: history",
+  "template_library_events.target_account_id": "left: history",
+  "template_library_invitations.accepted_by": "left: history",
+  "template_library_invitations.invited_by": "left: history",
+  "template_library_members.account_id": "moved (the higher role)",
+  "template_library_publications.publisher_id": "left: history of who published to a library",
+  "template_library_viewer_grants.member_account_id": "left: bound to the source's sign-ins, which end",
+  "tenant_invitations.invited_by": "left: history",
+  "tenant_invitations.tenant_id": "left: invitations are to department shelves, which do not move",
+  "tenant_member_events.actor_id": "left: history (the merge adds its own events)",
+  "tenant_member_events.target_account_id": "left: history",
+  "tenant_member_events.tenant_id": "left: history of department shelves",
+  "tenant_members.account_id": "moved (department shelves, the higher role)",
+  "tenant_members.invited_by": "left: history",
+  "tenant_members.tenant_id": "left: memberships of department shelves, which do not move",
+  "tenants.created_by": "left: the source shelf itself, emptied and erased",
+  "tenants.owner_id": "left: the source shelf itself, emptied and erased",
+  "uploads.account_id": "moved",
+  "uploads.tenant_id": "moved",
+  "url_import_jobs.account_id": "moved",
+  "url_import_jobs.tenant_id": "moved",
+  "webhook_deliveries.tenant_id": "left: deleted with the source shelf's endpoints",
+  "webhook_endpoints.created_by": "moved",
+  "webhook_endpoints.tenant_id": "left: the source shelf's endpoints are deleted",
+};
 
 const ROLE_RANK = { reader: 1, curator: 2, admin: 3 } as const;
 const SHELF_RANK = { reader: 1, author: 2, curator: 3, admin: 4 } as const;
@@ -455,6 +610,8 @@ export async function mergeAccounts(input: {
 
   const copies: Array<{ key: string; version: string }> = [];
   const originals: Array<{ key: string; version: string }> = [];
+  /** Transcripts of sessions kept once (dropTwiceSentSessions): deleted after the commit. */
+  const dropped: Array<{ key: string; version: string }> = [];
   let report: MergeReport;
   try {
     report = await transaction(async (c) => {
@@ -502,6 +659,11 @@ export async function mergeAccounts(input: {
         );
         counts.activeAgentConnections = Math.max(0, counts.activeAgentConnections - (closed.rowCount ?? 0));
       }
+
+      // An agent session sent to both shelves (same agent, same id) is kept
+      // once, as after any second upload: the later one. The other row goes
+      // now, its transcript after the commit.
+      dropped.push(...(await dropTwiceSentSessions(c, from.tenant, into.tenant)));
 
       // 1. Copies under the target's prefix (the originals stay until commit).
       const objects = await sourceObjects(c, from.tenant);
@@ -709,8 +871,18 @@ export async function mergeAccounts(input: {
             AND m.old_key=$2||'/'||u.id::text AND m.old_version=u.object_version`,
         [into.tenant, from.tenant, objectMap],
       );
+      await moveAgentSessions(c, from, into, objectMap);
 
       // 4. What the source wrote elsewhere, and who it is.
+      // The person responsible for works (on department shelves too), the
+      // author of the moved links and of proposals to «Лента» stay the person.
+      await c.query("UPDATE artifacts SET owner_account_id=$2 WHERE owner_account_id=$1", [from.id, into.id]);
+      await c.query("UPDATE shares SET created_by=$3 WHERE tenant_id=$1 AND created_by=$2", [
+        into.tenant,
+        from.id,
+        into.id,
+      ]);
+      await c.query("UPDATE feed_proposals SET proposed_by=$2 WHERE proposed_by=$1", [from.id, into.id]);
       await c.query(
         `DELETE FROM comment_reactions s USING comment_reactions t
           WHERE s.author_account_id=$1 AND t.author_account_id=$2
@@ -822,7 +994,7 @@ export async function mergeAccounts(input: {
     throw error;
   }
   if (!report.dryRun) {
-    for (const original of originals) {
+    for (const original of [...originals, ...dropped]) {
       try {
         await mover.remove(original.key, original.version);
       } catch {
@@ -849,6 +1021,7 @@ export function formatMergeReport(report: MergeReport) {
     `Участие в библиотеках: ${c.libraryMemberships}`,
     `События статистики: ${c.analyticsEvents}`,
     `Сеансы источника будут закрыты: ${c.sessionsEnded}`,
+    `Сессии агентов: ${c.agentSessions} (есть и у получателя: ${c.agentSessionsTwice}, из двух остаётся отправленная позже)`,
     `Объём: ${c.sourceBytes} Б исходников, ${c.derivativeBytes} Б подготовленных версий`,
     ...report.notes.map((note) => `Внимание: ${note}`),
     ...report.leftovers.map((item) => `Не удалось удалить старый объект: ${item.key} (версия ${item.version})`),
