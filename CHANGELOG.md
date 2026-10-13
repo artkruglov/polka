@@ -40,6 +40,14 @@
 - Заголовки и `\echo` рецептов прав БД называли миграцию 071, хотя проверяют 072.
 ### Changed
 
+- **Своя установка без сборки ([«Быстрый путь»](deploy/hosted/README.md#быстрый-путь)):**
+  - на тег `v*` workflow `release-images` публикует `ghcr.io/artkruglov/polka:<версия>` и `ghcr.io/artkruglov/polka-backup:<версия>` (и `latest` для релиза без суффикса) для amd64 и arm64, с метками OCI, provenance и SBOM. Веб-сборка в образе делается один раз на платформе сборки;
+  - `compose.yml` берёт образ бэкапа из `POLKA_BACKUP_IMAGE`; пусто — собирает его на VM, как раньше;
+  - в образе есть файлы `deploy/hosted` своей версии, рецепты прав и `scripts/hosted-setup.mjs`: `hosted.env` можно создать на VM без Node.js;
+  - `deploy/hosted/install.sh` (POSIX sh): проверяет Docker и compose, скачивает образы и закрепляет версию, раскладывает файлы версии в `/opt/polka/deploy` (изменённые сохраняет как `*.previous`), сверяет DNS обоих доменов с IP машины, пишет `hosted.env` (600) через `hosted-setup.mjs` в контейнере без сети и запускает `up -d`. Без `--force` существующий `hosted.env` не меняет; ключи — из окружения или с вводом без эха;
+  - `hosted:setup` берёт из окружения ещё `SMTP_PASS` и `OIDC_CLIENT_SECRET`, новый ключ `--backup-image`;
+  - `npm run admin -- ops doctor`: настройки, DNS и TLS обоих доменов, отдельный registrable domain просмотра, база и версия схемы, бакет (версионирование, условная запись — без новых объектов), возраст последнего дампа, вход в SMTP (письмо — только с `--send-test`), OIDC discovery, есть ли способ входа и администратор компании, сводка настроек. ✓/✗ с подсказками по-русски, код выхода 1 при ✗, секреты не печатаются;
+  - CI проверяет `install.sh` через `sh -n` и shellcheck.
 - **Шаблон своей установки (`deploy/hosted`) — для компании, а не для polochka.app:**
   - модели фильтра содержимого в `hosted.env.example` выключены (`CONTENT_MODEL_PROVIDER=off`): раньше там был Yandex AI Studio с заглушкой модели и пустым ключом; как включить — в комментарии;
   - `OPERATOR_CONTACT` пуст вместо `privacy@polochka.app`, и `hosted:setup` перечисляет его как незаполненный;

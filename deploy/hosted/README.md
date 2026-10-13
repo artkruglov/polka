@@ -2,6 +2,41 @@
 
 Пример поставки Полки на одну VM: PostgreSQL на той же машине, внешнее S3-совместимое хранилище с версионированием, TLS через Caddy. Это не HA и не production-сертификация. Ниже `polka.example.com` и `polka-viewer.example.net` — заглушки, подставьте свои домены.
 
+## Быстрый путь
+
+Готовые образы релиза — `ghcr.io/artkruglov/polka:<версия>` и `ghcr.io/artkruglov/polka-backup:<версия>` (amd64 и arm64): собирать на VM ничего не нужно, Node.js и git тоже. Нужны VM с Docker и плагином compose, два домена с A-записями на неё (второй — на другом registrable domain, «Что нужно» ниже), два приватных бакета S3 с версионированием и два ключа (приложения и только на запись дампов).
+
+1. Скачать установщик, прочитать и запустить. Он проверит Docker, скачает образы, разложит файлы версии в `/opt/polka/deploy`, сверит DNS обоих доменов с IP машины, создаст `hosted.env` (права 600, пароли БД и `LINK_KEY` генерируются и не печатаются) и запустит `docker compose up -d`. Чего не хватает, спросит в терминале; ключи берёт из окружения или спрашивает без эха.
+
+   ```sh
+   curl -fsSLo polka-install.sh https://raw.githubusercontent.com/artkruglov/polka/main/deploy/hosted/install.sh
+   less polka-install.sh
+   S3_ACCESS_KEY=… S3_SECRET_KEY=… BACKUP_S3_ACCESS_KEY=… BACKUP_S3_SECRET_KEY=… \
+   sudo -E sh polka-install.sh --app-host polka.company.ru --viewer-host polka-view.company.net \
+     --s3-endpoint https://storage.yandexcloud.net --s3-region ru-central1 \
+     --s3-bucket company-polka-objects --backup-bucket company-polka-backups \
+     --operator-contact privacy@company.ru
+   ```
+
+   Почта для кодов входа — `--smtp-host … --smtp-user … --mail-from …` и `SMTP_PASS` в окружении; вход компании — `--oidc-discovery-url … --oidc-client-id …` и `OIDC_CLIENT_SECRET`; любая настройка — `--set KEY=VALUE`; `sh polka-install.sh --help` — все ключи. Повторный запуск безопасен: существующий `hosted.env` без `--force` не меняется. Из клона репозитория — `sudo -E sh deploy/hosted/install.sh …` (берутся файлы клона).
+
+2. Первый администратор — без почты и SSO: аккаунт с этой почтой, роль администратора компании и одноразовая ссылка для входа на час.
+
+   ```sh
+   cd /opt/polka/deploy/hosted
+   docker compose --env-file hosted.env run --rm -T --no-deps app \
+     node --import tsx scripts/admin.ts account bootstrap anna@company.ru
+   ```
+
+3. Проверка: DNS и TLS обоих доменов, база и версия схемы, бакет (версионирование, условная запись), возраст последнего дампа, SMTP и OIDC, есть ли способ входа и администратор. Каждая строка — ✓ или ✗ с подсказкой; при ✗ команда завершается с ошибкой. Ничего не меняет и секретов не печатает; `--send-test you@company.ru` отправляет одно проверочное письмо.
+
+   ```sh
+   docker compose --env-file hosted.env run --rm -T --no-deps app \
+     node --import tsx scripts/admin.ts ops doctor
+   ```
+
+Обновление на новую версию: `sudo -E sh install.sh --release <версия> --force` из `/opt/polka/deploy/hosted` (секреты в `hosted.env` остаются, меняется образ; файлы, которые вы правили, сохраняются рядом как `*.previous`). Перед обновлением с миграцией — дамп, как в разделе «Обновление». Дальше — подробный ручной путь: из него видно, что делает установщик, и он нужен для своей сборки образа.
+
 ## Состав
 
 | Сервис | Назначение |
@@ -11,7 +46,7 @@
 | `app` | приложение: app listener `127.0.0.1:4390`, viewer listener `127.0.0.1:4391` (только при `HTML_LIVE_MODE=production`); `network_mode: host` |
 | `maintenance` | очистка истёкших загрузок, сессий, грантов раз в `MAINTENANCE_INTERVAL_SECONDS` (300 по умолчанию, 30–900); `network_mode: host` |
 | `caddy` | TLS (Let's Encrypt, автоматически) для `APP_HOST` и `VIEWER_HOST_NAME`, без access log и admin API; `network_mode: host`, единственный публичный listener (80/443) |
-| `backup` | `pg_dump` раз в `BACKUP_INTERVAL_SECONDS` (по умолчанию сутки) в `$BACKUP_BUCKET/postgres/`; образ собирается локально из закреплённого `postgres:16-alpine` + AWS CLI |
+| `backup` | `pg_dump` раз в `BACKUP_INTERVAL_SECONDS` (по умолчанию сутки) в `$BACKUP_BUCKET/postgres/`; образ — закреплённый `postgres:16-alpine` + AWS CLI: опубликованный `POLKA_BACKUP_IMAGE` или, если он пуст, собранный на VM (`up --build`) |
 
 Объекты хранятся в приватном versioned-бакете `S3_BUCKET`, дампы БД — в отдельном приватном versioned-бакете `BACKUP_BUCKET`. Интерактивный HTML включается `HTML_LIVE_MODE=production` и работает только на отдельном registrable domain (`VIEWER_HOST_NAME`, отличный от домена `APP_HOST`); по умолчанию `disabled`. Контракт: [HOSTED_VIEWER_DELTA](../../docs/HOSTED_VIEWER_DELTA.md).
 
@@ -22,7 +57,7 @@
 ## Что нужно
 
 - **VM** с Linux и systemd (Ubuntu, Debian), от 4 ГБ RAM (спокойнее 6 ГБ, а с рендерером на той же VM — обязательно), 2 vCPU, диск от 20 ГБ. Публичный IP.
-- **Docker** с плагином compose (`docker compose version`), **git** и **Node.js 22** — только для `npm run hosted:setup` (шаг 4); приложению на VM Node.js не нужен, оно работает в контейнере.
+- **Docker** с плагином compose (`docker compose version`). Для «Быстрого пути» больше ничего; для ручного пути ниже — ещё **git** и **Node.js 22** (сборка образа и `npm run hosted:setup`, шаг 4). Приложению на VM Node.js не нужен, оно работает в контейнере.
 - **Два домена** с A-записями на IP VM: домен приложения (`APP_HOST`) и отдельный registrable domain для просмотра (`VIEWER_HOST_NAME`), например `polka.company.ru` и `polka-view.company.net`, но не `view.company.ru`. Интерактивные страницы выполняют чужие скрипты; на своём сайте, без cookie и API приложения, они не дотянутся до сессий людей (раздел «Интерактивный viewer»). Второй домен нужен даже при выключенном интерактивном просмотре: Caddy выпускает сертификат для обоих.
 - **S3-совместимое хранилище** с версионированием и условной записью (`If-None-Match: *`; `storage-check` проверяет обе при каждом `up` и без них останавливает запуск). Два приватных бакета: объекты (`S3_BUCKET`) и дампы (`BACKUP_BUCKET`). Yandex Object Storage подходит.
 - **Три ключа S3**, у каждого свои права (раздел «Бэкапы и секреты»): ключ приложения (объекты и листинг бакета дампов), ключ бэкапа только на запись в `BACKUP_BUCKET` (обязателен: без него `compose.yml` не запустится), ключ чтения дампов для восстановления — хранится вне VM.
@@ -33,7 +68,7 @@
 
 1. DNS: A-записи `APP_HOST` и `VIEWER_HOST_NAME` на IP VM, **без** прокси CDN (у Cloudflare — «DNS only»): CDN видел бы токены агентов и мог бы менять HTML. Обе записи нужны до первого `up`: Caddy сразу запрашивает сертификаты для обоих доменов, а `VIEWER_HOST_NAME` обязателен даже при `HTML_LIVE_MODE=disabled`. Firewall — 22, 80, 443 (см. выше). Если у VM динамический внешний IP, после stop/start обновите обе записи.
 2. Два приватных бакета с **включённым версионированием**: `S3_BUCKET` (объекты) и `BACKUP_BUCKET` (дампы). `storage-check` не включает версионирование сам и без него останавливает запуск (`Bucket versioning must already be enabled`). Для бэкапа обязателен отдельный ключ только на запись в `BACKUP_BUCKET` (`BACKUP_S3_ACCESS_KEY`, без него `compose.yml` не запустится; см. «Бэкапы и секреты»).
-3. Собрать образ приложения. Опубликованного образа нет, `up --build` собирает только `backup`:
+3. Образ приложения: опубликованный `ghcr.io/artkruglov/polka:<версия>` (в шаге 4 — `--image ghcr.io/artkruglov/polka:<версия> --backup-image ghcr.io/artkruglov/polka-backup:<версия>`, тогда `up` ничего не собирает) или свой, собранный из тега. Своя сборка (`up --build` тогда собирает и `backup`):
 
    ```sh
    git clone https://github.com/artkruglov/polka.git /opt/polka && cd /opt/polka
@@ -176,6 +211,8 @@ sudo netfilter-persistent save
 
 Перед обновлением прочитайте [CHANGELOG](../../CHANGELOG.md) от своей версии до новой: там названы новые миграции и настройки. Есть ли в релизе миграция, видно и по коду: `git diff --stat <текущий-тег>..<новый-тег> -- deploy/migrations`. Если есть, сначала сделайте дамп и дождитесь строки `backup ok`: без него откат невозможен.
 
+С опубликованными образами вместо `git checkout` и `docker build` — после того же внеочередного дампа: `sudo -E sh install.sh --release <версия> --force` из `/opt/polka/deploy/hosted` (новые файлы версии, `POLKA_IMAGE` и `POLKA_BACKUP_IMAGE` в `hosted.env`, `up -d`). Со своей сборкой:
+
 ```sh
 cd /opt/polka && git fetch && git checkout <new-tag-or-commit>
 docker build -t polka:<new-short> .
@@ -202,7 +239,7 @@ docker compose --env-file hosted.env up -d --build
 
 Для этой формы установки восстановление — это дамп БД из `BACKUP_BUCKET` плюс versioned-бакет объектов `S3_BUCKET` как есть. Если после дампа кого-то удаляли, журнал стираний применяется к восстановленной базе (шаг 5 ниже, `restore-reconcile`); общий контракт — [deploy/RESTORE.md](../RESTORE.md).
 
-Ключ бэкапа только пишет, поэтому для скачивания нужен ключ с правом чтения `BACKUP_BUCKET`. AWS CLI есть в локальном образе `polka-backup:local`. Ниже `<S3_ENDPOINT>` и `<BACKUP_BUCKET>` — значения из `hosted.env`.
+Ключ бэкапа только пишет, поэтому для скачивания нужен ключ с правом чтения `BACKUP_BUCKET`. AWS CLI есть в образе бэкапа — опубликованном `POLKA_BACKUP_IMAGE` или собранном `polka-backup:local`. Ниже `<S3_ENDPOINT>` и `<BACKUP_BUCKET>` — значения из `hosted.env`.
 
 ```sh
 cd /opt/polka/deploy/hosted
@@ -213,10 +250,11 @@ docker compose --env-file hosted.env stop app maintenance backup
 docker compose --env-file hosted.env --profile purge stop account-purge
 
 # 1. Выбрать и скачать дамп
+BACKUP_IMAGE=$(sed -n "s/^POLKA_BACKUP_IMAGE=//p" hosted.env); BACKUP_IMAGE=${BACKUP_IMAGE:-polka-backup:local}
 # ключ аккаунта чтения (не ключ приложения и не ключ записи: у них нет права читать дампы)
 export AWS_ACCESS_KEY_ID=<ключ с чтением> AWS_SECRET_ACCESS_KEY=<секрет> AWS_DEFAULT_REGION=us-east-1
 aws_backup() { docker run --rm -i -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
-  --entrypoint aws polka-backup:local --endpoint-url <S3_ENDPOINT> "$@"; }
+  --entrypoint aws "$BACKUP_IMAGE" --endpoint-url <S3_ENDPOINT> "$@"; }
 aws_backup s3 ls s3://<BACKUP_BUCKET>/postgres/
 aws_backup s3 cp s3://<BACKUP_BUCKET>/postgres/polka-<UTC>.dump - > polka.dump
 docker compose --env-file hosted.env exec -T postgres pg_restore --list < polka.dump > /dev/null

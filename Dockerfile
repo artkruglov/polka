@@ -3,7 +3,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Web bundle only: full dev toolchain, nothing from this stage but dist/ ships.
-FROM base AS web
+# dist/ is the same on every platform, so a multi-arch build
+# (.github/workflows/release-images.yml) makes it once, natively.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS web
+WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/web ./apps/web
 COPY packages ./packages
@@ -33,6 +37,12 @@ COPY packages ./packages
 # Only server-side operator scripts (.dockerignore drops tests and dev tools).
 COPY scripts ./scripts
 COPY deploy/migrations ./deploy/migrations
+# The single-VM deployment of this very version: deploy/hosted/install.sh
+# copies it out of the image (no git checkout on the VM) and runs
+# scripts/hosted-setup.mjs here, so the VM needs no Node.js.
+COPY deploy/runtime-grants.sql deploy/purge-worker-grants.sql deploy/restore-worker-grants.sql ./deploy/
+COPY deploy/hosted ./deploy/hosted
+COPY deploy/renderer/seccomp-chromium.json ./deploy/renderer/seccomp-chromium.json
 # Operator publication verifies these original sources before registration.
 COPY content/editorial ./content/editorial
 COPY --from=web /app/dist ./dist

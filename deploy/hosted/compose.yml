@@ -371,10 +371,12 @@ services:
     logging: *logging
 
   backup:
-    # Built locally from the pinned postgres image (pg_dump matches the server)
-    # plus the AWS CLI: `docker compose --env-file hosted.env up -d --build`.
+    # The pinned postgres image (pg_dump matches the server) plus the AWS CLI.
+    # POLKA_BACKUP_IMAGE: the release's published image (ghcr.io/artkruglov/
+    # polka-backup:<version>), pulled like POLKA_IMAGE. Empty: built here,
+    # `docker compose --env-file hosted.env up -d --build`.
     build: ./backup
-    image: polka-backup:local
+    image: ${POLKA_BACKUP_IMAGE:-polka-backup:local}
     restart: unless-stopped
     read_only: true
     tmpfs: ["/tmp:rw,noexec,nosuid,size=256m"]

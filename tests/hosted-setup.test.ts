@@ -172,6 +172,51 @@ test("hosted:setup lists what is missing and refuses wrong input", () => {
   }
 });
 
+test("published images and mail/IdP secrets from the environment (install.sh)", () => {
+  const out = join(mkdtempSync(join(tmpdir(), "hosted-setup-")), "hosted.env");
+  const secrets = { ...keys, SMTP_PASS: "smtp-password-123", OIDC_CLIENT_SECRET: "oidc-secret-456" };
+  const res = run(
+    [
+      ...flags.filter((flag) => flag !== "polka:v0.12.1" && flag !== "--image"),
+      "--image",
+      "ghcr.io/artkruglov/polka:0.16.0",
+      "--backup-image",
+      "ghcr.io/artkruglov/polka-backup:0.16.0",
+      "--set",
+      "MAIL_MODE=smtp",
+      "--out",
+      out,
+    ],
+    secrets,
+  );
+  assert.equal(res.status, 0, res.stderr);
+  const env = parse(readFileSync(out, "utf8"));
+  assert.equal(env.POLKA_IMAGE, "ghcr.io/artkruglov/polka:0.16.0");
+  assert.equal(env.POLKA_BACKUP_IMAGE, "ghcr.io/artkruglov/polka-backup:0.16.0");
+  assert.equal(env.SMTP_PASS, secrets.SMTP_PASS);
+  assert.equal(env.OIDC_CLIENT_SECRET, secrets.OIDC_CLIENT_SECRET);
+  for (const secret of [secrets.SMTP_PASS, secrets.OIDC_CLIENT_SECRET])
+    assert.ok(!res.stdout.includes(secret) && !res.stderr.includes(secret));
+  // compose.yml takes the backup image from hosted.env and still builds without it.
+  assert.match(compose, /image: \$\{POLKA_BACKUP_IMAGE:-polka-backup:local\}/);
+  assert.match(compose, /build: \.\/backup/);
+});
+
+test("the image carries what install.sh needs, and nothing secret", () => {
+  const ignore = readFileSync(new URL("../.dockerignore", import.meta.url), "utf8");
+  for (const path of [
+    "scripts/hosted-setup.mjs",
+    "deploy/hosted/compose.yml",
+    "deploy/hosted/hosted.env.example",
+    "deploy/hosted/install.sh",
+    "deploy/runtime-grants.sql",
+  ])
+    assert.match(ignore, new RegExp(`^!${path.replace(/[.]/g, "\\.")}$`, "m"), path);
+  // Files are allowed one by one: no pattern that would let hosted.env in.
+  assert.doesNotMatch(ignore, /^!deploy\/hosted\/\*/m);
+  assert.match(ignore, /^\*\*\/\*\.env$/m);
+});
+
 test("hosted:setup is the npm script the deploy guide names", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["hosted:setup"], "node scripts/hosted-setup.mjs");

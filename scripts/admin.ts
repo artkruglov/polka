@@ -87,6 +87,9 @@ export const COMMANDS: Record<string, Record<string, Command>> = {
   shelf: {
     import: { script: "shelf-import.ts", about: "save an exported shelf: --dir … --account … [--dry-run]" },
   },
+  ops: {
+    doctor: { script: "doctor.ts", about: "is this installation ready: a checklist [--send-test <email>]" },
+  },
   metrics: {
     summary: { script: "metrics.ts", about: "product metrics: [--weeks N] [--json] | forget <account>" },
     "agent-access": { script: "agent-access-metrics.ts", about: "agent access report (AGENT_ACCESS_AND_MEMORY)" },

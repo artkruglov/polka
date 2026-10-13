@@ -18,6 +18,23 @@
 !scripts/polka-export.mjs
 !scripts/polka-sessions.mjs
 !deploy/migrations/*.sql
+# The single-VM deployment install.sh copies out of the image: each file by
+# name, so a hosted.env or a backup of it next to them never gets in.
+!scripts/hosted-setup.mjs
+!deploy/runtime-grants.sql
+!deploy/purge-worker-grants.sql
+!deploy/restore-worker-grants.sql
+!deploy/renderer/seccomp-chromium.json
+!deploy/hosted/README.md
+!deploy/hosted/compose.yml
+!deploy/hosted/Caddyfile
+!deploy/hosted/hosted.env.example
+!deploy/hosted/init-roles.sh
+!deploy/hosted/worker-roles.sh
+!deploy/hosted/install.sh
+!deploy/hosted/backups-bucket-policy.example.json
+!deploy/hosted/backup/Dockerfile
+!deploy/hosted/backup/backup.sh
 !content/editorial/**
 # The web bundle embeds the privacy policy and terms from here.
 !docs/legal/*.md
