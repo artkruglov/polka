@@ -1,10 +1,12 @@
 /**
  * GET /connect: instructions an AI agent reads when its user says
- * "Connect Полка: <origin>/connect". Plain text, so any agent can fetch it and
- * a person can read it in a browser. The agent runs one command; everything
+ * "Connect Полка: <origin>/connect". Plain text, so any agent can fetch it; a
+ * browser gets connectPage() below. The agent runs one command; everything
  * else (account, consent) happens in the user's browser over OAuth, so no
  * token or password passes through the agent or the chat.
  */
+
+import { escapeHtml } from "../../packages/contracts/html.ts";
 
 /** The skill package `npx skills add …` installs (skills/polka/SKILL.md). */
 export const SKILL_REPO = "artkruglov/polka-plugin";
@@ -107,4 +109,87 @@ In a web chat (Claude.ai, ChatGPT): "${harvestPrompts.chat}"
 
 Full agent reference (tools, HTTP API, limits): ${origin}/llms.txt.
 ${sourceUrl ? `\nSource code of this installation (AGPL-3.0): ${sourceUrl}\n` : ""}`;
+}
+
+/**
+ * A browser asked (a person tapped the link in a chat or a post): the same
+ * guide, but under a short human explanation and the phrase to copy. Agents
+ * that fetch with a browser-like Accept still find every instruction in the
+ * <pre>. Agents that prefer text or markdown get the plain guide (wantsHtml).
+ */
+export function wantsHtml(accept: string | undefined) {
+  if (!accept) return false;
+  const types = accept
+    .toLowerCase()
+    .split(",")
+    .map((part) => {
+      const [type, ...params] = part.trim().split(";");
+      const q = params.map((p) => p.trim()).find((p) => p.startsWith("q="));
+      return { type: type!.trim(), q: q ? Number(q.slice(2)) || 0 : 1 };
+    });
+  const quality = (type: string) => Math.max(0, ...types.filter((t) => t.type === type).map((t) => t.q));
+  const html = Math.max(quality("text/html"), quality("application/xhtml+xml"));
+  return (
+    html > 0 &&
+    html >= quality("text/markdown") &&
+    html >= quality("text/plain") &&
+    types[0]!.type !== "text/markdown" &&
+    types[0]!.type !== "text/plain"
+  );
+}
+
+export function connectPage(origin: string, sourceUrl?: string) {
+  const phrase = `Подключи Полку: ${origin}/connect`;
+  const e = escapeHtml;
+  return `<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подключить Полку к агенту</title>
+<meta name="description" content="Скопируйте фразу и отправьте её агенту: Claude Code, Codex, Claude или ChatGPT.">
+<style>
+:root{--bg:#fff;--soft:#f5f7ff;--text:#111827;--muted:#5b6475;--accent:#1f4fff;--line:#e4e7ee}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--soft:#171a21;--text:#eef0f5;--muted:#a3a9b6;--accent:#7d9bff;--line:#2a2f3a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:40px 16px 64px}
+.logo{font-weight:800;font-size:22px;color:var(--text);text-decoration:none}
+h1{font-size:30px;line-height:1.2;margin:28px 0 12px}p{margin:0 0 14px}.muted{color:var(--muted)}
+.phrase{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:18px 0}
+.phrase code{flex:1 1 260px;font:600 16px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+button,.btn{font:inherit;font-weight:600;border:0;border-radius:12px;padding:10px 16px;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+ol{padding-left:22px}li{margin:6px 0}.row{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}
+details{margin-top:28px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;color:var(--muted)}
+pre{white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);border-radius:12px;padding:14px;overflow-x:auto}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<a class="logo" href="${e(origin)}/">полка</a>
+<h1>Подключите Полку к своему агенту</h1>
+<p class="muted">Эта ссылка — инструкция для агента. Скопируйте фразу и отправьте её в Claude Code, Codex, Claude или ChatGPT: агент всё настроит сам.</p>
+<div class="phrase"><code id="phrase">${e(phrase)}</code><button type="button" id="copy">Скопировать</button></div>
+<ol>
+<li>Агент выполнит одну команду, и откроется Полка.</li>
+<li>Войдите через Яндекс ID или по почте — или нажмите «Начать без регистрации».</li>
+<li>Нажмите «Разрешить». Дальше просто скажите агенту «сохрани на Полку» — он пришлёт ссылку.</li>
+</ol>
+<p class="muted">Claude.ai и ChatGPT в браузере не выполняют команды — коннектор добавляете вы, это пара минут: <a href="${e(origin)}/settings/agents?client=claude-ai">для Claude</a> · <a href="${e(origin)}/settings/agents?client=chatgpt">для ChatGPT</a>.</p>
+<div class="row"><a class="btn" href="${e(origin)}/signup">Начать</a><a class="btn ghost" href="${e(origin)}/">Что такое Полка</a></div>
+<details><summary>Текст для агента</summary><pre>${e(connectGuide(origin, sourceUrl))}</pre></details>
+</main>
+<script>
+document.getElementById("copy").addEventListener("click", function () {
+  var button = this;
+  navigator.clipboard.writeText(document.getElementById("phrase").textContent).then(function () {
+    button.textContent = "Скопировано";
+    setTimeout(function () { button.textContent = "Скопировать"; }, 2000);
+  });
+});
+</script>
+</body>
+</html>
+`;
 }

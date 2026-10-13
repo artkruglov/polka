@@ -715,6 +715,15 @@ test("Agents get plain-text setup instructions at /connect", async () => {
   assert.ok(guide.body.includes(`(AGPL-3.0): ${config.SOURCE_URL}\n`));
   // The setup never asks the agent for a token or a password.
   assert.doesNotMatch(guide.body, /Bearer|POLKA_MCP_TOKEN|пароль/i);
+  // A person tapping the link in a browser gets a page, not raw text.
+  const page = await app.inject({ method: "GET", url: "/connect", headers: { accept: "text/html,*/*;q=0.8" } });
+  assert.equal(page.statusCode, 200);
+  assert.match(String(page.headers["content-type"]), /^text\/html/);
+  assert.match(String(page.headers.vary), /Accept/);
+  assert.ok(page.body.includes(`Подключи Полку: ${config.APP_ORIGIN}/connect`));
+  const slash = await app.inject({ method: "GET", url: "/connect/" });
+  assert.equal(slash.statusCode, 308);
+  assert.equal(slash.headers.location, "/connect");
 });
 
 test(

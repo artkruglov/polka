@@ -1,5 +1,5 @@
 import { extensionSignInMethods, extensions } from "./extensions.ts";
-import { connectGuide } from "./connect-guide.ts";
+import { connectGuide, connectPage, wantsHtml } from "./connect-guide.ts";
 import { robotsTxt, sitemapXml } from "./indexing.ts";
 import { registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
@@ -42,8 +42,14 @@ export function registerSiteRoutes(app: FastifyInstance) {
   );
   app.get("/connect", async (req, reply) => {
     trackPageView(req, "/connect");
+    reply.header("vary", "Accept");
+    // A person who tapped the link sees a page with the phrase to copy; an
+    // agent gets the plain guide (connect-guide.ts, wantsHtml).
+    if (wantsHtml(req.headers.accept))
+      return reply.type("text/html; charset=utf-8").send(connectPage(config.APP_ORIGIN, config.SOURCE_URL));
     return reply.type("text/plain; charset=utf-8").send(connectGuide(config.APP_ORIGIN, config.SOURCE_URL));
   });
+  app.get("/connect/", async (_req, reply) => reply.redirect("/connect", 308));
   // Cold discovery for agents: /llms.txt, /openapi.json, Agent Skills index.
   registerAgentDiscovery(app);
   app.get("/api/health", async () => {
