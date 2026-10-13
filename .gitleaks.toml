@@ -17,4 +17,6 @@ regexes = [
   '''^a0c860f5-e0ef-41dc-8fba-b2ebdb4015e1$''',
   '''^17c86833-3121-4658-abe4-dce32612cfd3$''',
   '''^a8a2505b-5445-47fd-82ba-417870e8d1d6$''',
+  # Fake IdP secret in tests/hosted-setup.test.ts (install.sh environment test)
+  '''oidc-secret-456''',
 ]
