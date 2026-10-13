@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowRight, ArrowUpRight, Cloud, Mail, Server } from "lucide-react";
 import { LinkButton } from "../../shared/ui/controls.tsx";
-import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
+import { SOURCE_LICENSE, SOURCE_URL, cloudDocument } from "../../shared/lib/project-links.ts";
 
 const CONTACT = "hello@polochka.app";
 
@@ -33,7 +33,7 @@ export function PricingPlans() {
             <LinkButton variant="primary" href="https://polochka.app">
               Открыть polochka.app <ArrowUpRight size={18} />
             </LinkButton>
-            <a href="/terms">Соглашение</a>
+            <a href={cloudDocument("terms")}>Соглашение</a>
           </div>
         </article>
 

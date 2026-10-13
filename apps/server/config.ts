@@ -11,6 +11,11 @@ const unsetIfEmpty = (schema: z.ZodType<string, string>) =>
     .optional()
     .transform((value) => value || undefined)
     .pipe(schema.optional());
+const httpsUrl = () =>
+  z
+    .string()
+    .url()
+    .refine((value) => new URL(value).protocol === "https:", "an https URL");
 const env = z
   .object({
     URL_IMPORT_ENABLED: z
@@ -228,6 +233,12 @@ const env = z
     NEW_ACCOUNT_MAX_LINKS: z.coerce.number().int().min(0).max(10000).default(5),
     // Links a new account may create per day, closed ones included. 0: no limit.
     NEW_ACCOUNT_DAILY_LINKS: z.coerce.number().int().min(0).max(10000).default(10),
+    // Who is a new author (docs/specs/ABUSE_PROTECTION.md, «Своя установка
+    // компании»). public: the rules above, against spam on an open cloud.
+    // company: everyone who signs in here is the company's own, so no account
+    // is new by age: no link limits, no review for being new. A paused link,
+    // a block or an open report still take trust away.
+    ACCOUNT_TRUST: z.enum(["public", "company"]).default("public"),
     // The prohibited-content filter (docs/specs/CONTENT_FILTER.md). off: no
     // filter; balanced: severe categories wait for review, the rest only for
     // new authors; strict: every flagged link waits, a severe category with a
@@ -241,6 +252,14 @@ const env = z
     MODERATION_RETENTION: z.string().max(1000).default(""),
     // Where an owner appeals a block. Unset: OPERATOR_EMAIL, if any.
     OPERATOR_CONTACT: unsetIfEmpty(z.string().email()),
+    // Who runs this installation and where its documents are
+    // (docs/specs/SELF_HOST_BASE_SPEC.md, «Своя установка — не облако»).
+    // polochka.app shows the texts in docs/legal;
+    // any other APP_ORIGIN never does: /privacy and /terms say the operator
+    // publishes them (OPERATOR_NAME, OPERATOR_CONTACT), or lead to these URLs.
+    OPERATOR_NAME: unsetIfEmpty(z.string().max(200)),
+    PRIVACY_URL: unsetIfEmpty(httpsUrl()),
+    TERMS_URL: unsetIfEmpty(httpsUrl()),
     // Automatic blocking. false (the first weeks on polochka.app): anything
     // flagged waits for the operator; only CSAM and certain malicious code
     // (a miner, an executable) are blocked at once. true: a severe category

@@ -6,6 +6,7 @@
  * The commands are the ones GET /connect serves (apps/server/connect-guide.ts);
  * a test keeps them in step.
  */
+import { CLAUDE_PLUGIN_INSTALL, CODEX_PLUGIN_INSTALL, agentCommands } from "./agent-commands.ts";
 import { connectPhrase } from "./connect-phrase.ts";
 
 export const AGENT_CLIENT_IDS = ["chatgpt", "claude-ai", "claude-code", "codex", "other"] as const;
@@ -89,18 +90,13 @@ export const SAVE_PHRASE = "Сохрани это на Полку";
 export const CONNECT_AGENT_TITLE = "Подключите агента — он сам сохранит работу на полку";
 export const CONNECT_AGENT_LEAD = `Подключают один раз, дальше просто просите: «${SAVE_PHRASE}».`;
 
-/** The skill Claude Code and Codex install; the server names the same repository (apps/server/connect-guide.ts). */
-export const SKILL_INSTALL = "npx skills add artkruglov/polka-plugin";
-/**
- * The repository is also a plugin marketplace for Claude Code
- * (.claude-plugin/) and Codex (.codex-plugin/, .agents/plugins/): one
- * install brings the MCP server and every skill under skills/. GET /connect
- * gives the agent the same commands; a test keeps them equal.
- */
-export const CLAUDE_PLUGIN_INSTALL =
-  "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka";
-export const CODEX_PLUGIN_INSTALL =
-  "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka";
+export {
+  CLAUDE_PLUGIN_INSTALL,
+  CODEX_PLUGIN_INSTALL,
+  PLUGIN_MCP_URL,
+  SKILL_INSTALL,
+  agentCommands,
+} from "./agent-commands.ts";
 export const CODEX_LOGIN = "codex mcp login polka";
 export const SKILL_INDEX_PATH = "/.well-known/agent-skills";
 
@@ -156,6 +152,7 @@ const command = (value: string, lead?: string): SetupCopy => ({
 
 export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
   const mcp = `${origin}/mcp`;
+  const commands = agentCommands(origin);
   const say = connectPhrase(origin);
   const allow = "Откроется Полка: войдите (или создайте полку через Яндекс ID или почту) и нажмите «Разрешить».";
   const ask = `Попросите: «${SAVE_PHRASE}».`;
@@ -209,6 +206,24 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
         ],
       };
     case "claude-code":
+      if (!commands.plugin)
+        return {
+          id,
+          title: "Claude Code: одна команда",
+          intro:
+            "Команда подключает Claude Code к этой Полке. Скилл — агент будет знать, как сохранять, делиться и править работы — ставится отдельно.",
+          steps: [
+            {
+              text: "Выполните в терминале:",
+              copies: [command(commands.claude), phrase(say, "или скажите Claude Code — он выполнит команду сам:")],
+              note: `Скилл Полки этой установки: ${commands.skills}. Плагин Полки из каталога не ставьте: он подключает публичное облако Полки, а не эту установку.`,
+            },
+            { text: "В Claude Code введите /mcp → polka → Authenticate." },
+            {
+              text: `${allow} После этого ${ask.charAt(0).toLowerCase()}${ask.slice(1)}`,
+            },
+          ],
+        };
       return {
         id,
         title: "Claude Code: одна команда",
@@ -229,6 +244,25 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
         ],
       };
     case "codex":
+      if (!commands.plugin)
+        return {
+          id,
+          title: "Codex: одна команда",
+          intro:
+            "Codex — агент OpenAI в терминале и в приложении Codex. Команда подключает его к этой Полке. Если вы пишете в чат на chatgpt.com, выберите ChatGPT.",
+          steps: [
+            {
+              text: "Выполните в терминале:",
+              copies: [command(commands.codex), phrase(say, "или скажите Codex — он выполнит команду сам:")],
+              note: `Скилл Полки этой установки: ${commands.skills}.`,
+            },
+            {
+              text: `Если вход не открылся сам, выполните команду ниже. ${allow}`,
+              copies: [command(CODEX_LOGIN)],
+            },
+            { text: `После этого ${ask.charAt(0).toLowerCase()}${ask.slice(1)}` },
+          ],
+        };
       return {
         id,
         title: "Codex: одна команда",
@@ -238,7 +272,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
           {
             text: "Выполните в терминале:",
             copies: [command(CODEX_PLUGIN_INSTALL), phrase(say, "или скажите Codex — он выполнит команду сам:")],
-            note: `Без плагина: codex mcp add polka --url ${mcp}, скилл — ${SKILL_INSTALL}.`,
+            note: `Без плагина: codex mcp add polka --url ${mcp}, скилл — ${commands.skills}.`,
           },
           {
             text: `Войдите командой ниже. ${allow}`,
@@ -260,7 +294,7 @@ export function clientSetup(origin: string, id: AgentClientId): ClientSetup {
           },
           {
             text: "Если клиент понимает скиллы (SKILL.md), поставьте скилл Полки — агент будет знать, как сохранять и делиться:",
-            copies: [command(SKILL_INSTALL)],
+            copies: [command(commands.skills)],
           },
           {
             text: `${allow} Если у агента есть терминал, можно просто сказать ему:`,
@@ -284,6 +318,10 @@ export type HeroSetup = {
 
 export function heroSetup(origin: string, id: HeroClientId): HeroSetup {
   const mcp = `${origin}/mcp`;
+  const commands = agentCommands(origin);
+  const lead = commands.plugin
+    ? "Одна команда в терминале ставит подключение и скилл Полки:"
+    : "Одна команда в терминале подключает агента к этой Полке:";
   const allow = "откроется Полка, нажмите «Разрешить».";
   switch (id) {
     case "claude-ai":
@@ -296,22 +334,22 @@ export function heroSetup(origin: string, id: HeroClientId): HeroSetup {
     case "claude-code":
       return {
         id,
-        lead: "Одна команда в терминале ставит подключение и скилл Полки:",
-        copies: [command(CLAUDE_PLUGIN_INSTALL)],
-        next: `Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate — ${allow}`,
+        lead,
+        copies: [command(commands.claude)],
+        next: `Затем в Claude Code: /mcp → ${commands.claudeServer} → Authenticate — ${allow}`,
       };
     case "codex":
       return {
         id,
-        lead: "Одна команда в терминале ставит подключение и скилл Полки:",
-        copies: [command(CODEX_PLUGIN_INSTALL)],
+        lead,
+        copies: [command(commands.codex)],
         next: `Затем ${CODEX_LOGIN} — ${allow}`,
       };
     case "other":
       return {
         id,
         lead: "Адрес MCP-сервера (Streamable HTTP, вход через OAuth):",
-        copies: [url(mcp), command(SKILL_INSTALL, "Скилл Полки для агента:")],
+        copies: [url(mcp), command(commands.skills, "Скилл Полки для агента:")],
         next: `При подключении ${allow}`,
       };
   }

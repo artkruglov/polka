@@ -26,6 +26,7 @@ import { LOCAL_OPERATOR_MAIL_DIRECTORY } from "../apps/server/mailer.ts";
 import { signModerationToken, verifyModerationToken } from "../apps/server/moderation-tokens.ts";
 import { SCAN_INCOMPLETE, SignalCollector, isSuspicious, scanScript } from "../apps/server/phishing-signals.ts";
 import { authorStanding, decideModeration } from "../apps/server/share-moderation.ts";
+import { NO_DECISION as NO_CONTENT } from "../apps/server/content-filter/policy.ts";
 import { publishResponseSchema } from "../apps/server/publish-api.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -39,6 +40,7 @@ const defaults = {
   OPERATOR_EMAIL: config.OPERATOR_EMAIL,
   MODERATION_AUTOPAUSE_REPORTS: config.MODERATION_AUTOPAUSE_REPORTS,
   NEW_ACCOUNT_MAX_LINKS: config.NEW_ACCOUNT_MAX_LINKS,
+  ACCOUNT_TRUST: config.ACCOUNT_TRUST,
 };
 config.OPERATOR_EMAIL = "operator@example.test";
 
@@ -46,6 +48,7 @@ afterEach(() => {
   config.SHARE_MODERATION = defaults.SHARE_MODERATION;
   config.MODERATION_AUTOPAUSE_REPORTS = defaults.MODERATION_AUTOPAUSE_REPORTS;
   config.NEW_ACCOUNT_MAX_LINKS = defaults.NEW_ACCOUNT_MAX_LINKS;
+  config.ACCOUNT_TRUST = defaults.ACCOUNT_TRUST;
 });
 
 after(async () => {
@@ -252,6 +255,46 @@ test("new accounts: 7-day links and a live-link cap, each refused with a reason"
   const operator = await operatorCreated();
   const month = await share(operator, await save(operator, HONEST), 30);
   assert.equal(month.statusCode, 200, month.body);
+});
+
+test("ACCOUNT_TRUST=company: a signed-in account is established at once; a pause or a report still counts", async () => {
+  assert.equal(defaults.ACCOUNT_TRUST, "public");
+  config.ACCOUNT_TRUST = "company";
+  config.SHARE_MODERATION = "new-accounts";
+  config.NEW_ACCOUNT_MAX_LINKS = 1;
+  const owner = await signedUp(0, "oidc");
+  const standing = await authorStanding(db, owner.tenant);
+  assert.equal(standing.trusted, true);
+  // Under auto the images of a young account wait; here no account is young.
+  assert.equal(decideModeration(standing, [], "auto", NO_CONTENT, true).hold, null);
+  assert.equal(decideModeration(standing, [], "new-accounts").hold, null);
+  // A month-long link, past the new-account cap, nothing held for review.
+  const month = await share(owner, await save(owner, HONEST), 30);
+  assert.equal(month.statusCode, 200, month.body);
+  assert.equal(month.json().share.moderation, "none");
+  const second = await sharedLink(owner, HONEST);
+  assert.equal(second.moderation, "none");
+  // Recipients are not told the author is new.
+  const view = await resolve(second.token);
+  assert.equal(view.statusCode, 200, view.body);
+  assert.equal(view.json().authorIsNew, false);
+  // Phishing from a trusted author is not «suspicious from a new account»;
+  // the content filter's fraud check still applies (CONTENT_FILTER.md).
+  assert.equal(decideModeration(standing, inspectHtml(PHISHING).signals, "flagged").hold, null);
+  // An open report takes trust away, as a paused link does.
+  await call("POST", "/api/reports", { key: randomUUID(), token: second.token, reason: "other" });
+  assert.equal((await authorStanding(db, owner.tenant)).trusted, false);
+  const reported = await share(owner, await save(owner, HONEST), 30);
+  assert.equal(reported.statusCode, 422, reported.body);
+  assert.match(reported.json().message, /жалобы/);
+  await db.query("UPDATE share_reports SET status='dismissed' WHERE share_id=$1", [second.shareId]);
+  assert.equal((await authorStanding(db, owner.tenant)).trusted, true);
+  await db.query("UPDATE shares SET moderation='paused' WHERE id=$1", [second.shareId]);
+  assert.equal((await authorStanding(db, owner.tenant)).trusted, false);
+  // public (the default): the same account is new again.
+  config.ACCOUNT_TRUST = "public";
+  await db.query("UPDATE shares SET moderation='none' WHERE id=$1", [second.shareId]);
+  assert.equal((await authorStanding(db, owner.tenant)).trusted, false);
 });
 
 test("moving a new account's 7-day link counts whole days left by the database's clock", async () => {

@@ -8,6 +8,7 @@ import {
 import { ApiError, request } from "../../shared/api/client.ts";
 import { Button, TextAreaField, TextField } from "../../shared/ui/controls.tsx";
 import { ErrorNotice } from "../../shared/ui/index.tsx";
+import { useLegalLinks } from "../../entities/capabilities/useCapabilities.ts";
 
 export const CONTACT = "hello@polochka.app";
 
@@ -45,6 +46,7 @@ export function EnterpriseForm({
   /** Tests render the success state directly. */
   initialSent?: { contact: string } | null;
 }) {
+  const legal = useLegalLinks();
   const [fields, setFields] = useState<Fields>(EMPTY);
   // One key per filled form: a retry after a network error is the same request.
   const [key, setKey] = useState(newKey);
@@ -161,7 +163,7 @@ export function EnterpriseForm({
         <input type="checkbox" name="policyRead" required checked={fields.policyRead} onChange={set("policyRead")} />
         <span>
           Согласие с{" "}
-          <a href="/privacy" target="_blank" rel="noopener">
+          <a href={legal.privacy} target="_blank" rel="noopener">
             Политикой обработки персональных данных
           </a>
           . Контакт нужен, чтобы ответить, и хранится год.

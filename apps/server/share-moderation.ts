@@ -64,8 +64,8 @@ export const SIGNED_UP_SQL = (account: string) =>
 
 /**
  * Trusted: not holding a paused link, and created by the operator, approved
- * by the operator, or older than NEW_ACCOUNT_DAYS without open reports.
- * Everyone else is new.
+ * by the operator, or older than NEW_ACCOUNT_DAYS (any age under
+ * ACCOUNT_TRUST=company) without open reports. Everyone else is new.
  */
 export async function authorStanding(
   c: Queryable,
@@ -104,6 +104,10 @@ export async function authorStanding(
     [tenantId, config.NEW_ACCOUNT_DAYS, issuerId],
   );
   if (!row) throw new Error("Share owner not found");
+  // ACCOUNT_TRUST=company: everyone who signs in is the company's own, so an
+  // account counts as established from the start (no age, no clean saves).
+  const company = config.ACCOUNT_TRUST === "company";
+  const aged = company || row.aged;
   return {
     accountId: row.id,
     name: row.name,
@@ -112,7 +116,7 @@ export async function authorStanding(
     disabled: row.disabled,
     operatorCreated: row.operator_created,
     approved: row.approved,
-    aged: row.aged,
+    aged,
     openReports: row.open_reports,
     pausedLinks: row.paused_links,
     blockedContent: row.blocked_content,
@@ -125,9 +129,9 @@ export async function authorStanding(
       !row.blocked_content &&
       (row.operator_created ||
         row.approved ||
-        (row.aged &&
+        (aged &&
           !row.open_reports &&
-          (config.SHARE_MODERATION !== "auto" || row.clean_saves >= config.TRUST_MIN_CLEAN_SAVES))),
+          (company || config.SHARE_MODERATION !== "auto" || row.clean_saves >= config.TRUST_MIN_CLEAN_SAVES))),
   };
 }
 

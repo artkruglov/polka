@@ -3,6 +3,8 @@
  * agent would run. The commands are the same ones GET /connect serves
  * (apps/server/connect-guide.ts); a test keeps them in step.
  */
+import { agentCommands } from "./agent-commands.ts";
+
 export const connectPhrase = (origin: string, ref?: string) =>
   `Подключи Полку: ${origin}/connect${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`;
 
@@ -36,19 +38,24 @@ export type ClientHint = {
 
 export function clientHints(origin: string): ClientHint[] {
   const mcp = `${origin}/mcp`;
+  const commands = agentCommands(origin);
   return (
     [
       {
         id: "codex",
         client: "Codex",
-        command: "codex plugin marketplace add artkruglov/polka-plugin && codex plugin add polka@polka",
-        note: "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka.",
+        command: commands.codex,
+        note: commands.plugin
+          ? "Плагин ставит подключение и скилл. Затем войдите: codex mcp login polka."
+          : `Если вход не открылся сам: codex mcp login polka. Скилл: ${commands.skills}.`,
       },
       {
         id: "claude-code",
         client: "Claude Code",
-        command: "claude plugin marketplace add artkruglov/polka-plugin && claude plugin install polka@polka",
-        note: "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate.",
+        command: commands.claude,
+        note: commands.plugin
+          ? "Плагин ставит подключение и скилл. Затем в Claude Code: /mcp → plugin:polka:polka → Authenticate."
+          : `Затем в Claude Code: /mcp → polka → Authenticate. Скилл: ${commands.skills}.`,
       },
       {
         id: "claude-ai",

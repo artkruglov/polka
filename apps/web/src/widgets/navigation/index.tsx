@@ -21,7 +21,7 @@ import { Avatar, Button, IconButton } from "../../shared/ui/controls.tsx";
 import { ActionMenu } from "../../shared/ui/ActionMenu.tsx";
 import { Dialog } from "../../shared/ui/index.tsx";
 import { rememberAccount, useAccountState } from "../../entities/account/model/useAccount.ts";
-import { useSignInWays, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import { useLegalLinks, useSignInWays, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { useSourceStars } from "../../entities/capabilities/useSourceStars.ts";
 import { GitHubMark } from "../../shared/ui/GitHubMark.tsx";
 import { formatStars, onGitHub } from "../../shared/lib/project-links.ts";
@@ -373,12 +373,13 @@ function ShelfBanners({ account }: { account: Account }) {
  */
 export function LegalLinks() {
   const sourceUrl = useSourceUrl();
+  const legal = useLegalLinks();
   const onGitHub = new URL(sourceUrl).hostname === "github.com";
   return (
     <footer className="site-footer">
       <nav aria-label="Документы">
-        <a href="/privacy">Политика</a>
-        <a href="/terms">Соглашение</a>
+        <a href={legal.privacy}>Политика</a>
+        <a href={legal.terms}>Соглашение</a>
         <a href="/enterprise">Для компаний</a>
         <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
           {onGitHub ? "Открытый код на GitHub" : "Открытый код"}

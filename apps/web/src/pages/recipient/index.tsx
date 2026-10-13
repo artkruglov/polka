@@ -26,7 +26,7 @@ import { Preview, type FrameOverlay } from "../../widgets/artifact-preview/index
 import { CopyText } from "../../shared/ui/CopyText.tsx";
 import { useSharedComments } from "../../widgets/comments/index.ts";
 import { SHARE_RETURN_PATH, takeShareAfterSignIn } from "../../shared/lib/share-return.ts";
-import { useCapabilities, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import { useCapabilities, useLegalLinks, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { ProviderButtons } from "../../features/provider-sign-in/index.tsx";
 import {
   ConvertBar,
@@ -562,6 +562,7 @@ function RecipientFrame({
 function AboutThisPage({ viewer }: { viewer: Viewer }) {
   const [open, setOpen] = useState(false);
   const sourceUrl = useSourceUrl();
+  const legal = useLegalLinks();
   const detailsId = useId();
   const note = recipientNote(viewer);
   const meta = [
@@ -617,8 +618,8 @@ function AboutThisPage({ viewer }: { viewer: Viewer }) {
           <a href="/">
             Что такое Полка <ArrowUpRight size={13} />
           </a>
-          <a href="/privacy">Политика</a>
-          <a href="/terms">Соглашение</a>
+          <a href={legal.privacy}>Политика</a>
+          <a href={legal.terms}>Соглашение</a>
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
             Открытый код
           </a>

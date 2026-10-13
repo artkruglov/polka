@@ -25,6 +25,19 @@ export type InstallationCapabilities = {
   privacyContact: string | null;
   /** Self-service «Удалить аккаунт»; null when this installation keeps it off. */
   accountDeletion: { purge: boolean } | null;
+  /** Whose documents /privacy and /terms show. */
+  legal: InstallationLegal;
+};
+
+/**
+ * cloud: polochka.app, its own texts (docs/legal). Anywhere else the
+ * operator's documents: their URLs, or a page naming the operator.
+ */
+export type InstallationLegal = {
+  cloud: boolean;
+  operatorName: string | null;
+  privacyUrl: string | null;
+  termsUrl: string | null;
 };
 
 export type SignInProvider = {
@@ -75,6 +88,17 @@ const httpsUrl = (value: unknown) => {
   }
 };
 
+export function parseLegal(raw: unknown): InstallationLegal {
+  const legal = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const name = typeof legal.operatorName === "string" ? legal.operatorName.trim().slice(0, 200) : "";
+  return {
+    cloud: legal.cloud === true,
+    operatorName: name || null,
+    privacyUrl: httpsUrl(legal.privacyUrl),
+    termsUrl: httpsUrl(legal.termsUrl),
+  };
+}
+
 /** One /capabilities request per page load; a failure is retried by the next consumer. */
 export function loadCapabilities() {
   cached ??= request<Record<string, unknown>>("/capabilities")
@@ -114,6 +138,7 @@ export function loadCapabilities() {
           raw.accountDeletion && typeof raw.accountDeletion === "object"
             ? { purge: (raw.accountDeletion as { purge?: unknown }).purge === true }
             : null,
+        legal: parseLegal(raw.legal),
       } satisfies InstallationCapabilities;
     })
     .catch((error) => {
@@ -177,6 +202,17 @@ export function useSignInWays() {
           ? "по почте"
           : "способом, который выдал оператор";
   return { via, with: withWay };
+}
+
+/**
+ * Where «Политика» and «Соглашение» lead: the operator's own documents when
+ * this installation names them (PRIVACY_URL, TERMS_URL), otherwise the site
+ * routes, which show what fits this installation (pages/legal).
+ */
+export function useLegalLinks() {
+  const state = useCapabilities();
+  const legal = state.status === "ready" ? state.capabilities.legal : null;
+  return { privacy: legal?.privacyUrl ?? "/privacy", terms: legal?.termsUrl ?? "/terms" };
 }
 
 /** Where the source code of this installation is: upstream until the server says otherwise. */

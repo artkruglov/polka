@@ -20,7 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
-import { useCapabilities, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
+import { useCapabilities, useLegalLinks, useSourceUrl } from "../../entities/capabilities/useCapabilities.ts";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
 import { EditorialCatalog } from "../../widgets/editorial-catalog/index.tsx";
 import { LinkButton } from "../../shared/ui/controls.tsx";
@@ -54,6 +54,7 @@ export function Landing() {
   const imports = useCapabilities();
   const livePreview = imports.status === "ready" && imports.capabilities.livePreview;
   const sourceUrl = useSourceUrl();
+  const legal = useLegalLinks();
   const github = onGitHub(sourceUrl);
   const guideUrl = selfHostGuideUrl(sourceUrl);
   const command = selfHostCommand(sourceUrl);
@@ -423,8 +424,8 @@ polka_change_files      put docs/risks.md
           полка
         </a>
         <nav aria-label="Документы">
-          <a href="/privacy">Политика</a>
-          <a href="/terms">Соглашение</a>
+          <a href={legal.privacy}>Политика</a>
+          <a href={legal.terms}>Соглашение</a>
           <a href="/enterprise">Для компаний</a>
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
             {github ? "Открытый код на GitHub" : "Открытый код"}

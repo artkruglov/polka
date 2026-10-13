@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { EnterpriseInterest } from "../../../../../packages/contracts/constants.ts";
 import { Badge, LinkButton } from "../../shared/ui/controls.tsx";
-import { SOURCE_LICENSE, SOURCE_URL } from "../../shared/lib/project-links.ts";
+import { SOURCE_LICENSE, SOURCE_URL, cloudDocument } from "../../shared/lib/project-links.ts";
 import { CONTACT, EnterpriseForm, initialInterest } from "./form.tsx";
 
 /** Something that is not on main yet: said plainly, never promised. */
@@ -313,8 +313,8 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
     a: (
       <>
         На polochka.app — в России, в Yandex Cloud: база, файлы и резервные копии. Подробно — в{" "}
-        <a href="/privacy">Политике обработки данных</a>. На своей установке данные лежат там, где вы её развернули:
-        Полка сама никуда их не отправляет.
+        <a href={cloudDocument("privacy")}>Политике обработки данных</a>. На своей установке данные лежат там, где вы её
+        развернули: Полка сама никуда их не отправляет.
       </>
     ),
   },
@@ -548,7 +548,7 @@ export function EnterpriseContent({
               <LinkButton href="#request" onClick={choose("cloud")}>
                 Оставить заявку
               </LinkButton>
-              <a href="/terms">Соглашение</a>
+              <a href={cloudDocument("terms")}>Соглашение</a>
             </div>
           </article>
           <article>

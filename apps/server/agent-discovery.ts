@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { AGENT_SCOPES, MAX_BYTES, type AgentScope } from "../../packages/contracts/index.ts";
 import { config } from "./config.ts";
-import { SKILL_INSTALL, SKILL_REPO, harvestPrompts } from "./connect-guide.ts";
+import { SKILL_INSTALL, SKILL_REPO, agentCommands, harvestPrompts } from "./connect-guide.ts";
 import { createMcpServer } from "./mcp-server.ts";
 import { OAUTH_DEFAULT_SCOPES } from "./oauth.ts";
 import { openApiDocument } from "./openapi.ts";
@@ -103,6 +103,8 @@ function commentsIntro() {
 
 export function llmsText(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
+  // The plugin's skills package serves polochka.app; elsewhere this server's own.
+  const skillInstall = agentCommands(origin).skills;
   const tools = mcpToolCatalog()
     .map((tool) => `- ${tool.name} [${tool.scopes.join(" or ")}]: ${tool.summary}`)
     .join("\n");
@@ -112,7 +114,7 @@ export function llmsText(origin: string, sourceUrl?: string) {
 > An agent saves one self-contained HTML page (or a React component) and gets an unlisted link;
 > the recipient needs no account, and the owner can revoke the link at any time.
 
-This file describes the installation at ${origin}. OpenAPI: ${origin}/openapi.json. Agent skills: ${origin}/.well-known/agent-skills/index.json (or \`npx skills add ${SKILL_REPO}\`): \`${SKILL_NAME}\` saves, shares and revises; \`${ORGANIZE_SKILL_NAME}\` sorts a shelf into folders with the owner.
+This file describes the installation at ${origin}. OpenAPI: ${origin}/openapi.json. Agent skills: ${origin}/.well-known/agent-skills/index.json (or \`${skillInstall}\`): \`${SKILL_NAME}\` saves, shares and revises; \`${ORGANIZE_SKILL_NAME}\` sorts a shelf into folders with the owner.
 ${sourceUrl ? `\nSource code of this installation (AGPL-3.0): ${sourceUrl}\n` : ""}
 ## Connect
 
@@ -124,7 +126,7 @@ The human signs in or creates a shelf in their own browser (email + 8-digit code
 - Claude.ai or ChatGPT in the browser (no terminal, and their sandboxes usually cannot fetch this site): do not try to run commands or fetch ${origin}/connect. The human adds the custom connector themselves; tell them these steps. Claude.ai: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect; then in the chat "+" → Connectors → enable "Полка". ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create, MCP Server URL ${mcp}, Authentication: OAuth; then in the chat "+" → enable the connector. Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai or ${origin}/settings/agents?client=chatgpt.
 - Any other MCP client with OAuth: remote Streamable HTTP server ${mcp}; metadata at ${origin}/.well-known/oauth-protected-resource and ${origin}/.well-known/oauth-authorization-server (dynamic client registration, PKCE).
 - No OAuth (scripts, CI): the human creates a token at ${origin}/settings/agents («Для разработчиков») and exports it themselves: \`read -r -s POLKA_TOKEN && export POLKA_TOKEN\`. Use it only from the environment as \`Authorization: Bearer $POLKA_TOKEN\`; never ask for it in chat.
-- Skill for Claude Code and Codex (how to save, share and revise): \`${SKILL_INSTALL}\`, or ${origin}/.well-known/agent-skills.
+- Skill for Claude Code and Codex (how to save, share and revise): \`${skillInstall}\`, or ${origin}/.well-known/agent-skills.
 
 ## After connecting
 
@@ -172,7 +174,7 @@ ${ownerPhrasesText(origin)}
 
 - Page: one self-contained HTML document up to ${MB} MB. The viewer has no network: CSS in <style>, images and fonts as data: URIs, no external URLs. Convert Markdown or text to HTML first.
 - Storage: a quota per shelf; polka_context reports used and quota bytes. HTTP API: ${PUBLISH_API_LIMITS.perConnection} requests per token and ${PUBLISH_API_LIMITS.perIp} per IP in 10 minutes.
-- Links expire after 1, 7 or 30 days (default 30). A new account gets at most ${NEW_ACCOUNT_MAX_DAYS} days and ${config.NEW_ACCOUNT_MAX_LINKS} open links; the response says so in expiresNote, a refusal in words to relay.
+- Links expire after 1, 7 or 30 days (default 30).${config.ACCOUNT_TRUST === "company" ? "" : ` A new account gets at most ${NEW_ACCOUNT_MAX_DAYS} days and ${config.NEW_ACCOUNT_MAX_LINKS} open links; the response says so in expiresNote, a refusal in words to relay.`}
 - Moderation: a link from a new account, or a page that looks like phishing, may wait for a moderator's review. The response then has \`moderation\`: "held" (or "paused") and moderationMessage; recipients see a review screen until it is approved.
 
 ## Presenting the result
