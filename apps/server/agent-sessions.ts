@@ -1,5 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { gunzipSync } from "node:zlib";
+import type { Readable } from "node:stream";
+import { createGunzip, gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PoolClient } from "pg";
 import { z } from "zod";
@@ -15,7 +17,9 @@ import { checkSessionDelete, installationFingerprintKey } from "./extensions.ts"
 import { bearerActor } from "./publish-api.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import { lockShelf } from "./shelves.ts";
-import { deleteVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
+import { deleteVersion, putImmutableObject, readBlob, readStream, sha256, verifyObject } from "./storage.ts";
+
+const unpack = promisify(gunzip);
 
 /**
  * Agent sessions (docs/specs/AGENT_SESSIONS.md): a person's Claude Code and
@@ -27,8 +31,12 @@ import { deleteVersion, putImmutable, readBlob, sha256 } from "./storage.ts";
 export const SESSION_LIMITS = {
   /** The compressed index (POST /api/v1/sessions). */
   indexBytes: 8 * 1024 * 1024,
-  /** …and decompressed. */
-  indexJsonBytes: 96 * 1024 * 1024,
+  /**
+   * …and decompressed. The fullest index the CLI makes (20 000 calls with
+   * 200-character templates, 5 000 secrets) is 10 MiB; JSON.parse holds the
+   * event loop ~9 ms per MiB of it.
+   */
+  indexJsonBytes: 16 * 1024 * 1024,
   transcriptBytes: 64 * 1024 * 1024,
   /** A transcript bigger than this unpacked is only downloaded, not shown. */
   transcriptViewBytes: 256 * 1024 * 1024,
@@ -294,7 +302,8 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
   if (gz.length > SESSION_LIMITS.indexBytes) throw overQuota();
   let body: SessionBody;
   try {
-    const json = gunzipSync(gz, { maxOutputLength: SESSION_LIMITS.indexJsonBytes });
+    // Unpacked off the main thread.
+    const json = await unpack(gz, { maxOutputLength: SESSION_LIMITS.indexJsonBytes });
     body = sessionBodySchema.parse(JSON.parse(json.toString("utf8")));
   } catch (error) {
     if (error instanceof z.ZodError)
@@ -461,6 +470,24 @@ export async function saveSession(actor: ServiceActor, gz: Buffer) {
   });
 }
 
+/** Tests: something to happen between storing a transcript and recording it (a token revoked). */
+export const transcriptUploadForTests: { afterStore?: () => Promise<void> } = {};
+
+/** The session row a transcript upload writes to, locked; 404 when it is not the caller's. */
+async function transcriptTarget(c: PoolClient, verified: ServiceActor, sessionId: string) {
+  const shelf = await sessionShelf(c, verified.tenantId, verified.accountId);
+  if (!shelf.quota) throw disabled();
+  const {
+    rows: [session],
+  } = await c.query(
+    `SELECT transcript_key, transcript_version, transcript_bytes FROM agent_sessions
+      WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`,
+    [sessionId, verified.tenantId, verified.accountId],
+  );
+  if (!session) throw new Problem(404, "not_found", "Сессия не найдена: сначала отправьте её индекс.");
+  return { shelf, session };
+}
+
 /** PUT /api/v1/sessions/:id/transcript: the redacted transcript, gzipped JSON lines. */
 export async function saveTranscript(actor: ServiceActor, sessionId: string, gz: Buffer) {
   if (gz.length < 20 || gz[0] !== 0x1f || gz[1] !== 0x8b)
@@ -468,25 +495,32 @@ export async function saveTranscript(actor: ServiceActor, sessionId: string, gz:
   if (gz.length > SESSION_LIMITS.transcriptBytes) throw overQuota();
   const hash = sha256(gz);
   const key = transcriptKey(actor.tenantId, sessionId, hash);
+  // Authorized before anything is stored: a token without the right, a revoked
+  // one or another person's session never reaches the store. The transaction
+  // below checks it all again: the token can be revoked while the bytes upload.
+  const stored = await withServiceActorTransaction(actor, "sessions", async (c, verified) => {
+    const { shelf, session } = await transcriptTarget(c, verified, sessionId);
+    if (session.transcript_key === key) return true;
+    if (shelf.used + gz.length - Number(session.transcript_bytes) > shelf.quota) throw overQuota();
+    return false;
+  });
+  if (stored) return { id: sessionId, bytes: gz.length };
   // Written before the transaction: a stored object holds no lock (artifacts.ts does the same).
-  const version = await putImmutable(key, gz);
+  const { version, created } = await putImmutableObject(key, gz);
   let kept = false;
   try {
+    await transcriptUploadForTests.afterStore?.();
     const result = await withServiceActorTransaction(actor, "sessions", async (c, verified) => {
-      const shelf = await sessionShelf(c, verified.tenantId, verified.accountId);
-      if (!shelf.quota) throw disabled();
-      const {
-        rows: [session],
-      } = await c.query(
-        `SELECT transcript_key, transcript_version, transcript_bytes FROM agent_sessions
-          WHERE id=$1 AND tenant_id=$2 AND account_id=$3 FOR UPDATE`,
-        [sessionId, verified.tenantId, verified.accountId],
-      );
-      if (!session) throw new Problem(404, "not_found", "Сессия не найдена: сначала отправьте её индекс.");
+      const { shelf, session } = await transcriptTarget(c, verified, sessionId);
       if (session.transcript_key === key) {
         kept = true;
         return { id: sessionId, bytes: gz.length };
       }
+      // Found, not stored by this call: a parallel upload of the same bytes
+      // that failed may have deleted it since (discardTranscript, under this
+      // row's lock). Then nothing is recorded and the machine sends again.
+      if (!created && !(await verifyObject(key, version, gz.length, hash).catch(() => false)))
+        throw new Problem(409, "conflict", "Расшифровка изменилась во время отправки. Отправьте сессию ещё раз.");
       const delta = gz.length - Number(session.transcript_bytes);
       if (shelf.used + delta > shelf.quota) throw overQuota();
       await c.query(
@@ -504,8 +538,28 @@ export async function saveTranscript(actor: ServiceActor, sessionId: string, gz:
     });
     return result;
   } finally {
-    if (!kept) await deleteVersion(key, version).catch(() => undefined);
+    // Only a version this call stored, and only while no row points at it.
+    if (!kept && created) await discardTranscript(sessionId, key, version).catch(() => undefined);
   }
+}
+
+/**
+ * Deletes the transcript version a failed upload stored, under the session
+ * row's lock, unless a row references it after all (a parallel upload of the
+ * same bytes recorded it). A parallel upload that found this version checks,
+ * under the same lock, that it still exists (saveTranscript).
+ */
+async function discardTranscript(sessionId: string, key: string, version: string) {
+  await transaction(async (c) => {
+    // The key holds the session id: only this row can point at it.
+    const {
+      rows: [row],
+    } = await c.query(
+      `SELECT transcript_key=$2 AND transcript_version=$3 AS used FROM agent_sessions WHERE id=$1 FOR UPDATE`,
+      [sessionId, key, version],
+    );
+    if (!row?.used) await deleteVersion(key, version);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -667,24 +721,74 @@ export async function readTranscriptIn(scope: SessionScope, sessionId: string, q
   const q = transcriptQuery.parse(query ?? {});
   const session = await sessionIn(scope, sessionId);
   if (!session.transcript_key) return { events: [], total: 0, offset: q.offset, tooLarge: false };
-  const gz = await readBlob(session.transcript_key, session.transcript_version);
-  let lines: string[];
-  try {
-    lines = gunzipSync(gz, { maxOutputLength: SESSION_LIMITS.transcriptViewBytes })
-      .toString("utf8")
-      .split("\n")
-      .filter(Boolean);
-  } catch {
-    return { events: [], total: 0, offset: q.offset, tooLarge: true };
-  }
-  const events = lines.slice(1 + q.offset, 1 + q.offset + q.limit).map((line) => {
+  const page = await transcriptPage(
+    await readStream(session.transcript_key, session.transcript_version),
+    1 + q.offset,
+    q.limit,
+  );
+  if (!page) return { events: [], total: 0, offset: q.offset, tooLarge: true };
+  const events = page.lines.map((line) => {
     try {
       return JSON.parse(line);
     } catch {
       return { type: "unreadable" };
     }
   });
-  return { events, total: lines.length - 1, offset: q.offset, tooLarge: false };
+  return { events, total: Math.max(0, page.total - 1), offset: q.offset, tooLarge: false };
+}
+
+/**
+ * Lines `from`…`from+count-1` of a gzipped JSON-lines stream (empty lines do
+ * not count) and how many lines there are, or null when it is not gzip or
+ * unpacks to more than transcriptViewBytes. Unpacked chunk by chunk, off the
+ * main thread: only the requested lines are ever held, never the whole text
+ * (a 250 MB transcript once took 0.8 s of the event loop and 700 MB).
+ */
+export async function transcriptPage(gz: Readable, from: number, count: number) {
+  const unzip = createGunzip();
+  gz.on("error", (error) => unzip.destroy(error));
+  gz.pipe(unzip);
+  const lines: string[] = [];
+  let line = 0;
+  let lineBytes = 0;
+  let parts: Buffer[] = [];
+  let unpacked = 0;
+  const wanted = () => line >= from && line < from + count;
+  try {
+    for await (const chunk of unzip as AsyncIterable<Buffer>) {
+      unpacked += chunk.length;
+      if (unpacked > SESSION_LIMITS.transcriptViewBytes) return null;
+      let start = 0;
+      while (start < chunk.length) {
+        const newline = chunk.indexOf(10, start);
+        const end = newline === -1 ? chunk.length : newline;
+        if (end > start) {
+          if (wanted()) parts.push(chunk.subarray(start, end));
+          lineBytes += end - start;
+        }
+        if (newline === -1) break;
+        if (lineBytes) {
+          if (wanted()) lines.push(Buffer.concat(parts).toString("utf8"));
+          line++;
+        }
+        parts = [];
+        lineBytes = 0;
+        start = newline + 1;
+      }
+    }
+  } catch (error: any) {
+    // Not gzip, or cut short: unreadable here, still downloadable. A store error is one.
+    if (typeof error?.code === "string" && error.code.startsWith("Z_")) return null;
+    throw error;
+  } finally {
+    gz.destroy();
+    unzip.destroy();
+  }
+  if (lineBytes) {
+    if (wanted()) lines.push(Buffer.concat(parts).toString("utf8"));
+    line++;
+  }
+  return { lines, total: line };
 }
 
 export const transcriptFile = (person: Person, sessionId: string) => transcriptFileIn(own(person), sessionId);

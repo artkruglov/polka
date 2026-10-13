@@ -58,6 +58,15 @@ export function createS3Store(config: { endpoint: string; accessKey: string; sec
     );
   }
   async function putImmutable(key: string, bytes: Buffer) {
+    return (await putImmutableObject(key, bytes)).version;
+  }
+  /**
+   * putImmutable that also says whether this call stored the version
+   * (`created`) or found the same bytes already there. A caller that cleans
+   * up after a failure deletes only a version it created: the other one may
+   * be referenced by a row already.
+   */
+  async function putImmutableObject(key: string, bytes: Buffer): Promise<{ version: string; created: boolean }> {
     const hash = sha256(bytes);
     try {
       const result = await s3.send(
@@ -71,7 +80,7 @@ export function createS3Store(config: { endpoint: string; accessKey: string; sec
         }),
       );
       if (!result.VersionId || result.VersionId === "null") throw new Error("Storage versioning required");
-      return result.VersionId;
+      return { version: result.VersionId, created: true };
     } catch (e: any) {
       if (e.$metadata?.httpStatusCode !== 412) throw e;
       const head = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
@@ -79,7 +88,7 @@ export function createS3Store(config: { endpoint: string; accessKey: string; sec
         throw new Error("Immutable object conflict");
       const existing = await readBlob(key, head.VersionId);
       if (sha256(existing) !== hash) throw new Error("Stored bytes checksum mismatch");
-      return head.VersionId;
+      return { version: head.VersionId, created: false };
     }
   }
   async function readBlob(key: string, version: string) {
@@ -251,6 +260,7 @@ export function createS3Store(config: { endpoint: string; accessKey: string; sec
     bucket,
     prepareBucket,
     putImmutable,
+    putImmutableObject,
     putStream,
     verifyObject,
     readBlob,

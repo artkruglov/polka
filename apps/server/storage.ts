@@ -10,7 +10,16 @@ const store = createS3Store({
   secretKey: config.S3_SECRET_KEY,
   bucket: config.S3_BUCKET,
 });
-export const { s3, bucket, prepareBucket, putImmutable, putStream, verifyObject, deleteAllVersions } = store;
+export const {
+  s3,
+  bucket,
+  prepareBucket,
+  putImmutable,
+  putImmutableObject,
+  putStream,
+  verifyObject,
+  deleteAllVersions,
+} = store;
 export { StreamRejected } from "../../packages/storage/s3.ts";
 
 /** One object version, for good (the bucket is versioned: the key alone would only add a delete marker). */

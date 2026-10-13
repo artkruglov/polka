@@ -11,11 +11,12 @@ import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
-import { mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "../apps/server/account-merge.ts";
+import { MERGE_INVENTORY, mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "../apps/server/account-merge.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
-import { bucket, s3, sha256 } from "../apps/server/storage.ts";
+import { bucket, putImmutable, s3, sha256 } from "../apps/server/storage.ts";
+import { gzipSync } from "node:zlib";
 import { runAccountMerge } from "../scripts/account-merge.ts";
 
 const app = await createApp();
@@ -463,6 +464,162 @@ test("the web path refuses a shelf with more objects than the cap, before copyin
   assert.deepEqual(copied, []);
   assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
   assert.ok(WEB_MERGE_MAX_OBJECTS >= 1);
+});
+
+/** An agent session with a stored transcript, as agent-sessions.ts leaves it. */
+async function agentSession(who: Owner, externalId: string, updatedAt: string) {
+  const id = randomUUID();
+  const gz = gzipSync(
+    Buffer.from(`{"schema":"polka-session-transcript/1"}\n{"type":"prompt","text":"${externalId}"}\n`),
+  );
+  const key = `${who.tenant}/sessions/${id}/${sha256(gz)}.jsonl.gz`;
+  const version = await putImmutable(key, gz);
+  await db.query(
+    `INSERT INTO agent_sessions(id,tenant_id,account_id,source,external_id,transcript_key,transcript_version,
+       transcript_bytes,index_bytes,updated_at)
+     VALUES($1,$2,$3,'claude-code',$4,$5,$6,$7,100,$8)`,
+    [id, who.tenant, who.id, externalId, key, version, gz.length, updatedAt],
+  );
+  await db.query(
+    `INSERT INTO agent_session_secrets(session_id,fingerprint,type,confidence,length,occurrences)
+     VALUES($1,'0123456789ab','github-token','high',40,1)`,
+    [id],
+  );
+  await db.query("UPDATE tenants SET session_used_bytes=session_used_bytes+$2 WHERE id=$1", [
+    who.tenant,
+    gz.length + 100,
+  ]);
+  return { id, key, version, bytes: gz.length + 100 };
+}
+
+const stored = (key: string, version: string) =>
+  s3
+    .send(new HeadObjectCommand({ Bucket: bucket, Key: key, VersionId: version }))
+    .then(() => true)
+    .catch(() => false);
+
+test("agent sessions move with their transcripts, allowance and fingerprint key", async () => {
+  const from = await owner("merge-sessions-from");
+  const into = await owner("merge-sessions-into");
+  const sourceKey = randomBytes(32);
+  await db.query("UPDATE tenants SET session_quota_bytes=$2,session_fingerprint_key=$3 WHERE id=$1", [
+    from.tenant,
+    1024 * 1024,
+    sourceKey,
+  ]);
+  const only = await agentSession(from, "only-on-source", "2026-10-01T10:00:00Z");
+  // The same session sent to both shelves: the later upload stays.
+  const newerOnSource = await agentSession(from, "twice-a", "2026-10-02T10:00:00Z");
+  const olderOnTarget = await agentSession(into, "twice-a", "2026-10-01T10:00:00Z");
+  const olderOnSource = await agentSession(from, "twice-b", "2026-10-01T10:00:00Z");
+  const newerOnTarget = await agentSession(into, "twice-b", "2026-10-03T10:00:00Z");
+
+  const dry = await mergeAccounts({ from: from.id, into: into.id, actor: "operator-script", dryRun: true });
+  assert.equal(dry.counts.agentSessions, 3);
+  assert.equal(dry.counts.agentSessionsTwice, 2);
+  const report = await mergeAccounts({ from: from.id, into: into.id, actor: "operator-script", proof: "t" });
+  assert.deepEqual(report.leftovers, []);
+
+  const { rows } = await db.query(
+    `SELECT id,tenant_id,account_id,transcript_key,transcript_version FROM agent_sessions WHERE tenant_id=ANY($1::uuid[])
+      ORDER BY external_id`,
+    [[from.tenant, into.tenant]],
+  );
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    [only.id, newerOnSource.id, newerOnTarget.id],
+  );
+  for (const row of rows) {
+    assert.equal(row.tenant_id, into.tenant);
+    assert.equal(row.account_id, into.id);
+    assert.ok(row.transcript_key.startsWith(`${into.tenant}/sessions/${row.id}/`));
+    assert.ok(await stored(row.transcript_key, row.transcript_version));
+  }
+  // Facts of a moved session come along; the transcript opens for its new owner.
+  assert.equal((await db.query("SELECT 1 FROM agent_session_secrets WHERE session_id=$1", [only.id])).rowCount, 1);
+  const login = await app.inject({
+    method: "POST",
+    url: "/api/login",
+    remoteAddress: address(),
+    headers: { origin },
+    payload: { name: into.name, password },
+  });
+  const cookie = `polka_session=${login.cookies.find((c) => c.name === "polka_session")!.value}`;
+  const page = await app.inject({
+    method: "GET",
+    url: `/api/sessions/${only.id}/transcript`,
+    remoteAddress: address(),
+    headers: { origin, cookie },
+  });
+  assert.equal(page.statusCode, 200, page.body);
+  assert.equal(page.json().events[0].text, "only-on-source");
+  // Nothing of them is left under the source's prefix, nor the replaced copies.
+  for (const gone of [only, newerOnSource, olderOnSource, olderOnTarget])
+    assert.equal(await stored(gone.key, gone.version), false, gone.key);
+
+  const {
+    rows: [shelves],
+  } = await db.query(
+    `SELECT s.session_used_bytes AS source_used, s.session_fingerprint_key AS source_key,
+            t.session_used_bytes AS target_used, t.session_quota_bytes AS target_quota, t.session_fingerprint_key AS target_key
+       FROM tenants s, tenants t WHERE s.id=$1 AND t.id=$2`,
+    [from.tenant, into.tenant],
+  );
+  assert.equal(Number(shelves.source_used), 0);
+  assert.equal(shelves.source_key, null);
+  assert.equal(Number(shelves.target_used), only.bytes + newerOnSource.bytes + newerOnTarget.bytes);
+  assert.equal(Number(shelves.target_quota), 1024 * 1024);
+  // The target had no key: it takes the source's, so old and new fingerprints match.
+  assert.deepEqual(shelves.target_key, sourceKey);
+});
+
+test("a target with its own fingerprint key keeps it", async () => {
+  const from = await owner("merge-keys-from");
+  const into = await owner("merge-keys-into");
+  const targetKey = randomBytes(32);
+  await db.query("UPDATE tenants SET session_fingerprint_key=$2 WHERE id=$1", [from.tenant, randomBytes(32)]);
+  await db.query("UPDATE tenants SET session_fingerprint_key=$2 WHERE id=$1", [into.tenant, targetKey]);
+  await agentSession(from, "keyed", "2026-10-01T10:00:00Z");
+  await mergeAccounts({ from: from.id, into: into.id, actor: "operator-script", proof: "t" });
+  const {
+    rows: [shelf],
+  } = await db.query("SELECT session_fingerprint_key FROM tenants WHERE id=$1", [into.tenant]);
+  assert.deepEqual(shelf.session_fingerprint_key, targetKey);
+});
+
+// A new table naming an account or a shelf must be handled by the merge or
+// deliberately left: otherwise its rows stay with the source and its erasure
+// takes them (agent sessions once did).
+test("every column naming an account or a shelf is in the merge inventory", async () => {
+  const { rows } = await db.query(
+    `SELECT DISTINCT cl.relname || '.' || a.attname AS col
+       FROM pg_constraint con
+       JOIN pg_class cl ON cl.oid=con.conrelid
+       JOIN pg_namespace n ON n.oid=cl.relnamespace AND n.nspname='public'
+       JOIN pg_class ref ON ref.oid=con.confrelid AND ref.relname IN ('accounts','tenants')
+       CROSS JOIN LATERAL unnest(con.conkey) AS k(attnum)
+       JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=k.attnum
+      WHERE con.contype='f'
+     UNION
+     SELECT cl.relname || '.' || a.attname
+       FROM pg_attribute a
+       JOIN pg_class cl ON cl.oid=a.attrelid AND cl.relkind IN ('r','p')
+       JOIN pg_namespace n ON n.oid=cl.relnamespace AND n.nspname='public'
+      WHERE a.attnum > 0 AND NOT a.attisdropped
+        AND (a.attname IN ('tenant_id','account_id') OR a.attname LIKE '%\\_account\\_id')
+     ORDER BY 1`,
+  );
+  const columns = rows.map((row) => row.col as string);
+  assert.deepEqual(
+    columns.filter((column) => !(column in MERGE_INVENTORY)),
+    [],
+    "add these to MERGE_INVENTORY in apps/server/account-merge.ts: move them in mergeAccounts or say why they stay",
+  );
+  assert.deepEqual(
+    Object.keys(MERGE_INVENTORY).filter((column) => !columns.includes(column)),
+    [],
+    "no longer in the schema: remove from MERGE_INVENTORY",
+  );
 });
 
 // Hosted installations grant the application role no TEMPORARY privilege
