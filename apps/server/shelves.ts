@@ -6,7 +6,7 @@ import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { config } from "./config.ts";
-import { db } from "./db.ts";
+import { afterCommit, db } from "./db.ts";
 import { Problem, missing } from "./errors.ts";
 import { companyAdminOf } from "./organisations.ts";
 
@@ -83,12 +83,26 @@ export async function shelvesOf(accountId: string): Promise<Shelf[]> {
 }
 
 /**
+ * The shelf locks a client's current transaction holds: its id
+ * (pg_current_xact_id) and the strongest lock of each shelf and account
+ * pair. The entry goes at commit; after a rollback it stays, and the id,
+ * read again with the recheck, no longer matches. (The code takes no
+ * savepoints, whose rollback would release the locks.)
+ */
+const heldShelfLocks = new WeakMap<PoolClient, { tx: string; locks: Map<string, "UPDATE" | "SHARE"> }>();
+
+/**
  * Lock the shelf, the account, then its membership (the order account
  * deletion takes too), and check the account's role on it: the
  * membership twin of lockActiveOwnerTenant. A personal shelf's owner passes
  * any role, so an owner's paths behave exactly as before. A shelf the account
  * may not open is «not found», like someone else's work; a role too low is
  * «forbidden».
+ *
+ * An agent's call locks the shelf in service-auth and again in the service
+ * it calls, in one transaction. The second time the rows are already this
+ * transaction's: one plain read rechecks them (the same conditions, the
+ * current values) instead of three locking statements.
  */
 export async function lockShelf(
   c: PoolClient,
@@ -97,14 +111,39 @@ export async function lockShelf(
   lock: "UPDATE" | "SHARE" = "UPDATE",
   denied: () => Error = missing,
 ) {
-  const tenant = (
+  const key = `${actor.tenant}:${actor.id}`;
+  const held = heldShelfLocks.get(c);
+  const heldLock = held?.locks.get(key);
+  if (held && heldLock && (heldLock === "UPDATE" || lock === "SHARE")) {
+    const {
+      rows: [row],
+    } = await c.query(
+      `SELECT pg_current_xact_id()::text AS held_tx,member.role AS held_role,tenant.*
+       FROM (SELECT 1) here
+       LEFT JOIN tenants tenant ON tenant.id=$1 AND tenant.state='active'
+         AND ($3::boolean OR tenant.kind='personal')
+       LEFT JOIN accounts account ON account.id=$2
+         AND NOT account.disabled AND account.deletion_requested_at IS NULL
+       LEFT JOIN tenant_members member ON member.tenant_id=tenant.id
+         AND member.account_id=account.id AND member.state='active'`,
+      [actor.tenant, actor.id, config.TEAM_SHELVES === "on"],
+    );
+    if (row.held_tx === held.tx) {
+      const { held_tx: _tx, held_role: role, ...tenant } = row;
+      if (!role) throw denied();
+      if (!atLeast(role, min)) throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
+      return { tenant, role: role as ShelfRole };
+    }
+  }
+  const locked = (
     await c.query(
-      `SELECT * FROM tenants WHERE id=$1 AND state='active'
+      `SELECT *,pg_current_xact_id()::text AS held_tx FROM tenants WHERE id=$1 AND state='active'
          AND ($2::boolean OR kind='personal') FOR ${lock}`,
       [actor.tenant, config.TEAM_SHELVES === "on"],
     )
   ).rows[0];
-  if (!tenant) throw denied();
+  if (!locked) throw denied();
+  const { held_tx: tx, ...tenant } = locked;
   const account = (
     await c.query(
       `SELECT id FROM accounts
@@ -122,6 +161,15 @@ export async function lockShelf(
     )
   ).rows[0];
   if (!member) throw denied();
+  const current = heldShelfLocks.get(c);
+  if (current && current.tx === tx) {
+    if (lock === "UPDATE" || !current.locks.has(key)) current.locks.set(key, lock);
+  } else {
+    heldShelfLocks.set(c, { tx, locks: new Map([[key, lock]]) });
+    afterCommit(c, () => {
+      if (heldShelfLocks.get(c)?.tx === tx) heldShelfLocks.delete(c);
+    });
+  }
   if (!atLeast(member.role, min)) throw new Problem(403, "forbidden", "Для этого нужна другая роль на полке.");
   return { tenant, role: member.role as ShelfRole };
 }

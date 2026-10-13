@@ -73,7 +73,10 @@ export async function transitionArtifactLifecycleInTransaction(
     return snapshot(restored);
   }
 
-  await c.query("SELECT id FROM shares WHERE artifact_id=$1 ORDER BY id FOR UPDATE", [artifactId]);
+  await c.query("SELECT id FROM shares WHERE tenant_id=$2 AND artifact_id=$1 ORDER BY id FOR UPDATE", [
+    artifactId,
+    actor.tenant,
+  ]);
   await c.query(
     `SELECT derivative.id
      FROM revision_derivatives derivative
@@ -105,7 +108,10 @@ export async function transitionArtifactLifecycleInTransaction(
        AND share.tenant_id=$2`,
     [artifactId, actor.tenant],
   );
-  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2", [artifactId, actor.tenant]);
+  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1 AND tenant_id=$2 AND NOT revoked", [
+    artifactId,
+    actor.tenant,
+  ]);
   // A proposal to «Лента» waiting for the operator goes with the work.
   await withdrawFeedProposalsOfWork(c, artifactId);
   await c.query(
