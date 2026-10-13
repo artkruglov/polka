@@ -204,6 +204,15 @@ export async function consumeSignInLink(token: string, ip: string) {
     if (!link) throw staleLink();
     const owner = { id: link.account_id, tenant: link.tenant_id };
     await lockActiveOwnerTenant(c as PoolClient, owner, staleLink);
+    // The first read decided before the owner's locks: a claim (which ends
+    // weak sessions) or a revoked connection may have committed while this
+    // waited. Decide again under the locks, holding the link and its
+    // connection until the session exists.
+    const {
+      rows: [current],
+    } = await c.query(`${LIVE_LINK} FOR UPDATE OF link, connection`, [link.token_hash]);
+    if (!current || current.connection_id !== link.connection_id || current.account_id !== link.account_id)
+      throw staleLink();
     const spent = await c.query(
       `UPDATE agent_sign_in_links SET consumed_at=clock_timestamp()
         WHERE token_hash=$1 AND consumed_at IS NULL`,

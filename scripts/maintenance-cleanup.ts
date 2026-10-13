@@ -3,6 +3,7 @@ import { cleanupEmailChallengesInTransaction } from "../apps/server/email-mainte
 import {
   closeProvisionalShelf,
   eraseProvisionalShelfRows,
+  unfinishedProvisionalErasures,
   idleProvisionalShelves,
   retireProvisionalShelf,
   type ProvisionalRetirementPolicy,
@@ -261,18 +262,26 @@ export async function runMaintenanceCleanup(
   let provisionalShelvesRetired = 0;
   if (!options.provisionalRetirement && options.provisionalIdleDays) {
     const idleDays = options.provisionalIdleDays;
-    const idle = await scope.transaction(async (c) => {
+    // Shelves an earlier run closed but did not finish (S3 failed, the
+    // deadline came, the process stopped) go first, then the newly idle.
+    const [unfinished, idle] = await scope.transaction(async (c) => {
       assertActive(scope.signal);
-      return idleProvisionalShelves(c, { idleDays });
+      return [await unfinishedProvisionalErasures(c), await idleProvisionalShelves(c, { idleDays })] as const;
     });
+    const erase = async (shelf: { id: string; tenant: string }) => {
+      await deleteEveryVersion(storage, `${shelf.tenant}/`, scope.signal);
+      await scope.transaction((c) => eraseProvisionalShelfRows(c, shelf));
+    };
+    for (const shelf of unfinished) {
+      assertActive(scope.signal);
+      await erase(shelf);
+    }
     for (const shelf of idle) {
       assertActive(scope.signal);
       const closed = await scope.transaction((c) => closeProvisionalShelf(c, shelf, idleDays));
       if (!closed.closed) continue;
       provisionalShelvesRetired++;
-      if (!closed.erase) continue;
-      await deleteEveryVersion(storage, `${shelf.tenant}/`, scope.signal);
-      await scope.transaction((c) => eraseProvisionalShelfRows(c, shelf));
+      if (closed.erase) await erase(shelf);
     }
   }
   if (options.provisionalRetirement) {

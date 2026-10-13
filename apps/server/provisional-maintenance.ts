@@ -162,9 +162,12 @@ export async function requestDeletionRows(
 // Without the deletion pipeline (ACCOUNT_DELETION_ENABLED=false) maintenance
 // deletes an idle provisional shelf itself, in three steps: close it (this
 // transaction), delete every stored object under its tenant prefix, then
-// delete its rows. A provisional shelf has no address, links, discussions,
-// publications or identities by construction; one that somehow has any, or
-// has blocked content (evidence), is only closed and left to the operator.
+// delete its rows. Closing records the erasure (provisional_erasures, 076),
+// and deleting the rows removes that record: a run that stops in between
+// leaves it, and the next run finishes the shelf (unfinishedProvisionalErasures).
+// A provisional shelf has no address, links, discussions, publications or
+// identities by construction; one that somehow has any, or has blocked
+// content (evidence), is only closed and left to the operator.
 
 /** Step 1: close the shelf. False when it is no longer idle or not simple. */
 export async function closeProvisionalShelf(c: Client, shelf: { id: string; tenant: string }, idleDays: number) {
@@ -198,7 +201,29 @@ export async function closeProvisionalShelf(c: Client, shelf: { id: string; tena
   ]);
   await c.query("UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL", [shelf.tenant]);
   await c.query("DELETE FROM sessions WHERE account_id=$1", [shelf.id]);
+  if (row.simple)
+    await c.query(
+      `INSERT INTO provisional_erasures(account_id,tenant_id,closed_at) VALUES($1,$2,$3)
+       ON CONFLICT (account_id) DO NOTHING`,
+      [shelf.id, shelf.tenant, now],
+    );
   return { closed: true, erase: !!row.simple };
+}
+
+/**
+ * Shelves closed for erasure whose objects or rows are not gone yet, oldest
+ * first. Only while the account is still closed and unclaimed: one an
+ * operator opened again is left to the operator.
+ */
+export async function unfinishedProvisionalErasures(c: Client, limit = 20) {
+  const { rows } = await c.query(
+    `SELECT e.account_id AS id,e.tenant_id AS tenant FROM provisional_erasures e
+       JOIN accounts a ON a.id=e.account_id
+      WHERE a.disabled AND a.deletion_requested_at IS NOT NULL AND a.claimed_at IS NULL
+      ORDER BY e.closed_at LIMIT $1`,
+    [limit],
+  );
+  return (rows ?? []) as Array<{ id: string; tenant: string }>;
 }
 
 /** Step 3 (after the objects are gone): the shelf's rows. */
@@ -222,6 +247,8 @@ export async function eraseProvisionalShelfRows(c: Client, shelf: { id: string; 
     "DELETE FROM artifacts WHERE tenant_id=$1",
     "DELETE FROM folders WHERE tenant_id=$1",
     "UPDATE tenants SET used_bytes=0,derivative_used_bytes=0 WHERE id=$1",
+    // Done: a later run has nothing to finish.
+    "DELETE FROM provisional_erasures WHERE tenant_id=$1",
   ])
     await c.query(sql, [shelf.tenant]);
 }

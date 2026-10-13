@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 75 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 75);
+test("migration catalog is the complete contiguous schema 76 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 76);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -114,9 +114,9 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>75\n/, recipe);
-    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>75 THEN/, recipe);
-    assert.match(text, /001 through 075/, recipe);
+    assert.match(text, /schema_migrations\)<>76\n/, recipe);
+    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>76 THEN/, recipe);
+    assert.match(text, /001 through 076/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
@@ -140,6 +140,14 @@ test("071 webhooks: no work content, encrypted secret, erased with the account",
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {
   const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
   assert.match(source, /await client\.query\("SET lock_timeout='5s'"\);\n\s+await runMigrations\(/);
+});
+
+test("076 records provisional erasures, granted to the runtime", async () => {
+  const sql = await readFile(migrationFileUrl("076_provisional_erasures.sql"), "utf8");
+  assert.match(sql, /account_id uuid PRIMARY KEY REFERENCES accounts\(id\) ON DELETE CASCADE/);
+  assert.match(sql, /tenant_id uuid NOT NULL UNIQUE REFERENCES tenants\(id\) ON DELETE CASCADE/);
+  const grants = await readFile(new URL("../deploy/runtime-grants.sql", import.meta.url), "utf8");
+  assert.match(grants, /GRANT SELECT, INSERT, DELETE ON TABLE public\.provisional_erasures TO :"runtime_role";/);
 });
 
 test("075 indexes search text per shelf and stores the title vector and the latest MIME type", async () => {

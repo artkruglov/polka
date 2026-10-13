@@ -822,6 +822,72 @@ test("without the deletion pipeline maintenance deletes an idle provisional shel
   assert.equal((await publish(bearer, "Ещё")).statusCode, 401);
 });
 
+test("a provisional erasure cut short by a storage failure is finished by the next run", async () => {
+  const idle = await startProvisional();
+  const bearer = await approve(idle.cookie, idle.request);
+  const saved = (await publish(bearer, "Работа, которую стирают дважды")).json();
+  const {
+    rows: [revision],
+  } = await db.query("SELECT object_key,object_version FROM revisions WHERE artifact_id=$1", [saved.artifactId]);
+  await db.query("UPDATE accounts SET provisional_at=now()-interval '40 days' WHERE id=$1", [idle.id]);
+  await db.query(
+    `UPDATE agent_connections SET created_at=now()-interval '40 days',
+            last_seen_at=now()-interval '35 days' WHERE account_id=$1`,
+    [idle.id],
+  );
+  await db.query("UPDATE revisions SET created_at=now()-interval '35 days' WHERE tenant_id=$1", [idle.tenant]);
+  await db.query("DELETE FROM sessions WHERE account_id=$1", [idle.id]);
+  const storage = createMaintenanceObjectStore({
+    endpoint: config.S3_ENDPOINT,
+    region: "us-east-1",
+    accessKey: config.S3_ACCESS_KEY,
+    secretKey: config.S3_SECRET_KEY,
+    bucket: config.S3_BUCKET,
+  });
+  try {
+    // S3 refuses deletions: the shelf is closed, its objects and rows stay.
+    const failing = {
+      ...storage,
+      listVersions: storage.listVersions.bind(storage),
+      deleteVersion: async () => {
+        throw Object.assign(new Error("storage down"), { code: "storage" });
+      },
+    };
+    await assert.rejects(runMaintenanceCleanup(maintenanceScope(), failing as never, { provisionalIdleDays: 30 }));
+    const {
+      rows: [closed],
+    } = await db.query(
+      `SELECT a.disabled,(SELECT count(*) FROM artifacts WHERE tenant_id=$2)::int AS works,
+              (SELECT count(*) FROM provisional_erasures WHERE account_id=$1)::int AS pending
+         FROM accounts a WHERE a.id=$1`,
+      [idle.id, idle.tenant],
+    );
+    assert.deepEqual(closed, { disabled: true, works: 1, pending: 1 });
+    // The idle scan no longer finds a closed shelf; the record does.
+    await runMaintenanceCleanup(maintenanceScope(), storage, { provisionalIdleDays: 30 });
+  } finally {
+    storage.close();
+  }
+  await assert.rejects(
+    s3.send(
+      new HeadObjectCommand({
+        Bucket: config.S3_BUCKET,
+        Key: revision.object_key,
+        VersionId: revision.object_version,
+      }),
+    ),
+  );
+  const {
+    rows: [left],
+  } = await db.query(
+    `SELECT (SELECT count(*) FROM artifacts WHERE tenant_id=$2)::int AS works,
+            (SELECT count(*) FROM agent_connections WHERE tenant_id=$2)::int AS connections,
+            (SELECT count(*) FROM provisional_erasures WHERE account_id=$1)::int AS pending`,
+    [idle.id, idle.tenant],
+  );
+  assert.deepEqual(left, { works: 0, connections: 0, pending: 0 });
+});
+
 test("maintenance deletes an idle provisional shelf and leaves a live one", async () => {
   const idle = await startProvisional();
   const live = await startProvisional();
@@ -988,6 +1054,73 @@ test("a link's weak session does not survive the claim and never hands out links
   // The owner's own session still works and now shares.
   const owner = await share(shelf.cookie);
   assert.equal(owner.statusCode, 200, owner.body);
+});
+
+/**
+ * Opens a link while another transaction holds the shelf (as a claim or a
+ * revocation does), commits that transaction's change once the opening
+ * waits for the shelf, and returns the opening's answer.
+ */
+async function enterWhileHeld(shelf: { tenant: string }, token: string, change: (c: any) => Promise<unknown>) {
+  const holder = await db.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [shelf.tenant]);
+    await change(holder);
+    const entering = post("/api/auth/enter", "", { token });
+    // The opening read the link as live and now waits for the shelf's lock.
+    for (let i = 0; i < 200; i++) {
+      const { rowCount } = await db.query(
+        `SELECT 1 FROM pg_locks waiting JOIN pg_locks held ON held.transactionid=waiting.transactionid
+          WHERE NOT waiting.granted AND held.granted AND held.pid=$1`,
+        [(holder as any).processID],
+      );
+      if (rowCount) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await holder.query("COMMIT");
+    return await entering;
+  } catch (error) {
+    await holder.query("ROLLBACK");
+    throw error;
+  } finally {
+    holder.release();
+  }
+}
+
+test("a link opened while the connection is revoked or the shelf claimed gives no session", async () => {
+  // Revoked while the opening waited for the shelf.
+  const revoked = await linkingShelf();
+  const first = new URL((await signInLink(revoked.bearer)).json().url).hash.slice(1);
+  const lost = await enterWhileHeld(revoked, first, (c) =>
+    c.query("UPDATE agent_connections SET revoked_at=clock_timestamp() WHERE account_id=$1", [revoked.id]),
+  );
+  assert.equal(lost.statusCode, 410, lost.body);
+  assert.equal(
+    (await db.query("SELECT 1 FROM sessions WHERE account_id=$1 AND assurance='agent_link'", [revoked.id])).rowCount,
+    0,
+  );
+  // Claimed while the opening waited: the claim ended weak sessions, none comes back.
+  const claimed = await linkingShelf();
+  const second = new URL((await signInLink(claimed.bearer)).json().url).hash.slice(1);
+  const late = await enterWhileHeld(claimed, second, async (c) => {
+    await c.query("UPDATE accounts SET claimed_at=clock_timestamp() WHERE id=$1", [claimed.id]);
+    await c.query("DELETE FROM sessions WHERE account_id=$1 AND assurance='agent_link'", [claimed.id]);
+  });
+  assert.equal(late.statusCode, 410, late.body);
+  assert.equal(
+    (await db.query("SELECT 1 FROM sessions WHERE account_id=$1 AND assurance='agent_link'", [claimed.id])).rowCount,
+    0,
+  );
+  assert.equal(
+    (await db.query("SELECT consumed_at FROM agent_sign_in_links WHERE token_hash=$1", [sha256(second)])).rows[0]
+      .consumed_at,
+    null,
+  );
+  // Nothing held: the same kind of link still opens.
+  const open = await linkingShelf();
+  const third = new URL((await signInLink(open.bearer)).json().url).hash.slice(1);
+  assert.equal((await post("/api/auth/enter", "", { token: third })).statusCode, 200);
 });
 
 test("temporary shelves have their own daily budget with a clear refusal (П5)", async () => {
