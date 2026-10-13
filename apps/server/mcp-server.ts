@@ -355,6 +355,41 @@ function toolFailure(tool: string, error: unknown) {
 }
 
 /**
+ * A server is built per request (the SDK's stateless handler wants a fresh
+ * one), and the SDK converts every tool's zod schema to JSON Schema on each
+ * tools/list and before each tools/call: ~0.7 ms of the main thread per
+ * request for the same answer. A tool's schema never changes (its name fixes
+ * it), so the first one seen for a name is kept with its conversions
+ * memoised. Validation is the original schema's, untouched.
+ */
+const toolSchemas = new Map<string, unknown>();
+type StandardSchema = {
+  "~standard": {
+    jsonSchema?: { input: (options: unknown) => unknown; output: (options: unknown) => unknown };
+  };
+};
+export function memoisedToolSchema(name: string, schema: unknown) {
+  const standard = (schema as StandardSchema | undefined)?.["~standard"];
+  if (!standard?.jsonSchema) return schema;
+  const kept = toolSchemas.get(name);
+  if (kept) return kept;
+  const converted = new Map<string, unknown>();
+  const memo = (io: "input" | "output") => (options: unknown) => {
+    const key = `${io}:${JSON.stringify(options ?? null)}`;
+    if (!converted.has(key)) converted.set(key, standard.jsonSchema![io](options));
+    return converted.get(key);
+  };
+  // The original's parse, validate and zod internals through the prototype;
+  // only the JSON Schema conversion is memoised.
+  const wrapped = Object.create(schema as object);
+  Object.defineProperty(wrapped, "~standard", {
+    value: { ...standard, jsonSchema: { input: memo("input"), output: memo("output") } },
+  });
+  toolSchemas.set(name, wrapped);
+  return wrapped;
+}
+
+/**
  * Every tool of this server answers a failure with toolFailure: the SDK's
  * own handling would pass an exception's raw message to the agent.
  */
@@ -365,13 +400,20 @@ function guardTools(server: McpServer) {
     callback: (...args: unknown[]) => unknown,
   ) => unknown;
   (server as unknown as { registerTool: typeof register }).registerTool = (name, config, callback) =>
-    register(name, config, async (...args: unknown[]) => {
-      try {
-        return await callback(...args);
-      } catch (error) {
-        return toolFailure(name, error);
-      }
-    });
+    register(
+      name,
+      {
+        ...(config as object),
+        inputSchema: memoisedToolSchema(name, (config as { inputSchema?: unknown }).inputSchema),
+      },
+      async (...args: unknown[]) => {
+        try {
+          return await callback(...args);
+        } catch (error) {
+          return toolFailure(name, error);
+        }
+      },
+    );
   return server;
 }
 const statusInput = z

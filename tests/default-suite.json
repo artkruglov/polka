@@ -125,6 +125,7 @@
   "tests/paste-code.test.ts",
   "tests/onboarding-first-run.test.ts",
   "tests/service-auth.test.ts",
+  "tests/agent-bookkeeping.test.ts",
   "tests/moderation.test.ts",
   "tests/abuse-protection.test.ts",
   "tests/content-filter.test.ts",
