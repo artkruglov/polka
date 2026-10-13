@@ -144,6 +144,9 @@ try {
             S3_BUCKET: bucket,
             MAIL_MODE: "local",
             URL_IMPORT_ENABLED: "false",
+            // No line per request: tests read their children's stdout as JSON
+            // (tests/ops-status.test.ts turns the lines on for itself).
+            ACCESS_LOG: "off",
             HTML_LIVE_MODE: batch.liveLibraryViewer ? "local" : "disabled",
             HTML_LIVE_ENABLED: batch.liveLibraryViewer ? "true" : "false",
             ...(batch.liveLibraryViewer

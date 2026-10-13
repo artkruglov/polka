@@ -145,6 +145,13 @@ test("every request gets an x-request-id and one log line with its route pattern
   const lines: string[] = [];
   t.mock.method(console, "log", (line: string) => lines.push(line));
   t.mock.method(console, "error", (line: string) => lines.push(line));
+  // The suite runs with ACCESS_LOG=off (scripts/test-isolated.ts); the default is info.
+  const settings = config as { ACCESS_LOG: string };
+  const before = settings.ACCESS_LOG;
+  settings.ACCESS_LOG = "info";
+  t.after(() => {
+    settings.ACCESS_LOG = before;
+  });
   const secret = randomBytes(12).toString("hex");
   const answer = await app.inject({ method: "GET", url: `/api/capabilities?token=${secret}` });
   const id = answer.headers["x-request-id"] as string;
@@ -161,14 +168,9 @@ test("every request gets an x-request-id and one log line with its route pattern
   const other = await app.inject({ method: "GET", url: "/api/capabilities" });
   assert.notEqual(other.headers["x-request-id"], id);
   // ACCESS_LOG=off: no line, the header stays.
-  const settings = config as { ACCESS_LOG: string };
   settings.ACCESS_LOG = "off";
-  try {
-    lines.length = 0;
-    const quiet = await app.inject({ method: "GET", url: "/api/capabilities" });
-    assert.ok(quiet.headers["x-request-id"]);
-    assert.equal(lines.filter((entry) => entry.includes('"event":"request"')).length, 0);
-  } finally {
-    settings.ACCESS_LOG = "info";
-  }
+  lines.length = 0;
+  const quiet = await app.inject({ method: "GET", url: "/api/capabilities" });
+  assert.ok(quiet.headers["x-request-id"]);
+  assert.equal(lines.filter((entry) => entry.includes('"event":"request"')).length, 0);
 });
