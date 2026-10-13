@@ -63,7 +63,11 @@ const web = (method: "GET" | "DELETE", url: string, cookieHeader: string) =>
 
 const bearer = (secret: string) => ({ authorization: `Bearer ${secret}` });
 
-async function upload(secret: string, file: { source: "claude-code" | "codex"; path: string; id: string }) {
+async function upload(
+  secret: string,
+  file: { source: "claude-code" | "codex"; path: string; id: string },
+  edit?: (body: { toolCalls: Array<{ template?: string }> }) => void,
+) {
   const key = await app.inject({
     method: "GET",
     url: "/api/v1/sessions/key",
@@ -72,6 +76,7 @@ async function upload(secret: string, file: { source: "claude-code" | "codex"; p
   });
   assert.equal(key.statusCode, 200, key.body);
   const prepared = await prepareSession(file, Buffer.from(key.json().key, "hex"));
+  edit?.(prepared.body);
   const saved = await app.inject({
     method: "POST",
     url: "/api/v1/sessions",
@@ -215,6 +220,29 @@ test("uploads a session, shows it to its owner only, replaces it on a new upload
     ).rowCount,
     0,
   );
+});
+
+test("a template from an older CLI is blanked again: no password glued to a flag is stored", async () => {
+  const person = await owner("sessions-template");
+  const secret = await token(person);
+  const glued = "S3cret" + "Pass9";
+  // An older CLI shaped the raw command and kept `-…` words and plain words after flags.
+  const { saved } = await upload(secret, await sessionFile(), (body) => {
+    body.toolCalls[0]!.template = `mysql -u root -p${glued}`;
+    body.toolCalls[1]!.template = "git push --force origin";
+  });
+  assert.equal(saved.statusCode, 200, saved.body);
+  const detail = await web("GET", `/api/sessions/${saved.json().id}`, await cookie(person));
+  assert.deepEqual(
+    detail
+      .json()
+      .toolCalls.slice(0, 2)
+      .map((c: { template: string }) => c.template),
+    ["mysql -u <arg> <arg>", "git push --force <arg>"],
+  );
+  assert.ok(!detail.body.includes(glued));
+  // The destructive rule still reads the subcommand and the flag.
+  assert.ok(saved.json().alerts.includes("destructive_command"));
 });
 
 test("needs the sessions permission, an enabled shelf and room", async () => {

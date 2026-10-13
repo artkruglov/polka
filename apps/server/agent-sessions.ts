@@ -5,6 +5,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { uuid } from "../../packages/contracts/index.ts";
 import type { ExtensionContext, SessionSelection } from "../../packages/extension-api/index.ts";
+import { scrubTemplate } from "../../scripts/polka-sessions.mjs";
 import { audit } from "./artifacts.ts";
 import { assertStrongSession, identity } from "./auth.ts";
 import { config } from "./config.ts";
@@ -63,7 +64,8 @@ const toolCallSchema = z.object({
   inputBytes: count,
   outputBytes: count,
   argv0: nullableText(100),
-  template: nullableText(200),
+  // Blanked again: an older CLI kept glued flag values (`-pS3cret`) and words after flags.
+  template: nullableText(200).transform((value) => (value ? scrubTemplate(value) : null)),
   hosts: z.array(text(253)).max(20).default([]),
   network: z.boolean().default(false),
   subagent: z.boolean().default(false),
