@@ -37,9 +37,9 @@ export async function writeLocalMailFile(path: string, body: string) {
   await writeFile(path, body, { flag: "wx", mode: 0o600 });
 }
 
-/** One SMTP message; throws when the server does not accept it. */
-export async function sendSmtpMail(mail: Mail) {
-  const transport = nodemailer.createTransport({
+/** The SMTP connection of this installation (scripts/doctor.ts verifies it). */
+export function smtpTransport() {
+  return nodemailer.createTransport({
     host: config.SMTP_HOST,
     port: config.SMTP_PORT,
     secure: config.SMTP_PORT === 465,
@@ -53,7 +53,11 @@ export async function sendSmtpMail(mail: Mail) {
     logger: false,
     debug: false,
   });
-  const result = await transport.sendMail({
+}
+
+/** One SMTP message; throws when the server does not accept it. */
+export async function sendSmtpMail(mail: Mail) {
+  const result = await smtpTransport().sendMail({
     from: config.MAIL_FROM,
     to: mail.to,
     subject: mail.subject,

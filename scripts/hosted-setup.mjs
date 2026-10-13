@@ -2,7 +2,7 @@
 // hosted.env.example: the hosts you name, fresh database passwords, LINK_KEY
 // and OPS_STATUS_TOKEN, and the S3 settings you pass. Secrets are generated
 // here and never printed; S3 keys come from the environment, not the command
-// line, so they stay out of shell history. An existing file is kept unless
+// line, so they stay out of shell history (so do SMTP_PASS and OIDC_CLIENT_SECRET). An existing file is kept unless
 // --force; with --force every value already in it stays (the generated
 // secrets included: new database passwords would lock the app out of its
 // database, a new LINK_KEY breaks every link and webhook secret) unless you
@@ -13,7 +13,7 @@
 //   npm run hosted:setup -- --app-host polka.company.ru --viewer-host polka-view.company.net \
 //     --s3-endpoint https://storage.yandexcloud.net --s3-region ru-central1 \
 //     --s3-bucket company-polka-objects --backup-bucket company-polka-backups \
-//     --image polka:v0.12.1 --live [--set TEAM_SHELVES=on] [--out path] [--force [--rotate]]
+//     --image polka:v0.12.1 [--backup-image …] --live [--set TEAM_SHELVES=on] [--out path] [--force [--rotate]]
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -44,11 +44,20 @@ const TO_FILL = [
   // Where an owner appeals a block: shown on their shelf.
   "OPERATOR_CONTACT",
 ];
-const FROM_ENV = ["S3_ACCESS_KEY", "S3_SECRET_KEY", "BACKUP_S3_ACCESS_KEY", "BACKUP_S3_SECRET_KEY"];
+// Secrets: from the environment only, never the command line (shell history, ps).
+const FROM_ENV = [
+  "S3_ACCESS_KEY",
+  "S3_SECRET_KEY",
+  "BACKUP_S3_ACCESS_KEY",
+  "BACKUP_S3_SECRET_KEY",
+  "SMTP_PASS",
+  "OIDC_CLIENT_SECRET",
+];
 const FLAGS = {
   "--app-host": "APP_HOST",
   "--viewer-host": "VIEWER_HOST_NAME",
   "--image": "POLKA_IMAGE",
+  "--backup-image": "POLKA_BACKUP_IMAGE",
   "--s3-endpoint": "S3_ENDPOINT",
   "--s3-region": "S3_REGION",
   "--s3-bucket": "S3_BUCKET",

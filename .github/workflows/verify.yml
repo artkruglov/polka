@@ -110,6 +110,9 @@ jobs:
           cp deploy/hosted/hosted.env.example "$RUNNER_TEMP/hosted.env"
           sed -i -E 's/^([A-Z0-9_]+)=$/\1=ci-placeholder/' "$RUNNER_TEMP/hosted.env"
           docker compose -f deploy/hosted/compose.yml --env-file "$RUNNER_TEMP/hosted.env" config --quiet
+      # The installer companies run on a bare VM (shellcheck ships with the runner image).
+      - name: Installer script
+        run: sh -n deploy/hosted/install.sh && shellcheck --shell=sh deploy/hosted/install.sh
       - run: npm run local:setup
       # MinIO is compiled from source (deploy/minio/Dockerfile, ~10 min), so
       # the image is built once per Dockerfile and kept in the Actions cache.

@@ -3,6 +3,7 @@
   "tests/server-errors.test.ts",
   "tests/log.test.ts",
   "tests/admin-cli.test.ts",
+  "tests/doctor.test.ts",
   "tests/contracts-helpers.test.ts",
   "tests/renderer-playwright-version.test.ts",
   "tests/renderer-seccomp.test.ts",
