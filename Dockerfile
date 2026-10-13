@@ -3,11 +3,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Web bundle only: full dev toolchain, nothing from this stage but dist/ ships.
-# dist/ is the same on every platform, so a multi-arch build
-# (.github/workflows/release-images.yml) makes it once, natively.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS web
-WORKDIR /app
-COPY package.json package-lock.json ./
+# Plain `FROM base`, not `--platform=$BUILDPLATFORM`: the legacy builder
+# (docker without buildx, as on polochka.app's VM) has no BUILDPLATFORM and
+# refuses the stage. The multi-arch release build runs it under emulation.
+FROM base AS web
 RUN npm ci --no-audit --no-fund
 COPY apps/web ./apps/web
 COPY packages ./packages

@@ -3,8 +3,8 @@
 #   ghcr.io/<owner>/polka:<version>         the application (Dockerfile)
 #   ghcr.io/<owner>/polka-backup:<version>  the backup job (deploy/hosted/backup)
 # and :latest for both on a release that is not a prerelease (vX.Y.Z, no
-# suffix). linux/amd64 and linux/arm64; the web bundle is built once,
-# natively, and only the production dependencies run under emulation.
+# suffix). linux/amd64 and linux/arm64 (arm64 under emulation, the web
+# bundle included: the Dockerfile stays buildable by the legacy builder).
 # Each image carries OCI labels, a SLSA provenance attestation and an SPDX
 # SBOM (BuildKit attestations, visible with `docker buildx imagetools inspect`).
 #
