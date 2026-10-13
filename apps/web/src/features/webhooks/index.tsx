@@ -116,6 +116,14 @@ function DeliveryLog({ id }: { id: string }) {
  */
 type Place = string;
 type Result = { place: Place; text: string; tone: "info" | "error" };
+/**
+ * Where focus goes once an action is done: the one-time secret, the message
+ * under the list (after a delete) or a webhook's card (its form closed). An
+ * element is the control that started the action, refocused if the action
+ * disabled it and focus fell to the page.
+ */
+type FocusTarget = "secret" | "list" | { webhook: string } | HTMLElement;
+const CREATED = "Вебхук добавлен. Секрет показан выше — сохраните его сейчас.";
 
 /**
  * «Вебхуки» of the open shelf (docs/specs/WEBHOOKS.md): addresses that receive
@@ -138,6 +146,32 @@ export function WebhooksSection() {
   const [loadError, setLoadError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const shown = useRef(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const secretRef = useRef<HTMLDivElement>(null);
+  const listResultRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<FocusTarget | null>(null);
+
+  // Buttons are disabled while an action runs and forms close after it, so
+  // focus would drop to the page (and out of the shelf's dialog): put it back.
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (busy || !target) return;
+    pendingFocus.current = null;
+    const card = (id: string) =>
+      sectionRef.current?.querySelector<HTMLElement>(`[data-webhook-id="${CSS.escape(id)}"]`) ?? null;
+    if (target === "secret") {
+      const notice = secretRef.current;
+      if (!notice) return;
+      notice.scrollIntoView({ block: "center" });
+      notice.focus({ preventScroll: true });
+    } else if (target === "list") (listResultRef.current ?? sectionRef.current)?.focus();
+    else if (target instanceof HTMLElement) {
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (!lost) return;
+      if (target.isConnected && !(target as HTMLButtonElement).disabled) target.focus();
+      else sectionRef.current?.focus();
+    } else card(target.webhook)?.focus();
+  });
 
   const reload = useCallback(async () => {
     try {
@@ -156,12 +190,14 @@ export function WebhooksSection() {
 
   if (items === null && !loadError) return null;
 
-  const run = async (place: Place, action: () => Promise<string | void>) => {
+  const run = async (place: Place, action: () => Promise<string | void>, focusAfter?: FocusTarget) => {
+    const from = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setBusy(true);
     setResult(null);
     try {
       const message = await action();
       if (message) setResult({ place, text: message, tone: "info" });
+      pendingFocus.current = focusAfter ?? from ?? (place === "new" ? null : { webhook: place });
       await reload();
       setLogVersion((value) => value + 1);
     } catch (cause) {
@@ -170,6 +206,7 @@ export function WebhooksSection() {
         text: cause instanceof Error ? cause.message : "Не удалось выполнить действие.",
         tone: "error",
       });
+      pendingFocus.current = from;
     } finally {
       setBusy(false);
     }
@@ -185,7 +222,7 @@ export function WebhooksSection() {
     ));
 
   return (
-    <section className="agent-card" id="webhooks" aria-labelledby="webhooks-title">
+    <section className="agent-card" id="webhooks" aria-labelledby="webhooks-title" ref={sectionRef} tabIndex={-1}>
       <h2 id="webhooks-title">Вебхуки</h2>
       <p>
         Полка отправит POST на ваш HTTPS-адрес, когда на полке что-то произойдёт: та же запись, что в ленте событий для
@@ -194,7 +231,14 @@ export function WebhooksSection() {
         ответил 2xx, Полка повторит позже; после трёх дней одних ошибок вебхук выключится.
       </p>
       {(items ?? []).map((item) => (
-        <article key={item.id} className="webhooks-item" data-status={item.status}>
+        <article
+          key={item.id}
+          className="webhooks-item"
+          data-status={item.status}
+          data-webhook-id={item.id}
+          tabIndex={-1}
+          aria-label={item.url}
+        >
           <div className="webhooks-head">
             <strong className="webhooks-url">{item.url}</strong>
             {item.status === "disabled" && <Badge>{DISABLED_LABEL[item.disabledReason ?? "owner"]}</Badge>}
@@ -208,26 +252,37 @@ export function WebhooksSection() {
             {item.skippedEvents > 0 && <> Пропущено событий (очередь была полна): {item.skippedEvents}.</>}
           </p>
           {secret?.id === item.id && (
-            <Notice onDismiss={() => setSecret(null)}>
-              <p className="webhooks-secret">
-                Секрет показывается только сейчас — сохраните его у получателя:
-                <span className="webhooks-secret-value">
-                  <code>{secret.value}</code>
-                  <CopyButton value={secret.value} />
-                </span>
-                {secret.rotated && "Прежний секрет больше не подписывает запросы."}
-              </p>
-            </Notice>
+            <div ref={secretRef} tabIndex={-1} className="webhooks-secret-box">
+              <Notice
+                onDismiss={() => {
+                  setSecret(null);
+                  pendingFocus.current = { webhook: item.id };
+                }}
+              >
+                <p className="webhooks-secret">
+                  Секрет показывается только сейчас — сохраните его у получателя:
+                  <span className="webhooks-secret-value">
+                    <code>{secret.value}</code>
+                    <CopyButton value={secret.value} />
+                  </span>
+                  {secret.rotated && "Прежний секрет больше не подписывает запросы."}
+                </p>
+              </Notice>
+            </div>
           )}
           {editing === item.id ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                void run(item.id, async () => {
-                  await client.webhooks.update(item.id, { events: editEvents });
-                  setEditing(null);
-                  return "События сохранены.";
-                });
+                void run(
+                  item.id,
+                  async () => {
+                    await client.webhooks.update(item.id, { events: editEvents });
+                    setEditing(null);
+                    return "События сохранены.";
+                  },
+                  { webhook: item.id },
+                );
               }}
             >
               <EventChoice value={editEvents} onChange={setEditEvents} />
@@ -235,7 +290,13 @@ export function WebhooksSection() {
                 <Button variant="primary" type="submit" disabled={busy || !editEvents.length}>
                   Сохранить
                 </Button>
-                <Button type="button" onClick={() => setEditing(null)}>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setEditing(null);
+                    pendingFocus.current = { webhook: item.id };
+                  }}
+                >
                   Отмена
                 </Button>
               </div>
@@ -255,20 +316,34 @@ export function WebhooksSection() {
                   onClick={() => {
                     setConfirming(null);
                     if (confirming.action === "rotate")
-                      void run(item.id, async () => {
-                        const rotated = await client.webhooks.rotate(item.id);
-                        setSecret({ id: item.id, value: rotated.secret, rotated: true });
-                      });
+                      void run(
+                        item.id,
+                        async () => {
+                          const rotated = await client.webhooks.rotate(item.id);
+                          setSecret({ id: item.id, value: rotated.secret, rotated: true });
+                        },
+                        "secret",
+                      );
                     else
-                      void run("list", async () => {
-                        await client.webhooks.remove(item.id);
-                        return `Вебхук ${item.url} удалён вместе с журналом.`;
-                      });
+                      void run(
+                        "list",
+                        async () => {
+                          await client.webhooks.remove(item.id);
+                          return `Вебхук ${item.url} удалён вместе с журналом.`;
+                        },
+                        "list",
+                      );
                   }}
                 >
                   {confirming.action === "rotate" ? "Выдать новый секрет" : "Удалить вебхук"}
                 </Button>
-                <Button type="button" onClick={() => setConfirming(null)}>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setConfirming(null);
+                    pendingFocus.current = { webhook: item.id };
+                  }}
+                >
                   Отмена
                 </Button>
               </div>
@@ -342,19 +417,28 @@ export function WebhooksSection() {
           {log === item.id && <DeliveryLog key={logVersion} id={item.id} />}
         </article>
       ))}
-      {result?.place === "list" && <div className="webhooks-list-result">{resultAt("list")}</div>}
+      {result?.place === "list" && (
+        <div className="webhooks-list-result" ref={listResultRef} tabIndex={-1}>
+          {resultAt("list")}
+        </div>
+      )}
       {loadError && <Notice tone="error">{loadError}</Notice>}
       <form
         className="webhooks-new"
         onSubmit={(event) => {
           event.preventDefault();
-          void run("new", async () => {
-            const made = await client.webhooks.create({ url: url.trim(), description: description.trim(), events });
-            setSecret({ id: made.webhook.id, value: made.secret, rotated: false });
-            setUrl("");
-            setDescription("");
-            setEvents(DEFAULT_EVENTS);
-          });
+          void run(
+            "new",
+            async () => {
+              const made = await client.webhooks.create({ url: url.trim(), description: description.trim(), events });
+              setSecret({ id: made.webhook.id, value: made.secret, rotated: false });
+              setUrl("");
+              setDescription("");
+              setEvents(DEFAULT_EVENTS);
+              return CREATED;
+            },
+            "secret",
+          );
         }}
       >
         <h3>Новый вебхук</h3>
@@ -379,7 +463,11 @@ export function WebhooksSection() {
         <Button variant="primary" type="submit" disabled={busy || !url.trim() || !events.length}>
           Добавить вебхук
         </Button>
-        {resultAt("new")}
+        {result?.place === "new" && result.tone === "error" && resultAt("new")}
+        {/* Always in the page, so the confirmation is announced: the secret is above the form. */}
+        <p className="webhooks-result" role="status">
+          {result?.place === "new" && result.tone === "info" ? result.text : ""}
+        </p>
       </form>
     </section>
   );

@@ -46,18 +46,23 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return `${n} ${rule === "one" ? one : rule === "few" ? few : many}`;
 };
 
-function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => void }) {
+/** version: bumped when the page reloads, so an open member list reloads too. */
+function ShelfRow({ shelf, version, onChanged }: { shelf: CompanyShelf; version: number; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
-  const [members, setMembers] = useState<Member[] | null>(null);
+  const [members, setMembers] = useState<{ version: number; items: Member[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!open || members) return;
+    if (!open || members?.version === version) return;
+    let live = true;
     company
       .members(shelf.id)
-      .then((page) => setMembers(page.items))
-      .catch((e) => setError((e as Error).message));
-  }, [open, members, shelf.id]);
+      .then((page) => live && setMembers({ version, items: page.items }))
+      .catch((e) => live && setError((e as Error).message));
+    return () => {
+      live = false;
+    };
+  }, [open, members, shelf.id, version]);
   return (
     <li className="company-shelf">
       <div className="company-shelf-head">
@@ -100,9 +105,11 @@ function ShelfRow({ shelf, onChanged }: { shelf: CompanyShelf; onChanged: () => 
           <p className="company-muted" role="status">
             Загружаем…
           </p>
+        ) : !members.items.length ? (
+          <p className="company-muted">На полке пока никого нет.</p>
         ) : (
           <ul className="company-members">
-            {members.map((member) => (
+            {members.items.map((member) => (
               <li key={member.accountId}>
                 <span>
                   {member.name}
@@ -133,7 +140,16 @@ export function signInAfterOffboarding(sso: boolean, cloud: boolean) {
  * everywhere: «со всех полок отделов», or on a shared cloud «… компании»: the
  * other companies' shelves are not this admin's.
  */
-function Offboarding({ everywhere, signIn }: { everywhere: string; signIn: string }) {
+function Offboarding({
+  everywhere,
+  signIn,
+  onChanged,
+}: {
+  everywhere: string;
+  signIn: string;
+  /** The shelves' members and admins changed: reload the list below. */
+  onChanged: () => void;
+}) {
   const [who, setWho] = useState("");
   const [person, setPerson] = useState<Employee | null>(null);
   const [busy, setBusy] = useState(false);
@@ -165,13 +181,17 @@ function Offboarding({ everywhere, signIn }: { everywhere: string; signIn: strin
     setError("");
     try {
       const { removed } = await company.offboard(person.accountId);
+      const names = removed.map((shelf) => `«${shelf.name}»`).join(", ");
       setDone(
-        removed.length
-          ? `${person.name} больше не на полках ${removed.map((shelf) => `«${shelf.name}»`).join(", ")}. Агенты сотрудника на этих полках отключены, работы остались.`
-          : `${person.name} уже не состоит ни в одной полке отдела.`,
+        removed.length === 1
+          ? `${person.name} больше не на полке ${names}. Агенты сотрудника на ней отключены, работы остались.`
+          : removed.length
+            ? `${person.name} больше не на полках ${names}. Агенты сотрудника на этих полках отключены, работы остались.`
+            : `${person.name} уже не состоит ни в одной полке отдела.`,
       );
       setPerson({ ...person, shelves: [], teamAgents: 0 });
       setConfirm(false);
+      if (removed.length) onChanged();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -227,9 +247,9 @@ function Offboarding({ everywhere, signIn }: { everywhere: string; signIn: strin
         <Dialog title={`Убрать ${person.name} ${everywhere}?`} busy={busy} onClose={() => !busy && setConfirm(false)}>
           <div className="dialog-body">
             <p>
-              {person.name} перестанет видеть полки {person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")},
-              агенты сотрудника на них отключатся. Работы останутся на полках. Там, где других администраторов не было,
-              администратором станете вы.
+              {person.shelves.length === 1
+                ? `${person.name} перестанет видеть полку «${person.shelves[0].name}», агенты сотрудника на ней отключатся. Работы останутся на полке. Если других администраторов там не было, администратором станете вы.`
+                : `${person.name} перестанет видеть полки ${person.shelves.map((shelf) => `«${shelf.name}»`).join(", ")}, агенты сотрудника на них отключатся. Работы останутся на полках. Там, где других администраторов не было, администратором станете вы.`}
             </p>
           </div>
           <div className="dialog-footer">
@@ -326,6 +346,7 @@ export function CompanyAdmin() {
             <Offboarding
               everywhere={state.organisation ? "со всех полок отделов компании" : "со всех полок отделов"}
               signIn={signInAfterOffboarding(sso, Boolean(state.organisation))}
+              onChanged={() => setRefresh((n) => n + 1)}
             />
             {extensionSections.map(({ id, title, Component }) => (
               <section key={id} className="company-card" aria-label={title}>
@@ -338,7 +359,12 @@ export function CompanyAdmin() {
               {state.shelves.length ? (
                 <ul className="company-shelves">
                   {state.shelves.map((shelf) => (
-                    <ShelfRow key={shelf.id} shelf={shelf} onChanged={() => setRefresh((n) => n + 1)} />
+                    <ShelfRow
+                      key={shelf.id}
+                      shelf={shelf}
+                      version={refresh}
+                      onChanged={() => setRefresh((n) => n + 1)}
+                    />
                   ))}
                 </ul>
               ) : (

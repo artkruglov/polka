@@ -261,7 +261,7 @@ export function RecipientScreen({
             <a className="ui-button ui-button--primary" href="/signin" target="_blank" rel="noopener">
               Войти
             </a>
-            <Button onClick={onRetry}>Я вошёл — открыть</Button>
+            <Button onClick={onRetry}>Вход выполнен — открыть</Button>
           </div>
         </main>
       </RecipientFrame>

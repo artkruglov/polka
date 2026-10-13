@@ -6,6 +6,8 @@
   margin: 0 auto;
   padding: 44px var(--gutter) 96px;
   display: grid;
+  /* Shrinkable column: the token form and long commands stay inside a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
 }
 .agent-page-heading {

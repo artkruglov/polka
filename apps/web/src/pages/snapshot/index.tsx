@@ -79,7 +79,7 @@ export function ShelfSnapshotPage() {
             <p role="status">Проверяем аккаунт…</p>
           )
         ) : account === null ? (
-          <LinkButton variant="primary" href="/?login=1&next=%2Fsnapshot">
+          <LinkButton variant="primary" href={`/?login=1&next=${encodeURIComponent(withShelf("/snapshot"))}`}>
             Войти
           </LinkButton>
         ) : (

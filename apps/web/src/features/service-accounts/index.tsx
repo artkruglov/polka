@@ -102,7 +102,7 @@ export function ServiceAccountsSection({ accountId, admin }: { accountId: string
                 disabled={busy}
                 onClick={() => void run(() => client.serviceAccounts.setResponsible(item.id, accountId), item.name)}
               >
-                Отвечать самому и разморозить
+                Взять ответственность и разморозить
               </Button>
             )}
             {confirming === item.id ? (
