@@ -310,7 +310,7 @@ async function composeBlocked(notice: Extract<ModerationNotice, { kind: "blocked
     ...rows.map(([name, value]) => `${name}: ${value}`),
     "",
     `Снять блокировку: npm run admin -- moderation unblock ${row.id}`,
-    `Сохранить доказательства (legal hold): npm run moderation:hold -- ${row.id} --authority "…"`,
+    `Сохранить доказательства (legal hold): npm run admin -- moderation legal-hold ${row.id} on --authority "…"`,
     ...(notice.frozen ? [`Вернуть доступ автору: npm run admin -- moderation enable ${clean(row.name, 60)}`] : []),
     `Журнал: npm run admin -- moderation events ${row.artifact_id}`,
   ];

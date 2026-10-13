@@ -422,6 +422,28 @@ test("erasing an account clears its shelf card and its mark as a work's owner (m
   assert.equal(counts.rowCount, 0, "read counts of an erased person's shelf are gone");
 });
 
+test("the events feed: a cursor kept before a restore is not stuck ahead of the cluster", async () => {
+  const token = (await create(admin, { name: "После восстановления", scopes: ["context", "read", "capture"] })).json()
+    .token as string;
+  const tail = (await api(token, "GET", "/api/v1/events")).json();
+  const id = tail.nextCursor === "0" ? "0" : tail.nextCursor.split(":")[1];
+  const stale = `99999999999:${id}`;
+  // The restore procedure clears the old cluster's numbers (step 3a).
+  await db.query("UPDATE audit_outbox SET tx_id=NULL WHERE tenant_id=$1", [shelf.id]);
+  // Nothing new yet: the cursor comes back without the old cluster's number.
+  const empty = (await api(token, "GET", `/api/v1/events?after=${encodeURIComponent(stale)}`)).json();
+  assert.deepEqual(empty.events, []);
+  assert.equal(empty.nextCursor, `0:${id}`);
+  const saved = (await publish(token, "Сохранено после восстановления")).json();
+  let page: any = { events: [] };
+  for (let tries = 0; tries < 60 && !page.events.length; tries++) {
+    page = (await api(token, "GET", `/api/v1/events?after=${encodeURIComponent(stale)}`)).json();
+    if (!page.events.length) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(page.events.some((event: any) => event.artifactId === saved.artifactId));
+  assert.ok(BigInt(page.nextCursor.split(":")[0]) < 99999999999n, page.nextCursor);
+});
+
 test("the events feed and the works list carry metadata only: no bytes, no payload", async () => {
   const token = (await create(admin, { name: "Только метаданные", scopes: ["context", "read", "capture"] })).json()
     .token as string;

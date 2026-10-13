@@ -7,6 +7,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
@@ -321,4 +323,21 @@ test("erasing an account clears its company admin role", async () => {
     rows: [row],
   } = await db.query("SELECT company_admin,company_organisation_id FROM accounts WHERE id=$1", [leaving.id]);
   assert.deepEqual(row, { company_admin: false, company_organisation_id: null });
+});
+
+test("the company admin command refuses a flag it does not know instead of granting the role", async () => {
+  const typo = await account("org-typo", `typo@${domainA}`);
+  const script = fileURLToPath(new URL("../scripts/company-admin.ts", import.meta.url));
+  for (const args of [[typo.name, "--revok"], [typo.name, "--org"], [typo.name, "extra"], []]) {
+    const res = spawnSync(process.execPath, ["--import", "tsx", script, ...args], {
+      encoding: "utf8",
+      env: { ...process.env },
+    });
+    assert.equal(res.status, 2, `${args.join(" ")}: ${res.stderr}`);
+    assert.match(res.stderr, /company admin <login or e-mail>/);
+  }
+  const {
+    rows: [row],
+  } = await db.query("SELECT company_admin FROM accounts WHERE id=$1", [typo.id]);
+  assert.equal(row.company_admin, false);
 });

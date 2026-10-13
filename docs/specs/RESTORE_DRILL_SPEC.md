@@ -59,7 +59,10 @@ revocation journal. Вместо этого каждый restore до откры
 2. поставить `revoked_at` всем ещё активным `agent_connections`;
 3. удалить `viewer_grants`, `grants`, `agent_connection_csrf` и `sessions`;
 4. удалить незавершённые `login_challenges`;
-5. не менять исходные revisions, files, manifests, receipts и audit.
+5. отозвать активные приглашения на полки (`tenant_invitations`, миграция 067) и
+   выключить активные вебхуки (`webhook_endpoints`, миграция 071, с причиной
+   `owner`; их ожидающие доставки — `failed`);
+6. не менять исходные revisions, files, manifests, receipts и audit.
 
 После restore владелец входит заново и явно создаёт новые links/connections.
 Старые recipient и agent tokens должны получать нейтральный отказ. Короткие
@@ -250,6 +253,15 @@ DELETE FROM grants;
 DELETE FROM agent_connection_csrf;
 DELETE FROM sessions;
 DELETE FROM login_challenges;
+UPDATE tenant_invitations
+SET state='revoked', token_hash=NULL, revoked_at=clock_timestamp()
+WHERE state='active';
+UPDATE webhook_endpoints
+SET status='disabled', disabled_reason='owner', updated_at=clock_timestamp()
+WHERE status='active';
+UPDATE webhook_deliveries
+SET state='failed', next_attempt_at=NULL, leased_until=NULL, last_error='endpoint_disabled'
+WHERE state='pending';
 ```
 
 Целевой интерфейс:

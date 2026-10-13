@@ -17,10 +17,17 @@ export const OPS_LIMITS = {
   // deletes expired rows; a row expired longer than this means the loop has
   // stopped or keeps failing early.
   maintenanceOverdueSeconds: 30 * 60,
-  // A daily backup plus two hours of slack.
-  backupAgeHours: 26,
+  // Slack over the backup interval (OPS_BACKUP_INTERVAL_SECONDS, the backup
+  // job's BACKUP_INTERVAL_SECONDS): a daily dump alarms after 26 hours, an
+  // hourly one after 3.
+  backupSlackHours: 2,
   diskFreePercent: 10,
 };
+
+/** How old the newest dump may be before the backup check turns red. */
+export function backupAgeLimitHours(intervalSeconds = config.OPS_BACKUP_INTERVAL_SECONDS) {
+  return Math.round((intervalSeconds / 3600 + OPS_LIMITS.backupSlackHours) * 10) / 10;
+}
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
@@ -79,7 +86,8 @@ async function backup(): Promise<Check> {
     } while (ContinuationToken);
     if (!newest) return { ok: false, reason: "no dumps" };
     const ageHours = Math.round(((Date.now() - newest) / 3_600_000) * 10) / 10;
-    return { ok: ageHours < OPS_LIMITS.backupAgeHours, ageHours };
+    const limitHours = backupAgeLimitHours();
+    return { ok: ageHours < limitHours, ageHours, limitHours };
   } catch {
     return { ok: false, reason: "cannot list" };
   }

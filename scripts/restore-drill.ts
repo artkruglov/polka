@@ -594,6 +594,24 @@ async function seedSource(linkKey: string) {
        VALUES($1,$2,$3,$4,$5,now()+interval '50 seconds')`,
       [fingerprint(randomBytes(32)), ids.bundleRevision, ids.activeShare, grantHash, ids.derivative],
     );
+    // Access paths the restore must close too: an open invitation link to
+    // the shelf and an active webhook address with a waiting delivery.
+    await client.query(
+      `INSERT INTO tenant_invitations(id,tenant_id,role,token_hash,max_uses,invited_by,created_at,expires_at)
+       VALUES($1,$2,'reader',$3,5,$4,now(),now()+interval '7 days')`,
+      [randomUUID(), ids.tenant, fingerprint(randomBytes(32)), ids.account],
+    );
+    const webhook = randomUUID();
+    await client.query(
+      `INSERT INTO webhook_endpoints(id,tenant_id,created_by,url,events,secret_enc,secret_hint)
+       VALUES($1,$2,$3,'https://hooks.example.test/polka',ARRAY['revision.saved'],$4,'whsec_x')`,
+      [webhook, ids.tenant, ids.account, randomBytes(48)],
+    );
+    await client.query(
+      `INSERT INTO webhook_deliveries(id,endpoint_id,tenant_id,event_id,action,payload,next_attempt_at)
+       VALUES($1,$2,$3,'1:1','revision.saved','{}'::jsonb,now())`,
+      [randomUUID(), webhook, ids.tenant],
+    );
     const stageRequest = {
       key: randomUUID(),
       title: "Live stage",
@@ -1282,6 +1300,18 @@ async function remapAndClose(mapping: Awaited<ReturnType<typeof restoreObjects>>
     await client.query("DELETE FROM agent_connection_csrf");
     await client.query("DELETE FROM sessions");
     await client.query("DELETE FROM login_challenges");
+    // Shelf invitation links (067) and webhook addresses (071) issued before
+    // the dump: the same fail-closed rule. A webhook goes off as if its owner
+    // switched it off, and the owner turns it back on in «Настройки».
+    await client.query(
+      "UPDATE tenant_invitations SET state='revoked',token_hash=NULL,revoked_at=clock_timestamp() WHERE state='active'",
+    );
+    await client.query(
+      "UPDATE webhook_endpoints SET status='disabled',disabled_reason='owner',updated_at=clock_timestamp() WHERE status='active'",
+    );
+    await client.query(
+      "UPDATE webhook_deliveries SET state='failed',next_attempt_at=NULL,leased_until=NULL,last_error='endpoint_disabled' WHERE state='pending'",
+    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1319,6 +1349,9 @@ async function verify(
        (SELECT count(*)::int FROM project_view_grants) AS project_view_grants,
        (SELECT count(*)::int FROM agent_connection_csrf) AS csrf,
        (SELECT count(*)::int FROM login_challenges) AS challenges,
+       (SELECT count(*)::int FROM tenant_invitations WHERE state='active') AS invitations,
+       (SELECT count(*)::int FROM webhook_endpoints WHERE status='active') AS webhooks,
+       (SELECT count(*)::int FROM webhook_deliveries WHERE state='pending') AS webhook_deliveries,
        (SELECT count(*)::int FROM upload_files uf JOIN uploads u ON u.id=uf.upload_id WHERE u.id=$1) AS dead_files,
        (SELECT count(*)::int FROM uploads WHERE id=$1 AND reconciled_at IS NOT NULL) AS tombstone`,
       [seed.ids.reconciledUpload],

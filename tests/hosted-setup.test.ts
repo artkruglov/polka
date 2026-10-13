@@ -76,11 +76,72 @@ test("hosted:setup fills every required setting and generates distinct secrets",
   assert.match(readFileSync(out, "utf8"), /Keep LINK_KEY stable/);
   for (const secret of [env.LINK_KEY, env.POSTGRES_ADMIN_PASSWORD, keys.S3_SECRET_KEY])
     assert.ok(!res.stdout.includes(secret) && !res.stderr.includes(secret));
-  assert.match(res.stdout, /every required setting is filled/);
-  // A second run keeps the file unless --force, and --force makes new secrets.
+  assert.match(res.stdout, /still to fill: OPERATOR_CONTACT$/m);
+  // A second run keeps the file unless --force.
   assert.notEqual(run([...flags, "--out", out], keys).status, 0);
-  assert.equal(run([...flags, "--out", out, "--force"], keys).status, 0);
-  assert.notEqual(parse(readFileSync(out, "utf8")).LINK_KEY, env.LINK_KEY);
+  // --force updates it: secrets, keys and earlier settings stay, what is given again changes.
+  writeFileSync(out, `${readFileSync(out, "utf8")}\nBACKUP_INTERVAL_SECONDS=3600\n`);
+  const update = run(["--out", out, "--force", "--set", "OPERATOR_CONTACT=privacy@company.test"]);
+  assert.equal(update.status, 0, update.stderr);
+  assert.match(update.stdout, /every required setting is filled/);
+  const updated = parse(readFileSync(out, "utf8"));
+  for (const key of [
+    "POSTGRES_ADMIN_PASSWORD",
+    "POLKA_SCHEMA_PASSWORD",
+    "POLKA_RUNTIME_PASSWORD",
+    "LINK_KEY",
+    "OPS_STATUS_TOKEN",
+    "S3_SECRET_KEY",
+    "APP_HOST",
+    "HTML_LIVE_MODE",
+  ])
+    assert.equal(updated[key], env[key], key);
+  assert.equal(updated.OPERATOR_CONTACT, "privacy@company.test");
+  assert.equal(updated.BACKUP_INTERVAL_SECONDS, "3600");
+  assert.equal(statSync(out).mode & 0o777, 0o600);
+  // --rotate makes new secrets on purpose, and only with --force.
+  assert.match(run(["--out", out, "--rotate"]).stderr, /with --force/);
+  const rotated = run(["--out", out, "--force", "--rotate"]);
+  assert.equal(rotated.status, 0, rotated.stderr);
+  assert.match(rotated.stdout, /ALTER ROLE/);
+  const after = parse(readFileSync(out, "utf8"));
+  assert.notEqual(after.LINK_KEY, env.LINK_KEY);
+  assert.notEqual(after.POLKA_RUNTIME_PASSWORD, env.POLKA_RUNTIME_PASSWORD);
+  assert.equal(after.S3_SECRET_KEY, env.S3_SECRET_KEY);
+});
+
+test("hosted:setup refuses a viewer on the app's registrable domain", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hosted-setup-"));
+  for (const [app, viewer] of [
+    ["polka.company.ru", "view.company.ru"],
+    ["polka.company.ru", "company.ru"],
+    ["polka.company.co.uk", "viewer.company.co.uk"],
+    ["polka.company.com.ru", "v.company.com.ru"],
+  ]) {
+    const res = run(["--app-host", app, "--viewer-host", viewer, "--out", join(dir, `${Math.random()}.env`)]);
+    assert.notEqual(res.status, 0, `${app} ${viewer}`);
+    assert.match(res.stderr, /another registrable domain/);
+  }
+  for (const [app, viewer] of [
+    ["polka.company.ru", "polka-view.company.net"],
+    ["polka.one.co.uk", "polka.two.co.uk"],
+  ]) {
+    const res = run(["--app-host", app, "--viewer-host", viewer, "--out", join(dir, `${Math.random()}.env`)]);
+    assert.equal(res.status, 0, `${app} ${viewer}: ${res.stderr}`);
+  }
+});
+
+test("the example suits a company: no model without a key, no polochka.app contact, one company per installation", () => {
+  const example = parse(readFileSync(new URL("../deploy/hosted/hosted.env.example", import.meta.url), "utf8"));
+  assert.equal(example.CONTENT_MODEL_PROVIDER, "off");
+  assert.equal(example.OPERATOR_CONTACT, "");
+  assert.equal(example.TEAM_SHELVES_SCOPE, "installation");
+  assert.doesNotMatch(JSON.stringify(example), /polochka\.app/);
+  // Every OIDC_* the compose file passes can be set with --set.
+  const oidc = new Set([...compose.matchAll(/^\s+(OIDC_[A-Z_]+):/gm)].map((m) => m[1]));
+  assert.ok(oidc.size >= 5);
+  for (const key of oidc) assert.ok(key in example, `${key} is missing from the example`);
+  assert.match(compose, /TEAM_SHELVES_SCOPE: \$\{TEAM_SHELVES_SCOPE:-installation\}/);
 });
 
 test("hosted:setup lists what is missing and refuses wrong input", () => {
@@ -97,6 +158,7 @@ test("hosted:setup lists what is missing and refuses wrong input", () => {
   assert.match(partial.stdout, /still to fill: .*POLKA_IMAGE.*S3_ENDPOINT.*S3_ACCESS_KEY/);
   for (const [args, env, why] of [
     [["--app-host", "same.company.test", "--viewer-host", "same.company.test"], {}, /its own host/],
+    [["--rotate"], {}, /with --force/],
     [["--app-host", "not a host"], {}, /host name/],
     [["--set", "NOT_A_SETTING=1"], {}, /not a setting/],
     [["--set", "TEAM_SHELVES=on\nLINK_KEY=x"], {}, /one line/],

@@ -4,7 +4,8 @@ import { randomBytes } from "node:crypto";
 import { DeleteObjectsCommand, ListObjectVersionsCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
-import { OPS_LIMITS } from "../apps/server/ops-status.ts";
+import { readFileSync } from "node:fs";
+import { OPS_LIMITS, backupAgeLimitHours } from "../apps/server/ops-status.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -68,7 +69,18 @@ test("ops status reports the newest backup and fails without one", async () => {
   const fresh = (await status(`Bearer ${token}`)).json();
   assert.equal(fresh.checks.backup.ok, true);
   assert.ok(fresh.checks.backup.ageHours < 1, String(fresh.checks.backup.ageHours));
+  assert.equal(fresh.checks.backup.limitHours, backupAgeLimitHours());
   mutable.OPS_BACKUP_BUCKET = undefined;
+});
+
+test("the backup age limit follows the backup interval: daily 26 hours, hourly 3", () => {
+  assert.equal(backupAgeLimitHours(86_400), 26);
+  assert.equal(backupAgeLimitHours(3_600), 3);
+  assert.equal(backupAgeLimitHours(config.OPS_BACKUP_INTERVAL_SECONDS), config.OPS_BACKUP_INTERVAL_SECONDS / 3600 + 2);
+  // The hosted compose passes the backup job's interval to the app.
+  const compose = readFileSync(new URL("../deploy/hosted/compose.yml", import.meta.url), "utf8");
+  assert.match(compose, /OPS_BACKUP_INTERVAL_SECONDS: \$\{BACKUP_INTERVAL_SECONDS:-86400\}/);
+  assert.match(compose, /BACKUP_INTERVAL_SECONDS: \$\{BACKUP_INTERVAL_SECONDS:-86400\}/);
 });
 
 test("ops status fails when expired rows show maintenance has stopped", async () => {

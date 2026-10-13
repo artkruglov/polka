@@ -375,6 +375,9 @@ const env = z
     // job writes dumps; the app only lists it to report the newest dump's age.
     OPS_STATUS_TOKEN: unsetIfEmpty(z.string().min(32)),
     OPS_BACKUP_BUCKET: unsetIfEmpty(z.string()),
+    // How often the backup job dumps (its BACKUP_INTERVAL_SECONDS): the status
+    // turns red when the newest dump is older than this plus two hours.
+    OPS_BACKUP_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(31_536_000).default(86_400),
     RESTORE_MODE: z.enum(["off", "required"]).default("off"),
     RESTORE_RECEIPT_PATH: z.string().optional(),
     RESTORE_RUN_ID: z.string().uuid().optional(),
