@@ -14,7 +14,7 @@ import { snapshotClient, type SnapshotCall } from "./cover-snapshot-client.ts";
 import { db } from "./db.ts";
 import { missing } from "./errors.ts";
 import { readBlob } from "./storage.ts";
-import { inWorker } from "./html.ts";
+import { runInPool } from "./worker-pool.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
   SERVED_RUNTIME_PROFILES_SQL,
@@ -124,14 +124,9 @@ export async function coverFactsBounded(source: string, deadlineMs = 3_000): Pro
       return unread;
     }
   }
-  // The deadline starts once the worker says it is ready (html.ts inWorker):
-  // loading tsx on a busy host must not count against the page.
-  const facts = await inWorker<CoverFacts | null>(
-    { source },
-    deadlineMs,
-    unread,
-    new URL("./cover-facts-worker.mjs", import.meta.url),
-  );
+  // In the reader pool (worker-pool.ts); the deadline counts the work, not
+  // the wait for a worker.
+  const facts = await runInPool<CoverFacts | null>({ kind: "cover", source }, deadlineMs, unread);
   return facts ?? unread;
 }
 

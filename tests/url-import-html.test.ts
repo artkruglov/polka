@@ -174,3 +174,26 @@ test("CDN libraries stay recognisable for the runtime; icons and TTF fonts are s
     JSON.stringify(result.warnings),
   );
 });
+
+test("HTML importer removes many sibling elements in one pass, not one filter each", async () => {
+  // 60 000 <base> and 20 000 <script> siblings: detaching them one by one
+  // filtered the siblings each time (~5·10^9 steps on the request thread).
+  const page = `<!doctype html><title>Wide</title><body>${'<base href="/">'.repeat(60_000)}${"<script>1</script>".repeat(20_000)}<p>end</p></body>`;
+  const started = performance.now();
+  const result = await captureHtmlUrl(base + "wide.html", {
+    fetcher: source({ [base + "wide.html"]: ["text/html", page] }),
+  });
+  assert.ok(performance.now() - started < 15_000, `took ${performance.now() - started} ms`);
+  const index = Buffer.from(result.files.find((f) => f.path === "index.html")!.data, "base64").toString();
+  assert.doesNotMatch(index, /<base/);
+  assert.match(index, /<p>end<\/p>/);
+});
+
+test("HTML importer does not parse on the request thread a page its reader could not read in time", async () => {
+  // Deep nesting is quadratic for parse5; the pool's reader gives up at its deadline.
+  const page = `<!doctype html><title>Deep</title>${"<div>".repeat(200_000)}`;
+  await assert.rejects(
+    captureHtmlUrl(base + "deep.html", { fetcher: source({ [base + "deep.html"]: ["text/html", page] }) }),
+    { code: "too_complex" },
+  );
+});

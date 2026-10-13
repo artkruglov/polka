@@ -1,6 +1,6 @@
 import { canonicalizeManifest, PROJECT_RUNTIME, type BundleManifest } from "../../packages/contracts/bundle.ts";
 import { checkBuildInWorker } from "./bundle-derivatives.ts";
-import { BUNDLE_BUILDER_VERSION } from "./bundle-runtime-contract.ts";
+import { BUILD_LIMITS, BUNDLE_BUILDER_VERSION } from "./bundle-runtime-contract.ts";
 import { db } from "./db.ts";
 import { needsRuntimeBuild } from "./react-runtime.ts";
 import { readBlob } from "./storage.ts";
@@ -18,6 +18,37 @@ import { readBlob } from "./storage.ts";
 /** Files a runtime page may read while it is built: its code, styles and data. */
 const BUILD_INPUT_MIME = new Set(["text/html", "text/javascript", "text/css", "application/json"]);
 const CACHE_BYTES = 64 * 1024 * 1024;
+
+/**
+ * A build reads its inputs (up to the project's 48 MB) before the builder
+ * takes it. Inputs are read only once the build is admitted: at most as many
+ * builds as the builder has workers, holding at most LOADING_BYTES of inputs
+ * together (one build alone may hold more). A build that is not admitted
+ * within ADMISSION_WAIT_MS answers «busy» and is not remembered.
+ */
+const LOADING_BYTES = 64 * 1024 * 1024;
+const ADMISSION_WAIT_MS = 10_000;
+const loads = { builds: 0, bytes: 0 };
+
+async function admitInputs(bytes: number) {
+  const deadline = Date.now() + ADMISSION_WAIT_MS;
+  while (loads.builds >= BUILD_LIMITS.workers || (loads.builds > 0 && loads.bytes + bytes > LOADING_BYTES)) {
+    if (Date.now() >= deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  loads.builds++;
+  loads.bytes += bytes;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    loads.builds--;
+    loads.bytes -= bytes;
+  };
+}
+
+/** Builds reading their inputs now, and those inputs' bytes (tests). */
+export const runtimeInputLoads = () => ({ ...loads });
 
 export type ProjectRuntimePage = { ok: true; html: Buffer } | { ok: false; reason: string; path?: string };
 
@@ -68,13 +99,20 @@ export async function projectRuntimePage(
     } catch {
       return { ok: false as const, reason: "the page's files do not form a valid manifest", path };
     }
-    const files = await Promise.all(
-      canonical.files.map(async (file) => ({
-        path: file.path,
-        bytes: file.path === path ? pageBytes : await read(file.path),
-      })),
-    );
-    const result = await checkBuildInWorker(canonical, files, { project: true });
+    const release = await admitInputs(canonical.files.reduce((sum, file) => sum + file.size, 0));
+    if (!release) return { ok: false as const, reason: "сервер занят другими сборками" };
+    let result: Awaited<ReturnType<typeof checkBuildInWorker>>;
+    try {
+      const files = await Promise.all(
+        canonical.files.map(async (file) => ({
+          path: file.path,
+          bytes: file.path === path ? pageBytes : await read(file.path),
+        })),
+      );
+      result = await checkBuildInWorker(canonical, files, { project: true });
+    } finally {
+      release();
+    }
     if (!result.ok && (result.failed || result.busy)) return { ok: false as const, reason: result.reason };
     const outcome: ProjectRuntimePage = result.ok
       ? { ok: true, html: Buffer.from(result.html) }
