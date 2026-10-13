@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -12,6 +13,7 @@ import { createAccount } from "../apps/server/auth.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { sessionsForExtension } from "../apps/server/agent-sessions.ts";
+import { scrubSessionTemplates } from "../apps/server/session-template-scrub.ts";
 import { auditFeedHead, readAuditFeed } from "../apps/server/extension-feed.ts";
 import { useExtensions } from "../apps/server/extensions.ts";
 import { createMcpServer } from "../apps/server/mcp-server.ts";
@@ -243,6 +245,57 @@ test("a template from an older CLI is blanked again: no password glued to a flag
   assert.ok(!detail.body.includes(glued));
   // The destructive rule still reads the subcommand and the flag.
   assert.ok(saved.json().alerts.includes("destructive_command"));
+});
+
+test("sessions scrub-templates blanks templates stored before the server re-scrubbed them", async () => {
+  const person = await owner("sessions-scrub");
+  const secret = await token(person);
+  const { saved } = await upload(secret, await sessionFile());
+  assert.equal(saved.statusCode, 200, saved.body);
+  const id = saved.json().id as string;
+  const glued = "Hunter" + "2Pass";
+  // What an older server kept as the CLI sent it.
+  await db.query(`UPDATE agent_session_tool_calls SET template=$2 WHERE session_id=$1 AND seq=0`, [
+    id,
+    `mysql -u root -p${glued}`,
+  ]);
+  await db.query(
+    `UPDATE agent_session_tool_calls SET template='sshpass -p ${glued} ssh' WHERE session_id=$1 AND seq=1`,
+    [id],
+  );
+  const templates = async () =>
+    (
+      await db.query(`SELECT template FROM agent_session_tool_calls WHERE session_id=$1 AND seq<2 ORDER BY seq`, [id])
+    ).rows.map((row) => row.template);
+
+  // The operator's command, as on the VM: counts only, never a value.
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, ["--import", "tsx", "scripts/admin.ts", "sessions", "scrub-templates", ...args], {
+      cwd: new URL("../", import.meta.url),
+      encoding: "utf8",
+      env: process.env,
+    });
+  const dry = run("--dry-run", "--batch", "2");
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.ok(!dry.stdout.includes(glued) && !dry.stderr.includes(glued));
+  const dryReport = JSON.parse(dry.stdout.trim().split("\n").at(-1)!);
+  assert.equal(dryReport.event, "sessions.scrub_templates");
+  assert.equal(dryReport.dryRun, true);
+  assert.ok(dryReport.dirty >= 2 && dryReport.scanned >= dryReport.dirty);
+  assert.equal(dryReport.updated, 0);
+  assert.deepEqual(await templates(), [`mysql -u root -p${glued}`, `sshpass -p ${glued} ssh`]);
+
+  const report = await scrubSessionTemplates({ batch: 3 });
+  assert.ok(report.updated >= 2);
+  assert.deepEqual(await templates(), ["mysql -u <arg> <arg>", "sshpass -p <arg> <arg>"]);
+  // Idempotent: nothing left to change, the clean rows stay as they are.
+  const again = await scrubSessionTemplates();
+  assert.equal(again.dirty, 0);
+  assert.equal(again.updated, 0);
+  assert.ok(again.scanned >= 2);
+  assert.deepEqual(await templates(), ["mysql -u <arg> <arg>", "sshpass -p <arg> <arg>"]);
+  const detail = await web("GET", `/api/sessions/${id}`, await cookie(person));
+  assert.ok(!detail.body.includes(glued));
 });
 
 test("needs the sessions permission, an enabled shelf and room", async () => {
