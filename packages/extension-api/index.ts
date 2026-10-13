@@ -115,6 +115,8 @@ export type ExtensionAccount = {
   operatorDisabled: boolean;
   /** The extension whose deprovision holds, or null. */
   deprovisionedBy: string | null;
+  /** The organisation whose directory deprovisioned it (null before migration 073), or null. */
+  deprovisionedOrganisationId: string | null;
   companyAdmin: boolean;
   /** The organisation a company admin administers (TEAM_SHELVES_SCOPE=organisation). */
   companyOrganisationId: string | null;
@@ -368,9 +370,13 @@ export type ExtensionContext = {
       organisationId: string;
     }): Promise<{ account: ExtensionAccount; created: boolean }>;
     /**
-     * A new address (only on the organisation's domains; another account's:
-     * 409) or display name (null: none). A new address ends every session
-     * and pending code and is written to the journal (account.email_changed).
+     * Only an account of the organisation: its current address is verified
+     * and on one of the organisation's domains (403, reason
+     * organisation_member, otherwise; so for deprovision, reactivate and
+     * startSession). A new address (only on the organisation's domains;
+     * another account's: 409) or display name (null: none). A new address
+     * ends every session and pending code and is written to the journal
+     * (account.email_changed).
      */
     update(
       id: string,
@@ -381,24 +387,32 @@ export type ExtensionContext = {
      * own reason to disable the account (apart from the operator's). Every
      * session ends, every agent connection is revoked and the person leaves
      * the organisation's department shelves (member.revoked for each).
-     * Nothing is deleted; idempotent.
+     * Nothing is deleted; idempotent. The organisation is recorded: only it
+     * can reactivate.
      */
     deprovision(id: string, input: { organisationId: string; reason?: string }): Promise<ExtensionDeprovision>;
     /**
      * Lifts this extension's deprovision and only it: an account the operator
      * or moderation disabled stays disabled (state "disabled",
-     * operatorDisabled). Another extension's deprovision: 409. Shelves are
-     * not given back.
+     * operatorDisabled). Another extension's or another organisation's
+     * deprovision: 409; no organisation named: 400. Shelves are not given
+     * back.
      */
-    reactivate(id: string): Promise<ExtensionAccount>;
+    reactivate(id: string, input: { organisationId: string }): Promise<ExtensionAccount>;
     /**
      * Signs the verified person in: a new core session in the polka_session
      * cookie on this reply (7 days), as the core's sign-in does (the
      * browser's earlier session given as `previous` ends; the journal gets
-     * account.signed_in). A disabled account: 403. The extension then
-     * redirects (303) where the person was going.
+     * account.signed_in). Only an account of the organisation the extension
+     * verified the person for (403, organisation_member; no organisation
+     * named: 400). A disabled account: 403 (account_disabled). The extension
+     * then redirects (303) where the person was going.
      */
-    startSession(reply: FastifyReply, accountId: string, previous?: string): Promise<void>;
+    startSession(
+      reply: FastifyReply,
+      accountId: string,
+      input: { organisationId: string; previous?: string },
+    ): Promise<void>;
   };
   /**
    * Department shelves (docs/specs/TEAM_SHELVES.md) of one organisation, for

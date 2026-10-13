@@ -15,7 +15,15 @@
 // An extension's deprovision is its own reason to disable an account
 // (accounts.deprovisioned_at, migration 072), apart from the operator's
 // (operator_disabled_at): the account stays disabled while either holds, and
-// reactivate lifts only the extension's.
+// reactivate lifts only the extension's, and only for the organisation that
+// made it (deprovisioned_organisation_id, migration 073).
+//
+// An existing account is the organisation's only while its current address
+// is verified and on one of the organisation's domains: update, deprovision,
+// reactivate and startSession refuse any other account (403,
+// organisation_member). Domains are unique to one organisation, so one
+// organisation's directory never changes, disables, brings back or signs in
+// another organisation's person.
 //
 // Lock order is the core's: a shelf, then accounts by id, then memberships
 // (shelf-members.ts, lockShelf); a personal shelf, then its account
@@ -55,7 +63,8 @@ const roleSchema = z.enum(TEAM_ROLES);
 const ACCOUNT_SQL = `SELECT a.id,a.name AS login,COALESCE(a.display_name,a.name) AS name,a.email,
          a.email_verified_at IS NOT NULL AS email_verified,a.disabled,
          a.deletion_requested_at IS NOT NULL AS deleting,a.company_admin,a.company_organisation_id,
-         a.operator_disabled_at IS NOT NULL AS operator_disabled,a.deprovisioned_by,t.id AS shelf
+         a.operator_disabled_at IS NOT NULL AS operator_disabled,a.deprovisioned_by,
+         a.deprovisioned_organisation_id,t.id AS shelf
     FROM accounts a LEFT JOIN tenants t ON t.owner_id=a.id`;
 
 type AccountRow = {
@@ -70,6 +79,7 @@ type AccountRow = {
   company_organisation_id: string | null;
   operator_disabled: boolean;
   deprovisioned_by: string | null;
+  deprovisioned_organisation_id: string | null;
   shelf: string | null;
 };
 
@@ -82,6 +92,7 @@ const toAccount = (row: AccountRow): ExtensionAccount => ({
   state: row.deleting ? "deleting" : row.disabled ? "disabled" : "active",
   operatorDisabled: row.operator_disabled,
   deprovisionedBy: row.deprovisioned_by,
+  deprovisionedOrganisationId: row.deprovisioned_organisation_id,
   companyAdmin: row.company_admin,
   companyOrganisationId: row.company_organisation_id,
   personalShelfId: row.shelf,
@@ -124,6 +135,27 @@ async function assertOnDomain(c: Query, organisationId: string, email: string) {
   const domain = email.slice(email.lastIndexOf("@") + 1);
   if (!(await domainsOf(c, organisationId)).includes(domain)) throw offDomain();
 }
+
+const notMember = () =>
+  new Problem(403, "forbidden", "Этот аккаунт не из организации.", { reason: "organisation_member" });
+
+/**
+ * The (locked) account is the organisation's person: its current address is
+ * verified and on one of the organisation's domains. An unknown organisation:
+ * 404; any other account: 403.
+ */
+async function assertMember(
+  c: Query,
+  organisationId: string,
+  account: { email: string | null; email_verified_at: Date | null },
+) {
+  const domains = await domainsOf(c, organisationId);
+  const email = account.email_verified_at ? account.email : null;
+  if (!email || !domains.includes(email.slice(email.lastIndexOf("@") + 1))) throw notMember();
+}
+
+/** The organisation a call acts for; a call without one is refused (400). */
+const organisationInput = z.object({ organisationId: z.string() });
 
 export async function getAccount(id: string) {
   if (!idSchema.safeParse(id).success) return null;
@@ -173,8 +205,9 @@ export async function provisionAccount(input: { email: string; name?: string | n
 }
 
 /**
- * A new address (only on the organisation's domains; another account's:
- * 409) or display name (null: none). A changed address ends every session
+ * Of the organisation's person only (403 otherwise): a new address (only on
+ * the organisation's domains; another account's: 409) or display name
+ * (null: none). A changed address ends every session
  * and every code sent to either address, and is written to the journal.
  */
 export async function updateAccount(
@@ -183,6 +216,7 @@ export async function updateAccount(
   input: { email?: string; name?: string | null; organisationId: string },
 ) {
   idSchema.parse(id);
+  organisationInput.parse(input);
   const email = input.email === undefined ? undefined : emailSchema.parse(input.email);
   const name = input.name == null ? input.name : nameSchema.parse(input.name).slice(0, 40);
   return transaction(async (c) => {
@@ -191,6 +225,7 @@ export async function updateAccount(
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [email]);
     }
     const { tenant, account } = await lockPersonal(c, id);
+    await assertMember(c, input.organisationId, account);
     if (email && email !== account.email) {
       const { rowCount } = await c.query("SELECT 1 FROM accounts WHERE email=$1 AND id<>$2", [email, id]);
       if (rowCount) throw new Problem(409, "conflict", "Эта почта уже у другого аккаунта Полки.");
@@ -217,7 +252,9 @@ const ofOrganisation = (shelf: string, param: string) =>
  * reason to disable the account. Every session ends, every agent connection
  * (tokens and OAuth grants) is revoked and the person leaves the
  * organisation's department shelves. Nothing is deleted, and the person's
- * links stop opening while the account is disabled. Idempotent.
+ * links stop opening while the account is disabled. Idempotent. Only the
+ * organisation's person (403 otherwise); the organisation is recorded, and
+ * only it can reactivate.
  */
 export async function deprovisionAccount(
   extension: string,
@@ -225,11 +262,14 @@ export async function deprovisionAccount(
   input: { organisationId: string; reason?: string },
 ): Promise<ExtensionDeprovision> {
   idSchema.parse(id);
+  organisationInput.parse(input);
   const result = await transaction(async (c) => {
     await domainsOf(c, input.organisationId);
     const { tenant, account } = await lockPersonal(c, id);
+    // Nothing changes for an account being deleted (its address may be gone).
     if (account.deletion_requested_at)
       return { state: "deleting" as const, sessions: 0, connections: 0, shelves: [] as string[] };
+    await assertMember(c, input.organisationId, account);
     const { rows: connections } = await c.query(
       `SELECT id,tenant_id,account_id FROM agent_connections
        WHERE account_id=$1 AND revoked_at IS NULL ORDER BY id FOR UPDATE`,
@@ -254,10 +294,15 @@ export async function deprovisionAccount(
     const already = !!account.deprovisioned_at;
     if (!already) {
       await c.query(
-        "UPDATE accounts SET disabled=true,deprovisioned_at=clock_timestamp(),deprovisioned_by=$2 WHERE id=$1",
-        [id, extension],
+        `UPDATE accounts SET disabled=true,deprovisioned_at=clock_timestamp(),deprovisioned_by=$2,
+           deprovisioned_organisation_id=$3
+         WHERE id=$1`,
+        [id, extension, input.organisationId],
       );
-      await audit(c, { id, tenant }, "account.deprovisioned", id, { extension });
+      await audit(c, { id, tenant }, "account.deprovisioned", id, {
+        extension,
+        organisation: input.organisationId,
+      });
     }
     const shelves = memberships.map((member) => member.tenant_id as string);
     afterCommit(c, () => {
@@ -284,23 +329,31 @@ export async function deprovisionAccount(
 /**
  * Lifts the extension's deprovision, and only it: an account the operator or
  * moderation disabled stays disabled (state "disabled", operatorDisabled).
+ * Only the organisation's person (403 otherwise), and only the organisation
+ * that deprovisioned it (another one's, or another extension's: 409); a
+ * deprovision recorded before migration 073 names no organisation.
  * Department shelves are not given back; the directory adds the person again.
  */
-export async function reactivateAccount(extension: string, id: string) {
+export async function reactivateAccount(extension: string, id: string, input: { organisationId: string }) {
   idSchema.parse(id);
+  const { organisationId } = organisationInput.parse(input);
   return transaction(async (c) => {
+    await domainsOf(c, organisationId);
     const { tenant, account } = await lockPersonal(c, id);
     if (account.deletion_requested_at) throw new Problem(409, "conflict", "Аккаунт удаляется.");
+    await assertMember(c, organisationId, account);
     if (account.deprovisioned_at) {
       if (account.deprovisioned_by !== extension)
         throw new Problem(409, "conflict", "Аккаунт отключило другое расширение.");
+      if (account.deprovisioned_organisation_id && account.deprovisioned_organisation_id !== organisationId)
+        throw new Problem(409, "conflict", "Аккаунт отключила другая организация.");
       await c.query(
-        `UPDATE accounts SET deprovisioned_at=NULL,deprovisioned_by=NULL,
+        `UPDATE accounts SET deprovisioned_at=NULL,deprovisioned_by=NULL,deprovisioned_organisation_id=NULL,
            disabled=(operator_disabled_at IS NOT NULL)
          WHERE id=$1`,
         [id],
       );
-      await audit(c, { id, tenant }, "account.reactivated", id, { extension });
+      await audit(c, { id, tenant }, "account.reactivated", id, { extension, organisation: organisationId });
     }
     return (await readAccount(c, id))!;
   });
@@ -310,30 +363,37 @@ export async function reactivateAccount(extension: string, id: string) {
  * Signs the person in with the core's own session (7 days, the
  * polka_session cookie) after the extension has verified them, as every
  * sign-in does: the browser's earlier session ends, the day counts as active,
- * and the journal records which extension signed the person in. A disabled
- * account or one being deleted: 403.
+ * and the journal records which extension signed the person in. Only the
+ * organisation's person (403, organisation_member; no organisation named:
+ * 400). A disabled account or one being deleted: 403.
  */
 export async function startSessionForExtension(
   extension: string,
   reply: FastifyReply,
   accountId: string,
-  previous?: string,
+  input: { organisationId: string; previous?: string },
 ) {
   idSchema.parse(accountId);
+  const { organisationId, previous } = organisationInput.extend({ previous: z.string().optional() }).parse(input);
   const session = randomBytes(32).toString("base64url");
   await transaction(async (c) => {
+    await domainsOf(c, organisationId);
     const { tenant, account } = await lockPersonal(c, accountId);
     if (account.disabled || account.deletion_requested_at)
       throw new Problem(403, "forbidden", "Этот аккаунт отключён. Обратитесь к администратору компании.", {
         reason: "account_disabled",
       });
+    await assertMember(c, organisationId, account);
     if (previous) await c.query("DELETE FROM sessions WHERE hash=$1", [sha256(previous)]);
     await c.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')", [sha256(session), accountId]);
-    await audit(c, { id: accountId, tenant }, "account.signed_in", accountId, { extension });
+    await audit(c, { id: accountId, tenant }, "account.signed_in", accountId, {
+      extension,
+      organisation: organisationId,
+    });
   });
   markActive(accountId);
   reply.setCookie("polka_session", session, sessionCookie());
-  log.info({ event: "extension.sign_in", extension, accountId });
+  log.info({ event: "extension.sign_in", extension, accountId, organisationId });
 }
 
 // Department shelves (docs/specs/TEAM_SHELVES.md) for a directory's groups,

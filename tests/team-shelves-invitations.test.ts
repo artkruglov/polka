@@ -153,6 +153,30 @@ test("a link for several people counts its uses", async () => {
   assert.equal(await roleOn(two), "reader");
 });
 
+test("someone taken off the shelf after the link was made cannot come back by it", async () => {
+  // Removed before the link: a new link brings them back (the admin chose to).
+  const earlier = await signUp("inv-earlier");
+  assert.equal((await call("POST", `/api/shelves/${shelf.id}/members`, admin, { who: earlier.name })).statusCode, 200);
+  assert.equal((await call("POST", `/api/shelves/${shelf.id}/members/${earlier.id}/revoke`, admin)).statusCode, 200);
+  const link = (await invite(admin, { role: "reader", maxUses: 5 })).json();
+  const token = tokenOf(link.invitationUrl);
+  assert.equal((await accept(earlier, token)).statusCode, 200);
+  assert.equal(await roleOn(earlier), "reader");
+
+  // Joined by the link, then offboarded: the still-active link refuses.
+  const leaver = await signUp("inv-leaver");
+  assert.equal((await accept(leaver, token)).statusCode, 200);
+  assert.equal((await call("POST", `/api/shelves/${shelf.id}/members/${leaver.id}/revoke`, admin)).statusCode, 200);
+  const back = await accept(leaver, token);
+  assert.equal(back.statusCode, 403, back.body);
+  assert.equal(back.json().reason, "removed_after_invitation");
+  assert.equal(await roleOn(leaver), null);
+  // The link still admits others, and a new link brings the person back.
+  assert.equal((await accept(await signUp("inv-other"), token)).statusCode, 200);
+  const fresh = (await invite(admin, { role: "reader" })).json();
+  assert.equal((await accept(leaver, tokenOf(fresh.invitationUrl))).statusCode, 200);
+});
+
 test("an expired or revoked link admits nobody", async () => {
   const expired = (await invite(admin, { role: "author", expiresInHours: 1 })).json();
   await db.query(

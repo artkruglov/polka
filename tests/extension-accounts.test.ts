@@ -24,7 +24,7 @@ const domain = `corp-${tag}.test`;
 const otherDomain = `other-${tag}.test`;
 const extension: PolkaExtension = {
   name: "sso",
-  signInPaths: ["/api/ext/sso/acs"],
+  signInPaths: ["/api/ext/sso/acs", "/api/ext/sso/acs-account"],
   machinePaths: ["/api/ext/sso/scim/*"],
   signInMethods: () => [
     { id: "acme", name: "Войти через SSO компании", start: "/api/ext/sso/start" },
@@ -37,7 +37,18 @@ const extension: PolkaExtension = {
     app.post("/api/ext/sso/acs", async (req, reply) => {
       const { email, organisationId } = req.body as { email: string; organisationId: string };
       const { account } = await ctx.accounts.provision({ email, name: "Иван Петров", organisationId });
-      await ctx.accounts.startSession(reply, account.id, req.cookies.polka_session);
+      await ctx.accounts.startSession(reply, account.id, { organisationId, previous: req.cookies.polka_session });
+      return reply.redirect("/", 303);
+    });
+    // An account the extension already maps to the organisation's person.
+    app.post("/api/ext/sso/acs-account", async (req, reply) => {
+      const { accountId, organisationId } = req.body as { accountId: string; organisationId?: string };
+      // Without an organisation: the old positional `previous` argument.
+      await ctx.accounts.startSession(
+        reply,
+        accountId,
+        (organisationId ? { organisationId } : req.cookies.polka_session) as { organisationId: string },
+      );
       return reply.redirect("/", 303);
     });
     app.get("/api/ext/sso/acs", async (req) => ({ name: (await ctx.identity(req)).name }));
@@ -309,7 +320,7 @@ test("deprovision ends sessions and agents, leaves only the organisation's shelv
     assert.equal((await acs(vera.email!)).statusCode, 403);
     assert.equal((await context.teamShelves.setMember(corp, mine.id, vera.id, "reader").catch((e) => e)).status, 409);
     assert.deepEqual(await audits(vera.id), ["account.signed_in", "account.deprovisioned"]);
-    assert.equal((await context.accounts.reactivate(vera.id)).state, "active");
+    assert.equal((await context.accounts.reactivate(vera.id, { organisationId: corp })).state, "active");
   } finally {
     config.TEAM_SHELVES_SCOPE = saved.scope;
   }
@@ -320,7 +331,7 @@ test("the operator's disable and the extension's deprovision are separate: neith
   const carl = await person("carl");
   await disableAccount(carl.login, "spam");
   await context.accounts.deprovision(carl.id, { organisationId: corp });
-  const back = await context.accounts.reactivate(carl.id);
+  const back = await context.accounts.reactivate(carl.id, { organisationId: corp });
   assert.equal(back.state, "disabled");
   assert.equal(back.operatorDisabled, true);
   assert.equal(back.deprovisionedBy, null);
@@ -336,7 +347,7 @@ test("the operator's disable and the extension's deprovision are separate: neith
     [dina.id],
   );
   assert.equal(rowCount, 1);
-  assert.equal((await context.accounts.reactivate(dina.id)).state, "disabled");
+  assert.equal((await context.accounts.reactivate(dina.id, { organisationId: corp })).state, "disabled");
 
   // The operator's enable does not undo the directory's deprovision.
   const egor = await person("egor");
@@ -345,16 +356,95 @@ test("the operator's disable and the extension's deprovision are separate: neith
   const enabled = await enableAccount(egor.login);
   assert.equal(enabled.deprovisionedBy, "sso");
   assert.equal((await context.accounts.get(egor.id))?.state, "disabled");
-  assert.equal((await context.accounts.reactivate(egor.id)).state, "active");
+  assert.equal((await context.accounts.reactivate(egor.id, { organisationId: corp })).state, "active");
 
   // Another extension's deprovision is not this one's to lift.
   const fedor = await person("fedor");
   await db.query("UPDATE accounts SET disabled=true,deprovisioned_at=now(),deprovisioned_by='other' WHERE id=$1", [
     fedor.id,
   ]);
-  assert.equal((await context.accounts.reactivate(fedor.id).catch((e) => e)).status, 409);
+  assert.equal((await context.accounts.reactivate(fedor.id, { organisationId: corp }).catch((e) => e)).status, 409);
   // The database keeps the rule too.
   await assert.rejects(db.query("UPDATE accounts SET disabled=false WHERE id=$1", [fedor.id]), /disabled_while_held/);
+});
+
+const signInAs = (accountId: string, organisationId?: string) =>
+  app.inject({
+    method: "POST",
+    url: "/api/ext/sso/acs-account",
+    headers: { origin: "https://idp.example.com" },
+    payload: { accountId, ...(organisationId ? { organisationId } : {}) },
+  });
+
+test("one organisation's directory never changes, disables, revives or signs in another's person", async () => {
+  // Bea belongs to the other organisation; its directory deprovisions her.
+  const bea = await person("bea", other, otherDomain);
+  const reason = async (call: Promise<unknown>) => {
+    const error = (await call.catch((e) => e)) as { status?: number; details?: { reason?: string } };
+    return `${error.status}:${error.details?.reason}`;
+  };
+  // Taking her over with an address on corp's domain: refused, nothing changes.
+  assert.equal(
+    await reason(context.accounts.update(bea.id, { email: `bea-${tag}@${domain}`, organisationId: corp })),
+    "403:organisation_member",
+  );
+  assert.equal(
+    await reason(context.accounts.update(bea.id, { name: "Чужая", organisationId: corp })),
+    "403:organisation_member",
+  );
+  assert.equal((await context.accounts.get(bea.id))?.email, bea.email);
+  // Signing her in through corp's sign-in: refused; through her own: fine.
+  const foreign = await signInAs(bea.id, corp);
+  assert.equal(foreign.statusCode, 403, foreign.body);
+  assert.equal(foreign.json().reason, "organisation_member");
+  assert.equal((await signInAs(bea.id, other)).statusCode, 303);
+  // No organisation named: refused, never allowed.
+  assert.equal((await signInAs(bea.id)).statusCode, 400);
+  assert.equal(
+    (await context.accounts.reactivate(bea.id, undefined as unknown as { organisationId: string }).catch((e) => e))
+      .name,
+    "ZodError",
+  );
+  assert.equal(
+    (await context.accounts.deprovision(bea.id, {} as { organisationId: string }).catch((e) => e)).name,
+    "ZodError",
+  );
+  // Disabling her for corp: refused, she stays active.
+  assert.equal(await reason(context.accounts.deprovision(bea.id, { organisationId: corp })), "403:organisation_member");
+  assert.equal((await context.accounts.get(bea.id))?.state, "active");
+
+  // Her own organisation deprovisions her; corp cannot lift that.
+  assert.equal((await context.accounts.deprovision(bea.id, { organisationId: other })).state, "deprovisioned");
+  assert.equal((await context.accounts.get(bea.id))?.deprovisionedOrganisationId, other);
+  assert.equal(await reason(context.accounts.reactivate(bea.id, { organisationId: corp })), "403:organisation_member");
+  // Even were her address on corp's domain now, only the organisation that
+  // deprovisioned her brings her back.
+  await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [bea.id, `bea-moved-${tag}@${domain}`]);
+  assert.equal((await context.accounts.reactivate(bea.id, { organisationId: corp }).catch((e) => e)).status, 409);
+  assert.equal((await context.accounts.get(bea.id))?.state, "disabled");
+  await db.query("UPDATE accounts SET email=$2 WHERE id=$1", [bea.id, bea.email]);
+  const back = await context.accounts.reactivate(bea.id, { organisationId: other });
+  assert.equal(back.state, "active");
+  assert.equal(back.deprovisionedOrganisationId, null);
+
+  // A deprovision recorded before migration 073 names no organisation: the
+  // organisation the person belongs to now may lift it.
+  const gleb = await person("gleb");
+  await db.query("UPDATE accounts SET disabled=true,deprovisioned_at=now(),deprovisioned_by='sso' WHERE id=$1", [
+    gleb.id,
+  ]);
+  assert.equal(
+    await reason(context.accounts.reactivate(gleb.id, { organisationId: other })),
+    "403:organisation_member",
+  );
+  assert.equal((await context.accounts.reactivate(gleb.id, { organisationId: corp })).state, "active");
+
+  // An unverified address is no one's: refused.
+  await db.query("UPDATE accounts SET email_verified_at=NULL WHERE id=$1", [gleb.id]);
+  assert.equal(
+    await reason(context.accounts.deprovision(gleb.id, { organisationId: corp })),
+    "403:organisation_member",
+  );
 });
 
 test("department shelves are not offered while TEAM_SHELVES is off", async () => {
