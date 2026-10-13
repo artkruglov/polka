@@ -71,6 +71,7 @@
   "tests/webhooks.test.ts",
   "tests/team-shelves-agents.test.ts",
   "tests/company-admin.test.ts",
+  "tests/operator-sign-in-links.test.ts",
   "tests/organisations.test.ts",
   "tests/team-shelves-review.test.ts",
   "tests/projects.test.ts",

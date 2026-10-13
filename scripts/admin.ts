@@ -46,6 +46,10 @@ export const COMMANDS: Record<string, Record<string, Command>> = {
   },
   account: {
     create: { script: "account.ts", about: "create an account: <login> --generate, or the password on stdin" },
+    bootstrap: {
+      script: "account-bootstrap.ts",
+      about: "first admin, no mail needed: <email> [--org …] [--no-admin]; prints a one-time link",
+    },
     email: { script: "account-email.ts", about: "attach an email to an account: <login> <email>" },
     merge: { script: "account-merge.ts", about: "merge two shelves: --from … --into … --proof … [--dry-run]" },
     erase: { script: "account-erase.ts", about: "erase an account on request: --account … [--dry-run]" },

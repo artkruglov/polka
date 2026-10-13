@@ -7,6 +7,7 @@ import { Problem, missing } from "./errors.ts";
 import { sessionCookie } from "./sign-in-routes.ts";
 import { holdSignInCollision } from "./claim-routes.ts";
 import { consumeSignInLink, describeShelfHint, previewSignInLink } from "./agent-sign-in-links.ts";
+import { consumeOperatorLink, previewOperatorLink } from "./operator-sign-in-links.ts";
 import { PROVISIONAL_IDLE_DAYS, PROVISIONAL_SESSION_SECONDS, renewProvisionalSession } from "./provisional.ts";
 import { sha256 } from "./storage.ts";
 import { uuid } from "../../packages/contracts/index.ts";
@@ -283,6 +284,37 @@ export function registerAccountRoutes(app: FastifyInstance) {
       await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session)]);
     reply.setCookie("polka_session", entered.session, sessionCookie(entered.maxAge));
     return { ok: true, clientName: entered.clientName };
+  });
+  // /welcome#<token>: a one-time link the operator printed on the server
+  // (operator-sign-in-links.ts). Same shape as /enter: looking spends
+  // nothing, the click does; a signed-in browser switches only on request.
+  app.post("/api/auth/welcome/preview", { bodyLimit: 1024 }, async (req) => {
+    const { token } = z
+      .object({ token: z.string().max(64) })
+      .strict()
+      .parse(req.body);
+    const link = await previewOperatorLink(token, req.ip);
+    const current = await identity(req).catch(anonymous);
+    return { ...link, current: current ? { name: current.name } : null };
+  });
+  app.post("/api/auth/welcome", { bodyLimit: 1024 }, async (req, reply) => {
+    const { token, replace } = z
+      .object({ token: z.string().max(64), replace: z.boolean().optional() })
+      .strict()
+      .parse(req.body);
+    const current = await identity(req).catch(anonymous);
+    if (current && !replace)
+      throw new Problem(
+        409,
+        "conflict",
+        `Этот браузер уже вошёл в полку «${current.name}». Выберите, остаться в ней или перейти.`,
+        { reason: "signed_in" },
+      );
+    const entered = await consumeOperatorLink(token, req.ip);
+    if (req.cookies.polka_session)
+      await db.query("DELETE FROM sessions WHERE hash=$1", [sha256(req.cookies.polka_session)]);
+    reply.setCookie("polka_session", entered.session, sessionCookie(entered.maxAge));
+    return { ok: true };
   });
   app.get(
     "/api/folders",

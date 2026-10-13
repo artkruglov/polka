@@ -33,6 +33,7 @@ import {
   SignupLinked,
   Claim,
   Enter,
+  Welcome,
   SignIn,
   Templates,
   TermsPage,
@@ -62,6 +63,7 @@ function Route({ path }: { path: string }) {
   if (path === "/signup/linked") return <SignupLinked />;
   if (path === "/claim") return <Claim />;
   if (path === "/enter") return <Enter />;
+  if (path === "/welcome") return <Welcome />;
   if (path === "/signin") return <SignIn />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/terms") return <TermsPage />;

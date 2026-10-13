@@ -300,6 +300,8 @@ export async function runMaintenanceCleanup(
       "DELETE FROM oauth_refresh_tokens WHERE expires_at<now()",
       // Sign-in links from agents live 5 minutes; a day later they go.
       "DELETE FROM agent_sign_in_links WHERE expires_at<now()-interval '1 day'",
+      // Links the operator printed (account bootstrap) live an hour.
+      "DELETE FROM operator_sign_in_links WHERE expires_at<now()-interval '1 day'",
       // The privacy policy keeps a report for one year.
       "DELETE FROM share_reports WHERE created_at<now()-interval '1 year'",
       // The moderation journal is kept for 3 years (its trigger refuses any
