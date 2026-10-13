@@ -74,6 +74,12 @@ export const COMMANDS: Record<string, Record<string, Command>> = {
       about: "proposals to «Лента»: list [--all] | export <id> <slug> | decide …",
     },
   },
+  sessions: {
+    "scrub-templates": {
+      script: "sessions-scrub-templates.ts",
+      about: "blank values left in stored command templates: [--dry-run] [--batch N]",
+    },
+  },
   shelf: {
     import: { script: "shelf-import.ts", about: "save an exported shelf: --dir … --account … [--dry-run]" },
   },
