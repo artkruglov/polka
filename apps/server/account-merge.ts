@@ -399,6 +399,8 @@ export const MERGE_INVENTORY: Record<string, `moved${string}` | `left: ${string}
   "oauth_refresh_tokens.account_id": "moved",
   "oauth_refresh_tokens.tenant_id": "moved",
   "operator_sign_in_links.account_id": "left: an operator's sign-in link opens the source only, which is closed",
+  "provisional_erasures.account_id": "refused: a shelf closed for erasure is disabled, which a merge refuses",
+  "provisional_erasures.tenant_id": "refused: a shelf closed for erasure is disabled, which a merge refuses",
   "revision_derivatives.tenant_id": "moved",
   "revisions.created_by": "moved on the source shelf; left: elsewhere authorship stays, as for any erased author",
   "revisions.tenant_id": "moved",

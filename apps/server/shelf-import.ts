@@ -581,6 +581,18 @@ async function finishWork(
       exportId,
       sourceId: item.id,
     });
+    // The move to the trash with its original time, as the acceptance below:
+    // the shelf snapshot reads the trash from the journal, and without it a
+    // work restored here later would show on the shelf for every moment
+    // between its original trashing and that restore.
+    if (item.trashedAt)
+      await c.query(
+        `INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,payload,created_at)
+         SELECT $1,$2,'artifact.trashed',$3,'human',NULL,$4
+          WHERE NOT EXISTS (SELECT 1 FROM audit_outbox WHERE tenant_id=$1 AND target_id=$3
+                              AND action='artifact.trashed' AND created_at=$4::timestamptz)`,
+        [actor.tenant, actor.id, last.artifactId, item.trashedAt],
+      );
     // The acceptance with its original time, so the shelf snapshot sees it then.
     if (accepted)
       await c.query(

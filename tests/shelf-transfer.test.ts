@@ -19,6 +19,7 @@ import { shelfExportFileSchema } from "../packages/contracts/shelf-export.ts";
 import { createApp } from "../apps/server/app.ts";
 import { acceptRevision, setWorkOwner } from "../apps/server/artifact-acceptance.ts";
 import { transitionOwnerArtifactLifecycle } from "../apps/server/artifact-trash.ts";
+import { shelfSnapshotForMember } from "../apps/server/shelf-snapshot.ts";
 import {
   beginBundleUpload,
   beginUpload,
@@ -448,6 +449,51 @@ test("a rerun leaves finished works as the owner changed them", async () => {
     rows: [now],
   } = await db.query("SELECT title,trashed_at FROM artifacts WHERE id=$1", [old.id]);
   assert.deepEqual(now, { title: "Нужное", trashed_at: null });
+});
+
+test("an imported trashing is journaled at its time: the snapshot before a later restore keeps the work in the trash", async () => {
+  const target = await createAccount(`import-trash-${randomBytes(5).toString("hex")}`, password);
+  await importShelf({ dir: exportDir, account: target.name });
+  const exported = shelfExportFileSchema.parse(
+    JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")),
+  );
+  const trashedAt = exported.items.find((item) => item.id === ids.trashed)!.trashedAt!;
+  const {
+    rows: [old],
+  } = await db.query(
+    "SELECT id,lifecycle_version,latest_revision_id FROM artifacts WHERE tenant_id=$1 AND title='Старьё'",
+    [target.tenant],
+  );
+  const {
+    rows: [event],
+  } = await db.query(
+    "SELECT created_at FROM audit_outbox WHERE tenant_id=$1 AND target_id=$2 AND action='artifact.trashed'",
+    [target.tenant, old.id],
+  );
+  assert.equal(event.created_at.toISOString(), trashedAt);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const between = new Date((Date.parse(trashedAt) + Date.now()) / 2).toISOString();
+  await transitionOwnerArtifactLifecycle(
+    target,
+    old.id,
+    { expectedLifecycleVersion: old.lifecycle_version, expectedRevisionId: old.latest_revision_id },
+    "active",
+  );
+  const titles = async (at: string) =>
+    (await shelfSnapshotForMember(target, { at })).items.map((item: { title: string }) => item.title);
+  assert.ok(!(await titles(between)).includes("Старьё"), "in the trash before the restore");
+  assert.ok((await titles(new Date().toISOString())).includes("Старьё"), "on the shelf after it");
+  // A rerun journals nothing twice.
+  await importShelf({ dir: exportDir, account: target.name });
+  assert.equal(
+    (
+      await db.query(
+        "SELECT count(*)::int AS n FROM audit_outbox WHERE tenant_id=$1 AND target_id=$2 AND action='artifact.trashed'",
+        [target.tenant, old.id],
+      )
+    ).rows[0].n,
+    1,
+  );
 });
 
 test("a version this installation does not accept skips its work, in the dry run too", async () => {
