@@ -376,6 +376,7 @@ export const MERGE_INVENTORY: Record<string, `moved${string}` | `left: ${string}
   "agent_read_days.tenant_id": "left: read counts of the source shelf, erased with it",
   "agent_sessions.account_id": "moved (moveAgentSessions)",
   "agent_sessions.tenant_id": "moved (moveAgentSessions)",
+  "artifact_search.tenant_id": "moved with its work (foreign key ON UPDATE CASCADE, migration 075)",
   "artifacts.created_by": "moved on the source shelf; left: elsewhere authorship stays, as for any erased author",
   "artifacts.owner_account_id": "moved, on every shelf",
   "artifacts.tenant_id": "moved",

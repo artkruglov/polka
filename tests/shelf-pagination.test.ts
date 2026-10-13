@@ -166,7 +166,31 @@ test("a kind filter covers the whole shelf and the counts are the shelf's", asyn
     // The chips keep the numbers of every kind while one is chosen.
     assert.deepEqual(filtered.counts, all.counts, kind);
   }
-  assert.deepEqual((await walk("kind=other")).seen, []);
+  // An empty kind still shows the numbers of the others.
+  const other = await walk("kind=other");
+  assert.deepEqual(other.seen, []);
+  assert.deepEqual(other.counts, all.counts);
+  // The kind is the latest version's (artifacts.latest_mime, kept by a
+  // trigger): a version of another type moves the work, going back moves it back.
+  const [first] = artifactIds;
+  const {
+    rows: [{ latest_revision_id: original, latest_mime: originalMime }],
+  } = await db.query("SELECT latest_revision_id,latest_mime FROM artifacts WHERE id=$1", [first]);
+  const pdf = randomUUID();
+  await db.query(
+    `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
+       object_key,object_version,total_size)
+     VALUES($1,$2,$3,2,$4,'report.pdf','application/pdf',1,$5,$6,'fixture',1)`,
+    [pdf, owner.tenant, first, owner.id, "0".repeat(64), `pagination/${first}/2`],
+  );
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [first, pdf]);
+  const moved = await walk("sort=new");
+  assert.equal(moved.counts?.other, 1);
+  assert.equal(moved.counts?.all, 26);
+  await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [first, original]);
+  const back = await db.query("SELECT latest_mime FROM artifacts WHERE id=$1", [first]);
+  assert.equal(back.rows[0].latest_mime, originalMime);
+  assert.deepEqual((await walk("sort=new")).counts, all.counts);
 });
 
 test("«Принятые» shows only works with an accepted version, across pages and with a kind", async () => {

@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 074.
+-- Operator-reviewed recipe for the Polka schema through migration 075.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>74
+     OR (SELECT count(*) FROM public.schema_migrations)<>75
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>74 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 074';
+     OR (SELECT max(version) FROM public.schema_migrations)<>75 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 075';
   END IF;
 END $$;
 
@@ -244,8 +244,11 @@ GRANT SELECT, UPDATE ON TABLE public.webhook_dispatch_cursor TO :"runtime_role";
 -- account bootstrap, run as the runtime) issues them and spends an account's
 -- older ones, the application consumes them, maintenance deletes expired rows.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.operator_sign_in_links TO :"runtime_role";
+-- Shelf search index (075): new columns of artifact_search and artifacts and
+-- new indexes, already granted; the latest_mime trigger runs with the rights
+-- of the statement that fired it (the runtime role reads revisions).
 -- Allowed shelves of a connection (059): a column of agent_connections, already granted.
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;
 
-\echo Runtime grants installed for the reviewed schema through migration 074
+\echo Runtime grants installed for the reviewed schema through migration 075

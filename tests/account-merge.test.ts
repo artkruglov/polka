@@ -299,6 +299,14 @@ test("a merge moves everything; old links open, tokens keep working, the source 
   ).rows;
   assert.equal(moved.length, 3);
   for (const row of moved) assert.ok(row.object_key.startsWith(`${f.into.tenant}/`), row.object_key);
+  // The search text moved with its work (the shelf of artifact_search follows by its foreign key).
+  const searchRows = (
+    await db.query("SELECT tenant_id FROM artifact_search WHERE artifact_id=ANY($1::uuid[])", [
+      [f.first.artifactId, f.second.artifactId],
+    ])
+  ).rows;
+  assert.equal(searchRows.length, 2);
+  for (const row of searchRows) assert.equal(row.tenant_id, f.into.tenant);
   // The originals under the source's prefix are gone.
   for (const row of before)
     await assert.rejects(

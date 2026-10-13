@@ -54,17 +54,25 @@ function decodeCursor(value: string | undefined, message: string) {
 const encodeCursor = (date: string, id: string) => Buffer.from(JSON.stringify({ date, id })).toString("base64url");
 
 /**
- * What a shelf chip groups by, from the latest version's bytes; mirrors
- * categoryOf in apps/web/src/entities/artifact/format.ts.
+ * What a shelf chip groups by, from the latest version's MIME type (stored
+ * on the work, artifacts.latest_mime); mirrors categoryOf in
+ * apps/web/src/entities/artifact/format.ts.
  */
 const SHELF_KINDS = ["pages", "documents", "images", "other"] as const;
 type ShelfKind = (typeof SHELF_KINDS)[number];
-const shelfKindSql = (revision: string) =>
-  `(CASE WHEN ${revision}.mime LIKE 'image/%' THEN 'images'
-         WHEN ${revision}.mime IN ('text/plain','text/markdown') THEN 'documents'
-         WHEN ${revision}.mime='text/html' THEN 'pages'
+const shelfKindSql = (artifact: string) =>
+  `(CASE WHEN ${artifact}.latest_mime LIKE 'image/%' THEN 'images'
+         WHEN ${artifact}.latest_mime IN ('text/plain','text/markdown') THEN 'documents'
+         WHEN ${artifact}.latest_mime='text/html' THEN 'pages'
          ELSE 'other' END)`;
-const SHELF_RANK = searchRank("artifact", "$3", "$6");
+/**
+ * The matching works (`matched`) with their rank for «Сначала подходящие».
+ * OFFSET 0 keeps the subquery whole, so the rank (the text's cover density,
+ * the costly part of a ranked search) is computed once per work rather than
+ * again for the page key and for the order.
+ */
+const RANKED = `(SELECT artifact.*,${searchRank("artifact", "$3", "$6")} AS search_rank
+                 FROM matched artifact ${searchJoin("artifact")} OFFSET 0)`;
 const UPDATED_KEY = `to_char(artifact.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 /** The shelf's orders: the key a page ends on, the ORDER BY, and «after the key». */
 const SHELF_ORDER = {
@@ -84,12 +92,13 @@ const SHELF_ORDER = {
     after: (key: string, id: string) => `(lower(artifact.title),artifact.id)>(${key},${id})`,
   },
   // A search, best answers first (searchRank over $3 and $6 of the shelf's
-  // query), then newest. The key is «rank date»; without a query, newest first.
+  // query, as search_rank: RANKED), then newest. The key is «rank date»;
+  // without a query, newest first.
   relevance: {
-    key: `${SHELF_RANK}::text||' '||${UPDATED_KEY}`,
-    by: `${SHELF_RANK} DESC,artifact.updated_at DESC,artifact.id DESC`,
+    key: `artifact.search_rank::text||' '||${UPDATED_KEY}`,
+    by: `artifact.search_rank DESC,artifact.updated_at DESC,artifact.id DESC`,
     after: (key: string, id: string) =>
-      `(${SHELF_RANK},artifact.updated_at,artifact.id)<(split_part(${key},' ',1)::int,split_part(${key},' ',2)::timestamptz,${id})`,
+      `(artifact.search_rank,artifact.updated_at,artifact.id)<(split_part(${key},' ',1)::int,split_part(${key},' ',2)::timestamptz,${id})`,
   },
 } as const;
 type ShelfOrder = keyof typeof SHELF_ORDER;
@@ -142,50 +151,58 @@ export function registerWorkRoutes(app: FastifyInstance) {
     // By title or by the text of the latest version (docs/specs/CONTENT_SEARCH.md).
     const text = q.q.trim();
     const title = titlePattern(text);
-    const { rows } = await db.query(
-      `SELECT artifact.id,${order.key} AS cursor_key,
-              ${searchSnippet("$6", "$7")}
-       FROM artifacts artifact
-       LEFT JOIN revisions latest ON latest.id=artifact.latest_revision_id
-       ${searchJoin("artifact")}
+    // The works that match, once: the page is read from them, and the first
+    // page also counts them by kind over the whole shelf (the chips). Read
+    // twice, the CTE is computed once; a later page reads it once, inlined,
+    // in the order of the shelf's index.
+    const matched = `
+      SELECT artifact.id,artifact.title,artifact.title_document,artifact.updated_at,
+             artifact.latest_revision_id,${shelfKindSql("artifact")} AS kind
+        FROM artifacts artifact
        WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
          AND ($2::uuid IS NULL OR artifact.folder_id=$2)
-         AND ${searchMatch("artifact", "$3", "$6")}
-         AND ($8::text IS NULL OR ${shelfKindSql("latest")}=$8)
-         AND ($9::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)
-         AND ($4::text IS NULL OR ${order.after("$4", "$5::uuid")})
-       ORDER BY ${order.by} LIMIT 25`,
-      [
-        actor.tenant,
-        q.folderId ?? null,
-        title,
-        cursor?.key ?? null,
-        cursor?.id ?? null,
-        searchQuery(text),
-        HEADLINE_OPTIONS,
-        q.kind ?? null,
-        q.accepted === "1",
-      ],
-    );
+         AND ${searchMatch("artifact", "$3", "$6", "ARRAY[$1::uuid]")}
+         AND ($9::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)`;
+    const countsSql = `(SELECT json_object_agg(kind,count) FROM (SELECT kind,count(*)::int AS count FROM matched GROUP BY 1) kinds)`;
+    const params = [
+      actor.tenant,
+      q.folderId ?? null,
+      title,
+      cursor?.key ?? null,
+      cursor?.id ?? null,
+      searchQuery(text),
+      HEADLINE_OPTIONS,
+      q.kind ?? null,
+      q.accepted === "1",
+    ];
+    const list = (values: unknown[]) =>
+      db.query(
+        // The page first, then the text of its 25 works for the snippets;
+        // only «Сначала подходящие» reads the text of every match (its rank).
+        `WITH matched AS (${matched})
+         SELECT artifact.id,artifact.cursor_key,
+                ${searchSnippet("$6", "$7")}${cursor ? "" : `,${countsSql} AS counts`}
+         FROM (SELECT artifact.*,${order.key} AS cursor_key
+                 FROM ${q.sort === "relevance" ? RANKED : "matched"} artifact
+                WHERE ($8::text IS NULL OR artifact.kind=$8)
+                  AND ($4::text IS NULL OR ${order.after("$4", "$5::uuid")})
+                ORDER BY ${order.by} LIMIT 25) artifact
+         ${searchJoin("artifact")}
+         ORDER BY ${order.by}`,
+        values,
+      );
+    const { rows } = await list(params);
     const more = rows.length > 24,
       page = rows.slice(0, 24),
       last = page.at(-1);
-    // How many works of each kind match, over the whole shelf (first page only).
+    // How many works of each kind match, over the whole shelf (first page
+    // only), from the same statement. A page empty for its kind asks again
+    // without the kind (rare); with no kind chosen, empty means none match.
     let counts: Record<ShelfKind | "all", number> | undefined;
     if (!cursor) {
       counts = { all: 0, pages: 0, documents: 0, images: 0, other: 0 };
-      const { rows: kinds } = await db.query(
-        `SELECT ${shelfKindSql("latest")} AS kind,count(*)::int AS count
-           FROM artifacts artifact
-           LEFT JOIN revisions latest ON latest.id=artifact.latest_revision_id
-          WHERE artifact.tenant_id=$1 AND artifact.trashed_at IS NULL
-            AND ($2::uuid IS NULL OR artifact.folder_id=$2)
-            AND ${searchMatch("artifact", "$3", "$4")}
-            AND ($5::boolean IS NOT TRUE OR artifact.accepted_revision_id IS NOT NULL)
-          GROUP BY 1`,
-        [actor.tenant, q.folderId ?? null, title, searchQuery(text), q.accepted === "1"],
-      );
-      for (const { kind, count } of kinds as { kind: ShelfKind; count: number }[]) {
+      const first = rows[0] ?? (q.kind ? (await list(params.with(7, null))).rows[0] : undefined);
+      for (const [kind, count] of Object.entries(first?.counts ?? {}) as [ShelfKind, number][]) {
         counts[kind] += count;
         counts.all += count;
       }

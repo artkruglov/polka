@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 74 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 74);
+test("migration catalog is the complete contiguous schema 75 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 75);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -114,9 +114,9 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>74\n/, recipe);
-    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>74 THEN/, recipe);
-    assert.match(text, /001 through 074/, recipe);
+    assert.match(text, /schema_migrations\)<>75\n/, recipe);
+    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>75 THEN/, recipe);
+    assert.match(text, /001 through 075/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
@@ -140,6 +140,23 @@ test("071 webhooks: no work content, encrypted secret, erased with the account",
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {
   const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
   assert.match(source, /await client\.query\("SET lock_timeout='5s'"\);\n\s+await runMigrations\(/);
+});
+
+test("075 indexes search text per shelf and stores the title vector and the latest MIME type", async () => {
+  const sql = await readFile(migrationFileUrl("075_shelf_search_index.sql"), "utf8");
+  // No extension: btree_gin would need CREATE on the database and superuser-owned functions in public.
+  assert.doesNotMatch(sql.replace(/^--.*$/gm, ""), /CREATE EXTENSION/);
+  assert.match(
+    sql,
+    /FOREIGN KEY \(tenant_id, artifact_id\)\s+REFERENCES artifacts\(tenant_id, id\) ON UPDATE CASCADE ON DELETE CASCADE/,
+  );
+  assert.match(sql, /USING gin \(\(document \|\| \('~' \|\| tenant_id::text\)::tsvector\)\)/);
+  assert.match(sql, /title_document tsvector GENERATED ALWAYS AS \(to_tsvector\('russian', title\)\) STORED/);
+  assert.match(sql, /BEFORE INSERT OR UPDATE OF latest_revision_id ON artifacts/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION artifact_latest_mime\(\) FROM PUBLIC/);
+  // The query side builds the same expression (search-text.ts).
+  const search = await readFile(new URL("../apps/server/search-text.ts", import.meta.url), "utf8");
+  assert.match(search, /\(\$\{row\}\.document \|\| \('~' \|\| \$\{row\}\.tenant_id::text\)::tsvector\)/);
 });
 
 test("074 stores operator sign-in links as hashes, short-lived, granted to the runtime", async () => {
