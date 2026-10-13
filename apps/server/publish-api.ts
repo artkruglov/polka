@@ -234,23 +234,29 @@ const unauthorized = (reply: FastifyReply, error?: "invalid_token") => {
 export const EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
 
 /**
- * Bearer only: cookies are never read, and a browser Origin other than Полка
- * (or an extension) is refused. A project's files are counted apart: one
- * project may hold PROJECT_MAX_FILES of them (docs/specs/PROJECTS.md).
+ * The token of a request checked before its body was read (admission.ts):
+ * the route's bearerActor takes it from here instead of asking again.
  */
-export async function bearerActor(
-  req: FastifyRequest,
-  reply: FastifyReply,
-  bucket: "calls" | "project-files" | "export-files" | "sessions" = "calls",
-  // The project routes also take a one-time project upload token.
-  audiences: readonly string[] = [MCP_AUDIENCE],
-) {
+const preauthenticated = new WeakMap<object, ServiceActor>();
+
+/**
+ * Before the body is read (admission.ts): a request to a bearer-only route
+ * without a token valid for any of this API's audiences is refused here, and
+ * its body is never buffered. The route still checks its own audiences.
+ */
+export async function preauthenticateBearer(req: FastifyRequest, reply: FastifyReply) {
+  preauthenticated.set(req.raw, await bearerToken(req, reply, [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE]));
+}
+
+async function bearerToken(req: FastifyRequest, reply: FastifyReply, audiences: readonly string[]) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
   const unauthenticated = () => limitAttempts(`api-v1:ip:${req.ip}`, PUBLISH_API_LIMITS.perIp);
   const origin = req.headers.origin;
   if (origin !== undefined && origin !== config.APP_ORIGIN && !EXTENSION_ORIGIN.test(origin))
     throw new Problem(403, "forbidden", "API вызывается с сервера, а не со страницы в браузере.");
+  const known = preauthenticated.get(req.raw);
+  if (known && audiences.includes(known.audience)) return known;
   const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(req.headers.authorization ?? "");
   if (!match) {
     await unauthenticated();
@@ -265,6 +271,22 @@ export async function bearerActor(
     await unauthenticated();
     throw unauthorized(reply, "invalid_token");
   }
+  return actor;
+}
+
+/**
+ * Bearer only: cookies are never read, and a browser Origin other than Полка
+ * (or an extension) is refused. A project's files are counted apart: one
+ * project may hold PROJECT_MAX_FILES of them (docs/specs/PROJECTS.md).
+ */
+export async function bearerActor(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  bucket: "calls" | "project-files" | "export-files" | "sessions" = "calls",
+  // The project routes also take a one-time project upload token.
+  audiences: readonly string[] = [MCP_AUDIENCE],
+) {
+  const actor = await bearerToken(req, reply, audiences);
   await limitAttempts(
     bucket === "calls"
       ? `api-v1:connection:${actor.rootConnectionId ?? actor.connectionId}`
@@ -372,7 +394,8 @@ export async function registerPublishApi(app: FastifyInstance) {
     media.addContentTypeParser("application/octet-stream", (_req, payload, done) => done(null, payload));
     media.put(
       "/api/v1/projects/:uploadId/media/:index",
-      { bodyLimit: PROJECT_VIDEO_MAX_FILE_BYTES },
+      // Streamed, not buffered: outside the budget of bodies in memory (admission.ts).
+      { bodyLimit: PROJECT_VIDEO_MAX_FILE_BYTES, config: { streamedBody: true } },
       async (req, reply) => {
         try {
           const actor = await bearerActor(req, reply, "project-files", PROJECT_AUDIENCES);

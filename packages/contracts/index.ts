@@ -358,4 +358,6 @@ export type ErrorCode =
   | "quota"
   | "forbidden"
   | "unsupported"
+  // 503 with Retry-After: the server is busy, nothing was done; retry later.
+  | "busy"
   | "internal";

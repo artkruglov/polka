@@ -53,6 +53,10 @@ const env = z
     // Connections of the app's pool (db.ts). An upload holds one for the
     // whole S3 PUT (see db.ts), so this bounds concurrent uploads too.
     DATABASE_POOL_MAX: z.coerce.number().int().min(2).max(200).default(20),
+    // Request bodies the app holds in memory at once, in MiB (admission.ts).
+    // Past it a new upload is answered 503 with Retry-After before a byte of
+    // it is read; one request larger than this alone is still let in.
+    BODY_BYTES_IN_FLIGHT_MB: z.coerce.number().int().min(8).max(4096).default(256),
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(16),

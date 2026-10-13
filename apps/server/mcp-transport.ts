@@ -1,6 +1,6 @@
 import { createMcpHandler, type AuthInfo, type McpHandlerRequestOptions } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { authenticateServiceToken, MCP_AUDIENCE, type ServiceActor } from "./service-auth.ts";
@@ -19,6 +19,13 @@ export const MCP_LIMITS = { perIp: 600, perConnection: 300 };
 // RFC 9728 §5.1: point OAuth clients at the protected resource metadata.
 const challenge = (error?: string) =>
   `Bearer ${error ? `error="${error}", ` : ""}resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}"`;
+
+/** A refusal before the body is read: the connection closes instead of waiting for it. */
+function refuse(reply: FastifyReply, status: number, body: object) {
+  const declared = Number(reply.request.headers["content-length"] ?? 0);
+  if (declared > 0 || reply.request.headers["transfer-encoding"] !== undefined) reply.header("connection", "close");
+  return reply.code(status).send(body);
+}
 
 function actorFromAuth(authInfo?: AuthInfo) {
   const actor = authInfo?.extra?.serviceActor as ServiceActor | undefined;
@@ -46,26 +53,34 @@ export async function registerMcpTransport(app: FastifyInstance) {
   const nodeHandler = toNodeHandler(securedHandler, {
     onerror: () => log.error({ event: "mcp.transport.failed" }),
   });
+  // The token is checked before the body is read (onRequest): a request
+  // without a valid one is refused unread (admission.ts has the budget).
+  const actors = new WeakMap<object, ServiceActor>();
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.headers.host !== endpoint.host) return refuse(reply, 403, { code: "forbidden" });
+    const origin = request.headers.origin;
+    if (origin !== undefined && origin !== config.APP_ORIGIN) return refuse(reply, 403, { code: "forbidden" });
+    const authorization = request.headers.authorization ?? "";
+    const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
+    const unauthenticated = () => limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
+    if (!match) {
+      await unauthenticated();
+      return refuse(reply.header("www-authenticate", challenge()), 401, { code: "unauthorized" });
+    }
+    let actor: ServiceActor;
+    try {
+      actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
+    } catch {
+      await unauthenticated();
+      return refuse(reply.header("www-authenticate", challenge("invalid_token")), 401, { code: "unauthorized" });
+    }
+    await limitAttempts(`mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`, MCP_LIMITS.perConnection);
+    actors.set(request.raw, actor);
+  };
   await app.register(async (mcp) => {
-    mcp.all("/mcp", { bodyLimit: MCP_BODY_LIMIT }, async (request, reply) => {
-      if (request.headers.host !== endpoint.host) return reply.code(403).send({ code: "forbidden" });
-      const origin = request.headers.origin;
-      if (origin !== undefined && origin !== config.APP_ORIGIN) return reply.code(403).send({ code: "forbidden" });
-      const authorization = request.headers.authorization ?? "";
-      const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization);
-      const unauthenticated = () => limitAttempts(`mcp:ip:${request.ip}`, MCP_LIMITS.perIp);
-      if (!match) {
-        await unauthenticated();
-        return reply.header("www-authenticate", challenge()).code(401).send({ code: "unauthorized" });
-      }
-      let actor: ServiceActor;
-      try {
-        actor = await authenticateServiceToken(match[1], MCP_AUDIENCE);
-      } catch {
-        await unauthenticated();
-        return reply.header("www-authenticate", challenge("invalid_token")).code(401).send({ code: "unauthorized" });
-      }
-      await limitAttempts(`mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`, MCP_LIMITS.perConnection);
+    mcp.all("/mcp", { bodyLimit: MCP_BODY_LIMIT, onRequest: authenticate }, async (request, reply) => {
+      const actor = actors.get(request.raw);
+      if (!actor) throw new Error("MCP request reached the handler without a checked token");
       const auth: AuthInfo = {
         token: "[redacted]",
         clientId: actor.connectionId,
