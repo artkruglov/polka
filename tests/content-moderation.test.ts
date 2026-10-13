@@ -236,6 +236,12 @@ test("CSAM at save: blocked and isolated at once, the author disabled, the lette
   assert.ok(letter, "no letter");
   assert.match(letter.subject, /CSAM/);
   assert.doesNotMatch(letter.text, /Архив|порно|pthc|moderation#/);
+  // The commands it names exist (scripts/admin.ts).
+  assert.ok(
+    letter.text.includes(`npm run admin -- moderation legal-hold ${receipt.revisionId} on --authority`),
+    letter.text,
+  );
+  assert.doesNotMatch(letter.text, /moderation:hold/);
   // The same bytes again, by anyone: blocked at once as well.
   const other = await signedUp(0);
   const again = await save(other, CSAM);

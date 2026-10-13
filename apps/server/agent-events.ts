@@ -2,6 +2,7 @@ import { z } from "zod";
 import { agentFolderScope, inScopeSql } from "./agent-scope.ts";
 import { countAgentRead } from "./agent-read-counter.ts";
 import { db } from "./db.ts";
+import { cursorAheadOfCluster } from "./extension-feed.ts";
 import { recheckServiceActor, type ServiceActor } from "./service-auth.ts";
 
 /**
@@ -93,7 +94,15 @@ export async function listEventsForAgent(actor: ServiceActor, raw: z.input<typeo
     );
     return { events: [], nextCursor: end ? `${end.tx ?? "0"}:${end.id}` : "0" };
   }
-  const [afterTx, afterId] = input.after === "0" ? ["0", "0"] : input.after.split(":");
+  let [afterTx, afterId] = input.after === "0" ? ["0", "0"] : input.after.split(":");
+  // A cursor from before a restore (extension-feed.ts, cursorAheadOfCluster)
+  // goes on from the same row with no transaction number, and that is the
+  // cursor handed back, so it does not jump once the cluster catches up.
+  let after = input.after;
+  if (await cursorAheadOfCluster(afterTx!)) {
+    afterTx = "0";
+    after = `0:${afterId}`;
+  }
   const { rows } = await db.query(
     `SELECT ${EVENT_COLUMNS_SQL}
      ${EVENT_FROM_SQL}
@@ -112,7 +121,7 @@ export async function listEventsForAgent(actor: ServiceActor, raw: z.input<typeo
   return {
     events: page.map(eventDTO),
     // On an empty page the cursor stays where it was: nothing is skipped.
-    nextCursor: last ? `${last.tx}:${last.id}` : input.after,
+    nextCursor: last ? `${last.tx}:${last.id}` : after,
     more,
   };
 }

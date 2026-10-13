@@ -245,6 +245,30 @@ test("the journal: commit order, a cursor to keep, nothing skipped behind a late
   );
 });
 
+test("the journal: a cursor kept before a restore goes on with what the new cluster writes", async () => {
+  const action = `probe.${randomBytes(3).toString("hex")}`;
+  const {
+    rows: [row],
+  } = await db.query(
+    "INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id) VALUES($1,$2,$3,$4) RETURNING id::text AS id",
+    [owner.tenant, owner.id, action, randomUUID()],
+  );
+  // The old cluster's transaction number, far ahead of this one; the id is before the new row.
+  const stale = { tx: "99999999999", id: String(BigInt(row.id) - 1n) };
+  for (let tries = 0; ; tries++) {
+    const result = await context.auditFeed.read(stale, { actions: [action], limit: 10 });
+    if (result.items.length === 1) {
+      assert.equal(result.items[0]!.id, row.id);
+      assert.ok(BigInt(result.next!.tx) < 99999999999n, result.next!.tx);
+      break;
+    }
+    // Before the row settles the cursor is handed back without the old number.
+    assert.equal(result.next!.tx === "0" || BigInt(result.next!.tx) < 99999999999n, true);
+    assert.ok(tries < 100, "the restored cursor never reached the new row");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+});
+
 test("no renderer, no PDF; the renderer's answer is a small PDF or a known outcome", () => {
   assert.equal(context.content.pdf, null);
   const pdf = Buffer.from("%PDF-1.7\n%…").toString("base64");

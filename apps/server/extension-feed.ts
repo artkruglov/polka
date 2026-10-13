@@ -11,6 +11,23 @@ export const SETTLED_SQL = "COALESCE(e.tx_id,'0'::xid8)<pg_snapshot_xmin(pg_curr
 
 const DIGITS = /^\d{1,20}$/;
 
+/**
+ * A cursor kept before a restore from a logical dump names a transaction
+ * number of the old cluster, which the new one has not reached: the feed
+ * would wait at it forever. Such a cursor goes on from the same row id with
+ * no transaction number: the restored rows have none (deploy/hosted/README.md,
+ * «Восстановление из дампа», step 3a), so what the new cluster wrote since
+ * the restore follows it. The webhook dispatcher heals its cursor the same
+ * way (webhooks.ts). pg_snapshot_xmax assigns no transaction id.
+ */
+export async function cursorAheadOfCluster(tx: string): Promise<boolean> {
+  if (tx === "0") return false;
+  const {
+    rows: [row],
+  } = await db.query("SELECT $1::xid8>=pg_snapshot_xmax(pg_current_snapshot()) AS ahead", [tx]);
+  return row.ahead === true;
+}
+
 /** The end of the settled journal now: a cursor that starts after everything so far. */
 export async function auditFeedHead(): Promise<AuditCursor> {
   const {
@@ -28,8 +45,9 @@ export async function readAuditFeed(
   cursor: AuditCursor | null,
   options: { actions: string[]; limit: number },
 ): Promise<{ items: AuditFeedItem[]; next: AuditCursor | null }> {
-  const from = cursor ?? { tx: "0", id: "0" };
+  let from = cursor ?? { tx: "0", id: "0" };
   if (!DIGITS.test(from.tx) || !DIGITS.test(from.id)) throw new Error("Invalid audit cursor");
+  if (await cursorAheadOfCluster(from.tx)) from = { tx: "0", id: from.id };
   const limit = Number.isFinite(options.limit) ? Math.max(1, Math.min(500, Math.trunc(options.limit))) : 100;
   // The settled end first: every row up to it has finished, so the page below
   // sees all of them, and a short page may move the cursor to it.

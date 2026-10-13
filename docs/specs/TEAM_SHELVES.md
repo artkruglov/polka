@@ -184,7 +184,7 @@
 
 Решение владельца 12.10.2026 ([DECISIONS](DECISIONS.md)): на polochka.app полки отделов и сервисные доступы включены для всех. Облако — одна установка для многих компаний, поэтому «установка = компания» там не годится: администратор компании видел бы чужие полки, а администратор полки мог бы найти любой адрес и добавить постороннего без согласия.
 
-- **Настройка** `TEAM_SHELVES_SCOPE=installation|organisation`. По умолчанию `installation`: своя установка работает как раньше, организации, если они есть, не учитываются. `deploy/hosted/compose.yml` по умолчанию ставит `organisation`; polochka.app работает так.
+- **Настройка** `TEAM_SHELVES_SCOPE=installation|organisation`. По умолчанию `installation`: своя установка работает как раньше, организации, если они есть, не учитываются. `deploy/hosted` (`compose.yml` и `hosted.env.example`) тоже ставит `installation`; polochka.app задаёт `organisation` в своём `hosted.env`.
 - **Схема (070).**
   - `organisations(id, name, created_at)`: название 1–80 символов, уникально без учёта регистра. Названия сравниваются через `lower()` по `ctype` базы: на polochka.app это `en_US.utf8`, кириллица тоже сравнивается без учёта регистра; в базе с `C` кириллица различала бы регистр.
   - `organisation_domains(domain, organisation_id)`: свои почтовые домены организации; домен принадлежит одной организации. Публичные почтовые сервисы (gmail.com, yandex.ru, mail.ru и другие из `PUBLIC_MAIL_DOMAINS`) не принимаются.

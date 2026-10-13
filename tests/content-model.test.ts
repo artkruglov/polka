@@ -159,16 +159,35 @@ test("config: NeuralDeep primary, Yandex fallback; keys never cross endpoints", 
   assert.equal(own.code!.flatRate, false);
 });
 
-test("config: hosted.env.example starts on Yandex AI Studio for every role; NeuralDeep is only commented out", () => {
-  const example = Object.fromEntries(
-    readFileSync("deploy/hosted/hosted.env.example", "utf8")
-      .split("\n")
-      .filter((line) => /^CONTENT_(MODEL|CODE_MODEL)_?[A-Z_]*=/.test(line))
-      .map((line) => {
-        const at = line.indexOf("=");
-        return [line.slice(0, at), line.slice(at + 1).replaceAll("<folder>", "b1gexample")];
-      }),
+test("config: hosted.env.example starts with no model; its commented AI Studio lines set every role; NeuralDeep is only commented out", () => {
+  const text = readFileSync("deploy/hosted/hosted.env.example", "utf8");
+  const settings = (lines: string[], prefix: RegExp) =>
+    Object.fromEntries(
+      lines
+        .filter((line) => prefix.test(line))
+        .map((line) => {
+          const assignment = line.replace(/^#\s*/, "");
+          const at = assignment.indexOf("=");
+          return [
+            assignment.slice(0, at),
+            assignment
+              .slice(at + 1)
+              .replaceAll("<folder>", "b1gexample")
+              .replace("<AI Studio key>", "studio-key"),
+          ];
+        }),
+    );
+  const live = settings(text.split("\n"), /^CONTENT_(MODEL|CODE_MODEL)_?[A-Z_]*=/);
+  // As shipped: rules only, nothing sent to a model.
+  assert.equal(live.CONTENT_MODEL_PROVIDER, "off");
+  assert.equal(endpoints(live), null);
+  // The AI Studio lines of the comment (before the NeuralDeep block) turn it on.
+  const enable = settings(
+    text.slice(0, text.indexOf("NeuralDeep (api.neuraldeep.ru)")).split("\n"),
+    /^#\s+CONTENT_(MODEL|CODE_MODEL)_?[A-Z_]*=/,
   );
+  assert.equal(enable.CONTENT_MODEL_PROVIDER, "yandex");
+  const example = { ...live, ...enable };
   const roles = ok(endpoints(example));
   assert.equal(roles.primary.provider, "yandex");
   assert.equal(roles.primary.url, YANDEX);

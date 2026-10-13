@@ -19,10 +19,20 @@
 
 `app`, `maintenance`, `storage-check` и `caddy` работают в сети хоста: `viewer-config.ts` требует loopback listeners, а Caddy проксирует на `127.0.0.1`. Поэтому на VM порты 4390/4391/5432 должны быть свободны и закрыты извне (они и так слушают только loopback), а в firewall/security group открыты только SSH (лучше — только с адресов оператора), 80/443 TCP и, по желанию, 443/UDP для HTTP/3.
 
+## Что нужно
+
+- **VM** с Linux и systemd (Ubuntu, Debian), от 4 ГБ RAM (спокойнее 6 ГБ, а с рендерером на той же VM — обязательно), 2 vCPU, диск от 20 ГБ. Публичный IP.
+- **Docker** с плагином compose (`docker compose version`), **git** и **Node.js 22** — только для `npm run hosted:setup` (шаг 4); приложению на VM Node.js не нужен, оно работает в контейнере.
+- **Два домена** с A-записями на IP VM: домен приложения (`APP_HOST`) и отдельный registrable domain для просмотра (`VIEWER_HOST_NAME`), например `polka.company.ru` и `polka-view.company.net`, но не `view.company.ru`. Интерактивные страницы выполняют чужие скрипты; на своём сайте, без cookie и API приложения, они не дотянутся до сессий людей (раздел «Интерактивный viewer»). Второй домен нужен даже при выключенном интерактивном просмотре: Caddy выпускает сертификат для обоих.
+- **S3-совместимое хранилище** с версионированием и условной записью (`If-None-Match: *`; `storage-check` проверяет обе при каждом `up` и без них останавливает запуск). Два приватных бакета: объекты (`S3_BUCKET`) и дампы (`BACKUP_BUCKET`). Yandex Object Storage подходит.
+- **Три ключа S3**, у каждого свои права (раздел «Бэкапы и секреты»): ключ приложения (объекты и листинг бакета дампов), ключ бэкапа только на запись в `BACKUP_BUCKET` (обязателен: без него `compose.yml` не запустится), ключ чтения дампов для восстановления — хранится вне VM.
+- **Входящие 80 и 443 TCP** открыты всему интернету: Let's Encrypt проверяет домены по HTTP, а люди открывают Полку по HTTPS. SSH — лучше только с адресов оператора.
+- Почта (SMTP) не обязательна: без неё аккаунты с паролем выдаёт оператор (ниже).
+
 ## Первый запуск
 
 1. DNS: A-записи `APP_HOST` и `VIEWER_HOST_NAME` на IP VM, **без** прокси CDN (у Cloudflare — «DNS only»): CDN видел бы токены агентов и мог бы менять HTML. Обе записи нужны до первого `up`: Caddy сразу запрашивает сертификаты для обоих доменов, а `VIEWER_HOST_NAME` обязателен даже при `HTML_LIVE_MODE=disabled`. Firewall — 22, 80, 443 (см. выше). Если у VM динамический внешний IP, после stop/start обновите обе записи.
-2. Два приватных бакета с **включённым версионированием**: `S3_BUCKET` (объекты) и `BACKUP_BUCKET` (дампы). `storage-check` не включает версионирование сам и без него останавливает запуск (`Bucket versioning must already be enabled`). По желанию — отдельный ключ только на запись в `BACKUP_BUCKET` (см. «Бэкапы и секреты»).
+2. Два приватных бакета с **включённым версионированием**: `S3_BUCKET` (объекты) и `BACKUP_BUCKET` (дампы). `storage-check` не включает версионирование сам и без него останавливает запуск (`Bucket versioning must already be enabled`). Для бэкапа обязателен отдельный ключ только на запись в `BACKUP_BUCKET` (`BACKUP_S3_ACCESS_KEY`, без него `compose.yml` не запустится; см. «Бэкапы и секреты»).
 3. Собрать образ приложения. Опубликованного образа нет, `up --build` собирает только `backup`:
 
    ```sh
@@ -41,7 +51,7 @@
      --image polka:<short-commit> --live
    ```
 
-   Любую другую настройку из примера можно задать сразу: `--set TEAM_SHELVES=on`. Существующий файл команда не трогает без `--force`. Сохраните копию `LINK_KEY` в менеджере секретов: без него перестают работать все ссылки. Заполнить вручную тоже можно: `cp deploy/hosted/hosted.env.example deploy/hosted/hosted.env && chmod 600 deploy/hosted/hosted.env`, пароли `openssl rand -hex 24`, `LINK_KEY` `openssl rand -hex 32`.
+   Любую другую настройку из примера можно задать сразу: `--set OPERATOR_CONTACT=privacy@company.ru` (адрес для обжалования блокировок, его команда перечисляет как незаполненный), `--set OIDC_DISCOVERY_URL=…` (свой IdP, раздел «Вход через Яндекс ID и VK ID»). Модели фильтра содержимого в примере выключены (`CONTENT_MODEL_PROVIDER=off`, только правила), как их включить — в комментарии `hosted.env.example`. Существующий файл команда не трогает без `--force`; с `--force` всё, что в нём уже есть, включая пароли БД и `LINK_KEY`, остаётся, меняется только переданное. Новые секреты — только с `--rotate`: тогда пароли ролей нужно сменить и в БД (`ALTER ROLE`), а новый `LINK_KEY` ломает все выданные ссылки и секреты вебхуков. Сохраните копию `LINK_KEY` в менеджере секретов: без него перестают работать все ссылки. Заполнить вручную тоже можно: `cp deploy/hosted/hosted.env.example deploy/hosted/hosted.env && chmod 600 deploy/hosted/hosted.env`, пароли `openssl rand -hex 24`, `LINK_KEY` `openssl rand -hex 32`.
 
 5. Запустить:
 
@@ -51,11 +61,14 @@
 
 Роли БД создаёт `init-roles.sh` при первом старте пустого volume `pgdata`. Позже он не запускается: смена паролей ролей — вручную через `ALTER ROLE` и затем в `hosted.env`.
 
-Аккаунт (регистрация по почте выключена, пока нет SMTP). Пароль читается из stdin, не из аргументов:
+Аккаунт (регистрация по почте выключена, пока нет SMTP). Пароль читается из stdin, не из аргументов; придумайте его сами или сгенерируйте и сохраните в менеджере паролей, прежде чем передать человеку:
 
 ```sh
+cd /opt/polka/deploy/hosted
+PASSWORD=$(openssl rand -base64 18) && echo "$PASSWORD"   # сохраните, больше он нигде не покажется
 printf '%s' "$PASSWORD" | docker compose --env-file hosted.env run --rm -T --no-deps app \
   node --import tsx scripts/account.ts <login>
+unset PASSWORD
 ```
 
 ## Лента — редакционный каталог
@@ -153,13 +166,21 @@ sudo netfilter-persistent save
 
 ## Обновление
 
-Перед обновлением прочитайте [CHANGELOG](../../CHANGELOG.md) от своей версии до новой: там названы новые миграции и настройки. Есть ли в релизе миграция, видно и по коду: `git diff --stat <текущий-тег>..<новый-тег> -- deploy/migrations`. Если есть, сначала сделайте дамп (`docker compose --env-file hosted.env restart backup`, раздел «Бэкапы и секреты»): без него откат невозможен.
+Перед обновлением прочитайте [CHANGELOG](../../CHANGELOG.md) от своей версии до новой: там названы новые миграции и настройки. Есть ли в релизе миграция, видно и по коду: `git diff --stat <текущий-тег>..<новый-тег> -- deploy/migrations`. Если есть, сначала сделайте дамп и дождитесь строки `backup ok`: без него откат невозможен.
 
 ```sh
 cd /opt/polka && git fetch && git checkout <new-tag-or-commit>
 docker build -t polka:<new-short> .
-sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' deploy/hosted/hosted.env
-cd deploy/hosted && docker compose --env-file hosted.env up -d --build
+cd deploy/hosted
+# внеочередной дамп (раздел «Бэкапы и секреты»): ждать `backup ok` после перезапуска;
+# `backup FAILED` или тишина 15 минут — не обновляться, пока причина не устранена
+SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+docker compose --env-file hosted.env restart backup
+timeout 900 sh -c "until docker compose --env-file hosted.env logs --since $SINCE backup | grep 'backup ok'; do sleep 10; done"
+sed -i 's/^POLKA_IMAGE=.*/POLKA_IMAGE=polka:<new-short>/' hosted.env
+docker compose --env-file hosted.env up -d --build
+# со службой очистки (раздел «Удаление аккаунта») — с профилем, иначе она останется на старом образе:
+# docker compose --env-file hosted.env --profile purge up -d --build
 ```
 
 `up -d` заново выполняет миграции и grants, затем перезапускает app. `deploy/runtime-grants.sql` проверяет точный номер последней миграции (точный набор — в `packages/migrations.ts`): релиз с новой миграцией приносит и обновлённый recipe. Миграции идут одной транзакцией; таймаут на одну команду — `MIGRATION_STATEMENT_TIMEOUT_MS` (по умолчанию 120000). При ошибке job печатает имя файла миграции и SQLSTATE, всё откатывается.
@@ -177,7 +198,11 @@ cd deploy/hosted && docker compose --env-file hosted.env up -d --build
 
 ```sh
 cd /opt/polka/deploy/hosted
+# account-purge — служба очистки (профиль purge, раздел «Удаление аккаунта»): работающая,
+# она раз в минуту ходила бы в восстановленную базу и в журнал стираний.
+# Без этой службы вторая команда ничего не делает.
 docker compose --env-file hosted.env stop app maintenance backup
+docker compose --env-file hosted.env --profile purge stop account-purge
 
 # 1. Выбрать и скачать дамп
 # ключ аккаунта чтения (не ключ приложения и не ключ записи: у них нет права читать дампы)
@@ -240,17 +265,23 @@ DELETE FROM grants;
 DELETE FROM agent_connection_csrf;
 DELETE FROM sessions;
 DELETE FROM login_challenges;
+UPDATE tenant_invitations SET state='revoked',token_hash=NULL,revoked_at=clock_timestamp() WHERE state='active';
+UPDATE webhook_endpoints SET status='disabled',disabled_reason='owner',updated_at=clock_timestamp() WHERE status='active';
+UPDATE webhook_deliveries SET state='failed',next_attempt_at=NULL,leased_until=NULL,last_error='endpoint_disabled'
+  WHERE state='pending';
 COMMIT;
 SQL
 
-# 6. Запуск
-docker compose --env-file hosted.env up -d
+# 6. Запуск. Со службой очистки — с её профилем (она была остановлена в начале):
+docker compose --env-file hosted.env --profile purge up -d
+# без службы очистки (ACCOUNT_DELETION_PURGE_WORKER=false, по умолчанию):
+# docker compose --env-file hosted.env up -d
 rm polka.dump
 ```
 
-Шаг 5б обязателен. Дамп хранит доступы такими, какими они были в момент снимка: ссылка, сессия или токен агента, отозванные уже после него, в восстановленной базе снова действуют до своего срока, а журнал стираний (шаг 5) возвращает только удалённые аккаунты, не отзывы. Поэтому восстановленная база закрывается целиком, так же как в `scripts/restore-drill.ts`: все ссылки отозваны, все подключения агентов отозваны, сессии и временные разрешения удалены. Последствия для людей: все входят заново, агенты подключаются заново, владельцам нужно снова выдать ссылки (сами работы и версии не тронуты). Это осознанный выбор: после аварии лучше закрыть лишнее, чем открыть отозванное. Если дамп снят минуту назад и вы уверены, что после него ничего не отзывали, шаг можно пропустить, но запишите это в журнал операций.
+Шаг 5б обязателен. Дамп хранит доступы такими, какими они были в момент снимка: ссылка, сессия, токен агента, приглашение на полку отдела или адрес вебхука, отозванные уже после него, в восстановленной базе снова действуют до своего срока, а журнал стираний (шаг 5) возвращает только удалённые аккаунты, не отзывы. Поэтому восстановленная база закрывается целиком, так же как в `scripts/restore-drill.ts`: все ссылки и приглашения на полки отозваны, все подключения агентов отозваны, сессии и временные разрешения удалены, вебхуки выключены (в «Настройках» они значатся выключенными владельцем, неотправленные события не уйдут). Последствия для людей: все входят заново, агенты подключаются заново, владельцам нужно снова выдать ссылки и приглашения и включить нужные вебхуки (сами работы и версии не тронуты). Это осознанный выбор: после аварии лучше закрыть лишнее, чем открыть отозванное. Если дамп снят минуту назад и вы уверены, что после него ничего не отзывали, шаг можно пропустить, но запишите это в журнал операций.
 
-Шаг 5 обязателен, если после момента дампа кого-то удаляли (`account-erase`): иначе удалённые аккаунты вернутся. `restore-reconcile` читает журнал стираний ключом только на чтение, для каждой заявки в нём находит аккаунт в восстановленной базе и снова стирает его строки и объекты полки. Затем пишет квитанцию в `/opt/polka/restore/receipts`. Он откажет, если журнал изменился после `restore-authorities`, если база не закрыта (работают `app`, `maintenance` или `backup`) или миграции не совпадают с релизом. Для него нужны роль `polka_restore` и ключ журнала только на чтение (раздел «Удаление аккаунта»). Проверено 28.09.2026 на отдельной VM: дамп polochka.app, снятый до удаления синтетического аккаунта, восстановлен; после шага 5 аккаунт снова стёрт (строки, статус `purged`), остальные аккаунты не тронуты, сверка — 2 секунды.
+Шаг 5 обязателен, если после момента дампа кого-то удаляли (`account-erase`): иначе удалённые аккаунты вернутся. `restore-reconcile` читает журнал стираний ключом только на чтение, для каждой заявки в нём находит аккаунт в восстановленной базе и снова стирает его строки и объекты полки. Затем пишет квитанцию в `/opt/polka/restore/receipts`. Он откажет, если журнал изменился после `restore-authorities`, если база не закрыта (работают `app`, `maintenance`, `backup` или `account-purge`) или миграции не совпадают с релизом. Для него нужны роль `polka_restore` и ключ журнала только на чтение (раздел «Удаление аккаунта»). Проверено 28.09.2026 на отдельной VM: дамп polochka.app, снятый до удаления синтетического аккаунта, восстановлен; после шага 5 аккаунт снова стёрт (строки, статус `purged`), остальные аккаунты не тронуты, сверка — 2 секунды.
 
 Не используйте `pg_restore --clean`: в существующей БД он оставляет таблицы более новой миграции, а в пустой падает на каждом DROP отсутствующего объекта, и настоящие ошибки теряются среди сотен ложных. Поэтому БД пересоздаётся с правами из `init-roles.sh`, а `pg_restore` идёт без `--clean`. Шаг `grants` при `up` заново выдаёт права `polka_runtime`. Так восстановлен настоящий hosted-дамп схемы 028 (все таблицы и 28 миграций). 28.09.2026 процедура отрепетирована на отдельной VM с дампом polochka.app (схема 48, 69 работ): дамп восстановился без ошибок, миграции дошли до 049, все 172 объекта версий нашлись в бакете с совпадающими SHA-256, приложение поднялось на восстановленной базе и отдало файлы работы по API. От пустой VM до работающего приложения — 13 минут, из них сборка образа и скачивание — около 5. Всё, что изменилось после момента дампа (новые работы, ссылки, сессии, токены агентов), теряется; объекты этих работ остаются в `S3_BUCKET` без ссылок на них.
 
@@ -273,7 +304,7 @@ rm polka.dump
 
 По умолчанию выключен (`MAIL_MODE=disabled`): аккаунты с паролем выдаёт оператор. С `MAIL_MODE=smtp` вход — по восьмизначному коду из письма. В режиме `EMAIL_SIGNUP=invite` (по умолчанию в `compose.yml` и `hosted.env.example` этой формы установки; в коде по умолчанию `open`) код получают только:
 
-- аккаунты, к которым оператор привязал адрес: `docker compose --env-file hosted.env run --rm app node --import tsx scripts/account-email.ts <логин> <почта>` — вход по коду откроет полку этого аккаунта;
+- аккаунты, к которым оператор привязал адрес: `docker compose --env-file hosted.env run --rm --no-deps app node --import tsx scripts/account-email.ts <логин> <почта>` — вход по коду откроет полку этого аккаунта;
 - адреса и домены из `EMAIL_SIGNUP_ALLOW` (`anna@example.com,@team.example.com`) — при первом входе у них появится новая полка.
 
 Остальным форма отвечает так же, но письмо не уходит, поэтому по ней нельзя узнать, кто приглашён. `EMAIL_SIGNUP=open` открывает регистрацию любому адресу (так на polochka.app, с потолками `EMAIL_SIGNUP_DAILY_*`).
@@ -307,6 +338,10 @@ rm polka.dump
 - scopes только `openid`, `email`, `profile`;
 - в `hosted.env` и Lockbox `polka-hosted-env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`;
 - `GOOGLE_SIGNUP=link-only` (по умолчанию здесь). Google — не российская система, поэтому он только входит в полку, к которой владелец привязал его в «Способах входа». Новую полку он не открывает и временную не закрепляет.
+
+**Свой IdP компании (OpenID Connect: Keycloak, Avanpost, ADFS)** — пошагово в [SIGN_IN_PROVIDERS.md](../../docs/specs/SIGN_IN_PROVIDERS.md), «Свой OIDC»:
+- в IdP — confidential-клиент, authorization code с PKCE S256, redirect URI `https://<APP_HOST>/api/auth/idp/oidc/callback`, в `id_token` — `email` и `email_verified`;
+- в `hosted.env`: `OIDC_DISCOVERY_URL` (адрес `…/.well-known/openid-configuration`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, подпись кнопки `OIDC_NAME`; по желанию `OIDC_ALLOWED_DOMAINS`, `OIDC_ORG_CLAIM` и `OIDC_ORG_VALUE`, `OIDC_ORG_LIBRARY`. Всё это задаётся и сразу при создании файла: `npm run hosted:setup -- … --set OIDC_DISCOVERY_URL=https://sso.company.ru/realms/main/.well-known/openid-configuration --set OIDC_CLIENT_ID=polka` (секрет — тем же `--set` или правкой файла).
 
 **Доступ компании:** `ORG_DOMAINS=company.ru=<id библиотеки шаблонов>:reader`. Сотрудник с подтверждённой почтой `@company.ru`, вошедший через Яндекс ID (у Яндекс 360 это аккаунт организации), становится читателем библиотеки. Исключённого администратором домен обратно не добавит.
 
@@ -419,9 +454,25 @@ docker compose --env-file hosted.env logs -f account-purge                  # ac
 
 ## Прочие настройки
 
-- `TEAM_SHELVES` (`off` по умолчанию, на polochka.app `on` с 12.10.2026) — полки отделов ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md)).
-- `TEAM_SHELVES_SCOPE` (`organisation` по умолчанию в этом `compose.yml`, `installation` в коде и в `deploy/compose.base.yml`) — чьи полки отделов видит администратор компании. `organisation` — облако для многих компаний: у администратора компании есть организация, он видит и ведёт только её полки, сразу добавить на полку можно только сотрудника организации (подтверждённая почта на её домене или участие в её полке), остальных — только ссылкой-приглашением. `installation` — одна компания на установку, как раньше. Организацию и её администратора заводит оператор: `npm run admin -- company org "<название>" --domain company.ru`, затем `npm run admin -- company admin <логин|почта> --org "<название>"` ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md#организации-в-облаке-миграция-070)).
-- `SERVICE_ACCOUNTS` (`off` по умолчанию, на polochka.app `on` с 12.10.2026) — сервисные доступы для cron и CI на полках отделов ([PUBLISH_API.md](../../docs/PUBLISH_API.md)).
+- `TEAM_SHELVES` — полки отделов ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md)). В коде и в `compose.yml` (если переменной нет в `hosted.env`) — `off`; `hosted.env.example` и `hosted:setup` ставят `on`, как на polochka.app с 12.10.2026. Не нужны — `TEAM_SHELVES=off`.
+- `TEAM_SHELVES_SCOPE` (`installation` по умолчанию: в коде, в этом `compose.yml`, в `hosted.env.example` и в `deploy/compose.base.yml`) — чьи полки отделов видит администратор компании. `installation` — одна компания на установку: администратор компании видит и ведёт все полки отделов. `organisation` — облако для многих компаний (так на polochka.app): у администратора компании есть организация, он видит и ведёт только её полки, сразу добавить на полку можно только сотрудника организации (подтверждённая почта на её домене или участие в её полке), остальных — только ссылкой-приглашением ([TEAM_SHELVES.md](../../docs/specs/TEAM_SHELVES.md#организации-в-облаке-миграция-070)). Администратора компании назначает оператор на VM:
+
+  ```sh
+  cd /opt/polka/deploy/hosted
+  docker compose --env-file hosted.env run --rm --no-deps app \
+    node --import tsx scripts/admin.ts company admin <логин|почта>
+  # снять роль
+  docker compose --env-file hosted.env run --rm --no-deps app \
+    node --import tsx scripts/admin.ts company admin <логин|почта> --revoke
+  # только при TEAM_SHELVES_SCOPE=organisation: сначала организация, затем её администратор
+  docker compose --env-file hosted.env run --rm --no-deps app \
+    node --import tsx scripts/admin.ts company org "<название>" --domain company.ru
+  docker compose --env-file hosted.env run --rm --no-deps app \
+    node --import tsx scripts/admin.ts company admin <логин|почта> --org "<название>"
+  ```
+
+  Неизвестный ключ (например, `--revok`) команда отклоняет и ничего не меняет. Локально то же — `npm run admin -- company …`.
+- `SERVICE_ACCOUNTS` — сервисные доступы для cron и CI на полках отделов ([PUBLISH_API.md](../../docs/PUBLISH_API.md)). В коде и в `compose.yml` — `off`, в `hosted.env.example` — `on` (так на polochka.app с 12.10.2026). То же с `WEBHOOKS` ([WEBHOOKS.md](../../docs/specs/WEBHOOKS.md)): приложению тогда нужен исходящий HTTPS.
 - `BROWSER_EXTENSION_IDS` — ID официальной сборки расширения «На Полку»; её страница согласия подписана «Расширение браузера «На Полку»». Пусто — любое расширение показывается со своим ID.
 - `POLKA_EXTENSIONS` — модули расширений открытого ядра, установленные в образ ([EXTENSIONS.md](../../docs/specs/EXTENSIONS.md)). Пусто — только ядро.
 - `S3_SECRET_KEY` — не короче 16 символов, иначе приложение не запустится.
@@ -449,8 +500,8 @@ docker compose --env-file hosted.env logs -f account-purge                  # ac
 | `CONTENT_FILTER_MODE` | `strict` | Фильтр содержимого: `off`, `balanced` (по умолчанию в коде), `strict` — всё отмеченное ждёт проверки при любом доверии |
 | `CONTENT_FILTER_AUTOBLOCK` | `false` первые 2–4 недели, затем `true` | Автоблокировка: при `false` сразу блокируются только CSAM и явный вредоносный код, остальное ждёт вас; при `true` — ещё тяжёлые категории, в которых уверены правила или согласны обе модели |
 | `MODERATION_RETENTION` | пусто | Сроки изоляции по категориям поверх умолчаний (`porn=30,gambling=keep`…) |
-| `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы |
-| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | см. `hosted.env.example` | Модели: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила. При любом другом провайдере обязателен `CONTENT_MODEL_PRIMARY`: без него приложение не запустится |
+| `OPERATOR_CONTACT` | `privacy@polochka.app` | Адрес для обжалования, который владелец видит у заблокированной работы. В `hosted.env.example` пуст: укажите свой, `hosted:setup` перечисляет его как незаполненный |
+| `CONTENT_MODEL_*`, `CONTENT_CODE_MODEL_*` | Yandex AI Studio | Модели. В `hosted.env.example` выключены (`CONTENT_MODEL_PROVIDER=off`, только правила): прежний пример включал Yandex AI Studio с пустым ключом, и приложение без конца обращалось к модели, которая не отвечает. Без модели ссылки новых аккаунтов с изображениями ждут вас (`moderation queue`, `approve`). Включение описано там же: все роли (основная, второе мнение, ревьюер кода) — Yandex AI Studio, один каталог и один ключ. У каждой роли можно задать свой провайдер, адрес, ключ, лимиты запросов и признак фиксированной оплаты, плюс параметры и цены. Ключи — секреты (hosted.env и Lockbox). NeuralDeep — необязательный вариант, в `hosted.env.example` закомментирован; включать только после поручения на обработку ПДн с ним ([CONTENT_FILTER.md](../../docs/specs/CONTENT_FILTER.md), «NeuralDeep»). `CONTENT_MODEL_PROVIDER=off` (умолчание `compose.yml`) — только правила. При любом другом провайдере обязателен `CONTENT_MODEL_PRIMARY`: без него приложение не запустится |
 | `CONTENT_MODEL_DAILY_BUDGET_RUB` | `500` | Бюджет моделей в сутки (UTC, с 03:00 по Москве); дальше только правила и одно письмо вам. Расход хранится в базе, перезапуск и деплой его не обнуляют |
 | `EMAIL_SIGNUP_DAILY_PER_SUBNET`, `EMAIL_SIGNUP_DAILY_PER_DOMAIN` | `10`, `20` | Новых полок в сутки из одной сети /24 и с одного почтового домена (кроме крупных публичных). Одноразовые адреса отклоняются всегда |
 
@@ -600,7 +651,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
   |---|---|
   | `database` | БД не отвечает |
   | `maintenance` | просроченные сессии или гранты лежат дольше 30 минут: цикл обслуживания остановился или падает раньше очистки |
-  | `backup` | самому новому дампу в `BACKUP_BUCKET/postgres/` 26 часов и больше, или дампов нет. Ключу приложения нужно право на листинг этого бакета |
+  | `backup` | самому новому дампу в `BACKUP_BUCKET/postgres/` больше `BACKUP_INTERVAL_SECONDS` плюс 2 часа (сутки — 26 часов, час — 3; порог в ответе — `limitHours`), или дампов нет. Ключу приложения нужно право на листинг этого бакета |
   | `disk` | свободно меньше 10% диска VM |
 
 - **Скрипт внешней проверки** — `npm run ops:uptime` (`node scripts/ci/uptime.mjs`, без зависимостей, Node 20+) с `APP_ORIGIN`, `VIEWER_ORIGIN` и `OPS_STATUS_TOKEN`: приложение и viewer отвечают, TLS-сертификатам больше 14 дней, статус зелёный. Каждая проверка — до трёх попыток с паузой 20 секунд. Код выхода 1 при сбое.
