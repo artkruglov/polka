@@ -196,6 +196,8 @@ npm run verify         # всё перед push; то же проверяет Gi
 
 ## Своя установка
 
+Пошагово для компании — [Полка в компании: запуск за один день](docs/company-launch.md): какой вариант выбрать, что подготовить, установка одной командой, первый администратор, настройки и подключение сотрудников.
+
 Поставка состоит из одного Docker-образа и внешних PostgreSQL и versioned S3. Образ собирается из исходников (`docker build`), опубликованного образа пока нет. Интерактивный viewer должен работать на отдельном registrable domain. Рекомендуемый путь — [deploy/hosted/README.md](deploy/hosted/README.md) (одна VM с Caddy, как на polochka.app; там же [обновление и откат](deploy/hosted/README.md#обновление)). [deploy/BASE.md](deploy/BASE.md), [deploy/RESTORE.md](deploy/RESTORE.md) и [deploy/VIEWER_STAGING.md](deploy/VIEWER_STAGING.md) — черновики для опытных операторов. Как устроена система: [docs/architecture.md](docs/architecture.md).
 
 ## Для компаний
