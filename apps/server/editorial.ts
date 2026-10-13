@@ -102,6 +102,11 @@ const usableParameters = () => [config.HTML_LIVE_ENABLED, [...SERVED_BUILDER_VER
  * current publication binding to remain usable.
  */
 export async function assertEditorialShareAccessible(c: Queryable, shareId: string) {
+  // Almost no link is in the catalogue: a lookup by the unique share_id
+  // answers that without planning the publication join (4 ms of planning
+  // against 0.06 ms of execution, on every open of a link).
+  const catalogued = await c.query("SELECT 1 FROM editorial_publications WHERE share_id=$1", [shareId]);
+  if (!catalogued.rowCount) return;
   const {
     rows: [state],
   } = await c.query(

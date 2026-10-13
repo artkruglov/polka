@@ -757,7 +757,8 @@ async function enableShareInTransaction(
   await assertNewAccountLimits(c, standing, actor.tenant, input.expiresInDays);
   const decision = await moderationFor(c, standing, actor.tenant, artifact.title, artifact.latest_revision_id, notices);
   const holdReason = decision.block ? `blocked:${decision.block}` : decision.hold;
-  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1", [artifactId]);
+  // NOT revoked: the partial index one_current_share finds the one open link.
+  await c.query("UPDATE shares SET revoked=true WHERE artifact_id=$1 AND NOT revoked", [artifactId]);
   const shareId = randomUUID();
   const {
     rows: [created],

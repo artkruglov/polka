@@ -132,7 +132,7 @@ export async function requestDeletionRows(
       WHERE issued.share_id=share.id AND share.tenant_id=$1`,
     [shelf.tenant],
   );
-  await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [shelf.tenant]);
+  await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1 AND NOT revoked", [shelf.tenant]);
   await c.query("UPDATE uploads SET aborted=true WHERE tenant_id=$1 AND receipt IS NULL", [shelf.tenant]);
   await c.query(
     `UPDATE revision_derivatives

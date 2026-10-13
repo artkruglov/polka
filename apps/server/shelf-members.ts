@@ -111,10 +111,25 @@ const event = (
  * organisation's domains) and what may be added directly.
  */
 export async function listShelfMembers(actor: Actor, shelfId: string) {
+  if (config.TEAM_SHELVES !== "on") throw missing();
   return transaction(async (c) => {
-    const shelf = await lockTeamShelf(c, shelfId);
-    const active = await lockAccounts(c, [actor.id]);
-    const role = roleOf(await lockMemberships(c, shelfId, [actor.id]), active, actor.id);
+    // Read-only: the same checks as lockTeamShelf, lockAccounts and roleOf,
+    // without their row locks. A list took FOR UPDATE on the shelf and
+    // waited behind every save on it.
+    const {
+      rows: [shelf],
+    } = await c.query(
+      `SELECT shelf.id,shelf.name,shelf.organisation_id AS "organisationId",member.role
+       FROM tenants shelf
+       JOIN tenant_members member ON member.tenant_id=shelf.id
+        AND member.account_id=$2 AND member.state='active'
+       JOIN accounts account ON account.id=member.account_id
+        AND NOT account.disabled AND account.deletion_requested_at IS NULL
+       WHERE shelf.id=$1 AND shelf.kind='team' AND shelf.state='active'`,
+      [shelfId, actor.id],
+    );
+    if (!shelf) throw missing();
+    const role = shelf.role as ShelfRole;
     const { rows } = await c.query(
       `SELECT member.account_id AS "accountId",
               COALESCE(account.display_name,account.name) AS name,

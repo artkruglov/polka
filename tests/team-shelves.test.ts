@@ -162,6 +162,90 @@ test("lockShelf checks the role; a personal shelf's owner passes any", async () 
   assert.equal((await lock({ id: member.id, tenant: member.tenant }, "admin")).role, "owner");
 });
 
+test("a second lockShelf in one transaction rechecks without relocking, and sees the transaction's changes", async () => {
+  config.TEAM_SHELVES = "on";
+  const shelf = (await call("POST", "/api/shelves", admin, { name: "Повторная блокировка" })).json();
+  await db.query("INSERT INTO tenant_members(tenant_id,account_id,role,invited_by) VALUES($1,$2,'author',$3)", [
+    shelf.id,
+    member.id,
+    admin.id,
+  ]);
+  const actor = { id: member.id, tenant: shelf.id };
+  await transaction(async (c) => {
+    const first = await lockShelf(c, actor, "author");
+    const statements: string[] = [];
+    const query = c.query.bind(c);
+    (c as any).query = (text: string, values: unknown[]) => {
+      statements.push(text);
+      return query(text, values);
+    };
+    try {
+      const again = await lockShelf(c, actor, "reader");
+      assert.equal(again.role, "author");
+      assert.deepEqual(again.tenant, first.tenant);
+      assert.equal(statements.length, 1);
+      assert.doesNotMatch(statements[0], /FOR (UPDATE|SHARE)/);
+      // A role too low is still «forbidden»; a change made by this transaction counts.
+      await assert.rejects(lockShelf(c, actor, "curator"), (error: any) => error.status === 403);
+      await c.query("UPDATE tenant_members SET role='curator' WHERE tenant_id=$1 AND account_id=$2", [
+        shelf.id,
+        member.id,
+      ]);
+      assert.equal((await lockShelf(c, actor, "curator")).role, "curator");
+      await c.query("UPDATE accounts SET disabled=true WHERE id=$1", [member.id]);
+      await assert.rejects(lockShelf(c, actor, "reader"), notFound);
+    } finally {
+      (c as any).query = query;
+    }
+    throw Object.assign(new Error("roll back"), { rollback: true });
+  }).catch((error) => {
+    if (!error.rollback) throw error;
+  });
+  // After the rollback the next transaction on the same pooled client locks for real again.
+  for (let i = 0; i < 3; i++)
+    await transaction(async (c) => {
+      const statements: string[] = [];
+      const query = c.query.bind(c);
+      (c as any).query = (text: string, values: unknown[]) => {
+        statements.push(text);
+        return query(text, values);
+      };
+      try {
+        assert.equal((await lockShelf(c, actor, "author")).role, "author");
+      } finally {
+        (c as any).query = query;
+      }
+      assert.ok(statements.some((text) => /FROM tenants WHERE id=\$1 .*FOR UPDATE/s.test(text)));
+    });
+});
+
+test("the member list takes no row locks: it does not wait for a save holding the shelf", async () => {
+  config.TEAM_SHELVES = "on";
+  const shelf = (await call("POST", "/api/shelves", admin, { name: "Список без ожидания" })).json();
+  const holder = await db.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT 1 FROM tenants WHERE id=$1 FOR UPDATE", [shelf.id]);
+    await holder.query("SELECT 1 FROM accounts WHERE id=$1 FOR UPDATE", [admin.id]);
+    const listed = await Promise.race([
+      call("GET", `/api/shelves/${shelf.id}/members`, admin),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
+    assert.ok(listed, "the list waited for the shelf's lock");
+    assert.equal(listed.statusCode, 200, listed.body);
+    assert.equal(listed.json().role, "admin");
+    assert.deepEqual(
+      listed.json().items.map((item: { accountId: string }) => item.accountId),
+      [admin.id],
+    );
+  } finally {
+    await holder.query("ROLLBACK");
+    holder.release();
+  }
+  // Still only for its members.
+  assert.equal((await call("GET", `/api/shelves/${shelf.id}/members`, stranger)).statusCode, 404);
+});
+
 test("the schema keeps owners and department shelves apart", async () => {
   await assert.rejects(
     db.query("INSERT INTO tenants(id,owner_id,kind,name) VALUES($1,$2,'team','Лишний владелец')", [

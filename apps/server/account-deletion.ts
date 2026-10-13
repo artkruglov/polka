@@ -300,7 +300,7 @@ export async function confirmAccountDeletion(actor: Actor, sessionToken: string,
       [actor.tenant],
     );
     await withdrawEditorialForDeletionInTransaction(c, actor);
-    await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1", [actor.tenant]);
+    await c.query("UPDATE shares SET revoked=true WHERE tenant_id=$1 AND NOT revoked", [actor.tenant]);
     await c.query(
       `UPDATE uploads SET aborted=true
        WHERE tenant_id=$1 AND receipt IS NULL`,
