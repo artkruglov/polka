@@ -68,6 +68,7 @@ import { registerServiceAccountRoutes } from "./service-account-routes.ts";
 import { registerWebhookRoutes } from "./webhook-routes.ts";
 import { log } from "./log.ts";
 import { registerRequestLog, requestId } from "./request-log.ts";
+import { registerAdmission } from "./admission.ts";
 
 /** The first frame of a stack below its message: where it was thrown. */
 export function firstStackFrame(error: unknown) {
@@ -133,6 +134,8 @@ export async function createApp() {
     )
       throw new Problem(403, "forbidden", "Запрос должен быть отправлен из Полки.");
   });
+  // Bodies: bearer tokens and the in-memory budget before a byte is read.
+  registerAdmission(app);
   // Which surface an action came through (analytics.ts: work_saved via).
   // A preHandler, not onRequest: the context must survive body parsing.
   app.addHook("preHandler", (req, _reply, done) => {
