@@ -216,7 +216,8 @@ export function registerViewRoutes(app: FastifyInstance) {
            AND ${linkShelfOpenSql("tenant")}
            WHERE share.token_hash=$1 AND NOT account.disabled
              AND account.deletion_requested_at IS NULL`,
-          [tokenHash, config.NEW_ACCOUNT_DAYS],
+          // ACCOUNT_TRUST=company: no author here is «new» to a recipient.
+          [tokenHash, config.ACCOUNT_TRUST === "company" ? 0 : config.NEW_ACCOUNT_DAYS],
         )
       ).rows[0];
       if (!candidate) throw missing();

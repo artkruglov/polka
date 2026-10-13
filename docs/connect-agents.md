@@ -34,7 +34,7 @@
 
 Установка из `artkruglov/polka-plugin` проверена 27.09.2026 в пустых профилях: клон за секунду, `claude plugin install polka@polka` и `codex plugin add polka@polka` проходят. Проверено 25.09.2026 на Claude Code 2.1.282 и Codex CLI 0.153.4 установкой из локальной копии репозитория в пустой профиль (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): `claude plugin validate .` проходит, `claude plugin details polka@polka` показывает скиллы из `skills/` и MCP-сервер `polka`, `claude mcp list` — `plugin:polka:polka: https://polochka.app/mcp (HTTP) - ! Needs authentication`; `codex mcp list` — `polka  https://polochka.app/mcp … enabled  OAuth`. Второй скилл, добавленный в `skills/`, подхватывается без правки манифестов.
 
-Внутри сессии Claude Code те же команды: `/plugin marketplace add artkruglov/polka-plugin`, затем `/plugin install polka@polka` и `/reload-plugins`. Своя установка Полки: плагин смотрит на `polochka.app`; для другого адреса подключите MCP-сервер командой из раздела [ниже](#claude-code-и-codex-без-плагина) и поставьте скилл `npx skills add <ваш APP_ORIGIN>`.
+Внутри сессии Claude Code те же команды: `/plugin marketplace add artkruglov/polka-plugin`, затем `/plugin install polka@polka` и `/reload-plugins`. Своя установка Полки: плагин смотрит на `polochka.app` (`PLUGIN_MCP_URL`), поэтому на любом другом `APP_ORIGIN` `/connect`, `/llms.txt`, страница «Агенты» и блок «Подключите агента» плагин не предлагают: они дают команды из раздела [ниже](#claude-code-и-codex-без-плагина) с адресом установки и скиллы `npx skills add <APP_ORIGIN>`, а `/connect` просит агента плагин не ставить ([SELF_HOST_BASE_SPEC](specs/SELF_HOST_BASE_SPEC.md#своя-установка--не-облако)).
 
 В клоне этого репозитория Claude Code предложит включить проектный сервер из `.mcp.json` — это тот же `polochka.app/mcp`; для разработки можно отказаться.
 
@@ -95,7 +95,7 @@ npx skills add https://polochka.app      # с установки: /.well-known/a
 
 ## Claude Code и Codex без плагина
 
-Обычно достаточно [плагина](#плагин-полки-для-claude-code-и-codex): он ставит и сервер, и скиллы. Без плагина — только MCP-сервер, одной командой; скилл отдельно: `npx skills add artkruglov/polka-plugin`. Если плагин уже стоит, эти команды не нужны: получится второй сервер с теми же инструментами.
+Обычно достаточно [плагина](#плагин-полки-для-claude-code-и-codex): он ставит и сервер, и скиллы. Без плагина — только MCP-сервер, одной командой; скилл отдельно: `npx skills add artkruglov/polka-plugin` (на своей установке — `npx skills add <APP_ORIGIN>`, скиллы с её адресами). На своей установке этот путь единственный. Если плагин уже стоит, эти команды не нужны: получится второй сервер с теми же инструментами.
 
 Оба клиента умеют входить в MCP-сервер через OAuth, как Claude.ai. Токен не нужен: клиент регистрируется сам, открывает Полку в браузере, вы входите и нажимаете «Разрешить».
 

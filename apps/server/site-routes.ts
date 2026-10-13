@@ -1,7 +1,7 @@
 import { extensionSignInMethods, extensions } from "./extensions.ts";
 import { connectGuide, connectPage, wantsHtml } from "./connect-guide.ts";
 import { robotsTxt, sitemapXml } from "./indexing.ts";
-import { registerAgentDiscovery } from "./agent-discovery.ts";
+import { HOSTED_ORIGIN, registerAgentDiscovery } from "./agent-discovery.ts";
 import { authorizeOpsStatus, opsStatus } from "./ops-status.ts";
 import { registerOpsMetrics } from "./metrics.ts";
 import { trackPageView } from "./analytics.ts";
@@ -102,6 +102,15 @@ export function registerSiteRoutes(app: FastifyInstance) {
     // Where an owner asks to delete the shelf and its data (settings,
     // «Удалить полку»); null: the page says «оператору этой установки».
     privacyContact: config.OPERATOR_CONTACT ?? config.OPERATOR_EMAIL ?? null,
+    // Whose documents /privacy and /terms show. cloud: polochka.app's own
+    // (docs/legal). Anywhere else the operator's: their URLs, or a page that
+    // names the operator and the contact above, never the cloud's texts.
+    legal: {
+      cloud: config.APP_ORIGIN === HOSTED_ORIGIN,
+      operatorName: config.OPERATOR_NAME ?? null,
+      privacyUrl: config.PRIVACY_URL ?? null,
+      termsUrl: config.TERMS_URL ?? null,
+    },
     // «Удалить аккаунт» in the settings (ACCOUNT_DELETION_ENABLED); `purge`: a worker erases the data.
     accountDeletion: config.ACCOUNT_DELETION_ENABLED ? { purge: config.ACCOUNT_DELETION_PURGE_WORKER } : null,
     // AGPL-3.0 § 13: the interface links users to this installation's source.

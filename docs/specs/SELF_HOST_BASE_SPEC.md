@@ -261,3 +261,21 @@ failure blocking start, DB/S3 outage и recovery без restart storm, graceful 
 Обе maintenance команды выполняют реальную очистку истёкших временных данных той DB/S3, которую задаёт окружение. Сначала проверьте выбранное окружение и backup-процедуру; команда не предназначена для пробного запуска на неизвестных данных. Локально принят target-only synthetic schema18 drill, включая удаление после backup и reconciliation перед запуском; daemon на рабочей DB не запускался. Команды не заменяют непройденную контейнерную/облачную приёмку выше.
 
 Регрессионные проверки разделены на maintenance-scheduler, maintenance-child, maintenance-log-filter, maintenance-guard и maintenance-gc. Упомянутый выше единый maintenance-runner.test.ts заменён этими focused файлами. Доказательства.
+
+## Своя установка — не облако
+
+Компания, которая развернула Полку у себя, получает свою Полку, а не polochka.app. Облако узнаётся по одному признаку: `APP_ORIGIN=https://polochka.app`. Там всё остаётся как было.
+
+**Агенты подключаются к своему серверу.** Плагин Полки (`polka@polka` из `artkruglov/polka-plugin`) и скиллы из того же репозитория подключают `https://polochka.app/mcp` (константа `PLUGIN_MCP_URL`, её же называет `.mcp.json`). На другом адресе `/connect`, `/llms.txt`, страница «Агенты», блок «Подключите агента» и первые шаги дают прямые команды: `claude mcp add --transport http --scope user polka <APP_ORIGIN>/mcp` и `codex mcp add polka --url <APP_ORIGIN>/mcp`. Скиллы — отдельно и по желанию: `npx skills add <APP_ORIGIN>` читает `/.well-known/agent-skills/index.json` этой установки, адреса в скиллах — её собственные. `/connect` прямо просит агента не ставить плагин. Команды строят `agentCommands` в `apps/server/connect-guide.ts` и `apps/web/src/entities/onboarding/agent-commands.ts`; тест держит их равными.
+
+**Документы — владельца установки.** `docs/legal/privacy.md` и `terms.md` — документы облака, на другой установке их не показывают. Настройки (в `deploy/hosted` — блок рядом с `OPERATOR_CONTACT`):
+
+| Настройка | По умолчанию | Что делает |
+|---|---|---|
+| `OPERATOR_NAME` | пусто | Кому принадлежит установка: «ООО «Ромашка»» |
+| `PRIVACY_URL`, `TERMS_URL` | пусто | Свои документы (только https). `/privacy` и `/terms` переходят туда, туда же ведут ссылки в подвале, под формой входа и в заявке на `/enterprise` |
+| `OPERATOR_CONTACT` | пусто | Адрес для вопросов о данных (уже был; без него — `OPERATOR_EMAIL`) |
+
+Без адресов `/privacy` и `/terms` показывают короткую страницу: «Эта установка Полки принадлежит <`OPERATOR_NAME` или «организации, которая её развернула»>. Политику обработки персональных данных и условия использования публикует она.» и контакт. Пока установка не ответила (`/api/capabilities` → `legal`), страница пустая, а не текст облака. Где страница описывает само облако (тарифы, «Для компаний»), ссылка ведёт на документы `https://polochka.app`. Письма уже брали адрес и контакт установки.
+
+**Доверие к аккаунтам.** `ACCOUNT_TRUST=company` снимает правила для новых аккаунтов, нужные открытому облаку против спама ([ABUSE_PROTECTION](ABUSE_PROTECTION.md#своя-установка-компании)). По умолчанию `public`.

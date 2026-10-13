@@ -163,7 +163,8 @@ async function moderationFor(
     }
   }
   const spam =
-    config.CONTENT_FILTER_MODE !== "off" && !standing.operatorCreated && revision
+    // Within one company colleagues save the same report: not a spam run.
+    config.CONTENT_FILTER_MODE !== "off" && config.ACCOUNT_TRUST !== "company" && !standing.operatorCreated && revision
       ? await duplicates(c, tenantId, { ...revision, size: Number(revision.size) })
       : null;
   const content = decideContent({

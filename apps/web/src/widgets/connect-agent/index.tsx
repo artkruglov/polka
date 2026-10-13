@@ -8,6 +8,7 @@ import {
   CODEX_PLUGIN_INSTALL,
   SKILL_INDEX_PATH,
   SKILL_INSTALL,
+  agentCommands,
 } from "../../entities/onboarding/agent-setup.ts";
 
 /** A command to run by hand, with its copy button and what comes after. */
@@ -37,6 +38,7 @@ export function ConnectAgent({
 }) {
   const titleId = useId();
   const phrase = connectPhrase(location.origin);
+  const commands = agentCommands(location.origin);
   return (
     <div className={`connect-agent ${className}`} role="group" aria-labelledby={titleId}>
       <span id={titleId} className="connect-agent-title">
@@ -66,43 +68,79 @@ export function ConnectAgent({
       )}
       <details className="connect-agent-manual">
         <summary>Команды для терминала</summary>
-        <ol>
-          <Command
-            label="Claude Code"
-            command={CLAUDE_PLUGIN_INSTALL}
-            after={
-              <>
-                Плагин ставит подключение и скиллы. Затем в Claude Code: <code>/mcp</code> →{" "}
-                <code>plugin:polka:polka</code> → Authenticate.
-              </>
-            }
-          />
-          <Command
-            label="Codex"
-            command={CODEX_PLUGIN_INSTALL}
-            after={
-              <>
-                Затем <code>{CODEX_LOGIN}</code> — вход откроется в браузере.
-              </>
-            }
-          />
-          <Command
-            label="Если плагин не ставится"
-            command={`claude mcp add --transport http --scope user polka ${location.origin}/mcp`}
-            after={
-              <>
-                Для Codex: <code>{`codex mcp add polka --url ${location.origin}/mcp`}</code>. GitHub не нужен,
-                подключение то же.
-              </>
-            }
-          />
-          <Command
-            label="Только скилл, для других агентов"
-            command={SKILL_INSTALL}
-            after={<a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>}
-          />
-        </ol>
+        {commands.plugin ? (
+          <PluginCommands />
+        ) : (
+          // The plugin connects polochka.app: here the agent adds this server directly.
+          <ol>
+            <Command
+              label="Claude Code"
+              command={commands.claude}
+              after={
+                <>
+                  Затем в Claude Code: <code>/mcp</code> → <code>polka</code> → Authenticate.
+                </>
+              }
+            />
+            <Command
+              label="Codex"
+              command={commands.codex}
+              after={
+                <>
+                  Если вход не открылся сам: <code>{CODEX_LOGIN}</code>.
+                </>
+              }
+            />
+            <Command
+              label="Скиллы Полки этой установки"
+              command={commands.skills}
+              after={<a href={SKILL_INDEX_PATH}>Адрес скиллов для агента</a>}
+            />
+          </ol>
+        )}
       </details>
     </div>
+  );
+}
+
+/** polochka.app: the plugin brings the connection and the skills in one install. */
+function PluginCommands() {
+  return (
+    <ol>
+      <Command
+        label="Claude Code"
+        command={CLAUDE_PLUGIN_INSTALL}
+        after={
+          <>
+            Плагин ставит подключение и скиллы. Затем в Claude Code: <code>/mcp</code> → <code>plugin:polka:polka</code>{" "}
+            → Authenticate.
+          </>
+        }
+      />
+      <Command
+        label="Codex"
+        command={CODEX_PLUGIN_INSTALL}
+        after={
+          <>
+            Затем <code>{CODEX_LOGIN}</code> — вход откроется в браузере.
+          </>
+        }
+      />
+      <Command
+        label="Если плагин не ставится"
+        command={`claude mcp add --transport http --scope user polka ${location.origin}/mcp`}
+        after={
+          <>
+            Для Codex: <code>{`codex mcp add polka --url ${location.origin}/mcp`}</code>. GitHub не нужен, подключение
+            то же.
+          </>
+        }
+      />
+      <Command
+        label="Только скилл, для других агентов"
+        command={SKILL_INSTALL}
+        after={<a href={SKILL_INDEX_PATH}>Адрес скилла для агента</a>}
+      />
+    </ol>
   );
 }

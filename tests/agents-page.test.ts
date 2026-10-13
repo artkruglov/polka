@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -7,9 +8,13 @@ import {
   CLAUDE_PLUGIN_INSTALL,
   CLIENT_STORAGE_KEY,
   CODEX_PLUGIN_INSTALL,
+  HERO_CLIENT_IDS,
+  PLUGIN_MCP_URL,
   SAVE_PHRASE,
   agentClients,
+  agentCommands,
   clientSetup,
+  heroSetup,
   isFreshAccount,
   parseClientId,
   readStoredClient,
@@ -18,10 +23,14 @@ import {
   signInMethodLabel,
   storeClient,
 } from "../apps/web/src/entities/onboarding/agent-setup.ts";
-import { connectPhrase } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
+import { clientHints, connectPhrase } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
 import { connectionStatus } from "../apps/web/src/pages/agents/index.tsx";
 import { SetupPanel } from "../apps/web/src/widgets/agent-setup/index.tsx";
-import { connectGuide } from "../apps/server/connect-guide.ts";
+import {
+  PLUGIN_MCP_URL as SERVER_PLUGIN_MCP_URL,
+  agentCommands as serverAgentCommands,
+  connectGuide,
+} from "../apps/server/connect-guide.ts";
 import { llmsText, skillMarkdown } from "../apps/server/agent-discovery.ts";
 import type { AgentConnection } from "../packages/contracts/index.ts";
 
@@ -232,4 +241,48 @@ test("/connect, llms.txt and the skill send web ChatGPT and Claude.ai users to t
   assert.match(llmsText(origin), /do not try to run commands or fetch/);
   assert.match(connectGuide(origin), /Перескажи ему шаги/);
   assert.match(skillMarkdown(origin), /Для разработчиков/);
+});
+
+test("a company's own installation connects agents to itself, never through the cloud's plugin", async () => {
+  const own = "https://polka.company.test";
+  const mcpJson = JSON.parse(await readFile(new URL("../.mcp.json", import.meta.url), "utf8"));
+  // The plugin connects exactly one server; both sides name it.
+  assert.equal(mcpJson.mcpServers.polka.url, PLUGIN_MCP_URL);
+  assert.equal(PLUGIN_MCP_URL, SERVER_PLUGIN_MCP_URL);
+  for (const where of [origin, own, "http://127.0.0.1:4390"])
+    assert.deepEqual(agentCommands(where), serverAgentCommands(where), where);
+  assert.equal(agentCommands(origin).plugin, true);
+
+  const commands = agentCommands(own);
+  assert.equal(commands.plugin, false);
+  assert.equal(commands.claude, `claude mcp add --transport http --scope user polka ${own}/mcp`);
+  assert.equal(commands.codex, `codex mcp add polka --url ${own}/mcp`);
+  // `npx skills add <origin>` reads this server's /.well-known/agent-skills.
+  assert.equal(commands.skills, `npx skills add ${own}`);
+
+  const guide = connectGuide(own);
+  for (const value of [commands.claude, commands.codex, commands.skills]) assert.ok(guide.includes(value), value);
+  assert.ok(!guide.includes(CLAUDE_PLUGIN_INSTALL) && !guide.includes(CODEX_PLUGIN_INSTALL));
+  assert.match(guide, /Не ставь плагин Полки/);
+  assert.doesNotMatch(guide, /plugin:polka:polka|reload-plugins/);
+  assert.ok(llmsText(own).includes(`npx skills add ${own}`));
+  assert.doesNotMatch(llmsText(own), /artkruglov\/polka-plugin/);
+
+  // Every command the web app offers is one /connect gives, and none installs the plugin.
+  const offered = [
+    ...AGENT_CLIENT_IDS.flatMap((id) => clientSetup(own, id).steps.flatMap((step) => step.copies ?? [])),
+    ...HERO_CLIENT_IDS.flatMap((id) => heroSetup(own, id).copies),
+  ].filter((copy) => copy.kind === "command");
+  assert.ok(offered.length >= 5);
+  for (const copy of offered) {
+    assert.ok(guide.includes(copy.value), `guide lacks ${copy.value}`);
+    assert.doesNotMatch(copy.value, /polka-plugin|polka@polka/);
+  }
+  for (const hint of clientHints(own)) if (hint.command) assert.ok(guide.includes(hint.command), hint.command);
+  const claudeCode = clientSetup(own, "claude-code");
+  assert.equal(claudeCode.steps[0].copies?.[0].value, commands.claude);
+  assert.ok(claudeCode.steps.some((step) => step.text.includes("/mcp → polka → Authenticate")));
+  assert.match(heroSetup(own, "claude-code").next, /\/mcp → polka → Authenticate/);
+  const html = renderToStaticMarkup(React.createElement(SetupPanel, { setup: claudeCode, waiting: false }));
+  assert.doesNotMatch(html, /plugin:polka:polka|polka@polka/);
 });

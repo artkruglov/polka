@@ -112,7 +112,8 @@ test("an installation on 127.0.0.1 offers only the paths that reach it", () => {
   };
   const local = render(React.createElement(AgentHeroView, { ...props, origin: "http://127.0.0.1:4713" }));
   assert.doesNotMatch(local, /Add custom connector|>Claude<\/button>/);
-  assert.match(local, /claude plugin install polka@polka/);
+  assert.match(local, /claude mcp add --transport http --scope user polka http:\/\/127\.0\.0\.1:4713\/mcp/);
+  assert.doesNotMatch(local, /polka@polka/);
   const hosted = render(React.createElement(AgentHeroView, { ...props, origin: "https://polochka.app" }));
   assert.match(hosted, /Add custom connector/);
 });

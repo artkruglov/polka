@@ -18,6 +18,30 @@ export const SKILL_INSTALL = `npx skills add ${SKILL_REPO}`;
  */
 export const CLAUDE_PLUGIN_INSTALL = `claude plugin marketplace add ${SKILL_REPO} && claude plugin install polka@polka`;
 export const CODEX_PLUGIN_INSTALL = `codex plugin marketplace add ${SKILL_REPO} && codex plugin add polka@polka`;
+/** The one server the plugin connects to: its .mcp.json names this address. */
+export const PLUGIN_MCP_URL = "https://polochka.app/mcp";
+
+/**
+ * The commands for this installation. The plugin and the skills in
+ * artkruglov/polka-plugin belong to polochka.app: anywhere else they would
+ * connect people to the public cloud, so an agent adds this origin's MCP
+ * server directly and takes the skills this server serves
+ * (/.well-known/agent-skills, which `npx skills add <origin>` reads). The web
+ * app builds the same (apps/web/src/entities/onboarding/agent-commands.ts);
+ * a test keeps them equal.
+ */
+export function agentCommands(origin: string) {
+  const mcp = `${origin}/mcp`;
+  const plugin = mcp === PLUGIN_MCP_URL;
+  return {
+    plugin,
+    claude: plugin ? CLAUDE_PLUGIN_INSTALL : `claude mcp add --transport http --scope user polka ${mcp}`,
+    codex: plugin ? CODEX_PLUGIN_INSTALL : `codex mcp add polka --url ${mcp}`,
+    skills: plugin ? SKILL_INSTALL : `npx skills add ${origin}`,
+    /** The server's name in Claude Code's /mcp list. */
+    claudeServer: plugin ? "plugin:polka:polka" : "polka",
+  };
+}
 
 /**
  * The first task after connecting: the agent finds the person's best past
@@ -35,6 +59,27 @@ export const harvestPrompts = {
 export function connectGuide(origin: string, sourceUrl?: string) {
   const mcp = `${origin}/mcp`;
   const skills = `${origin}/.well-known/agent-skills`;
+  const commands = agentCommands(origin);
+  const terminalRu = commands.plugin
+    ? `- Codex: \`${CODEX_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем \`codex mcp login polka\` — вход откроется в браузере. Без плагина: \`codex mcp add polka --url ${mcp}\`.
+- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем попроси пользователя ввести \`/reload-plugins\` (или перезапустить Claude Code), потом \`/mcp\`, выбрать \`plugin:polka:polka\` и нажать Authenticate. Без плагина: \`claude mcp add --transport http --scope user polka ${mcp}\`.
+- Если плагин не ставится (ошибка git вроде \`invalid index-pack output\`, нет доступа к GitHub, песочница или фильтр разрешений его не пускает), не останавливайся и не проси пользователя чинить git: сразу выполни команду «Без плагина» для своего клиента. Ей не нужен GitHub, она подключает тот же сервер; скиллы необязательны. В Claude Code пользователь затем вводит \`/mcp\`, выбирает \`polka\` и нажимает Authenticate.`
+    : `- Codex: \`${commands.codex}\` — вход откроется в браузере (если нет, \`codex mcp login polka\`).
+- Claude Code: \`${commands.claude}\`, затем попроси пользователя ввести \`/mcp\`, выбрать \`polka\` и нажать Authenticate.
+- Не ставь плагин Полки (\`polka@polka\` из ${SKILL_REPO}) и скиллы из этого репозитория: они подключают публичное облако Полки, а не эту установку.`;
+  const terminalEn = commands.plugin
+    ? `- Codex: \`${CODEX_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then \`codex mcp login polka\`; the sign-in opens in the browser. Without the plugin: \`codex mcp add polka --url ${mcp}\`.
+- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then ask the user to type \`/reload-plugins\` (or restart Claude Code), then \`/mcp\`, choose \`plugin:polka:polka\` and press Authenticate. Without the plugin: \`claude mcp add --transport http --scope user polka ${mcp}\`.
+- If the plugin does not install (a git clone error such as \`invalid index-pack output\`, no network to GitHub, a sandbox or permission filter that refuses it), do not stop and do not ask the user to fix git: run the "Without the plugin" command for your client right away. It needs nothing from GitHub and connects the same server; the skills are optional. In Claude Code the user then types \`/mcp\`, chooses \`polka\` and presses Authenticate.`
+    : `- Codex: \`${commands.codex}\`; the sign-in opens in the browser (if not, \`codex mcp login polka\`).
+- Claude Code: \`${commands.claude}\`, then ask the user to type \`/mcp\`, choose \`polka\` and press Authenticate.
+- Do not install the Полка plugin (\`polka@polka\` from ${SKILL_REPO}) or the skills from that repository: they connect the public Полка cloud, not this installation.`;
+  const skillRu = commands.plugin
+    ? `Скиллы Полки — агент будет знать, как сохранять, делиться и править. Плагин для Claude Code и Codex (команды выше) ставит их сам; для других агентов: \`${SKILL_INSTALL}\` (или по адресу ${skills}).`
+    : `Скиллы Полки — агент будет знать, как сохранять, делиться и править. Их отдаёт эта установка, ставятся отдельно и по желанию: \`${commands.skills}\` (или по адресу ${skills}).`;
+  const skillEn = commands.plugin
+    ? `The Полка skills teach the agent how to save, share and revise. The Claude Code and Codex plugin (commands above) installs them; for other agents: \`${SKILL_INSTALL}\` (or ${skills}).`
+    : `The Полка skills teach the agent how to save, share and revise. This installation serves them; install them separately if you like: \`${commands.skills}\` (or ${skills}).`;
   return `# Подключить Полку
 
 Полка хранит страницы, отчёты и прототипы, которые вы делаете с агентом, и даёт на них ссылку. MCP-сервер: ${mcp}. Вход через OAuth в браузере, токен не нужен.
@@ -43,9 +88,7 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 
 Пользователь попросил подключить Полку. Определи, какой ты клиент, выполни одну команду из списка и скажи пользователю, что сделать в браузере. Больше ничего не устанавливай и не спрашивай токен.
 
-- Codex: \`${CODEX_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем \`codex mcp login polka\` — вход откроется в браузере. Без плагина: \`codex mcp add polka --url ${mcp}\`.
-- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (плагин: MCP-сервер и скиллы Полки), затем попроси пользователя ввести \`/reload-plugins\` (или перезапустить Claude Code), потом \`/mcp\`, выбрать \`plugin:polka:polka\` и нажать Authenticate. Без плагина: \`claude mcp add --transport http --scope user polka ${mcp}\`.
-- Если плагин не ставится (ошибка git вроде \`invalid index-pack output\`, нет доступа к GitHub, песочница или фильтр разрешений его не пускает), не останавливайся и не проси пользователя чинить git: сразу выполни команду «Без плагина» для своего клиента. Ей не нужен GitHub, она подключает тот же сервер; скиллы необязательны. В Claude Code пользователь затем вводит \`/mcp\`, выбирает \`polka\` и нажимает Authenticate.
+${terminalRu}
 - Другой MCP-клиент с OAuth: добавь удалённый Streamable HTTP-сервер ${mcp} с авторизацией OAuth.
 - Claude.ai или ChatGPT в браузере (терминала нет, эту страницу ты, скорее всего, не смог загрузить): команды не выполнить, коннектор добавляет сам пользователь. Перескажи ему шаги, ничего не запрашивай:
   - Claude.ai и Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Затем в чате «+» → Connectors → включить «Полка». Пошагово с кнопками копирования: ${origin}/settings/agents?client=claude-ai
@@ -59,7 +102,7 @@ export function connectGuide(origin: string, sourceUrl?: string) {
 
 ## Скилл для Claude Code и Codex
 
-Скиллы Полки — агент будет знать, как сохранять, делиться и править. Плагин для Claude Code и Codex (команды выше) ставит их сам; для других агентов: \`${SKILL_INSTALL}\` (или по адресу ${skills}).
+${skillRu}
 
 ## Первая сессия: соберите лучшие работы
 
@@ -81,9 +124,7 @@ ${sourceUrl ? `\nИсходный код этой установки (AGPL-3.0):
 
 Your user asked to connect Полка. Work out which client you are, run the one matching command and tell the user what to do in the browser. Install nothing else and do not ask for a token.
 
-- Codex: \`${CODEX_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then \`codex mcp login polka\`; the sign-in opens in the browser. Without the plugin: \`codex mcp add polka --url ${mcp}\`.
-- Claude Code: \`${CLAUDE_PLUGIN_INSTALL}\` (the plugin: MCP server and Полка skills), then ask the user to type \`/reload-plugins\` (or restart Claude Code), then \`/mcp\`, choose \`plugin:polka:polka\` and press Authenticate. Without the plugin: \`claude mcp add --transport http --scope user polka ${mcp}\`.
-- If the plugin does not install (a git clone error such as \`invalid index-pack output\`, no network to GitHub, a sandbox or permission filter that refuses it), do not stop and do not ask the user to fix git: run the "Without the plugin" command for your client right away. It needs nothing from GitHub and connects the same server; the skills are optional. In Claude Code the user then types \`/mcp\`, chooses \`polka\` and presses Authenticate.
+${terminalEn}
 - Another MCP client with OAuth: add the remote Streamable HTTP server ${mcp} with OAuth authorization.
 - Claude.ai or ChatGPT in the browser (no terminal; you most likely could not even fetch this page): you cannot run commands, the user adds the connector themselves. Tell them the steps, ask for nothing:
   - Claude.ai and Claude Desktop: Settings → Connectors → Add custom connector, URL ${mcp} → Add → Connect. Then in the chat "+" → Connectors → enable "Полка". Step by step with copy buttons: ${origin}/settings/agents?client=claude-ai
@@ -97,7 +138,7 @@ Right after connecting, tell the user once: «Если понадобится о
 
 ## Skill for Claude Code and Codex
 
-The Полка skills teach the agent how to save, share and revise. The Claude Code and Codex plugin (commands above) installs them; for other agents: \`${SKILL_INSTALL}\` (or ${skills}).
+${skillEn}
 
 ## First session: collect the best past work
 

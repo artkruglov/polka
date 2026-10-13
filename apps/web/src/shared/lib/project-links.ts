@@ -5,6 +5,20 @@
 export const SOURCE_URL = "https://github.com/artkruglov/polka";
 export const SOURCE_LICENSE = "AGPL-3.0";
 
+/** The public cloud; its documents (docs/legal) are shown only there. */
+export const CLOUD_ORIGIN = "https://polochka.app";
+
+/** This page is served by the cloud itself (false while rendered without a browser). */
+export const onCloud = () => typeof location !== "undefined" && location.origin === CLOUD_ORIGIN;
+
+/**
+ * The cloud's own policy or agreement, where a page describes the cloud: a
+ * site path on polochka.app, its full address on any other installation.
+ */
+export function cloudDocument(doc: "privacy" | "terms") {
+  return typeof location === "undefined" || onCloud() ? `/${doc}` : `${CLOUD_ORIGIN}/${doc}`;
+}
+
 /** Is this source a repository on github.com (a star count exists, GitHub paths apply)? */
 export function onGitHub(sourceUrl: string) {
   try {

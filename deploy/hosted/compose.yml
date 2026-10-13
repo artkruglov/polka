@@ -150,6 +150,11 @@ x-runtime-env: &runtime-env
   CONTENT_FILTER_AUTOBLOCK: ${CONTENT_FILTER_AUTOBLOCK:-false}
   MODERATION_RETENTION: ${MODERATION_RETENTION:-}
   OPERATOR_CONTACT: ${OPERATOR_CONTACT:-}
+  # Your installation, not the cloud: /privacy and /terms, account trust.
+  OPERATOR_NAME: ${OPERATOR_NAME:-}
+  PRIVACY_URL: ${PRIVACY_URL:-}
+  TERMS_URL: ${TERMS_URL:-}
+  ACCOUNT_TRUST: ${ACCOUNT_TRUST:-public}
   CONTENT_MODEL_PROVIDER: ${CONTENT_MODEL_PROVIDER:-off}
   # Empty URL: the provider's own (AI Studio or api.neuraldeep.ru).
   CONTENT_MODEL_URL: ${CONTENT_MODEL_URL:-}

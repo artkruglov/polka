@@ -1,4 +1,5 @@
 import React from "react";
+import { useLegalLinks } from "../../entities/capabilities/useCapabilities.ts";
 
 /**
  * Shown under the email form: the first sign-in by code creates a shelf and
@@ -7,10 +8,11 @@ import React from "react";
  * have to be a separate document anyway.
  */
 export function SignupConsent() {
+  const legal = useLegalLinks();
   return (
     <p className="onboard-fine onboard-consent">
-      Продолжая, вы принимаете <a href="/terms">Соглашение</a> и подтверждаете, что прочитали{" "}
-      <a href="/privacy">Политику обработки данных</a>.
+      Продолжая, вы принимаете <a href={legal.terms}>Соглашение</a> и подтверждаете, что прочитали{" "}
+      <a href={legal.privacy}>Политику обработки данных</a>.
     </p>
   );
 }
