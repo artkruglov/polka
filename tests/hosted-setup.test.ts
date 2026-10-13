@@ -142,7 +142,14 @@ test(
           "--format",
           "json",
         ],
-        { encoding: "utf8" },
+        // Only what docker itself needs: Compose prefers the shell's variables
+        // over the env file, and the test runner exports S3_SECRET_KEY & co.
+        {
+          encoding: "utf8",
+          env: Object.fromEntries(
+            Object.entries(process.env).filter(([name]) => /^(PATH|HOME|DOCKER_[A-Z_]+|XDG_[A-Z_]+)$/.test(name)),
+          ),
+        },
       );
       assert.equal(answer.status, 0, answer.stderr);
       // `config` writes a literal $ as $$.
