@@ -56,7 +56,7 @@ export function Away() {
           <>
             <h1>Вы уходите с Полки</h1>
             <p>
-              Вы уходите с Полки на <strong>{state.target.host}</strong>. Ссылку разместил автор страницы, Полка её не
+              Вы уходите с Полки на <strong>{state.target.host}</strong>. Ссылка размещена на странице, Полка её не
               проверяла.
             </p>
             <p className="away-url">{state.target.url}</p>

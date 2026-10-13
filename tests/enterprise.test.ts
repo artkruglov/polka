@@ -365,7 +365,7 @@ test("/enterprise: value, deployment, questions and the request form", () => {
   assert.match(html, /maxLength="2000"/i);
   assert.match(html, /class="enterprise-trap" aria-hidden="true"/);
   assert.match(html, /<input type="text" tabindex="-1" autoComplete="off" name="website"/i);
-  assert.match(html, /<a href="\/privacy"[^>]*>Политику обработки персональных данных<\/a>/);
+  assert.match(html, /Согласие с <a href="\/privacy"[^>]*>Политикой обработки персональных данных<\/a>/);
   assert.match(html, /href="mailto:hello@polochka\.app">hello@polochka\.app<\/a>/);
   assert.ok(html.includes('href="/pricing"'));
 });

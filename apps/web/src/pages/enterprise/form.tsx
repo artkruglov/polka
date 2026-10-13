@@ -160,9 +160,9 @@ export function EnterpriseForm({
       <label className="enterprise-policy">
         <input type="checkbox" name="policyRead" required checked={fields.policyRead} onChange={set("policyRead")} />
         <span>
-          Я прочитал(а){" "}
+          Согласие с{" "}
           <a href="/privacy" target="_blank" rel="noopener">
-            Политику обработки персональных данных
+            Политикой обработки персональных данных
           </a>
           . Контакт нужен, чтобы ответить, и хранится год.
         </span>

@@ -404,7 +404,7 @@ export function EnterpriseContent({
             {
               title: "Анализ рынка, версия 4",
               meta: "Начат в ChatGPT · продолжен в Codex",
-              tag: "Диск",
+              tag: "Работа",
             },
             {
               title: "Сессия Claude Code",

@@ -126,3 +126,22 @@
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
+/* Focus is moved here after an action: the new secret, a card, the message. */
+.webhooks-secret-box:focus,
+.webhooks-item:focus-visible,
+.webhooks-list-result:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+#webhooks:focus {
+  outline: none;
+}
+/* The form's live region stays in the page while empty, so it is announced. */
+.webhooks-new .webhooks-result:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

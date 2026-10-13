@@ -228,10 +228,10 @@ test("the link card: service badge, title, host, «Открыть» to the origi
     /href="https:\/\/claude\.ai\/artifact\/F49sUXozTkEFzFawwHGSxo" target="_blank" rel="noopener noreferrer nofollow"/,
   );
   assert.match(card, /Открыть/);
-  assert.match(card, /если автор включил доступ по ссылке/);
+  assert.match(card, /если у страницы включён доступ по ссылке/);
   assert.match(
     recipientAccessNote("claude.ai", "claude"),
-    /Получатель откроет страницу из Claude, если автор включил доступ по ссылке/,
+    /Получатель откроет страницу из Claude, если у страницы включён доступ по ссылке/,
   );
   assert.match(recipientAccessNote("example.org", null), /Получатель откроет оригинал на example\.org/);
   const cover = renderToStaticMarkup(

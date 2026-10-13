@@ -44,16 +44,17 @@ const invitationLabel: Record<string, string> = {
   expired: "срок истёк",
   redacted: "данные удалены",
 };
+// What happened, then who did it: past-tense verbs about a person would be gendered.
 const eventActionLabel: Record<string, string> = {
-  "template_library.created": "создал библиотеку",
-  "template_library.invitation_created": "создал приглашение",
-  "template_library.invitation_accepted": "принял приглашение",
-  "template_library.domain_joined": "вошёл через домен компании",
-  "template_library.invitation_revoked": "отозвал приглашение",
-  "template_library.member_revoked": "отозвал участника",
-  "template_library.member_role_changed": "изменил роль участника",
-  "template_library.release_published": "опубликовал выпуск",
-  "template_library.publication_withdrawn": "убрал выпуск из библиотеки",
+  "template_library.created": "Библиотека создана",
+  "template_library.invitation_created": "Приглашение создано",
+  "template_library.invitation_accepted": "Приглашение принято",
+  "template_library.domain_joined": "Вход через домен компании",
+  "template_library.invitation_revoked": "Приглашение отозвано",
+  "template_library.member_revoked": "Участник отозван",
+  "template_library.member_role_changed": "Роль участника изменена",
+  "template_library.release_published": "Выпуск опубликован",
+  "template_library.publication_withdrawn": "Выпуск убран из библиотеки",
 };
 
 function message(error: unknown) {
@@ -200,7 +201,7 @@ function HistoryDialog({
               <article className="library-history-row" key={event.id}>
                 <div>
                   <strong>
-                    {eventPerson(event.actor, members)} {eventActionLabel[event.action] ?? event.action}
+                    {eventActionLabel[event.action] ?? event.action} · {eventPerson(event.actor, members)}
                   </strong>
                   <p>
                     {eventTarget(event, members)}

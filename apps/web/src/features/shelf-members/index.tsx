@@ -66,7 +66,7 @@ const INSTALLATION: ShelfDirectAdd = { scope: "installation" };
 /** Whom the admin may add directly; everyone else comes by an invitation link. */
 function directAddHint(rule: ShelfDirectAdd) {
   if (rule.scope === "installation")
-    return "Коллега должен хотя бы раз войти в Полку. Кто ещё не входил — пригласите ссылкой.";
+    return "Коллеге нужно хотя бы раз войти в Полку. Кто ещё не входил — пригласите ссылкой.";
   if (!rule.organisation)
     return "Полка не привязана к организации: сразу добавить никого нельзя. Пригласите коллег ссылкой — они примут приглашение сами.";
   const domains = rule.domains.map((domain) => `@${domain}`).join(", ");
