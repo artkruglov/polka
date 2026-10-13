@@ -350,7 +350,18 @@ export function RecipientScreen({
     );
   if (!viewer)
     return (
-      <RecipientFrame account={account} pending>
+      <RecipientFrame
+        account={account}
+        pending
+        // The note's line keeps its place too (on a phone it sets the row's height).
+        note={
+          <div className="recipient-note" aria-hidden="true">
+            <p className="recipient-note-line">
+              <span>&nbsp;</span>
+            </p>
+          </div>
+        }
+      >
         <main id="main" className="empty" role="status">
           Открываем работу…
         </main>

@@ -27,7 +27,8 @@ export function MoveShelf({ origin }: { origin: string }) {
       </ol>
       <div className="agent-instruction-block">
         <h3>Скачать полку в папку</h3>
-        <pre>
+        {/* Long lines scroll sideways: a Tab stop, so the keyboard can scroll them too. */}
+        <pre tabIndex={0} aria-label="Команды для скачивания полки">
           <code>{commands}</code>
         </pre>
         <CopyButton value={commands} label="Скопировать команды" successText="Команды скопированы" />

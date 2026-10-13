@@ -76,7 +76,12 @@ export default defineConfig(({ command, mode }) => {
     root,
     // React Fast Refresh in the dev server only; the build stays as it was.
     plugins: [bookmarklet(), command === "serve" && react()],
-    build: { outDir: "../../dist", emptyOutDir: true },
+    build: {
+      outDir: "../../dist",
+      emptyOutDir: true,
+      // Lucide icons in one chunk, not a 200-byte file per icon per page (tests/web-entry-chunk.test.ts).
+      rolldownOptions: { output: { codeSplitting: { groups: [{ name: "icons", test: /[\\/]lucide-react[\\/]/ }] } } },
+    },
     server: {
       host: "127.0.0.1",
       port,

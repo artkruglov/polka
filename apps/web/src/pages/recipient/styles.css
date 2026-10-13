@@ -339,6 +339,8 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 12px;
+    /* A one-line note with its icon: the height is kept while the link resolves. */
+    min-height: 36px;
     padding-bottom: 8px;
   }
   .recipient-note {

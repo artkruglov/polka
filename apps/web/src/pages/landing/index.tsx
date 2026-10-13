@@ -261,7 +261,8 @@ polka_change_files      put docs/risks.md
           </div>
         </section>
 
-        <section className="lp-section lp-catalog" aria-label="Лента">
+        {/* A plain block: the catalog inside is the «Лента» region (one landmark per name). */}
+        <div className="lp-section lp-catalog">
           <EditorialCatalog
             items={catalog.items.slice(0, 6)}
             loading={catalog.state === "loading"}
@@ -273,7 +274,7 @@ polka_change_files      put docs/risks.md
               Все материалы <ArrowUpRight size={18} />
             </LinkButton>
           )}
-        </section>
+        </div>
 
         <section id="companies" className="lp-section lp-control" aria-labelledby="lp-control-title">
           <header className="lp-section-head">

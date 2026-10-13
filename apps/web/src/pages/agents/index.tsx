@@ -1039,7 +1039,8 @@ function InstructionBlock({
   return (
     <div className="agent-instruction-block">
       <h4>{title}</h4>
-      <pre>
+      {/* It may scroll sideways: reachable by keyboard. */}
+      <pre tabIndex={0} aria-label={title}>
         <code>{value}</code>
       </pre>
       <CopyButton value={value} label={copyLabel} successText={copiedLabel} />
