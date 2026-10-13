@@ -104,7 +104,7 @@ export function TrashPanel({
       <div className="trash-panel-heading">
         <div>
           <p className="trash-panel-kicker eyebrow">Архив хранения</p>
-          <h2 id="trash-panel-title">Корзина</h2>
+          <h1 id="trash-panel-title">Корзина</h1>
           <p className="trash-panel-muted">
             Работы лежат в корзине, пока вы их не восстановите или не удалите: сами они не удаляются и продолжают
             занимать место. Старые ссылки закрыты и не оживут после восстановления.
@@ -138,7 +138,7 @@ export function TrashPanel({
             return (
               <article className="trash-panel-item" key={artifact.id}>
                 <div className="trash-panel-item-copy">
-                  <h3>{artifact.title}</h3>
+                  <h2>{artifact.title}</h2>
                   <p>
                     В корзине {date(artifact.trashedAt ?? artifact.updatedAt)} · версия {artifact.revision.number} ·{" "}
                     {size(revisionSize)}

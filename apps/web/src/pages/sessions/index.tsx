@@ -406,7 +406,7 @@ export function AgentSessions() {
   }, [account]);
   return (
     <AppShell current="sessions" account={account}>
-      <main className="sessions-page">
+      <main id="main" className="sessions-page">
         <header>
           <span className="eyebrow">Claude Code и Codex</span>
           <h1>Сессии агентов</h1>

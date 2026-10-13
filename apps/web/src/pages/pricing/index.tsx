@@ -9,7 +9,7 @@ export function Pricing() {
   return (
     <AppShell current="landing" account={account} className="mkt-page" bare>
       <SiteHeader signedIn={!!account} />
-      <main className="pricing-page">
+      <main id="main" className="pricing-page">
         <PricingPlans />
       </main>
     </AppShell>

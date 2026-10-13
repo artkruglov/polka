@@ -1,50 +1,72 @@
-import { AgentContextPanel } from "../../features/agent-context/index.tsx";
+// Stylesheets of the parts Node tests render (they cannot import CSS), in the old cascade order.
+import "../../entities/link/styles.css";
+import "../../widgets/trash/styles.css";
+import "../../pages/agents/styles.css";
+import "../../features/webhooks/styles.css";
+import "../../features/first-run/styles.css";
+import "../../features/agent-hero/styles.css";
 import { ShelfNavigation } from "../../widgets/shelf-navigation/index.tsx";
 import { Button, EmptyState, IconButton, Notice } from "../../shared/ui/controls.tsx";
-import { CreateFolderPanel } from "../../features/create-folder/index.tsx";
 import { ShelfPage, type CardAction, type ShelfSort } from "../../pages/shelf/index.tsx";
 import { ArtifactReader, readerTabFromSearch, withReaderTab } from "../../widgets/artifact-reader/index.tsx";
 import { downloadRevision } from "../../features/download-artifact/index.ts";
-import { CompareRevisions } from "../../features/compare-revisions/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useWorkComments } from "../../widgets/comments/index.ts";
-import type { Artifact, Folder, Revision } from "../../../../../packages/contracts/index.ts";
+import type { Account, Artifact, Folder, Revision } from "../../../../../packages/contracts/index.ts";
 import { ApiError, client, currentShelf, withShelf, type ShelfCounts } from "../../shared/api/client.ts";
 import type { Category } from "../../entities/artifact/format.ts";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
-import { Preview } from "../../widgets/artifact-preview/Preview.tsx";
-import { UploadPanel } from "../../features/upload-artifact/index.tsx";
-import { SharePanel } from "../../features/share-artifact/index.tsx";
-import { ServiceAccountsSection } from "../../features/service-accounts/index.tsx";
-import { ShelfCardSection } from "../../features/shelf-card/index.tsx";
-import { WebhooksSection } from "../../features/webhooks/index.tsx";
-import { AcceptRevisionPanel } from "../../features/accept-revision/index.tsx";
-import { ProposeToFeedPanel } from "../../features/propose-to-feed/index.tsx";
-import { ArtifactMetadataPanel } from "../../features/edit-artifact-metadata/index.tsx";
-import { Login } from "../../pages/login/index.tsx";
-import { rememberAccount, useAccountState } from "../../entities/account/model/useAccount.ts";
-import { LazyLanding } from "../routing/lazy-pages.tsx";
-import { safeNext } from "../../shared/lib/safe-next.ts";
-import { ReworkArtifactPanel } from "../../features/rework-artifact/index.tsx";
 import { shelfUrl } from "../../entities/artifact/agent-phrases.ts";
-import { TrashArtifactPanel } from "../../features/trash-artifact/index.tsx";
 import { TrashPanel } from "../../widgets/trash/index.tsx";
 import { useDocumentTitle } from "../../shared/lib/document-title.ts";
 import { shelfAccess, useShelves, shelfName } from "../../entities/shelf/model.ts";
-import { CreateShelfPanel, ShelfMembersPanel, ShelfSwitcher } from "../../features/shelf-members/index.tsx";
+import { ShelfSwitcher } from "../../features/shelf-members/switcher.tsx";
 import "./styles.css";
+
+/** A named export as a lazy component: dialogs, settings and the reader's parts load when shown. */
+function lazyNamed<M extends Record<K, React.ComponentType<any>>, K extends keyof M>(
+  load: () => Promise<M>,
+  name: K,
+): React.LazyExoticComponent<M[K]> {
+  return React.lazy(() => load().then((module) => ({ default: module[name] })));
+}
+const loadPreview = () => import("../../widgets/artifact-preview/Preview.tsx");
+const Preview = lazyNamed(loadPreview, "Preview");
+const CompareRevisions = lazyNamed(() => import("../../features/compare-revisions/index.tsx"), "CompareRevisions");
+const AgentContextPanel = lazyNamed(() => import("../../features/agent-context/index.tsx"), "AgentContextPanel");
+const CreateFolderPanel = lazyNamed(() => import("../../features/create-folder/index.tsx"), "CreateFolderPanel");
+const UploadPanel = lazyNamed(() => import("../../features/upload-artifact/index.tsx"), "UploadPanel");
+const SharePanel = lazyNamed(() => import("../../features/share-artifact/index.tsx"), "SharePanel");
+const ServiceAccountsSection = lazyNamed(
+  () => import("../../features/service-accounts/index.tsx"),
+  "ServiceAccountsSection",
+);
+const ShelfCardSection = lazyNamed(() => import("../../features/shelf-card/index.tsx"), "ShelfCardSection");
+const WebhooksSection = lazyNamed(() => import("../../features/webhooks/index.tsx"), "WebhooksSection");
+const AcceptRevisionPanel = lazyNamed(() => import("../../features/accept-revision/index.tsx"), "AcceptRevisionPanel");
+const ProposeToFeedPanel = lazyNamed(() => import("../../features/propose-to-feed/index.tsx"), "ProposeToFeedPanel");
+const ArtifactMetadataPanel = lazyNamed(
+  () => import("../../features/edit-artifact-metadata/index.tsx"),
+  "ArtifactMetadataPanel",
+);
+const ReworkArtifactPanel = lazyNamed(() => import("../../features/rework-artifact/index.tsx"), "ReworkArtifactPanel");
+const TrashArtifactPanel = lazyNamed(() => import("../../features/trash-artifact/index.tsx"), "TrashArtifactPanel");
+const CreateShelfPanel = lazyNamed(() => import("../../features/shelf-members/index.tsx"), "CreateShelfPanel");
+const ShelfMembersPanel = lazyNamed(() => import("../../features/shelf-members/index.tsx"), "ShelfMembersPanel");
 const params = new URLSearchParams(location.search);
 /** The shelf's order as GET /api/artifacts names it. */
 const SORT_PARAM = { relevant: "relevance", newest: "new", oldest: "old", title: "title" } as const;
-function resume(next: string) {
-  const intent = params.get("intent");
-  location.replace(intent && !/[?#]/.test(next) ? `${next}?intent=${encodeURIComponent(intent)}` : next);
-}
-export function App() {
-  const { account, error: authError, retry: retryAccount } = useAccountState();
+const Loading = ({ children }: { children: React.ReactNode }) => (
+  <div className="empty" role="status">
+    {children}
+  </div>
+);
+
+/** The signed-in workspace; home.tsx decides who gets here and loads this chunk. */
+export function App({ account }: { account: Account }) {
   // Department shelves (docs/specs/TEAM_SHELVES.md): which shelf this tab shows.
   const shelves = useShelves(!!account && !account.provisional);
   const team = shelves.current?.kind === "team" ? shelves.current : null;
@@ -123,6 +145,7 @@ export function App() {
     setTrashActionError("");
   }
   const shelfGeneration = useRef(0);
+  const searched = useRef<string | null>(null);
   const trashGeneration = useRef(0);
   const routeGeneration = useRef(0);
   const selectedRef = useRef(selected);
@@ -222,6 +245,9 @@ export function App() {
     if (!account || selected || trashView) return;
     let live = true;
     setLoading(true);
+    // Typing waits for a pause; the first list, a folder or a filter asks at once.
+    const typed = searched.current !== null && searched.current !== query;
+    searched.current = query;
     const timer = setTimeout(
       () =>
         client
@@ -243,7 +269,7 @@ export function App() {
             setError(e.message);
           })
           .finally(() => live && setLoading(false)),
-      150,
+      typed ? 150 : 0,
     );
     return () => {
       live = false;
@@ -293,6 +319,8 @@ export function App() {
   };
   useEffect(() => {
     if (!account || !selected) return;
+    // The viewer's chunk downloads beside the work's data.
+    void loadPreview().catch(() => undefined);
     const expectedId = selected;
     const expectedAccount = account;
     const generation = routeGeneration.current;
@@ -333,8 +361,6 @@ export function App() {
       live = false;
     };
   }, [account, selected, refresh]);
-  const guestHome = location.pathname === "/" && !params.has("login");
-  // The landing page is static: a guest (or an unreachable API) should still see it.
   // Comments of the work's links (docs/specs/COMMENTS.md): only once a link
   // was ever made, never in the trash.
   const workComments = useWorkComments({
@@ -343,41 +369,6 @@ export function App() {
     shelfUrl: work ? shelfUrl(location.origin, work.id) : "",
     enabled: !!selected && !!work && !work.trashedAt && !!work.share,
   });
-  if (guestHome && (account === null || authError)) return <LazyLanding />;
-  if (authError)
-    return (
-      <div className="empty">
-        <h1>Не удалось соединиться с Полкой</h1>
-        <ErrorNotice error={authError} />
-        <Button onClick={retryAccount}>Попробовать снова</Button>
-      </div>
-    );
-  if (account === undefined)
-    return (
-      <div className="empty" role="status">
-        Открываем полку…
-      </div>
-    );
-  if (!account)
-    return (
-      <Login
-        onLogin={(a) => {
-          const next = safeNext(params.get("next"));
-          if (next && next !== "/") return resume(next);
-          window.history.replaceState(null, "", location.pathname);
-          rememberAccount(a);
-        }}
-      />
-    );
-  const nextAfterLogin = safeNext(params.get("next"));
-  if (params.has("login") && nextAfterLogin && nextAfterLogin !== "/") {
-    resume(nextAfterLogin);
-    return (
-      <div className="empty" role="status">
-        Возвращаем к действию…
-      </div>
-    );
-  }
   const activeFolder = folders.find((f) => f.id === folderId),
     shown = viewed ?? work?.revision;
   const loadMore = async () => {
@@ -465,7 +456,7 @@ export function App() {
       }}
     >
       <div className="workspace" data-comments={workComments.available && workComments.open ? "open" : undefined}>
-        <main>
+        <main id="main">
           {!selected && notices}
           {selected ? (
             work && shown ? (
@@ -499,22 +490,30 @@ export function App() {
                       }
                     : undefined
                 }
-                compare={history ? <CompareRevisions revisions={revisions} shown={shown} /> : null}
+                compare={
+                  history ? (
+                    <React.Suspense fallback={<Loading>Готовим сравнение…</Loading>}>
+                      <CompareRevisions revisions={revisions} shown={shown} />
+                    </React.Suspense>
+                  ) : null
+                }
                 onDownload={() => {
                   void downloadRevision(shown, work.title).catch((e) =>
                     setError(e instanceof Error ? e.message : "Не удалось скачать работу."),
                   );
                 }}
                 preview={
-                  <Preview
-                    revision={shown}
-                    title={work.title}
-                    overlay={workComments.available ? workComments.overlay : undefined}
-                    readingTitle={shown.mime === "text/plain" ? work.title : undefined}
-                    onInlineBuildChange={async () => {
-                      await refreshWork();
-                    }}
-                  />
+                  <React.Suspense fallback={<Loading>Открываем работу…</Loading>}>
+                    <Preview
+                      revision={shown}
+                      title={work.title}
+                      overlay={workComments.available ? workComments.overlay : undefined}
+                      readingTitle={shown.mime === "text/plain" ? work.title : undefined}
+                      onInlineBuildChange={async () => {
+                        await refreshWork();
+                      }}
+                    />
+                  </React.Suspense>
                 }
               />
             ) : (
@@ -615,196 +614,199 @@ export function App() {
         </aside>
       )}
       {selected && workComments.floating}
-      {mobile && (
-        <Dialog title="Папки" onClose={() => setMobile(false)}>
-          <nav className="mobile-nav" aria-label="Папки и корзина (меню)">
-            {nav}
-          </nav>
-        </Dialog>
-      )}
-      {shelfDialog === "create" && <CreateShelfPanel onClose={() => setShelfDialog(null)} />}
-      {shelfDialog === "members" && team && account && (
-        <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)}>
-          {/* This tab's shelf is the department (X-Polka-Shelf), so the card is its. */}
-          <ShelfCardSection canEdit={shelfAccess(team, account.id).curate} />
-          {shelfAccess(team, account.id).curate && (
-            <ServiceAccountsSection accountId={account.id} admin={team.role === "admin"} />
-          )}
-          {team.role === "admin" && <WebhooksSection />}
-        </ShelfMembersPanel>
-      )}
-      {(panel === "upload" || panel === "version") && (
-        <UploadPanel
-          artifact={panel === "version" ? (work ?? undefined) : undefined}
-          shelfUrl={panel === "version" && work ? shelfUrl(location.origin, work.id) : undefined}
-          folders={folders}
-          folderId={folderId}
-          onClose={() => setPanel(null)}
-          onSaved={(r) => {
-            setPanel(null);
-            setRefresh((x) => x + 1);
-            open(r.artifactId);
-            setNotice(
-              `Версия ${r.number} сохранена. ${currentShelf() ? "Её видят участники полки." : r.number > 1 ? "Отправленная ссылка не изменилась." : "Пока работу видите только вы."}`,
-            );
-          }}
-        />
-      )}
-      {panel === "share" && work && (
-        <SharePanel
-          artifact={work}
-          provisional={!!account?.provisional}
-          onClose={() => setPanel(null)}
-          onChange={async () => {
-            await refreshWork();
-          }}
-        />
-      )}
-      {panel === "metadata" && work && (
-        <ArtifactMetadataPanel
-          artifact={work}
-          folders={folders}
-          onClose={() => setPanel(null)}
-          onReload={refreshWork}
-          onSaved={async () => {
-            setPanel(null);
-            setRefresh((x) => x + 1);
-            await refreshWork();
-          }}
-        />
-      )}
-      {panel === "accept" && work && (
-        <AcceptRevisionPanel
-          artifact={work}
-          accountId={account?.id}
-          onClose={() => setPanel(null)}
-          onChanged={refreshWork}
-          onSaved={async () => {
-            setPanel(null);
-            await refreshWork();
-          }}
-        />
-      )}
-      {panel === "feed" && work && currentShelf() && (
-        <ProposeToFeedPanel artifact={work} onClose={() => setPanel(null)} />
-      )}
-      {panel === "trash" && work && !work.trashedAt && (
-        <TrashArtifactPanel
-          busy={trashBusy}
-          error={trashActionError}
-          onClose={() => {
-            if (!trashBusy) setPanel(null);
-          }}
-          onConfirm={async () => {
-            if (trashBusyRef.current) return;
-            const expectedId = work.id;
-            const expectedAccount = account;
-            const expectedGeneration = routeGeneration.current;
-            const isCurrent = () =>
-              routeGeneration.current === expectedGeneration &&
-              selectedRef.current === expectedId &&
-              accountRef.current === expectedAccount;
-            setTrashActionError("");
-            trashBusyRef.current = true;
-            setTrashBusy(true);
-            try {
-              await client.trashArtifact(expectedId, {
-                expectedLifecycleVersion: work.lifecycleVersion,
-                expectedRevisionId: work.revision.id,
-              });
-              if (isCurrent()) {
-                trashBusyRef.current = false;
-                setTrashBusy(false);
-                setPanel(null);
-                setNotice("Работа перемещена в корзину. Старые ссылки закрыты.");
-                setRefresh((value) => value + 1);
-                open(null);
-              }
-            } catch (e) {
-              if (!isCurrent()) return;
-              if (e instanceof ApiError && e.status === 409) {
-                try {
-                  await refreshWork();
-                  if (isCurrent())
-                    setTrashActionError("Работа изменилась. Данные обновлены, проверьте их и повторите перемещение.");
-                } catch {
-                  if (isCurrent())
-                    setTrashActionError(
-                      "Работа изменилась, но обновить данные не удалось. Обновите страницу и повторите действие.",
-                    );
-                }
-              } else setTrashActionError((e as Error).message);
-            } finally {
-              if (isCurrent()) {
-                trashBusyRef.current = false;
-                setTrashBusy(false);
-              }
-            }
-          }}
-        />
-      )}
-      {cardTrash && !selected && (
-        <TrashArtifactPanel
-          title={cardTrash.title}
-          busy={trashBusy}
-          error={trashActionError}
-          onClose={() => {
-            if (!trashBusy) setCardTrash(null);
-          }}
-          onConfirm={async () => {
-            if (trashBusyRef.current) return;
-            const target = cardTrash;
-            const expectedGeneration = shelfGeneration.current;
-            trashBusyRef.current = true;
-            setTrashBusy(true);
-            setTrashActionError("");
-            try {
-              await client.trashArtifact(target.id, {
-                expectedLifecycleVersion: target.lifecycleVersion,
-                expectedRevisionId: target.revision.id,
-              });
-              setCardTrash(null);
-              if (expectedGeneration === shelfGeneration.current) {
-                // Off the shelf at once; the next load brings the counts.
-                setItems((current) => current.filter((a) => a.id !== target.id));
-                setNotice(`«${target.title}» в корзине. Старые ссылки закрыты.`);
-                setRefresh((value) => value + 1);
-              }
-            } catch (e) {
-              setTrashActionError(
-                e instanceof ApiError && e.status === 409
-                  ? "Работа изменилась, пока была открыта полка. Обновите полку и повторите."
-                  : (e as Error).message,
+      {/* Dialogs and settings are lazy chunks; nothing shows until one arrives. */}
+      <React.Suspense fallback={null}>
+        {mobile && (
+          <Dialog title="Папки" onClose={() => setMobile(false)}>
+            <nav className="mobile-nav" aria-label="Папки и корзина (меню)">
+              {nav}
+            </nav>
+          </Dialog>
+        )}
+        {shelfDialog === "create" && <CreateShelfPanel onClose={() => setShelfDialog(null)} />}
+        {shelfDialog === "members" && team && account && (
+          <ShelfMembersPanel shelf={team} accountId={account.id} onClose={() => setShelfDialog(null)}>
+            {/* This tab's shelf is the department (X-Polka-Shelf), so the card is its. */}
+            <ShelfCardSection canEdit={shelfAccess(team, account.id).curate} />
+            {shelfAccess(team, account.id).curate && (
+              <ServiceAccountsSection accountId={account.id} admin={team.role === "admin"} />
+            )}
+            {team.role === "admin" && <WebhooksSection />}
+          </ShelfMembersPanel>
+        )}
+        {(panel === "upload" || panel === "version") && (
+          <UploadPanel
+            artifact={panel === "version" ? (work ?? undefined) : undefined}
+            shelfUrl={panel === "version" && work ? shelfUrl(location.origin, work.id) : undefined}
+            folders={folders}
+            folderId={folderId}
+            onClose={() => setPanel(null)}
+            onSaved={(r) => {
+              setPanel(null);
+              setRefresh((x) => x + 1);
+              open(r.artifactId);
+              setNotice(
+                `Версия ${r.number} сохранена. ${currentShelf() ? "Её видят участники полки." : r.number > 1 ? "Отправленная ссылка не изменилась." : "Пока работу видите только вы."}`,
               );
-            } finally {
-              trashBusyRef.current = false;
-              setTrashBusy(false);
-            }
-          }}
-        />
-      )}
-      {panel === "agent-context" && work && shown && (
-        <AgentContextPanel key={shown.id} artifactId={work.id} revisionId={shown.id} onClose={() => setPanel(null)} />
-      )}
-      {panel === "rework" && work && (
-        <ReworkArtifactPanel
-          title={work.title}
-          shelfUrl={shelfUrl(location.origin, work.id)}
-          onClose={() => setPanel(null)}
-          onUpload={() => setPanel("version")}
-        />
-      )}
-      {panel === "folder" && (
-        <CreateFolderPanel
-          onClose={() => setPanel(null)}
-          onCreated={(folder) => {
-            setPanel(null);
-            setRefresh((x) => x + 1);
-            setFolderId(folder.id);
-            open(null);
-          }}
-        />
-      )}
+            }}
+          />
+        )}
+        {panel === "share" && work && (
+          <SharePanel
+            artifact={work}
+            provisional={!!account?.provisional}
+            onClose={() => setPanel(null)}
+            onChange={async () => {
+              await refreshWork();
+            }}
+          />
+        )}
+        {panel === "metadata" && work && (
+          <ArtifactMetadataPanel
+            artifact={work}
+            folders={folders}
+            onClose={() => setPanel(null)}
+            onReload={refreshWork}
+            onSaved={async () => {
+              setPanel(null);
+              setRefresh((x) => x + 1);
+              await refreshWork();
+            }}
+          />
+        )}
+        {panel === "accept" && work && (
+          <AcceptRevisionPanel
+            artifact={work}
+            accountId={account?.id}
+            onClose={() => setPanel(null)}
+            onChanged={refreshWork}
+            onSaved={async () => {
+              setPanel(null);
+              await refreshWork();
+            }}
+          />
+        )}
+        {panel === "feed" && work && currentShelf() && (
+          <ProposeToFeedPanel artifact={work} onClose={() => setPanel(null)} />
+        )}
+        {panel === "trash" && work && !work.trashedAt && (
+          <TrashArtifactPanel
+            busy={trashBusy}
+            error={trashActionError}
+            onClose={() => {
+              if (!trashBusy) setPanel(null);
+            }}
+            onConfirm={async () => {
+              if (trashBusyRef.current) return;
+              const expectedId = work.id;
+              const expectedAccount = account;
+              const expectedGeneration = routeGeneration.current;
+              const isCurrent = () =>
+                routeGeneration.current === expectedGeneration &&
+                selectedRef.current === expectedId &&
+                accountRef.current === expectedAccount;
+              setTrashActionError("");
+              trashBusyRef.current = true;
+              setTrashBusy(true);
+              try {
+                await client.trashArtifact(expectedId, {
+                  expectedLifecycleVersion: work.lifecycleVersion,
+                  expectedRevisionId: work.revision.id,
+                });
+                if (isCurrent()) {
+                  trashBusyRef.current = false;
+                  setTrashBusy(false);
+                  setPanel(null);
+                  setNotice("Работа перемещена в корзину. Старые ссылки закрыты.");
+                  setRefresh((value) => value + 1);
+                  open(null);
+                }
+              } catch (e) {
+                if (!isCurrent()) return;
+                if (e instanceof ApiError && e.status === 409) {
+                  try {
+                    await refreshWork();
+                    if (isCurrent())
+                      setTrashActionError("Работа изменилась. Данные обновлены, проверьте их и повторите перемещение.");
+                  } catch {
+                    if (isCurrent())
+                      setTrashActionError(
+                        "Работа изменилась, но обновить данные не удалось. Обновите страницу и повторите действие.",
+                      );
+                  }
+                } else setTrashActionError((e as Error).message);
+              } finally {
+                if (isCurrent()) {
+                  trashBusyRef.current = false;
+                  setTrashBusy(false);
+                }
+              }
+            }}
+          />
+        )}
+        {cardTrash && !selected && (
+          <TrashArtifactPanel
+            title={cardTrash.title}
+            busy={trashBusy}
+            error={trashActionError}
+            onClose={() => {
+              if (!trashBusy) setCardTrash(null);
+            }}
+            onConfirm={async () => {
+              if (trashBusyRef.current) return;
+              const target = cardTrash;
+              const expectedGeneration = shelfGeneration.current;
+              trashBusyRef.current = true;
+              setTrashBusy(true);
+              setTrashActionError("");
+              try {
+                await client.trashArtifact(target.id, {
+                  expectedLifecycleVersion: target.lifecycleVersion,
+                  expectedRevisionId: target.revision.id,
+                });
+                setCardTrash(null);
+                if (expectedGeneration === shelfGeneration.current) {
+                  // Off the shelf at once; the next load brings the counts.
+                  setItems((current) => current.filter((a) => a.id !== target.id));
+                  setNotice(`«${target.title}» в корзине. Старые ссылки закрыты.`);
+                  setRefresh((value) => value + 1);
+                }
+              } catch (e) {
+                setTrashActionError(
+                  e instanceof ApiError && e.status === 409
+                    ? "Работа изменилась, пока была открыта полка. Обновите полку и повторите."
+                    : (e as Error).message,
+                );
+              } finally {
+                trashBusyRef.current = false;
+                setTrashBusy(false);
+              }
+            }}
+          />
+        )}
+        {panel === "agent-context" && work && shown && (
+          <AgentContextPanel key={shown.id} artifactId={work.id} revisionId={shown.id} onClose={() => setPanel(null)} />
+        )}
+        {panel === "rework" && work && (
+          <ReworkArtifactPanel
+            title={work.title}
+            shelfUrl={shelfUrl(location.origin, work.id)}
+            onClose={() => setPanel(null)}
+            onUpload={() => setPanel("version")}
+          />
+        )}
+        {panel === "folder" && (
+          <CreateFolderPanel
+            onClose={() => setPanel(null)}
+            onCreated={(folder) => {
+              setPanel(null);
+              setRefresh((x) => x + 1);
+              setFolderId(folder.id);
+              open(null);
+            }}
+          />
+        )}
+      </React.Suspense>
     </AppShell>
   );
 }

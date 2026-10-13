@@ -42,7 +42,7 @@ export function Away() {
   }, [token]);
   return (
     <>
-      <main className="away-page">
+      <main id="main" className="away-page">
         <span className="eyebrow">Полка</span>
         {state.kind === "checking" && <p role="status">Проверяем ссылку…</p>}
         {state.kind === "refused" && (

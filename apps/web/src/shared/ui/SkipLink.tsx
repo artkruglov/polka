@@ -2,8 +2,8 @@ import React from "react";
 
 /**
  * The first Tab stop on every page: past the navigation to the page's
- * <main>. Hidden until focused. Pages name their main differently, so the
- * link finds the element instead of relying on an id.
+ * <main>. Hidden until focused. Every page's main carries id="main", so the
+ * link works without script too; the click handler also moves focus there.
  */
 export function SkipLink() {
   return (

@@ -9,7 +9,7 @@ export function Enterprise() {
   return (
     <AppShell current="landing" account={account} className="mkt-page" bare>
       <SiteHeader signedIn={!!account} />
-      <main className="enterprise-page">
+      <main id="main" className="enterprise-page">
         <EnterpriseContent />
       </main>
     </AppShell>

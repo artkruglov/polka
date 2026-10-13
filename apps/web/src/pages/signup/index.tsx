@@ -1,3 +1,6 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../shared/ui/onboard.css";
+import "../../features/provider-sign-in/styles.css";
 import React, { useEffect, useState, useRef } from "react";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
@@ -162,7 +165,7 @@ export function Signup() {
   return (
     <AppShell current="shelf" account={account} className="mkt-page" bare>
       <SiteHeader signedIn={!!account} />
-      <main className="onboard">
+      <main id="main" className="onboard">
         <div className="onboard-icon">{passwordOnly ? <KeyRound /> : <Mail />}</div>
         <span className="eyebrow">
           {forAgent ? "Агент просит доступ к Полке" : passwordOnly ? "Вход в Полку" : "Своя полка за пару шагов"}

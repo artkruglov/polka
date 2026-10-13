@@ -1,3 +1,7 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../widgets/editorial-catalog/styles.css";
+import "../../entities/link/styles.css";
+import "../../features/provider-sign-in/styles.css";
 import "./styles.css";
 import "../../features/recipient-convert/styles.css";
 import { useEditorialList } from "../../entities/editorial/useEditorialList.ts";
@@ -145,7 +149,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
   return (
     <AppShell current="discover" account={account} className="feed-reader">
       {state !== "ready" || !item ? (
-        <main className="editorial-catalog editorial-catalog-detail">
+        <main id="main" className="editorial-catalog editorial-catalog-detail">
           {state === "loading" && (
             <div className="editorial-catalog-state" role="status">
               Загружаем материал…
@@ -167,7 +171,8 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
         </main>
       ) : (
         <div ref={frame} className="feed-material">
-          <header className="feed-topbar">
+          {/* Not header/footer elements: the shell holds the page's one banner and contentinfo. */}
+          <div className="feed-topbar">
             <a href="/discover" className="feed-back">
               <ArrowLeft aria-hidden="true" /> <span>Лента</span>
             </a>
@@ -189,7 +194,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
                 <Maximize2 aria-hidden="true" /> <span>Открыть на весь экран</span>
               </Button>
             </div>
-          </header>
+          </div>
           <p className="feed-task" title={`${item.task}. Что попробовать: ${item.action}`}>
             {item.task}. <span>Что попробовать: {item.action}</span>
           </p>
@@ -201,7 +206,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
               onClose={() => setWelcome(false)}
             />
           )}
-          <main ref={stageRef} className="feed-stage" aria-label={item.title}>
+          <main id="main" ref={stageRef} className="feed-stage" aria-label={item.title}>
             {!token ? (
               <p className="feed-state" role="alert">
                 Ссылка на материал недоступна.
@@ -221,7 +226,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
               <Preview revision={work.viewer.revision} grant={work.viewer.grant} />
             )}
           </main>
-          <footer className="feed-footer">
+          <div className="feed-footer">
             <span>
               Лицензия материала: {item.license} · {item.author}
             </span>
@@ -230,7 +235,7 @@ function Detail({ slug, retry, onRetry }: { slug: string; retry: number; onRetry
                 Открыть по ссылке <ArrowUpRight aria-hidden="true" />
               </a>
             )}
-          </footer>
+          </div>
           {withBar && (
             <div ref={footerBox} className="feed-convert">
               <ConvertBar onTry={(opener) => press("try", opener)} onRemix={(opener) => press("remix", opener)} />
@@ -270,7 +275,7 @@ export function EditorialPage() {
   if (location.pathname.startsWith("/discover/")) {
     return (
       <AppShell current="discover" account={account}>
-        <main className="editorial-catalog">
+        <main id="main" className="editorial-catalog">
           <div className="editorial-catalog-state" role="alert">
             Материал не найден. <a href="/discover">Вернуться к подборке</a>
           </div>
@@ -293,7 +298,7 @@ function CatalogRoute({
   const list = useEditorialList(retry);
   return (
     <AppShell current="discover" account={account}>
-      <main>
+      <main id="main">
         <EditorialCatalog
           headingLevel={1}
           items={list.items}

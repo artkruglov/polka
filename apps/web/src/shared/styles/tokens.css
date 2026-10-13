@@ -29,7 +29,7 @@
   /* Ink */
   --ink: #0f1420;
   --ink-2: #28354a;
-  --muted: #647087;
+  --muted: #5d687d; /* AA: 4.96:1 on --soft-2, 5.01:1 on --accent-soft */
   --muted-2: #687286; /* AA: 4.84:1 on white, 4.51:1 on --soft */
   --muted-3: #aab3c2;
 

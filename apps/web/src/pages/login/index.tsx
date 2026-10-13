@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../features/provider-sign-in/styles.css";
 import { authReturnTo, safeNext } from "../../shared/lib/safe-next.ts";
 import { SiteHeader } from "../../widgets/site-header/index.tsx";
 import { AppShell } from "../../widgets/navigation/index.tsx";
@@ -20,7 +22,7 @@ export function Login({ onLogin }: { onLogin: (a: Account) => void }) {
   return (
     <AppShell current="shelf" account={null} className="mkt-page" bare>
       <SiteHeader signedIn={false} />
-      <main className="login-page">
+      <main id="main" className="login-page">
         <section className="login-intro">
           <span className="eyebrow">Работы из Claude, ChatGPT и других агентов</span>
           <h1>

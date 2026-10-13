@@ -1,3 +1,5 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../shared/ui/onboard.css";
 import React, { useEffect, useState } from "react";
 import { Link2, UserRoundPlus } from "lucide-react";
 import { ApiError, request } from "../../shared/api/client.ts";
@@ -50,7 +52,7 @@ export function SignupChoose() {
   return (
     <AppShell current="shelf" account={account} className="mkt-page" bare>
       <SiteHeader signedIn={!!account} />
-      <main className="onboard">
+      <main id="main" className="onboard">
         <div className="onboard-icon">
           <Link2 />
         </div>
@@ -117,7 +119,7 @@ export function SignupLinked() {
   return (
     <AppShell current="shelf" account={account} className="mkt-page" bare>
       <SiteHeader signedIn={!!account} />
-      <main className="onboard">
+      <main id="main" className="onboard">
         <div className="onboard-icon">
           <Link2 />
         </div>

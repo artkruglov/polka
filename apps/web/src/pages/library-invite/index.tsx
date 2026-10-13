@@ -78,7 +78,7 @@ export function LibraryInvite() {
   }
   return (
     <AppShell current="templates" account={account}>
-      <main className="library-invite-page">
+      <main id="main" className="library-invite-page">
         <span className="eyebrow">Общая библиотека</span>
         <h1>Приглашение в библиотеку</h1>
         {invitation === undefined ? null : !invitation ? (

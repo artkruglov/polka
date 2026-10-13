@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request } from "../../shared/api/client.ts";
+import { loadRawCapabilities } from "../../shared/api/capabilities.ts";
 import { SOURCE_URL } from "../../shared/lib/project-links.ts";
 
 /** Installation capabilities that change what the interface may promise. */
@@ -101,7 +101,7 @@ export function parseLegal(raw: unknown): InstallationLegal {
 
 /** One /capabilities request per page load; a failure is retried by the next consumer. */
 export function loadCapabilities() {
-  cached ??= request<Record<string, unknown>>("/capabilities")
+  cached ??= loadRawCapabilities()
     .then((raw) => {
       const emailLogin = raw.emailLogin === "local" || raw.emailLogin === "smtp" ? raw.emailLogin : "disabled";
       return {

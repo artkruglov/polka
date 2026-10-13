@@ -1,3 +1,6 @@
+// Shared stylesheets this page needs, before its own (cascade order); main.tsx keeps only the global layer.
+import "../../widgets/editorial-catalog/styles.css";
+import "../../widgets/agent-setup/styles.css";
 import "./styles.css";
 import React, { useEffect, useState } from "react";
 import {
@@ -65,7 +68,7 @@ export function Landing() {
   return (
     <AppShell current="landing" account={account} className="landing" bare>
       <SiteHeader signedIn={!!account} home />
-      <main className="lp-main">
+      <main id="main" className="lp-main">
         <section className="lp-hero">
           <div className="lp-hero-glow" aria-hidden="true" />
           <div className="lp-hero-copy">
@@ -403,7 +406,8 @@ polka_change_files      put docs/risks.md
             </li>
           </ol>
           <div className="lp-selfhost-command">
-            <pre>
+            {/* It scrolls sideways on a phone: a Tab stop, so the keyboard can scroll it too. */}
+            <pre tabIndex={0} aria-label="Команда установки">
               <code>{command}</code>
             </pre>
             <CopyButton value={command} label="Скопировать" successText="Скопировано" />

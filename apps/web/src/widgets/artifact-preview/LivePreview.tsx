@@ -1,5 +1,6 @@
 import { Button } from "../../shared/ui/controls.tsx";
 import { send } from "../../shared/api/client.ts";
+import { loadRawCapabilities } from "../../shared/api/capabilities.ts";
 import { CircleStop, Maximize2, Minimize2, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -155,12 +156,9 @@ export function LivePreview({
   useEffect(() => {
     const abort = new AbortController();
     const currentGeneration = generation.current;
-    send("/api/capabilities", { signal: abort.signal })
-      .then(async (response) => {
-        const result = (await response.json()) as {
-          liveExperimental?: unknown;
-          liveMode?: unknown;
-        };
+    // The same request as the rest of the page (shared/api/capabilities.ts).
+    loadRawCapabilities()
+      .then((result) => {
         if (!abort.signal.aborted && generation.current === currentGeneration)
           setCapability(
             result.liveExperimental !== true

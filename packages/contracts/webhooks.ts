@@ -1,27 +1,8 @@
 import { z } from "zod";
+import { WEBHOOK_EVENTS, WEBHOOK_URL_MAX, type WebhookEvent } from "./webhook-constants.ts";
 
-/**
- * Webhooks of a shelf (docs/specs/WEBHOOKS.md): what Полка may send to an
- * address the shelf's owner or admin registered. The first seven are the
- * actions of the agents' feed (GET /api/v1/events); links and comments are
- * webhooks only.
- */
-export const WEBHOOK_EVENTS = [
-  "revision.saved",
-  "revision.accepted",
-  "owner.changed",
-  "artifact.metadata_updated",
-  "artifact.moved",
-  "artifact.trashed",
-  "artifact.restored",
-  "share.enabled",
-  "share.revoked",
-  "comment.created",
-] as const;
-export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
-
-export const MAX_WEBHOOKS_PER_SHELF = 10;
-export const WEBHOOK_URL_MAX = 2000;
+// The events and limits live in the zod-free webhook-constants.ts (the browser imports them there).
+export { WEBHOOK_EVENTS, MAX_WEBHOOKS_PER_SHELF, WEBHOOK_URL_MAX, type WebhookEvent } from "./webhook-constants.ts";
 
 const events = z
   .array(z.enum(WEBHOOK_EVENTS, { message: "Неизвестное событие." }))

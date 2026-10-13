@@ -26,7 +26,7 @@ export function MoveShelf({ origin }: { origin: string }) {
         <li>Выполните команды (Node 22+). Повторный запуск продолжает с места и не скачивает файлы второй раз.</li>
       </ol>
       <div className="agent-instruction-block">
-        <h4>Скачать полку в папку</h4>
+        <h3>Скачать полку в папку</h3>
         <pre>
           <code>{commands}</code>
         </pre>

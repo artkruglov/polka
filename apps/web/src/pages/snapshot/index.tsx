@@ -60,7 +60,7 @@ export function ShelfSnapshotPage() {
   const name = shelfName(shelves.current);
   return (
     <AppShell current="shelf" account={account}>
-      <main className="snapshot-page">
+      <main id="main" className="snapshot-page">
         <a className="snapshot-back" href={withShelf("/")}>
           ← {name}
         </a>

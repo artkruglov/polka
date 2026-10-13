@@ -224,8 +224,8 @@ export function SignInMethods() {
   const query = new URLSearchParams(location.search);
   const returned = providerErrorMessage(query.get("idp_error"));
   const linked = query.get("linked") === "1";
-  const load = () =>
-    loadIdentities()
+  const load = (fresh = false) =>
+    loadIdentities({ fresh })
       .then(setData)
       .catch((e) => setError((e as Error).message));
   useEffect(() => {
@@ -250,7 +250,7 @@ export function SignInMethods() {
     setError(null);
     try {
       await request(`/account/identities/${provider}/unlink`, {});
-      await load();
+      await load(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось отвязать. Повторите попытку.");
     } finally {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseCommentAnchor, type CommentAnchor } from "../../../../../packages/contracts/comment-constants.ts";
+import type { ShareDiscussion } from "../../../../../packages/contracts/comments.ts";
 
 // The shell's side of the comment overlay protocol (apps/server/
 // comment-overlay.ts). Messages are taken only from the one frame this
@@ -198,3 +199,14 @@ export function useOverlayBridge() {
 }
 
 export type OverlayBridge = ReturnType<typeof useOverlayBridge>;
+
+/** The quotes of a link's open threads and reactions, for the overlay; in the page's chunk, not the rail's. */
+export function anchorsOf(discussion: ShareDiscussion): BridgeAnchor[] {
+  const open = discussion.threads.filter((thread) => !thread.resolvedAt && thread.anchor && !thread.deleted);
+  const quoted = new Set(open.map((thread) => thread.sig));
+  const fragments = new Map<string, BridgeAnchor>();
+  for (const group of discussion.reactions)
+    if (group.sig && group.anchor && !quoted.has(group.sig))
+      fragments.set(group.sig, { id: `r:${group.sig}`, ...group.anchor });
+  return [...open.map((thread) => ({ id: thread.id, ...thread.anchor! })), ...fragments.values()];
+}

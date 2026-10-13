@@ -22,6 +22,8 @@ export function EditorialCatalog({
   headingLevel = 2,
 }: EditorialCatalogProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
+  // One level under the catalog's own heading, wherever it sits.
+  const CardHeading = headingLevel === 1 ? "h2" : "h3";
   const [topic, setTopic] = useState<string | null>(null);
   const topics = [...new Set(items.map((item) => item.topic))];
   const activeTopic = topic && topics.includes(topic) ? topic : null;
@@ -60,7 +62,7 @@ export function EditorialCatalog({
         <div className="editorial-catalog-empty">
           <Wave compact className="editorial-catalog-empty-wave" />
           <div className="editorial-catalog-empty-body">
-            <h3>Пока здесь пусто</h3>
+            <CardHeading>Пока здесь пусто</CardHeading>
             <p>
               В «Ленте» появляются материалы, которые авторы опубликовали после проверки. Ваши работы сюда не попадают
               сами: по умолчанию их видите только вы.
@@ -105,7 +107,7 @@ export function EditorialCatalog({
                   </div>
                 )}
                 <div className="editorial-catalog-card-body">
-                  <h3>{recipientUrl ? <a href={recipientUrl}>{item.title}</a> : item.title}</h3>
+                  <CardHeading>{recipientUrl ? <a href={recipientUrl}>{item.title}</a> : item.title}</CardHeading>
                   <span className="editorial-catalog-card-meta" title={`${item.license} · ${item.action}`}>
                     {item.topic} · {item.author}
                   </span>
