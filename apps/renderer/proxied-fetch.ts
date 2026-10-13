@@ -2,7 +2,7 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { connect as tlsConnect } from "node:tls";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
-import type { Readable } from "node:stream";
+import { pipeline, Writable, type Readable, type Transform } from "node:stream";
 import { RENDERER_USER_AGENT } from "../../packages/renderer-contract.ts";
 
 /*
@@ -74,27 +74,34 @@ export function proxiedGet(proxyPort: number, { insecure = false }: { insecure?:
             },
           },
           (answer) => {
+            // pipeline() settles on every ending: the body complete, an error
+            // in any stage, or a connection that closed mid-body (the source
+            // ends prematurely and the decoder would otherwise wait forever).
             const encoding = String(answer.headers["content-encoding"] ?? "identity").toLowerCase();
-            const stream: Readable =
+            const decoder: Transform | null =
               encoding === "gzip"
-                ? answer.pipe(createGunzip())
+                ? createGunzip()
                 : encoding === "deflate"
-                  ? answer.pipe(createInflate())
+                  ? createInflate()
                   : encoding === "br"
-                    ? answer.pipe(createBrotliDecompress())
-                    : answer;
+                    ? createBrotliDecompress()
+                    : null;
             const chunks: Buffer[] = [];
             let size = 0;
-            stream.on("data", (chunk: Buffer) => {
-              size += chunk.length;
-              if (size > maxBytes) {
-                answer.destroy();
-                stream.destroy();
-                fail(new FetchFailure("too_large"));
-              } else chunks.push(chunk);
+            const sink = new Writable({
+              write(chunk: Buffer, _encoding, done) {
+                size += chunk.length;
+                if (size > maxBytes) return done(new FetchFailure("too_large"));
+                chunks.push(chunk);
+                done();
+              },
             });
-            stream.on("error", fail);
-            stream.on("end", () => {
+            const stages: Array<Readable | Transform | Writable> = decoder ? [answer, decoder, sink] : [answer, sink];
+            pipeline(stages, (error) => {
+              if (error) {
+                secure.destroy();
+                return fail(error);
+              }
               secure.end();
               resolve({ status: answer.statusCode ?? 0, headers: answer.headers, body: Buffer.concat(chunks) });
             });

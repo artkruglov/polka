@@ -65,13 +65,28 @@ export function createEgressProxy(policy: EgressPolicy = {}): Server {
   });
   server.on("connect", async (req: IncomingMessage, client: Socket, head: Buffer) => {
     client.on("error", () => client.destroy());
+    // The slot is taken before the DNS lookup, so lookups that hang count
+    // against the cap too (a client that gives up does not free it while its
+    // lookup still runs); every way out below gives it back exactly once.
     if (open >= maxConnections) return refuse(client, "busy", 503);
-    const target = await egressTarget(req.url ?? "", policy);
+    open++;
+    let held = true;
+    const release = () => {
+      if (held) open--;
+      held = false;
+    };
+    let target: Awaited<ReturnType<typeof egressTarget>>;
+    try {
+      target = await egressTarget(req.url ?? "", policy);
+    } catch {
+      target = { refused: "dns" };
+    }
     if ("refused" in target) {
+      release();
       onRefused?.(hostOf(req), target.refused);
       return refuse(client, target.refused, 403);
     }
-    open++;
+    if (client.destroyed) return release();
     const upstream = connect({ host: target.address, port: target.port });
     const close = () => {
       upstream.destroy();
@@ -80,7 +95,7 @@ export function createEgressProxy(policy: EgressPolicy = {}): Server {
     upstream.setTimeout(idleMs, close);
     client.setTimeout(idleMs, close);
     upstream.once("close", () => {
-      open--;
+      release();
       client.destroy();
     });
     upstream.on("error", close);

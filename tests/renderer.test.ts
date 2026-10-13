@@ -7,10 +7,16 @@ import assert from "node:assert/strict";
 import { connect } from "node:net";
 import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer as createTlsServer } from "node:tls";
+import { gzipSync } from "node:zlib";
 import { detectChallenge } from "../apps/renderer/challenge.ts";
 import { createEgressProxy, egressTarget } from "../apps/renderer/egress-proxy.ts";
 import { TITLE_SCAN_CHARS, fetchPage, readTitle, robotsVia } from "../apps/renderer/fetch-page.ts";
-import type { ProxiedAnswer, ProxiedGet } from "../apps/renderer/proxied-fetch.ts";
+import { FetchFailure, proxiedGet, type ProxiedAnswer, type ProxiedGet } from "../apps/renderer/proxied-fetch.ts";
 import { RENDERER_USER_AGENT, signRenderRequest, verifyRenderRequest } from "../packages/renderer-contract.ts";
 
 const page = (over: Partial<Parameters<typeof detectChallenge>[0]> = {}) => ({
@@ -172,6 +178,103 @@ test("the proxy refuses CONNECT to internal targets and plain HTTP, and tunnels 
   } finally {
     proxy.close();
     upstream.close();
+  }
+});
+
+const listening = async <T extends { listen: Function; address: Function }>(server: T) => {
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return (server.address() as AddressInfo).port;
+};
+
+test("the proxy counts CONNECTs still waiting for DNS against its cap and frees them on every outcome", async () => {
+  const lookups: Array<(answer: Array<{ address: string; family: number }>) => void> = [];
+  const proxy = createEgressProxy({
+    maxConnections: 1,
+    resolver: (host) =>
+      host === "slow.test"
+        ? new Promise((resolve) => lookups.push(resolve))
+        : Promise.resolve([{ address: "10.0.0.5", family: 4 }]),
+  });
+  const proxyPort = await listening(proxy);
+  const send = (target: string) =>
+    new Promise<string>((resolve) => {
+      const socket = connect(proxyPort, "127.0.0.1", () =>
+        socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`),
+      );
+      let data = "";
+      socket.on("data", (chunk) => (data += chunk));
+      socket.on("close", () => resolve(data));
+      socket.on("error", () => resolve(data));
+      setTimeout(() => socket.destroy(), 3000);
+    });
+  try {
+    const slow = send("slow.test:443");
+    while (!lookups.length) await new Promise((resolve) => setTimeout(resolve, 5));
+    // The only slot is held by the pending lookup.
+    assert.match(await send("other.test:443"), /^HTTP\/1\.1 503[^]*x-egress-refused: busy/);
+    lookups[0]([{ address: "10.0.0.5", family: 4 }]);
+    assert.match(await slow, /^HTTP\/1\.1 403[^]*x-egress-refused: address/);
+    // Refused after the lookup: the slot is free again.
+    assert.match(await send("other.test:443"), /^HTTP\/1\.1 403[^]*x-egress-refused: address/);
+  } finally {
+    proxy.close();
+  }
+});
+
+test("a proxied GET settles when a compressed body is cut off mid-stream", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "polka-renderer-tls-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  try {
+    execFileSync(
+      "openssl",
+      ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=fixture.test"].concat([
+        "-keyout",
+        join(dir, "key.pem"),
+        "-out",
+        join(dir, "cert.pem"),
+      ]),
+      { stdio: "ignore" },
+    );
+  } catch {
+    return t.skip("openssl is not available");
+  }
+  const body = gzipSync(Buffer.from("<title>Cut</title>" + "x".repeat(200_000)));
+  // Headers, then half of the gzip bytes, then the connection drops: no end, no error from the decoder itself.
+  const site = createTlsServer(
+    { key: readFileSync(join(dir, "key.pem")), cert: readFileSync(join(dir, "cert.pem")) },
+    (socket) => {
+      socket.once("data", () => {
+        socket.write(
+          `HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-encoding: gzip\r\ncontent-length: ${body.length}\r\n\r\n`,
+        );
+        socket.write(body.subarray(0, body.length >> 1), () => setTimeout(() => socket.destroy(), 50));
+      });
+      socket.on("error", () => undefined);
+    },
+  );
+  const sitePort = await listening(site);
+  const proxy = createEgressProxy({
+    ports: [sitePort],
+    resolver: async () => [{ address: "127.0.0.1", family: 4 }],
+    allowAddress: (_address, host) => host === "fixture.test",
+  });
+  const proxyPort = await listening(proxy);
+  try {
+    const get = proxiedGet(proxyPort, { insecure: true });
+    const started = Date.now();
+    const outcome = await Promise.race([
+      get(`https://fixture.test:${sitePort}/`, { timeoutMs: 10_000 }).then(
+        () => "resolved",
+        (error) => error,
+      ),
+      new Promise((resolve) => setTimeout(() => resolve("stalled"), 4000).unref()),
+    ]);
+    assert.ok(outcome instanceof FetchFailure, String(outcome));
+    assert.equal(outcome.reason, "network");
+    assert.ok(Date.now() - started < 4000);
+  } finally {
+    proxy.close();
+    site.close();
   }
 });
 
