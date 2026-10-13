@@ -110,6 +110,69 @@ test("hosted:setup fills every required setting and generates distinct secrets",
   assert.equal(after.S3_SECRET_KEY, env.S3_SECRET_KEY);
 });
 
+// Docker Compose interpolates `$NAME` and cuts ` #…` in an unquoted dotenv
+// value: a secret with them must come out of `docker compose config` as given.
+const dockerCompose = spawnSync("docker", ["compose", "version"], { encoding: "utf8" }).status === 0;
+test(
+  "hosted:setup writes secrets Compose reads back literally",
+  { skip: dockerCompose ? false : "docker compose is not installed" },
+  () => {
+    const out = join(mkdtempSync(join(tmpdir(), "hosted-setup-")), "hosted.env");
+    const tricky = {
+      ...keys,
+      S3_SECRET_KEY: `p$HOME#x ${"${LINK_KEY}"} $$ 'q' "dq" \\$ end\\`,
+      SMTP_PASS: "  lead and trail  # not a comment",
+      OIDC_CLIENT_SECRET: "a\\nb`c`ю=",
+    };
+    const contact = "Отдел ИБ <sec@company.test> #1 $USER";
+    const res = run([...flags, "--set", `OPERATOR_CONTACT=${contact}`, "--out", out], tricky);
+    assert.equal(res.status, 0, res.stderr);
+    // A plain value stays bare, as before.
+    assert.match(readFileSync(out, "utf8"), /^S3_ACCESS_KEY=app-access-key$/m);
+    const resolved = () => {
+      const answer = spawnSync(
+        "docker",
+        [
+          "compose",
+          "-f",
+          fileURLToPath(new URL("../deploy/hosted/compose.yml", import.meta.url)),
+          "--env-file",
+          out,
+          "config",
+          "--format",
+          "json",
+        ],
+        // Only what docker itself needs: Compose prefers the shell's variables
+        // over the env file, and the test runner exports S3_SECRET_KEY & co.
+        {
+          encoding: "utf8",
+          env: Object.fromEntries(
+            Object.entries(process.env).filter(([name]) => /^(PATH|HOME|DOCKER_[A-Z_]+|XDG_[A-Z_]+)$/.test(name)),
+          ),
+        },
+      );
+      assert.equal(answer.status, 0, answer.stderr);
+      // `config` writes a literal $ as $$.
+      const environment = JSON.parse(answer.stdout).services.app.environment as Record<string, string>;
+      return (key: string) => environment[key]?.replaceAll("$$", "$");
+    };
+    let app = resolved();
+    assert.equal(app("S3_SECRET_KEY"), tricky.S3_SECRET_KEY);
+    assert.equal(app("SMTP_PASS"), tricky.SMTP_PASS);
+    assert.equal(app("OIDC_CLIENT_SECRET"), tricky.OIDC_CLIENT_SECRET);
+    assert.equal(app("OPERATOR_CONTACT"), contact);
+    // --force keeps them byte for byte and still compares what Compose reads.
+    const update = run(["--out", out, "--force", "--set", "TEAM_SHELVES=off"]);
+    assert.equal(update.status, 0, update.stderr);
+    app = resolved();
+    assert.equal(app("S3_SECRET_KEY"), tricky.S3_SECRET_KEY);
+    assert.equal(app("OPERATOR_CONTACT"), contact);
+    assert.match(update.stdout, /every required setting is filled/);
+    const same = run(["--out", out, "--force"], { BACKUP_S3_ACCESS_KEY: keys.S3_ACCESS_KEY });
+    assert.match(same.stderr, /its own write-only key/);
+  },
+);
+
 test("hosted:setup refuses a viewer on the app's registrable domain", () => {
   const dir = mkdtempSync(join(tmpdir(), "hosted-setup-"));
   for (const [app, viewer] of [
@@ -209,6 +272,8 @@ test("the image carries what install.sh needs, and nothing secret", () => {
     "deploy/hosted/compose.yml",
     "deploy/hosted/hosted.env.example",
     "deploy/hosted/install.sh",
+    "deploy/hosted/role-settings.sql",
+    "deploy/hosted/Caddyfile",
     "deploy/runtime-grants.sql",
   ])
     assert.match(ignore, new RegExp(`^!${path.replace(/[.]/g, "\\.")}$`, "m"), path);

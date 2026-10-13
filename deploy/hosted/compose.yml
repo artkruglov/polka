@@ -236,6 +236,29 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+      - ./role-settings.sql:/docker-entrypoint-initdb.d/20-role-settings.sql:ro
+    # Server settings; a change here takes a restart of postgres
+    # (README.md, «Обновление»).
+    # - shared_buffers: a quarter of the container's memory limit below
+    #   (the stock 128MB leaves most of the hot data to the OS cache).
+    # - pg_stat_statements: per-query statistics for the operator; the
+    #   extension itself lives in the `postgres` database (role-settings.sql).
+    # - log_min_duration_statement: a statement slower than 500 ms is logged
+    #   with its text (the app passes values as parameters) and never with
+    #   the parameters' values (log_parameter_max_length=0).
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=500ms
+      - -c
+      - log_parameter_max_length=0
+    # Parallel queries share memory through /dev/shm; Docker's default 64 MB
+    # is too small for a hash join over a large table.
+    shm_size: 256m
     # Loopback only, for the host-network services; never 0.0.0.0.
     ports: ["127.0.0.1:5432:5432"]
     networks: [polka]

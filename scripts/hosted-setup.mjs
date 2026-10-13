@@ -141,6 +141,41 @@ if (rotate && !force) fail("--rotate replaces the secrets of an existing file: p
 
 const exists = existsSync(out);
 if (exists && !force) fail(`${out} exists; pass --force to update it (its secrets stay unless --rotate)`);
+// hosted.env is read by Docker Compose (`--env-file`), whose dotenv rules
+// interpolate `$NAME` and cut ` #…` in an unquoted value. A value is written
+// bare only when it has none of that; anything else goes in double quotes
+// with \\, " and $ escaped, which Compose (and a POSIX shell) reads back
+// literally. Lines kept from an existing file stay as they are.
+const PLAIN = /^[A-Za-z0-9_.,:/@+=%-]*$/;
+const dotenvValue = (value) => (PLAIN.test(value) ? value : `"${value.replace(/[\\"$]/g, (char) => `\\${char}`)}"`);
+/** What Compose makes of a value as written: quotes, escapes, inline comments. */
+function readDotenvValue(raw) {
+  const text = raw.trim();
+  const quote = text[0];
+  if ((quote === "'" || quote === '"') && text.length > 1) {
+    let value = "";
+    for (let i = 1; i < text.length; i++) {
+      const char = text[i];
+      if (char === quote) return value;
+      if (char === "\\" && i + 1 < text.length) {
+        const next = text[i + 1];
+        if (quote === "'" && next === "'") {
+          value += next;
+          i++;
+          continue;
+        }
+        if (quote === '"') {
+          value += { n: "\n", t: "\t", r: "\r" }[next] ?? next;
+          i++;
+          continue;
+        }
+      }
+      if (quote === '"' && char === "$" && text[i + 1] === "$") i++;
+      value += char;
+    }
+  }
+  return text.replace(/\s+#.*$/, "");
+}
 const parse = (text) =>
   Object.fromEntries(
     text.split("\n").flatMap((line) => {
@@ -149,7 +184,9 @@ const parse = (text) =>
     }),
   );
 // --force: what the file already says, unless given again.
-const current = exists ? parse(readFileSync(out, "utf8")) : {};
+// `raw` is each line's text after `=`, `current` what Compose reads from it.
+const raw = exists ? parse(readFileSync(out, "utf8")) : {};
+const current = Object.fromEntries(Object.entries(raw).map(([key, text]) => [key, readDotenvValue(text)]));
 
 const merged = { ...current, ...values };
 for (const key of ["APP_HOST", "VIEWER_HOST_NAME"])
@@ -195,16 +232,21 @@ const final = {};
 const written = lines.map((line) => {
   const key = line.match(/^([A-Z0-9_]+)=/)?.[1];
   if (!key) return line;
-  const value = values[key] ?? generated[key] ?? current[key] ?? line.slice(key.length + 1);
-  final[key] = value;
-  return `${key}=${value}`;
+  const given = values[key] ?? generated[key];
+  if (given !== undefined) {
+    final[key] = given;
+    return `${key}=${dotenvValue(given)}`;
+  }
+  const text = raw[key] ?? line.slice(key.length + 1);
+  final[key] = readDotenvValue(text);
+  return `${key}=${text}`;
 });
 // Settings of the old file the example does not have (BACKUP_INTERVAL_SECONDS…) stay too.
 const extra = Object.keys(current).filter((key) => !known.has(key));
 if (extra.length) {
   written.push("", "# Kept from the previous hosted.env (not in hosted.env.example).");
   for (const key of extra) {
-    written.push(`${key}=${current[key]}`);
+    written.push(`${key}=${raw[key]}`);
     final[key] = current[key];
   }
 }
