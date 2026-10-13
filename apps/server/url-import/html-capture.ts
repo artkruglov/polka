@@ -4,7 +4,8 @@ import postcss from "postcss";
 import { canonicalizeManifest } from "../../../packages/contracts/bundle.ts";
 import { MAX_BYTES, MAX_TITLE } from "../../../packages/contracts/index.ts";
 import { checkBuildInWorker } from "../bundle-derivatives.ts";
-import { classifyHtmlBounded } from "../html.ts";
+import { CLASSIFY_INLINE_BYTES, classifyHtmlBounded, inspectHtmlBounded } from "../html.ts";
+import { SCAN_INCOMPLETE } from "../phishing-signals.ts";
 import { cdnRole } from "../react-runtime.ts";
 import { matchLink } from "../../../packages/contracts/link-providers.ts";
 import { fetchPublic, publicUrl, type PublicResponse } from "./public-fetch.ts";
@@ -14,9 +15,21 @@ const downloadable = (url: URL) => {
   return !route || route === "html" || route === "server-render";
 };
 export type Fetcher = (url: string, options: { maxBytes: number; signal: AbortSignal }) => Promise<PublicResponse>;
-const detach = (node: Tree.Element) => {
-  if (node.parentNode && "childNodes" in node.parentNode)
-    node.parentNode.childNodes = node.parentNode.childNodes.filter((n) => n !== node);
+/**
+ * Takes the nodes out of the tree, one pass per parent. Detaching them one by
+ * one filtered the siblings each time: 100 000 <base> or <script> siblings
+ * were ~10^10 steps on the server's request thread.
+ */
+const detachAll = (nodes: Iterable<Tree.Element>) => {
+  const byParent = new Map<Tree.ParentNode, Set<Tree.Node>>();
+  for (const node of nodes) {
+    const parent = node.parentNode;
+    if (!parent || !("childNodes" in parent)) continue;
+    const gone = byParent.get(parent) ?? new Set<Tree.Node>();
+    gone.add(node);
+    byParent.set(parent, gone);
+  }
+  for (const [parent, gone] of byParent) parent.childNodes = parent.childNodes.filter((n) => !gone.has(n));
 };
 /** One self-contained page: stylesheets become <style>, local images and fonts data: URIs; other files leave the bundle. */
 function inlineInto(nodes: Tree.Element[], stored: Map<string, { mime: string; bytes: Buffer }>) {
@@ -172,6 +185,11 @@ export async function captureHtmlDocument(
   const html = main.bytes.toString("utf8");
   if (!Buffer.from(html).equals(main.bytes))
     throw new HtmlCaptureError("unsupported_encoding", "Пока поддерживается только UTF-8.");
+  // parse5's tree builder is quadratic on deeply nested markup (html.ts): a
+  // large page is first read in the reader pool with its deadline, and one
+  // that cannot be read in time is not parsed on the request thread.
+  if (html.length > CLASSIFY_INLINE_BYTES && (await inspectHtmlBounded(html)).signals.includes(SCAN_INCOMPLETE))
+    throw new HtmlCaptureError("too_complex", "Разметку страницы не удалось разобрать за отведённое время.");
   const doc = parse(html);
   const nodes: Tree.Element[] = [];
   function walk(n: Tree.Node) {
@@ -180,17 +198,15 @@ export async function captureHtmlDocument(
     if ("content" in n) walk(n.content);
   }
   walk(doc);
-  if (stripScripts)
-    // oxlint-disable-next-line no-useless-spread -- a copy: the loop splices nodes
-    for (const node of [...nodes]) {
+  if (stripScripts) {
+    const stripped = new Set<Tree.Element>();
+    for (const node of nodes) {
       if (node.tagName === "script" || node.tagName === "noscript") {
-        detach(node);
-        nodes.splice(nodes.indexOf(node), 1);
+        stripped.add(node);
         continue;
       }
       if (node.tagName === "iframe" || node.tagName === "object" || node.tagName === "embed") {
-        detach(node);
-        nodes.splice(nodes.indexOf(node), 1);
+        stripped.add(node);
         known.push("Встроенные окна страницы (iframe) в снимок не вошли.");
         continue;
       }
@@ -211,8 +227,7 @@ export async function captureHtmlDocument(
           ?.value.trim()
           .toLowerCase();
         if (media && !["all", "screen"].includes(media)) {
-          detach(node);
-          nodes.splice(nodes.indexOf(node), 1);
+          stripped.add(node);
           continue;
         }
         node.attrs = node.attrs
@@ -220,6 +235,11 @@ export async function captureHtmlDocument(
           .map((a) => (a.name === "rel" ? { ...a, value: "stylesheet" } : a));
       }
     }
+    detachAll(stripped);
+    let kept = 0;
+    for (const node of nodes) if (!stripped.has(node)) nodes[kept++] = node;
+    nodes.length = kept;
+  }
   let base = main.url;
   const baseNode = nodes.find((n) => n.tagName === "base");
   const baseHref = baseNode?.attrs.find((a) => a.name === "href")?.value;
@@ -332,20 +352,21 @@ export async function captureHtmlDocument(
     }
     return tree.toString();
   }
+  const dropped = new Set<Tree.Element>();
   for (const node of nodes) {
     if (node.tagName === "base") {
-      detach(node);
+      dropped.add(node);
       continue;
     }
     if (node.tagName === "iframe" || node.tagName === "object" || node.tagName === "embed")
       warnings.add("Встроенный внешний документ требует отдельного импорта.");
     node.attrs = node.attrs.filter((a) => a.name !== "integrity");
+    const stylesheet =
+      node.tagName === "link" &&
+      node.attrs.some((x) => x.name === "rel" && x.value.toLowerCase().split(/\s+/).includes("stylesheet"));
     for (const a of node.attrs) {
       if (a.name === "style") a.value = await css(a.value, base);
       if (a.name === "srcset") warnings.add("Адаптивные изображения srcset ещё не локализованы.");
-      const stylesheet =
-        node.tagName === "link" &&
-        node.attrs.some((x) => x.name === "rel" && x.value.toLowerCase().split(/\s+/).includes("stylesheet"));
       // A CDN library or Tailwind stays a recognisable URL: the runtime replaces it with Полка's vendored copy.
       // A snapshot downloads CDN stylesheets too: it is inlined, there is no runtime to supply them.
       if (
@@ -378,7 +399,7 @@ export async function captureHtmlDocument(
     // A left-out stylesheet goes with its element; a left-out image or media keeps its element without the address.
     if (node.attrs.some((a) => a.value === SKIPPED)) {
       if (node.tagName === "link") {
-        detach(node);
+        dropped.add(node);
         continue;
       }
       node.attrs = node.attrs.filter((a) => a.value !== SKIPPED);
@@ -388,6 +409,7 @@ export async function captureHtmlDocument(
         if (child.nodeName === "#text")
           (child as Tree.TextNode).value = await css((child as Tree.TextNode).value, base);
   }
+  detachAll(dropped);
   // This is a conservative compatibility diagnostic, not a security boundary or
   // proof that arbitrary JavaScript is offline. The viewer CSP remains authoritative.
   if (stripScripts) {

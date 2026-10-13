@@ -56,8 +56,35 @@ const slug = (text: string) =>
 
 export type ProjectPage = { title: string; body: string };
 
+/**
+ * An external link of a drawn page before it is signed: the address in
+ * base64url. The signature of an /away link lasts AWAY_LINK_TTL_SECONDS, and
+ * a drawn page is kept longer than that, so a page is kept unsigned and its
+ * links are signed each time it is served (signAwayLinks). Author text never
+ * holds a raw `href="` (marked escapes quotes), so only links drawn here match.
+ */
+const AWAY_MARK = "polka-away:";
+const AWAY_PLACEHOLDER = /href="polka-away:([A-Za-z0-9_-]*)"/g;
+
+/** A drawn page with its external links signed now. */
+export function signAwayLinks(page: ProjectPage, now = Date.now()): ProjectPage {
+  if (!page.body.includes(AWAY_MARK)) return page;
+  return {
+    title: page.title,
+    body: page.body.replace(
+      AWAY_PLACEHOLDER,
+      (_, encoded: string) => `href="${escapeHtml(awayHref(Buffer.from(encoded, "base64url").toString("utf8"), now))}"`,
+    ),
+  };
+}
+
 /** One document of the project as the body of a page, and its title. */
 export function renderProjectMarkdown(source: string, path: string, paths: ReadonlySet<string>): ProjectPage {
+  return signAwayLinks(renderProjectMarkdownUnsigned(source, path, paths));
+}
+
+/** renderProjectMarkdown with external links left for signAwayLinks (what is cached). */
+export function renderProjectMarkdownUnsigned(source: string, path: string, paths: ReadonlySet<string>): ProjectPage {
   let title = "";
   const seen = new Map<string, number>();
   const marked = new Marked({
@@ -92,7 +119,7 @@ export function renderProjectMarkdown(source: string, path: string, paths: Reado
         const [href, fragment] = splitFragment(token.href);
         if (!href && fragment) return `<a href="#${escapeHtml(fragment)}">${inner}</a>`;
         if (/^https?:\/\//i.test(href))
-          return `<a href="${escapeHtml(awayHref(token.href))}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+          return `<a href="${AWAY_MARK}${Buffer.from(token.href).toString("base64url")}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
         // The sandbox opens no mail client: the address is shown to copy.
         if (/^mailto:/i.test(href))
           return `<span class="polka-mail" title="${escapeHtml(href.slice(7))}">${inner}</span>`;
@@ -115,14 +142,34 @@ export function renderProjectMarkdown(source: string, path: string, paths: Reado
 
 // Bounds for drawing a document (marked is quadratic on some inputs, e.g.
 // «*a *a *a …»: 48 KB take ~20 s). A small one is drawn at once; a larger
-// one in a worker with a deadline; a huge one, or one that runs out of
-// time, is shown as plain text. A version is immutable, so each drawn page
-// is kept for the next reader.
+// one in a worker of the pool with a deadline; a huge one, or one that runs
+// out of time, is shown as plain text. A version is immutable, so each drawn
+// page is kept for the next reader, within MARKDOWN_CACHE_BYTES; a huge
+// document's plain text is cheap to make again and is not kept.
 export const MARKDOWN_INLINE_CHARS = 4 * 1024;
 export const MARKDOWN_MAX_CHARS = 512 * 1024;
 export const MARKDOWN_DEADLINE_MS = 3_000;
 const CACHE_ENTRIES = 300;
+/** Drawn pages kept in memory, counted as UTF-16 (two bytes a character). */
+export const MARKDOWN_CACHE_BYTES = 64 * 1024 * 1024;
 const drawn = new Map<string, ProjectPage>();
+let drawnBytes = 0;
+const pageBytes = (page: ProjectPage) => 2 * (page.body.length + page.title.length);
+
+function keep(key: string, page: ProjectPage) {
+  const size = pageBytes(page);
+  if (size > MARKDOWN_CACHE_BYTES / 4) return;
+  while (drawn.size && (drawn.size >= CACHE_ENTRIES || drawnBytes + size > MARKDOWN_CACHE_BYTES)) {
+    const [oldest, value] = drawn.entries().next().value!;
+    drawn.delete(oldest);
+    drawnBytes -= pageBytes(value);
+  }
+  drawn.set(key, page);
+  drawnBytes += size;
+}
+
+/** What the cache of drawn pages holds now (tests, stats). */
+export const markdownCacheStats = () => ({ entries: drawn.size, bytes: drawnBytes });
 
 const plainPage = (source: string, path: string): ProjectPage => ({
   title: posix.basename(path),
@@ -139,24 +186,22 @@ export async function renderProjectMarkdownBounded(
   if (cached) {
     drawn.delete(cacheKey);
     drawn.set(cacheKey, cached);
-    return cached;
+    return signAwayLinks(cached);
   }
+  if (source.length > MARKDOWN_MAX_CHARS) return plainPage(source, path);
   let page: ProjectPage;
-  if (source.length > MARKDOWN_MAX_CHARS) page = plainPage(source, path);
-  else if (source.length <= MARKDOWN_INLINE_CHARS) page = renderProjectMarkdown(source, path, paths);
+  if (source.length <= MARKDOWN_INLINE_CHARS) page = renderProjectMarkdownUnsigned(source, path, paths);
   else {
-    const { inWorker } = await import("./html.ts");
+    const { runInPool } = await import("./worker-pool.ts");
     page =
-      (await inWorker<ProjectPage | null>(
-        { source, path, paths: [...paths] },
+      (await runInPool<ProjectPage | null>(
+        { kind: "markdown", source, path, paths: [...paths] },
         MARKDOWN_DEADLINE_MS,
         null,
-        new URL("./project-markdown-worker.mjs", import.meta.url),
       )) ?? plainPage(source, path);
   }
-  drawn.set(cacheKey, page);
-  if (drawn.size > CACHE_ENTRIES) drawn.delete(drawn.keys().next().value!);
-  return page;
+  keep(cacheKey, page);
+  return signAwayLinks(page);
 }
 
 function splitFragment(href: string): [string, string] {

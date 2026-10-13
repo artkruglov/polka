@@ -147,7 +147,7 @@ async function authorizedProjectNow(token: string) {
   const {
     rows: [revision],
   } = await db.query(
-    `SELECT r.id,r.manifest,pv.share_id,pv.owner_session_hash,pv.expires_at FROM project_view_grants pv
+    `SELECT r.id,r.manifest,r.object_key,r.object_version,pv.share_id,pv.owner_session_hash,pv.expires_at FROM project_view_grants pv
      JOIN revisions r ON r.id=pv.revision_id
      JOIN artifacts artifact ON artifact.id=r.artifact_id AND artifact.trashed_at IS NULL
      JOIN tenants tenant ON tenant.id=r.tenant_id AND tenant.state='active'
@@ -337,18 +337,23 @@ const wrapperPage = (title: string, body: string, token: string) =>
 
 /**
  * Where each file of a version is stored. A version never changes, so this is
- * read once (a project has at most 400 files) and kept.
+ * read once (a project has at most 400 files) and kept. Its objects can move
+ * though: an account merge copies every object of the shelf to new keys and
+ * rewrites revisions and revision_files in one transaction. The version's own
+ * key and object version are part of the cache key, so a moved version is
+ * read again instead of pointing at objects that are gone.
  */
 const filesOfRevision = new Map<string, Map<string, { object_key: string; object_version: string }>>();
-async function storedFiles(revisionId: string) {
-  const kept = filesOfRevision.get(revisionId);
+async function storedFiles(revision: { id: string; object_key: string; object_version: string }) {
+  const key = `${revision.id}:${revision.object_key}:${revision.object_version}`;
+  const kept = filesOfRevision.get(key);
   if (kept) return kept;
   const rows = (
-    await db.query("SELECT path,object_key,object_version FROM revision_files WHERE revision_id=$1", [revisionId])
+    await db.query("SELECT path,object_key,object_version FROM revision_files WHERE revision_id=$1", [revision.id])
   ).rows;
   const map = new Map(rows.map((row) => [row.path as string, row]));
   if (filesOfRevision.size >= 200) filesOfRevision.delete(filesOfRevision.keys().next().value!);
-  filesOfRevision.set(revisionId, map);
+  filesOfRevision.set(key, map);
   return map;
 }
 
@@ -404,7 +409,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
     // A folder's address opens its page at its own path, so relative links work.
     if (navigate && file.path !== path && (rawPath !== "" || file.path.includes("/")))
       return reply.redirect(base(token) + file.path.split("/").map(encodeURIComponent).join("/"), 303);
-    const stored = (await storedFiles(revision.id)).get(file.path);
+    const stored = (await storedFiles(revision)).get(file.path);
     if (!stored) throw missing();
     if (isVideoMime(file.mime) && !navigate) {
       // Some engines send no Fetch Metadata for a media request; the token
@@ -440,7 +445,7 @@ export function registerProjectViewerRoutes(viewer: FastifyInstance) {
       // A page with React, Babel or Tailwind from a CDN, or module scripts, is served compiled.
       const runtime = await projectRuntimePage(revision.id, revision.manifest, file.path, async (other) => {
         if (other === file.path) return bytes;
-        const entry = (await storedFiles(revision.id)).get(other);
+        const entry = (await storedFiles(revision)).get(other);
         if (!entry) throw missing();
         return readBlob(entry.object_key, entry.object_version);
       });

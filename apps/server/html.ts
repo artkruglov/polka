@@ -1,4 +1,4 @@
-import { availableParallelism } from "node:os";
+import { runInPool } from "./worker-pool.ts";
 import { decodeHTMLAttribute } from "entities";
 import { parse } from "parse5";
 import { SearchText, addScriptText } from "./search-text.ts";
@@ -515,15 +515,15 @@ export function classifyHtml(source: string): HtmlProfile {
  * inspectHtml off the request thread, with a deadline. parse5's tree builder
  * is quadratic on deeply nested markup (200 KB of nested <div> takes ~4 s,
  * the 5 MB upload limit ~40 min), and saving runs on the server's request
- * thread. Small pages are inspected inline; larger ones in a worker that is
- * terminated at the deadline. A page that cannot be read in time gets no
- * static link ("unsupported"; the owner still sees and downloads it) and the
- * signal SCAN_INCOMPLETE, so an interactive link to it waits for review
- * instead of escaping the phishing check by nesting.
+ * thread. Small pages are inspected inline; larger ones in a worker of the
+ * pool (worker-pool.ts), which is terminated at the deadline. A page that
+ * cannot be read in time gets no static link ("unsupported"; the owner still
+ * sees and downloads it) and the signal SCAN_INCOMPLETE, so an interactive
+ * link to it waits for review instead of escaping the phishing check by
+ * nesting.
  */
 export const CLASSIFY_INLINE_BYTES = 16 * 1024;
 export const CLASSIFY_DEADLINE_MS = 2_000;
-const WORKER_START_MS = 10_000;
 export const UNREAD: HtmlInspection = {
   profile: "unsupported",
   signals: [SCAN_INCOMPLETE],
@@ -535,93 +535,9 @@ export type InspectOptions = {
   scripts?: boolean;
   text?: boolean;
 };
-/**
- * Runs one message through a fresh classify worker. The deadline bounds the
- * scan, not the worker's start: the worker says it is ready (tsx and the
- * classifier loaded) before it gets the source, and only then does the clock
- * start. On a loaded host loading alone can take seconds, and a normal page
- * must not come out «unsupported» with scan:incomplete for it. Startup has
- * its own, looser bound. Other readers with the same protocol (the shelf
- * cover reader, cover-facts-worker.ts) pass their own worker script.
- *
- * Each worker may take a 256 MB heap, so at most one per CPU runs at a time
- * (availableParallelism); the others wait for a slot in order. The wait is
- * not part of the deadline either: the clock starts at the worker's "ready".
- */
-export async function inWorker<T>(
-  message: object,
-  deadlineMs: number,
-  unread: T,
-  script: URL = new URL("./html-classify-worker.mjs", import.meta.url),
-): Promise<T> {
-  const { Worker } = await import("node:worker_threads");
-  await acquireWorkerSlot();
-  let worker: InstanceType<typeof Worker>;
-  try {
-    worker = new Worker(script, {
-      resourceLimits: { maxOldGenerationSizeMb: 256 },
-    });
-  } catch (error) {
-    releaseWorkerSlot();
-    throw error;
-  }
-  try {
-    return await new Promise<T>((resolve) => {
-      let timer = setTimeout(() => resolve(unread), WORKER_START_MS);
-      worker.on("message", (reply: T | { ready: true }) => {
-        clearTimeout(timer);
-        if (reply && typeof reply === "object" && "ready" in reply) {
-          timer = setTimeout(() => resolve(unread), deadlineMs);
-          worker.postMessage(message);
-        } else resolve(reply as T);
-      });
-      worker.once("error", () => {
-        clearTimeout(timer);
-        resolve(unread);
-      });
-    });
-  } finally {
-    try {
-      await worker.terminate();
-    } finally {
-      releaseWorkerSlot();
-    }
-  }
-}
 
-let workerLimit = Math.max(1, availableParallelism());
-let workersRunning = 0;
-const workerQueue: Array<() => void> = [];
-
-function acquireWorkerSlot(): Promise<void> | void {
-  if (workersRunning < workerLimit) {
-    workersRunning++;
-    return;
-  }
-  return new Promise<void>((resolve) => workerQueue.push(resolve));
-}
-
-/** A freed slot goes straight to the next waiting call, in order. */
-function releaseWorkerSlot() {
-  const next = workerQueue.shift();
-  if (next && workersRunning <= workerLimit) next();
-  else {
-    workersRunning--;
-    if (next) workerQueue.unshift(next);
-  }
-}
-
-/** The worker slots now; `limit` changes their number (tests). */
-export function workerSlots(limit?: number) {
-  if (limit !== undefined) {
-    workerLimit = Math.max(1, limit);
-    while (workersRunning < workerLimit && workerQueue.length) {
-      workersRunning++;
-      workerQueue.shift()!();
-    }
-  }
-  return { limit: workerLimit, running: workersRunning, waiting: workerQueue.length };
-}
+/** The reader pool's slots now; `limit` changes their number (tests). */
+export { workerSlots } from "./worker-pool.ts";
 
 export async function inspectHtmlBounded(
   source: string,
@@ -629,7 +545,7 @@ export async function inspectHtmlBounded(
   options: InspectOptions = {},
 ): Promise<HtmlInspection> {
   if (source.length <= CLASSIFY_INLINE_BYTES) return inspectHtml(source, new SignalCollector(options));
-  return inWorker({ source, options }, deadlineMs, UNREAD);
+  return runInPool({ kind: "inspect", source, options }, deadlineMs, UNREAD);
 }
 
 /**
@@ -643,7 +559,7 @@ export async function scanTextBounded(
 ): Promise<FilterResult & { incomplete?: true }> {
   if (source.length <= CLASSIFY_INLINE_BYTES) return scanText(source);
   const unread = { v: 1 as const, hits: {}, incomplete: true as const };
-  return inWorker<FilterResult & { incomplete?: true }>({ source, text: true }, deadlineMs, unread);
+  return runInPool<FilterResult & { incomplete?: true }>({ kind: "inspect", source, text: true }, deadlineMs, unread);
 }
 
 /**
@@ -729,8 +645,8 @@ export async function scanScriptsBounded(
   for (const part of parts) {
     const chars = part.reduce((sum, source) => sum + source.length, 0);
     scans.push(
-      await inWorker<ScriptScan>(
-        { scripts: part },
+      await runInPool<ScriptScan>(
+        { kind: "inspect", scripts: part },
         deadlineMs + Math.ceil(chars / (1024 * 1024)) * msPerMb,
         UNREAD_SCRIPTS,
       ),
