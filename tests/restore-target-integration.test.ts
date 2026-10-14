@@ -72,7 +72,7 @@ if (
 )
   throw new Error("Restore target integration requires exact synthetic resources");
 
-type ChildResult = { code: number; stderr: string };
+type ChildResult = { code: number; stderr: string; stdout: string };
 const liveChildren = new Set<ChildProcess>();
 
 function trackChild(child: ChildProcess) {
@@ -116,7 +116,7 @@ function spawnNode(args: string[], env: NodeJS.ProcessEnv, stderr: "pipe" | "ign
     spawn(process.execPath, args, {
       cwd: root,
       env,
-      stdio: ["ignore", "ignore", stderr],
+      stdio: ["ignore", stderr, stderr],
     }),
   );
 }
@@ -125,8 +125,12 @@ function boundedChild(args: string[], env: NodeJS.ProcessEnv, timeoutMs: number)
   return new Promise<ChildResult>((resolve, reject) => {
     const child = spawnNode(args, env, "pipe");
     let stderr = "";
+    let stdout = "";
     child.stderr!.on("data", (chunk) => {
       if (stderr.length < 8_192) stderr += String(chunk).slice(0, 8_192);
+    });
+    child.stdout!.on("data", (chunk) => {
+      if (stdout.length < 8_192) stdout += String(chunk).slice(0, 8_192);
     });
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const deadline = setTimeout(() => {
@@ -139,7 +143,7 @@ function boundedChild(args: string[], env: NodeJS.ProcessEnv, timeoutMs: number)
     child.once("close", (code, signal) => {
       clearTimeout(deadline);
       if (killTimer) clearTimeout(killTimer);
-      resolve({ code: signal ? 124 : (code ?? 1), stderr });
+      resolve({ code: signal ? 124 : (code ?? 1), stderr, stdout });
     });
   });
 }
@@ -486,10 +490,14 @@ test("operational restore CLI reconciles stale state and gates real startup", { 
     PATH: process.env.PATH,
   } satisfies NodeJS.ProcessEnv;
   const cliArgs = ["--import", "tsx", "scripts/restore-target.ts", "--confirm-closed-target"];
-  assert.equal((await boundedChild(cliArgs, cliEnv, 30_000)).code, 0);
+  // The CLI's own output in the failure (restore.failed names the error's
+  // class and code): a bare «1 !== 0» says nothing.
+  const first = await boundedChild(cliArgs, cliEnv, 30_000);
+  assert.equal(first.code, 0, first.stdout + first.stderr);
   const firstBytes = await readFile(receiptPath);
   const firstStat = await stat(receiptPath);
-  assert.equal((await boundedChild(cliArgs, cliEnv, 30_000)).code, 0);
+  const second = await boundedChild(cliArgs, cliEnv, 30_000);
+  assert.equal(second.code, 0, second.stdout + second.stderr);
   assert.deepEqual(await readFile(receiptPath), firstBytes);
   assert.equal((await stat(receiptPath)).ino, firstStat.ino);
 

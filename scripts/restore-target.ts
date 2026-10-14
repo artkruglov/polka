@@ -301,8 +301,17 @@ export async function runRestoreTargetCli(
       ledgerManifestSha256: result.receipt.ledgerManifestSha256,
     });
     return 0;
-  } catch {
-    safeEmit({ event: "restore.failed", reason: stopReason ?? "restore" });
+  } catch (error) {
+    // The class and code only, never the message: it may carry a connection
+    // string or a key. Enough to tell a database error from a storage one.
+    const failure = error as { name?: unknown; code?: unknown; $metadata?: { httpStatusCode?: unknown } };
+    safeEmit({
+      event: "restore.failed",
+      reason: stopReason ?? "restore",
+      error: typeof failure?.name === "string" ? failure.name.slice(0, 60) : "unknown",
+      ...(typeof failure?.code === "string" ? { code: failure.code.slice(0, 40) } : {}),
+      ...(typeof failure?.$metadata?.httpStatusCode === "number" ? { status: failure.$metadata.httpStatusCode } : {}),
+    });
     return 1;
   } finally {
     clearTimeout(deadline);
