@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-14
+
+Обновление: миграции 075 и 076 (сделайте дамп), `postgres` один раз перезапускается с новыми настройками сервера, роли получают таймауты из `role-settings.sql`, Caddy перезапускается ради лимитов тел и сжатия ([hosted → Обновление](deploy/hosted/README.md#обновление)). Восстановление на минуту и копия работ включаются отдельно: профили `pitr` и `mirror`.
+
 ### Added
 
 - **Восстановление базы на любую минуту** (профиль `pitr`, [hosted](deploy/hosted/README.md#восстановление-на-момент-времени)): служба `wal-archive` принимает журнал предзаписи по репликационному соединению (`pg_receivewal`, слот `polka_wal`) и раз в минуту кладёт его в `BACKUP_BUCKET/wal/`, раз в сутки делает базовый бэкап в `base/`; `polka-pitr-restore` в образе бэкапа готовит том базы к восстановлению на заданное время UTC или до последнего байта. RPO — около минуты вместо часа. Новые настройки `POLKA_REPLICA_PASSWORD`, `WAL_UPLOAD_SECONDS`, `BASE_BACKUP_INTERVAL_SECONDS`; роль `polka_replica` создают `init-roles.sh` и `worker-roles.sh`; PostgreSQL держит для остановленного архива не больше 2 ГБ WAL (`max_slot_wal_keep_size`, перезапуск `postgres` при обновлении). Ключу записи бэкапов нужны `wal/*` и `base/*` в политике бакета.
@@ -817,7 +821,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/artkruglov/polka/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/artkruglov/polka/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/artkruglov/polka/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/artkruglov/polka/compare/v0.14.0...v0.15.0
