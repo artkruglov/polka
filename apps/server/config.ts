@@ -401,6 +401,20 @@ const env = z
     // How often the backup job dumps (its BACKUP_INTERVAL_SECONDS): the status
     // turns red when the newest dump is older than this plus two hours.
     OPS_BACKUP_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(31_536_000).default(86_400),
+    // The compose profiles in use (COMPOSE_PROFILES): with `pitr` the status
+    // also checks the WAL archive (its heartbeat under wal/ and the newest
+    // base backup under base/, older than OPS_BASE_BACKUP_INTERVAL_SECONDS
+    // plus two hours turns it red).
+    OPS_COMPOSE_PROFILES: z
+      .string()
+      .default("")
+      .transform((value) =>
+        value
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    OPS_BASE_BACKUP_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(31_536_000).default(86_400),
     // Graceful stop (shutdown.ts): how long running requests and work started
     // after a commit may take before the process closes anyway. Keep it below
     // the container's stop_grace_period (30 s in deploy/hosted/compose.yml).

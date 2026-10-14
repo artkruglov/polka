@@ -82,6 +82,15 @@ upload_round() {
     [ -e "$sum" ] || continue
     [ -e "$wal/$(basename "$sum" .sum)" ] || rm -f "$sum"
   done
+  # The heartbeat the app's /api/ops/status reads (it may only list the
+  # bucket): refreshed every five minutes while the rounds succeed, also when
+  # the database is idle and no WAL changed.
+  now=$(date +%s)
+  if [ $(( now - $(cat "$spool/state/heartbeat-at" 2>/dev/null || echo 0) )) -ge 300 ]; then
+    echo "$now" > /tmp/heartbeat
+    put /tmp/heartbeat wal/heartbeat || return 1
+    echo "$now" > "$spool/state/heartbeat-at"
+  fi
   date +%s > "$marker"
 }
 

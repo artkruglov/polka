@@ -5,7 +5,7 @@ import { DeleteObjectsCommand, ListObjectVersionsCommand, PutObjectCommand } fro
 import { createApp } from "../apps/server/app.ts";
 import { createAccount } from "../apps/server/auth.ts";
 import { readFileSync } from "node:fs";
-import { OPS_LIMITS, backupAgeLimitHours } from "../apps/server/ops-status.ts";
+import { OPS_LIMITS, backupAgeLimitHours, baseBackupAgeLimitHours } from "../apps/server/ops-status.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
@@ -13,9 +13,10 @@ import { s3, sha256 } from "../apps/server/storage.ts";
 const app = await createApp();
 // The disk check reads the machine running the tests; keep it out of the verdict.
 OPS_LIMITS.diskFreePercent = 0;
-const mutable = config as { OPS_STATUS_TOKEN?: string; OPS_BACKUP_BUCKET?: string };
+const mutable = config as { OPS_STATUS_TOKEN?: string; OPS_BACKUP_BUCKET?: string; OPS_COMPOSE_PROFILES: string[] };
 const token = randomBytes(24).toString("hex");
 const dumpKey = `postgres/polka-${randomBytes(4).toString("hex")}.dump`;
+const baseKey = `base/${randomBytes(4).toString("hex")}/base.tar.gz`;
 
 const status = (authorization?: string) =>
   app.inject({
@@ -27,8 +28,12 @@ const status = (authorization?: string) =>
 after(async () => {
   mutable.OPS_STATUS_TOKEN = undefined;
   mutable.OPS_BACKUP_BUCKET = undefined;
-  const versions = await s3.send(new ListObjectVersionsCommand({ Bucket: config.S3_BUCKET, Prefix: dumpKey }));
-  const objects = (versions.Versions ?? []).map((v) => ({ Key: v.Key!, VersionId: v.VersionId }));
+  mutable.OPS_COMPOSE_PROFILES = [];
+  const objects = [];
+  for (const Prefix of [dumpKey, baseKey, "wal/heartbeat"]) {
+    const versions = await s3.send(new ListObjectVersionsCommand({ Bucket: config.S3_BUCKET, Prefix }));
+    objects.push(...(versions.Versions ?? []).map((v) => ({ Key: v.Key!, VersionId: v.VersionId })));
+  }
   if (objects.length)
     await s3.send(new DeleteObjectsCommand({ Bucket: config.S3_BUCKET, Delete: { Objects: objects } }));
   await app.close();
@@ -47,7 +52,7 @@ test("ops status does not exist until a token is configured, and needs that toke
   const body = ok.json();
   assert.equal(body.ok, true);
   assert.equal(typeof body.version, "string");
-  assert.deepEqual(Object.keys(body.checks).sort(), ["backup", "database", "disk", "maintenance"]);
+  assert.deepEqual(Object.keys(body.checks).sort(), ["backup", "database", "disk", "maintenance", "walArchive"]);
   assert.equal(body.checks.database.ok, true);
   // Numbers to watch, not a check: memory, event loop, pool, worker slots.
   assert.ok(body.runtime.rssMiB > 0 && body.runtime.heapUsedMiB > 0);
@@ -56,6 +61,7 @@ test("ops status does not exist until a token is configured, and needs that toke
   assert.deepEqual(Object.keys(body.runtime.workers).sort(), ["limit", "running", "waiting"]);
   // Not configured is reported, not treated as a failure.
   assert.deepEqual(body.checks.backup, { ok: null, reason: "not configured" });
+  assert.deepEqual(body.checks.walArchive, { ok: null, reason: "not configured" });
 });
 
 test("ops status reports the newest backup and fails without one", async () => {
@@ -73,6 +79,52 @@ test("ops status reports the newest backup and fails without one", async () => {
   mutable.OPS_BACKUP_BUCKET = undefined;
 });
 
+test("with profile pitr the status checks the WAL archive's heartbeat and base backup", async () => {
+  mutable.OPS_STATUS_TOKEN = token;
+  mutable.OPS_BACKUP_BUCKET = config.S3_BUCKET;
+  await s3.send(new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: dumpKey, Body: "dump" }));
+  try {
+    // Without the profile the archive is not expected.
+    mutable.OPS_COMPOSE_PROFILES = ["mirror"];
+    const off = (await status(`Bearer ${token}`)).json();
+    assert.deepEqual(off.checks.walArchive, { ok: null, reason: "not configured" });
+
+    mutable.OPS_COMPOSE_PROFILES = ["pitr", "mirror"];
+    const none = await status(`Bearer ${token}`);
+    assert.equal(none.statusCode, 503, none.body);
+    assert.deepEqual(none.json().checks.walArchive, { ok: false, reason: "no heartbeat" });
+
+    await s3.send(new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: "wal/heartbeat", Body: "1" }));
+    assert.deepEqual((await status(`Bearer ${token}`)).json().checks.walArchive, {
+      ok: false,
+      reason: "no base backup",
+    });
+
+    await s3.send(new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: baseKey, Body: "base" }));
+    const fresh = await status(`Bearer ${token}`);
+    assert.equal(fresh.statusCode, 200, fresh.body);
+    assert.deepEqual(fresh.json().checks.walArchive, {
+      ok: true,
+      heartbeatMinutes: 0,
+      baseAgeHours: 0,
+      baseLimitHours: baseBackupAgeLimitHours(),
+    });
+
+    // A heartbeat older than the limit: the upload rounds have stopped.
+    OPS_LIMITS.walHeartbeatMinutes = 0;
+    try {
+      const stale = await status(`Bearer ${token}`);
+      assert.equal(stale.statusCode, 503, stale.body);
+      assert.equal(stale.json().checks.walArchive.ok, false);
+    } finally {
+      OPS_LIMITS.walHeartbeatMinutes = 15;
+    }
+  } finally {
+    mutable.OPS_COMPOSE_PROFILES = [];
+    mutable.OPS_BACKUP_BUCKET = undefined;
+  }
+});
+
 test("the backup age limit follows the backup interval: daily 26 hours, hourly 3", () => {
   assert.equal(backupAgeLimitHours(86_400), 26);
   assert.equal(backupAgeLimitHours(3_600), 3);
@@ -81,6 +133,10 @@ test("the backup age limit follows the backup interval: daily 26 hours, hourly 3
   const compose = readFileSync(new URL("../deploy/hosted/compose.yml", import.meta.url), "utf8");
   assert.match(compose, /OPS_BACKUP_INTERVAL_SECONDS: \$\{BACKUP_INTERVAL_SECONDS:-86400\}/);
   assert.match(compose, /BACKUP_INTERVAL_SECONDS: \$\{BACKUP_INTERVAL_SECONDS:-86400\}/);
+  // And the profiles and wal-archive's base backup interval.
+  assert.match(compose, /OPS_COMPOSE_PROFILES: \$\{COMPOSE_PROFILES:-\}/);
+  assert.match(compose, /OPS_BASE_BACKUP_INTERVAL_SECONDS: \$\{BASE_BACKUP_INTERVAL_SECONDS:-86400\}/);
+  assert.match(compose, /\n      BASE_BACKUP_INTERVAL_SECONDS: \$\{BASE_BACKUP_INTERVAL_SECONDS:-86400\}/);
 });
 
 test("ops status fails when expired rows show maintenance has stopped", async () => {

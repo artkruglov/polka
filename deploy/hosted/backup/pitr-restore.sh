@@ -35,7 +35,7 @@ if [ "$list" = 1 ]; then
   echo "base backups (UTC, finished):"
   echo "$bases"
   echo "newest WAL:"
-  s3 ls "s3://$BACKUP_BUCKET/wal/" | sort | tail -3
+  s3 ls "s3://$BACKUP_BUCKET/wal/" | grep -v " heartbeat$" | sort | tail -3
   exit 0
 fi
 case "$target" in
