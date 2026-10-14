@@ -4,7 +4,7 @@
 # jobs (compose.yml): the dumps (backup), the WAL archive (wal-archive) and
 # the copy of the works bucket (objects-mirror); polka-pitr-restore prepares
 # a restore to a moment in time.
-FROM postgres:16-alpine@sha256:97ff59a4e30e08d1c11bdcd9455e7832368c0572b576c9092cde2df4ae5552a3
+FROM postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
 RUN apk add --no-cache aws-cli && aws --version \
   && install -d -o postgres -g postgres -m 700 /var/lib/polka-wal
 COPY --chmod=0755 backup.sh /usr/local/bin/polka-backup
