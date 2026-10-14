@@ -354,7 +354,7 @@ rm polka.dump
 - `wal-archive` принимает журнал предзаписи (WAL) по репликационному соединению (`pg_receivewal` через слот `polka_wal`) и раз в `WAL_UPLOAD_SECONDS` кладёт готовые сегменты в `s3://$BACKUP_BUCKET/wal/<сегмент>.gz`, а дописываемый — в `wal/<сегмент>.partial.gz`, если он изменился;
 - раз в `BASE_BACKUP_INTERVAL_SECONDS` (сутки) — базовый бэкап `pg_basebackup` в `base/<UTC окончания>/base.tar.gz`, с нужным ему WAL внутри;
 - ключ тот же, что у дампов, и тоже только пишет: политике бакета нужны `wal/*` и `base/*` ([`backups-bucket-policy.example.json`](backups-bucket-policy.example.json)). Сроки — правилом жизненного цикла: на polochka.app `wal/` и `base/` удаляются через 8 дней, прежние версии — через день;
-- пока `wal-archive` не работает, сервер держит непринятый WAL у себя, но не больше 2 ГБ (`max_slot_wal_keep_size`); дальше слот сбрасывается, а `wal-archive` при старте начинает новую цепочку с базового бэкапа. Healthcheck — `unhealthy`, если 10 минут не было успешной выгрузки.
+- пока `wal-archive` не работает, сервер держит непринятый WAL у себя, но не больше 2 ГБ (`max_slot_wal_keep_size`); дальше слот сбрасывается, а `wal-archive` при старте начинает новую цепочку с базового бэкапа. Healthcheck — `unhealthy`, если 10 минут не было успешной выгрузки. Каждые 5 минут успешной работы `wal-archive` обновляет `wal/heartbeat`, и `/api/ops/status` (проверка `walArchive`) краснеет, если отметка старше 15 минут или базовый бэкап старше `BASE_BACKUP_INTERVAL_SECONDS` плюс 2 часа: сбой архива дойдёт до алертов мониторинга.
 
 **Включение на работающей установке.** В `hosted.env`: `COMPOSE_PROFILES=pitr` (или `pitr,mirror`), `POLKA_REPLICA_PASSWORD=$(openssl rand -hex 24)`. Затем:
 
@@ -805,6 +805,7 @@ docker compose --env-file hosted.env exec -T app node --import tsx scripts/edito
   | `database` | БД не отвечает |
   | `maintenance` | просроченные сессии или гранты лежат дольше 30 минут: цикл обслуживания остановился или падает раньше очистки |
   | `backup` | самому новому дампу в `BACKUP_BUCKET/postgres/` больше `BACKUP_INTERVAL_SECONDS` плюс 2 часа (сутки — 26 часов, час — 3; порог в ответе — `limitHours`), или дампов нет. Ключу приложения нужно право на листинг этого бакета |
+  | `walArchive` | только с профилем `pitr` (по `COMPOSE_PROFILES`): `wal-archive` больше 15 минут не обновлял `BACKUP_BUCKET/wal/heartbeat` (выгрузки журнала не проходят или контейнер стоит; в ответе — `heartbeatMinutes`), или самому новому базовому бэкапу в `base/` больше `BASE_BACKUP_INTERVAL_SECONDS` плюс 2 часа (`baseAgeHours`, `baseLimitHours`) |
   | `disk` | свободно меньше 10% диска VM |
 
 - **Скрипт внешней проверки** — `npm run ops:uptime` (`node scripts/ci/uptime.mjs`, без зависимостей, Node 20+) с `APP_ORIGIN`, `VIEWER_ORIGIN` и `OPS_STATUS_TOKEN`: приложение и viewer отвечают, TLS-сертификатам больше 14 дней, статус зелёный. Каждая проверка — до трёх попыток с паузой 20 секунд. Код выхода 1 при сбое.

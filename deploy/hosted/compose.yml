@@ -206,6 +206,10 @@ x-runtime-env: &runtime-env
   OPS_BACKUP_BUCKET: ${BACKUP_BUCKET:?}
   # The backup job's interval: the status alarms after it plus two hours.
   OPS_BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+  # With profile pitr the status checks the WAL archive too: its heartbeat
+  # and the newest base backup (wal-archive's interval plus two hours).
+  OPS_COMPOSE_PROFILES: ${COMPOSE_PROFILES:-}
+  OPS_BASE_BACKUP_INTERVAL_SECONDS: ${BASE_BACKUP_INTERVAL_SECONDS:-86400}
   # Graceful stop and self-healing (README «Самовосстановление»): the stop
   # deadline stays below the app's stop_grace_period; 0 turns a watchdog off.
   SHUTDOWN_GRACE_SECONDS: ${SHUTDOWN_GRACE_SECONDS:-25}
