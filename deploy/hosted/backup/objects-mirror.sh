@@ -35,23 +35,25 @@ mirror_once() {
   # versions are there either way.
   deletes=$(mirror_sync --delete --dryrun | grep -c '^(dryrun) delete:' || true)
   if [ "$deletes" -gt "$max_deletes" ]; then
-    mirror_sync --only-show-errors || return 1
+    mirror_sync --only-show-errors
+    status=$?
     echo "mirror ALERT: $deletes objects are gone from $S3_BUCKET since the last copy (limit $max_deletes); copied without deleting, see README.md «Копия работ»" >&2
-    return 1
+    [ "$status" = 0 ] && status=1
+    return "$status"
   fi
-  mirror_sync --delete --only-show-errors || return 1
+  mirror_sync --delete --only-show-errors || return $?
   echo "mirror ok $(date -u +%Y%m%dT%H%M%SZ) deletes=$deletes"
   date +%s > "$marker"
 }
 
 trap 'exit 0' TERM INT
-first=1
 while true; do
-  if ! mirror_once; then
-    echo "mirror FAILED $(date -u +%Y%m%dT%H%M%SZ)" >&2
-    [ "$first" = 1 ] && exit 1
-  fi
-  first=0
+  # A failed round never stops the job: `aws s3 sync` names each object it
+  # could not copy (an unreadable source object, a wrong key or bucket) and
+  # copies the rest, and the healthcheck stays unhealthy until a round
+  # succeeds. Restarting would only repeat the same listing every second.
+  mirror_once && status=0 || status=$?
+  [ "$status" = 0 ] || echo "mirror FAILED $(date -u +%Y%m%dT%H%M%SZ) status=$status" >&2
   sleep "$interval" &
   wait $! || true
 done
