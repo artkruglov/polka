@@ -31,6 +31,7 @@ import { audit } from "./artifacts.ts";
 import { recordEvent } from "./content-moderation.ts";
 import { config } from "./config.ts";
 import { db, transaction } from "./db.ts";
+import { checkAccountMerge, runAccountMerged } from "./extensions.ts";
 import { requestDeletionRows } from "./provisional-maintenance.ts";
 import { bucket, copyVersion, s3 } from "./storage.ts";
 import { UUID_RE } from "../../packages/contracts/uuid.ts";
@@ -624,6 +625,14 @@ export async function mergeAccounts(input: {
       if (input.actor === "signup" && !from.provisional)
         throw new MergeRefusal("Временная полка уже закреплена. Обновите страницу.");
       await refuseUnsafeSource(c, from);
+      const merge = {
+        from: { accountId: from.id, tenantId: from.tenant },
+        into: { accountId: into.id, tenantId: into.tenant },
+        actor: input.actor,
+        dryRun: !!input.dryRun,
+      };
+      const refused = await checkAccountMerge(merge, c);
+      if (refused) throw new MergeRefusal(refused.message);
       const counts = await count(c, from, into);
       const notes: string[] = [];
       if (from.email && into.email)
@@ -932,6 +941,8 @@ export async function mergeAccounts(input: {
         ]);
       }
       await moveAnalytics(c, from.id, into.id);
+      // Extensions move their own records of the person in this transaction.
+      await runAccountMerged(merge, c);
 
       // 5. Storage accounting, then the source is closed.
       await c.query(

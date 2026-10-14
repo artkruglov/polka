@@ -66,6 +66,21 @@ export type SessionDelete = {
 export type SessionDeleteDecision = { allow: true } | { allow: false; message: string };
 
 /**
+ * Two accounts about to become one (apps/server/account-merge.ts): the
+ * source's shelf, connections and works move to the target, and the source
+ * is deleted. `actor`: the person on /claim («Объединить» a provisional
+ * shelf) or the operator's `npm run account:merge`.
+ */
+export type AccountMerge = {
+  from: { accountId: string; tenantId: string };
+  into: { accountId: string; tenantId: string };
+  actor: "signup" | "operator-script";
+  dryRun: boolean;
+};
+
+export type AccountMergeDecision = { allow: true } | { allow: false; message: string };
+
+/**
  * A person about to sign in by one of the core's own methods: an emailed code
  * (asked for and checked), a password, a provider (Яндекс ID, VK ID, Google,
  * OIDC), or a provider being linked to an account ("link": from the
@@ -510,7 +525,20 @@ export interface PolkaExtension {
      * the whole account is never asked.
      */
     sessionDelete?(input: SessionDelete, c: PoolClient): Promise<SessionDeleteDecision>;
+    /**
+     * Inside the merge's transaction, both accounts locked, before anything
+     * moves (a dry run asks too): refuse with a message the person or the
+     * operator reads, e.g. an account the company's directory manages.
+     */
+    accountMerge?(merge: AccountMerge, c: PoolClient): Promise<AccountMergeDecision>;
   };
+  /**
+   * Inside the merge's transaction, after the core moved its rows and before
+   * the source is deleted: move the extension's own records of the source to
+   * the target through `c`. An error aborts the whole merge. Not called for
+   * a dry run.
+   */
+  accountMerged?(merge: AccountMerge, c: PoolClient): Promise<void>;
   /**
    * After the fact, outside the transaction: best effort, at most once (lost
    * on a restart). Errors are logged, never thrown. For work that must not be

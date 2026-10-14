@@ -10,6 +10,8 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { formatMergeReport, mergeAccounts, MergeRefusal } from "../apps/server/account-merge.ts";
 import { flushAnalytics } from "../apps/server/analytics.ts";
+import { config } from "../apps/server/config.ts";
+import { extensionsConfigured, loadExtensions } from "../apps/server/extensions.ts";
 import { db } from "../apps/server/db.ts";
 import { s3 } from "../apps/server/storage.ts";
 
@@ -33,6 +35,10 @@ export async function runAccountMerge(argv: string[]) {
     console.error(USAGE);
     return 2;
   }
+  // The installation's extensions may refuse the merge and move their own
+  // records in it (policies.accountMerge, accountMerged); register() is not
+  // called here, so those hooks work through their transaction alone.
+  if (!extensionsConfigured()) await loadExtensions(config.POLKA_EXTENSIONS);
   try {
     const report = await mergeAccounts({
       from: values.from,
