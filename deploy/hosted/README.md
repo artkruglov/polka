@@ -347,6 +347,96 @@ rm polka.dump
 
 Не используйте `pg_restore --clean`: в существующей БД он оставляет таблицы более новой миграции, а в пустой падает на каждом DROP отсутствующего объекта, и настоящие ошибки теряются среди сотен ложных. Поэтому БД пересоздаётся с правами из `init-roles.sh`, а `pg_restore` идёт без `--clean`. Шаг `grants` при `up` заново выдаёт права `polka_runtime`. Так восстановлен настоящий hosted-дамп схемы 028 (все таблицы и 28 миграций). 28.09.2026 процедура отрепетирована на отдельной VM с дампом polochka.app (схема 48, 69 работ): дамп восстановился без ошибок, миграции дошли до 049, все 172 объекта версий нашлись в бакете с совпадающими SHA-256, приложение поднялось на восстановленной базе и отдало файлы работы по API. От пустой VM до работающего приложения — 13 минут, из них сборка образа и скачивание — около 5. Всё, что изменилось после момента дампа (новые работы, ссылки, сессии, токены агентов), теряется; объекты этих работ остаются в `S3_BUCKET` без ссылок на них.
 
+## Восстановление на момент времени
+
+Дамп раз в час теряет до часа изменений. С профилем `pitr` база восстанавливается на любую минуту последних 7 дней (RPO — около `WAL_UPLOAD_SECONDS`, по умолчанию минута):
+
+- `wal-archive` принимает журнал предзаписи (WAL) по репликационному соединению (`pg_receivewal` через слот `polka_wal`) и раз в `WAL_UPLOAD_SECONDS` кладёт готовые сегменты в `s3://$BACKUP_BUCKET/wal/<сегмент>.gz`, а дописываемый — в `wal/<сегмент>.partial.gz`, если он изменился;
+- раз в `BASE_BACKUP_INTERVAL_SECONDS` (сутки) — базовый бэкап `pg_basebackup` в `base/<UTC окончания>/base.tar.gz`, с нужным ему WAL внутри;
+- ключ тот же, что у дампов, и тоже только пишет: политике бакета нужны `wal/*` и `base/*` ([`backups-bucket-policy.example.json`](backups-bucket-policy.example.json)). Сроки — правилом жизненного цикла: на polochka.app `wal/` и `base/` удаляются через 8 дней, прежние версии — через день;
+- пока `wal-archive` не работает, сервер держит непринятый WAL у себя, но не больше 2 ГБ (`max_slot_wal_keep_size`); дальше слот сбрасывается, а `wal-archive` при старте начинает новую цепочку с базового бэкапа. Healthcheck — `unhealthy`, если 10 минут не было успешной выгрузки.
+
+**Включение на работающей установке.** В `hosted.env`: `COMPOSE_PROFILES=pitr` (или `pitr,mirror`), `POLKA_REPLICA_PASSWORD=$(openssl rand -hex 24)`. Затем:
+
+```sh
+cd /opt/polka/deploy/hosted
+docker compose --env-file hosted.env up -d postgres    # max_slot_wal_keep_size и пароль в окружении postgres: перезапуск на несколько секунд
+docker compose --env-file hosted.env exec -T postgres sh -s < worker-roles.sh   # роль polka_replica и строка в pg_hba.conf
+docker compose --env-file hosted.env up -d --build
+docker compose --env-file hosted.env logs -f wal-archive   # «base backup ok …», затем тишина: выгрузки идут молча
+```
+
+На новой установке роль и строку `pg_hba.conf` создаёт `init-roles.sh`, если `POLKA_REPLICA_PASSWORD` задан до первого запуска.
+
+**Восстановление.** Нужен ключ чтения `BACKUP_BUCKET` (как для дампа). Время цели — UTC; `--target latest` — до последнего принятого байта.
+
+```sh
+cd /opt/polka/deploy/hosted
+BACKUP_IMAGE=$(sed -n "s/^POLKA_BACKUP_IMAGE=//p" hosted.env); BACKUP_IMAGE=${BACKUP_IMAGE:-polka-backup:local}
+export AWS_ACCESS_KEY_ID=<ключ с чтением> AWS_SECRET_ACCESS_KEY=<секрет> AWS_DEFAULT_REGION=us-east-1
+pitr() { docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+  -e S3_ENDPOINT=<S3_ENDPOINT> -e BACKUP_BUCKET=<BACKUP_BUCKET> "$@"; }
+pitr --entrypoint polka-pitr-restore "$BACKUP_IMAGE" --list     # базовые бэкапы и последний WAL
+
+docker compose --env-file hosted.env --profile purge --profile pitr stop app maintenance backup account-purge wal-archive postgres
+# прежние данные — в сторону, пока восстановление не проверено
+docker volume create polka-hosted_pgdata-before
+docker run --rm -u 0 -v polka-hosted_pgdata:/from -v polka-hosted_pgdata-before:/to --entrypoint sh "$BACKUP_IMAGE" -c 'cp -a /from/. /to/'
+docker run --rm -u 0 -v polka-hosted_pgdata:/d --entrypoint sh "$BACKUP_IMAGE" -c 'find /d -mindepth 1 -delete'
+pitr -v polka-hosted_pgdata:/var/lib/postgresql/data --entrypoint polka-pitr-restore "$BACKUP_IMAGE" \
+  --target 2026-10-14T09:30:00Z
+docker compose --env-file hosted.env up -d postgres
+docker compose --env-file hosted.env logs postgres | grep -E "recovery stopping|archive recovery complete|ready to accept"
+# убрать настройки восстановления и скачанный WAL
+docker compose --env-file hosted.env exec -T postgres sh -c \
+  'sed -i "/polka-pitr-restore/,\$d" "$PGDATA/postgresql.auto.conf" && rm -rf "$PGDATA/pitr-wal"'
+docker compose --env-file hosted.env restart postgres
+```
+
+Дальше — шаги 4–6 «Восстановления из дампа»: миграции и grants, журнал стираний (`--source pitr-<UTC цели>`), закрытие доступов (шаг 5б) и запуск. Шаг 3a не нужен: номера транзакций у восстановленной базы свои. После проверки: `docker volume rm polka-hosted_pgdata-before`. Восстановленная база начинает новую линию времени (timeline), `wal-archive` создаёт слот заново и продолжает архив; прежняя линия остаётся в бакете до своего срока.
+
+Проверено 14.10.2026 на MinIO: таблица из 1000 строк, затем ещё 1000 и удаление 499; восстановление на минуту между ними вернуло ровно первые 1000, `--target latest` — 1501 строку.
+
+## Копия работ
+
+`S3_BUCKET` версионирован, но ключ приложения может удалить любую версию (так работают удаление аккаунта, корзина и модерация), а значит может и взломанное приложение. С профилем `mirror` у работ есть копия, до которой приложение не дотягивается:
+
+- `objects-mirror` раз в `MIRROR_INTERVAL_SECONDS` (15 минут) копирует недостающие объекты `S3_BUCKET` в `MIRROR_BUCKET` внутри хранилища (`aws s3 sync`, байты не идут через VM), а для исчезнувших ставит в копии метку удаления;
+- `MIRROR_BUCKET` версионирован, с **object lock** (GOVERNANCE, 14 дней по умолчанию): каждую скопированную версию 14 дней нельзя удалить ни ключом копии, ни владельцем без явного обхода. Правило жизненного цикла удаляет прежние версии через 15 дней после метки — стёртый аккаунт уходит и из копии не позже чем через 30 дней (`BACKUP_RETENTION_MAX_DAYS`, политика обработки данных);
+- если за один проход из `S3_BUCKET` пропало больше `MIRROR_MAX_DELETES` (200) объектов, копия обновляется без удалений, в лог пишется `mirror ALERT`, healthcheck становится `unhealthy`. Законная массовая очистка: временно поднимите `MIRROR_MAX_DELETES` и `up -d objects-mirror`.
+
+Ключи — два сервисных аккаунта, как у бэкапов: **копия** (`MIRROR_S3_*` в `hosted.env`) читает `S3_BUCKET` и пишет в `MIRROR_BUCKET` без права удалять версии; **чтение копии** — только для восстановления, хранится вне VM. Политика: [`mirror-bucket-policy.example.json`](mirror-bucket-policy.example.json). На Yandex Object Storage (проверено 14.10.2026):
+
+```sh
+yc storage bucket create --name <MIRROR_BUCKET> --max-size 53687091200
+yc storage bucket update --name <MIRROR_BUCKET> --versioning versioning-enabled
+# object lock: yc 0.191 не умеет, S3 API с IAM-токеном владельца
+BODY='<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled><Rule><DefaultRetention><Mode>GOVERNANCE</Mode><Days>14</Days></DefaultRetention></Rule></ObjectLockConfiguration>'
+curl -X PUT "https://storage.yandexcloud.net/<MIRROR_BUCKET>?object-lock" -H "X-YaCloud-SubjectToken: $(yc iam create-token)" \
+  -H "Content-MD5: $(printf '%s' "$BODY" | openssl dgst -md5 -binary | base64)" --data-binary "$BODY"
+echo '{"lifecycleRules":[{"id":"deleted-versions-15d","enabled":true,"filter":{"prefix":""},"noncurrentExpiration":{"noncurrentDays":"15"},"expiration":{"expiredObjectDeleteMarker":true},"abortIncompleteMultipartUpload":{"daysAfterExpiration":"1"}}]}' > lifecycle.json
+yc storage bucket update --name <MIRROR_BUCKET> --lifecycle-rules-from-file lifecycle.json
+# чтение S3_BUCKET для копии: ACL бакета (политики у него нет, приложение работает по роли папки)
+yc storage bucket update --name <S3_BUCKET> --grants grant-type=grant-type-account,permission=permission-read,grantee-id=<копия>
+yc storage bucket update --name <MIRROR_BUCKET> \
+  --grants grant-type=grant-type-account,permission=permission-read,grantee-id=<копия> \
+  --grants grant-type=grant-type-account,permission=permission-write,grantee-id=<копия> \
+  --grants grant-type=grant-type-account,permission=permission-read,grantee-id=<чтение>
+yc storage bucket update --name <MIRROR_BUCKET> --policy-from-file mirror-bucket-policy.json
+```
+
+`--grants` заменяет весь ACL бакета: если у `S3_BUCKET` он уже есть, перечислите и прежние записи. После политики ключ приложения (роль папки `storage.editor`) в `MIRROR_BUCKET` не пускают. Включение: `MIRROR_BUCKET`, `MIRROR_S3_ACCESS_KEY`, `MIRROR_S3_SECRET_KEY` и `mirror` в `COMPOSE_PROFILES`, затем `up -d`; в логе `objects-mirror` — `mirror ok … deletes=0`.
+
+**Возврат потерянных работ.** `objects-restore` находит каждую версию, на которую ссылается база (работы, файлы проектов, производные, расшифровки сессий), и проверяет её в `S3_BUCKET`. Пропавшую он читает из копии (последнюю настоящую версию того же ключа), сверяет SHA-256, пишет обратно и переводит строки на новую версию. Содержимое, стёртое модерацией, не возвращается.
+
+```sh
+# hosted.env на время восстановления: MIRROR_READ_ACCESS_KEY, MIRROR_READ_SECRET_KEY (ключ чтения копии)
+docker compose --env-file hosted.env run --rm objects-restore            # что пропало и есть ли в копии
+docker compose --env-file hosted.env run --rm objects-restore --apply    # вернуть (или --key <ключ объекта>)
+```
+
+Срочное удаление из копии (материалы, которые закон требует удалить сразу): политика бакета не пускает никого, кроме двух аккаунтов, поэтому сначала замените её на ту, что разрешает владельцу `s3:DeleteObjectVersion` и `s3:BypassGovernanceRetention`, удалите версии с `--bypass-governance-retention`, затем верните прежнюю политику.
+
 ## Бэкапы и секреты
 
 - Дамп БД: каждые `BACKUP_INTERVAL_SECONDS` (по умолчанию сутки), `s3://$BACKUP_BUCKET/postgres/polka-<UTC>.dump`. Перед загрузкой дамп проверяется `pg_restore --list`. Первый дамп делается сразу при старте: если он не удался (нет доступа к БД или бакету), контейнер `backup` завершается с ошибкой и перезапускается (в `docker compose ps` — `Restarting`); позже неудачи пишутся как `backup FAILED`, а healthcheck становится `unhealthy`, если за интервал плюс час не было успешного дампа. Следите за `docker compose ps`. `backup` ждёт только готовности postgres, не `migrate`, поэтому первый дамп на новой установке может быть сделан до миграций.
@@ -359,7 +449,7 @@ rm polka.dump
   На Yandex Object Storage (проверено 29.09.2026 на временном бакете) это делается так: политика бакета работает как **белый список**: как только она есть, всё, чего в ней нет, запрещено всем, включая роль папки `storage.editor` у приложения и владельца облака. Одной политики «Allow» для нового аккаунта недостаточно, нужен ещё ACL: `yc storage bucket update --name <BACKUP_BUCKET> --grants grant-type=grant-type-account,permission=permission-read,grantee-id=<запись> --grants grant-type=grant-type-account,permission=permission-write,grantee-id=<запись> --grants grant-type=grant-type-account,permission=permission-read,grantee-id=<чтение>` (одиночный `permission-write` `yc` отклоняет; ACL сужает политика). Политика: [`backups-bucket-policy.example.json`](backups-bucket-policy.example.json), `--policy-from-file`. Порядок при внедрении на работающей установке: сначала ACL и политика, где приложению пока разрешено всё, затем переключить `backup` на новый ключ и убедиться, что появился `backup ok`, и только потом сузить приложение до `s3:ListBucket`. Снять политику целиком `yc` не умеет; если бэкапы перестали писаться, замените её на ту, что возвращает права. Правило жизненного цикла и версионирование политика не трогает. Тем же способом закрыт бакет журнала стираний: приложения в его политике нет.
   Версионирование и, по возможности, object lock/retention на бакете бэкапов защищают дампы от перезаписи.
 - `hosted.env` (в том числе `LINK_KEY` и пароли БД) храните в менеджере секретов или офлайн, **не** в бакете бэкапов и не в другом бакете, куда пишет эта установка: иначе утечка одного ключа раскрывает и данные, и все секреты. Потеря `LINK_KEY` ломает все выданные ссылки.
-- RPO — до одного интервала бэкапа для метаданных (на polochka.app — час, `BACKUP_INTERVAL_SECONDS=3600` с 12.10.2026; дамп около 1,3 МБ, за 30 дней хранения — около 1 ГБ). RTO на polochka.app — около 15 минут до работающего приложения на новой VM, без DNS и TLS (проверка 28.09.2026). Проверьте восстановление на отдельной VM до того, как полагаться на бэкапы, и повторяйте после изменений схемы.
+- RPO — до одного интервала бэкапа для метаданных (на polochka.app — час, `BACKUP_INTERVAL_SECONDS=3600` с 12.10.2026; дамп около 1,3 МБ, за 30 дней хранения — около 1 ГБ); с профилем `pitr` — около минуты за последние 7 дней (раздел «Восстановление на момент времени»). Работы — в версионированном `S3_BUCKET`, с профилем `mirror` ещё и в копии под object lock (раздел «Копия работ»). RTO на polochka.app — около 15 минут до работающего приложения на новой VM, без DNS и TLS (проверка 28.09.2026). Проверьте восстановление на отдельной VM до того, как полагаться на бэкапы, и повторяйте после изменений схемы.
 - Для восстановления нужен `hosted.env`: на polochka.app его копия — секрет Lockbox `polka-hosted-env`. 28.09.2026 копия совпала с файлом на VM во всех 55 настройках, кроме `POLKA_IMAGE` (меняется при каждом обновлении). Обновляйте её при каждом изменении настроек.
 
 ## Вход по почте

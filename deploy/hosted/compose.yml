@@ -226,6 +226,7 @@ networks:
 
 volumes:
   pgdata:
+  walspool:
   caddy-data:
   caddy-config:
 
@@ -240,6 +241,7 @@ services:
       POLKA_RUNTIME_PASSWORD: ${POLKA_RUNTIME_PASSWORD:?}
       POLKA_PURGE_PASSWORD: ${POLKA_PURGE_PASSWORD:-}
       POLKA_RESTORE_PASSWORD: ${POLKA_RESTORE_PASSWORD:-}
+      POLKA_REPLICA_PASSWORD: ${POLKA_REPLICA_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
@@ -253,6 +255,9 @@ services:
     # - log_min_duration_statement: a statement slower than 500 ms is logged
     #   with its text (the app passes values as parameters) and never with
     #   the parameters' values (log_parameter_max_length=0).
+    # - max_slot_wal_keep_size: WAL kept for a stopped wal-archive (its
+    #   replication slot) stops at 2 GB instead of filling the disk; past it
+    #   wal-archive starts a new chain with a base backup.
     command:
       - postgres
       - -c
@@ -263,6 +268,8 @@ services:
       - log_min_duration_statement=500ms
       - -c
       - log_parameter_max_length=0
+      - -c
+      - max_slot_wal_keep_size=2GB
     # Parallel queries share memory through /dev/shm; Docker's default 64 MB
     # is too small for a hash join over a large table.
     shm_size: 256m
@@ -442,6 +449,77 @@ services:
       postgres: {condition: service_healthy}
     logging: *logging
 
+  # Restore to any minute (README.md, «Восстановление на момент времени»):
+  # the WAL streamed to BACKUP_BUCKET/wal/ within WAL_UPLOAD_SECONDS and a
+  # daily base backup to BACKUP_BUCKET/base/. Opt-in: profile pitr
+  # (COMPOSE_PROFILES=pitr in hosted.env), POLKA_REPLICA_PASSWORD and the
+  # polka_replica role (worker-roles.sh). Same write-only key as the dumps.
+  wal-archive:
+    image: ${POLKA_BACKUP_IMAGE:-polka-backup:local}
+    build: ./backup
+    profiles: ["pitr"]
+    entrypoint: ["/usr/local/bin/polka-wal-archive"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PGHOST: postgres
+      PGUSER: polka_replica
+      PGPASSWORD: ${POLKA_REPLICA_PASSWORD:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:?Set BACKUP_S3_ACCESS_KEY}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:?Set BACKUP_S3_SECRET_KEY}
+      BACKUP_BUCKET: ${BACKUP_BUCKET:?}
+      WAL_UPLOAD_SECONDS: ${WAL_UPLOAD_SECONDS:-60}
+      BASE_BACKUP_INTERVAL_SECONDS: ${BASE_BACKUP_INTERVAL_SECONDS:-86400}
+    # The received WAL waits here until it is uploaded; the slot keeps the
+    # rest on the server.
+    volumes: ["walspool:/var/lib/polka-wal"]
+    # Unhealthy when no upload round succeeded for ten minutes.
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/last-success && test $$(( $$(date +%s) - $$(cat /tmp/last-success) )) -lt 600"]
+      interval: 1m
+      timeout: 5s
+      start_period: 15m
+    networks: [polka]
+    depends_on:
+      postgres: {condition: service_healthy}
+    logging: *logging
+
+  # A copy of S3_BUCKET in MIRROR_BUCKET, a versioned bucket with object
+  # lock that the app key cannot reach (README.md, «Копия работ»). Opt-in:
+  # profile mirror (COMPOSE_PROFILES=mirror) and its own key.
+  objects-mirror:
+    image: ${POLKA_BACKUP_IMAGE:-polka-backup:local}
+    build: ./backup
+    profiles: ["mirror"]
+    entrypoint: ["/usr/local/bin/polka-objects-mirror"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:?}
+      MIRROR_BUCKET: ${MIRROR_BUCKET:-}
+      MIRROR_S3_ACCESS_KEY: ${MIRROR_S3_ACCESS_KEY:-}
+      MIRROR_S3_SECRET_KEY: ${MIRROR_S3_SECRET_KEY:-}
+      MIRROR_INTERVAL_SECONDS: ${MIRROR_INTERVAL_SECONDS:-900}
+      MIRROR_MAX_DELETES: ${MIRROR_MAX_DELETES:-200}
+    # Unhealthy when no copy succeeded within the interval plus an hour.
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/last-success && test $$(( $$(date +%s) - $$(cat /tmp/last-success) )) -lt $$(( $${MIRROR_INTERVAL_SECONDS:-900} + 3600 ))"]
+      interval: 5m
+      timeout: 5s
+      start_period: 30m
+    networks: [polka]
+    logging: *logging
+
   # Headless renderer on this VM (opt-in: docker compose --profile renderer up -d).
   # For a separate VM use deploy/renderer instead. Chromium goes out only
   # through the egress proxy inside the container, which refuses private,
@@ -513,6 +591,28 @@ services:
       ERASURE_LEDGER_SECRET_KEY: ${ERASURE_LEDGER_READER_SECRET_KEY:-}
     volumes: ["/opt/polka/restore/input:/restore-input:rw"]
     entrypoint: ["node", "--import", "tsx", "scripts/restore-authorities.ts"]
+    restart: "no"
+
+  # Lost objects of S3_BUCKET back from MIRROR_BUCKET (README.md, «Копия
+  # работ»): dry run first, then --apply. The schema owner points the rows at
+  # the restored versions; the mirror is read with a read-only key.
+  #   docker compose --env-file hosted.env run --rm objects-restore [--apply]
+  objects-restore:
+    <<: *hardening
+    image: ${POLKA_IMAGE:?}
+    profiles: ["ops"]
+    network_mode: host
+    environment:
+      DATABASE_URL: postgres://polka_schema:${POLKA_SCHEMA_PASSWORD:?}@127.0.0.1:5432/polka
+      S3_ENDPOINT: ${S3_ENDPOINT:?}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:?}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+      MIRROR_BUCKET: ${MIRROR_BUCKET:-}
+      MIRROR_READ_ACCESS_KEY: ${MIRROR_READ_ACCESS_KEY:-}
+      MIRROR_READ_SECRET_KEY: ${MIRROR_READ_SECRET_KEY:-}
+    entrypoint: ["node", "--import", "tsx", "scripts/objects-restore.ts"]
     restart: "no"
 
   restore-reconcile:

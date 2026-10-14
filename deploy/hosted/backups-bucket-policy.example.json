@@ -13,7 +13,7 @@
       "Effect": "Allow",
       "Principal": {"CanonicalUser": "<ID сервисного аккаунта записи>"},
       "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
-      "Resource": ["arn:aws:s3:::<BACKUP_BUCKET>/postgres/*"]
+      "Resource": ["arn:aws:s3:::<BACKUP_BUCKET>/postgres/*", "arn:aws:s3:::<BACKUP_BUCKET>/wal/*", "arn:aws:s3:::<BACKUP_BUCKET>/base/*"]
     },
     {
       "Sid": "backup-reader",
