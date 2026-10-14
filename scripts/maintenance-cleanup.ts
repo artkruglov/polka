@@ -3,6 +3,7 @@ import { cleanupEmailChallengesInTransaction } from "../apps/server/email-mainte
 import {
   closeProvisionalShelf,
   eraseProvisionalShelfRows,
+  provisionalErasurePending,
   unfinishedProvisionalErasures,
   idleProvisionalShelves,
   retireProvisionalShelf,
@@ -47,6 +48,8 @@ export type MaintenanceCounters = {
   emailChallengesRemoved: number;
   /** Idle provisional shelves handed to the deletion pipeline. */
   provisionalShelvesRetired: number;
+  /** Provisional shelves whose erasure failed this run; the next run retries them. */
+  provisionalErasuresFailed: number;
 };
 
 export class MaintenanceStorageFailure extends Error {}
@@ -260,6 +263,7 @@ export async function runMaintenanceCleanup(
   }
 
   let provisionalShelvesRetired = 0;
+  let provisionalErasuresFailed = 0;
   if (!options.provisionalRetirement && options.provisionalIdleDays) {
     const idleDays = options.provisionalIdleDays;
     // Shelves an earlier run closed but did not finish (S3 failed, the
@@ -268,9 +272,20 @@ export async function runMaintenanceCleanup(
       assertActive(scope.signal);
       return [await unfinishedProvisionalErasures(c), await idleProvisionalShelves(c, { idleDays })] as const;
     });
+    // One shelf that keeps failing (its objects, its rows) must not stop the
+    // others or the steps after this one: it is counted, left recorded
+    // (provisional_erasures) and tried again by the next run. Stopping
+    // (deadline, signal) still ends the run.
     const erase = async (shelf: { id: string; tenant: string }) => {
-      await deleteEveryVersion(storage, `${shelf.tenant}/`, scope.signal);
-      await scope.transaction((c) => eraseProvisionalShelfRows(c, shelf));
+      try {
+        // Only while it is still closed and unclaimed: it may have been claimed meanwhile.
+        if (!(await scope.transaction((c) => provisionalErasurePending(c, shelf)))) return;
+        await deleteEveryVersion(storage, `${shelf.tenant}/`, scope.signal);
+        await scope.transaction((c) => eraseProvisionalShelfRows(c, shelf));
+      } catch (error) {
+        if (error instanceof MaintenanceStopped || scope.signal.aborted) throw error;
+        provisionalErasuresFailed++;
+      }
     };
     for (const shelf of unfinished) {
       assertActive(scope.signal);
@@ -350,5 +365,6 @@ export async function runMaintenanceCleanup(
     expiredDerivativesReconciled,
     emailChallengesRemoved,
     provisionalShelvesRetired,
+    provisionalErasuresFailed,
   };
 }

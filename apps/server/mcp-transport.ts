@@ -1,6 +1,7 @@
 import { createMcpHandler, type AuthInfo, type McpHandlerRequestOptions } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { markAuthenticated } from "./admission.ts";
 import { limitAttempts } from "./auth.ts";
 import { config } from "./config.ts";
 import { authenticateServiceToken, MCP_AUDIENCE, type ServiceActor } from "./service-auth.ts";
@@ -76,6 +77,7 @@ export async function registerMcpTransport(app: FastifyInstance) {
     }
     await limitAttempts(`mcp:connection:${actor.rootConnectionId ?? actor.connectionId}`, MCP_LIMITS.perConnection);
     actors.set(request.raw, actor);
+    markAuthenticated(request);
   };
   await app.register(async (mcp) => {
     mcp.all("/mcp", { bodyLimit: MCP_BODY_LIMIT, onRequest: authenticate }, async (request, reply) => {

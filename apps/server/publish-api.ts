@@ -248,6 +248,9 @@ export async function preauthenticateBearer(req: FastifyRequest, reply: FastifyR
   preauthenticated.set(req.raw, await bearerToken(req, reply, [MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE]));
 }
 
+/** Whether preauthenticateBearer accepted this request's token (admission.ts). */
+export const isPreauthenticated = (req: FastifyRequest) => preauthenticated.has(req.raw);
+
 async function bearerToken(req: FastifyRequest, reply: FastifyReply, audiences: readonly string[]) {
   // Only requests without a valid token count per address: agents on hosted
   // platforms share addresses. A valid token has its connection's cap.
