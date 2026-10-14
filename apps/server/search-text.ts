@@ -86,6 +86,9 @@ export async function indexRevisionText(
     return;
   }
   // The row carries its work's shelf (migration 075): the index is per shelf.
+  // Callers hold the work's row lock (they updated or locked it in this
+  // transaction), so an account merge cannot move the work between this read
+  // of tenant_id and the foreign key check.
   await c.query(
     `INSERT INTO artifact_search(artifact_id,tenant_id,revision_id,body)
      SELECT id,tenant_id,$2,$3 FROM artifacts WHERE id=$1
