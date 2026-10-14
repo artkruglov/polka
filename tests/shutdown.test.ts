@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { installShutdown } from "../apps/server/shutdown.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/shutdown-drain.ts", import.meta.url));
 
@@ -53,4 +54,27 @@ test("SIGTERM gives up on work that outlives the deadline and still exits", asyn
   assert.match(out, /"event":"server.stopped","drained":false/);
   assert.doesNotMatch(out, /after-commit done/);
   assert.ok(stoppedInMs < 8_000, `stopped after ${stoppedInMs} ms`);
+});
+
+test("a watchdog stop during a SIGTERM stop still exits 1", async () => {
+  const codes: number[] = [];
+  let finishDrain = () => {};
+  const stop = installShutdown({
+    steps: {
+      intake: async () => {},
+      drain: () => new Promise<void>((resolve) => (finishDrain = resolve)),
+      close: async () => {},
+    },
+    deadlineMs: 5_000,
+    signals: [],
+    exit: (code) => codes.push(code),
+  });
+  const first = stop(0);
+  const second = stop(1);
+  // Both callers wait for the same stop.
+  assert.equal(first, second);
+  await new Promise((resolve) => setImmediate(resolve));
+  finishDrain();
+  await first;
+  assert.deepEqual(codes, [1]);
 });

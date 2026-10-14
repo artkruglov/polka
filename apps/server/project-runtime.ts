@@ -24,14 +24,15 @@ const CACHE_BYTES = 64 * 1024 * 1024;
  * takes it. Inputs are read only once the build is admitted: at most as many
  * builds as the builder has workers, holding at most LOADING_BYTES of inputs
  * together (one build alone may hold more). A build that is not admitted
- * within ADMISSION_WAIT_MS answers «busy» and is not remembered.
+ * within RUNTIME_ADMISSION.waitMs answers «busy» and is not remembered.
  */
 const LOADING_BYTES = 64 * 1024 * 1024;
-const ADMISSION_WAIT_MS = 10_000;
+export const RUNTIME_ADMISSION = { waitMs: 10_000 };
 const loads = { builds: 0, bytes: 0 };
 
-async function admitInputs(bytes: number) {
-  const deadline = Date.now() + ADMISSION_WAIT_MS;
+/** A slot to read a build's inputs, or null when none freed in time (exported for tests). */
+export async function admitInputs(bytes: number) {
+  const deadline = Date.now() + RUNTIME_ADMISSION.waitMs;
   while (loads.builds >= BUILD_LIMITS.workers || (loads.builds > 0 && loads.bytes + bytes > LOADING_BYTES)) {
     if (Date.now() >= deadline) return null;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -50,7 +51,10 @@ async function admitInputs(bytes: number) {
 /** Builds reading their inputs now, and those inputs' bytes (tests). */
 export const runtimeInputLoads = () => ({ ...loads });
 
-export type ProjectRuntimePage = { ok: true; html: Buffer } | { ok: false; reason: string; path?: string };
+// `transient`: the builder was busy or broke, not the page; it is not
+// remembered and says nothing about whether the page builds.
+export type ProjectRuntimePage =
+  { ok: true; html: Buffer } | { ok: false; reason: string; path?: string; transient?: true };
 
 const built = new Map<string, ProjectRuntimePage>();
 const pending = new Map<string, Promise<ProjectRuntimePage | null>>();
@@ -100,7 +104,7 @@ export async function projectRuntimePage(
       return { ok: false as const, reason: "the page's files do not form a valid manifest", path };
     }
     const release = await admitInputs(canonical.files.reduce((sum, file) => sum + file.size, 0));
-    if (!release) return { ok: false as const, reason: "сервер занят другими сборками" };
+    if (!release) return { ok: false as const, reason: "сервер занят другими сборками", transient: true as const };
     let result: Awaited<ReturnType<typeof checkBuildInWorker>>;
     try {
       const files = await Promise.all(
@@ -113,7 +117,8 @@ export async function projectRuntimePage(
     } finally {
       release();
     }
-    if (!result.ok && (result.failed || result.busy)) return { ok: false as const, reason: result.reason };
+    if (!result.ok && (result.failed || result.busy))
+      return { ok: false as const, reason: result.reason, transient: true as const };
     const outcome: ProjectRuntimePage = result.ok
       ? { ok: true, html: Buffer.from(result.html) }
       : { ok: false, reason: result.reason, path: result.path ?? path };
@@ -129,9 +134,18 @@ export async function projectRuntimePage(
 }
 
 /**
+ * How long the save may wait for its pages to be checked. Each page can wait
+ * up to RUNTIME_ADMISSION.waitMs for the builder; under load a project of many
+ * pages would otherwise hold the agent's answer for minutes.
+ */
+export const SAVE_CHECK = { budgetMs: 20_000 };
+
+/**
  * Builds every runtime page of a version that was just saved, so the first
  * view is served from memory and the agent learns at once which pages do not
- * build. Returns the pages that failed, by path.
+ * build. Returns the pages that failed, by path. A busy builder ends the
+ * check: the pages not checked yet are built on their first view, and «busy»
+ * is never reported as a page that does not build.
  */
 export async function checkProjectRuntimePages(
   revisionId: string,
@@ -139,9 +153,12 @@ export async function checkProjectRuntimePages(
   read: (path: string) => Promise<Buffer>,
 ) {
   const problems: Array<{ path: string; reason: string }> = [];
+  const deadline = Date.now() + SAVE_CHECK.budgetMs;
   for (const file of manifest.files) {
     if (file.mime !== "text/html") continue;
+    if (Date.now() >= deadline) break;
     const page = await projectRuntimePage(revisionId, manifest, file.path, read);
+    if (page && !page.ok && page.transient) break;
     if (page && !page.ok) problems.push({ path: page.path ?? file.path, reason: page.reason });
   }
   return problems;

@@ -53,7 +53,9 @@ export async function gracefulShutdown(steps: ShutdownSteps, deadlineMs: number)
 /**
  * Stop once on the first of `signals` and exit with 0; `stop(code)` does the
  * same from code (the watchdog exits with 1). A second signal while stopping
- * is ignored: the deadline already bounds the wait.
+ * is ignored: the deadline already bounds the wait. The process exits with
+ * the highest code asked for: a watchdog stop that overlaps a SIGTERM still
+ * exits 1.
  */
 export function installShutdown({
   steps,
@@ -67,7 +69,11 @@ export function installShutdown({
   exit?: (code: number) => void;
 }) {
   let stopping: Promise<void> | null = null;
-  const stop = (code: number) => (stopping ??= gracefulShutdown(steps, deadlineMs).then(() => exit(code)));
+  let exitCode = 0;
+  const stop = (code: number) => {
+    exitCode = Math.max(exitCode, code);
+    return (stopping ??= gracefulShutdown(steps, deadlineMs).then(() => exit(exitCode)));
+  };
   for (const signal of signals) process.on(signal, () => void stop(0));
   return stop;
 }
