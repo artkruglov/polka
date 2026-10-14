@@ -8,5 +8,6 @@
   "tests/editorial-catalog.test.ts",
   "tests/editorial-seed-live.test.ts",
   "tests/mcp-transport.test.ts",
-  "tests/publish-component-live.test.ts"
+  "tests/publish-component-live.test.ts",
+  "tests/objects-restore.test.ts"
 ]

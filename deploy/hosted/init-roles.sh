@@ -35,3 +35,12 @@ GRANT CONNECT ON DATABASE polka TO polka_restore;
 ALTER ROLE polka_restore SET search_path = pg_catalog, public;
 SQL
 fi
+# The WAL archive (wal-archive in compose.yml), when configured: a login with
+# REPLICATION only, allowed to replicate from the compose network.
+if [ -n "${POLKA_REPLICA_PASSWORD:-}" ]; then
+  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+    --set=replica_password="$POLKA_REPLICA_PASSWORD" <<'SQL'
+CREATE ROLE polka_replica LOGIN REPLICATION PASSWORD :'replica_password';
+SQL
+  echo "host replication polka_replica samenet scram-sha-256" >> "$PGDATA/pg_hba.conf"
+fi
