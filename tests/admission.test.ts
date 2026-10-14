@@ -186,3 +186,108 @@ test("bodies past the in-flight budget get 503 with Retry-After until the budget
     bodyBudget(before);
   }
 });
+
+/** Starts `count` uploads that declare `declared` bytes, send `send` and hold until `hold`. */
+function slowSenders(count: number, path: string, declared: number, send: number, hold: Promise<void>) {
+  return Array.from({ length: count }, () =>
+    partialUpload(
+      "POST",
+      path,
+      declared,
+      send,
+      { "content-type": "application/json", origin: config.APP_ORIGIN },
+      hold,
+    ).catch(() => null),
+  );
+}
+
+const settle = async (until: () => boolean) => {
+  for (let i = 0; i < 200 && !until(); i++) await new Promise((r) => setTimeout(r, 20));
+};
+
+test("slow anonymous senders hold only the bytes they sent, not what they declare", async () => {
+  const before = bodyBudget().budget;
+  bodyBudget(16 * MiB);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  try {
+    // 52 requests declare 5 MiB each (16 times the whole budget) to an
+    // unmatched route and to a cookie route, then send 1 KiB and stall.
+    const stalled = [
+      ...slowSenders(26, `/api/no-such-route-${randomUUID()}`, 5 * MiB, 1024, held),
+      ...slowSenders(26, "/api/artifacts", 5 * MiB, 1024, held),
+    ];
+    await settle(() => bodyBudget().inFlight >= 52 * 1024);
+    assert.equal(bodyBudget().inFlight, 52 * 1024);
+    assert.equal(bodyBudget().anonymous.inFlight, 52 * 1024);
+    // A checked upload of 8 MiB is still admitted and read.
+    const real = await new Promise<number>((resolve, reject) => {
+      const body = Buffer.from(JSON.stringify({ pad: "x".repeat(8 * MiB) }));
+      const req = http.request(
+        {
+          host: "127.0.0.1",
+          port,
+          method: "POST",
+          path: "/api/v1/sessions",
+          headers: {
+            "content-type": "application/json",
+            "content-length": String(body.length),
+            authorization: `Bearer ${secret}`,
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode!);
+        },
+      );
+      req.on("error", reject);
+      req.end(body);
+    });
+    assert.notEqual(real, 503);
+    release();
+    await Promise.all(stalled);
+    await settle(() => bodyBudget().inFlight === 0);
+    assert.equal(bodyBudget().inFlight, 0);
+    assert.equal(bodyBudget().anonymous.inFlight, 0);
+    assert.equal(bodyBudget().addresses, 0);
+  } finally {
+    release();
+    bodyBudget(before);
+  }
+});
+
+test("anonymous bytes from one address are capped while another of its bodies is in flight", async () => {
+  const before = bodyBudget().budget;
+  bodyBudget(16 * MiB); // anonymous: 4 MiB in all, 1 MiB from one address
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  try {
+    const [first] = slowSenders(1, `/api/no-such-route-${randomUUID()}`, 5 * MiB, 768 * 1024, held);
+    await settle(() => bodyBudget().anonymous.inFlight >= 768 * 1024);
+    assert.equal(bodyBudget().anonymous.inFlight, 768 * 1024);
+    const refusedBefore = bodyBudget().refused;
+    const second = await partialUpload("POST", `/api/no-such-route-${randomUUID()}`, 5 * MiB, 512 * 1024, {
+      "content-type": "application/json",
+      origin: config.APP_ORIGIN,
+    });
+    assert.equal(second.status, 503);
+    assert.equal(second.headers["retry-after"], "5");
+    assert.equal(second.headers.connection, "close");
+    assert.equal(JSON.parse(second.body).code, "busy");
+    assert.ok(bodyBudget().refused > refusedBefore);
+    // A small anonymous request still fits.
+    const small = await partialUpload("POST", `/api/no-such-route-${randomUUID()}`, 1024, 1024, {
+      "content-type": "application/json",
+      origin: config.APP_ORIGIN,
+    });
+    assert.notEqual(small.status, 503);
+    release();
+    await first;
+    await settle(() => bodyBudget().inFlight === 0);
+    assert.equal(bodyBudget().inFlight, 0);
+    assert.equal(bodyBudget().addresses, 0);
+  } finally {
+    release();
+    bodyBudget(before);
+  }
+});

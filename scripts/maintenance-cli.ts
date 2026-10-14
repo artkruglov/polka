@@ -23,6 +23,7 @@ type SafeEvent = {
   expiredUploadsReconciled?: number;
   expiredDerivativesReconciled?: number;
   emailChallengesRemoved?: number;
+  provisionalErasuresFailed?: number;
 };
 
 const SETUP_CLOSE_TIMEOUT_MS = 1_000;

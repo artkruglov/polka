@@ -12,18 +12,31 @@ import { log } from "./log.ts";
  * of the database work of an agent's read. Each process adds its own counts,
  * so several processes still sum correctly. What a crashed process had not
  * written yet (at most FLUSH_MS of reads) is lost; a graceful shutdown calls
- * flushAgentReads.
+ * flushAgentReads. A batch the database refused (a brief outage) goes back
+ * into memory and is written with the next one; at most PENDING_MAX counters
+ * are held, so a long outage drops the counts past that, not the process.
  */
 export const AGENT_READS_FLUSH_MS = 10_000;
+export const AGENT_READS_PENDING_MAX = 10_000;
 const pending = new Map<string, number>();
 let timer: NodeJS.Timeout | null = null;
 let warned = false;
 
+/** Adds `reads` to a counter; a new counter only while fewer than PENDING_MAX are held. */
+function add(key: string, reads: number) {
+  const held = pending.get(key);
+  if (held !== undefined) pending.set(key, held + reads);
+  else if (pending.size < AGENT_READS_PENDING_MAX) pending.set(key, reads);
+}
+
 export async function countAgentRead(tenantId: string, principal: "human" | "service" | undefined) {
   const day = new Date().toISOString().slice(0, 10);
-  const key = `${tenantId}|${principal ?? "human"}|${day}`;
-  pending.set(key, (pending.get(key) ?? 0) + 1);
-  if (!timer) {
+  add(`${tenantId}|${principal ?? "human"}|${day}`, 1);
+  schedule();
+}
+
+function schedule() {
+  if (!timer && pending.size) {
     timer = setTimeout(() => {
       timer = null;
       void flushAgentReads();
@@ -32,6 +45,14 @@ export async function countAgentRead(tenantId: string, principal: "human" | "ser
     timer.unref();
   }
 }
+
+const transient = (error: any) => {
+  const code = typeof error?.code === "string" ? error.code : "";
+  return !/^[0-9A-Z]{5}$/.test(code) || /^(08|40|53|57)/.test(code);
+};
+
+/** The counters held in memory now (tests). */
+export const pendingAgentReads = () => pending.size;
 
 /** Writes the counts held in memory now (the timer, a graceful shutdown, tests). */
 export async function flushAgentReads() {
@@ -53,9 +74,17 @@ export async function flushAgentReads() {
       [rows.map((row) => row[0]), rows.map((row) => row[1]), rows.map((row) => row[2]), rows.map((row) => row[3])],
     );
   } catch (error: any) {
+    const missing = error?.code === "42501" || error?.code === "42P01";
+    // Not lost to a brief outage (no connection, a restart, a timeout, a
+    // deadlock): back into memory, written with the next batch. A batch the
+    // database itself rejects would be rejected again.
+    if (transient(error)) {
+      for (const [tenantId, principal, day, reads] of rows) add(`${tenantId}|${principal}|${day}`, reads);
+      schedule();
+    }
     // Counting is not worth a failed read, but a missing table or grant (an
     // operator who migrated without re-running the grants) must not stay silent.
-    if (!warned && (error?.code === "42501" || error?.code === "42P01")) {
+    if (!warned && missing) {
       warned = true;
       log.warn({ event: "agent_read_counter_unavailable", code: error.code });
     }

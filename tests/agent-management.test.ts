@@ -6,7 +6,7 @@ import { db } from "../apps/server/db.ts";
 import { acceptRevision, setWorkOwner } from "../apps/server/artifact-acceptance.ts";
 import { shelfSnapshotForAgent } from "../apps/server/shelf-snapshot.ts";
 import { listEventsForAgent } from "../apps/server/agent-events.ts";
-import { countAgentRead, flushAgentReads } from "../apps/server/agent-read-counter.ts";
+import { countAgentRead, flushAgentReads, pendingAgentReads } from "../apps/server/agent-read-counter.ts";
 import {
   getArtifactForAgent,
   listArtifactsForAgent,
@@ -706,4 +706,40 @@ test("agent reads are added up in memory and written in one statement", async ()
   await countAgentRead(shelf.tenant, "human");
   await flushAgentReads();
   assert.deepEqual(await reads(), []);
+});
+
+test("a batch of agent reads the database could not take is written with the next one", async () => {
+  const shelf = await createAccount(`reads-${randomBytes(4).toString("hex")}`, randomBytes(24).toString("hex"));
+  const reads = async () =>
+    (await db.query("SELECT reads FROM agent_read_days WHERE tenant_id=$1", [shelf.tenant])).rows.map(
+      (row) => row.reads,
+    );
+  await flushAgentReads();
+  for (let i = 0; i < 3; i++) await countAgentRead(shelf.tenant, "service");
+  const query = db.query;
+  // A brief outage: the connection is gone for one write.
+  (db as any).query = async () => {
+    throw Object.assign(new Error("terminating connection"), { code: "57P01" });
+  };
+  try {
+    await flushAgentReads();
+  } finally {
+    (db as any).query = query;
+  }
+  assert.equal(pendingAgentReads(), 1, "the batch is held again");
+  await countAgentRead(shelf.tenant, "service");
+  await flushAgentReads();
+  assert.deepEqual(await reads(), [4]);
+  assert.equal(pendingAgentReads(), 0);
+  // A batch the database rejects as such is not retried forever.
+  await countAgentRead(shelf.tenant, "service");
+  (db as any).query = async () => {
+    throw Object.assign(new Error("invalid input"), { code: "22P02" });
+  };
+  try {
+    await flushAgentReads();
+  } finally {
+    (db as any).query = query;
+  }
+  assert.equal(pendingAgentReads(), 0);
 });

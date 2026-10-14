@@ -22,6 +22,7 @@ import { useExtensions } from "../apps/server/extensions.ts";
 import { providerEndpoints } from "../apps/server/sign-in-providers.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
 import { runMaintenanceCleanup } from "../scripts/maintenance-cleanup.ts";
+import { eraseProvisionalShelfRows } from "../apps/server/provisional-maintenance.ts";
 import { createMaintenanceObjectStore } from "../scripts/maintenance-adapters.ts";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 
@@ -853,7 +854,11 @@ test("a provisional erasure cut short by a storage failure is finished by the ne
         throw Object.assign(new Error("storage down"), { code: "storage" });
       },
     };
-    await assert.rejects(runMaintenanceCleanup(maintenanceScope(), failing as never, { provisionalIdleDays: 30 }));
+    // The failing shelf is counted and skipped: the run goes on to its
+    // later steps and completes instead of stopping at this shelf.
+    const cut = await runMaintenanceCleanup(maintenanceScope(), failing as never, { provisionalIdleDays: 30 });
+    assert.ok(cut.provisionalErasuresFailed >= 1);
+    assert.equal(typeof cut.emailChallengesRemoved, "number");
     const {
       rows: [closed],
     } = await db.query(
@@ -886,6 +891,56 @@ test("a provisional erasure cut short by a storage failure is finished by the ne
     [idle.id, idle.tenant],
   );
   assert.deepEqual(left, { works: 0, connections: 0, pending: 0 });
+});
+
+test("a provisional shelf claimed before its erasure finished keeps its rows", async () => {
+  const idle = await startProvisional();
+  const bearer = await approve(idle.cookie, idle.request);
+  const saved = (await publish(bearer, "Работа, которую вернули")).json();
+  await db.query("UPDATE accounts SET provisional_at=now()-interval '40 days' WHERE id=$1", [idle.id]);
+  await db.query(
+    `UPDATE agent_connections SET created_at=now()-interval '40 days',
+            last_seen_at=now()-interval '35 days' WHERE account_id=$1`,
+    [idle.id],
+  );
+  await db.query("UPDATE revisions SET created_at=now()-interval '35 days' WHERE tenant_id=$1", [idle.tenant]);
+  await db.query("DELETE FROM sessions WHERE account_id=$1", [idle.id]);
+  const storage = createMaintenanceObjectStore({
+    endpoint: config.S3_ENDPOINT,
+    region: "us-east-1",
+    accessKey: config.S3_ACCESS_KEY,
+    secretKey: config.S3_SECRET_KEY,
+    bucket: config.S3_BUCKET,
+  });
+  try {
+    const failing = {
+      ...storage,
+      listVersions: storage.listVersions.bind(storage),
+      deleteVersion: async () => {
+        throw Object.assign(new Error("storage down"), { code: "storage" });
+      },
+    };
+    await runMaintenanceCleanup(maintenanceScope(), failing as never, { provisionalIdleDays: 30 });
+    // The shelf is claimed before the next run.
+    await db.query("UPDATE accounts SET claimed_at=now() WHERE id=$1", [idle.id]);
+    await runMaintenanceCleanup(maintenanceScope(), storage, { provisionalIdleDays: 30 });
+  } finally {
+    storage.close();
+  }
+  // Even a run that had already picked the shelf deletes no rows: the
+  // account is checked again under its lock.
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    assert.equal(await eraseProvisionalShelfRows(client, { id: idle.id, tenant: idle.tenant }), false);
+    await client.query("COMMIT");
+  } finally {
+    client.release();
+  }
+  const {
+    rows: [left],
+  } = await db.query("SELECT count(*)::int AS works FROM artifacts WHERE id=$1", [saved.artifactId]);
+  assert.equal(left.works, 1);
 });
 
 test("maintenance deletes an idle provisional shelf and leaves a live one", async () => {

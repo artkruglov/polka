@@ -175,7 +175,9 @@ const shelfTerms = (shelves: string) =>
  * matched in a subquery the index serves for those shelves only; a row of
  * artifact_search is always its work's latest version. A title is short and
  * the list is one shelf's, so it is matched in place, against its stored
- * tsvector (artifacts.title_document).
+ * tsvector (artifacts.title_document). A query of stop words only («что и»,
+ * "the") is an empty tsquery, and '' && '~<shelf>' would match every row of
+ * the shelf: numnode keeps it from matching any text.
  */
 export const searchMatch = (artifact: string, title: string, query: string, shelves: string) =>
   `((${title}::text IS NULL AND ${query}::text IS NULL)
@@ -184,6 +186,7 @@ export const searchMatch = (artifact: string, title: string, query: string, shel
     OR ${artifact}.id IN (
       SELECT found.artifact_id FROM artifact_search found
       WHERE ${query}::text IS NOT NULL
+        AND numnode(to_tsquery('russian',${query}::text)) > 0
         AND ${shelfDocument("found")} @@ (to_tsquery('russian',${query}::text) && ${shelfTerms(shelves)})
         AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                         WHERE b.revision_id=found.revision_id AND b.released_at IS NULL)))`;

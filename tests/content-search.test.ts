@@ -205,6 +205,17 @@ test("polka_list finds by text and returns a plain snippet", async () => {
   assert.ok(!strangers.items.some((entry) => entry.id === saved.artifactId));
 });
 
+test("a query of stop words only finds no text, on the web and for an agent", async () => {
+  const saved = await saveSingle("<!doctype html><p>Сверка остатков на складе.</p>", { title: "Сверка" });
+  assert.ok((await search("остатк")).some((entry) => entry.id === saved.artifactId));
+  const actor = await agent(owner);
+  for (const q of ["что", "что и", "the", "и the"]) {
+    assert.ok(!(await search(q)).some((entry) => entry.id === saved.artifactId), q);
+    const listed = await listArtifactsForAgent(actor, { query: q });
+    assert.ok(!listed.items.some((entry) => entry.id === saved.artifactId), q);
+  }
+});
+
 test("a blocked version's text neither matches nor shows until the block is released", async () => {
   const saved = await saveSingle("<!doctype html><p>Сводка по тендеру на ремонт.</p>");
   assert.ok((await search("тендер")).some((entry) => entry.id === saved.artifactId));

@@ -6,6 +6,7 @@ export type SafeMaintenanceLog = {
   expiredUploadsReconciled?: number;
   expiredDerivativesReconciled?: number;
   emailChallengesRemoved?: number;
+  provisionalErasuresFailed?: number;
 };
 const events = new Set(["maintenance.started", "maintenance.completed", "maintenance.failed", "maintenance.skipped"]);
 const reasons = new Set(["busy", "deadline", "stopping", "guard_lost", "database", "storage", "internal"]);
@@ -14,6 +15,7 @@ const counters = [
   "expiredUploadsReconciled",
   "expiredDerivativesReconciled",
   "emailChallengesRemoved",
+  "provisionalErasuresFailed",
 ] as const;
 
 export function createMaintenanceLogFilter(emit: (event: SafeMaintenanceLog) => void) {

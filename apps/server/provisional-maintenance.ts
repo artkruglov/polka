@@ -226,9 +226,28 @@ export async function unfinishedProvisionalErasures(c: Client, limit = 20) {
   return (rows ?? []) as Array<{ id: string; tenant: string }>;
 }
 
-/** Step 3 (after the objects are gone): the shelf's rows. */
+/**
+ * Whether the shelf is still recorded for erasure and its account still
+ * closed and unclaimed; `lock` holds the account row until the transaction ends.
+ */
+export async function provisionalErasurePending(c: Client, shelf: { id: string; tenant: string }, lock = false) {
+  const { rows } = await c.query(
+    `SELECT 1 FROM accounts a
+       JOIN provisional_erasures e ON e.account_id=a.id AND e.tenant_id=$2
+      WHERE a.id=$1 AND a.disabled AND a.deletion_requested_at IS NOT NULL AND a.claimed_at IS NULL
+      ${lock ? "FOR UPDATE OF a" : ""}`,
+    [shelf.id, shelf.tenant],
+  );
+  return !!rows?.length;
+}
+
+/**
+ * Step 3 (after the objects are gone): the shelf's rows, checked again under
+ * the account's lock; false when it was claimed meanwhile.
+ */
 export async function eraseProvisionalShelfRows(c: Client, shelf: { id: string; tenant: string }) {
   await c.query("SELECT 1 FROM tenants WHERE id=$1 AND owner_id=$2 FOR UPDATE", [shelf.tenant, shelf.id]);
+  if (!(await provisionalErasurePending(c, shelf, true))) return false;
   for (const sql of [
     "DELETE FROM agent_operations WHERE tenant_id=$1",
     "DELETE FROM url_import_jobs WHERE tenant_id=$1",
@@ -251,4 +270,5 @@ export async function eraseProvisionalShelfRows(c: Client, shelf: { id: string; 
     "DELETE FROM provisional_erasures WHERE tenant_id=$1",
   ])
     await c.query(sql, [shelf.tenant]);
+  return true;
 }
