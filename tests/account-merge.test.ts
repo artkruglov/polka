@@ -14,6 +14,8 @@ import { actorKey, flushAnalytics } from "../apps/server/analytics.ts";
 import { MERGE_INVENTORY, mergeAccounts, MergeRefusal, WEB_MERGE_MAX_OBJECTS } from "../apps/server/account-merge.ts";
 import { config } from "../apps/server/config.ts";
 import { db } from "../apps/server/db.ts";
+import { useExtensions } from "../apps/server/extensions.ts";
+import type { AccountMerge } from "../packages/extension-api/index.ts";
 import { MCP_AUDIENCE } from "../apps/server/service-auth.ts";
 import { bucket, putImmutable, s3, sha256 } from "../apps/server/storage.ts";
 import { gzipSync } from "node:zlib";
@@ -453,6 +455,65 @@ test("refuses a disabled side, the same account and blocked content", async () =
     console.error = error;
   }
   assert.match(refused.join("\n"), /Отказ/);
+});
+
+test("an extension may refuse a merge and moves its own records inside it", async (t) => {
+  t.after(() => useExtensions([]));
+  const asked: AccountMerge[] = [];
+  const moved: AccountMerge[] = [];
+  let refuse: string | null = null;
+  let fail = false;
+  useExtensions([
+    {
+      name: "merge-test",
+      policies: {
+        accountMerge: async (merge, c) => {
+          // The merge's own transaction: both accounts are locked by it.
+          await c.query("SELECT 1 FROM accounts WHERE id=$1", [merge.from.accountId]);
+          asked.push(merge);
+          return refuse ? { allow: false, message: refuse } : { allow: true };
+        },
+      },
+      accountMerged: async (merge, c) => {
+        if (fail) throw new Error("extension rows did not move");
+        // Sees the core's moves of this transaction.
+        const {
+          rows: [row],
+        } = await c.query("SELECT count(*)::int AS n FROM artifacts WHERE tenant_id=$1", [merge.from.tenantId]);
+        assert.equal(row.n, 0);
+        moved.push(merge);
+      },
+    },
+  ]);
+
+  const f = await fixture();
+  refuse = "Аккаунтом управляет каталог компании.";
+  await assert.rejects(
+    mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script", proof: "t", dryRun: true }),
+    (error: unknown) => error instanceof MergeRefusal && /каталог компании/.test(error.message),
+  );
+  assert.deepEqual(asked.at(-1), {
+    from: { accountId: f.from.id, tenantId: f.from.tenant },
+    into: { accountId: f.into.id, tenantId: f.into.tenant },
+    actor: "operator-script",
+    dryRun: true,
+  });
+  assert.equal(moved.length, 0);
+
+  // A failing move aborts the whole merge: the works stay on the source.
+  refuse = null;
+  fail = true;
+  await assert.rejects(
+    mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script", proof: "t" }),
+    /extension rows did not move/,
+  );
+  assert.equal(await tenantOf(f.first.artifactId), f.from.tenant);
+
+  fail = false;
+  await mergeAccounts({ from: f.from.id, into: f.into.id, actor: "operator-script", proof: "t" });
+  assert.equal(moved.length, 1);
+  assert.equal(moved[0].dryRun, false);
+  assert.equal(await tenantOf(f.first.artifactId), f.into.tenant);
 });
 
 test("the web path refuses a shelf with more objects than the cap, before copying anything", async () => {

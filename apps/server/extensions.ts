@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import { isAbsolute, resolve } from "node:path";
 import type { PoolClient } from "pg";
 import type {
+  AccountMerge,
+  AccountMergeDecision,
   LinkIssue,
   LinkIssueDecision,
   LinkOpen,
@@ -186,6 +188,20 @@ export async function checkSessionDelete(input: SessionDelete, c: PoolClient) {
     if (decision && !decision.allow)
       throw new Problem(403, "forbidden", decision.message, { reason: "session_policy", extension: extension.name });
   }
+}
+
+/** The first refusal wins; null lets the merge go on (account-merge.ts). */
+export async function checkAccountMerge(merge: AccountMerge, c: PoolClient) {
+  for (const extension of loaded) {
+    const decision: AccountMergeDecision | undefined = await extension.policies?.accountMerge?.(merge, c);
+    if (decision && !decision.allow) return { extension: extension.name, message: decision.message };
+  }
+  return null;
+}
+
+/** Each extension moves its own records inside the merge; an error aborts it. */
+export async function runAccountMerged(merge: AccountMerge, c: PoolClient) {
+  for (const extension of loaded) await extension.accountMerged?.(merge, c);
 }
 
 /** Fire and forget, after the commit: an extension's failure never fails the core. */
