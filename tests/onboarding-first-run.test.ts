@@ -4,11 +4,24 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentConnection, Artifact, Revision } from "../packages/contracts/index.ts";
 import { looksLikeHtml, MAX_BYTES } from "../packages/contracts/index.ts";
-import { classifyHtml } from "../apps/server/html.ts";
+import { classifyHtml, inspectHtml } from "../apps/server/html.ts";
 import { connectGuide } from "../apps/server/connect-guide.ts";
 import { deriveFirstRun } from "../apps/web/src/entities/onboarding/steps.ts";
-import { dismissalKey, readDismissed, writeDismissed } from "../apps/web/src/entities/onboarding/dismissal.ts";
-import { SAMPLE_TITLE, samplePage } from "../apps/web/src/entities/onboarding/sample-page.ts";
+import {
+  dismissalKey,
+  readDismissed,
+  recordDismissal,
+  resolveDismissed,
+  writeDismissed,
+} from "../apps/web/src/entities/onboarding/dismissal.ts";
+import {
+  INTERACTIVE_SAMPLE_TITLE,
+  SAMPLE_TITLE,
+  chooseSample,
+  interactiveSamplePage,
+  samplePage,
+} from "../apps/web/src/entities/onboarding/sample-page.ts";
+import { HERO_MAX_SHELF_AGE_DAYS, HERO_MAX_WORKS, heroOffered } from "../apps/web/src/entities/onboarding/hero.ts";
 import { clientHints, connectPhrase } from "../apps/web/src/entities/onboarding/connect-phrase.ts";
 import { FirstRunSteps } from "../apps/web/src/features/first-run/index.tsx";
 
@@ -214,6 +227,67 @@ test("the built-in example is a small self-contained static page the server can 
   assert.match(html, new RegExp(`<title>${SAMPLE_TITLE}</title>`));
   assert.doesNotMatch(html, /https?:\/\//);
   assert.doesNotMatch(html, /<script|<form|<iframe/i);
+});
+
+test("the interactive example is a small limited page, offered only with the production live viewer", () => {
+  const html = interactiveSamplePage();
+  assert.ok(looksLikeHtml(html));
+  const inspection = inspectHtml(html);
+  assert.equal(inspection.profile, "limited");
+  assert.deepEqual(inspection.signals, []);
+  assert.ok(Buffer.byteLength(html) < 16 * 1024);
+  assert.match(html, new RegExp(`<title>${INTERACTIVE_SAMPLE_TITLE}</title>`));
+  assert.doesNotMatch(html, /https?:\/\//);
+  assert.doesNotMatch(html, /<form|<iframe|fetch\(|XMLHttpRequest|WebSocket|localStorage/i);
+  assert.equal(chooseSample("production").title, INTERACTIVE_SAMPLE_TITLE);
+  for (const mode of ["local", "staging", null, undefined]) assert.equal(chooseSample(mode).title, SAMPLE_TITLE);
+});
+
+test("the hero is offered to shelves younger than 30 days or with fewer than 3 works", () => {
+  const now = Date.parse("2026-10-15T12:00:00Z");
+  const daysAgo = (days: number) => new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+  assert.equal(HERO_MAX_SHELF_AGE_DAYS, 30);
+  assert.equal(HERO_MAX_WORKS, 3);
+  // Young: offered whatever the works, even before they are counted.
+  assert.equal(heroOffered({ createdAt: daysAgo(29), works: null, now }), true);
+  assert.equal(heroOffered({ createdAt: daysAgo(1), works: 50, now }), true);
+  // Old: by the number of works; unknown until counted.
+  assert.equal(heroOffered({ createdAt: daysAgo(30), works: null, now }), null);
+  assert.equal(heroOffered({ createdAt: daysAgo(31), works: 2, now }), true);
+  assert.equal(heroOffered({ createdAt: daysAgo(31), works: 3, now }), false);
+  // Made before createdAt was recorded: old.
+  assert.equal(heroOffered({ createdAt: null, works: 0, now }), true);
+  assert.equal(heroOffered({ createdAt: null, works: 10, now }), false);
+});
+
+test("«Скрыть» follows the account; this browser's copy only fills the gaps", () => {
+  const memory = new Map<string, string>();
+  const storage = {
+    getItem: (k: string) => memory.get(k) ?? null,
+    setItem: (k: string, v: string) => void memory.set(k, v),
+    removeItem: (k: string) => void memory.delete(k),
+  };
+  const at = "2026-10-15T10:00:00.000Z";
+  // Hidden on the account: hidden here too, and the copy remembers the server's answer.
+  assert.deepEqual(resolveDismissed("a1", at, storage), { hidden: true, migrate: false });
+  assert.equal(memory.get(dismissalKey("a1")), at);
+  // Shown again from another browser: the server wins over the confirmed copy.
+  assert.deepEqual(resolveDismissed("a1", null, storage), { hidden: false, migrate: false });
+  assert.equal(memory.has(dismissalKey("a1")), false);
+  // A per-browser «Скрыть» from before the flag: still hidden, and sent to the account.
+  writeDismissed("a2", true, storage);
+  assert.deepEqual(resolveDismissed("a2", null, storage), { hidden: true, migrate: true });
+  // An older server without the field: the copy alone.
+  assert.deepEqual(resolveDismissed("a2", undefined, storage), { hidden: true, migrate: false });
+  assert.deepEqual(resolveDismissed("a3", undefined, storage), { hidden: false, migrate: false });
+  // The server's answer during this page load beats the account read at its start.
+  recordDismissal("a4", at, storage);
+  assert.deepEqual(resolveDismissed("a4", null, storage), { hidden: true, migrate: false });
+  recordDismissal("a4", null, storage);
+  assert.deepEqual(resolveDismissed("a4", at, storage), { hidden: false, migrate: false });
+  // No storage at all: the account decides.
+  assert.deepEqual(resolveDismissed("a5", at, null), { hidden: true, migrate: false });
+  assert.deepEqual(resolveDismissed("a5", null, null), { hidden: false, migrate: false });
 });
 
 test("the phrase and the client hints match what GET /connect tells the agent", () => {

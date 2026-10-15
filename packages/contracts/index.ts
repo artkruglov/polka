@@ -275,6 +275,12 @@ export interface Artifact {
   /** Who saved it, on a department shelf (docs/specs/TEAM_SHELVES.md). */
   author?: { id: string; name: string };
   /**
+   * Who saved the latest version: a person (web app, or the API with a
+   * session) or an agent connection, with its name while the connection
+   * exists. Absent when the audit row is gone (docs/specs/ONBOARDING_V2.md).
+   */
+  savedBy?: { type: "owner" | "agent"; name?: string };
+  /**
    * Found by its text (docs/specs/CONTENT_SEARCH.md): a fragment with the
    * found words between SEARCH_MATCH_START and SEARCH_MATCH_END.
    */
@@ -353,6 +359,11 @@ export interface Account {
   idleDays?: number;
   /** The session came from an agent's sign-in link (browse only). */
   assurance?: "agent_link";
+  /**
+   * From /api/session only: when the owner hid the shelf's «Подключите
+   * агента» block (docs/specs/ONBOARDING_V2.md); null: not hidden.
+   */
+  onboardingHiddenAt?: string | null;
 }
 export type ErrorCode =
   | "invalid"

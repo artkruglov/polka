@@ -23,7 +23,8 @@ import { HarvestPrompt } from "../../entities/onboarding/HarvestPrompt.tsx";
 import { arrivedFromShare } from "../../entities/onboarding/arrival.ts";
 import { writeDismissed } from "../../entities/onboarding/dismissal.ts";
 import { useFirstRun } from "../../entities/onboarding/useFirstRun.ts";
-import { SAMPLE_FILENAME, SAMPLE_TITLE, sampleBlob } from "../../entities/onboarding/sample-page.ts";
+import { chooseSample } from "../../entities/onboarding/sample-page.ts";
+import { useCapabilities } from "../../entities/capabilities/useCapabilities.ts";
 import { useSaveUpload } from "../../entities/artifact/useSaveUpload.ts";
 
 type Status = "loading" | "ready" | "error";
@@ -305,6 +306,10 @@ export function FirstRunChecklist({
   // The client chosen on the agents page; switching here remembers it too.
   const [client, setClient] = useState<HarvestClientId>(() => harvestClient(readStoredClient()));
   const upload = useSaveUpload();
+  // The interactive example where the live viewer runs in production, the static one elsewhere.
+  const capabilities = useCapabilities().capabilities;
+  const sample = chooseSample(capabilities?.livePreview ? capabilities.liveMode : null);
+  const [saving, setSaving] = useState(sample);
   const model = deriveFirstRun({
     connections: data.connections.value,
     works: data.works.value,
@@ -333,7 +338,7 @@ export function FirstRunChecklist({
   const reported = useRef<string | null>(null);
   // The latest onSaved and reload, called once per new saved upload (below).
   const reportSaved = useEffectEvent((receipt: Receipt) => {
-    setAnnouncement(`Пример сохранён: «${SAMPLE_TITLE}». Пока его видите только вы.`);
+    setAnnouncement(`Пример сохранён: «${saving.title}». Пока его видите только вы.`);
     onSaved?.(receipt);
     data.reloadWorks();
   });
@@ -344,12 +349,16 @@ export function FirstRunChecklist({
     reportSaved(saved.receipt);
   }, [upload.saved]);
 
-  const saveSample = () =>
-    void upload.save(sampleBlob(), {
-      title: SAMPLE_TITLE,
-      filename: SAMPLE_FILENAME,
+  const saveSample = () => {
+    // A retry saves what the first attempt began, under the same key.
+    if (!upload.retrying) setSaving(sample);
+    const chosen = upload.retrying ? saving : sample;
+    void upload.save(chosen.blob(), {
+      title: chosen.title,
+      filename: chosen.filename,
       folderId: null,
     });
+  };
 
   return (
     <FirstRunSteps
@@ -371,7 +380,7 @@ export function FirstRunChecklist({
         stage: upload.stage,
         error: upload.error,
         retrying: upload.retrying,
-        saved: upload.saved ? { id: upload.saved.receipt.artifactId, title: SAMPLE_TITLE } : null,
+        saved: upload.saved ? { id: upload.saved.receipt.artifactId, title: saving.title } : null,
         save: saveSample,
       }}
       announcement={announcement}

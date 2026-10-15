@@ -6,7 +6,8 @@ import { knownShelf } from "../../shared/lib/known-shelf.ts";
 import { visitSource } from "../../shared/lib/visit-source.ts";
 import { AskAgentHint } from "../../shared/ui/AskAgentHint.tsx";
 import { rememberAccount } from "../../entities/account/model/useAccount.ts";
-import { Button, Notice } from "../../shared/ui/controls.tsx";
+import { Button, LinkButton, Notice } from "../../shared/ui/controls.tsx";
+import { announceAgentConnected } from "../../entities/onboarding/agent-connected.ts";
 import { scopeOptions } from "../../entities/agent-scope/scopes.ts";
 import { useSignInWays } from "../../entities/capabilities/useCapabilities.ts";
 import { AppShell, useAccount } from "../../widgets/navigation/index.tsx";
@@ -116,6 +117,8 @@ export function OAuthConsent() {
         host: state.details.client.extension ? "в расширение браузера" : `на ${state.details.client.redirectHost}`,
         approved: decision === "approve",
       });
+      // The shelf open in another tab re-reads its connections at once.
+      if (decision === "approve") announceAgentConnected();
       location.assign(result.redirectTo);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -162,6 +165,9 @@ export function OAuthConsent() {
                   «Агенты».
                 </p>
                 <AskAgentHint lead="Чтобы вернуться в эту полку из браузера, попросите агента:" tail="" />
+                <div className="oauth-actions">
+                  <LinkButton href="/">Вернуться на полку</LinkButton>
+                </div>
               </>
             )}
           </section>

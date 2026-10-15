@@ -16,7 +16,7 @@ import {
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
 import { SEARCH_MATCH_END, SEARCH_MATCH_START } from "../../../../../packages/contracts/constants.ts";
 import { ActionMenu, type MenuAction } from "../../shared/ui/ActionMenu.tsx";
-import { accessLabel, date, isLinked } from "../../entities/artifact/format.ts";
+import { accessLabel, date, isLinked, savedByLabel } from "../../entities/artifact/format.ts";
 import { CardCover, useCover } from "./CardCover.tsx";
 import { cardKind, sameText, seriesBadge, snippetBesideTitle } from "./cover-model.ts";
 
@@ -142,6 +142,8 @@ export function ShelfCard({
           </span>
           <span>
             {a.author ? `${a.author.name} · ` : ""}
+            {/* Only an agent: on one's own shelf «Сохранили вы» would repeat on every card. */}
+            {a.savedBy?.type === "agent" ? `${savedByLabel(a)} · ` : ""}
             {cardKind(a, cover)} · v{r.number}
             {a.acceptedRevisionId === r.id ? " принята" : a.acceptedRevisionId ? " · принята другая версия" : ""} ·{" "}
             {date(a.updatedAt)}

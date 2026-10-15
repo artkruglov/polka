@@ -153,7 +153,16 @@ export async function getArtifact(actor: Actor, id: string): Promise<Artifact> {
   if (!artifact) throw missing();
   return artifact;
 }
-/** Owner detail for several artifacts in three queries; missing ids are skipped, order is kept. */
+/**
+ * Who saved each of these versions ($2, of shelf $1): the actor of its
+ * 'revision.saved' audit row and, for an agent, its connection's name. One
+ * statement for a page; the partial index audit_outbox_saved (077) serves it.
+ */
+export const SAVED_BY_SQL = `SELECT DISTINCT ON (o.target_id) o.target_id,o.actor_type,c.name
+   FROM audit_outbox o LEFT JOIN agent_connections c ON c.id=o.connection_id
+  WHERE o.tenant_id=$1 AND o.action='revision.saved' AND o.target_id=ANY($2::uuid[])
+  ORDER BY o.target_id,o.id DESC`;
+/** Owner detail for several artifacts in a fixed number of queries; missing ids are skipped, order is kept. */
 export async function getArtifacts(actor: Actor, ids: string[]): Promise<Artifact[]> {
   await assertActiveOwner(db, actor);
   if (!ids.length) return [];
@@ -213,6 +222,16 @@ export async function getArtifacts(actor: Actor, ids: string[]): Promise<Artifac
       )
     ).rows.map((row) => row.account_id as string),
   );
+  // Who saved each latest version: its 'revision.saved' audit row, with the
+  // agent connection's name (index audit_outbox_saved, migration 077).
+  const savedByRevision = new Map(
+    (await db.query(SAVED_BY_SQL, [actor.tenant, artifacts.map((a) => a.latest_revision_id)])).rows.map((row) => [
+      row.target_id as string,
+      row.actor_type === "agent"
+        ? { type: "agent" as const, ...(row.name ? { name: row.name as string } : {}) }
+        : { type: "owner" as const },
+    ]),
+  );
   const byId = new Map(artifacts.map((a) => [a.id, a]));
   const revisionById = new Map(revisions.map((r) => [r.id, r]));
   const shareByArtifact = new Map(shares.map((s) => [s.artifact_id, s]));
@@ -233,6 +252,7 @@ export async function getArtifacts(actor: Actor, ids: string[]): Promise<Artifac
         revision: revisionDTO(r),
         share: shareDTO(shareByArtifact.get(a.id), r.id, opensByShare.get(shareByArtifact.get(a.id)?.id)),
         ...(authors && { author: authors.get(a.created_by) ?? { id: a.created_by, name: "Бывший участник" } }),
+        ...(savedByRevision.has(a.latest_revision_id) && { savedBy: savedByRevision.get(a.latest_revision_id)! }),
       },
     ];
   });

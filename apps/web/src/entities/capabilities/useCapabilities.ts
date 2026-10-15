@@ -9,6 +9,8 @@ export type InstallationCapabilities = {
   emailSignup: "open" | "invite";
   /** Isolated interactive view of supported pages. */
   livePreview: boolean;
+  /** Where that view runs: production is the separate viewer origin (polochka.page). */
+  liveMode: "local" | "staging" | "production" | null;
   /** This installation's source code (AGPL-3.0 § 13); a fork sets its own. */
   sourceUrl: string;
   /** External sign-in that is configured here, in button order. */
@@ -108,6 +110,8 @@ export function loadCapabilities() {
         emailLogin,
         emailSignup: raw.emailSignup === "invite" ? "invite" : "open",
         livePreview: raw.liveExperimental === true,
+        liveMode:
+          raw.liveMode === "local" || raw.liveMode === "staging" || raw.liveMode === "production" ? raw.liveMode : null,
         sourceUrl: httpsUrl(raw.sourceUrl) ?? SOURCE_URL,
         signInProviders: Array.isArray(raw.signInProviders)
           ? raw.signInProviders

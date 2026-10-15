@@ -17,10 +17,20 @@ import {
   type HeroClientId,
 } from "../../entities/onboarding/agent-setup.ts";
 import { reachableFrom } from "../../entities/onboarding/connect-phrase.ts";
-import { readAgentSeen, readDismissed, writeAgentSeen, writeDismissed } from "../../entities/onboarding/dismissal.ts";
+import {
+  readAgentSeen,
+  recordDismissal,
+  resolveDismissed,
+  writeAgentSeen,
+  writeDismissed,
+} from "../../entities/onboarding/dismissal.ts";
+import { onAgentConnected } from "../../entities/onboarding/agent-connected.ts";
+import { heroOffered } from "../../entities/onboarding/hero.ts";
 
 /** While the steps are on screen, how often the hero asks whether an agent has connected. */
 export const HERO_POLL_MS = 8000;
+/** After «Разрешить» in another tab: asks again this long after the signal. */
+const AGENT_CONNECTED_RETRIES_MS = [2000, 5000];
 
 const isActive = (c: AgentConnection) => c.status === "issued" || c.status === "seen";
 
@@ -50,10 +60,19 @@ function useAgentConnections(accountId: string, hidden: boolean) {
       if (document.visibilityState === "visible") load();
     };
     document.addEventListener("visibilitychange", onVisible);
+    // «Разрешить» in another tab (/oauth/consent): the agent exchanges its
+    // code a moment later, so ask now and twice more; the poll stays.
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const stop = onAgentConnected(() => {
+      load();
+      for (const ms of AGENT_CONNECTED_RETRIES_MS) timers.push(setTimeout(load, ms));
+    });
     return () => {
       // oxlint-disable-next-line react-hooks/exhaustive-deps -- a counter, not a DOM ref: bumping the latest value drops late answers
       generation.current++;
       document.removeEventListener("visibilitychange", onVisible);
+      stop();
+      for (const timer of timers) clearTimeout(timer);
     };
   }, [accountId, load]);
   useEffect(() => {
@@ -69,7 +88,7 @@ function useAgentConnections(accountId: string, hidden: boolean) {
 export type AgentHeroProps = {
   origin: string;
   connections: Connections;
-  /** The person hid the steps in this browser: one slim line instead. */
+  /** Hidden by the owner, or not offered to this shelf (heroOffered): one slim line instead. */
   hidden: boolean;
   client: HeroClientId;
   onClient: (id: HeroClientId) => void;
@@ -222,9 +241,41 @@ export function AgentHeroView({
   );
 }
 
-/** Data and choices: the connections from the API, the remembered client, the per-browser «Скрыть». */
-export function AgentHero({ account, onUpload }: { account: Account; onUpload: () => void }) {
-  const [hidden, setHidden] = useState(() => readDismissed(account.id));
+/**
+ * Data and choices: the connections from the API, the remembered client,
+ * «Скрыть» on the account (resolveDismissed), and who is offered the steps at
+ * all (heroOffered: young shelves or few works).
+ */
+export function AgentHero({
+  account,
+  works,
+  onUpload,
+}: {
+  account: Account;
+  /** Works on the whole shelf (no search or filter); null while unknown. */
+  works: number | null;
+  onUpload: () => void;
+}) {
+  const [initial] = useState(() => resolveDismissed(account.id, account.onboardingHiddenAt));
+  const [dismissed, setDismissed] = useState(initial.hidden);
+  // «Подключить агента» from the slim line: the steps, whatever the shelf's age.
+  const [asked, setAsked] = useState(false);
+  // Decided once per visit: a search or a filter does not move the shelf.
+  const offeredNow = heroOffered({ createdAt: account.createdAt, works });
+  const [offered, setOffered] = useState(offeredNow);
+  if (offered === null && offeredNow !== null) setOffered(offeredNow);
+  const hidden = !asked && (dismissed || offered !== true);
+  const remember = (onboardingHiddenAt: string | null) => recordDismissal(account.id, onboardingHiddenAt);
+  // A «Скрыть» this browser kept before the server knew (before migration
+  // 077, or a failed request) goes to the account once.
+  useEffect(() => {
+    if (initial.migrate)
+      client.onboarding
+        .hide()
+        .then((r) => remember(r.onboardingHiddenAt))
+        .catch(() => {});
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per mount
+  }, []);
   const [selected, setSelected] = useState<HeroClientId>(() => heroClient(readStoredClient()));
   const connections = useAgentConnections(account.id, hidden);
   const connected = connections.status === "ready" && connections.active.length > 0;
@@ -244,12 +295,25 @@ export function AgentHero({ account, onUpload }: { account: Account; onUpload: (
         storeClient(id);
       }}
       onHide={() => {
+        // At once in this browser; the account follows (a failure stays
+        // here as unsynced and is sent on the next visit).
         writeDismissed(account.id, true);
-        setHidden(true);
+        setDismissed(true);
+        setAsked(false);
+        client.onboarding
+          .hide()
+          .then((r) => remember(r.onboardingHiddenAt))
+          .catch(() => {});
       }}
       onShow={() => {
+        setAsked(true);
+        if (!dismissed) return;
         writeDismissed(account.id, false);
-        setHidden(false);
+        setDismissed(false);
+        client.onboarding
+          .unhide()
+          .then(() => remember(null))
+          .catch(() => {});
       }}
       onUpload={onUpload}
     />
