@@ -16,6 +16,8 @@ export {
   isTextMime,
   isDrawnMime,
   mimeForFilename,
+  PDF_MIME,
+  isPdfMime,
   looksLikeHtml,
   REPORT_REASONS,
   AGENT_SCOPES,

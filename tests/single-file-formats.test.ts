@@ -118,7 +118,7 @@ test("one row per format: MIME, extensions, text and drawn formats", () => {
     ["page.htm", "text/html"],
     ["photo.JPEG", "image/jpeg"],
     ["archive.zip", null],
-    ["report.pdf", null],
+    ["report.PDF", "application/pdf"],
   ] as const)
     assert.equal(mimeForFilename(name), mime, name);
   assert.deepEqual(MIME.filter(isTextMime).sort(), ["application/json", "text/csv", "text/markdown", "text/plain"]);

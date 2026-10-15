@@ -36,6 +36,7 @@ import { setShelfCard } from "../apps/server/shelf-card.ts";
 import { ImportRefusal, importShelf } from "../apps/server/shelf-import.ts";
 import { MCP_AUDIENCE, PROJECT_UPLOAD_AUDIENCE } from "../apps/server/service-auth.ts";
 import { s3, sha256 } from "../apps/server/storage.ts";
+import { buildPdf } from "./fixtures/pdf.ts";
 
 const app = await createApp();
 const password = randomBytes(24).toString("hex");
@@ -233,6 +234,12 @@ before(async () => {
     mime: "text/markdown",
     bytes: Buffer.from("# Итоги\n\nСводка недели.\n"),
   });
+  await saveFile(source, {
+    title: "Отчёт PDF",
+    filename: "report.pdf",
+    mime: "application/pdf",
+    bytes: buildPdf({ pages: [["Transfer quarterly Zanzibar"]] }),
+  });
   // A work in the trash.
   const old = await saveFile(source, {
     title: "Старьё",
@@ -290,8 +297,8 @@ test("polka-export.mjs writes the whole shelf, each file once", async () => {
   const run = await runExport(exportDir, secret);
   assert.equal(run.code, 0, run.stderr);
   const result = JSON.parse(run.stdout);
-  assert.equal(result.works, 9);
-  assert.equal(result.versions, 12);
+  assert.equal(result.works, 10);
+  assert.equal(result.versions, 13);
   assert.deepEqual(
     result.unavailable.map((u: any) => u.reason),
     ["blocked"],
@@ -300,7 +307,7 @@ test("polka-export.mjs writes the whole shelf, each file once", async () => {
   const blobs = await readdir(join(exportDir, "blobs"));
   assert.equal(blobs.length, result.files);
   assert.ok(blobs.every((name) => /^[a-f0-9]{64}$/.test(name)));
-  assert.ok(result.files < 13);
+  assert.ok(result.files < 14);
   const exported = shelfExportFileSchema.parse(
     JSON.parse(await readFile(join(exportDir, "polka-export.json"), "utf8")),
   );
@@ -349,7 +356,7 @@ test("the export routes: scopes, the browser, the upload token, the trash", asyn
   const second = (await get(`/api/v1/export?limit=4&cursor=${first.nextCursor}`, secret)).json();
   assert.equal(second.items.length, 4);
   const third = (await get(`/api/v1/export?limit=4&cursor=${second.nextCursor}`, secret)).json();
-  assert.equal(third.items.length, 1);
+  assert.equal(third.items.length, 2);
   assert.equal(third.nextCursor, null);
   // The CLI is served pointed at this installation.
   const cli = await app.inject({ method: "GET", url: "/api/v1/cli/polka-export.mjs" });
@@ -360,7 +367,7 @@ test("the export routes: scopes, the browser, the upload token, the trash", asyn
 test("importShelf saves every version, date, folder, acceptance, card and the trash", async () => {
   const target = await createAccount(`import-${randomBytes(5).toString("hex")}`, password);
   const dry = await importShelf({ dir: exportDir, account: target.name, dryRun: true });
-  assert.equal(dry.works, 8);
+  assert.equal(dry.works, 9);
   assert.deepEqual(
     dry.skipped.map((s) => s.title),
     ["Заблокировано"],
@@ -371,7 +378,7 @@ test("importShelf saves every version, date, folder, acceptance, card and the tr
   );
 
   const report = await importShelf({ dir: exportDir, account: target.name });
-  assert.equal(report.imported.length, 8);
+  assert.equal(report.imported.length, 9);
   assert.deepEqual(report.foldersCreated, ["Отчёты"]);
   const expected = (await shelfOf(source.tenant)).filter((work) => work.title !== "Заблокировано");
   const actual = await shelfOf(target.tenant);
@@ -393,14 +400,19 @@ test("importShelf saves every version, date, folder, acceptance, card and the tr
     [target.tenant],
   );
   assert.equal(found.length, 1);
-  // A CSV and a Markdown work keep their format and are searchable on the new shelf.
+  // A CSV, a Markdown and a PDF work keep their format and are searchable on the new shelf.
   assert.deepEqual(
     actual
-      .filter((work) => ["Лиды", "Итоги"].includes(work.title))
+      .filter((work) => ["Лиды", "Итоги", "Отчёт PDF"].includes(work.title))
       .map((work) => work.revisions[0].mime)
       .sort(),
-    ["text/csv", "text/markdown"],
+    ["application/pdf", "text/csv", "text/markdown"],
   );
+  const { rows: pdfFound } = await db.query(
+    "SELECT 1 FROM artifact_search s JOIN artifacts a ON a.id=s.artifact_id WHERE a.tenant_id=$1 AND s.body LIKE '%Zanzibar%'",
+    [target.tenant],
+  );
+  assert.equal(pdfFound.length, 1);
   const { rows: csvFound } = await db.query(
     "SELECT 1 FROM artifact_search s JOIN artifacts a ON a.id=s.artifact_id WHERE a.tenant_id=$1 AND s.body LIKE '%Казань%'",
     [target.tenant],
@@ -452,7 +464,7 @@ test("a damaged file or too little space is refused before anything is saved", a
     0,
   );
   const raised = await importShelf({ dir: exportDir, account: target.name, raiseQuota: true });
-  assert.equal(raised.imported.length, 8);
+  assert.equal(raised.imported.length, 9);
   assert.ok(raised.quota.raisedTo);
 });
 
@@ -535,7 +547,7 @@ test("a version this installation does not accept skips its work, in the dry run
   const dry = await importShelf({ dir: odd, account: target.name, dryRun: true });
   assert.match(dry.skipped.find((work) => work.title === "Заметка")!.reason, /не принимает версию \(mime\)/);
   const report = await importShelf({ dir: odd, account: target.name });
-  assert.equal(report.imported.length, 7);
+  assert.equal(report.imported.length, 8);
 });
 
 test("the report names versions this installation's moderation isolated", async () => {

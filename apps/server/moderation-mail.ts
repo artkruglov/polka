@@ -72,8 +72,8 @@ export const ACTION_LABEL: Record<ModerationAction, string> = {
 };
 
 const kindOf = (mime: string) =>
-  mime === "application/json"
-    ? "JSON"
+  mime === "application/json" || mime === "application/pdf"
+    ? singleFileFormat(mime)!.label
     : (singleFileFormat(mime)?.label.toLowerCase() ?? (mime.startsWith("image/") ? "изображение" : "документ"));
 
 const PROFILE: Record<string, string> = {

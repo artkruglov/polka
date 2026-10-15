@@ -38,11 +38,11 @@ export const PUBLISH_FIELD_NOTES: Record<string, string> = {
   component:
     "React component source as-is (default export rendered full-page). Only where the installation runs scripts; otherwise 422 unsupported.",
   componentLanguage: "Only with component. Default jsx.",
-  kind: "file: save one file as it is instead of a page (Markdown, CSV, JSON, text, PNG, JPEG, WebP), with name and text or base64. Polka shows Markdown as a document, CSV as a table and JSON as code.",
-  name: 'Only with kind "file": the file name; its extension gives the format (.md, .csv, .json, .txt, .png, .jpg, .webp) unless mime is sent.',
+  kind: "file: save one file as it is instead of a page (Markdown, CSV, JSON, text, PDF, PNG, JPEG, WebP), with name and text or base64. Polka shows Markdown as a document, CSV as a table, JSON as code and a PDF page by page (its scripts and forms never run).",
+  name: 'Only with kind "file": the file name; its extension gives the format (.md, .csv, .json, .txt, .pdf, .png, .jpg, .webp) unless mime is sent.',
   mime: 'Only with kind "file": the format, when the name has no known extension. text/html goes in html instead.',
   text: `Only with kind "file": the file as UTF-8 text, at most ${MAX_BYTES / 1024 / 1024} MB. JSON must parse.`,
-  base64: `Only with kind "file": the file's bytes in base64 (a picture), at most ${MAX_BYTES / 1024 / 1024} MB decoded.`,
+  base64: `Only with kind "file": the file's bytes in base64 (a PDF or a picture; required for them), at most ${MAX_BYTES / 1024 / 1024} MB decoded. A PDF that pdf.js cannot open, or one with a password, is 422.`,
   folderId: "Optional folder on the shelf.",
   expiresInDays: "Link lifetime. A new account gets at most 7 days: 30 becomes 7 and expiresNote says so.",
 };
@@ -177,6 +177,16 @@ export function openApiDocument(origin: string) {
                       kind: "file",
                       name: "leads.csv",
                       text: "name,city,amount\nАнна,Казань,1200\nБорис,Пермь,800\n",
+                    },
+                  },
+                  pdf: {
+                    summary: "A PDF shown page by page (base64 shortened here)",
+                    value: {
+                      key: "05d250e6-1ede-4c87-b537-93765249537f",
+                      title: "Quarterly report",
+                      kind: "file",
+                      name: "report.pdf",
+                      base64: "JVBERi0xLjcK…",
                     },
                   },
                 },

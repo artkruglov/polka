@@ -62,7 +62,7 @@ const SHELF_KINDS = ["pages", "documents", "images", "other"] as const;
 type ShelfKind = (typeof SHELF_KINDS)[number];
 const shelfKindSql = (artifact: string) =>
   `(CASE WHEN ${artifact}.latest_mime LIKE 'image/%' THEN 'images'
-         WHEN ${artifact}.latest_mime IN ('text/plain','text/markdown','text/csv','application/json') THEN 'documents'
+         WHEN ${artifact}.latest_mime IN ('text/plain','text/markdown','text/csv','application/json','application/pdf') THEN 'documents'
          WHEN ${artifact}.latest_mime='text/html' THEN 'pages'
          ELSE 'other' END)`;
 /**

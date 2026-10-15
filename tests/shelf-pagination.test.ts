@@ -180,7 +180,7 @@ test("a kind filter covers the whole shelf and the counts are the shelf's", asyn
   await db.query(
     `INSERT INTO revisions(id,tenant_id,artifact_id,number,created_by,filename,mime,size,sha256,
        object_key,object_version,total_size)
-     VALUES($1,$2,$3,2,$4,'report.pdf','application/pdf',1,$5,$6,'fixture',1)`,
+     VALUES($1,$2,$3,2,$4,'archive.zip','application/zip',1,$5,$6,'fixture',1)`,
     [pdf, owner.tenant, first, owner.id, "0".repeat(64), `pagination/${first}/2`],
   );
   await db.query("UPDATE artifacts SET latest_revision_id=$2 WHERE id=$1", [first, pdf]);

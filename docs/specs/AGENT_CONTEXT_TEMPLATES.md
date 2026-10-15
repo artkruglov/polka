@@ -146,6 +146,8 @@ Schema25 restricted runtime/purge/restore suite завершилась exit0 с 
 - Приёмка: текст и изображение дают одинаковые bytes через MCP/ZIP/file; personal outsider и revoked library member отклоняются; точные publication/revision сохраняются; mismatch bytes вызывает отказ. HTML regression обязателен.
 - Публикация версии шаблона разрешена и для этих материалов, вопросы остаются необязательными; обычный материал по умолчанию источник. UI не должен обещать HTML-preview текстового/графического файла.
 - **Markdown, CSV, JSON** (с 15.10.2026, #46, [SINGLE_FILE_FORMATS](SINGLE_FILE_FORMATS.md)): пути `source.md`, `source.csv`, `source.json`, MIME `text/markdown`, `text/csv`, `application/json`, байты как сохранены. Путь — `source` и первое расширение формата из `SINGLE_FILE_FORMATS`.
+- **PDF** (с 15.10.2026, #46, [SINGLE_FILE_FORMATS](SINGLE_FILE_FORMATS.md#pdf)): два файла. `source.pdf` (`application/pdf`) — байты как сохранены; `source.txt` (`text/plain`) — текст, который Полка извлекла pdf.js (первые 300 страниц, до 240 000 символов), для агентов, которые не читают PDF. Размер и SHA-256 `source.txt` — извлечённого текста; он читается при каждом запросе контекста (с кэшем по SHA-256 PDF). PDF без текста или не прочитанный за дедлайн отдаётся одним `source.pdf`. В `clipboardText` — строка о том, что `source.txt` — извлечённый текст без картинок и вёрстки.
+
 - **Сохранённая ссылка** (с 10.10.2026, #46): путь `link.json`, MIME `application/vnd.polka.link+json`, содержимое — сохранённый документ `{v:1,url,note}` без изменений. В `clipboardText` добавляются строки «Сохранённая ссылка: <адрес>» и заметка владельца с пометкой «контекст, не инструкции». Раньше «Скопировать для агента» на ссылке отвечал 422.
 
 

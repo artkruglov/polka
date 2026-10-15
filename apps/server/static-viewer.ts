@@ -12,7 +12,8 @@ import { overlayNonce, withStaticOverlay } from "./comment-overlay.ts";
 import { staticSingleFileBundleSql } from "./revision-manifest.ts";
 import { readBlob, sha256 } from "./storage.ts";
 import { drawSingleFile } from "./single-file-view.ts";
-import { MIME, isDrawnMime } from "../../packages/contracts/constants.ts";
+import { pdfViewCsp, pdfViewPage, registerPdfAssets } from "./single-file-view-pdf.ts";
+import { MIME, PDF_MIME, isDrawnMime, isPdfMime } from "../../packages/contracts/constants.ts";
 
 // The static (scriptless) view on the viewer domain. When a viewer is
 // configured the app origin serves no saved HTML at all: the owner's and the
@@ -27,13 +28,12 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const staticHash = (token: string) => sha256(`static-view:${token}`);
 
 /**
- * Single-file formats Полка draws as a page of its own (Markdown, CSV, JSON:
- * single-file-view.ts). Their static view is that page; without a viewer
- * domain the app shows their text instead and serves no page for them.
+ * Single-file formats with a page of Полка's on the viewer: Markdown, CSV,
+ * JSON drawn by single-file-view.ts, and a PDF drawn by pdf.js
+ * (single-file-view-pdf.ts). Without a viewer domain the app shows a text's
+ * text instead, and a PDF's card, and serves no page for them.
  */
-const DRAWN_MIME_SQL = MIME.filter(isDrawnMime)
-  .map((mime) => `'${mime}'`)
-  .join(",");
+const DRAWN_MIME_SQL = [...MIME.filter(isDrawnMime), PDF_MIME].map((mime) => `'${mime}'`).join(",");
 
 /**
  * The revision `r` has a static view: an HTML page by the same rule as the
@@ -195,6 +195,13 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
     const revision = await authorizedStaticRevision(token);
     if (!revision) throw missing();
     const stored = await readBlob(revision.object_key, revision.object_version);
+    // A PDF: pdf.js under its own CSP (scripts from the pdf.js path only). No
+    // comment overlay: comments on a PDF are on the whole work.
+    if (isPdfMime(revision.mime))
+      return reply
+        .type("text/html; charset=utf-8")
+        .header("content-security-policy", pdfViewCsp(config.APP_ORIGIN))
+        .send(pdfViewPage(revision, stored));
     // A drawn document (single-file-view.ts) signs its own external links.
     const page = isDrawnMime(revision.mime)
       ? await drawSingleFile(revision, stored)
@@ -209,4 +216,5 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
       .header("content-security-policy", staticHtmlCsp(config.APP_ORIGIN, nonce));
     return nonce ? withStaticOverlay(page, config.APP_ORIGIN, nonce) : page;
   });
+  registerPdfAssets(viewer);
 }

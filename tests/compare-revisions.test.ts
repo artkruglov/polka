@@ -37,7 +37,8 @@ test("Russian line counts", () => {
 
 test("images and binary files are not compared; text and HTML are", async () => {
   assert.match(unavailableReason(revision({ mime: "image/png", number: 4 }))!, /Версия 4 — изображение/);
-  assert.match(unavailableReason(revision({ mime: "application/pdf" }))!, /не текст/);
+  assert.match(unavailableReason(revision({ mime: "application/zip" }))!, /не текст/);
+  assert.match(unavailableReason(revision({ mime: "application/pdf" }))!, /PDF: версии PDF не сравниваются/);
   for (const mime of ["text/html", "text/plain", "text/markdown", "application/json", "image/svg+xml"])
     assert.equal(unavailableReason(revision({ mime })), null, mime);
   assert.equal(decodeText(new Uint8Array([0x3c, 0x70, 0x3e])), "<p>");

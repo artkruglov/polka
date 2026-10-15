@@ -11,6 +11,7 @@ import {
   PROJECT_MAX_BYTES,
   isVideoMime,
   isTextMime,
+  PDF_MIME,
   type HtmlProfile,
   type Revision,
   type Share,
@@ -36,8 +37,16 @@ import {
   verifyObject,
 } from "./storage.ts";
 import { Problem, missing } from "./errors.ts";
-import { inspectHtmlBounded, looksLikeHtml, scanScriptsBounded, scanTextBounded, type HtmlInspection } from "./html.ts";
-import { SignalCollector } from "./phishing-signals.ts";
+import {
+  UNREAD,
+  inspectHtmlBounded,
+  looksLikeHtml,
+  scanScriptsBounded,
+  scanTextBounded,
+  type HtmlInspection,
+} from "./html.ts";
+import { SCAN_INCOMPLETE, SignalCollector } from "./phishing-signals.ts";
+import { looksLikePdf, readPdfBounded } from "./pdf-reader.ts";
 import { fraudScore, mergeResults, type FilterResult } from "./content-filter/scanner.ts";
 import { CATEGORY_LABEL, decideContent } from "./content-filter/policy.ts";
 import { mergeSensitive, sensitiveFields, type SensitiveInput } from "./content-filter/sensitive-input.ts";
@@ -335,8 +344,21 @@ async function validateBytes(
         ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
         : input.mime === "image/webp"
           ? bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP"
-          : true;
+          : input.mime === PDF_MIME
+            ? looksLikePdf(bytes)
+            : true;
   if (!valid) throw new Problem(422, "invalid", "Содержимое файла не соответствует выбранному формату.");
+  // A PDF is saved only if pdf.js opens it (pdf-reader.ts): the viewer draws
+  // it with the same library. One that cannot be read in time is saved
+  // without text and counts as not checked (inspectSingleUpload).
+  if (input.mime === PDF_MIME) {
+    const reading = await readPdfBounded(bytes, input.sha256);
+    if (!reading.ok && reading.reason === "invalid")
+      throw new Problem(422, "invalid", "Файл не открывается как PDF: он повреждён или сохранён не полностью.");
+    if (!reading.ok && reading.reason === "password")
+      throw new Problem(422, "invalid", "PDF защищён паролем. Сохраните его без пароля и загрузите снова.");
+    return null;
+  }
   // A link work's file: exactly the small document saveLink writes.
   if (input.mime === LINK_MIME) {
     let document: unknown;
@@ -411,6 +433,14 @@ export async function assertLinkable(c: PoolClient, revisionId: string) {
       "Проект открывается на домене просмотра, а на этой установке он не настроен. Ссылку не выпускаем; проект можно скачать.",
     );
   }
+  // A PDF is drawn by pdf.js on the viewer domain only (static-viewer.ts);
+  // the app's origin never serves it inline (docs/specs/SINGLE_FILE_FORMATS.md).
+  if (r.mime === PDF_MIME && !config.HTML_LIVE_ENABLED)
+    throw new Problem(
+      422,
+      "unsupported",
+      "PDF открывается на домене просмотра, а на этой установке он не настроен. Ссылку не выпускаем; PDF можно скачать.",
+    );
   if (r.storage_kind === "bundle") {
     if (config.HTML_LIVE_ENABLED && r.derivative_id) return r.derivative_id as string;
     // A lone static page is linked like a single upload: static sandbox only.
@@ -668,25 +698,42 @@ async function inspectSingleUpload(
   const bytes = await readBlob(`${actor.tenant}/${id}`, objectVersion);
   const inspection = await validateBytes(bytes, input);
   const htmlProfile = inspection?.profile ?? null;
+  // A PDF's text and links, read once by validateBytes (kept by its SHA-256).
+  const pdf = input.mime === PDF_MIME ? await readPdfBounded(bytes, input.sha256) : null;
+  const pdfRead = pdf?.ok ? pdf : null;
   // The content filter: a page's findings come with its inspection; a text
   // file is read the same way; an image has no text (the model sees it when
   // a link is made). Only a page can ask the reader to type anything
   // (sensitiveInput); a page that could not be read in time stays unknown.
-  const contentFilter: FilterResult = inspection?.filter ?? {
-    ...(isTextMime(input.mime)
-      ? await scanTextBounded(bytes.toString("utf8"))
-      : input.mime === LINK_MIME
-        ? // The link's address (and the listed domains in it), title and note.
-          await scanTextBounded(linkText(input.title, bytes))
-        : { v: 1 as const, hits: {} }),
-    sensitiveInput: false,
-  };
+  const contentFilter: FilterResult = inspection?.filter ??
+    pdfRead?.filter ??
+    (pdf ? UNREAD.filter : null) ?? {
+      ...(isTextMime(input.mime)
+        ? await scanTextBounded(bytes.toString("utf8"))
+        : input.mime === LINK_MIME
+          ? // The link's address (and the listed domains in it), title and note.
+            await scanTextBounded(linkText(input.title, bytes))
+          : { v: 1 as const, hits: {} }),
+      sensitiveInput: false,
+    };
   let revisionManifest: ReturnType<typeof createSingleHtmlRevisionManifest> | null = null;
   if (input.mime === "text/html") {
     if (!htmlProfile) throw new Error("HTML profile invariant failed");
     revisionManifest = createSingleHtmlRevisionManifest(bytes, htmlProfile, new Date(), input.sourceUrl ?? null);
   }
-  return { objectVersion, bytes, inspection, htmlProfile, contentFilter, revisionManifest };
+  // Phishing signals: a page's, or a PDF's text and links read the same way
+  // (an unread PDF counts as not checked, like an unread page).
+  const signals = inspection?.signals ?? pdfRead?.signals ?? (pdf ? [SCAN_INCOMPLETE] : []);
+  return {
+    objectVersion,
+    bytes,
+    inspection,
+    htmlProfile,
+    contentFilter,
+    revisionManifest,
+    signals,
+    pdfText: pdfRead?.text ?? null,
+  };
 }
 /** The inspection of a finalize, before its transaction; null when there is none to do. */
 export async function prepareUploadFinalize(actor: Actor, id: string) {
@@ -709,7 +756,7 @@ export async function finalizeUploadInTransaction(
   const input = beginUploadSchema.parse(u.request);
   await validateUploadTarget(c, actor, input);
   // Inspected before the lock, unless the bytes were sent again since.
-  const { bytes, inspection, htmlProfile, contentFilter, revisionManifest } =
+  const { bytes, inspection, htmlProfile, contentFilter, revisionManifest, signals, pdfText } =
     prepared && prepared.objectVersion === u.object_version
       ? prepared
       : await inspectSingleUpload(actor, id, u.object_version, input);
@@ -770,7 +817,7 @@ export async function finalizeUploadInTransaction(
       revisionManifest?.manifest ?? null,
       revisionManifest?.manifestSha256 ?? null,
       input.size,
-      inspection?.signals ?? [],
+      signals,
       contentFilter,
     ],
   );
@@ -794,8 +841,11 @@ export async function finalizeUploadInTransaction(
         ? bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4))
         : input.mime === LINK_MIME
           ? linkText(input.title, bytes)
-          : null,
+          : input.mime === PDF_MIME
+            ? pdfText
+            : null,
   );
+
   await c.query("UPDATE tenants SET used_bytes=used_bytes+$2 WHERE id=$1", [actor.tenant, input.size]);
   const receipt = {
     uploadId: id,

@@ -129,7 +129,8 @@ test("kind words for the prompt: two words, by type, never the title", () => {
   );
   assert.equal(kindWords(revision({ mime: "image/png" })), "похожее изображение");
   assert.equal(kindWords(revision({ mime: "text/plain" })), "похожий текстовый документ");
-  assert.equal(kindWords(revision({ mime: "application/pdf" })), "похожую страницу");
+  assert.equal(kindWords(revision({ mime: "application/zip" })), "похожую страницу");
+  assert.equal(kindWords(revision({ mime: "application/pdf" })), "похожий документ (PDF)");
   assert.ok(!remixPrompt(origin, revision()).includes(title));
   assert.equal(variantRef("try"), "share");
   assert.equal(variantRef("remix"), "share-remix");

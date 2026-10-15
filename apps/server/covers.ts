@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { LINK_MIME } from "../../packages/contracts/constants.ts";
+import { LINK_MIME, PDF_MIME } from "../../packages/contracts/constants.ts";
 import type { RevisionCover } from "../../packages/contracts/cover.ts";
 import type { SnapshotResult } from "../../packages/renderer-contract.ts";
 import { config } from "./config.ts";
@@ -14,6 +14,7 @@ import { snapshotClient, type SnapshotCall } from "./cover-snapshot-client.ts";
 import { db } from "./db.ts";
 import { missing } from "./errors.ts";
 import { readBlob } from "./storage.ts";
+import { readPdfBounded } from "./pdf-reader.ts";
 import { runInPool } from "./worker-pool.ts";
 import {
   SERVED_BUILDER_VERSIONS_SQL,
@@ -149,10 +150,18 @@ export async function computeCoverFacts(r: any): Promise<CoverFacts> {
       accent: null,
       signals: EMPTY_SIGNALS,
     };
+  // A PDF: a document with its opening text (pdf-reader.ts). No picture of
+  // its first page: the renderer does not draw PDFs.
+  if (r.mime === PDF_MIME && r.storage_kind === "single") {
+    const reading = await readPdfBounded(await readBlob(r.object_key, r.object_version), r.sha256);
+    if (reading.ok && reading.text.trim())
+      return { ...coverFactsFromText(reading.text.slice(0, 64 * 1024), r.filename), genre: "document" };
+  }
   if (r.mime === "text/html") {
     const html = await readEntry(r);
     if (html !== null) return coverFactsBounded(html);
   }
+
   return { kind: "text", genre: "document", heading: null, lead: null, accent: null, signals: EMPTY_SIGNALS };
 }
 

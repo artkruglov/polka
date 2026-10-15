@@ -173,5 +173,6 @@
   "tests/agent-sessions-web.test.ts",
   "tests/hosted-setup.test.ts",
   "tests/single-file-formats.test.ts",
+  "tests/single-file-pdf.test.ts",
   "tests/test-suites.test.ts"
 ]

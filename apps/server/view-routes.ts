@@ -23,6 +23,7 @@ import { assertEditorialShareAccessible } from "./editorial.ts";
 import { answeringAccountSql, linkShelfOpenSql, lockAnsweringAccount } from "./owner-state.ts";
 import type { FastifyInstance } from "fastify";
 import { SHELF, id, strongIdentity, withComments } from "./route-helpers.ts";
+import { isPdfMime } from "../../packages/contracts/constants.ts";
 
 /** Share resolutions per client IP per 10 minutes; each view resolves once per grant. */
 export const RESOLVE_LIMIT_PER_IP = 600;
@@ -320,8 +321,11 @@ export function registerViewRoutes(app: FastifyInstance) {
     const r = await granted(req.headers.authorization?.replace(/^Bearer /, "") ?? "");
     if (!r) throw missing();
     // A link bound to an interactive version, and a page the static view
-    // refuses, never hand the recipient the raw upload (as sendHtml).
-    if (r.storage_kind === "bundle" || r.granted_derivative_id || r.html_profile === "unsupported") throw missing();
+    // refuses, never hand the recipient the raw upload (as sendHtml). A PDF
+    // is read on the viewer domain; its original is the owner's download only.
+    if (r.storage_kind === "bundle" || r.granted_derivative_id || r.html_profile === "unsupported" || isPdfMime(r.mime))
+      throw missing();
+
     reply.type(r.mime).header("content-security-policy", "sandbox; default-src 'none'");
     return readBlob(r.object_key, r.object_version);
   });

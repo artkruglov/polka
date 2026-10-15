@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Publish one HTML file, React component or file (Markdown, CSV, JSON, text,
-// a picture) to Полка through POST /api/v1/publish and print the link.
+// a PDF, a picture) to Полка through POST /api/v1/publish and print the link.
 // No dependencies: Node 22+ (global fetch). The token is read from POLKA_TOKEN only.
 //
 //   POLKA_ENDPOINT=https://polka.example.com POLKA_TOKEN=… \
@@ -9,6 +9,7 @@
 //   node polka-publish.mjs App.jsx --title "Прототип"            (runs interactively)
 //   node polka-publish.mjs App.jsx --artifact <id> --base-revision <revision.id>
 //   node polka-publish.mjs leads.csv --title "Лиды"              (saved as a table)
+//   node polka-publish.mjs report.pdf                            (shown page by page)
 //
 // See docs/PUBLISH_API.md.
 import { randomUUID } from "node:crypto";
@@ -24,13 +25,14 @@ const DEFAULT_ENDPOINT = "";
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
 
-const USAGE = `Usage: polka-publish <file.html|App.jsx|App.tsx|file.md|file.csv|file.json|-> [options]
+const USAGE = `Usage: polka-publish <file.html|App.jsx|App.tsx|file.md|file.csv|file.json|file.pdf|-> [options]
 
 Publishes one self-contained HTML page, one React component or one file to
 your Полка shelf and prints the share link. A .jsx/.tsx file is sent as
 component source: Полка compiles it and the link opens it interactively.
-A .md, .csv, .json, .txt, .png, .jpg or .webp file is saved as it is: Полка
-shows Markdown as a document, CSV as a table and JSON as code.
+A .md, .csv, .json, .txt, .pdf, .png, .jpg or .webp file is saved as it is:
+Полка shows Markdown as a document, CSV as a table, JSON as code and a PDF
+page by page.
 
 Options:
   --title <text>     Title on the shelf (default: the page <title> or file name)
@@ -78,7 +80,7 @@ function titleFromHtml(html) {
 /**
  * Files saved as they are (kind "file"), by extension: a copy of the formats
  * in packages/contracts/constants.ts (SINGLE_FILE_FORMATS), since this CLI
- * is served as one self-contained file. Pictures go as base64.
+ * is served as one self-contained file. A PDF and pictures go as base64.
  */
 const FILE_MIME = {
   ".md": "text/markdown",
@@ -86,6 +88,7 @@ const FILE_MIME = {
   ".csv": "text/csv",
   ".json": "application/json",
   ".txt": "text/plain",
+  ".pdf": "application/pdf",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -248,7 +251,9 @@ export async function main(
           });
     const name = options.file === "-" ? "stdin.html" : options.file;
     const mime = options.component ? null : fileMime(name);
-    const picture = !!mime?.startsWith("image/");
+    // Bytes, not text: a PDF or a picture.
+    const picture = !!mime && (mime.startsWith("image/") || mime === "application/pdf");
+
     const source = picture ? "" : raw.toString("utf8");
     if (picture ? !raw.length : !source.trim()) throw new CliError("The file is empty.");
     const html = options.component || mime ? null : asHtml(source, name);

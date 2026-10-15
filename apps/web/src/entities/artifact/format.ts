@@ -160,7 +160,11 @@ export const categoryLabel: Record<Category, string> = {
 export const categoryOf = (r: Pick<Revision, "mime">): Category =>
   r.mime.startsWith("image/")
     ? "images"
-    : r.mime === "text/plain" || r.mime === "text/markdown" || r.mime === "text/csv" || r.mime === "application/json"
+    : r.mime === "text/plain" ||
+        r.mime === "text/markdown" ||
+        r.mime === "text/csv" ||
+        r.mime === "application/json" ||
+        r.mime === "application/pdf"
       ? "documents"
       : r.mime === "text/html"
         ? "pages"

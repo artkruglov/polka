@@ -1,11 +1,14 @@
 // The phishing signals of a stored version, read again under the current
 // rules (phishing-signals.ts), for `moderation.ts recheck --fraud`
 // (shares.ts, recheckFraudHolds). The same reading as a save: a page, or
-// every page and script of a bundle (artifacts.ts).
+// every page and script of a bundle (artifacts.ts), or a PDF's text and links.
+
 import { db } from "./db.ts";
 import { inspectHtmlBounded, scanScriptsBounded } from "./html.ts";
 import { readBlob } from "./storage.ts";
 import { SignalCollector } from "./phishing-signals.ts";
+import { readPdfBounded } from "./pdf-reader.ts";
+import { PDF_MIME } from "../../packages/contracts/constants.ts";
 
 const MAX_BUNDLE_FILES = 500;
 /** revisions.phishing_signals holds at most 64 (029_abuse_protection.sql). */
@@ -24,6 +27,11 @@ export async function rescanPhishingSignals(revision: Row): Promise<string[] | n
   const page = async (key: string, version: string) =>
     (await inspectHtmlBounded((await readBlob(key, version)).toString("utf8"))).signals;
   try {
+    // A PDF's text and links, read again (not from the kept reading: the rules may have changed).
+    if (revision.storage_kind !== "bundle" && revision.mime === PDF_MIME) {
+      const reading = await readPdfBounded(await readBlob(revision.object_key, revision.object_version));
+      return reading.ok ? reading.signals.slice(0, MAX_SIGNALS) : null;
+    }
     if (revision.storage_kind !== "bundle")
       return revision.mime === "text/html"
         ? (await page(revision.object_key, revision.object_version)).slice(0, MAX_SIGNALS)
