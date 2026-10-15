@@ -10,6 +10,7 @@ import {
   type UploadInput,
   PROJECT_MAX_BYTES,
   isVideoMime,
+  isTextMime,
   type HtmlProfile,
   type Revision,
   type Share,
@@ -348,7 +349,7 @@ async function validateBytes(
       throw new Problem(422, "invalid", "Ссылка сохранена не полностью. Повторите.");
     return null;
   }
-  if (input.mime === "text/plain" || input.mime === "text/html") {
+  if (input.mime === "text/html" || isTextMime(input.mime)) {
     let source: string;
     try {
       source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -359,9 +360,18 @@ async function validateBytes(
         "invalid",
         input.mime === "text/html"
           ? "Для HTML-страницы поддерживается кодировка UTF-8."
-          : "Для текста поддерживается кодировка UTF-8.",
+          : input.mime === "text/csv"
+            ? "Для таблицы CSV поддерживается кодировка UTF-8. Сохраните файл как «CSV UTF-8»."
+            : "Для текста поддерживается кодировка UTF-8.",
       );
     }
+    // The same check as a project's JSON file (validateBundleFileBytes).
+    if (input.mime === "application/json")
+      try {
+        JSON.parse(source);
+      } catch {
+        throw new Problem(422, "invalid", "Это не похоже на JSON: файл не читается как JSON-документ.");
+      }
     if (input.mime === "text/html") {
       if (!looksLikeHtml(source))
         throw new Problem(
@@ -663,7 +673,7 @@ async function inspectSingleUpload(
   // a link is made). Only a page can ask the reader to type anything
   // (sensitiveInput); a page that could not be read in time stays unknown.
   const contentFilter: FilterResult = inspection?.filter ?? {
-    ...(input.mime === "text/plain"
+    ...(isTextMime(input.mime)
       ? await scanTextBounded(bytes.toString("utf8"))
       : input.mime === LINK_MIME
         ? // The link's address (and the listed domains in it), title and note.
@@ -780,7 +790,7 @@ export async function finalizeUploadInTransaction(
     revisionId,
     input.mime === "text/html"
       ? inspection?.text
-      : input.mime === "text/plain"
+      : isTextMime(input.mime)
         ? bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4))
         : input.mime === LINK_MIME
           ? linkText(input.title, bytes)

@@ -139,6 +139,16 @@ export async function computeCoverFacts(r: any): Promise<CoverFacts> {
     const text = (await readBlob(r.object_key, r.object_version)).subarray(0, 64 * 1024).toString("utf8");
     return coverFactsFromText(text, r.filename);
   }
+  // A table or a JSON document: named as such; the card keeps the work's title.
+  if (r.mime === "text/csv" || r.mime === "application/json")
+    return {
+      kind: "text",
+      genre: r.mime === "text/csv" ? "table" : "data",
+      heading: null,
+      lead: null,
+      accent: null,
+      signals: EMPTY_SIGNALS,
+    };
   if (r.mime === "text/html") {
     const html = await readEntry(r);
     if (html !== null) return coverFactsBounded(html);

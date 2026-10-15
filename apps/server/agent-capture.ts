@@ -5,10 +5,15 @@ import type { PoolClient } from "pg";
 import type { Actor } from "./artifacts.ts";
 import { z } from "zod";
 import { canonicalizeManifest } from "../../packages/contracts/bundle.ts";
-import { MAX_TITLE, uuid } from "../../packages/contracts/index.ts";
+import { MAX_TITLE, beginUploadSchema, uuid } from "../../packages/contracts/index.ts";
 import { Problem, missing } from "./errors.ts";
 import { withServiceActorTransaction, type ServiceActor } from "./service-auth.ts";
 import {
+  beginUploadInTransaction,
+  finalizeUploadInTransaction,
+  prepareUploadFinalize,
+  stageUploadBytes,
+  uploadBytesInTransaction,
   beginBundleUploadInTransaction,
   uploadBundleFileInTransaction,
   finalizeBundleUploadInTransaction,
@@ -230,6 +235,87 @@ export async function saveBundle(
     const receipt = await finalizeBundleUploadInTransaction(c, owner, begun.uploadId, prepared);
     await hooks.afterSave?.(c, receipt);
     return receipt;
+  });
+}
+
+/**
+ * Saves one file as a single-file work (docs/specs/SINGLE_FILE_FORMATS.md):
+ * the upload steps of the web form (begin, bytes, finalize) under the
+ * connection's checks at every step, with the same idempotency by key as a
+ * bundle (a key belongs to one connection and one request).
+ */
+export async function saveSingleFile(
+  actor: ServiceActor,
+  mode: "capture" | "revise",
+  input: {
+    key: string;
+    title: string;
+    filename: string;
+    mime: string;
+    folderId?: string;
+    artifactId?: string;
+    baseRevisionId?: string;
+  },
+  bytes: Buffer,
+) {
+  const owner: Actor = { id: actor.accountId, tenant: actor.tenantId, connectionId: actor.connectionId };
+  const request = beginUploadSchema.parse({
+    key: input.key,
+    title: input.title,
+    filename: input.filename,
+    mime: input.mime,
+    size: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    ...(mode === "revise"
+      ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId }
+      : input.folderId
+        ? { folderId: input.folderId }
+        : {}),
+  });
+  const ownUpload = async (c: PoolClient, uploadId: string) => {
+    const row = (
+      await c.query(
+        "SELECT request FROM uploads WHERE id=$1 AND tenant_id=$2 AND connection_id IS NOT DISTINCT FROM $3::uuid FOR UPDATE",
+        [uploadId, owner.tenant, owner.connectionId ?? null],
+      )
+    ).rows[0];
+    if (!row) throw missing();
+    if (!!row.request.artifactId !== (mode === "revise"))
+      throw new Problem(403, "forbidden", "Неверное разрешение для операции.");
+  };
+  const begun = await withServiceActorTransaction(actor, mode, async (c) => {
+    const old = (
+      await c.query("SELECT connection_id FROM uploads WHERE tenant_id=$1 AND idempotency_key=$2", [
+        owner.tenant,
+        input.key,
+      ])
+    ).rows[0];
+    if (old && old.connection_id !== (owner.connectionId ?? null))
+      throw new Problem(409, "conflict", "Ключ уже относится к другой операции.");
+    const result = await beginUploadInTransaction(c, owner, request);
+    await c.query("UPDATE uploads SET connection_id=$2 WHERE id=$1 AND tenant_id=$3", [
+      result.uploadId,
+      owner.connectionId ?? null,
+      owner.tenant,
+    ]);
+    return result;
+  });
+  if (begun.receipt) return begun.receipt as { artifactId: string; revisionId: string; htmlProfile?: string | null };
+  // The S3 PUT and the reading back happen outside the steps' transactions,
+  // as for a bundle (artifacts.ts, stageUploadBytes).
+  const staged = await stageUploadBytes(owner, begun.uploadId, bytes);
+  await withServiceActorTransaction(actor, mode, async (c) => {
+    await ownUpload(c, begun.uploadId);
+    await uploadBytesInTransaction(c, owner, begun.uploadId, bytes, staged);
+  });
+  const prepared = await prepareUploadFinalize(owner, begun.uploadId);
+  return withServiceActorTransaction(actor, mode, async (c) => {
+    await ownUpload(c, begun.uploadId);
+    return (await finalizeUploadInTransaction(c, owner, begun.uploadId, prepared)) as {
+      artifactId: string;
+      revisionId: string;
+      htmlProfile?: string | null;
+    };
   });
 }
 

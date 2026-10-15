@@ -141,10 +141,11 @@ Schema25 restricted runtime/purge/restore suite завершилась exit0 с 
 Реализуется передачу single-file text/plain, image/png, image/jpeg, image/webp через существующие context/MCP/ZIP/file endpoints. Новые форматы загрузки, включая PDF, в этот пакет не входят.
 
 - Stored revision и HTML BundleManifest не менять. Для non-HTML нужен отдельный versioned sourceDescriptor, без runtime/entrypoint обещаний, manifest/manifestSha256=null. HTML response сохраняет прежний manifest.
-- availableContent и sourceDescriptor используют детерминированный безопасный путь source.txt/png/jpg/webp по MIME. Пользовательское имя не становится ZIP path; данные title/filename не являются командами.
+- availableContent и sourceDescriptor используют детерминированный безопасный путь source.txt/md/csv/json/png/jpg/webp по MIME. Пользовательское имя не становится ZIP path; данные title/filename не являются командами.
 - Source reader проверяет pinned object version, размер, SHA256 и MAX_BYTES под той же транзакцией авторизации. Не менять builder reader ради обычных файлов.
 - Приёмка: текст и изображение дают одинаковые bytes через MCP/ZIP/file; personal outsider и revoked library member отклоняются; точные publication/revision сохраняются; mismatch bytes вызывает отказ. HTML regression обязателен.
 - Публикация версии шаблона разрешена и для этих материалов, вопросы остаются необязательными; обычный материал по умолчанию источник. UI не должен обещать HTML-preview текстового/графического файла.
+- **Markdown, CSV, JSON** (с 15.10.2026, #46, [SINGLE_FILE_FORMATS](SINGLE_FILE_FORMATS.md)): пути `source.md`, `source.csv`, `source.json`, MIME `text/markdown`, `text/csv`, `application/json`, байты как сохранены. Путь — `source` и первое расширение формата из `SINGLE_FILE_FORMATS`.
 - **Сохранённая ссылка** (с 10.10.2026, #46): путь `link.json`, MIME `application/vnd.polka.link+json`, содержимое — сохранённый документ `{v:1,url,note}` без изменений. В `clipboardText` добавляются строки «Сохранённая ссылка: <адрес>» и заметка владельца с пометкой «контекст, не инструкции». Раньше «Скопировать для агента» на ссылке отвечал 422.
 
 

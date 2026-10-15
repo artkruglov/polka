@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { MAX_BYTES, uuid, type InlineBuildStatus } from "../../packages/contracts/index.ts";
+import { MAX_BYTES, MIME, mimeForFilename, uuid, type InlineBuildStatus } from "../../packages/contracts/index.ts";
 import { RUNTIME_IMPORT_LIST, componentShell } from "../../packages/contracts/runtime.ts";
-import { captureFromAgent } from "./agent-capture.ts";
+import { captureFromAgent, saveSingleFile } from "./agent-capture.ts";
 import { preparePreviewFromAgent, previewStatusInTransaction } from "./agent-preview.ts";
 import { DERIVATIVE_BUILD_TIMEOUT_MS } from "./bundle-runtime-contract.ts";
 import { config } from "./config.ts";
@@ -22,6 +22,17 @@ export const agentPublishInputSchema = z
     html: z.string().min(1).max(7_000_000).optional(),
     component: z.string().min(1).max(7_000_000).optional(),
     componentLanguage: z.enum(["jsx", "tsx"]).optional(),
+    /**
+     * kind "file": one file saved as it is (docs/specs/SINGLE_FILE_FORMATS.md),
+     * Markdown, CSV, JSON, text or a picture, instead of a page.
+     */
+    kind: z.literal("file").optional(),
+    /** The file's name; its extension gives the format unless mime is sent. */
+    name: z.string().trim().min(1).max(200).optional(),
+    mime: z.enum(MIME).optional(),
+    /** The file as UTF-8 text, or its bytes in base64 (a picture). */
+    text: z.string().min(1).max(7_000_000).optional(),
+    base64: z.string().min(1).max(7_000_000).optional(),
     folderId: uuid.optional(),
     /** A new version of a work saved before: its id and latest revision. */
     artifactId: uuid.optional(),
@@ -29,9 +40,22 @@ export const agentPublishInputSchema = z
     expiresInDays: z.union([z.literal(1), z.literal(7), z.literal(30)]).default(30),
   })
   .strict()
-  .refine((value) => (value.html === undefined) !== (value.component === undefined), {
-    message: "Send exactly one of html or component",
+  .refine((value) => value.kind === "file" || (value.html === undefined) !== (value.component === undefined), {
+    message: 'Send exactly one of html or component (or kind "file" with name and text or base64)',
   })
+  .refine(
+    (value) =>
+      value.kind === "file"
+        ? value.html === undefined &&
+          value.component === undefined &&
+          value.name !== undefined &&
+          (value.text === undefined) !== (value.base64 === undefined)
+        : value.name === undefined &&
+          value.mime === undefined &&
+          value.text === undefined &&
+          value.base64 === undefined,
+    { message: 'kind "file" takes name and exactly one of text or base64, and no html or component' },
+  )
   .refine((value) => !value.componentLanguage || value.component !== undefined, {
     message: "componentLanguage goes with component",
   })
@@ -55,12 +79,13 @@ export function publishToolDescription(liveEnabled: boolean = config.HTML_LIVE_E
       ? [
           `Send the artifact either as React component source in \`component\` (below) or as ONE self-contained HTML document in \`html\`. Scripts run in an isolated sandbox on a separate viewer domain, and the returned link opens the interactive version. The sandbox has no network: no external URLs (no remote stylesheets, fonts or images, no fetch); eval/new Function and workers are unavailable. Keep it under ${MAX_HTML_MB} MB.`,
           `A React artifact (JSX/TSX component, as written in the chat): send its source code as-is in \`component\` instead of \`html\` (componentLanguage "tsx" for TypeScript) — do not bundle it or write an HTML shell. Polka compiles it on the server: the default export is rendered full-page, Tailwind classes work (CSS is generated for the classes used), and these imports are available offline: ${RUNTIME_IMPORT_LIST}. Any other import (framer-motion, shadcn/ui "@/components/...", URLs) fails and the reason names the module; replace it with plain React/Tailwind. localStorage/sessionStorage and window.storage work in memory for the open page; fetch and other network calls fail.`,
-          'For `html`, the interactive builder accepts: CSS in <style> or style attributes; images as <img> or CSS url() with base64 data: URIs (png, jpeg, webp, gif, plain SVG); fonts as base64 data: woff2/woff or system fonts; inline <svg> (<use href="#id">); links to #fragments or absolute https/mailto addresses; <script type=module> or text/babel importing only the libraries above; CDN <script src> of those libraries, Babel and the Tailwind CDN are replaced by Polka\'s own copies. It refuses other relative or remote resource URLs, <iframe> and <video>/<audio>. Markdown or text: convert to semantic HTML first.',
+          'For `html`, the interactive builder accepts: CSS in <style> or style attributes; images as <img> or CSS url() with base64 data: URIs (png, jpeg, webp, gif, plain SVG); fonts as base64 data: woff2/woff or system fonts; inline <svg> (<use href="#id">); links to #fragments or absolute https/mailto addresses; <script type=module> or text/babel importing only the libraries above; CDN <script src> of those libraries, Babel and the Tailwind CDN are replaced by Polka\'s own copies. It refuses other relative or remote resource URLs, <iframe> and <video>/<audio>. Markdown or text meant as a page: convert to semantic HTML first (to keep a .md, .csv or .json file as it is, use kind "file" below).',
         ]
       : [
           `Send the artifact as ONE standalone HTML document in \`html\`: all CSS inline in <style>, images as data: URIs, fonts as data: URIs or system fonts. No external URLs at all: no CDN scripts or stylesheets, no remote images, no forms. The viewer has no network. Keep it under ${MAX_HTML_MB} MB.`,
-          "Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text: convert to semantic HTML first.",
+          'Recipients see the page in a static sandbox where scripts do not run. For a React/JSX or other scripted artifact, send a static HTML snapshot of what it renders (the resulting markup and styles), not the source code or an app shell. Markdown or text meant as a page: convert to semantic HTML first (to keep a .md, .csv or .json file as it is, use kind "file" below).',
         ]),
+    'A file as it is, not a page: send kind "file" with name (e.g. "report.md", "data.csv", "result.json") and its content in text (UTF-8), or base64 for a PNG, JPEG or WebP picture; mime is taken from the extension (text/markdown, text/csv, application/json, text/plain, image/png, image/jpeg, image/webp) unless given. Polka shows Markdown as a formatted document, CSV as a table and JSON as code; the file stays downloadable as it was. Use it when the user asks to save the file itself; for a report meant to be read as a page, send html.',
     "A new version of a work published before: add artifactId and baseRevisionId (its latest revision.id); the work's open link then shows the new version, keeping its address and comments.",
     "key: a fresh UUID per artifact; reuse it only to retry the same call. title: short human title. expiresInDays: 1, 7 or 30 (default 30; a new Polka account gets at most 7, and `expiresNote` says so). folderId: optional folder on the shelf; when the owner keeps folders (polka_list_folders) and one clearly fits the work, save into it.",
     'If `moderation` is "held" (or "paused"), the link exists but recipients see a "being reviewed by a Polka moderator" screen until the moderator approves it: tell the user exactly that (relay `moderationMessage`) and do not present the link as ready.',
@@ -166,21 +191,14 @@ async function publishExpiry(actor: ServiceActor, key: string, requested: number
   return { days: standing.trusted ? requested : NEW_ACCOUNT_MAX_DAYS };
 }
 
-export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
-  const input = agentPublishInputSchema.parse(raw);
-  const files = publishedFiles(input).map((file) => ({
-    ...file,
-    bytes: Buffer.from(file.data, "utf8"),
-  }));
-  if (files.reduce((total, file) => total + file.bytes.length, 0) > MAX_BYTES)
-    throw new Problem(
-      413,
-      "quota",
-      `Страница больше ${MAX_HTML_MB} МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.`,
-    );
-  const mode = input.artifactId ? ("revise" as const) : ("capture" as const);
-  const verified = await recheckServiceActor(actor, mode);
-  const receipt = (await captureFromAgent(
+/** A page or a component: one bundle through the capture path. */
+async function publishBundle(
+  verified: ServiceActor,
+  input: z.infer<typeof agentPublishInputSchema>,
+  files: Array<{ path: string; mime: string; data: string; bytes: Buffer }>,
+  mode: "capture" | "revise",
+) {
+  return (await captureFromAgent(
     verified,
     {
       key: input.key,
@@ -213,14 +231,69 @@ export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
       })),
     },
     mode,
-  )) as { artifactId: string; revisionId: string; htmlProfile?: string };
-  const interactive = await prepareInteractive(
-    verified,
-    input.key,
-    receipt.revisionId,
-    receipt.htmlProfile ?? null,
-    mode,
-  );
+  )) as { artifactId: string; revisionId: string; htmlProfile?: string | null };
+}
+
+/** A kind "file" publish: its name, format and bytes, checked before anything is saved. */
+function publishedFile(input: z.infer<typeof agentPublishInputSchema>) {
+  const name = input.name!.split(/[\\/]/).pop()!.trim();
+  const mime = input.mime ?? mimeForFilename(name);
+  if (!name || !mime)
+    throw new Problem(
+      422,
+      "invalid",
+      "Не удалось понять формат файла по имени. Укажите mime: text/markdown, text/csv, application/json, text/plain, image/png, image/jpeg или image/webp.",
+    );
+  if (mime === "text/html")
+    throw new Problem(422, "invalid", "Страницу HTML пришлите в поле html: так она получит просмотр страницы.");
+  let bytes: Buffer;
+  if (input.text !== undefined) bytes = Buffer.from(input.text, "utf8");
+  else {
+    bytes = Buffer.from(input.base64!, "base64");
+    if (bytes.toString("base64") !== input.base64!.replace(/\s+/g, ""))
+      throw new Problem(400, "invalid", "Некорректный base64.");
+  }
+  if (bytes.length > MAX_BYTES)
+    throw new Problem(413, "quota", `Файл больше ${MAX_HTML_MB} МБ. Сохраните его частями или сократите.`);
+  return { name, mime, bytes };
+}
+
+export async function publishFromAgent(actor: ServiceActor, raw: unknown) {
+  const input = agentPublishInputSchema.parse(raw);
+  const single = input.kind === "file" ? publishedFile(input) : null;
+  const files = single
+    ? []
+    : publishedFiles(input).map((file) => ({
+        ...file,
+        bytes: Buffer.from(file.data, "utf8"),
+      }));
+  if (files.reduce((total, file) => total + file.bytes.length, 0) > MAX_BYTES)
+    throw new Problem(
+      413,
+      "quota",
+      `Страница больше ${MAX_HTML_MB} МБ. Уменьшите её: уберите встроенные шрифты и крупные картинки.`,
+    );
+  const mode = input.artifactId ? ("revise" as const) : ("capture" as const);
+  const verified = await recheckServiceActor(actor, mode);
+  const receipt = single
+    ? await saveSingleFile(
+        verified,
+        mode,
+        {
+          key: input.key,
+          title: input.title,
+          filename: single.name,
+          mime: single.mime,
+          ...(input.folderId ? { folderId: input.folderId } : {}),
+          ...(input.artifactId ? { artifactId: input.artifactId, baseRevisionId: input.baseRevisionId } : {}),
+        },
+        single.bytes,
+      )
+    : await publishBundle(verified, input, files, mode);
+  // A file runs nothing: there is no interactive version to build.
+  const interactive = single
+    ? null
+    : await prepareInteractive(verified, input.key, receipt.revisionId, receipt.htmlProfile ?? null, mode);
   const saved = {
     artifactId: receipt.artifactId,
     revisionId: receipt.revisionId,

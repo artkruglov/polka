@@ -32,6 +32,12 @@ function formatLabel(mime: string | undefined) {
       return "HTML";
     case "text/plain":
       return "Текст";
+    case "text/markdown":
+      return "Markdown";
+    case "text/csv":
+      return "CSV";
+    case "application/json":
+      return "JSON";
     case "image/png":
       return "PNG";
     case "image/jpeg":

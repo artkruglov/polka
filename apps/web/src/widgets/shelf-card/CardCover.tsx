@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   AppWindow,
+  Braces,
   FileText,
   Globe,
   Hash,
@@ -8,6 +9,7 @@ import {
   LayoutDashboard,
   Link as LinkIcon,
   NotebookText,
+  Sheet,
   StickyNote,
 } from "lucide-react";
 import type { Artifact } from "../../../../../packages/contracts/index.ts";
@@ -34,6 +36,8 @@ const GENRE_ICON: Record<CoverGenre, React.ComponentType<{ className?: string }>
   app: AppWindow,
   page: Globe,
   image: ImageIcon,
+  table: Sheet,
+  data: Braces,
 };
 
 // One request per version for the whole session, whichever view asks.

@@ -1,5 +1,5 @@
 import type { Artifact, Revision } from "../../../../../packages/contracts/index.ts";
-import { LINK_MIME } from "../../../../../packages/contracts/constants.ts";
+import { LINK_MIME, singleFileFormat } from "../../../../../packages/contracts/constants.ts";
 export const date = (s: string) => new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 export const size = (n: number) =>
   n < 1024 ? `${n} Б` : n < 1024 * 1024 ? `${Math.round(n / 1024)} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
@@ -38,18 +38,13 @@ export const isStaticSingleFileBundle = (r: Revision) =>
 /** A folder of linked pages saved as one work (docs/specs/PROJECTS.md). */
 export const isProject = (r: Partial<Pick<Revision, "storageKind" | "manifest">>) =>
   r.storageKind === "bundle" && r.manifest?.runtime === "project-v1";
+/** One word for what a work is: the format's own (SINGLE_FILE_FORMATS), a project or a link. */
 export const kindOf = (r: Pick<Revision, "mime"> & Partial<Pick<Revision, "storageKind" | "manifest">>) =>
   isProject(r)
     ? "Проект"
-    : r.mime === "text/markdown"
-      ? "Документ"
-      : r.mime === "text/html"
-        ? "Страница"
-        : r.mime === "text/plain"
-          ? "Текст"
-          : r.mime === LINK_MIME
-            ? "Ссылка"
-            : "Изображение";
+    : r.mime === LINK_MIME
+      ? "Ссылка"
+      : (singleFileFormat(r.mime)?.label ?? (r.mime.startsWith("image/") ? "Изображение" : "Файл"));
 export type ProfileView = {
   label: string;
   text: string;
@@ -165,7 +160,7 @@ export const categoryLabel: Record<Category, string> = {
 export const categoryOf = (r: Pick<Revision, "mime">): Category =>
   r.mime.startsWith("image/")
     ? "images"
-    : r.mime === "text/plain" || r.mime === "text/markdown"
+    : r.mime === "text/plain" || r.mime === "text/markdown" || r.mime === "text/csv" || r.mime === "application/json"
       ? "documents"
       : r.mime === "text/html"
         ? "pages"

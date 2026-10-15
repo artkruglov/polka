@@ -8,7 +8,7 @@
 // are read, and a row is written only while that version is still the
 // latest, so a save during the run wins. A version that cannot be read
 // (purged, isolated, missing, a page too deep to read in time) is skipped.
-import { LINK_MIME } from "../../packages/contracts/index.ts";
+import { LINK_MIME, MIME, isTextMime } from "../../packages/contracts/index.ts";
 import { db, transaction } from "./db.ts";
 import { inspectHtmlBounded } from "./html.ts";
 import { linkText } from "./saved-link-format.ts";
@@ -16,6 +16,8 @@ import { SEARCH_TEXT_CHARS, SearchText, addScriptText, indexRevisionText } from 
 import { readBlob } from "./storage.ts";
 
 const MAX_BUNDLE_FILES = 500;
+/** Single-file formats read as their own text (Markdown, CSV, JSON, text). */
+const TEXT_MIMES = MIME.filter(isTextMime);
 
 type Row = {
   artifact_id: string;
@@ -32,13 +34,14 @@ export async function searchTextOfRevision(revision: Row): Promise<string | null
   const page = async (key: string, version: string) =>
     (await inspectHtmlBounded((await readBlob(key, version)).toString("utf8"), undefined, { text: true })).text ?? null;
   try {
-    if (revision.mime === "text/plain") {
+    if (revision.storage_kind === "single" && isTextMime(revision.mime)) {
       const bytes = await readBlob(revision.object_key, revision.object_version);
       return bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4));
     }
     if (revision.mime === LINK_MIME)
       return linkText(revision.title, await readBlob(revision.object_key, revision.object_version));
-    if (revision.storage_kind !== "bundle") return await page(revision.object_key, revision.object_version);
+    if (revision.storage_kind !== "bundle")
+      return revision.mime === "text/html" ? await page(revision.object_key, revision.object_version) : null;
     // A bundle: the entry page's visible text, then the scripts' phrases.
     const text = new SearchText();
     const entry = await page(revision.object_key, revision.object_version);
@@ -98,11 +101,12 @@ export async function backfillSearch(
          WHERE a.id>$1 AND r.content_purged_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM moderation_blocks b
                            WHERE b.revision_id=r.id AND b.released_at IS NULL)
-           AND r.mime IN ('text/html','text/plain',$3)
+           AND (r.mime IN ('text/html','text/plain',$3)
+                OR (r.storage_kind='single' AND r.mime=ANY($5::text[])))
            AND (s.artifact_id IS NULL OR s.revision_id<>r.id)
            AND ($4::uuid[] IS NULL OR a.id=ANY($4::uuid[]))
          ORDER BY a.id LIMIT $2`,
-        [after, batch, LINK_MIME, options.artifactIds ?? null],
+        [after, batch, LINK_MIME, options.artifactIds ?? null, TEXT_MIMES],
       )
     ).rows;
     if (!rows.length) break;

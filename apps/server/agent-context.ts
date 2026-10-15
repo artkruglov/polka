@@ -10,7 +10,14 @@ import {
   type AgentContext,
   type SingleFileSourceDescriptor,
 } from "../../packages/contracts/agent-context.ts";
-import { LINK_MIME, linkDocumentSchema, MAX_BYTES, uuid } from "../../packages/contracts/index.ts";
+import {
+  LINK_MIME,
+  linkDocumentSchema,
+  MAX_BYTES,
+  MIME,
+  SINGLE_FILE_FORMATS,
+  uuid,
+} from "../../packages/contracts/index.ts";
 import { type Actor, readAuthorizedRevisionSource } from "./artifacts.ts";
 import { transaction } from "./db.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
@@ -21,18 +28,25 @@ import { zipFiles } from "./zip-files.ts";
 import { authorizeTemplateRevision } from "./template-library-access.ts";
 import { readBlob, sha256 } from "./storage.ts";
 
-const SINGLE_FILE_PATHS = {
-  "text/plain": "source.txt",
-  "image/png": "source.png",
-  "image/jpeg": "source.jpg",
-  "image/webp": "source.webp",
+/**
+ * The one file of a single-file work as the agent receives it: source plus
+ * the format's extension (packages/contracts/constants.ts); an HTML page has
+ * a manifest of its own.
+ */
+const SINGLE_FILE_PATHS: Record<string, string> = {
+  ...Object.fromEntries(
+    MIME.filter((mime) => mime !== "text/html").map((mime) => [
+      mime,
+      `source${SINGLE_FILE_FORMATS[mime].extensions[0]}`,
+    ]),
+  ),
   // A saved link: its stored document ({v,url,note}), the address is all there is.
   [LINK_MIME]: "link.json",
-} as const;
+};
 
 function singleFileDescriptor(revision: any): SingleFileSourceDescriptor | null {
   if (revision.manifest) return null;
-  const path = SINGLE_FILE_PATHS[revision.mime as keyof typeof SINGLE_FILE_PATHS];
+  const path = Object.hasOwn(SINGLE_FILE_PATHS, revision.mime) ? SINGLE_FILE_PATHS[revision.mime] : undefined;
   const size = Number(revision.size);
   if (
     revision.storage_kind !== "single" ||
@@ -47,7 +61,7 @@ function singleFileDescriptor(revision: any): SingleFileSourceDescriptor | null 
     throw new Problem(
       422,
       "unsupported",
-      "Контекст для агента недоступен для этого формата. Он есть у страниц, проектов, текста, картинок PNG, JPEG и WebP и у сохранённых ссылок.",
+      "Контекст для агента недоступен для этого формата. Он есть у страниц, проектов, текста, Markdown, CSV, JSON, картинок PNG, JPEG и WebP и у сохранённых ссылок.",
     );
   return {
     kind: "single-file",

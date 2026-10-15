@@ -6,7 +6,7 @@ import { log } from "./log.ts";
 /**
  * A warm pool of reader workers (html-pool-worker.ts): the classifier and
  * phishing scan of a page, a text or a work's scripts, a page's cover facts,
- * a project's Markdown. Each of these may be quadratic on crafted input, so
+ * a Markdown document, a CSV table. Each of these may be quadratic on crafted input, so
  * it runs off the request thread with a deadline.
  *
  * A worker used to be started per call: loading tsx and the readers took
@@ -27,7 +27,7 @@ const START_MS = 10_000;
 const TASKS_PER_WORKER = 1_000;
 const HEAP_MB = 256;
 
-export type PoolTask = { kind: "inspect" | "cover" | "markdown" } & Record<string, unknown>;
+export type PoolTask = { kind: "inspect" | "cover" | "markdown" | "csv" } & Record<string, unknown>;
 
 type Job = {
   task: PoolTask;

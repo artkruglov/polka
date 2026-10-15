@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   LINK_MIME,
+  isTextMime,
   artifactLifecycleSchema,
   updateArtifactMetadataFields,
   updateArtifactMetadataSchema,
@@ -176,13 +177,15 @@ function encodeFolderCursor(row: any) {
 
 /**
  * What a work is, in one word, from its latest revision: page (HTML, one
- * file or a bundle), link (a saved link), image, text or file.
+ * file or a bundle), link (a saved link), image, text (text, Markdown, CSV,
+ * JSON) or file.
  */
 export function workKind(mime: string) {
   if (mime === "text/html") return "page" as const;
   if (mime === LINK_MIME) return "link" as const;
   if (mime.startsWith("image/")) return "image" as const;
-  if (mime.startsWith("text/")) return "text" as const;
+  // Text, Markdown, CSV and JSON (and a project, by its README).
+  if (mime.startsWith("text/") || isTextMime(mime)) return "text" as const;
   return "file" as const;
 }
 

@@ -38,6 +38,11 @@ export const PUBLISH_FIELD_NOTES: Record<string, string> = {
   component:
     "React component source as-is (default export rendered full-page). Only where the installation runs scripts; otherwise 422 unsupported.",
   componentLanguage: "Only with component. Default jsx.",
+  kind: "file: save one file as it is instead of a page (Markdown, CSV, JSON, text, PNG, JPEG, WebP), with name and text or base64. Polka shows Markdown as a document, CSV as a table and JSON as code.",
+  name: 'Only with kind "file": the file name; its extension gives the format (.md, .csv, .json, .txt, .png, .jpg, .webp) unless mime is sent.',
+  mime: 'Only with kind "file": the format, when the name has no known extension. text/html goes in html instead.',
+  text: `Only with kind "file": the file as UTF-8 text, at most ${MAX_BYTES / 1024 / 1024} MB. JSON must parse.`,
+  base64: `Only with kind "file": the file's bytes in base64 (a picture), at most ${MAX_BYTES / 1024 / 1024} MB decoded.`,
   folderId: "Optional folder on the shelf.",
   expiresInDays: "Link lifetime. A new account gets at most 7 days: 30 becomes 7 and expiresNote says so.",
 };
@@ -144,7 +149,7 @@ export function openApiDocument(origin: string) {
       "/api/v1/publish": {
         post: {
           operationId: "publish",
-          summary: "Save one HTML page and get a link",
+          summary: "Save one HTML page or one file and get a link",
           description:
             "Saves the page privately on the token owner's shelf and, when the token has the share scope, returns an unlisted link in the same call. Requires capture. Retry network errors, 429 and 5xx with the same key.",
           security: [{ bearerAuth: ["capture"] }],
@@ -162,6 +167,16 @@ export function openApiDocument(origin: string) {
                       title: "Quarterly report",
                       html: '<!doctype html><html><head><meta charset="utf-8"><title>Quarterly report</title><style>body{font-family:system-ui;margin:40px}</style></head><body><h1>Quarterly report</h1></body></html>',
                       expiresInDays: 7,
+                    },
+                  },
+                  file: {
+                    summary: "A CSV file saved as a table",
+                    value: {
+                      key: "7c2e9b1d-4a6f-4e3b-8d2c-1f0a9e8b7c65",
+                      title: "Leads, October",
+                      kind: "file",
+                      name: "leads.csv",
+                      text: "name,city,amount\nАнна,Казань,1200\nБорис,Пермь,800\n",
                     },
                   },
                 },
@@ -825,7 +840,7 @@ export function openApiDocument(origin: string) {
       schemas: {
         PublishRequest: {
           ...withNotes(jsonSchema(agentPublishInputSchema, "input"), PUBLISH_FIELD_NOTES),
-          description: "Send exactly one of html and component.",
+          description: 'Send exactly one of html and component, or kind "file" with name and text or base64.',
         },
         PublishResponse: withNotes(jsonSchema(publishResponseSchema, "output"), PUBLISH_RESPONSE_NOTES),
         StatusResponse: jsonSchema(statusResponseSchema, "output"),

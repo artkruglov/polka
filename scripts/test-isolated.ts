@@ -130,7 +130,19 @@ try {
   process.on("SIGTERM", interrupt);
   try {
     let result = 0;
-    for (const batch of batches) {
+    for (const [index, batch] of batches.entries()) {
+      // Sign-in limits are counted per IP in the shared database, and every
+      // test signs in from 127.0.0.1: a later batch must not inherit the
+      // earlier batch's attempts (100 per 10 minutes, apps/server/auth.ts).
+      if (index > 0) {
+        const limits = new pg.Client({ connectionString: target.href });
+        await limits.connect();
+        try {
+          await limits.query("DELETE FROM login_limits");
+        } finally {
+          await limits.end();
+        }
+      }
       child = spawn(
         process.execPath,
         // Each file loads a TypeScript runtime and may spawn more processes.

@@ -11,6 +11,11 @@ export {
   isVideoMime,
   MAX_TITLE,
   MIME,
+  SINGLE_FILE_FORMATS,
+  singleFileFormat,
+  isTextMime,
+  isDrawnMime,
+  mimeForFilename,
   looksLikeHtml,
   REPORT_REASONS,
   AGENT_SCOPES,
@@ -21,7 +26,7 @@ export {
   SEARCH_MATCH_START,
   SEARCH_MATCH_END,
 } from "./constants.ts";
-export type { UploadMime, ReportReason } from "./constants.ts";
+export type { UploadMime, ReportReason, SingleFileFormat, SingleFileView } from "./constants.ts";
 import {
   MAX_BYTES,
   MAX_TITLE,

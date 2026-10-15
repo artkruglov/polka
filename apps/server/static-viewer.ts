@@ -11,6 +11,8 @@ import { staticHtmlCsp, withNewTabLinks } from "./html.ts";
 import { overlayNonce, withStaticOverlay } from "./comment-overlay.ts";
 import { staticSingleFileBundleSql } from "./revision-manifest.ts";
 import { readBlob, sha256 } from "./storage.ts";
+import { drawSingleFile } from "./single-file-view.ts";
+import { MIME, isDrawnMime } from "../../packages/contracts/constants.ts";
 
 // The static (scriptless) view on the viewer domain. When a viewer is
 // configured the app origin serves no saved HTML at all: the owner's and the
@@ -24,10 +26,23 @@ import { readBlob, sha256 } from "./storage.ts";
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const staticHash = (token: string) => sha256(`static-view:${token}`);
 
-/** The revision `r` has a static view: the same rule as the app's sendHtml. */
-const STATIC_REVISION_SQL = `r.mime='text/html'
+/**
+ * Single-file formats Полка draws as a page of its own (Markdown, CSV, JSON:
+ * single-file-view.ts). Their static view is that page; without a viewer
+ * domain the app shows their text instead and serves no page for them.
+ */
+const DRAWN_MIME_SQL = MIME.filter(isDrawnMime)
+  .map((mime) => `'${mime}'`)
+  .join(",");
+
+/**
+ * The revision `r` has a static view: an HTML page by the same rule as the
+ * app's sendHtml, or a single file of a drawn format.
+ */
+const STATIC_REVISION_SQL = `((r.mime='text/html'
   AND COALESCE(r.html_profile,'')<>'unsupported'
-  AND (r.storage_kind='single' OR ${staticSingleFileBundleSql("r")})`;
+  AND (r.storage_kind='single' OR ${staticSingleFileBundleSql("r")}))
+  OR (r.storage_kind='single' AND r.manifest IS NULL AND r.mime IN (${DRAWN_MIME_SQL})))`;
 
 const staticViewResult = (token: string, expiresAt: Date) => ({
   url: `${config.VIEWER_ORIGIN}/static/${token}`,
@@ -179,12 +194,11 @@ export function registerStaticViewerRoutes(viewer: FastifyInstance) {
     const token = (req.params as { token?: string }).token ?? "";
     const revision = await authorizedStaticRevision(token);
     if (!revision) throw missing();
-    const page = withNewTabLinks(
-      withSignedAwayLinks(
-        await readBlob(revision.object_key, revision.object_version),
-        `${config.VIEWER_ORIGIN}/static/${token}`,
-      ),
-    );
+    const stored = await readBlob(revision.object_key, revision.object_version);
+    // A drawn document (single-file-view.ts) signs its own external links.
+    const page = isDrawnMime(revision.mime)
+      ? await drawSingleFile(revision, stored)
+      : withNewTabLinks(withSignedAwayLinks(stored, `${config.VIEWER_ORIGIN}/static/${token}`));
     // With comments (asked for when the grant was issued), the one script
     // this response may run is the overlay, under a nonce of this response.
     const nonce = revision.comment_overlay ? overlayNonce() : undefined;

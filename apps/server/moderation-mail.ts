@@ -14,6 +14,7 @@ import { modelView } from "./content-moderation.ts";
 import { authorStanding, SIGNED_UP_SQL, type ModerationNotice } from "./share-moderation.ts";
 import { log } from "./log.ts";
 import { escapeHtml } from "../../packages/contracts/html.ts";
+import { singleFileFormat } from "../../packages/contracts/constants.ts";
 
 const REPORT_REASON: Record<string, string> = {
   phishing: "фишинг или выдаёт себя за другого",
@@ -71,13 +72,9 @@ export const ACTION_LABEL: Record<ModerationAction, string> = {
 };
 
 const kindOf = (mime: string) =>
-  mime === "text/html"
-    ? "страница"
-    : mime === "text/plain"
-      ? "текст"
-      : mime === "text/markdown"
-        ? "документ"
-        : "изображение";
+  mime === "application/json"
+    ? "JSON"
+    : (singleFileFormat(mime)?.label.toLowerCase() ?? (mime.startsWith("image/") ? "изображение" : "документ"));
 
 const PROFILE: Record<string, string> = {
   static: "статичная",
