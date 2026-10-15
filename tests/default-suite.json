@@ -125,6 +125,7 @@
   "tests/live-plan.test.ts",
   "tests/paste-code.test.ts",
   "tests/onboarding-first-run.test.ts",
+  "tests/onboarding-account.test.ts",
   "tests/service-auth.test.ts",
   "tests/agent-bookkeeping.test.ts",
   "tests/moderation.test.ts",

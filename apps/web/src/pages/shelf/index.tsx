@@ -107,7 +107,12 @@ export function ShelfPage({
           )}
         </header>
       ) : (
-        <AgentHero account={account} onUpload={() => setPanel("upload")} />
+        <AgentHero
+          account={account}
+          // The whole shelf only: a search or «Принятые» counts a part of it.
+          works={!loading && !query.trim() && !acceptedOnly && counts ? counts.all : null}
+          onUpload={() => setPanel("upload")}
+        />
       )}
 
       <section className="shelf-library" aria-label="Сохранённые работы" aria-busy={loading}>

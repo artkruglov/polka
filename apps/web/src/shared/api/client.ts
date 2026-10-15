@@ -343,6 +343,11 @@ export const client = {
   me: () => request<Account>("/me"),
   /** The signed-in account, or null for a guest (200 either way). */
   session: () => request<{ account: Account | null }>("/session").then(({ account }) => account),
+  /** «Скрыть» / «Подключить агента» on the shelf's onboarding block: account state. */
+  onboarding: {
+    hide: () => request<{ onboardingHiddenAt: string }>("/account/onboarding/hide", {}),
+    unhide: () => request<{ onboardingHiddenAt: null }>("/account/onboarding/unhide", {}),
+  },
   login: (name: string, password: string) => request("/login", { name, password }),
   logout: () => request("/logout", {}),
   folders: () => request<Folder[]>("/folders"),

@@ -8,8 +8,8 @@ import {
   SCHEMA_MIGRATIONS,
 } from "../packages/migrations.ts";
 
-test("migration catalog is the complete contiguous schema 76 set", async () => {
-  assert.equal(CURRENT_SCHEMA_VERSION, 76);
+test("migration catalog is the complete contiguous schema 77 set", async () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 77);
   assert.deepEqual(
     EXPECTED_MIGRATION_VERSIONS,
     Array.from({ length: CURRENT_SCHEMA_VERSION }, (_, index) => index + 1),
@@ -114,9 +114,9 @@ test("049 indexes the links of a revision and the live works of a folder; 050 op
   // Every grant recipe was reviewed for the new schema.
   for (const recipe of ["runtime-grants.sql", "purge-worker-grants.sql", "restore-worker-grants.sql"]) {
     const text = await readFile(new URL(`../deploy/${recipe}`, import.meta.url), "utf8");
-    assert.match(text, /schema_migrations\)<>76\n/, recipe);
-    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>76 THEN/, recipe);
-    assert.match(text, /001 through 076/, recipe);
+    assert.match(text, /schema_migrations\)<>77\n/, recipe);
+    assert.match(text, /max\(version\) FROM public.schema_migrations\)<>77 THEN/, recipe);
+    assert.match(text, /001 through 077/, recipe);
   }
   const video = await readFile(migrationFileUrl("050_project_video.sql"), "utf8");
   assert.match(video, /ADD COLUMN video_enabled boolean NOT NULL DEFAULT false/);
@@ -140,6 +140,19 @@ test("071 webhooks: no work content, encrypted secret, erased with the account",
 test("the migration job gives up on a held lock after 5 s instead of queueing the app", async () => {
   const source = await readFile(new URL("../scripts/migrate.ts", import.meta.url), "utf8");
   assert.match(source, /await client\.query\("SET lock_timeout='5s'"\);\n\s+await runMigrations\(/);
+});
+
+test("077 stores the onboarding flag on the account and indexes who saved a version", async () => {
+  const sql = await readFile(migrationFileUrl("077_onboarding_hidden.sql"), "utf8");
+  assert.match(sql, /ALTER TABLE accounts ADD COLUMN onboarding_hidden_at timestamptz;/);
+  assert.match(
+    sql,
+    /CREATE INDEX audit_outbox_saved ON audit_outbox \(tenant_id, target_id\)\s+WHERE action = 'revision\.saved';/,
+  );
+  // The runtime sets and clears the column: covered by its table grant on accounts.
+  const grants = await readFile(new URL("../deploy/runtime-grants.sql", import.meta.url), "utf8");
+  assert.match(grants, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE\n\s+public\.accounts,/);
+  assert.match(grants, /Onboarding \(077\)/);
 });
 
 test("076 records provisional erasures, granted to the runtime", async () => {

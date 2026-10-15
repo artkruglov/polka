@@ -139,6 +139,17 @@ export const isLinked = (a: Pick<Artifact, "share">) => !!a.share && ["active", 
 /** Short access label for cards and toolbars. */
 export const accessLabel = (a: Pick<Artifact, "share" | "author">) =>
   isLinked(a) ? "Доступно по ссылке" : a.author ? "Участники полки" : "Только я";
+/**
+ * Who saved the latest version, in a few words: «Сохранил Codex» for an agent
+ * connection, «Сохранили вы» for the owner on their own shelf. On a department
+ * shelf a person is already named (`author`), so only an agent is told.
+ */
+export const savedByLabel = (a: Pick<Artifact, "savedBy" | "author">): string | null =>
+  a.savedBy?.type === "agent"
+    ? `Сохранил ${a.savedBy.name ?? "агент"}`
+    : a.savedBy?.type === "owner" && !a.author
+      ? "Сохранили вы"
+      : null;
 export type Category = "pages" | "documents" | "images" | "other";
 export const categoryLabel: Record<Category, string> = {
   pages: "Страницы",

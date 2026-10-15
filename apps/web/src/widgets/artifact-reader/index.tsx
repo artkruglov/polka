@@ -29,7 +29,16 @@ import {
   WandSparkles,
 } from "lucide-react";
 import type { Artifact, Revision } from "../../../../../packages/contracts/index.ts";
-import { date, dateTime, size, status, kindOf, isImage, profileView } from "../../entities/artifact/format.ts";
+import {
+  date,
+  dateTime,
+  size,
+  status,
+  kindOf,
+  isImage,
+  profileView,
+  savedByLabel,
+} from "../../entities/artifact/format.ts";
 
 export type ReaderAction = "share" | "version" | "metadata" | "accept" | "feed" | "trash" | "rework" | "agent-context";
 /** The reader's views; «versions» is kept in the address as ?tab=versions. */
@@ -327,6 +336,8 @@ export function ArtifactReader({
                 <dt>Версия</dt>
                 <dd>
                   v{shown.number} · {dateTime(shown.createdAt)}
+                  {/* Known for the latest version (Artifact.savedBy). */}
+                  {shown.id === work.revision.id && savedByLabel(work) && <> · {savedByLabel(work)}</>}
                 </dd>
               </div>
               <div>

@@ -172,13 +172,20 @@ export function registerAccountRoutes(app: FastifyInstance) {
       // (and cookie) move 30 days ahead on a visit.
       if (a.provisional && !a.weak && (await renewProvisionalSession(req.cookies.polka_session ?? "")))
         reply.setCookie("polka_session", req.cookies.polka_session!, sessionCookie(PROVISIONAL_SESSION_SECONDS));
+      const {
+        rows: [onboarding],
+      } = await db.query("SELECT onboarding_hidden_at FROM accounts WHERE id=$1", [a.id]);
       // createdAt lets the app tell a shelf made a minute ago from an old
-      // one (the «Полка создана» note after a sign-up from a shared link).
+      // one (the «Полка создана» note after a sign-up from a shared link,
+      // the «Подключите агента» block only on young shelves).
       return {
         account: {
           id: a.id,
           name: a.name,
           createdAt: a.createdAt ? a.createdAt.toISOString() : null,
+          onboardingHiddenAt: onboarding?.onboarding_hidden_at
+            ? new Date(onboarding.onboarding_hidden_at).toISOString()
+            : null,
           ...(a.provisional ? { provisional: true, idleDays: PROVISIONAL_IDLE_DAYS } : {}),
           ...(a.weak ? { assurance: "agent_link" as const } : {}),
         },
@@ -187,6 +194,25 @@ export function registerAccountRoutes(app: FastifyInstance) {
       if (error instanceof Problem && error.status === 401) return { account: null };
       throw error;
     }
+  });
+  // «Скрыть» / «Подключить агента» on the shelf's onboarding block
+  // (docs/specs/ONBOARDING_V2.md): account state, so it holds in every
+  // browser. A view preference: an agent-link session may change it too.
+  // Browser routes: the Origin check in app.ts applies; no body.
+  app.post("/api/account/onboarding/hide", { bodyLimit: 1024 }, async (req) => {
+    const a = await identity(req);
+    const {
+      rows: [row],
+    } = await db.query(
+      "UPDATE accounts SET onboarding_hidden_at=COALESCE(onboarding_hidden_at,now()) WHERE id=$1 RETURNING onboarding_hidden_at",
+      [a.id],
+    );
+    return { onboardingHiddenAt: new Date(row.onboarding_hidden_at).toISOString() };
+  });
+  app.post("/api/account/onboarding/unhide", { bodyLimit: 1024 }, async (req) => {
+    const a = await identity(req);
+    await db.query("UPDATE accounts SET onboarding_hidden_at=NULL WHERE id=$1", [a.id]);
+    return { onboardingHiddenAt: null };
   });
   app.post("/api/account/deletion-csrf", async (req) =>
     issueAccountDeletionCsrf(await strongIdentity(req), req.cookies.polka_session ?? ""),
