@@ -26,6 +26,7 @@ import {
 } from "../../entities/onboarding/dismissal.ts";
 import { onAgentConnected } from "../../entities/onboarding/agent-connected.ts";
 import { heroOffered } from "../../entities/onboarding/hero.ts";
+import { UPLOAD_FORMATS } from "../../entities/artifact/upload.ts";
 
 /** While the steps are on screen, how often the hero asks whether an agent has connected. */
 export const HERO_POLL_MS = 8000;
@@ -229,7 +230,7 @@ export function AgentHeroView({
         </a>
         <span className="agent-hero-or">
           или {upload}
-          <span className="agent-hero-fine">HTML, текст или изображение до 5 МБ</span>
+          <span className="agent-hero-fine">{UPLOAD_FORMATS}</span>
         </span>
       </div>
       {connections.status === "error" && (
