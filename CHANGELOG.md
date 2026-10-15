@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-15
+
 Обновление: миграция 077 (сделайте дамп); рецепты прав `runtime-grants.sql`, `purge-worker-grants.sql` и `restore-worker-grants.sql` теперь ждут ровно 001–077.
 
 ### Added
@@ -857,7 +859,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/artkruglov/polka/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/artkruglov/polka/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/artkruglov/polka/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/artkruglov/polka/compare/v0.15.1...v0.16.0
