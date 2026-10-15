@@ -1,4 +1,4 @@
--- Operator-reviewed recipe for the Polka schema through migration 076.
+-- Operator-reviewed recipe for the Polka schema through migration 077.
 -- Run as the actual schema_owner in a dedicated Polka database AFTER migrate,
 -- BEFORE app/storage-check/maintenance. No roles/passwords are created here.
 -- psql -X --set=ON_ERROR_STOP=1 --set=schema_owner=polka_schema \
@@ -60,10 +60,10 @@ BEGIN
     RAISE EXCEPTION 'Provision database CONNECT and remove database CREATE for runtime first';
   END IF;
   IF current_schema()<>'public'
-     OR (SELECT count(*) FROM public.schema_migrations)<>76
+     OR (SELECT count(*) FROM public.schema_migrations)<>77
      OR (SELECT min(version) FROM public.schema_migrations)<>1
-     OR (SELECT max(version) FROM public.schema_migrations)<>76 THEN
-    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 076';
+     OR (SELECT max(version) FROM public.schema_migrations)<>77 THEN
+    RAISE EXCEPTION 'This recipe requires public schema and exactly reviewed migrations 001 through 077';
   END IF;
 END $$;
 
@@ -251,8 +251,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.operator_sign_in_links TO :
 -- idle provisional shelf, reads unfinished ones and deletes the row with the
 -- shelf's rows.
 GRANT SELECT, INSERT, DELETE ON TABLE public.provisional_erasures TO :"runtime_role";
+-- Onboarding (077): a column of accounts (the application sets and clears
+-- it: «Скрыть» on the shelf), covered by its table grant above; a partial
+-- index on audit_outbox, no grants.
 -- Allowed shelves of a connection (059): a column of agent_connections, already granted.
 -- Service accounts (058): service_principals is granted above; agent_connections gains two columns, and the leaving trigger also updates service_principals (a trigger runs with the rights of the statement that fired it, the runtime role: SELECT, UPDATE granted).
 COMMIT;
 
-\echo Runtime grants installed for the reviewed schema through migration 076
+\echo Runtime grants installed for the reviewed schema through migration 077
