@@ -78,13 +78,22 @@ export function signAwayLinks(page: ProjectPage, now = Date.now()): ProjectPage 
   };
 }
 
-/** One document of the project as the body of a page, and its title. */
-export function renderProjectMarkdown(source: string, path: string, paths: ReadonlySet<string>): ProjectPage {
+/**
+ * One document of the project as the body of a page, and its title. Without
+ * `paths` (null) it is a document on its own, a single-file work
+ * (docs/specs/SINGLE_FILE_FORMATS.md): there is nothing beside it to link
+ * to, so a path in backticks stays code and a relative link stays its text.
+ */
+export function renderProjectMarkdown(source: string, path: string, paths: ReadonlySet<string> | null): ProjectPage {
   return signAwayLinks(renderProjectMarkdownUnsigned(source, path, paths));
 }
 
 /** renderProjectMarkdown with external links left for signAwayLinks (what is cached). */
-export function renderProjectMarkdownUnsigned(source: string, path: string, paths: ReadonlySet<string>): ProjectPage {
+export function renderProjectMarkdownUnsigned(
+  source: string,
+  path: string,
+  paths: ReadonlySet<string> | null,
+): ProjectPage {
   let title = "";
   const seen = new Map<string, number>();
   const marked = new Marked({
@@ -108,7 +117,7 @@ export function renderProjectMarkdownUnsigned(source: string, path: string, path
       codespan(token: Tokens.Codespan) {
         const text = token.text;
         const code = `<code>${escapeHtml(text)}</code>`;
-        if (!PATH_LIKE.test(text) || !LOOKS_LIKE_FILE.test(text)) return code;
+        if (!paths || !PATH_LIKE.test(text) || !LOOKS_LIKE_FILE.test(text)) return code;
         const target = resolveProjectPath(paths, path, text);
         return target
           ? `<a class="polka-path" href="${escapeHtml(relativeHref(path, target))}">${code}</a>`
@@ -123,13 +132,14 @@ export function renderProjectMarkdownUnsigned(source: string, path: string, path
         // The sandbox opens no mail client: the address is shown to copy.
         if (/^mailto:/i.test(href))
           return `<span class="polka-mail" title="${escapeHtml(href.slice(7))}">${inner}</span>`;
+        if (!paths) return `<span>${inner}</span>`;
         const target = resolveProjectPath(paths, path, href);
         if (!target) return `<span class="polka-outside" title="Этого файла нет в проекте">${inner}</span>`;
         const suffix = fragment ? `#${encodeURIComponent(fragment)}` : "";
         return `<a href="${escapeHtml(relativeHref(path, target) + suffix)}">${inner}</a>`;
       },
       image(token: Tokens.Image) {
-        const target = resolveProjectPath(paths, path, token.href);
+        const target = paths && resolveProjectPath(paths, path, token.href);
         // Only the project's own pictures: the viewer has no network.
         if (!target) return escapeHtml(token.text ? `[${token.text}]` : "");
         return `<img src="${escapeHtml(relativeHref(path, target))}" alt="${escapeHtml(token.text)}" loading="lazy">`;
@@ -179,7 +189,7 @@ const plainPage = (source: string, path: string): ProjectPage => ({
 export async function renderProjectMarkdownBounded(
   source: string,
   path: string,
-  paths: ReadonlySet<string>,
+  paths: ReadonlySet<string> | null,
   cacheKey: string,
 ): Promise<ProjectPage> {
   const cached = drawn.get(cacheKey);
@@ -195,7 +205,7 @@ export async function renderProjectMarkdownBounded(
     const { runInPool } = await import("./worker-pool.ts");
     page =
       (await runInPool<ProjectPage | null>(
-        { kind: "markdown", source, path, paths: [...paths] },
+        { kind: "markdown", source, path, paths: paths && [...paths] },
         MARKDOWN_DEADLINE_MS,
         null,
       )) ?? plainPage(source, path);
@@ -209,14 +219,17 @@ function splitFragment(href: string): [string, string] {
   return at === -1 ? [href, ""] : [href.slice(0, at), href.slice(at + 1)];
 }
 
-/** A page of Полка around a document: its styles, no author scripts. */
-export function projectDocumentPage(page: ProjectPage, navScript: string) {
+/**
+ * A page of Полка around a document: its styles, no author scripts. A
+ * project's page loads nav.js; a single-file work's page (static-viewer.ts)
+ * runs no script at all, so it has none.
+ */
+export function projectDocumentPage(page: ProjectPage, navScript: string | null, options: { wide?: boolean } = {}) {
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(page.title)}</title>
 <style>${DOCUMENT_CSS}</style>
-<script src="${escapeHtml(navScript)}"></script>
-</head><body><main class="doc">${page.body}</main></body></html>`;
+${navScript ? `<script src="${escapeHtml(navScript)}"></script>\n` : ""}</head><body><main class="doc${options.wide ? " doc--wide" : ""}">${page.body}</main></body></html>`;
 }
 
 const DOCUMENT_CSS = `
@@ -241,5 +254,12 @@ th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-ali
 th{background:var(--soft)}
 img{max-width:100%;height:auto;border-radius:8px}
 hr{border:0;border-top:1px solid var(--line);margin:2em 0}
+.doc--wide{max-width:none}
+.polka-note{color:var(--muted);font-size:.9em}
+table.polka-sheet{display:block;overflow:auto;max-width:100%;max-height:calc(100vh - 120px);font-size:14px;line-height:1.4}
+table.polka-sheet th{position:sticky;top:0;z-index:1}
+table.polka-sheet td,table.polka-sheet th{white-space:pre-wrap;min-width:4em;max-width:40em}
+table.polka-sheet td.polka-row{color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;background:var(--soft);position:sticky;left:0}
+pre.polka-code{white-space:pre;tab-size:2}
 @media (max-width:600px){.doc{padding:24px 16px 56px}}
 `;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Publish one HTML file or React component to Полка through POST /api/v1/publish
-// and print the link.
+// Publish one HTML file, React component or file (Markdown, CSV, JSON, text,
+// a picture) to Полка through POST /api/v1/publish and print the link.
 // No dependencies: Node 22+ (global fetch). The token is read from POLKA_TOKEN only.
 //
 //   POLKA_ENDPOINT=https://polka.example.com POLKA_TOKEN=… \
@@ -8,6 +8,7 @@
 //   cat report.html | node polka-publish.mjs - --title "Отчёт" --endpoint https://polka.example.com
 //   node polka-publish.mjs App.jsx --title "Прототип"            (runs interactively)
 //   node polka-publish.mjs App.jsx --artifact <id> --base-revision <revision.id>
+//   node polka-publish.mjs leads.csv --title "Лиды"              (saved as a table)
 //
 // See docs/PUBLISH_API.md.
 import { randomUUID } from "node:crypto";
@@ -23,12 +24,13 @@ const DEFAULT_ENDPOINT = "";
 const ATTEMPTS = 3;
 const TIMEOUT_MS = 180_000;
 
-const USAGE = `Usage: polka-publish <file.html|App.jsx|App.tsx|-> [options]
+const USAGE = `Usage: polka-publish <file.html|App.jsx|App.tsx|file.md|file.csv|file.json|-> [options]
 
-Publishes one self-contained HTML page or one React component to your Полка
-shelf and prints the share link. A .jsx/.tsx file is sent as component source:
-Полка compiles it and the link opens it interactively. Markdown and text files
-are published as preformatted text.
+Publishes one self-contained HTML page, one React component or one file to
+your Полка shelf and prints the share link. A .jsx/.tsx file is sent as
+component source: Полка compiles it and the link opens it interactively.
+A .md, .csv, .json, .txt, .png, .jpg or .webp file is saved as it is: Полка
+shows Markdown as a document, CSV as a table and JSON as code.
 
 Options:
   --title <text>     Title on the shelf (default: the page <title> or file name)
@@ -73,7 +75,25 @@ function titleFromHtml(html) {
   return title ? title.slice(0, 160) : "";
 }
 
-/** Plain text and Markdown are wrapped into a minimal page, shown as written. */
+/**
+ * Files saved as they are (kind "file"), by extension: a copy of the formats
+ * in packages/contracts/constants.ts (SINGLE_FILE_FORMATS), since this CLI
+ * is served as one self-contained file. Pictures go as base64.
+ */
+const FILE_MIME = {
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".txt": "text/plain",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+};
+const fileMime = (name) => FILE_MIME[extname(name).toLowerCase()] ?? null;
+
+/** Text without a known extension (stdin, say) is wrapped into a minimal page, shown as written. */
 function asHtml(source, name) {
   const extension = extname(name).toLowerCase();
   if ([".html", ".htm"].includes(extension) || /^\s*</.test(source)) return source;
@@ -220,15 +240,18 @@ export async function main(
     }
     if (endpoint.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname))
       throw new CliError("The endpoint must use https.", 2);
-    const source =
+    const raw =
       options.file === "-"
-        ? await stdin()
-        : await readFile(options.file, "utf8").catch((error) => {
+        ? Buffer.from(await stdin(), "utf8")
+        : await readFile(options.file).catch((error) => {
             throw new CliError(`Cannot read ${options.file}: ${error.message}`);
           });
-    if (!source.trim()) throw new CliError("The file is empty.");
     const name = options.file === "-" ? "stdin.html" : options.file;
-    const html = options.component ? null : asHtml(source, name);
+    const mime = options.component ? null : fileMime(name);
+    const picture = !!mime?.startsWith("image/");
+    const source = picture ? "" : raw.toString("utf8");
+    if (picture ? !raw.length : !source.trim()) throw new CliError("The file is empty.");
+    const html = options.component || mime ? null : asHtml(source, name);
     const title =
       options.title?.trim() || (html ? titleFromHtml(html) : "") || basename(name, extname(name)) || "Без названия";
     const key = options.key ?? randomUUID();
@@ -238,7 +261,16 @@ export async function main(
       {
         key,
         title: title.slice(0, 160),
-        ...(html === null ? { component: source, componentLanguage: options.language } : { html }),
+        ...(mime
+          ? {
+              kind: "file",
+              name: basename(name),
+              mime,
+              ...(picture ? { base64: raw.toString("base64") } : { text: source }),
+            }
+          : html === null
+            ? { component: source, componentLanguage: options.language }
+            : { html }),
         ...(options.share ? { expiresInDays: options.share } : {}),
         ...(options.folderId ? { folderId: options.folderId } : {}),
         ...(options.artifactId ? { artifactId: options.artifactId, baseRevisionId: options.baseRevisionId } : {}),

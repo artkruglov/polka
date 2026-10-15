@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   MAX_BYTES,
   MAX_TITLE,
-  MIME,
   PROJECT_MAX_BYTES,
   PROJECT_MAX_FILES,
   PROJECT_VIDEO_MAX_BYTES,
@@ -13,8 +12,14 @@ import {
   uuid,
 } from "./index.ts";
 
+// Not ...MIME: a single-file format (text/csv) is not a bundle file, and
+// Markdown is a project's only.
 const BUNDLE_MIME = [
-  ...MIME,
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "text/plain",
+  "text/html",
   "text/css",
   "text/javascript",
   "application/json",

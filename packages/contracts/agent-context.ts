@@ -60,7 +60,15 @@ export type SingleFileSourceDescriptor = {
   schema: 1;
   files: Array<{
     path: string;
-    mime: "text/plain" | "image/png" | "image/jpeg" | "image/webp" | "application/vnd.polka.link+json";
+    mime:
+      | "text/plain"
+      | "text/markdown"
+      | "text/csv"
+      | "application/json"
+      | "image/png"
+      | "image/jpeg"
+      | "image/webp"
+      | "application/vnd.polka.link+json";
     size: number;
     sha256: string;
   }>;

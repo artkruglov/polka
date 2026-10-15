@@ -58,6 +58,8 @@ export const GENRE_LABEL: Record<CoverGenre, string> = {
   app: "Страница",
   page: "Страница",
   image: "Изображение",
+  table: "Таблица",
+  data: "JSON",
 };
 
 /** The kind named on the card: the cover's genre once decided, else the file kind. */

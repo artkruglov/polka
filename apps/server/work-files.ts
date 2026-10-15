@@ -126,6 +126,7 @@ const TEXT_FILE_MIMES = new Set([
   "text/html",
   "text/markdown",
   "text/plain",
+  "text/csv",
   "text/css",
   "text/javascript",
   "application/json",

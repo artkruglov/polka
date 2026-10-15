@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 import type { LinkDocument, Revision } from "../../../../../packages/contracts/index.ts";
-import { LINK_MIME, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
+import { LINK_MIME, isDrawnMime, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
 import { LinkCard, LinkCover, OWNER_LINK_HINT, recipientAccessNote } from "../../entities/link/index.tsx";
 import { bytes, staticView, withShelf } from "../../shared/api/client.ts";
-import { isImage, isStaticSingleFileBundle, size } from "../../entities/artifact/format.ts";
+import { isImage, isStaticSingleFileBundle, kindOf, size } from "../../entities/artifact/format.ts";
 import { LivePreview } from "./LivePreview.tsx";
 import { ProjectView, filesLabel } from "./ProjectView.tsx";
 import { TextCover } from "./TextCover.tsx";
@@ -39,6 +39,7 @@ export function Preview({
 }) {
   const [content, setContent] = useState<{ url?: string; text?: string }>({}),
     [error, setError] = useState("");
+  const drawn = revision.storageKind === "single" && isDrawnMime(revision.mime);
   // Another revision or grant shows nothing until its own bytes arrive.
   const source = `${revision.id}:${grant ?? ""}`;
   const [shown, setShown] = useState(source);
@@ -51,6 +52,9 @@ export function Preview({
     const abort = new AbortController();
     let url: string | undefined;
     if (revision.mime === "text/html" || revision.storageKind === "bundle") return () => abort.abort();
+    // Markdown, CSV and JSON open as a page drawn on the viewer domain; the
+    // frame reads the text itself when there is no viewer.
+    if (drawn && !compact) return () => abort.abort();
     // A link's cover needs only its host and service, which the revision carries.
     if (revision.mime === LINK_MIME && compact) return () => abort.abort();
     bytes(grant ? "/view/bytes" : `/revisions/${revision.id}/bytes`, grant, abort.signal)
@@ -212,6 +216,20 @@ export function Preview({
       </LivePreview>
     );
   }
+  // Markdown, CSV, JSON (docs/specs/SINGLE_FILE_FORMATS.md): Полка's own page
+  // of the file on the viewer domain, without scripts of the author's.
+  if (drawn && !compact)
+    return (
+      <div className="html-preview">
+        <SandboxFrame
+          title={revision.filename}
+          revisionId={revision.id}
+          grant={grant}
+          overlay={overlay}
+          sameOrigin={<SourceText revisionId={revision.id} grant={grant} />}
+        />
+      </div>
+    );
   if (content.url)
     return (
       <img
@@ -226,7 +244,7 @@ export function Preview({
       <div className={compact ? "cover-text" : "work-text"}>
         {compact ? (
           <>
-            <span className="eyebrow">Заметка</span>
+            <span className="eyebrow">{drawn ? kindOf(revision) : "Заметка"}</span>
             <p>{content.text.slice(0, 180)}</p>
             <FileText />
           </>
@@ -246,11 +264,17 @@ function SandboxFrame({
   grant,
   title,
   overlay,
+  sameOrigin,
 }: {
   revisionId: string;
   grant?: string;
   title: string;
   overlay?: FrameOverlay;
+  /**
+   * Shown instead of a frame on an install without a viewer domain: a drawn
+   * document (Markdown, CSV, JSON) is never served from Полка's own origin.
+   */
+  sameOrigin?: React.ReactNode;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [src, setSrc] = useState("");
@@ -279,8 +303,10 @@ function SandboxFrame({
   }, [revisionId, grant, comments]);
   // The overlay is the one script of a static view, and only on the viewer's
   // own domain: a same-origin frame (single-domain install) gets none.
-  const scripted = !!overlay && !!src && new URL(src, location.href).origin !== location.origin;
+  const onViewer = !!src && new URL(src, location.href).origin !== location.origin;
+  const scripted = !!overlay && onViewer;
   if (error) return <div className="preview-error">{error}</div>;
+  if (sameOrigin && src && !onViewer) return <>{sameOrigin}</>;
   return (
     <div className="html-preview-frame" data-loaded={loaded || undefined}>
       {!loaded && (
@@ -307,6 +333,31 @@ function SandboxFrame({
           onLoad={() => setLoaded(true)}
         />
       )}
+    </div>
+  );
+}
+
+/** A file's text as written, for a drawn format on an install without a viewer domain. */
+function SourceText({ revisionId, grant }: { revisionId: string; grant?: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const abort = new AbortController();
+    bytes(grant ? "/view/bytes" : `/revisions/${revisionId}/bytes`, grant, abort.signal)
+      .then((blob) => blob.text())
+      .then((value) => {
+        if (!abort.signal.aborted) setText(value);
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setError(e.message);
+      });
+    return () => abort.abort();
+  }, [revisionId, grant]);
+  if (error) return <div className="preview-error">{error}</div>;
+  if (text === null) return <div className="placeholder" aria-label="Загрузка материала…" />;
+  return (
+    <div className="work-text">
+      <pre>{text}</pre>
     </div>
   );
 }

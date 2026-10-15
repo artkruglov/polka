@@ -1,4 +1,5 @@
 import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
+import { isTextMime } from "../../packages/contracts/constants.ts";
 // Acting on the content filter (docs/specs/CONTENT_FILTER.md): the journal,
 // blocking a revision or a comment, disabling an author, deleting blocked
 // content, and the model verdicts gathered before a link is decided.
@@ -902,7 +903,8 @@ export async function revisionMaterial(revision: any) {
             `data:${file.mime};base64,${(await readBlob(file.object_key, file.object_version)).toString("base64")}`,
           );
       }
-  } else if (revision.mime === "text/plain") {
+  } else if (isTextMime(revision.mime)) {
+    // Text, Markdown, CSV, JSON: the file is its own text.
     const bytes = await readBlob(revision.object_key, revision.object_version);
     text = bytes.subarray(0, 96_000).toString("utf8");
   } else if (

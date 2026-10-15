@@ -9,6 +9,9 @@ type Shape = Pick<Revision, "mime" | "htmlProfile" | "inlineBuild">;
  */
 export function kindWords(revision: Shape) {
   if (revision.mime === "text/plain") return "похожий текстовый документ";
+  if (revision.mime === "text/markdown") return "похожий документ в Markdown";
+  if (revision.mime === "text/csv") return "похожую таблицу CSV";
+  if (revision.mime === "application/json") return "похожий JSON-файл";
   if (revision.mime.startsWith("image/")) return "похожее изображение";
   if (revision.mime === "text/html")
     return revision.inlineBuild?.state === "ready" || revision.htmlProfile === "limited"

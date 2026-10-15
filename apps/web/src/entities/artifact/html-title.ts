@@ -43,12 +43,20 @@ export function fallbackTitle(file: File) {
   return clipTitle(file.name.replace(/\.[^.]+$/, "") || file.name);
 }
 
+/** A Markdown document's first «#» heading, as plain text. */
+export function markdownTitle(source: string) {
+  const found = /^#\s+(.+?)\s*#*\s*$/m.exec(source.slice(0, 64 * 1024));
+  return found ? clipTitle(found[1]!.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim()) : "";
+}
+
 export async function suggestTitle(file: File): Promise<string> {
   const fallback = fallbackTitle(file);
   const html = file.type === "text/html" || /\.html?$/i.test(file.name);
-  if (!html) return fallback;
+  const markdown = /\.(md|markdown)$/i.test(file.name);
+  if (!html && !markdown) return fallback;
   try {
-    return htmlTitle(await file.slice(0, 256 * 1024).text()) || fallback;
+    const head = await file.slice(0, 256 * 1024).text();
+    return (html ? htmlTitle(head) : markdownTitle(head)) || fallback;
   } catch {
     return fallback;
   }

@@ -21,8 +21,74 @@ export const MAX_TITLE = 160;
 /** Around a found word in Artifact.snippet; never part of a work's text. */
 export const SEARCH_MATCH_START = "";
 export const SEARCH_MATCH_END = "";
-export const MIME = ["image/png", "image/jpeg", "image/webp", "text/plain", "text/html"] as const;
+export const MIME = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "text/plain",
+  "text/html",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+] as const;
 export type UploadMime = (typeof MIME)[number];
+/**
+ * How a single-file work of each format is shown (docs/specs/SINGLE_FILE_FORMATS.md):
+ *   page      HTML: the static or the interactive view
+ *   reading   plain text, typeset by the app
+ *   markdown  drawn by Полка's Markdown renderer on the viewer domain
+ *   table     CSV as a table drawn on the viewer domain
+ *   code      JSON as preformatted code on the viewer domain
+ *   image     the picture itself
+ */
+export type SingleFileView = "page" | "reading" | "markdown" | "table" | "code" | "image";
+export type SingleFileFormat = {
+  /** The word for a work of this format: cards, the reader, the moderator. */
+  label: string;
+  /** File name endings, lowercase, the first one canonical. */
+  extensions: readonly string[];
+  /** UTF-8 without NUL (the server refuses anything else). */
+  text: boolean;
+  view: SingleFileView;
+};
+/**
+ * One row per format a user saves as one file (MIME): the upload form, the
+ * server's checks, search, the agent context and the viewer read it. A new
+ * format (PDF is next) is one more row and a `view`.
+ */
+export const SINGLE_FILE_FORMATS: Record<UploadMime, SingleFileFormat> = {
+  "image/png": { label: "Изображение", extensions: [".png"], text: false, view: "image" },
+  "image/jpeg": { label: "Изображение", extensions: [".jpg", ".jpeg"], text: false, view: "image" },
+  "image/webp": { label: "Изображение", extensions: [".webp"], text: false, view: "image" },
+  "text/plain": { label: "Текст", extensions: [".txt"], text: true, view: "reading" },
+  "text/html": { label: "Страница", extensions: [".html", ".htm"], text: true, view: "page" },
+  "text/markdown": { label: "Документ", extensions: [".md", ".markdown"], text: true, view: "markdown" },
+  "text/csv": { label: "Таблица", extensions: [".csv"], text: true, view: "table" },
+  "application/json": { label: "JSON", extensions: [".json"], text: true, view: "code" },
+};
+/** The format of a single-file work, or null (a link, a project's other files). */
+export const singleFileFormat = (mime: string): SingleFileFormat | null =>
+  Object.hasOwn(SINGLE_FILE_FORMATS, mime) ? SINGLE_FILE_FORMATS[mime as UploadMime] : null;
+/**
+ * A text format other than an HTML page: its bytes are its text, for search,
+ * the content filter, the moderator and the agent (text/plain, Markdown, CSV, JSON).
+ */
+export const isTextMime = (mime: string) => {
+  const format = singleFileFormat(mime);
+  return !!format && format.text && format.view !== "page";
+};
+/** A format Полка draws as a page of its own on the viewer domain (Markdown, CSV, JSON). */
+export const isDrawnMime = (mime: string) => {
+  const view = singleFileFormat(mime)?.view;
+  return view === "markdown" || view === "table" || view === "code";
+};
+/** The format a file name says, by its extension; null when none matches. */
+export function mimeForFilename(name: string): UploadMime | null {
+  const lower = name.toLowerCase();
+  for (const mime of MIME)
+    if (SINGLE_FILE_FORMATS[mime].extensions.some((extension) => lower.endsWith(extension))) return mime;
+  return null;
+}
 /**
  * A work that is a link kept as it is («Сохранить как ссылку»): its one file
  * is a small JSON document ({v:1,url,note}); the service, badge and default

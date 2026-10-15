@@ -4,6 +4,7 @@ import { SCAN_INCOMPLETE, SignalCollector } from "./phishing-signals.ts";
 import { scanText } from "./content-filter/scanner.ts";
 import { coverFactsFromHtml } from "./cover-facts.ts";
 import { renderProjectMarkdownUnsigned } from "./project-markdown.ts";
+import { csvTableHtml } from "./single-file-view-csv.ts";
 
 // A reader of the pool (worker-pool.ts): it stays loaded and answers tasks one
 // at a time. The parent terminates it when a task misses its deadline, so a
@@ -12,7 +13,8 @@ import { renderProjectMarkdownUnsigned } from "./project-markdown.ts";
 type Task =
   | { kind: "inspect"; source: string; options?: InspectOptions; text?: boolean; scripts?: string[] }
   | { kind: "cover"; source: string }
-  | { kind: "markdown"; source: string; path: string; paths: string[] };
+  | { kind: "markdown"; source: string; path: string; paths: string[] | null }
+  | { kind: "csv"; source: string };
 
 function run(task: Task): unknown {
   if (task.kind === "cover") {
@@ -24,7 +26,14 @@ function run(task: Task): unknown {
   }
   if (task.kind === "markdown") {
     try {
-      return renderProjectMarkdownUnsigned(task.source, task.path, new Set(task.paths));
+      return renderProjectMarkdownUnsigned(task.source, task.path, task.paths && new Set(task.paths));
+    } catch {
+      return null;
+    }
+  }
+  if (task.kind === "csv") {
+    try {
+      return csvTableHtml(task.source);
     } catch {
       return null;
     }
