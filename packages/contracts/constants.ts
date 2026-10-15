@@ -30,6 +30,7 @@ export const MIME = [
   "text/markdown",
   "text/csv",
   "application/json",
+  "application/pdf",
 ] as const;
 export type UploadMime = (typeof MIME)[number];
 /**
@@ -40,8 +41,9 @@ export type UploadMime = (typeof MIME)[number];
  *   table     CSV as a table drawn on the viewer domain
  *   code      JSON as preformatted code on the viewer domain
  *   image     the picture itself
+ *   pdf       PDF pages drawn by pdf.js on the viewer domain
  */
-export type SingleFileView = "page" | "reading" | "markdown" | "table" | "code" | "image";
+export type SingleFileView = "page" | "reading" | "markdown" | "table" | "code" | "image" | "pdf";
 export type SingleFileFormat = {
   /** The word for a work of this format: cards, the reader, the moderator. */
   label: string;
@@ -54,7 +56,7 @@ export type SingleFileFormat = {
 /**
  * One row per format a user saves as one file (MIME): the upload form, the
  * server's checks, search, the agent context and the viewer read it. A new
- * format (PDF is next) is one more row and a `view`.
+ * format is one more row and a `view`.
  */
 export const SINGLE_FILE_FORMATS: Record<UploadMime, SingleFileFormat> = {
   "image/png": { label: "Изображение", extensions: [".png"], text: false, view: "image" },
@@ -65,7 +67,11 @@ export const SINGLE_FILE_FORMATS: Record<UploadMime, SingleFileFormat> = {
   "text/markdown": { label: "Документ", extensions: [".md", ".markdown"], text: true, view: "markdown" },
   "text/csv": { label: "Таблица", extensions: [".csv"], text: true, view: "table" },
   "application/json": { label: "JSON", extensions: [".json"], text: true, view: "code" },
+  "application/pdf": { label: "PDF", extensions: [".pdf"], text: false, view: "pdf" },
 };
+/** A PDF document: its text is read by pdf.js on the server (apps/server/pdf-reader.ts). */
+export const PDF_MIME = "application/pdf";
+export const isPdfMime = (mime: string) => mime === PDF_MIME;
 /** The format of a single-file work, or null (a link, a project's other files). */
 export const singleFileFormat = (mime: string): SingleFileFormat | null =>
   Object.hasOwn(SINGLE_FILE_FORMATS, mime) ? SINGLE_FILE_FORMATS[mime as UploadMime] : null;
@@ -77,7 +83,11 @@ export const isTextMime = (mime: string) => {
   const format = singleFileFormat(mime);
   return !!format && format.text && format.view !== "page";
 };
-/** A format Полка draws as a page of its own on the viewer domain (Markdown, CSV, JSON). */
+/**
+ * A text format Полка draws as a page of its own on the viewer domain
+ * (Markdown, CSV, JSON). A PDF also opens on the viewer domain, but as pages
+ * of pdf.js (isPdfMime), not as a drawn page.
+ */
 export const isDrawnMime = (mime: string) => {
   const view = singleFileFormat(mime)?.view;
   return view === "markdown" || view === "table" || view === "code";

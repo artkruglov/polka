@@ -8,6 +8,8 @@ export type RevisionSource = { text: string; files: Map<string, string> | null }
 export function unavailableReason(revision: Revision): string | null {
   if (revision.mime.startsWith("image/") && revision.mime !== "image/svg+xml")
     return `Версия ${revision.number} — изображение. Построчное сравнение доступно для страниц и текста.`;
+  if (revision.mime === "application/pdf")
+    return `Версия ${revision.number} — PDF: версии PDF не сравниваются построчно. Откройте обе версии или скачайте оригиналы.`;
   if (
     revision.storageKind === "single" &&
     !/^text\/|^application\/(json|xml|javascript)|\+xml$|\+json$/.test(revision.mime)

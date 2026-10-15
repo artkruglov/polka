@@ -38,6 +38,8 @@ function formatLabel(mime: string | undefined) {
       return "CSV";
     case "application/json":
       return "JSON";
+    case "application/pdf":
+      return "PDF";
     case "image/png":
       return "PNG";
     case "image/jpeg":

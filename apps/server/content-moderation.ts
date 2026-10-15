@@ -1,5 +1,7 @@
 import { PROJECT_RUNTIME } from "../../packages/contracts/bundle.ts";
-import { isTextMime } from "../../packages/contracts/constants.ts";
+import { PDF_MIME, isTextMime } from "../../packages/contracts/constants.ts";
+import { readPdfBounded } from "./pdf-reader.ts";
+
 // Acting on the content filter (docs/specs/CONTENT_FILTER.md): the journal,
 // blocking a revision or a comment, disabling an author, deleting blocked
 // content, and the model verdicts gathered before a link is decided.
@@ -907,6 +909,13 @@ export async function revisionMaterial(revision: any) {
     // Text, Markdown, CSV, JSON: the file is its own text.
     const bytes = await readBlob(revision.object_key, revision.object_version);
     text = bytes.subarray(0, 96_000).toString("utf8");
+  } else if (revision.mime === PDF_MIME && revision.storage_kind === "single") {
+    // A PDF: its text and the addresses its links lead to (pdf-reader.ts).
+    const reading = await readPdfBounded(await readBlob(revision.object_key, revision.object_version), revision.sha256);
+    if (reading.ok)
+      text = [reading.text.slice(0, 96_000), reading.links.length ? `Ссылки в PDF:\n${reading.links.join("\n")}` : ""]
+        .filter(Boolean)
+        .join("\n\n");
   } else if (
     revision.mime.startsWith("image/") &&
     config.CONTENT_MODEL_IMAGES &&
@@ -958,7 +967,7 @@ export async function reviewRevision(revisionId: string) {
     rows: [revision],
   } = await db.query(
     `SELECT id,tenant_id,artifact_id,mime,filename,storage_kind,object_key,object_version,
-       size,content_filter,content_purged_at,manifest->>'runtime' AS runtime
+       size,sha256,content_filter,content_purged_at,manifest->>'runtime' AS runtime
      FROM revisions WHERE id=$1`,
     [revisionId],
   );

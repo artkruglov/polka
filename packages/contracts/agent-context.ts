@@ -65,6 +65,7 @@ export type SingleFileSourceDescriptor = {
       | "text/markdown"
       | "text/csv"
       | "application/json"
+      | "application/pdf"
       | "image/png"
       | "image/jpeg"
       | "image/webp"

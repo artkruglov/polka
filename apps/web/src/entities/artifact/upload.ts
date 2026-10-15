@@ -8,7 +8,7 @@ export const UPLOAD_ACCEPT = [
   "text/x-markdown",
   "application/vnd.ms-excel",
 ].join(",");
-export const UPLOAD_FORMATS = "HTML, TXT, Markdown, CSV, JSON, PNG, JPEG или WebP · до 5 МБ";
+export const UPLOAD_FORMATS = "HTML, TXT, Markdown, CSV, JSON, PDF, PNG, JPEG или WebP · до 5 МБ";
 
 // Browsers may report an empty, generic or system-specific type (Windows
 // calls a .csv application/vnd.ms-excel, macOS a .md text/x-markdown or
@@ -22,7 +22,7 @@ export const uploadBlob = (file: File) => new Blob([file], { type: fileMime(file
 export function uploadProblem(blob: Blob): string | null {
   if (!blob.size) return "Файл пустой.";
   if (!(MIME as readonly string[]).includes(blob.type))
-    return "Этот тип файла не поддерживается. Подойдут HTML, TXT, Markdown, CSV, JSON, PNG, JPEG или WebP. ZIP и PDF пока не поддерживаются.";
+    return "Этот тип файла не поддерживается. Подойдут HTML, TXT, Markdown, CSV, JSON, PDF, PNG, JPEG или WebP. ZIP пока не поддерживается.";
   if (blob.size > MAX_BYTES) return "Файл больше 5 МБ.";
   return null;
 }

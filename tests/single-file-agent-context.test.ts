@@ -348,7 +348,7 @@ test("a saved link hands its address and note to the agent; other formats name t
     transaction((c) => buildAgentContext(c, owner, pins)),
     (error: any) =>
       error.status === 422 &&
-      /страниц, проектов, текста, Markdown, CSV, JSON, картинок PNG, JPEG и WebP и у сохранённых ссылок/.test(
+      /страниц, проектов, текста, Markdown, CSV, JSON, PDF, картинок PNG, JPEG и WebP и у сохранённых ссылок/.test(
         error.message,
       ),
   );

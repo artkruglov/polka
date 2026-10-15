@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import type { LinkDocument, Revision } from "../../../../../packages/contracts/index.ts";
-import { LINK_MIME, isDrawnMime, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
+import { LINK_MIME, isDrawnMime, isPdfMime, savedLinkUrl } from "../../../../../packages/contracts/constants.ts";
 import { LinkCard, LinkCover, OWNER_LINK_HINT, recipientAccessNote } from "../../entities/link/index.tsx";
 import { bytes, staticView, withShelf } from "../../shared/api/client.ts";
 import { isImage, isStaticSingleFileBundle, kindOf, size } from "../../entities/artifact/format.ts";
@@ -40,6 +40,7 @@ export function Preview({
   const [content, setContent] = useState<{ url?: string; text?: string }>({}),
     [error, setError] = useState("");
   const drawn = revision.storageKind === "single" && isDrawnMime(revision.mime);
+  const pdf = revision.storageKind === "single" && isPdfMime(revision.mime);
   // Another revision or grant shows nothing until its own bytes arrive.
   const source = `${revision.id}:${grant ?? ""}`;
   const [shown, setShown] = useState(source);
@@ -55,6 +56,8 @@ export function Preview({
     // Markdown, CSV and JSON open as a page drawn on the viewer domain; the
     // frame reads the text itself when there is no viewer.
     if (drawn && !compact) return () => abort.abort();
+    // A PDF is drawn by pdf.js on the viewer domain; its bytes are never read here.
+    if (pdf) return () => abort.abort();
     // A link's cover needs only its host and service, which the revision carries.
     if (revision.mime === LINK_MIME && compact) return () => abort.abort();
     bytes(grant ? "/view/bytes" : `/revisions/${revision.id}/bytes`, grant, abort.signal)
@@ -230,6 +233,23 @@ export function Preview({
         />
       </div>
     );
+  // A PDF (docs/specs/SINGLE_FILE_FORMATS.md): pdf.js on the viewer domain,
+  // page by page. Without a viewer domain the app never shows it inline: the
+  // owner gets a card with the download.
+  if (pdf)
+    return compact ? (
+      <TextCover id={revision.id} title={title ?? readingTitle ?? revision.filename} eyebrow="PDF" compact />
+    ) : (
+      <div className="html-preview">
+        <SandboxFrame
+          title={revision.filename}
+          revisionId={revision.id}
+          grant={grant}
+          scripts
+          sameOrigin={<PdfCard revision={revision} owner={!grant} />}
+        />
+      </div>
+    );
   if (content.url)
     return (
       <img
@@ -265,11 +285,17 @@ function SandboxFrame({
   title,
   overlay,
   sameOrigin,
+  scripts = false,
 }: {
   revisionId: string;
   grant?: string;
   title: string;
   overlay?: FrameOverlay;
+  /**
+   * The page runs Полка's own scripts from the viewer (a PDF's pdf.js,
+   * single-file-view-pdf.ts); its CSP admits nothing else.
+   */
+  scripts?: boolean;
   /**
    * Shown instead of a frame on an install without a viewer domain: a drawn
    * document (Markdown, CSV, JSON) is never served from Полка's own origin.
@@ -324,9 +350,11 @@ function SandboxFrame({
           // the server: no page scripts (with comments the CSP nonce admits
           // only Полка's overlay); links open only in a new tab.
           sandbox={
-            scripted
-              ? "allow-scripts allow-popups allow-popups-to-escape-sandbox"
-              : "allow-popups allow-popups-to-escape-sandbox"
+            scripts
+              ? "allow-scripts"
+              : scripted
+                ? "allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                : "allow-popups allow-popups-to-escape-sandbox"
           }
           ref={scripted ? overlay!.onFrame : undefined}
           referrerPolicy="no-referrer"
@@ -337,7 +365,27 @@ function SandboxFrame({
   );
 }
 
+/** A PDF on an install without a viewer domain: its name, size and, for the owner, the download. */
+function PdfCard({ revision, owner }: { revision: Revision; owner: boolean }) {
+  return (
+    <StatusPanel
+      title={revision.filename}
+      action={
+        owner && (
+          <a className="ui-button" href={withShelf(`/api/revisions/${revision.id}/bytes`)} download={revision.filename}>
+            <Download aria-hidden="true" /> Скачать PDF
+          </a>
+        )
+      }
+    >
+      PDF, {size(revision.size)}. Просмотр PDF работает на домене просмотра, а на этой установке он не настроен
+      {owner ? ": скачайте файл, чтобы открыть его." : "."}
+    </StatusPanel>
+  );
+}
+
 /** A file's text as written, for a drawn format on an install without a viewer domain. */
+
 function SourceText({ revisionId, grant }: { revisionId: string; grant?: string }) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState("");

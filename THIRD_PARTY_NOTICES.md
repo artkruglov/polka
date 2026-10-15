@@ -22,6 +22,15 @@ Runtime `react-runtime-v1` встраивает эти библиотеки в �
 
 Вместе с ними в страницы попадают их транзитивные зависимости. Среди них `victory-vendor` (MIT AND ISC, содержит модули d3 для recharts), `robust-predicates` (Unlicense), `delaunator` и `internmap` (ISC), а также зависимости mathjs (`complex.js`, `fraction.js`, `decimal.js` и другие, MIT). Все они входят в сводку ниже.
 
+## Просмотр PDF
+
+Домен просмотра отдаёт браузеру файлы pdf.js из `node_modules/pdfjs-dist/legacy/build/` (`pdf.min.mjs`, `pdf.worker.min.mjs`) без изменений, с их заголовком лицензии; сервер той же библиотекой читает текст PDF ([SINGLE_FILE_FORMATS](docs/specs/SINGLE_FILE_FORMATS.md#pdf)). Стили текстового слоя на странице PDF повторяют часть `web/pdf_viewer.css` pdf.js.
+
+| Библиотека | Версия | Лицензия | Где используется |
+|---|---|---|---|
+| pdfjs-dist (pdf.js, © Mozilla Foundation) | 6.3.289 | Apache-2.0 | Просмотр PDF в браузере и чтение текста PDF на сервере |
+| @napi-rs/canvas | необязательная зависимость pdfjs-dist | MIT | Ставится npm вместе с pdfjs-dist; Полка не рисует PDF на сервере |
+
 ## Рендерер (отдельный образ)
 
 Образ рендерера ([apps/renderer/Dockerfile](apps/renderer/Dockerfile)) собирается отдельно от приложения и в страницы пользователей не попадает.

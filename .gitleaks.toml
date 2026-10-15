@@ -13,6 +13,7 @@ regexes = [
   '''0b5f3a4e-3c2d-4f7a-9f55-6d1f0c9e8a21''',
   '''7c1e9a52-0f3b-4d6e-8a21-5b9f0c2d7e44''',
   '''7c2e9b1d-4a6f-4e3b-8d2c-1f0a9e8b7c65''',
+  '''05d250e6-1ede-4c87-b537-93765249537f''',
   # Idempotency keys recorded in docs/reviews/2026-09-20-cli-capture/results.json
   '''^5fd44e7d-88f2-4f40-96cc-b9fbb5c0c0e9$''',
   '''^a0c860f5-e0ef-41dc-8fba-b2ebdb4015e1$''',

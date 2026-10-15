@@ -71,6 +71,7 @@
     "nodemailer": "10.1.0",
     "papaparse": "5.7.0",
     "parse5": "8.0.1",
+    "pdfjs-dist": "6.3.289",
     "pg": "8.23.1",
     "pino": "10.4.0",
     "postcss": "8.5.29",

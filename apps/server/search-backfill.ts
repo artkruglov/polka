@@ -8,7 +8,9 @@
 // are read, and a row is written only while that version is still the
 // latest, so a save during the run wins. A version that cannot be read
 // (purged, isolated, missing, a page too deep to read in time) is skipped.
-import { LINK_MIME, MIME, isTextMime } from "../../packages/contracts/index.ts";
+import { LINK_MIME, MIME, PDF_MIME, isTextMime } from "../../packages/contracts/index.ts";
+import { readPdfBounded } from "./pdf-reader.ts";
+
 import { db, transaction } from "./db.ts";
 import { inspectHtmlBounded } from "./html.ts";
 import { linkText } from "./saved-link-format.ts";
@@ -16,8 +18,8 @@ import { SEARCH_TEXT_CHARS, SearchText, addScriptText, indexRevisionText } from 
 import { readBlob } from "./storage.ts";
 
 const MAX_BUNDLE_FILES = 500;
-/** Single-file formats read as their own text (Markdown, CSV, JSON, text). */
-const TEXT_MIMES = MIME.filter(isTextMime);
+/** Single-file formats with a text: read as their own (Markdown, CSV, JSON, text), or a PDF's. */
+const TEXT_MIMES = [...MIME.filter(isTextMime), PDF_MIME];
 
 type Row = {
   artifact_id: string;
@@ -27,6 +29,7 @@ type Row = {
   storage_kind: "single" | "bundle";
   object_key: string;
   object_version: string;
+  sha256?: string;
 };
 
 /** The text of one stored version for search; null when it cannot be read. */
@@ -37,6 +40,14 @@ export async function searchTextOfRevision(revision: Row): Promise<string | null
     if (revision.storage_kind === "single" && isTextMime(revision.mime)) {
       const bytes = await readBlob(revision.object_key, revision.object_version);
       return bytes.toString("utf8", 0, Math.min(bytes.length, SEARCH_TEXT_CHARS * 4));
+    }
+    // A PDF: the text pdf.js reads (pdf-reader.ts); none when it cannot be read in time.
+    if (revision.storage_kind === "single" && revision.mime === PDF_MIME) {
+      const reading = await readPdfBounded(
+        await readBlob(revision.object_key, revision.object_version),
+        revision.sha256,
+      );
+      return reading.ok ? reading.text : null;
     }
     if (revision.mime === LINK_MIME)
       return linkText(revision.title, await readBlob(revision.object_key, revision.object_version));
@@ -94,7 +105,7 @@ export async function backfillSearch(
     const rows: Row[] = (
       await db.query(
         `SELECT a.id AS artifact_id,r.id AS revision_id,a.title,r.mime,
-                r.storage_kind,r.object_key,r.object_version
+                r.storage_kind,r.object_key,r.object_version,r.sha256
          FROM artifacts a
          JOIN revisions r ON r.id=a.latest_revision_id
          LEFT JOIN artifact_search s ON s.artifact_id=a.id
