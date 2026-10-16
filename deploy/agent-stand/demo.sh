@@ -26,7 +26,7 @@ step() { printf '\n\033[1m== %s\033[0m\n' "$1"; [ "$pause" = 0 ] || read -r -p "
 json() { node -e "const t=require('$(pwd)/$OUT/tokens.json'); console.log($1)"; }
 
 step "1. Границы: ВМ без папок владельца, два бота со своими правами"
-limactl shell "$VM" -- sudo bash -c 'echo "Смонтировано с Mac: $(grep -c -E "virtiofs|9p|sshfs|fuse" /proc/mounts) папок"; echo "sudo у агента: $(sudo -l -U agent 2>/dev/null | grep -c "may run" || true)"'
+limactl shell "$VM" -- sudo bash -c 'echo "Смонтировано с Mac: $(awk "\$3 ~ /^(virtiofs|9p)\$/ || \$3 ~ /^fuse\\./" /proc/mounts | wc -l) папок"; echo "sudo у агента: $(sudo -l -U agent 2>/dev/null | grep -c "may run" || true)"'
 json 'Object.entries(t.bots).map(([n,b])=>`${n}: ${b.scopes.join(", ")}`).join("\n")'
 echo "Длинные токены ботов — только на этом компьютере; в ВМ уходит токен задачи на 15 минут."
 
