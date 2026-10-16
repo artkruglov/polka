@@ -1247,6 +1247,21 @@ test("agents read comments, patch the text, move the link and resolve threads", 
   assert.equal(stale.isError, true);
   assert.equal((stale.structuredContent as any).code, "conflict");
   assert.equal((stale.structuredContent as any).currentRevisionId, receipt.revisionId);
+  // A new link for the new version is a conflict naming the open link, so
+  // the agent can move it instead.
+  const second = await client.callTool({
+    name: "polka_share",
+    arguments: {
+      key: randomUUID(),
+      artifactId: published.artifactId,
+      expectedRevisionId: receipt.revisionId,
+      expiresInDays: 7,
+    },
+  });
+  assert.equal(second.isError, true);
+  assert.equal((second.structuredContent as any).code, "conflict");
+  assert.equal((second.structuredContent as any).shareId, published.shareId);
+  assert.equal((second.structuredContent as any).revisionId, published.revisionId);
   // The link moves to the new version with its token and its discussion.
   const moveKey = randomUUID();
   const moved = (

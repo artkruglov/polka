@@ -732,7 +732,14 @@ async function enableShareInTransaction(
     if (existing.moderation === "blocked") throw blockedRefusal();
     if (existingPolicy === "agent-exact") {
       if (existing.revision_id !== input.expectedRevisionId)
-        throw new Problem(409, "conflict", "Активная ссылка указывает на другую версию.");
+        // Named, so the agent can move it (polka_share with moveShareId)
+        // instead of being stuck: the id is not the link's token.
+        throw new Problem(
+          409,
+          "conflict",
+          "Активная ссылка указывает на другую версию. Чтобы она показывала новую, перенесите её: moveShareId.",
+          { shareId: existing.id, revisionId: existing.revision_id },
+        );
       const derivativeId = await assertLinkable(c, existing.revision_id);
       if (existing.derivative_id !== derivativeId)
         throw new Problem(409, "conflict", "Активная ссылка использует другую подготовленную версию.");
