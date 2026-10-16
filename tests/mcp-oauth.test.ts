@@ -437,6 +437,8 @@ test("consent requires the owner's session, the starting browser, CSRF and same 
   // «Давать ссылку для входа» is always offered; everything offered is pre-ticked.
   assert.deepEqual(consent.scopes, ["context", "capture", "share", "sign_in"]);
   assert.deepEqual(consent.defaultScopes, ["context", "capture", "share", "sign_in"]);
+  // A department shelf starts narrower: read and save, no links, no sign-in.
+  assert.deepEqual(consent.teamDefaultScopes, ["context", "capture"]);
 
   const foreignOrigin = await decide(
     owner,

@@ -54,9 +54,12 @@ export function OAuthConsent() {
             message: "Эта страница открывается из Claude, ChatGPT или другого MCP-клиента при подключении Полки.",
           },
   );
-  const [scopes, setScopes] = useState<AgentScope[]>([]);
   // The shelf the agent works on (docs/specs/TEAM_SHELVES.md): null is one's own.
   const [shelfId, setShelfId] = useState<string | null>(null);
+  // Ticks per shelf: a department shelf starts from its narrower defaults, and
+  // what the person ticked for one shelf is not carried to another.
+  const [ticked, setTicked] = useState<Record<string, AgentScope[]>>({});
+  const scopes = state.kind === "ready" ? (ticked[shelfId ?? ""] ?? shelfDefaults(state.details, shelfId)) : [];
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const sending = useRef(false);
@@ -67,7 +70,6 @@ export function OAuthConsent() {
     oauthConsent
       .details(requestId, controller.signal)
       .then((details) => {
-        setScopes(details.defaultScopes);
         setState({ kind: "ready", details });
       })
       .catch((error) => {
@@ -137,7 +139,10 @@ export function OAuthConsent() {
   };
 
   const toggle = (scope: AgentScope) =>
-    setScopes((current) => (current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]));
+    setTicked((current) => ({
+      ...current,
+      [shelfId ?? ""]: scopes.includes(scope) ? scopes.filter((item) => item !== scope) : [...scopes, scope],
+    }));
 
   return (
     <AppShell current="connections" account={account}>
@@ -313,6 +318,8 @@ const READ_SCOPES: AgentScope[] = ["context", "read", "source:read"];
 const OWN_SHELF_SCOPES: AgentScope[] = ["share", "sign_in", "sessions"];
 const fitsRole = (role: string, scope: AgentScope) =>
   (role !== "reader" || READ_SCOPES.includes(scope)) && (role === "owner" || !OWN_SHELF_SCOPES.includes(scope));
+const shelfDefaults = (details: OAuthConsentDetails, shelfId: string | null) =>
+  shelfId ? details.teamDefaultScopes : details.defaultScopes;
 const chosenRole = (details: OAuthConsentDetails, shelfId: string | null) =>
   details.shelves?.find((shelf) => shelf.id === shelfId)?.role ?? "owner";
 const ROLE_NAME: Record<string, string> = {

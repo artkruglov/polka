@@ -43,6 +43,13 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
  * sign-in link opens only a temporary shelf; the owner can untick any of them.
  */
 export const OAUTH_DEFAULT_SCOPES: readonly AgentScope[] = AGENT_SCOPES;
+/**
+ * Checked by default when the agent is to work on a department shelf: read and
+ * save, nothing that changes others' works (owner's decision, 16.10.2026 — a
+ * company's security wants an agent to start narrow). The person can still
+ * tick revise and manage; this is a default, not a ceiling.
+ */
+export const OAUTH_TEAM_DEFAULT_SCOPES: readonly AgentScope[] = ["context", "read", "source:read", "capture"];
 export const OAUTH_BROWSER_COOKIE = "polka_oauth";
 export const OAUTH_MACHINE_PATHS = new Set(["/oauth/token", "/oauth/register", "/oauth/revoke"]);
 export const PROTECTED_RESOURCE_METADATA_URL = getOAuthProtectedResourceMetadataUrl(new URL(MCP_AUDIENCE));
@@ -577,6 +584,7 @@ export async function authorizationDetails(actor: Actor, requestId: string, brow
     },
     scopes,
     defaultScopes: scopes.filter((scope) => OAUTH_DEFAULT_SCOPES.includes(scope)),
+    teamDefaultScopes: scopes.filter((scope) => OAUTH_TEAM_DEFAULT_SCOPES.includes(scope)),
     accessMinutes: ACCESS_TTL_SECONDS / 60,
     refreshDays: 30,
     maxDays: 365,
