@@ -252,7 +252,9 @@ export function ShelfPage({
                   <FileUp />
                 </span>
                 <strong>Загрузить файл</strong>
-                <span>Страницу, документ, таблицу, PDF, картинку или папку проекта — прямо с компьютера.</span>
+                <span>
+                  Страницу, документ, таблицу, PDF или картинку — прямо с компьютера. Папку проекта сохраняет агент.
+                </span>
               </button>
               <a className="shelf-start-card" href="/discover">
                 <span className="shelf-start-icon">
