@@ -20,7 +20,7 @@ import {
   uuid,
 } from "../../packages/contracts/index.ts";
 import { readPdfBounded } from "./pdf-reader.ts";
-import { type Actor, readAuthorizedRevisionSource } from "./artifacts.ts";
+import { type Actor, auditServiceRead, readAuthorizedRevisionSource } from "./artifacts.ts";
 import { transaction } from "./db.ts";
 import { lockActiveOwnerTenant } from "./owner-state.ts";
 import { missing, Problem } from "./errors.ts";
@@ -236,7 +236,9 @@ export const sourceForAgent = (actor: ServiceActor, input: unknown) => {
     const owner = { id: a.accountId, tenant: a.tenantId, connectionId: a.connectionId };
     // An agent limited to folders reads only works in them (agent-scope.ts).
     if (!q.libraryId) await assertArtifactInAgentScope(c, owner, q.artifactId);
-    return readAgentSource(c, owner, q);
+    const read = await readAgentSource(c, owner, q);
+    if (!q.libraryId) await auditServiceRead(c, a, q.revisionId, q.artifactId);
+    return read;
   });
 };
 export async function listTemplates(

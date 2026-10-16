@@ -298,3 +298,60 @@ export async function listShelfEvents(actor: Actor, shelfId: string) {
     return { items: rows };
   });
 }
+
+const agentAuditQuery = z
+  .object({
+    /** The id of the last item of the previous page: older items follow. */
+    before: z
+      .string()
+      .regex(/^\d{1,19}$/)
+      .optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  })
+  .strict();
+
+/**
+ * What agents did on the shelf, for its admin (docs/specs/TEAM_SHELVES.md,
+ * «Журнал агентов»): every action under an agent's token, the service
+ * accounts' own events and the acceptances, each with the connection, the
+ * service account, the task id its task token was issued for and the person
+ * responsible. Ids only, never the content of a work.
+ */
+export async function listAgentAudit(actor: Actor, shelfId: string, query: unknown) {
+  const input = agentAuditQuery.parse(query ?? {});
+  return transaction(async (c) => {
+    await lockTeamShelf(c, shelfId);
+    const active = await lockAccounts(c, [actor.id]);
+    adminOnly(roleOf(await lockMemberships(c, shelfId, [actor.id]), active, actor.id));
+    const { rows } = await c.query(
+      `SELECT e.id::text,e.created_at AS "at",e.action,e.actor_type AS "actorType",
+              e.target_id AS "targetId",
+              COALESCE(revision.artifact_id,artifact.id) AS "workId",
+              COALESCE(person.display_name,person.name) AS "responsible",
+              connection.id AS "connectionId",connection.name AS "connectionName",
+              connection.principal_type AS "principalType",
+              principal.id AS "serviceAccountId",principal.name AS "serviceAccount",
+              COALESCE(task.payload->>'taskId',e.payload->>'taskId') AS "taskId"
+       FROM audit_outbox e
+       LEFT JOIN accounts person ON person.id=e.actor_id
+       LEFT JOIN agent_connections connection
+         ON connection.id=e.connection_id AND connection.tenant_id=e.tenant_id
+       LEFT JOIN service_principals principal ON principal.id=connection.service_principal_id
+       -- A task token's own issue event carries the task id it was made for.
+       LEFT JOIN LATERAL (
+         SELECT issue.payload FROM audit_outbox issue
+         WHERE issue.tenant_id=e.tenant_id AND issue.target_id=connection.id
+           AND issue.action='service_account.task_token'
+         LIMIT 1
+       ) task ON connection.parent_id IS NOT NULL
+       LEFT JOIN revisions revision ON revision.id=e.target_id AND revision.tenant_id=e.tenant_id
+       LEFT JOIN artifacts artifact ON artifact.id=e.target_id AND artifact.tenant_id=e.tenant_id
+       WHERE e.tenant_id=$1
+         AND (e.actor_type='agent' OR e.action LIKE 'service\\_account.%' OR e.action='revision.accepted')
+         AND ($2::bigint IS NULL OR e.id<$2)
+       ORDER BY e.id DESC LIMIT $3`,
+      [shelfId, input.before ?? null, input.limit],
+    );
+    return { items: rows, before: rows.length === input.limit ? rows.at(-1).id : null };
+  });
+}

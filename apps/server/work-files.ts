@@ -5,7 +5,7 @@
 // one response: a project may be 48 MiB.
 import type { PoolClient } from "pg";
 import { assertArtifactInAgentScope } from "./agent-scope.ts";
-import { authorizedRevisionFiles } from "./artifacts.ts";
+import { auditServiceRead, authorizedRevisionFiles } from "./artifacts.ts";
 import { Problem, missing } from "./errors.ts";
 import { isVideoMime } from "../../packages/contracts/constants.ts";
 import { readBlob, readStream, sha256 } from "./storage.ts";
@@ -79,6 +79,7 @@ export async function storedRevisionFiles(c: Pick<PoolClient, "query">, revision
 export function workFilesForAgent(actor: ServiceActor, artifactId: string, revisionId?: string) {
   return withServiceActorTransaction(actor, "source:read", async (c, verified) => {
     const { artifact, revision, files, entrypoint, runtime } = await locate(c, verified, artifactId, revisionId);
+    await auditServiceRead(c, verified, revision.id, artifactId);
     return {
       artifactId,
       title: artifact.title as string,
@@ -100,11 +101,11 @@ export function workFilesForAgent(actor: ServiceActor, artifactId: string, revis
 
 /** One file's bytes, checked against the version's record of it. */
 export async function workFileForAgent(actor: ServiceActor, artifactId: string, revisionId: string, index: number) {
-  const file = await withServiceActorTransaction(
-    actor,
-    "source:read",
-    async (c, verified) => (await locate(c, verified, artifactId, revisionId)).files[index],
-  );
+  const file = await withServiceActorTransaction(actor, "source:read", async (c, verified) => {
+    const { revision, files } = await locate(c, verified, artifactId, revisionId);
+    if (files[index]) await auditServiceRead(c, verified, revision.id, artifactId);
+    return files[index];
+  });
   if (!file) throw missing();
   return readStoredFile(file);
 }
