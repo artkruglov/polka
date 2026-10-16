@@ -114,7 +114,10 @@ export type OAuthConsentDetails = {
     extension: { id: string; official: boolean } | null;
   };
   scopes: AgentScope[];
+  /** Checked at first for one's own shelf. */
   defaultScopes: AgentScope[];
+  /** Checked at first for a department shelf: narrower (docs/specs/MCP_ONBOARDING_SPEC.md). */
+  teamDefaultScopes: AgentScope[];
   accessMinutes: number;
   refreshDays: number;
   maxDays: number;
