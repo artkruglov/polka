@@ -15,6 +15,10 @@ case "${1:-}" in
     limactl start "$VM"
     limactl copy provision.sh "$VM:/tmp/provision.sh"
     limactl shell "$VM" -- sudo env POLKA_PORT="$PORT" bash /tmp/provision.sh
+    # The package upgrade restarts services that new ssh sessions wait on
+    # (the reverse tunnel hangs after login); a reboot settles them.
+    limactl stop "$VM"
+    limactl start "$VM"
     ;;
   tunnel)
     # A reverse tunnel keeps the address the same on both sides, so Полка's

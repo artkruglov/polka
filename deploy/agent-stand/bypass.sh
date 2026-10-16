@@ -46,8 +46,11 @@ echo "Токены задачи видны агенту: READER=\${READER:0:6}�
 expect "reader-bot: список своей полки"            allowed \$O/api/v1/works -H "\$R"
 expect "reader-bot: работа с чужой полки"          refused \$O/api/v1/works/\$FINANCE_WORK -H "\$R"
 expect "reader-bot: файлы работы с чужой полки"    refused \$O/api/v1/works/\$FINANCE_WORK/files -H "\$R"
-curl -sS \$O/api/v1/works -H "\$R" -H "x-polka-shelf: \$FINANCE_SHELF" -o list.json
-if grep -q "\$FINANCE_WORK" list.json; then row "ОШИБКА" "reader-bot: подмена полки заголовком" "чужая работа в списке"; fail=1;
+# The list must answer 200 without the other shelf's work: an error code
+# would prove nothing about the header.
+code=\$(curl -sS -o list.json -w '%{http_code}' \$O/api/v1/works -H "\$R" -H "x-polka-shelf: \$FINANCE_SHELF" || echo 000)
+if [ "\$code" != 200 ]; then row "ОШИБКА" "reader-bot: подмена полки заголовком" "ждали 200, получили \$code"; fail=1;
+elif grep -q "\$FINANCE_WORK" list.json; then row "ОШИБКА" "reader-bot: подмена полки заголовком" "чужая работа в списке"; fail=1;
 else row "отказано" "reader-bot: подмена полки заголовком" "в списке только своя полка"; fi
 expect "reader-bot: сохранить работу"              refused -X POST \$O/api/v1/publish -H "\$R" -H content-type:application/json -d '{"key":"00000000-0000-4000-8000-000000000001","title":"x","html":"<p>x</p>"}'
 expect "reader-bot: выпустить себе новый токен"    refused -X POST \$O/api/v1/task-token -H "\$R" -H content-type:application/json -d '{"minutes":60}'
