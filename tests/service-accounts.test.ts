@@ -23,9 +23,11 @@ let shelf: { id: string };
 
 async function account(prefix: string): Promise<Account> {
   const created = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
+  // Each from its own address: the suite's logins share the per-address limit.
   const login = await app.inject({
     method: "POST",
     url: "/api/login",
+    remoteAddress: address(),
     headers: { origin },
     payload: { name: created.name, password },
   });
