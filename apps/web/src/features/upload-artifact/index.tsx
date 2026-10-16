@@ -5,7 +5,15 @@ import React, { useRef, useState } from "react";
 import { ArrowUpRight, Upload } from "lucide-react";
 import type { Artifact, Folder, Receipt } from "../../../../../packages/contracts/index.ts";
 import { currentShelf, saveUpload, type PendingUpload } from "../../shared/api/client.ts";
-import { UPLOAD_ACCEPT, UPLOAD_FORMATS, uploadBlob, uploadProblem } from "../../entities/artifact/upload.ts";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS,
+  pastedFilename,
+  pastedMime,
+  uploadBlob,
+  uploadProblem,
+} from "../../entities/artifact/upload.ts";
+import { SINGLE_FILE_FORMATS } from "../../../../../packages/contracts/constants.ts";
 import { FolderSelect } from "../../entities/folder/FolderSelect.tsx";
 import { Dialog, ErrorNotice } from "../../shared/ui/index.tsx";
 import { fallbackTitle, suggestTitle } from "../../entities/artifact/html-title.ts";
@@ -43,9 +51,11 @@ export function UploadPanel({
     setPending(false);
     setError("");
   };
+  // Pasted text keeps its format: a page stays a page, Markdown a document.
+  const pasted = pastedMime(text, artifact?.revision.mime);
   const save = async () => {
     setError("");
-    const current = mode === "file" ? file && uploadBlob(file) : new Blob([text], { type: "text/plain" });
+    const current = mode === "file" ? file && uploadBlob(file) : new Blob([text], { type: pasted });
     if (!current?.size || !title.trim()) {
       setError("Добавьте название и содержимое.");
       return;
@@ -63,7 +73,7 @@ export function UploadPanel({
           operation.current,
           {
             title,
-            filename: mode === "file" ? file!.name : `${title}.txt`,
+            filename: mode === "file" ? file!.name : pastedFilename(title, pasted),
             ...(artifact
               ? {
                   artifactId: artifact.id,
@@ -171,6 +181,7 @@ export function UploadPanel({
                 }}
                 disabled={busy}
                 placeholder="Вставьте текст, который собрал агент…"
+                hint={text.trim() ? `Сохранится как: ${SINGLE_FILE_FORMATS[pasted].label}` : undefined}
               />
             )}
             {!artifact && folders.length > 0 && (

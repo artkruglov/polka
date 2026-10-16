@@ -26,3 +26,27 @@ export function uploadProblem(blob: Blob): string | null {
   if (blob.size > MAX_BYTES) return "Файл больше 5 МБ.";
   return null;
 }
+
+/** Pasted text formats: a page, a Markdown document or plain text. */
+const PASTE_MIMES = ["text/html", "text/markdown", "text/csv", "application/json", "text/plain"] as const;
+export type PasteMime = (typeof PASTE_MIMES)[number];
+
+/**
+ * What pasted text is saved as. A new version keeps its work's format (a page
+ * stays a page); a new work is a page when the text is an HTML document or
+ * markup, Markdown when it has a heading and other Markdown, else plain text.
+ */
+export function pastedMime(text: string, baseMime?: string): PasteMime {
+  if (baseMime && (PASTE_MIMES as readonly string[]).includes(baseMime)) return baseMime as PasteMime;
+  const head = text.trimStart().slice(0, 2000);
+  if (/^(<!doctype html|<html[\s>])/i.test(head)) return "text/html";
+  if (/<(body|head|main|section|article|div|table|style)[\s>]/i.test(head) && /<\/[a-z][\w-]*>/i.test(text))
+    return "text/html";
+  if (/^#{1,6} \S/m.test(head) && /(^\s*([-*+]|\d+\.) \S)|\*\*\S|\[[^\]]+\]\([^)]+\)|^```/m.test(text))
+    return "text/markdown";
+  return "text/plain";
+}
+
+/** The file name a paste is saved under: the title with the format's extension. */
+export const pastedFilename = (title: string, mime: PasteMime) =>
+  `${title.trim() || "Текст"}${SINGLE_FILE_FORMATS[mime].extensions[0]}`;
