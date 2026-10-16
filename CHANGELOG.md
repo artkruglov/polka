@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-10-17
+
+Обновление: без миграции. Журнал агентов и новые права по умолчанию работают только с `TEAM_SHELVES=on` (и `SERVICE_ACCOUNTS=on` для сервисных доступов).
+
 ### Added
 
 - **Стенд «агент под ограничениями»** ([deploy/agent-stand](deploy/agent-stand/README.md)) — показ для службы ИБ на локальной ВМ: Codex в песочнице `srt` с токеном задачи сервисного доступа, обходы прав из bash, журнал агентов, приёмка, замер отзыва.
@@ -876,7 +880,8 @@
 - Self-host: Docker-образ с закреплённым base digest, readiness, maintenance-воркер, рецепты прав ролей БД.
 - CI: тесты на временных PostgreSQL и MinIO, проверка лицензий, поиск секретов, smoke-тест образа.
 
-[Unreleased]: https://github.com/artkruglov/polka/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/artkruglov/polka/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/artkruglov/polka/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/artkruglov/polka/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/artkruglov/polka/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/artkruglov/polka/compare/v0.16.0...v0.17.0
