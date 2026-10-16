@@ -330,13 +330,17 @@ export async function listAgentAudit(actor: Actor, shelfId: string, query: unkno
               COALESCE(person.display_name,person.name) AS "responsible",
               connection.id AS "connectionId",connection.name AS "connectionName",
               connection.principal_type AS "principalType",
-              principal.id AS "serviceAccountId",principal.name AS "serviceAccount",
+              COALESCE(principal.id,managed.id) AS "serviceAccountId",
+              COALESCE(principal.name,managed.name) AS "serviceAccount",
               COALESCE(task.payload->>'taskId',e.payload->>'taskId') AS "taskId"
        FROM audit_outbox e
        LEFT JOIN accounts person ON person.id=e.actor_id
        LEFT JOIN agent_connections connection
          ON connection.id=e.connection_id AND connection.tenant_id=e.tenant_id
        LEFT JOIN service_principals principal ON principal.id=connection.service_principal_id
+       -- A person's action on a service account (created, disabled…) names it too.
+       LEFT JOIN service_principals managed
+         ON e.action LIKE 'service\\_account.%' AND managed.id=e.target_id AND managed.tenant_id=e.tenant_id
        -- A task token's own issue event carries the task id it was made for.
        LEFT JOIN LATERAL (
          SELECT issue.payload FROM audit_outbox issue

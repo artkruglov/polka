@@ -534,6 +534,11 @@ test("a task token stays on its shelf; the admin's agent journal names the servi
     .json()
     .items.find((i: any) => i.action === "service_account.task_token" && i.taskId === "report-7");
   assert.ok(issued, "the task token's issue is in the journal");
+  const createdEvent = journal
+    .json()
+    .items.find((i: any) => i.action === "service_account.created" && i.targetId === made.servicePrincipal.id);
+  assert.equal(createdEvent?.serviceAccount, "Отчётный бот", "a person's action names the service account");
+  assert.equal(createdEvent.actorType, "human");
   assert.ok(!journal.body.includes(foreign.artifactId), "another shelf's events stay out");
   // Only the shelf's admin reads it.
   const author = await account("svc-author");
