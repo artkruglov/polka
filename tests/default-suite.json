@@ -124,6 +124,7 @@
   "tests/shelf-invite-ui.test.ts",
   "tests/live-plan.test.ts",
   "tests/paste-code.test.ts",
+  "tests/paste-format.test.ts",
   "tests/onboarding-first-run.test.ts",
   "tests/onboarding-account.test.ts",
   "tests/service-auth.test.ts",
