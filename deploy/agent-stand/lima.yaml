@@ -1,0 +1,21 @@
+# The agent stand VM (deploy/agent-stand/README.md): Ubuntu 24.04 with no
+# folder of the Mac mounted, no ssh-agent, no container runtime and no port
+# forwarded to the Mac — the agent sees nothing of its host.
+minimumLimaVersion: 2.0.0
+base:
+  - template:_images/ubuntu-24.04
+cpus: 4
+memory: 8GiB
+disk: 20GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+ssh:
+  forwardAgent: false
+  forwardX11: false
+portForwards:
+  # Полка reaches the VM through a reverse tunnel (stand.sh tunnel), so
+  # nothing in the guest is forwarded back to the Mac.
+  - guestPortRange: [1, 65535]
+    ignore: true
