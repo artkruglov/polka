@@ -23,9 +23,11 @@ let shelf: { id: string };
 
 async function account(prefix: string): Promise<Account> {
   const created = await createAccount(`${prefix}-${randomBytes(5).toString("hex")}`, password);
+  // Each from its own address: the suite's logins share the per-address limit.
   const login = await app.inject({
     method: "POST",
     url: "/api/login",
+    remoteAddress: address(),
     headers: { origin },
     payload: { name: created.name, password },
   });
@@ -465,4 +467,85 @@ test("the events feed and the works list carry metadata only: no bytes, no paylo
       `works list shows ${forbidden}`,
     );
   assert.ok(saved.artifactId);
+});
+
+test("a task token stays on its shelf; the admin's agent journal names the service account and the task", async () => {
+  // Another department with a work of its own.
+  const other = (
+    await app.inject({
+      method: "POST",
+      url: "/api/shelves",
+      headers: { origin, cookie: admin.cookie },
+      payload: { name: "Чужой отдел" },
+    })
+  ).json();
+  const otherBot = await app.inject({
+    method: "POST",
+    url: "/api/service-accounts",
+    remoteAddress: address(),
+    headers: { origin, cookie: admin.cookie, "x-polka-shelf": other.id, "content-type": "application/json" },
+    payload: JSON.stringify({ name: "Чужой бот", scopes: ["context", "capture"] }),
+  });
+  assert.equal(otherBot.statusCode, 200, otherBot.body);
+  const foreign = (await publish(otherBot.json().token, "Бюджет чужого отдела")).json();
+
+  const made = (
+    await create(admin, { name: "Отчётный бот", scopes: ["context", "read", "source:read", "capture"] })
+  ).json();
+  const task = (await api(made.token, "POST", "/api/v1/task-token", { minutes: 10, taskId: "report-7" })).json();
+  // From a shell, with the token in hand: another shelf is not there.
+  assert.equal((await api(task.token, "GET", `/api/v1/works/${foreign.artifactId}`)).statusCode, 404);
+  assert.equal((await api(task.token, "GET", `/api/v1/works/${foreign.artifactId}/files`)).statusCode, 404);
+  const listed = await app.inject({
+    method: "GET",
+    url: "/api/v1/works",
+    remoteAddress: address(),
+    headers: { authorization: `Bearer ${task.token}`, "x-polka-shelf": other.id },
+  });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.ok(!listed.body.includes(foreign.artifactId), "the shelf header does not move a token");
+  assert.equal((await api(task.token, "GET", "/api/shelves")).statusCode, 401, "no web API with a token");
+
+  const saved = (await publish(task.token, "Отчёт по задаче")).json();
+  const journal = await session(admin, "GET", `/api/shelves/${shelf.id}/agent-audit?limit=50`);
+  assert.equal(journal.statusCode, 200, journal.body);
+  const item = journal.json().items.find((i: any) => i.action === "revision.saved" && i.targetId === saved.revisionId);
+  assert.ok(item, journal.body);
+  assert.equal(item.actorType, "agent");
+  assert.equal(item.serviceAccount, "Отчётный бот");
+  assert.equal(item.serviceAccountId, made.servicePrincipal.id);
+  assert.equal(item.taskId, "report-7");
+  assert.equal(item.workId, saved.artifactId);
+  assert.equal(item.principalType, "service");
+  assert.ok(item.responsible);
+  // Reading a version's content is in the journal once per task, however
+  // many times or files.
+  for (let i = 0; i < 2; i++)
+    assert.equal((await api(task.token, "GET", `/api/v1/works/${saved.artifactId}/files`)).statusCode, 200);
+  const file = await api(task.token, "GET", `/api/v1/works/${saved.artifactId}/revisions/${saved.revisionId}/files/0`);
+  assert.equal(file.statusCode, 200);
+  const reads = (await session(admin, "GET", `/api/shelves/${shelf.id}/agent-audit`))
+    .json()
+    .items.filter((i: any) => i.action === "revision.read" && i.targetId === saved.revisionId);
+  assert.equal(reads.length, 1);
+  assert.equal(reads[0].taskId, "report-7");
+  assert.equal(reads[0].workId, saved.artifactId);
+  const issued = journal
+    .json()
+    .items.find((i: any) => i.action === "service_account.task_token" && i.taskId === "report-7");
+  assert.ok(issued, "the task token's issue is in the journal");
+  assert.ok(!journal.body.includes(foreign.artifactId), "another shelf's events stay out");
+  // Only the shelf's admin reads it.
+  const author = await account("svc-author");
+  const joined = await app.inject({
+    method: "POST",
+    url: `/api/shelves/${shelf.id}/members`,
+    headers: { origin, cookie: admin.cookie },
+    payload: { who: author.name, role: "author" },
+  });
+  assert.equal(joined.statusCode, 200, joined.body);
+  assert.equal((await session(author, "GET", `/api/shelves/${shelf.id}/agent-audit`)).statusCode, 403);
+  const stranger = await account("svc-stranger");
+  assert.equal((await session(stranger, "GET", `/api/shelves/${shelf.id}/agent-audit`)).statusCode, 404);
+  assert.equal((await session(admin, "GET", `/api/shelves/${shelf.id}/agent-audit?limit=0`)).statusCode, 400);
 });

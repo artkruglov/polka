@@ -91,6 +91,29 @@ export const audit = (
       payload ?? null,
     ],
   );
+/**
+ * A service account's task read a version's content (docs/specs/TEAM_SHELVES.md,
+ * «Журнал агентов»): one row per connection and version, however many files
+ * it read, so a shelf's admin sees which task read what. People's reads and
+ * personal agents' reads stay a daily count (agent-read-counter.ts).
+ */
+export async function auditServiceRead(
+  c: PoolClient,
+  verified: { principal?: "human" | "service"; accountId: string; tenantId: string; connectionId: string },
+  revisionId: string,
+  artifactId: string,
+) {
+  if (verified.principal !== "service") return;
+  await c.query(
+    `INSERT INTO audit_outbox(tenant_id,actor_id,action,target_id,actor_type,connection_id,payload)
+     SELECT $1,$2,'revision.read',$3,'agent',$4,$5
+     WHERE NOT EXISTS (
+       SELECT 1 FROM audit_outbox seen
+       WHERE seen.tenant_id=$1 AND seen.target_id=$3
+         AND seen.action='revision.read' AND seen.connection_id=$4)`,
+    [verified.tenantId, verified.accountId, revisionId, verified.connectionId, { artifactId }],
+  );
+}
 /** Analytics: a work was saved (a new one or a version); `first` for the shelf. */
 async function trackSaved(c: PoolClient, actor: Actor, revisionId: string, number: number) {
   const {

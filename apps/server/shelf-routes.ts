@@ -17,6 +17,7 @@ import {
 import {
   addShelfMember,
   changeShelfMemberRole,
+  listAgentAudit,
   listShelfEvents,
   listShelfMembers,
   renameShelf,
@@ -122,6 +123,9 @@ export function registerShelfRoutes(app: FastifyInstance) {
     return setShelfCard(actor, req.body);
   });
   app.get("/api/shelves/:shelfId/events", async (req) => listShelfEvents(await identity(req), shelfId(req)));
+  app.get("/api/shelves/:shelfId/agent-audit", async (req) =>
+    listAgentAudit(await identity(req), shelfId(req), req.query),
+  );
   app.post("/api/folders", async (req) => {
     const actor = await identity(req, SHELF),
       input = z.object({ name: folderNameSchema }).strict().parse(req.body);
