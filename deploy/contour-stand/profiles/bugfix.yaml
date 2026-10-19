@@ -1,0 +1,31 @@
+# Профиль «Исправить баг» (deploy/contour-stand/README.md). Его пишет ИБ;
+# поручающий только выбирает тип задачи. Каждая строка включает свой слой.
+profile: bugfix
+title: Исправить баг в репозитории
+owner: ivanov                    # отвечает за задачи этого типа
+delegate_role: delegate-bugfix   # роль в Keycloak: кто может поручать
+sandbox:                         # песочница gVisor на задачу
+  image: contour/agent:1
+  command: codex
+  cpus: 2
+  memory: 2g
+  ttl_minutes: 20
+network:                         # куда можно выйти через прокси
+  allow: [polka, model, git]
+model:                           # шлюз LiteLLM, ключ на задачу
+  models: [agent-model]
+  budget_usd: 1.5
+secrets:                         # подставляет прокси, в песочнице их нет
+  git: agent-bot
+access:
+  polka_bot: report-bot          # сервисный доступ на Полке, токен задачи
+  git: ветка и PR; main защищён
+approval: human                  # результат принимает человек на Полке
+journal: /var/lib/contour/events
+instructions: |
+  Ты работаешь в изолированной песочнице. Сеть есть только через прокси и только к трём адресам.
+  Репозиторий: http://127.0.0.1:3000/contour/demo.git (git и API Gitea http://127.0.0.1:3000/api/v1 уже авторизованы прокси, токен не нужен).
+  1. Склонируй репозиторий в /work/repo, найди и исправь ошибку, чтобы `python3 -m unittest` проходил.
+  2. Запушь ветку fix/{task_id} (в main пушить нельзя) и открой PR в main через API Gitea (POST /repos/contour/demo/pulls).
+  3. Сохрани на Полку короткий отчёт через MCP-инструмент polka_publish: что было не так, что исправлено, ссылка на PR. Название: «{task_id}: исправление».
+  4. Последним сообщением дай ссылку на PR и на отчёт.

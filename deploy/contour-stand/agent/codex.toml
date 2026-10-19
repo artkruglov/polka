@@ -1,0 +1,14 @@
+# Codex on the contour stand: the model through the gateway with the task's
+# own key, Полка over MCP with the task token. Both go through the proxy.
+model = "agent-model"
+model_provider = "contour"
+
+[model_providers.contour]
+name = "Contour gateway"
+base_url = "http://127.0.0.1:4000/v1"
+env_key = "CONTOUR_MODEL_KEY"
+wire_api = "responses"
+
+[mcp_servers.polka]
+url = "http://127.0.0.1:4390/mcp"
+bearer_token_env_var = "POLKA_MCP_TOKEN"

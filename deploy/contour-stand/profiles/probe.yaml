@@ -1,0 +1,23 @@
+# Профиль проверок (checks.sh): те же границы, что у bugfix, но вместо агента
+# в песочнице пробы обхода, а у ключа — несколько центов на модели-заглушке.
+profile: probe
+title: Проверки границ
+owner: ivanov
+delegate_role: delegate-bugfix
+sandbox:
+  image: contour/agent:1
+  command: probe
+  cpus: 1
+  memory: 512m
+  ttl_minutes: 5
+network:
+  allow: [polka, model, git]
+model:
+  models: [mock-model]
+  budget_usd: 0.05
+secrets:
+  git: agent-bot
+access:
+  polka_bot: report-bot
+approval: none
+journal: /var/lib/contour/events

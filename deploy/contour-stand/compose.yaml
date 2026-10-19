@@ -1,0 +1,61 @@
+# Control-plane services of the contour stand (deploy/contour-stand/README.md).
+# Every port is published on the VM's loopback only: the task network cannot
+# reach them except through Squid, and Squid lets a task reach only what its
+# profile names. Images are pinned by version and digest.
+name: contour
+services:
+  postgres:
+    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_DB: litellm
+    env_file: /etc/contour/postgres.env
+    volumes: [pg:/var/lib/postgresql/data]
+    networks: [ctl]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "litellm"], interval: 5s, retries: 20 }
+    restart: unless-stopped
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.83.14-stable.patch.3@sha256:f12d528d4a05add56cb09e54c5126088f2edc6bdf3a2f943bcd3a32b08769da2
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    env_file: /etc/contour/litellm.env
+    volumes: ["/etc/contour/litellm.yaml:/etc/litellm/config.yaml:ro"]
+    ports: ["127.0.0.1:4000:4000"]
+    networks: [ctl]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  openbao:
+    image: openbao/openbao:2.6.3@sha256:a60afafda36337abe833c4a63894bf1095098f29abea4091e7e555a33dd52889
+    command: ["server", "-config=/etc/openbao/config.hcl"]
+    cap_add: [IPC_LOCK]
+    volumes: ["./openbao.hcl:/etc/openbao/config.hcl:ro", "bao:/openbao/file"]
+    ports: ["127.0.0.1:8200:8200"]
+    networks: [ctl]
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    env_file: /etc/contour/keycloak.env
+    volumes: ["/etc/contour/realm.json:/opt/keycloak/data/import/contour.json:ro"]
+    ports: ["127.0.0.1:8080:8080"]
+    networks: [ctl]
+    restart: unless-stopped
+
+  gitea:
+    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
+    environment:
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__ROOT_URL: http://127.0.0.1:3000/
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__service__DISABLE_REGISTRATION: "true"
+    volumes: [gitea:/data]
+    ports: ["127.0.0.1:3000:3000"]
+    networks: [ctl]
+    restart: unless-stopped
+
+networks:
+  ctl: {}
+volumes: { pg: {}, bao: {}, gitea: {} }
