@@ -14,10 +14,12 @@
 // profile's role; the dispatcher reserves the budget as a LiteLLM key, asks
 // Полка for a task token, opens the task's address in Squid, starts the
 // sandbox (gVisor) and writes every step as an event with the task id.
+// swarm.mjs imports start, wait and the helpers to run the steps of a goal.
 import { execFile as execFileCb, spawn } from "node:child_process";
 import { createPublicKey, createVerify, randomBytes } from "node:crypto";
-import { appendFile, chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { appendFile, chmod, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFile = promisify(execFileCb);
@@ -29,11 +31,12 @@ const KEYCLOAK = "http://127.0.0.1:8080/realms/contour";
 const LITELLM = "http://127.0.0.1:4000";
 const BAO = "http://127.0.0.1:8200";
 const SUBNET = "10.77.0";
-// What a profile's network line may name, as Squid port ACLs (squid.conf).
-const DESTINATIONS = { polka: "p_polka", model: "p_model", git: "p_git" };
+// What a profile's network line may name, as Squid ACLs (squid.conf). The
+// systems of record are readable only: GET, never a write.
+const DESTINATIONS = { polka: "p_polka", model: "p_model", git: "p_git", systems: "p_systems m_read" };
 
-// ---- profile: the YAML subset profiles use (maps two levels deep, [a, b]
-// lists, «|» blocks, # comments).
+// ---- profile: the YAML subset profiles and process packs use (maps two
+// levels deep, [a, b] lists, {a: b} maps, «|» blocks, # comments).
 export function parseProfile(text) {
   const root = {};
   let section = null,
@@ -49,7 +52,7 @@ export function parseProfile(text) {
     }
     const line = raw.replace(/\s+#.*$/, "").replace(/^#.*$/, "");
     if (!line.trim()) continue;
-    const m = /^( *)([\w-]+):\s*(.*)$/.exec(line);
+    const m = /^( *)([\w.-]+):\s*(.*)$/.exec(line);
     if (!m) throw new Error(`profile: cannot read «${raw}»`);
     const [, indent, key, value] = m;
     const target = indent ? section : root;
@@ -69,6 +72,15 @@ export function parseProfile(text) {
   return root;
 }
 function scalar(value) {
+  if (/^\{.*\}$/.test(value))
+    return Object.fromEntries(
+      value
+        .slice(1, -1)
+        .split(",")
+        .map((pair) => pair.split(":").map((v) => v.trim()))
+        .filter(([k]) => k)
+        .map(([k, v]) => [k, scalar(v ?? "")]),
+    );
   if (/^\[.*\]$/.test(value))
     return value
       .slice(1, -1)
@@ -76,19 +88,29 @@ function scalar(value) {
       .map((v) => v.trim())
       .filter(Boolean);
   if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  if (value === "true" || value === "false") return value === "true";
   return value.replace(/^"(.*)"$/, "$1");
 }
 
 // ---- helpers
 const now = () => new Date().toISOString();
 async function event(task, layer, type, data = {}) {
-  const line = JSON.stringify({ ts: now(), task_id: task.id, profile: task.profile, layer, event: type, ...data });
+  const goal = task.goal ? { goal_id: task.goal } : {};
+  const line = JSON.stringify({
+    ts: now(),
+    task_id: task.id,
+    ...goal,
+    profile: task.profile,
+    layer,
+    event: type,
+    ...data,
+  });
   await mkdir(task.journal, { recursive: true });
   await appendFile(join(task.journal, `${task.id}.jsonl`), line + "\n");
   await appendFile(join(task.journal, "all.jsonl"), line + "\n");
   console.log(`  [${layer}] ${type}${Object.keys(data).length ? " " + JSON.stringify(data) : ""}`);
 }
-async function http(url, { method = "GET", headers = {}, body, form } = {}) {
+export async function http(url, { method = "GET", headers = {}, body, form } = {}) {
   const response = await fetch(url, {
     method,
     headers: {
@@ -105,15 +127,24 @@ async function http(url, { method = "GET", headers = {}, body, form } = {}) {
   } catch {}
   return { status: response.status, json, text };
 }
-async function bao(path) {
+export async function bao(path) {
   const { root_token } = JSON.parse(await readFile("/etc/contour/bao-init.json", "utf8"));
   const r = await http(`${BAO}/v1/contour/data/${path}`, { headers: { "x-vault-token": root_token } });
   if (r.status !== 200) throw new Error(`OpenBao: no secret contour/${path} (${r.status})`);
   return r.json.data.data;
 }
 const docker = (...args) => execFile("docker", args, { maxBuffer: 1 << 24 });
-const saveTask = (task) => writeFile(join(TASKS, `${task.id}.json`), JSON.stringify(task, null, 2) + "\n");
-const loadTask = async (id) => JSON.parse(await readFile(join(TASKS, `${id}.json`), "utf8"));
+// Written whole and renamed: swarm.mjs runs several tasks in one process,
+// and a reader must never see half a file.
+async function saveTask(task) {
+  const file = join(TASKS, `${task.id}.json`);
+  await writeFile(`${file}.tmp`, JSON.stringify(task, null, 2) + "\n");
+  await rename(`${file}.tmp`, file);
+}
+// Address allocation and the Squid file are shared by concurrent tasks.
+let netQueue = Promise.resolve();
+const serial = (fn) => (netQueue = netQueue.then(fn, fn));
+export const loadTask = async (id) => JSON.parse(await readFile(join(TASKS, `${id}.json`), "utf8"));
 async function tasks() {
   await mkdir(TASKS, { recursive: true });
   const names = (await readdir(TASKS)).filter((n) => n.endsWith(".json"));
@@ -122,7 +153,7 @@ async function tasks() {
 
 // ---- identity: Keycloak password grant for the stand's test users, the
 // token's signature checked against the realm's keys.
-async function verifyJwt(token) {
+export async function verifyJwt(token) {
   const [h, p, s] = token.split(".");
   const header = JSON.parse(Buffer.from(h, "base64url"));
   const { keys } = (await http(`${KEYCLOAK}/protocol/openid-connect/certs`)).json;
@@ -136,18 +167,19 @@ async function verifyJwt(token) {
   if (claims.exp * 1000 < Date.now()) throw new Error("Keycloak: token expired");
   return claims;
 }
-async function signIn(user) {
+export async function signIn(user, { raw = false } = {}) {
   const { password } = await bao(`users/${user}`);
   const r = await http(`${KEYCLOAK}/protocol/openid-connect/token`, {
     method: "POST",
     form: { grant_type: "password", client_id: "dispatcher", username: user, password, scope: "openid" },
   });
   if (r.status !== 200) throw new Error(`Keycloak: ${user} cannot sign in (${r.status} ${r.json?.error ?? ""})`);
-  return verifyJwt(r.json.access_token);
+  return raw ? r.json.access_token : verifyJwt(r.json.access_token);
 }
 
 // ---- network: one Squid ACL per running task, keyed by its sandbox address.
-async function renderSquid() {
+const renderSquid = () => serial(writeSquid);
+async function writeSquid() {
   const running = (await tasks()).filter((t) => t.state === "running" && t.ip);
   const lines = ["# Generated by dispatcher.mjs: one block per running task."];
   for (const t of running) {
@@ -165,8 +197,11 @@ async function freeIp() {
 }
 
 // ---- start
-async function start(profilePath, text, user, command) {
-  const profile = parseProfile(await readFile(profilePath, "utf8"));
+// A profile is a YAML path (the CLI) or an object (swarm.mjs builds one per
+// step of a goal). prepare(work) fills the work folder before the sandbox
+// starts: inputs, the skill from the catalog.
+export async function start(source, text, user, { command, prepare, goal } = {}) {
+  const profile = typeof source === "string" ? parseProfile(await readFile(source, "utf8")) : structuredClone(source);
   if (command) profile.sandbox.command = command;
   const id = `task-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex")}`;
   const task = {
@@ -175,6 +210,7 @@ async function start(profilePath, text, user, command) {
     title: profile.title,
     text,
     requestedBy: user,
+    goal: goal ?? null,
     owner: profile.owner,
     journal: profile.journal ?? join(STATE, "events"),
     network: profile.network?.allow ?? [],
@@ -226,36 +262,43 @@ async function start(profilePath, text, user, command) {
     minutes: ttl + 5,
   });
 
-  // Полка: a task token of the profile's service account.
-  const bot = await bao(`polka/${profile.access.polka_bot}`);
-  const issued = await http(`${bot.origin}/api/v1/task-token`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${bot.token}` },
-    body: { minutes: ttl + 5, taskId: id },
-  });
-  if (issued.status !== 200)
-    throw new Error(`Полка: task token not issued (${issued.status} ${issued.text.slice(0, 200)})`);
-  await event(task, "access", "task-token", {
-    bot: profile.access.polka_bot,
-    scopes: issued.json.scopes,
-    minutes: ttl + 5,
-  });
+  // Полка: a task token of the profile's service account, if it names one.
+  let polkaToken = "";
+  if (profile.access?.polka_bot) {
+    const bot = await bao(`polka/${profile.access.polka_bot}`);
+    const issued = await http(`${bot.origin}/api/v1/task-token`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${bot.token}` },
+      body: { minutes: ttl + 5, taskId: id },
+    });
+    if (issued.status !== 200)
+      throw new Error(`Полка: task token not issued (${issued.status} ${issued.text.slice(0, 200)})`);
+    polkaToken = issued.json.token;
+    await event(task, "access", "task-token", {
+      bot: profile.access.polka_bot,
+      scopes: issued.json.scopes,
+      minutes: ttl + 5,
+    });
+  }
 
   // Work folder: the task text and the profile's instructions.
   const work = join(WORK, id);
   await mkdir(join(work, ".home"), { recursive: true });
   const instructions = (profile.instructions ?? "").replaceAll("{task_id}", id);
   await writeFile(join(work, "TASK.md"), `${text}\n\n${instructions}\n`);
+  if (prepare) await prepare(work);
   await execFile("chown", ["-R", "1000:1000", work]);
   await chmod(work, 0o700);
 
   // Network, then the sandbox.
-  task.ip = await freeIp();
-  task.state = "running";
-  task.started = now();
-  task.ttlMinutes = ttl;
-  await saveTask(task);
-  await renderSquid();
+  await serial(async () => {
+    task.ip = await freeIp();
+    task.state = "running";
+    task.started = now();
+    task.ttlMinutes = ttl;
+    await saveTask(task);
+    await writeSquid();
+  });
   await event(task, "network", "opened", { ip: task.ip, allow: task.network });
 
   const proxy = `http://${SUBNET}.1:3128`;
@@ -304,7 +347,7 @@ async function start(profilePath, text, user, command) {
     "-e",
     `CONTOUR_MODEL_KEY=${key.json.key}`,
     "-e",
-    `POLKA_MCP_TOKEN=${issued.json.token}`,
+    `POLKA_MCP_TOKEN=${polkaToken}`,
     s.image,
     ...String(s.command ?? "codex").split(" "),
   ];
@@ -322,7 +365,7 @@ async function start(profilePath, text, user, command) {
 }
 
 // ---- wait and close
-async function wait(id) {
+export async function wait(id) {
   let task = await loadTask(id);
   if (task.state !== "running") return task;
   const deadline = new Date(task.started).getTime() + task.ttlMinutes * 60_000;
@@ -411,7 +454,7 @@ async function close(task, outcome) {
   return task;
 }
 
-async function revoke(id) {
+export async function revoke(id) {
   const task = await loadTask(id);
   if (task.state !== "running") throw new Error(`${id} is ${task.state}, not running`);
   const t0 = performance.now();
@@ -433,8 +476,9 @@ async function revoke(id) {
   return close(task, "revoked");
 }
 
-// ---- cli
-const [command, ...rest] = process.argv.slice(2);
+// ---- cli (only when run directly, not when swarm.mjs imports this file)
+const main = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+const [command, ...rest] = main ? process.argv.slice(2) : [];
 const option = (name) => (rest.includes(name) ? rest[rest.indexOf(name) + 1] : null);
 const as = option("--as");
 const print = (task) => {
@@ -444,11 +488,13 @@ const print = (task) => {
   if (task.lastMessage) console.log(`\n${task.lastMessage}`);
 };
 try {
-  if (command === "run" || command === "start") {
+  if (!main) {
+    // imported
+  } else if (command === "run" || command === "start") {
     const [profile, text] = rest;
     if (!profile || !text || !as)
       throw new Error(`usage: dispatcher.mjs ${command} <profile.yaml> "<task>" --as <user>`);
-    const task = await start(profile, text, as, option("--command"));
+    const task = await start(profile, text, as, { command: option("--command") });
     if (command === "start") console.log(task.id);
     else print(await wait(task.id));
   } else if (command === "wait") print(await wait(rest[0]));

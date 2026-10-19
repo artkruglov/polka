@@ -22,6 +22,8 @@ want internet-proxy '403|000' https://example.com/
 want openbao-via-proxy 403 http://127.0.0.1:8200/v1/sys/health
 want keycloak-via-proxy 403 http://127.0.0.1:8080/realms/contour
 want postgres-via-proxy '403|000' http://127.0.0.1:5432/
+want nats-via-proxy '403|000' http://127.0.0.1:4222/
+want opa-via-proxy 403 http://127.0.0.1:8181/v1/data
 want host-ssh-direct 000 --noproxy '*' http://10.77.0.1:22/
 want litellm-admin '401|403' -H "authorization: Bearer $CONTOUR_MODEL_KEY" http://127.0.0.1:4000/key/list
 want polka-no-token 401 $O/api/v1/works
@@ -40,6 +42,11 @@ rm -rf /tmp/repo && git clone -q http://127.0.0.1:3000/contour/demo.git /tmp/rep
   if git push -q origin "HEAD:$b" 2>/dev/null; then say ok git-push-branch "$b"; git push -q origin --delete "$b" 2>/dev/null; else say fail git-push-branch "refused"; fi
   cd /
 } || say fail git-clone "$(head -c 80 /tmp/git.err)"
+
+# Systems of record: readable through the proxy, never writable from here.
+want systems-read 200 http://127.0.0.1:7070/ledger/invoices
+want systems-write 403 -X POST http://127.0.0.1:7070/ledger/invoices -H content-type:application/json -d '{"counterparty":"x","amount":1}'
+want systems-mail-in 403 -X POST http://127.0.0.1:7070/mail/incoming -H content-type:application/json -d '{"box":"support","from":"a@b","subject":"x","text":"x"}'
 
 # Budget: the probe profile gives the key a few cents on a priced mock model.
 n=0; stopped=""

@@ -3,10 +3,13 @@
 #
 #   deploy/contour-stand/stand.sh up         create and start the VM, build everything inside
 #   deploy/contour-stand/stand.sh sync       copy edited stand files into the VM
+#   deploy/contour-stand/stand.sh update     sync, then provision again (idempotent; the swarm included)
 #   deploy/contour-stand/stand.sh tunnel     Полка of this computer inside the VM at 127.0.0.1:4390
-#   deploy/contour-stand/stand.sh polka-bot  copy the Полка bot token (agent-stand seed) into OpenBao
+#   deploy/contour-stand/stand.sh polka-bot [name]  copy a Полка bot token (agent-stand seed) into OpenBao
 #   deploy/contour-stand/stand.sh secret     store the model provider's key in OpenBao (typed, not shown)
 #   deploy/contour-stand/stand.sh run ...    dispatcher.mjs in the VM: run | start | wait | revoke | status
+#   deploy/contour-stand/stand.sh contour ... swarm.mjs in the VM: goal | new | inbox | decide | sign | …
+#   deploy/contour-stand/stand.sh reset-swarm  forget goals, added processes, letters and documents
 #   deploy/contour-stand/stand.sh down       delete the VM
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -53,15 +56,26 @@ case "${1:-}" in
     read -r -s -p "Ключ API (не показывается): " key; echo
     printf '%s %s %s\n' "$provider" "$model" "$key" | in_vm bash /opt/contour/provision.sh upstream
     ;;
+  update)
+    ./stand.sh sync
+    in_vm bash /opt/contour/provision.sh
+    ;;
   run)
     shift
     in_vm node /opt/contour/dispatcher.mjs "$@"
+    ;;
+  contour)
+    shift
+    in_vm node /opt/contour/swarm.mjs "$@"
+    ;;
+  reset-swarm)
+    in_vm bash -c 'systemctl stop contour-swarm contour-systems && rm -rf /var/lib/contour/swarm /var/lib/contour/systems.json && install -d -m 700 /var/lib/contour/swarm && systemctl start contour-systems contour-swarm'
     ;;
   down)
     limactl delete --force "$VM"
     ;;
   *)
-    sed -n '2,11p' "$0"
+    sed -n '2,14p' stand.sh
     exit 2
     ;;
 esac

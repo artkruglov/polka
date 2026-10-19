@@ -56,6 +56,24 @@ services:
     networks: [ctl]
     restart: unless-stopped
 
+  # The swarm's bus: work queues per pool and the event stream.
+  nats:
+    image: nats:2.14.8-alpine@sha256:f9512b17aae6d41b6a615a7afad7b328633639ddae025744623e69b26fe686be
+    command: ["-js", "-sd", "/data"]
+    volumes: [nats:/data]
+    ports: ["127.0.0.1:4222:4222"]
+    networks: [ctl]
+    restart: unless-stopped
+
+  # The policy: security's bounds (policy/base.json) and who accepts a result.
+  opa:
+    image: openpolicyagent/opa:1.20.1-static@sha256:efbca2ec7decf2cf23fd93ae171280a736c17d83d9d2e21c66a8f717e8fc7f20
+    command: ["run", "--server", "--addr", "0.0.0.0:8181", "--watch", "--log-level", "error", "/policy"]
+    volumes: ["./policy:/policy:ro"]
+    ports: ["127.0.0.1:8181:8181"]
+    networks: [ctl]
+    restart: unless-stopped
+
 networks:
   ctl: {}
-volumes: { pg: {}, bao: {}, gitea: {} }
+volumes: { pg: {}, bao: {}, gitea: {}, nats: {} }

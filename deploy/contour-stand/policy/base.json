@@ -1,0 +1,13 @@
+{
+  "base": {
+    "_comment": "Границы ИБ для всех процессов (deploy/contour-stand/README.md). Пакет процесса может их только сузить.",
+    "effects": {
+      "mail.send": { "departments": ["finance", "sales", "support", "hr"], "max_recipients": 1 },
+      "ledger.invoice": { "max_amount": 500000 },
+      "ledger.cancel": {},
+      "edo.queue": {},
+      "swarm.spawn": { "max_children": 8 }
+    },
+    "audit_sample": { "2": 0.1, "3": 0.02 }
+  }
+}

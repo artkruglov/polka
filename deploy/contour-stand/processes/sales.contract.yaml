@@ -1,0 +1,22 @@
+# Пакет процесса (deploy/contour-stand/README.md, «Рой»). Владелец процесса
+# принимает его на Полке; ИБ задаёт границы в policy/base.json, и пакет может
+# их только сузить.
+process: sales.contract
+version: 3
+title: Договор поставки по КП
+department: sales
+owner: orlova
+autonomy: 2                     # 0 черновик · 1 каждый результат · 2 исключения · 3 аудит
+trigger:
+  manual: true                  # цель словами: «подготовь договор по КП-118»
+match: [договор, кп, поставк]
+work:
+  skill: contract
+  executor: auto                # agent, если в шлюзе есть модель, иначе скрипт навыка
+  pool: sales
+review:
+  reviewer_required: false
+effects:
+  edo.queue: { auto_from: 9 }   # подпись всегда человек
+  ledger.invoice: { auto_from: 2, limit: 500000 }
+budget_usd: 0.5

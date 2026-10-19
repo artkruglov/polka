@@ -2,7 +2,7 @@
 # Builds the contour stand inside its VM (deploy/contour-stand/README.md).
 # Run as root from /opt/contour; stand.sh does it. Idempotent.
 #
-#   provision.sh              everything: packages, gVisor, firewall, Squid, services, secrets, Gitea
+#   provision.sh              everything: packages, gVisor, firewall, Squid, services, secrets, Gitea, the swarm
 #   provision.sh boot         after a reboot: unseal OpenBao (systemd runs it)
 #   provision.sh upstream     read «provider model key» on stdin, store it, restart the gateway
 #   provision.sh polka-bot    read «name origin token» on stdin, store the Полка service token
@@ -106,7 +106,7 @@ esac
 
 # ---- packages: Docker, Squid, gVisor (pinned), Node (pinned)
 apt-get update -qq
-apt-get install -y -qq docker.io docker-compose-v2 docker-buildx squid jq curl iptables git >/dev/null
+apt-get install -y -qq docker.io docker-compose-v2 docker-buildx squid jq curl iptables git netcat-openbsd >/dev/null
 if [ ! -f /etc/apt/sources.list.d/gvisor.list ]; then
   curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor --yes -o /usr/share/keyrings/gvisor-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" \
@@ -153,10 +153,17 @@ kc=$(secret_file "$ETC/keycloak-admin")
 (umask 077
  echo "POSTGRES_PASSWORD=$pg" >"$ETC/postgres.env"
  printf 'KC_BOOTSTRAP_ADMIN_USERNAME=admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\n' "$kc" >"$ETC/keycloak.env")
-for user in ivanov petrov ib; do secret_file "$ETC/user-$user" >/dev/null; done
-sed -e "s/__IVANOV_PASSWORD__/$(cat $ETC/user-ivanov)/" -e "s/__PETROV_PASSWORD__/$(cat $ETC/user-petrov)/" \
-    -e "s/__IB_PASSWORD__/$(cat $ETC/user-ib)/" keycloak/realm.json >"$ETC/realm.json"
+USERS="ivanov petrov ib petrova orlova director"
+subst=()
+for user in $USERS; do
+  secret_file "$ETC/user-$user" >/dev/null
+  subst+=(-e "s/__${user^^}_PASSWORD__/$(cat "$ETC/user-$user")/")
+done
+realm_before=$(sha256sum "$ETC/realm.json" 2>/dev/null || true)
+sed "${subst[@]}" keycloak/realm.json >"$ETC/realm.json"
 chmod 644 "$ETC/realm.json" # read by Keycloak's container user; the VM has no other users who matter
+# The effect gateway's token: only the swarm and the systems of record read it.
+secret_file "$ETC/effects-token" >/dev/null
 [ -f "$ETC/litellm.yaml" ] || { printf 'model_list: []\n' >"$ETC/litellm.yaml"; : >"$ETC/litellm.env"; }
 
 # ---- services
@@ -166,10 +173,16 @@ unseal
 curl -fsS -o /dev/null -X POST "$BAO/v1/sys/mounts/contour" -H "x-vault-token: $(bao_token)" \
   -d '{"type":"kv","options":{"version":"2"}}' 2>/dev/null || true
 bao_put litellm "{\"master_key\":\"sk-$(cat $ETC/litellm-master)\"}"
-for user in ivanov petrov; do bao_put "users/$user" "{\"password\":\"$(cat $ETC/user-$user)\"}"; done
-bao_put users/ib-admin "{\"password\":\"$(cat $ETC/user-ib)\"}"
+for user in $USERS; do
+  name=$user; [ "$user" = ib ] && name=ib-admin
+  bao_put "users/$name" "{\"password\":\"$(cat "$ETC/user-$user")\"}"
+done
+bao_put effects "{\"token\":\"$(cat "$ETC/effects-token")\"}"
 render_litellm
 docker compose -f compose.yaml up -d >/dev/null
+# Keycloak imports the realm only when it starts empty: a changed realm
+# (new users or roles) needs a fresh container.
+[ "$realm_before" = "$(sha256sum "$ETC/realm.json")" ] || docker compose -f compose.yaml up -d --force-recreate keycloak >/dev/null
 wait_http http://127.0.0.1:3000/api/healthz
 wait_http http://127.0.0.1:8080/realms/contour
 wait_http http://127.0.0.1:4000/health/liveliness
@@ -227,6 +240,37 @@ UNIT
 systemctl daemon-reload
 systemctl enable contour-boot.service >/dev/null 2>&1
 systemctl restart squid
+
+# ---- the swarm: systems of record, the coordinator and its NATS client
+install -d -m 700 "$STATE/swarm"
+(cd /opt/contour && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
+wait_http http://127.0.0.1:8181/health
+cat >/etc/systemd/system/contour-systems.service <<'UNIT'
+[Unit]
+Description=Contour stand: systems of record (ledger, EDO, mail), API only
+After=network.target
+[Service]
+ExecStart=/usr/local/bin/node /opt/contour/systems.mjs
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+cat >/etc/systemd/system/contour-swarm.service <<'UNIT'
+[Unit]
+Description=Contour stand: the swarm coordinator (bus, pools, policy, effects)
+After=docker.service contour-systems.service contour-boot.service
+Requires=docker.service
+[Service]
+ExecStartPre=/bin/sh -c 'until nc -z 127.0.0.1 4222 && curl -fs http://127.0.0.1:8200/v1/sys/health >/dev/null; do sleep 2; done'
+ExecStart=/usr/local/bin/node /opt/contour/swarm.mjs serve
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable contour-systems.service contour-swarm.service >/dev/null 2>&1
+systemctl restart contour-systems.service contour-swarm.service
 
 echo "contour: node $(node -v), $(runsc --version | head -1), squid $(squid -v | head -1 | awk '{print $4}')"
 docker compose -f compose.yaml ps --format '{{.Service}} {{.State}}'

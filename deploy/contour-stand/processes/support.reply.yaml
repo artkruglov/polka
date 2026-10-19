@@ -1,0 +1,18 @@
+process: support.reply
+version: 1
+title: Ответ клиенту на письмо
+department: support
+owner: orlova
+autonomy: 1
+trigger:
+  inbox: support                # почтовый ящик процесса: каждое письмо — поручение
+match: [письм, клиент, ответ]
+work:
+  skill: reply
+  executor: auto
+  pool: support
+review:
+  reviewer_required: false
+effects:
+  mail.send: { auto_from: 2 }
+budget_usd: 0.2

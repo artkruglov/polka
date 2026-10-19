@@ -11,6 +11,8 @@
 #    searched for every secret of the stand.
 # 3. A user without the profile's role is refused.
 # 4. A running task is revoked: process, model key and network, timed.
+# 5. The swarm's boundaries (swarm.mjs selftest): the gateway, the policy,
+#    signature, acceptance on Полка, the skill catalog.
 # Exit code 0 only if every line is «ok».
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -55,5 +57,8 @@ times=$(vm bash -c "grep '\"event\":\"revoked\"' /var/lib/contour/events/$id.jso
 running=$(vm docker ps -q --filter "label=contour.task=$id")
 acl=$(vm grep -c "$id" /etc/squid/contour-tasks.conf || true)
 if [ -z "$running" ] && [ "${acl:-0}" = 0 ] && grep -q revoked <<<"$revoked"; then line ok revoke "$times"; else line fail revoke "container=${running:-none} acl=$acl"; fi
+
+echo "== 5. Рой: шлюз действий, политика, подпись, каталог навыков"
+while read -r verdict name detail; do line "$verdict" "$name" "$detail"; done < <(./stand.sh contour selftest || true)
 
 exit $fail

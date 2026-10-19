@@ -1,0 +1,34 @@
+{
+  "skills": {
+    "contract": {
+      "version": "2.1.0",
+      "owner": "sales",
+      "sha256": "4a9391791dce0f23c158d5857ed0a18617547a528fa9bfed6ee5664064cd9db4",
+      "admitted": "2026-10-19"
+    },
+    "onboarding": {
+      "version": "1.0.0",
+      "owner": "hr",
+      "sha256": "7a4f701f505a16d3ab710ada889f1430de5c64331fe8812f1478627998106481",
+      "admitted": "2026-10-19"
+    },
+    "planner": {
+      "version": "0.3.0",
+      "owner": "platform",
+      "sha256": "eb5a615f4a9b5285248299d046b1e1c5db1ef5aa9f090c4e910e826cc4b08bea",
+      "admitted": "2026-10-19"
+    },
+    "reconcile": {
+      "version": "1.2.0",
+      "owner": "finance",
+      "sha256": "5ca5a079262f16d0cbe5fcb816657f2a5ebb64ebdfe086784b9d41869e95d089",
+      "admitted": "2026-10-19"
+    },
+    "reply": {
+      "version": "1.0.0",
+      "owner": "support",
+      "sha256": "ec1e15b89335bab89d87bc90e9c58a52aa3d8221b568d2a3ce47cbe8b7f0180a",
+      "admitted": "2026-10-19"
+    }
+  }
+}
