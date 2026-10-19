@@ -8,6 +8,10 @@
 //   catalog.mjs admit <skill>    hash the skill's folder and record it as admitted
 //   catalog.mjs verify           every skill against its admitted digest
 //   catalog.mjs list             skills with version, owner and what they may propose
+//
+// Another stand adds its own catalogs through /etc/contour/extensions.json
+// ({"catalogs": [dir], "processes": [dir], "effects": [dir]}); each catalog
+// is a folder with skills/ and its own index.json.
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
@@ -15,8 +19,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseProfile } from "./dispatcher.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const SKILLS = join(HERE, "catalog", "skills");
-const INDEX = join(HERE, "catalog", "index.json");
+const HOME = join(HERE, "catalog");
+export const SKILLS = join(HOME, "skills");
+const EXTENSIONS = process.env.CONTOUR_EXTENSIONS ?? "/etc/contour/extensions.json";
 
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 
@@ -45,14 +50,36 @@ export async function skillMeta(dir) {
   return parseProfile(head[1]);
 }
 
-export async function index() {
-  return JSON.parse(await readFile(INDEX, "utf8").catch(() => '{"skills":{}}'));
+/** What other stands add: catalogs of skills, packs of processes, effect routes. */
+export async function extensions() {
+  const ext = JSON.parse(await readFile(EXTENSIONS, "utf8").catch(() => "{}"));
+  return { catalogs: [], processes: [], effects: [], ...ext };
+}
+const catalogs = async () => [HOME, ...(await extensions()).catalogs];
+
+export async function index(root = HOME) {
+  return JSON.parse(await readFile(join(root, "index.json"), "utf8").catch(() => '{"skills":{}}'));
+}
+/** The catalog that admitted a skill, or the first one that holds its folder. */
+async function rootOf(name) {
+  for (const root of await catalogs()) if ((await index(root)).skills[name]) return root;
+  for (const root of await catalogs())
+    if (
+      await readFile(join(root, "skills", name, "SKILL.md")).then(
+        () => true,
+        () => false,
+      )
+    )
+      return root;
+  return null;
 }
 
 /** A skill as a sandbox may get it: admitted, and unchanged since. */
-export async function verifiedSkill(name, dir = join(SKILLS, name)) {
-  const entry = (await index()).skills[name];
+export async function verifiedSkill(name, dir) {
+  const root = await rootOf(name);
+  const entry = root && (await index(root)).skills[name];
   if (!entry) throw new Error(`навык ${name} не допущен в каталог`);
+  dir ??= join(root, "skills", name);
   const digest = await treeDigest(dir);
   if (digest !== entry.sha256)
     throw new Error(`навык ${name} изменён после допуска (${digest.slice(0, 12)} ≠ ${entry.sha256.slice(0, 12)})`);
@@ -63,11 +90,12 @@ export async function verifiedSkill(name, dir = join(SKILLS, name)) {
 export async function findSkills(text) {
   const lower = text.toLowerCase();
   const found = [];
-  for (const name of Object.keys((await index()).skills)) {
-    const meta = await skillMeta(join(SKILLS, name));
-    const hits = (meta.match ?? []).filter((w) => lower.includes(w)).length;
-    if (hits) found.push({ name, meta, hits });
-  }
+  for (const root of await catalogs())
+    for (const name of Object.keys((await index(root)).skills)) {
+      const meta = await skillMeta(join(root, "skills", name));
+      const hits = (meta.match ?? []).filter((w) => lower.includes(w)).length;
+      if (hits) found.push({ name, meta, hits });
+    }
   return found.sort((a, b) => b.hits - a.hits);
 }
 
@@ -75,20 +103,24 @@ const main = process.argv[1] && import.meta.url === pathToFileURL(resolve(proces
 if (main) {
   const [command, name] = process.argv.slice(2);
   if (command === "admit" && name) {
-    const all = await index();
-    const meta = await skillMeta(join(SKILLS, name));
+    const root = await rootOf(name);
+    if (!root) throw new Error(`нет папки навыка ${name} ни в одном каталоге`);
+    const all = await index(root);
+    const meta = await skillMeta(join(root, "skills", name));
     all.skills[name] = {
       version: meta.version,
       owner: meta.owner,
-      sha256: await treeDigest(join(SKILLS, name)),
+      sha256: await treeDigest(join(root, "skills", name)),
       admitted: new Date().toISOString().slice(0, 10),
     };
     all.skills = Object.fromEntries(Object.entries(all.skills).sort(([a], [b]) => a.localeCompare(b)));
-    await writeFile(INDEX, JSON.stringify(all, null, 2) + "\n");
+    await writeFile(join(root, "index.json"), JSON.stringify(all, null, 2) + "\n");
     console.log(`${name}@${meta.version} ${all.skills[name].sha256.slice(0, 12)}`);
   } else if (command === "verify" || command === "list") {
     let bad = 0;
-    for (const [skill, entry] of Object.entries((await index()).skills)) {
+    const entries = [];
+    for (const root of await catalogs()) entries.push(...Object.entries((await index(root)).skills));
+    for (const [skill, entry] of entries) {
       try {
         const s = await verifiedSkill(skill);
         const extra =

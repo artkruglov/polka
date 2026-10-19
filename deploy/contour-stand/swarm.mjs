@@ -26,11 +26,11 @@
 //   swarm.mjs selftest                                  boundary checks of the swarm (checks.sh)
 import { createHash, randomBytes } from "node:crypto";
 import { appendFile, cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { connect } from "@nats-io/transport-node";
 import { AckPolicy, RetentionPolicy, jetstream, jetstreamManager } from "@nats-io/jetstream";
-import { findSkills, SKILLS, treeDigest, verifiedSkill } from "./catalog.mjs";
+import { extensions, findSkills, SKILLS, treeDigest, verifiedSkill } from "./catalog.mjs";
 import { bao, http, parseProfile, signIn, start, verifyJwt, wait } from "./dispatcher.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -146,12 +146,13 @@ async function note(g, event, msg, data = {}) {
   nc?.publish(`events.${g.id}`, line);
 }
 
-// ---- catalog: shipped packs plus packs accepted at runtime; autonomy
-// changes (promote, audit) live in the state file.
+// ---- catalog: shipped packs, packs of other stands (extensions.json) and
+// packs accepted at runtime; autonomy changes (promote, audit) live in the
+// state file.
 async function catalog() {
   const state = await loadJson(STATE, {});
   const packs = {};
-  for (const dir of [join(HERE, "processes"), ADDED])
+  for (const dir of [join(HERE, "processes"), ...(await extensions()).processes, ADDED])
     for (const f of await readdir(dir).catch(() => []))
       if (f.endsWith(".yaml")) {
         const p = parseProfile(await readFile(join(dir, f), "utf8"));
@@ -175,9 +176,9 @@ async function opa(input) {
   return r.json.result;
 }
 const effectsToken = () => readFile("/etc/contour/effects-token", "utf8").then((t) => t.trim());
-async function systems(method, path, body, key) {
+async function systems(method, path, body, key, base = SYSTEMS) {
   const headers = key ? { "x-effects-token": await effectsToken(), "idempotency-key": key } : {};
-  return http(`${SYSTEMS}${path}`, { method, headers, body });
+  return http(`${base}${path}`, { method, headers, body });
 }
 async function polka(bot, method, path, body) {
   const b = await bao(`polka/${bot}`);
@@ -328,6 +329,7 @@ async function runGoal(id) {
       failed: ["проверки не запустились"],
     });
     const effects = await loadJson(join(RESULTS, id, "effects.json"), []);
+    if (checks.failed.length === 0) await (await hookOf(pack)).afterReview?.(g0, join(RESULTS, id));
     const vendor = executor === "agent" ? "agent-model" : "skill-script";
     const decision = await opa({
       process: {
@@ -474,22 +476,38 @@ async function finishShadow(id, pack, skill) {
 // ---- effects: the only door to the systems of record. An effect passes
 // only with a policy decision (auto), a person's approval or as a document
 // for signature, and every call carries an idempotency key.
+//
+// Plain effects are routes: a system, a path and the fields of the effect
+// that travel. Other stands add theirs in effects/*.json (extensions.json).
+const ROUTES = {
+  "mail.send": { path: "/mail/send", fields: ["to", "subject", "body"] },
+  "ledger.invoice": { path: "/ledger/invoices", fields: ["counterparty", "inn", "amount", "basis"] },
+};
+async function routes() {
+  const all = { ...ROUTES };
+  for (const dir of (await extensions()).effects)
+    for (const f of (await readdir(dir).catch(() => [])).filter((n) => n.endsWith(".json")))
+      Object.assign(all, await loadJson(join(dir, f), {}));
+  return all;
+}
+// A pack's hook (work.hook, next to the pack) sees the result after the
+// checks and each effect after the gateway: a stand keeps its own records.
+async function hookOf(pack) {
+  if (!pack?.work?.hook || !pack.file) return {};
+  return import(pathToFileURL(resolve(dirname(pack.file), pack.work.hook)).href);
+}
+
 async function gateway(g, i) {
   const e = g.effects[i];
   if (!e || !["auto", "approved", "sign"].includes(e.decision))
     throw new Error(`шлюз: у действия ${e?.type ?? i} нет решения политики или человека`);
   const key = `${g.id}:${i}`;
   let r;
-  if (e.type === "mail.send")
-    r = await systems("POST", "/mail/send", { to: e.to, subject: e.subject, body: e.body, goal: g.id }, key);
-  else if (e.type === "ledger.invoice")
-    r = await systems(
-      "POST",
-      "/ledger/invoices",
-      { counterparty: e.counterparty, inn: e.inn, amount: e.amount, basis: e.basis, goal: g.id },
-      key,
-    );
-  else if (e.type === "edo.queue") {
+  const route = (await routes())[e.type];
+  if (route) {
+    const body = Object.fromEntries(route.fields.filter((f) => e[f] !== undefined).map((f) => [f, e[f]]));
+    r = await systems(route.method ?? "POST", route.path, { ...body, goal: g.id }, key, route.base ?? SYSTEMS);
+  } else if (e.type === "edo.queue") {
     // Only the version a person accepted on Полка goes to signature.
     const accepted = await acceptedRevision(g.polka.artifactId);
     if (accepted !== g.polka.revisionId)
@@ -545,6 +563,12 @@ async function applyEffects(g) {
         const r = await gateway(g, i);
         e.state = e.type === "edo.queue" ? "awaiting_signature" : "done";
         e.receipt = r.json?.id ?? r.json?.children ?? null;
+        // The effect happened; a hook that fails only leaves a note.
+        await (
+          await hookOf((await catalog())[g.process])
+        )
+          .afterEffect?.(g, e, r.json)
+          ?.catch?.((error) => note(g, "hook", `${e.type}: запись не обновлена — ${error.message}`));
         await note(
           g,
           "effect",

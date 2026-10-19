@@ -33,7 +33,13 @@ const BAO = "http://127.0.0.1:8200";
 const SUBNET = "10.77.0";
 // What a profile's network line may name, as Squid ACLs (squid.conf). The
 // systems of record are readable only: GET, never a write.
-const DESTINATIONS = { polka: "p_polka", model: "p_model", git: "p_git", systems: "p_systems m_read" };
+const DESTINATIONS = {
+  polka: "p_polka",
+  model: "p_model",
+  git: "p_git",
+  systems: "p_systems m_read",
+  fin: "p_fin m_read",
+};
 
 // ---- profile: the YAML subset profiles and process packs use (maps two
 // levels deep, [a, b] lists, {a: b} maps, «|» blocks, # comments).
