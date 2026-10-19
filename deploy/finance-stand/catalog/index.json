@@ -1,3 +1,10 @@
 {
-  "skills": {}
+  "skills": {
+    "fin-match": {
+      "version": "1.0.0",
+      "owner": "finance",
+      "sha256": "0c925377be8341bc7aa1d0b48bfac6b176a80f934541fbc7561f495ea9a2917b",
+      "admitted": "2026-10-19"
+    }
+  }
 }

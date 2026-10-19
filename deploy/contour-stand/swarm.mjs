@@ -329,7 +329,7 @@ async function runGoal(id) {
       failed: ["проверки не запустились"],
     });
     const effects = await loadJson(join(RESULTS, id, "effects.json"), []);
-    if (checks.failed.length === 0) await (await hookOf(pack)).afterReview?.(g0, join(RESULTS, id));
+    if (checks.failed.length === 0) await (await hookOf(pack)).afterReview?.(g0, join(RESULTS, id), hookContext(g0));
     const vendor = executor === "agent" ? "agent-model" : "skill-script";
     const decision = await opa({
       process: {
@@ -491,11 +491,16 @@ async function routes() {
   return all;
 }
 // A pack's hook (work.hook, next to the pack) sees the result after the
-// checks and each effect after the gateway: a stand keeps its own records.
+// checks, may refuse an effect before the gateway (its own records say no)
+// and sees each effect after it: a stand keeps its own records.
 async function hookOf(pack) {
   if (!pack?.work?.hook || !pack.file) return {};
   return import(pathToFileURL(resolve(dirname(pack.file), pack.work.hook)).href);
 }
+const hookContext = (g) => ({
+  publish: (subject, data) => nc?.publish(subject, JSON.stringify(data)),
+  note: (event, msg) => note(g, event, msg),
+});
 
 async function gateway(g, i) {
   const e = g.effects[i];
@@ -559,15 +564,20 @@ async function applyEffects(g) {
     } else if (e.decision === "human") {
       e.state = "awaiting_approval";
     } else {
+      const hook = await hookOf((await catalog())[g.process]);
+      const veto = await hook.beforeEffect?.(g, e, hookContext(g));
+      if (veto) {
+        Object.assign(e, { state: "denied", why: veto });
+        await note(g, "effect", `${e.type}: отказано — ${veto}`);
+        continue;
+      }
       try {
         const r = await gateway(g, i);
         e.state = e.type === "edo.queue" ? "awaiting_signature" : "done";
         e.receipt = r.json?.id ?? r.json?.children ?? null;
         // The effect happened; a hook that fails only leaves a note.
-        await (
-          await hookOf((await catalog())[g.process])
-        )
-          .afterEffect?.(g, e, r.json)
+        await hook
+          .afterEffect?.(g, e, r.json, hookContext(g))
           ?.catch?.((error) => note(g, "hook", `${e.type}: запись не обновлена — ${error.message}`));
         await note(
           g,
@@ -749,7 +759,7 @@ async function tick(at = new Date()) {
 // ---- commands that change state go through the daemon (one writer); the
 // person is the verified Keycloak token in the request.
 const commands = {
-  async goal({ text, files, process }, who) {
+  async goal({ text, files, process, params = {} }, who) {
     need(who, "employee");
     const packs = await catalog();
     const pack = process ? packs[process] : matchProcess(packs, text);
@@ -765,7 +775,7 @@ const commands = {
       });
       return { goal: g.id };
     }
-    const g = await createGoal({ process: pack.process, text, requestedBy: who.user, files });
+    const g = await createGoal({ process: pack.process, text, requestedBy: who.user, files, params });
     await withGoal(g.id, (x) =>
       note(
         x,
@@ -1244,6 +1254,7 @@ try {
     if (command === "goal") {
       body.files = await filesOf(options(rest, "--file"));
       body.process = option(rest, "--process") ?? undefined;
+      body.params = Object.fromEntries(options(rest, "--param").map((kv) => kv.split("=")));
     }
     if (command === "new") {
       const dir = option(rest, "--example");

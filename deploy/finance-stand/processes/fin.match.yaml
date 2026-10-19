@@ -1,0 +1,17 @@
+process: fin.match
+version: 1
+title: Сверка денег и первички
+department: finance
+owner: petrova
+autonomy: 2
+trigger:
+  manual: true
+match: [сверк, хвост, первичк, закрыт]
+work:
+  skill: fin-match
+  executor: auto
+  pool: finance
+  hook: ../hooks.mjs            # журнал обязательств: предложения сверки → события
+review:
+  reviewer_required: false
+budget_usd: 0.3
