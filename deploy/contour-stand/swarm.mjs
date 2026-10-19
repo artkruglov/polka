@@ -1030,7 +1030,9 @@ async function serve() {
     }
   })();
   const every = (ms, fn) => setInterval(() => fn().catch((e) => console.error(`${fn.name}: ${e.message}`)), ms);
-  every(4000, pollPolka);
+  // Полка allows a token 120 requests in 10 minutes; events every 8 s take
+  // 75 of them and leave the rest to reading accepted versions.
+  every(8000, pollPolka);
   every(5000, pollMail);
   every(60_000, () => tick());
   console.log(`swarm: ${Object.keys(await catalog()).length} processes, pools ${[...pools].join(", ")}`);
