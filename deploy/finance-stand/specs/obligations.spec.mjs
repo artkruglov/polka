@@ -108,3 +108,34 @@ spec("a closed obligation gets no reminders", {
   when: { type: "Remind", via: "mail" },
   refused: /уже закрыто/,
 });
+spec("a corrected UPD settles the wrong-VAT exception and closes the obligation", {
+  given: [
+    detected,
+    paid,
+    {
+      type: "DocumentMatched",
+      id: ID,
+      at: at(2),
+      data: { docId: "edo-1", kind: "upd", amount: 122000, vat: vatOf(122000, 20), ok: false },
+    },
+    { type: "ExceptionRaised", id: ID, at: at(2), data: { kind: "ошибка_ндс" } },
+  ],
+  when: { type: "MatchDocument", docId: "edo-2", kind: "upd", amount: 122000, vat: vatOf(122000) },
+  then: [
+    ["DocumentMatched", "upd"],
+    ["ExceptionResolved", "ошибка_ндс"],
+    ["Closed", null],
+  ],
+});
+spec("paid in two parts is paid, not twice", {
+  given: [
+    detected,
+    upd,
+    { type: "PaymentMatched", id: ID, at: at(1), data: { opId: "op-1", amount: 50000, date: "2026-09-10" } },
+  ],
+  when: { type: "MatchPayment", opId: "op-2", amount: 72000, date: "2026-10-09" },
+  then: [
+    ["PaymentMatched", null],
+    ["Closed", null],
+  ],
+});

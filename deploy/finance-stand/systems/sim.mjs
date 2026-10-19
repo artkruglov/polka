@@ -44,7 +44,7 @@ export function createSim({ company, db, id }) {
     }
     if (p === "silent") return;
     if (p === "injection" && n === 1) return later(1, { do: "injection", cp: cp.id, basis: ask.basis });
-    if (n === 1) return later(2, { do: "pay", cp: cp.id, basis: ask.basis });
+    if (n === 1) return later(2, { do: "pay", cp: cp.id, basis: ask.basis, amount: ask.amount });
   }
 
   // What happens on a day: documents arrive, money comes in, letters land.
@@ -76,11 +76,8 @@ export function createSim({ company, db, id }) {
       return `${cp.name}: УПД по ${a.basis}`;
     }
     if (a.do === "pay") {
-      const inv = invoice(a.basis);
-      const paid = [...db.ops]
-        .filter((o) => o.counterParty.inn === cp.inn && o.payPurpose.includes(a.basis))
-        .reduce((s, o) => s + o.accountAmount, 0);
-      const amount = Math.round((inv.СуммаДокумента - paid) * 100) / 100;
+      // The client pays what the reminder asked for: the debt, or the rest of it.
+      const amount = Math.round(Number(a.amount ?? invoice(a.basis).СуммаДокумента) * 100) / 100;
       const n = 9000 + db.ops.length;
       db.ops.push(
         tapiOperation(

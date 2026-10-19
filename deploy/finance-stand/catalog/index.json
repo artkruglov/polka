@@ -1,9 +1,33 @@
 {
   "skills": {
-    "fin-match": {
+    "fin-chase": {
       "version": "1.0.0",
       "owner": "finance",
-      "sha256": "0c925377be8341bc7aa1d0b48bfac6b176a80f934541fbc7561f495ea9a2917b",
+      "sha256": "9829f51364b81a48f52e2e49d9428a9a93862fb0effcd2a69b8a38170fe52eb2",
+      "admitted": "2026-10-19"
+    },
+    "fin-inbox": {
+      "version": "1.0.0",
+      "owner": "finance",
+      "sha256": "d06a30fd047556ddcf39c3a8abc491cc6bc64e577cb0438f2c4a87636f37c3b9",
+      "admitted": "2026-10-19"
+    },
+    "fin-match": {
+      "version": "1.1.0",
+      "owner": "finance",
+      "sha256": "ce2afd2982247b65c71d017662d337e25b8faaa1b7c5650fcece2b95f1535fdc",
+      "admitted": "2026-10-19"
+    },
+    "fin-recon": {
+      "version": "1.0.0",
+      "owner": "finance",
+      "sha256": "13939b875bba5f6471620eeb2e832bc59975fe0892b73d6397fec60760a4bf1a",
+      "admitted": "2026-10-19"
+    },
+    "fin-remind": {
+      "version": "1.0.0",
+      "owner": "finance",
+      "sha256": "35a9e067fe9bea44419490468d83473b29163a22bd9b94144008799b0566d952",
       "admitted": "2026-10-19"
     }
   }

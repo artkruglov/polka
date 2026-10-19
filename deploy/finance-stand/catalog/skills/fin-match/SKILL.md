@@ -1,6 +1,6 @@
 ---
 name: fin-match
-version: 1.0.0
+version: 1.1.0
 owner: finance
 description: Сверка денег и первички: выписки банков, ЭДО и учёт, список хвостов
 effects: []

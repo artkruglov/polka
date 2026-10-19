@@ -73,6 +73,13 @@ export function evolve(s, e) {
         closed: false,
         exceptions: [...s.exceptions, { kind: d.kind, why: d.why, amount: d.amount ?? null, open: true, at: e.at }],
       };
+    case "ExceptionResolved":
+      return {
+        ...s,
+        exceptions: s.exceptions.map((x) =>
+          x.kind === d.kind && x.open ? { ...x, open: false, resolvedBy: d.why } : x,
+        ),
+      };
     case "HumanDecided":
       return {
         ...s,
@@ -91,13 +98,21 @@ export const fold = (id, events) => events.filter((e) => e.id === id).reduce(evo
 
 /** The two lines of an obligation. */
 export function lines(s) {
-  const money = s.paid >= s.amount - 0.005 && s.payments.length <= 1 ? "closed" : s.paid > 0 ? "partial" : "open";
+  // Paid in parts is fine; paid beyond the amount is a second payment.
+  const money =
+    cents(s.paid) > cents(s.amount)
+      ? "twice"
+      : cents(s.paid) === cents(s.amount)
+        ? "closed"
+        : s.paid > 0
+          ? "partial"
+          : "open";
   const docs = s.docs.some((d) => d.kind === "upd" && d.ok)
     ? "closed"
     : s.docs.some((d) => d.kind === "upd")
       ? "wrong"
       : "open";
-  return { money: s.paid > s.amount + 0.005 || s.payments.length > 1 ? "twice" : money, docs };
+  return { money, docs };
 }
 const closable = (s) => {
   const l = lines(s);
@@ -159,6 +174,10 @@ export function decide(s, cmd, at) {
           ok: vatOk && amountOk,
         }),
       );
+      // A corrected UPD settles the wrong-VAT exception by itself: the
+      // document is what the exception was about.
+      if (cmd.kind === "upd" && vatOk && amountOk && s.exceptions.some((x) => x.kind === "ошибка_ндс" && x.open))
+        out.push(ev("ExceptionResolved", { kind: "ошибка_ндс", why: "пришёл исправленный УПД" }));
       if (cmd.kind === "upd" && !vatOk)
         out.push(
           ev("ExceptionRaised", {

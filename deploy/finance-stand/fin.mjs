@@ -10,9 +10,16 @@
 //   fin.mjs match [--as petrova]                    reconcile the firm: a goal of fin.match with what the systems hold
 //   fin.mjs tails [--journal <name>]                the tails and the numbers, from the journal of obligations
 //   fin.mjs rebuild [--journal <name>]              the view rebuilt from the journal, compared with the live one
+//   fin.mjs score                                   the journal's tails against the bookkeeper's reference
+//   fin.mjs selftest                                the stand's boundaries (checks.sh, block 6)
 //   fin.mjs audit --dir <exports> [--as petrova]    the same reconciliation on a company's own exports, its own journal
+//   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
+//   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
+//   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
+//   fin.mjs sign --as <user>                        sign the reconciliation drafts in EDO (a signer only)
 import { execFile as execFileCb, spawn } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,9 +27,9 @@ import { write } from "./company/gen.mjs";
 import * as tbank from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
 import { CONTOUR, contour } from "./contour.mjs";
-import { fromExports, fromSystems, writeInputs } from "./inputs.mjs";
-import { journal, metrics, tails } from "./obligations.mjs";
-import { journalOf, project, projectionOf } from "./hooks.mjs";
+import { fromExports, fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
+import { JOURNAL, apply, decide, fold, journal, metrics, tails } from "./obligations.mjs";
+import { beforeEffect, journalOf, project, projectionOf } from "./hooks.mjs";
 
 const execFile = promisify(execFileCb);
 const DATA = "/var/lib/finance";
@@ -44,10 +51,14 @@ export async function readBank(which, { from, to } = {}) {
   return clientBank(Buffer.from(await r.arrayBuffer()), "b").filter((o) => o.date >= from && (!to || o.date < to));
 }
 
-async function fin(method, path, body) {
+async function fin(method, path, body, key) {
   const r = await fetch(`${FIN}${path}`, {
     method,
-    headers: { "content-type": "application/json", "x-effects-token": await effectsToken() },
+    headers: {
+      "content-type": "application/json",
+      "x-effects-token": await effectsToken(),
+      ...(key ? { "idempotency-key": key } : {}),
+    },
     body: body && JSON.stringify(body),
   });
   return r.json();
@@ -72,14 +83,15 @@ function swarm(args) {
     p.on("exit", (code) => (code ? reject(new Error(`swarm.mjs ${args[0]}: код ${code}`)) : resolve()));
   });
 }
-async function reconcile(inputs, { as, title, params }) {
+const today = async () => (await (await fetch(`${FIN}/sim/clock`)).json()).date;
+async function reconcile(inputs, { as, title, params, process = "fin.match" }) {
   const dir = join(DATA, "runs", stamp());
   const files = await writeInputs(dir, inputs);
   await swarm([
     "goal",
     title,
     "--process",
-    "fin.match",
+    process,
     "--as",
     as,
     ...files.flatMap((f) => ["--file", f]),
@@ -236,8 +248,29 @@ const commands = {
     );
     for (const r of t.slice(0, Number(opt(args, "--limit", 50))))
       console.log(
-        `  ${r.number.padEnd(9)} ${(KIND[r.kind] ?? r.kind).padEnd(22)} ${String(r.sum?.toFixed(2) ?? "—").padStart(12)}  ${r.name}${r.asks ? ` · писали ${r.asks} раз` : ""}${r.open.length ? ` · исключение: ${r.open.join(", ")}` : ""}`,
+        `  ${r.number.padEnd(9)} ${(KIND[r.kind] ?? r.kind).padEnd(22)} ${String(r.sum?.toFixed(2) ?? "—").padStart(12)}  ${r.name}${r.asks ? ` · писали ${r.asks} ${[2, 3, 4].includes(r.asks % 10) && ![12, 13, 14].includes(r.asks % 100) ? "раза" : "раз"}` : ""}${r.open.length ? ` · исключение: ${r.open.join(", ")}` : ""}`,
       );
+  },
+
+  // Precision and recall against expected/tails.csv: right after the first
+  // reconciliation, before anyone has written to a counterparty.
+  async score() {
+    const c = await company();
+    const key = (n, k, sum) => `${n}|${k}|${Number(sum).toFixed(2)}`;
+    const ref = (await readFile(join(DATA, "company", "expected", "tails.csv"), "utf8"))
+      .trim()
+      .split("\n")
+      .slice(1)
+      .map((l) => l.split(";"));
+    const want = new Set(ref.map((r) => key(r[0], r[4], r[5])));
+    const got = new Set(tails(await journal(), c.firm.period.asOf).map((t) => key(t.number, t.kind, t.sum)));
+    const hit = [...got].filter((k) => want.has(k)).length;
+    const p = got.size ? hit / got.size : 0;
+    const r = want.size ? hit / want.size : 0;
+    console.log(
+      `эталон ${want.size}, найдено ${got.size}, совпало ${hit}: точность ${(p * 100).toFixed(1)}%, полнота ${(r * 100).toFixed(1)}%`,
+    );
+    process.exitCode = p >= 0.95 && r >= 0.95 ? 0 : 1;
   },
 
   async rebuild(args) {
@@ -251,6 +284,222 @@ const commands = {
       `${same ? "ok  " : "fail"} rebuild                из журнала (${again.events} событий) ${same ? "та же картина, что живая" : "картина разошлась с живой"}`,
     );
     process.exitCode = same ? 0 : 1;
+  },
+
+  async chase(args) {
+    const day = await today();
+    await reconcile(fromJournal({ events: await journal(), company: await company(), today: day }), {
+      as: opt(args, "--as", "petrova"),
+      title: `Запросить недостающие УПД на ${day}`,
+      params: {},
+      process: "fin.chase",
+    });
+  },
+
+  async remind(args) {
+    const day = await today();
+    await reconcile(fromJournal({ events: await journal(), company: await company(), today: day }), {
+      as: opt(args, "--as", "petrova"),
+      title: `Напомнить должникам на ${day}`,
+      params: {},
+      process: "fin.remind",
+    });
+  },
+
+  // New letters of the finance box become one goal; they are taken once.
+  async inbox(args) {
+    const letters = await (await fetch(`${FIN}/mail/inbox?box=finance&new`)).json();
+    if (!letters.length) return console.log("новых писем нет");
+    const day = await today();
+    for (const m of letters)
+      await fetch(`${FIN}/mail/take`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ box: "finance", id: m.id }),
+      });
+    await reconcile(fromInbox({ letters, events: await journal(), company: await company(), today: day }), {
+      as: opt(args, "--as", "petrova"),
+      title: `Разобрать ${letters.length} писем на ${day}`,
+      params: {},
+      process: "fin.inbox",
+    });
+  },
+
+  async recon(args) {
+    const day = await today();
+    await reconcile(fromStates({ events: await journal(), company: await company(), today: day }), {
+      as: opt(args, "--as", "petrova"),
+      title: `Акты сверки на ${day}`,
+      params: {},
+      process: "fin.recon",
+    });
+  },
+
+  async cycle(args) {
+    for (const step of ["inbox", "match", "chase", "remind"]) {
+      console.log(`\n== ${step}`);
+      await commands[step](args);
+    }
+  },
+
+  // An exception is closed by a person, named and checked by Keycloak.
+  async decide(args) {
+    const [number, kind, decision] = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--as");
+    const as = opt(args, "--as");
+    if (!number || !kind || !decision || !as)
+      throw new Error('usage: fin.mjs decide <счёт> <исключение> "<решение>" --as <user>');
+    const { signIn } = await contour("dispatcher.mjs");
+    await signIn(as); // a person of the realm, or this throws
+    const at = `${await today()}T12:00:00Z`;
+    const r = await apply([{ type: "Decide", id: `ob-${number}`, kind, decision, by: as }], { at, file: JOURNAL });
+    if (r.refused.length) throw new Error(r.refused[0].why);
+    await project(JOURNAL, (await company()).firm.period.asOf);
+    console.log(
+      `${number}: ${kind} — ${decision} (${as})${r.appended.some((e) => e.type === "Closed") ? "; обязательство закрыто" : ""}`,
+    );
+  },
+
+  // Signing drafts in EDO: only a signer of the realm, only the queued bytes.
+  async sign(args) {
+    const as = opt(args, "--as");
+    if (!as) throw new Error("usage: fin.mjs sign --as <подписант>");
+    const { signIn, verifyJwt } = await contour("dispatcher.mjs");
+    const claims = await verifyJwt(await signIn(as, { raw: true }));
+    if (!(claims.realm_access?.roles ?? []).includes("signer")) throw new Error(`${as}: нет роли signer`);
+    const drafts = await (await fetch(`${FIN}/edo/documents?dir=out&status=draft`)).json();
+    for (const d of drafts) {
+      const r = await fin("POST", "/edo/sign", { id: d.id, sha256: d.sha256, signer: as }, `sign:${d.id}`);
+      console.log(`  ${d.counterparty}: ${r.status ?? r.error}`);
+    }
+    console.log(`подписано ${drafts.length}`);
+  },
+
+  // Each line is «ok» when the boundary holds; the real services, nothing mocked.
+  async selftest() {
+    let fail = 0;
+    const line = (ok, name, detail) => {
+      if (!ok) fail = 1;
+      console.log(`${ok ? "ok  " : "fail"} ${name.padEnd(22)} ${detail}`);
+    };
+    const post = (path, body, headers = {}) =>
+      fetch(`${FIN}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      });
+    const c = await company();
+    const supplier = c.counterparties.find((x) => x.role === "supplier" && x.edo);
+
+    // 1. Writes need the gateway's token; 2. the banks need theirs.
+    const w = await post("/edo/request", { inn: supplier.inn, basis: "П-0101" });
+    line(w.status === 401, "fin-no-token", `запрос документа без токена шлюза → ${w.status}`);
+    const b = await fetch(`${FIN}/tbank/api/v4/bank-accounts`);
+    line(b.status === 401, "bank-no-token", `выписка без токена банка → ${b.status}`);
+
+    // 3. No payment among the stand's effects, and the policy denies one.
+    const routes = JSON.parse(await readFile(new URL("./effects/finance.json", import.meta.url), "utf8"));
+    const payLike = Object.keys(routes).filter((t) => /pay|transfer|плат/i.test(t));
+    const { http } = await contour("dispatcher.mjs");
+    const opa = await http("http://127.0.0.1:8181/v1/data/contour/accept/decision", {
+      method: "POST",
+      body: {
+        input: {
+          process: {
+            name: "fin.chase",
+            department: "finance",
+            autonomy: 3,
+            reviewer_required: false,
+            effects: { "bank.payment": { auto_from: 0 }, "edo.request": { auto_from: 2 } },
+          },
+          result: { checks: { passed: [], failed: [] }, executor: { vendor: "skill-script" }, reviewer: null },
+          effects: [{ type: "bank.payment", amount: 415330, to: "40702810999900001234" }],
+          sample: 0.99,
+        },
+      },
+    });
+    const d = opa.json?.result?.effects?.[0];
+    line(
+      !payLike.length && d?.decision === "deny",
+      "no-payment-effect",
+      `маршрутов платежа ${payLike.length}; bank.payment → ${d?.decision} (${d?.why})`,
+    );
+
+    // 4. New requisites in a letter go to a person, and the agent stops writing.
+    const id = "ob-selftest";
+    const at = "2026-10-05T10:00:00Z";
+    const detected = { type: "Detected", id, at, data: { side: "ap", inn: "1", number: "selftest", amount: 1000 } };
+    const letter = "У нас сменились банковские реквизиты, оплачивайте на новый счёт";
+    const r1 = decide(fold(id, [detected]), { type: "Response", id, text: letter }, at);
+    const r2 = decide(fold(id, [detected, ...r1.events]), { type: "RequestDocument", id, via: "edo" }, at);
+    line(
+      r1.events.some((e) => e.type === "ExceptionRaised" && e.data.kind === "реквизиты") &&
+        /реквизит/.test(r2.refused ?? ""),
+      "requisites-to-person",
+      `письмо о новых реквизитах → исключение; следующий запрос → ${r2.refused ?? "ушёл"}`,
+    );
+
+    // 5. The same request twice is one request.
+    const key = `selftest:${randomBytes(3).toString("hex")}`;
+    const tok = (await readFile("/etc/contour/effects-token", "utf8")).trim();
+    const h = { "x-effects-token": tok, "idempotency-key": key };
+    const one = await (
+      await post("/edo/request", { inn: supplier.inn, basis: "selftest", text: "Самопроверка стенда" }, h)
+    ).json();
+    const two = await (
+      await post("/edo/request", { inn: supplier.inn, basis: "selftest", text: "Самопроверка стенда" }, h)
+    ).json();
+    line(
+      one.id && one.id === two.id && two.repeated,
+      "edo-request-idempotent",
+      `два вызова → ${one.id}${two.repeated ? ", повтор" : ""}`,
+    );
+
+    // 6. The journal refuses a second letter within three days before the gateway.
+    const name = `selftest-${randomBytes(2).toString("hex")}`;
+    const file = journalOf({ journal: name });
+    const day = await today();
+    await apply(
+      [
+        {
+          type: "Detect",
+          id: "ob-П-9999",
+          side: "ap",
+          inn: supplier.inn,
+          name: supplier.name,
+          number: "П-9999",
+          amount: 1000,
+          due: "2026-09-01",
+        },
+        { type: "RequestDocument", id: "ob-П-9999", via: "edo" },
+      ],
+      { at: `${day}T09:00:00Z`, file },
+    );
+    const veto = await beforeEffect(
+      { id: "selftest", params: { journal: name } },
+      { type: "edo.request", basis: "П-9999" },
+    );
+    line(/не чаще/.test(veto ?? ""), "ask-limit", `второй запрос в тот же день → ${veto ?? "пропущен"}`);
+    await rm(file, { force: true });
+
+    // 7. The firm's view rebuilt from its journal is the live one.
+    const live = JSON.parse(await readFile(projectionOf(JOURNAL), "utf8").catch(() => "null"));
+    if (!live) line(true, "rebuild", "журнал пуст: сверка ещё не запускалась");
+    else {
+      const again = await project(JOURNAL, live.asOf);
+      line(
+        JSON.stringify(again.tails) === JSON.stringify(live.tails),
+        "rebuild",
+        `из журнала (${again.events} событий) та же картина`,
+      );
+    }
+
+    // 8. The finance skills reach a sandbox only as admitted.
+    const { verifiedSkill } = await contour("catalog.mjs");
+    const skills = (await readdir(new URL("./catalog/skills/", import.meta.url))).sort();
+    const bad = [];
+    for (const sk of skills) await verifiedSkill(sk).catch((e) => bad.push(e.message));
+    line(!bad.length, "fin-skills-admitted", bad.length ? bad.join("; ") : `${skills.join(", ")} совпадают с допуском`);
+    process.exitCode = fail;
   },
 
   async advance(args) {

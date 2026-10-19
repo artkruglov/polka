@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { clientBankExchange, cp1251, tapiOperation } from "./company/gen.mjs";
 import { normalize } from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
+import { states as obligationStates, tails as journalTails } from "./obligations.mjs";
 
 const LEDGER = [
   "Catalog_Контрагенты",
@@ -123,4 +124,42 @@ export async function writeInputs(dir, inputs) {
   await mkdir(dir, { recursive: true });
   for (const [name, value] of Object.entries(inputs)) await writeFile(join(dir, `${name}.json`), JSON.stringify(value));
   return Object.keys(inputs).map((n) => join(dir, `${n}.json`));
+}
+
+// ---- what the follow-up steps get: the journal's view, not the systems
+
+const counterpartiesOf = (company) =>
+  company.counterparties.map((c) => ({ inn: c.inn, name: c.name, email: c.email, edo: c.edo }));
+
+/** Tails, the address book and today: what fin-chase and fin-remind see. */
+export function fromJournal({ events, company, today }) {
+  return {
+    tails: journalTails(events, company.firm.period.asOf),
+    counterparties: counterpartiesOf(company),
+    firm: { name: company.firm.name, inn: company.firm.inn, today },
+  };
+}
+
+/** New letters of the finance box, with the same view (fin-inbox). */
+export function fromInbox({ letters, events, company, today }) {
+  return { letters, ...fromJournal({ events, company, today }) };
+}
+
+/** Obligations per counterparty in EDO (fin-recon). */
+export function fromStates({ events, company, today }) {
+  const all = obligationStates(events);
+  return {
+    states: counterpartiesOf(company).map((c) => ({
+      ...c,
+      obligations: all
+        .filter((s) => s.inn === c.inn)
+        .map((s) => ({ number: s.number, side: s.side, amount: s.amount, paid: s.paid })),
+    })),
+    firm: {
+      name: company.firm.name,
+      inn: company.firm.inn,
+      today,
+      period: `${company.firm.period.from} — ${company.firm.period.to}`,
+    },
+  };
 }

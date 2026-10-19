@@ -108,7 +108,7 @@ for inv in sorted(invoices.values(), key=lambda i: i["number"]):
     kind, sum_ = None, inv["amount"]
     if diff is not None:
         kind, sum_ = "учёт_эдо", abs(diff)
-    elif len(inv["payments"]) > 1 or paid > total:
+    elif paid > total:
         kind = "дубль_оплаты"
     elif upd_bad and not upd_ok:
         kind, sum_ = "ошибка_ндс", abs(vat_of(upd_bad[0]["amount"]) - upd_bad[0]["vat"])
