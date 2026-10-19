@@ -4,8 +4,26 @@
   "accessTokenLifespan": 300,
   "roles": {
     "realm": [
-      { "name": "delegate-bugfix", "description": "Может поручать агентам задачи «Исправить баг»" },
-      { "name": "security-admin", "description": "ИБ: пишет профили, смотрит журнал, отзывает задачи" }
+      {
+        "name": "delegate-bugfix",
+        "description": "Может поручать агентам задачи «Исправить баг»"
+      },
+      {
+        "name": "security-admin",
+        "description": "ИБ: пишет профили, смотрит журнал, отзывает задачи"
+      },
+      {
+        "name": "employee",
+        "description": "Сотрудник: ставит агентам цели словами"
+      },
+      {
+        "name": "process-owner",
+        "description": "Владелец процесса: принимает пакеты, решает исключения, меняет ступень"
+      },
+      {
+        "name": "signer",
+        "description": "Подписант: подписывает принятые версии документов"
+      }
     ]
   },
   "clients": [
@@ -20,22 +38,115 @@
   ],
   "users": [
     {
-      "username": "ivanov", "enabled": true, "firstName": "Иван", "lastName": "Иванов",
-      "email": "ivanov@contour.test", "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "__IVANOV_PASSWORD__", "temporary": false }],
-      "realmRoles": ["delegate-bugfix"]
+      "username": "ivanov",
+      "enabled": true,
+      "firstName": "Иван",
+      "lastName": "Иванов",
+      "email": "ivanov@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__IVANOV_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "delegate-bugfix",
+        "employee",
+        "process-owner"
+      ]
     },
     {
-      "username": "petrov", "enabled": true, "firstName": "Пётр", "lastName": "Петров",
-      "email": "petrov@contour.test", "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "__PETROV_PASSWORD__", "temporary": false }],
+      "username": "petrov",
+      "enabled": true,
+      "firstName": "Пётр",
+      "lastName": "Петров",
+      "email": "petrov@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__PETROV_PASSWORD__",
+          "temporary": false
+        }
+      ],
       "realmRoles": []
     },
     {
-      "username": "ib-admin", "enabled": true, "firstName": "Служба", "lastName": "ИБ",
-      "email": "ib@contour.test", "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "__IB_PASSWORD__", "temporary": false }],
-      "realmRoles": ["security-admin"]
+      "username": "ib-admin",
+      "enabled": true,
+      "firstName": "Служба",
+      "lastName": "ИБ",
+      "email": "ib@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__IB_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "security-admin"
+      ]
+    },
+    {
+      "username": "petrova",
+      "enabled": true,
+      "firstName": "Елена",
+      "lastName": "Петрова",
+      "email": "petrova@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__PETROVA_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "employee",
+        "process-owner"
+      ]
+    },
+    {
+      "username": "orlova",
+      "enabled": true,
+      "firstName": "Ольга",
+      "lastName": "Орлова",
+      "email": "orlova@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__ORLOVA_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "employee",
+        "process-owner"
+      ]
+    },
+    {
+      "username": "director",
+      "enabled": true,
+      "firstName": "Дмитрий",
+      "lastName": "Директоров",
+      "email": "director@contour.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__DIRECTOR_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "employee",
+        "signer"
+      ]
     }
   ]
 }

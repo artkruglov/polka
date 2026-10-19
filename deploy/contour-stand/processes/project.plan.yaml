@@ -1,0 +1,18 @@
+process: project.plan
+version: 1
+title: План проекта
+department: platform
+owner: ivanov
+autonomy: 1                     # план всегда принимает человек
+trigger:
+  manual: true
+match: [проект, план, запуск]
+work:
+  skill: planner
+  executor: agent               # без модели не работает
+  pool: plan
+review:
+  reviewer_required: false
+effects:
+  swarm.spawn: { auto_from: 1 } # принятый план сам порождает поручения
+budget_usd: 1.0

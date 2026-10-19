@@ -1,0 +1,10 @@
+{
+  "name": "contour-stand",
+  "private": true,
+  "description": "The swarm of the contour stand (README.md): the NATS client is its only dependency; installed inside the VM.",
+  "type": "module",
+  "dependencies": {
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/transport-node": "3.4.0"
+  }
+}

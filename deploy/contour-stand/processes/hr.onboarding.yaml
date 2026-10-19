@@ -1,0 +1,19 @@
+process: hr.onboarding
+version: 2
+title: Выход нового сотрудника
+department: hr
+owner: orlova
+autonomy: 1
+trigger:
+  manual: true
+match: [сотрудник, выход, найм, онбординг]
+work:
+  skill: onboarding
+  executor: auto
+  pool: hr
+review:
+  reviewer_required: false
+effects:
+  edo.queue: { auto_from: 9 }
+  mail.send: { auto_from: 1 }   # письмо руководителю внутри компании
+budget_usd: 0.2

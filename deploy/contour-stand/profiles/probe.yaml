@@ -11,7 +11,7 @@ sandbox:
   memory: 512m
   ttl_minutes: 5
 network:
-  allow: [polka, model, git]
+  allow: [polka, model, git, systems]
 model:
   models: [mock-model]
   budget_usd: 0.05

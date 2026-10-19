@@ -1,0 +1,11 @@
+{
+  "number": "КП-118",
+  "client": "ООО «Альфа»",
+  "inn": "7701000001",
+  "email": "buh@alfa.test",
+  "items": [
+    { "name": "Стеллаж складской С-200", "qty": 40, "price": 8900 },
+    { "name": "Монтаж", "qty": 1, "price": 36000 }
+  ],
+  "terms": { "penalty_pct": 0.5, "payment_days": 10 }
+}

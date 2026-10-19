@@ -1,0 +1,8 @@
+{
+  "number": "КП-121",
+  "client": "ООО «Бета»",
+  "inn": "7701000002",
+  "email": "pay@beta.test",
+  "items": [{ "name": "Стеллаж складской С-120", "qty": 12, "price": 6400 }],
+  "terms": { "penalty_pct": 0.1, "payment_days": 30 }
+}
