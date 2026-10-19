@@ -1,0 +1,9 @@
+{
+  "_comment": "Границы ИБ для эффектов финансового стенда (deploy/finance-stand/README.md). OPA видит их как data.ext.finance. Платёжных эффектов здесь нет и не будет: агент готовит черновики, платит человек в банке.",
+  "effects": {
+    "fin.mail": { "max_recipients": 1 },
+    "edo.request": {},
+    "edo.draft": {},
+    "ledger.draft": {}
+  }
+}

@@ -1,6 +1,8 @@
 # Кто принимает результат и какие эффекты проходят (deploy/contour-stand/README.md).
 # Вход: пакет процесса, результат с проверками, предложенные агентом эффекты
-# и случайное число для выборки на аудит. Границы ИБ — data.base (base.json).
+# и случайное число для выборки на аудит. Границы ИБ — data.base (base.json)
+# и границы других стендов, которые добавляют свои эффекты: data.ext.<стенд>
+# (policy/ext/<стенд>/*.json).
 package contour.accept
 
 import rego.v1
@@ -61,15 +63,21 @@ reviewer_ok if {
 audited if input.sample < object.get(data.base.audit_sample, sprintf("%d", [input.process.autonomy]), 0)
 
 # ---- effects: deny / sign / auto / human, with the reason
+default ext := {}
+
+ext := data.ext
+
+bounds := object.union_n(array.concat([data.base.effects], [x.effects | some x in ext]))
+
 decide(e) := {"type": e.type, "decision": "deny", "why": "эффекта нет в границах ИБ"} if {
-	not data.base.effects[e.type]
+	not bounds[e.type]
 } else := {"type": e.type, "decision": "deny", "why": "эффекта нет в пакете процесса"} if {
 	not input.process.effects[e.type]
 } else := {"type": e.type, "decision": "deny", "why": "отдел не может писать наружу"} if {
 	e.type == "mail.send"
 	not input.process.department in data.base.effects["mail.send"].departments
 } else := {"type": e.type, "decision": "deny", "why": "сумма выше границы ИБ"} if {
-	e.amount > data.base.effects[e.type].max_amount
+	e.amount > bounds[e.type].max_amount
 } else := {"type": e.type, "decision": "deny", "why": "больше подзадач, чем разрешено"} if {
 	e.type == "swarm.spawn"
 	count(e.children) > data.base.effects["swarm.spawn"].max_children

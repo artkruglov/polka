@@ -35,7 +35,7 @@ accept() {
   else
     read -r -p "Откройте Полку http://127.0.0.1:4390, примите работу $work и нажмите Enter " _
   fi
-  sleep 6 # the swarm polls Полка's events every 4 s
+  sleep 10 # the swarm polls Полка's events every 8 s
 }
 goal_of() { grep -oE 'goal-[0-9]{4}-[0-9a-f]{4}' | head -1; }
 
