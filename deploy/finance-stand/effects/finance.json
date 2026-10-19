@@ -1,5 +1,5 @@
 {
-  "fin.mail": { "base": "http://127.0.0.1:7071", "path": "/mail/send", "fields": ["to", "subject", "body", "basis"] },
+  "fin.mail": { "base": "http://127.0.0.1:7071", "path": "/mail/send", "fields": ["to", "subject", "body", "basis", "amount"] },
   "edo.request": { "base": "http://127.0.0.1:7071", "path": "/edo/request", "fields": ["inn", "basis", "text"] },
   "edo.draft": {
     "base": "http://127.0.0.1:7071",

@@ -231,7 +231,7 @@ const routes = {
       const m = { id: id("out"), at: db.clock, ...body };
       db.outbox.push(m);
       const cp = company.counterparties.find((c) => c.email === body.to);
-      if (cp) sim.outbound(cp, { kind: "letter", basis: body.basis, subject: body.subject });
+      if (cp) sim.outbound(cp, { kind: "letter", basis: body.basis, subject: body.subject, amount: body.amount });
       return [201, m];
     }),
 

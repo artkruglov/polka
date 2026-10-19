@@ -1,0 +1,19 @@
+process: fin.remind
+version: 1
+title: Напоминания должникам
+department: finance
+owner: petrova
+autonomy: 1
+trigger:
+  manual: true
+match: [напомин, должник, просроч]
+work:
+  skill: fin-remind
+  executor: auto
+  pool: finance
+  hook: ../hooks.mjs
+review:
+  reviewer_required: false
+effects:
+  fin.mail: { auto_from: 2 }
+budget_usd: 0.3
