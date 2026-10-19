@@ -1,0 +1,21 @@
+# The contour stand VM (deploy/contour-stand/README.md): Ubuntu 24.04 with no
+# folder of the Mac mounted and no port forwarded to the Mac. Docker with the
+# gVisor runtime is installed by provision.sh, not by Lima.
+minimumLimaVersion: 2.0.0
+base:
+  - template:_images/ubuntu-24.04
+cpus: 4
+memory: 8GiB
+disk: 30GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+ssh:
+  forwardAgent: false
+  forwardX11: false
+portForwards:
+  # Полка reaches the VM through a reverse tunnel (stand.sh tunnel); nothing
+  # in the guest is forwarded back to the Mac.
+  - guestPortRange: [1, 65535]
+    ignore: true

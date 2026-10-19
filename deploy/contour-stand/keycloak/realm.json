@@ -1,0 +1,41 @@
+{
+  "realm": "contour",
+  "enabled": true,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "delegate-bugfix", "description": "Может поручать агентам задачи «Исправить баг»" },
+      { "name": "security-admin", "description": "ИБ: пишет профили, смотрит журнал, отзывает задачи" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "dispatcher",
+      "name": "Диспетчер стенда",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "ivanov", "enabled": true, "firstName": "Иван", "lastName": "Иванов",
+      "email": "ivanov@contour.test", "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "__IVANOV_PASSWORD__", "temporary": false }],
+      "realmRoles": ["delegate-bugfix"]
+    },
+    {
+      "username": "petrov", "enabled": true, "firstName": "Пётр", "lastName": "Петров",
+      "email": "petrov@contour.test", "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "__PETROV_PASSWORD__", "temporary": false }],
+      "realmRoles": []
+    },
+    {
+      "username": "ib-admin", "enabled": true, "firstName": "Служба", "lastName": "ИБ",
+      "email": "ib@contour.test", "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "__IB_PASSWORD__", "temporary": false }],
+      "realmRoles": ["security-admin"]
+    }
+  ]
+}
