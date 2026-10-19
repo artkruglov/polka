@@ -7,7 +7,11 @@
 //   fin.mjs statement [--bank a|b] [--sandbox]      a bank's operations through the adapter
 //   fin.mjs contract                                the adapter against the bank's public sandbox
 //   fin.mjs advance <days>                          move the counterparties' clock forward
-import { execFile as execFileCb } from "node:child_process";
+//   fin.mjs match [--as petrova]                    reconcile the firm: a goal of fin.match with what the systems hold
+//   fin.mjs tails [--journal <name>]                the tails and the numbers, from the journal of obligations
+//   fin.mjs rebuild [--journal <name>]              the view rebuilt from the journal, compared with the live one
+//   fin.mjs audit --dir <exports> [--as petrova]    the same reconciliation on a company's own exports, its own journal
+import { execFile as execFileCb, spawn } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, resolve } from "node:path";
@@ -15,7 +19,10 @@ import { pathToFileURL } from "node:url";
 import { write } from "./company/gen.mjs";
 import * as tbank from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
-import { contour } from "./contour.mjs";
+import { CONTOUR, contour } from "./contour.mjs";
+import { fromExports, fromSystems, writeInputs } from "./inputs.mjs";
+import { journal, metrics, tails } from "./obligations.mjs";
+import { journalOf, project, projectionOf } from "./hooks.mjs";
 
 const execFile = promisify(execFileCb);
 const DATA = "/var/lib/finance";
@@ -44,6 +51,40 @@ async function fin(method, path, body) {
     body: body && JSON.stringify(body),
   });
   return r.json();
+}
+
+const company = async () => JSON.parse(await readFile(join(DATA, "company", "company.json"), "utf8"));
+const stamp = () => new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
+const KIND = {
+  нет_упд: "оплачено, нет УПД",
+  просрочка: "клиент просрочил",
+  нет_оплаты: "УПД есть, не оплачено",
+  частичная: "частичная оплата",
+  ошибка_ндс: "ошибка НДС в УПД",
+  дубль_оплаты: "оплачено дважды",
+  учёт_эдо: "учёт ≠ ЭДО",
+  реквизиты: "смена реквизитов",
+};
+// A goal of the swarm, as a person would put it (swarm.mjs goal).
+function swarm(args) {
+  return new Promise((resolve, reject) => {
+    const p = spawn("node", [join(CONTOUR, "swarm.mjs"), ...args], { stdio: "inherit" });
+    p.on("exit", (code) => (code ? reject(new Error(`swarm.mjs ${args[0]}: код ${code}`)) : resolve()));
+  });
+}
+async function reconcile(inputs, { as, title, params }) {
+  const dir = join(DATA, "runs", stamp());
+  const files = await writeInputs(dir, inputs);
+  await swarm([
+    "goal",
+    title,
+    "--process",
+    "fin.match",
+    "--as",
+    as,
+    ...files.flatMap((f) => ["--file", f]),
+    ...Object.entries(params).flatMap(([k, v]) => ["--param", `${k}=${v}`]),
+  ]);
 }
 
 const commands = {
@@ -151,6 +192,65 @@ const commands = {
       );
     }
     process.exitCode = fail;
+  },
+
+  async match(args) {
+    const c = await company();
+    const inputs = await fromSystems({ fin: FIN, readBank, company: c });
+    console.log(`операций ${inputs.operations.length}, документов ЭДО ${inputs.edo.length}`);
+    await reconcile(inputs, {
+      as: opt(args, "--as", "petrova"),
+      title: `Сверка денег и первички на ${c.firm.period.asOf}`,
+      params: {},
+    });
+  },
+
+  async audit(args) {
+    const dir = opt(args, "--dir");
+    if (!dir) throw new Error("--dir <папка с выгрузками компании>");
+    const inputs = await fromExports(dir);
+    const name = `audit-${inputs.firm.inn ?? "x"}-${stamp()}`;
+    console.log(`операций ${inputs.operations.length}, документов ЭДО ${inputs.edo.length}, журнал ${name}`);
+    await reconcile(inputs, {
+      as: opt(args, "--as", "petrova"),
+      title: `Аудит хвостов: ${inputs.firm.name ?? inputs.firm.inn} на ${inputs.firm.asOf}`,
+      params: { journal: name, as_of: inputs.firm.asOf },
+    });
+    console.log(`хвосты: fin.mjs tails --journal ${name}`);
+  },
+
+  async tails(args) {
+    const file = journalOf({ journal: opt(args, "--journal") });
+    const asOf =
+      opt(args, "--as-of") ??
+      (await readFile(projectionOf(file), "utf8").then(
+        (t) => JSON.parse(t).asOf,
+        () => null,
+      )) ??
+      (await company()).firm.period.asOf;
+    const events = await journal(file);
+    const t = tails(events, asOf);
+    const m = metrics(events, asOf);
+    console.log(
+      `на ${asOf}: обязательств ${m.obligations}, закрыто ${m.closed}, хвостов ${m.tails}; писем ${m.asks}, ответов ${m.responses}, решений человека ${m.decisions}, открытых исключений ${m.exceptionsOpen}`,
+    );
+    for (const r of t.slice(0, Number(opt(args, "--limit", 50))))
+      console.log(
+        `  ${r.number.padEnd(9)} ${(KIND[r.kind] ?? r.kind).padEnd(22)} ${String(r.sum?.toFixed(2) ?? "—").padStart(12)}  ${r.name}${r.asks ? ` · писали ${r.asks} раз` : ""}${r.open.length ? ` · исключение: ${r.open.join(", ")}` : ""}`,
+      );
+  },
+
+  async rebuild(args) {
+    const file = journalOf({ journal: opt(args, "--journal") });
+    const live = JSON.parse(await readFile(projectionOf(file), "utf8"));
+    const again = await project(file, live.asOf);
+    const same =
+      JSON.stringify(again.tails) === JSON.stringify(live.tails) &&
+      JSON.stringify(again.metrics) === JSON.stringify(live.metrics);
+    console.log(
+      `${same ? "ok  " : "fail"} rebuild                из журнала (${again.events} событий) ${same ? "та же картина, что живая" : "картина разошлась с живой"}`,
+    );
+    process.exitCode = same ? 0 : 1;
   },
 
   async advance(args) {
