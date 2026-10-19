@@ -47,6 +47,19 @@ rm -rf /tmp/repo && git clone -q http://127.0.0.1:3000/contour/demo.git /tmp/rep
 want systems-read 200 http://127.0.0.1:7070/ledger/invoices
 want systems-write 403 -X POST http://127.0.0.1:7070/ledger/invoices -H content-type:application/json -d '{"counterparty":"x","amount":1}'
 want systems-mail-in 403 -X POST http://127.0.0.1:7070/mail/incoming -H content-type:application/json -d '{"box":"support","from":"a@b","subject":"x","text":"x"}'
+# The finance stand (deploy/finance-stand), when it is installed: EDO and the
+# ledger readable, nothing writable, the banks closed without their token,
+# the bank's real API out of reach.
+fin() {
+  name=$1; re=$2; shift 2
+  c=$(code "$@")
+  if [ "$c" = 503 ] || [ "$c" = 502 ]; then say ok "$name" "финансового стенда нет"; elif echo "$c" | grep -Eq "^($re)$"; then say ok "$name" "$c"; else say fail "$name" "got $c $(head -c 80 /tmp/body)"; fi
+}
+fin fin-read 200 http://127.0.0.1:7071/edo/documents
+fin fin-write 403 -X POST http://127.0.0.1:7071/edo/request -H content-type:application/json -d '{"inn":"1","basis":"x"}'
+fin fin-bank-no-token 401 http://127.0.0.1:7071/tbank/api/v4/bank-accounts
+want tbank-direct 000 --noproxy '*' https://business.tbank.ru/openapi/sandbox/api/v4/bank-accounts
+want tbank-proxy '403|000' https://business.tbank.ru/openapi/sandbox/api/v4/bank-accounts
 
 # Budget: the probe profile gives the key a few cents on a priced mock model.
 n=0; stopped=""

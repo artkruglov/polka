@@ -13,6 +13,8 @@
 # 4. A running task is revoked: process, model key and network, timed.
 # 5. The swarm's boundaries (swarm.mjs selftest): the gateway, the policy,
 #    signature, acceptance on Полка, the skill catalog.
+# 6. The finance stand's boundaries (deploy/finance-stand, fin.mjs selftest),
+#    when it is installed: tokens, no payment effect, the journal's rules.
 # Exit code 0 only if every line is «ok».
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -60,5 +62,10 @@ if [ -z "$running" ] && [ "${acl:-0}" = 0 ] && grep -q revoked <<<"$revoked"; th
 
 echo "== 5. Рой: шлюз действий, политика, подпись, каталог навыков"
 while read -r verdict name detail; do line "$verdict" "$name" "$detail"; done < <(./stand.sh contour selftest || true)
+
+if vm test -f /opt/contour/finance/fin.mjs; then
+  echo "== 6. Финансовый стенд: токены, платежей нет, правила журнала"
+  while read -r verdict name detail; do line "$verdict" "$name" "$detail"; done < <(vm node /opt/contour/finance/fin.mjs selftest || true)
+fi
 
 exit $fail

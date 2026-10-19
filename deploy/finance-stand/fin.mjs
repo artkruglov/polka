@@ -11,13 +11,15 @@
 //   fin.mjs tails [--journal <name>]                the tails and the numbers, from the journal of obligations
 //   fin.mjs rebuild [--journal <name>]              the view rebuilt from the journal, compared with the live one
 //   fin.mjs score                                   the journal's tails against the bookkeeper's reference
+//   fin.mjs selftest                                the stand's boundaries (checks.sh, block 6)
 //   fin.mjs audit --dir <exports> [--as petrova]    the same reconciliation on a company's own exports, its own journal
 //   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
 //   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
 //   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
 //   fin.mjs sign --as <user>                        sign the reconciliation drafts in EDO (a signer only)
 import { execFile as execFileCb, spawn } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -26,8 +28,8 @@ import * as tbank from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
 import { CONTOUR, contour } from "./contour.mjs";
 import { fromExports, fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
-import { JOURNAL, apply, journal, metrics, tails } from "./obligations.mjs";
-import { journalOf, project, projectionOf } from "./hooks.mjs";
+import { JOURNAL, apply, decide, fold, journal, metrics, tails } from "./obligations.mjs";
+import { beforeEffect, journalOf, project, projectionOf } from "./hooks.mjs";
 
 const execFile = promisify(execFileCb);
 const DATA = "/var/lib/finance";
@@ -370,6 +372,134 @@ const commands = {
       console.log(`  ${d.counterparty}: ${r.status ?? r.error}`);
     }
     console.log(`подписано ${drafts.length}`);
+  },
+
+  // Each line is «ok» when the boundary holds; the real services, nothing mocked.
+  async selftest() {
+    let fail = 0;
+    const line = (ok, name, detail) => {
+      if (!ok) fail = 1;
+      console.log(`${ok ? "ok  " : "fail"} ${name.padEnd(22)} ${detail}`);
+    };
+    const post = (path, body, headers = {}) =>
+      fetch(`${FIN}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      });
+    const c = await company();
+    const supplier = c.counterparties.find((x) => x.role === "supplier" && x.edo);
+
+    // 1. Writes need the gateway's token; 2. the banks need theirs.
+    const w = await post("/edo/request", { inn: supplier.inn, basis: "П-0101" });
+    line(w.status === 401, "fin-no-token", `запрос документа без токена шлюза → ${w.status}`);
+    const b = await fetch(`${FIN}/tbank/api/v4/bank-accounts`);
+    line(b.status === 401, "bank-no-token", `выписка без токена банка → ${b.status}`);
+
+    // 3. No payment among the stand's effects, and the policy denies one.
+    const routes = JSON.parse(await readFile(new URL("./effects/finance.json", import.meta.url), "utf8"));
+    const payLike = Object.keys(routes).filter((t) => /pay|transfer|плат/i.test(t));
+    const { http } = await contour("dispatcher.mjs");
+    const opa = await http("http://127.0.0.1:8181/v1/data/contour/accept/decision", {
+      method: "POST",
+      body: {
+        input: {
+          process: {
+            name: "fin.chase",
+            department: "finance",
+            autonomy: 3,
+            reviewer_required: false,
+            effects: { "bank.payment": { auto_from: 0 }, "edo.request": { auto_from: 2 } },
+          },
+          result: { checks: { passed: [], failed: [] }, executor: { vendor: "skill-script" }, reviewer: null },
+          effects: [{ type: "bank.payment", amount: 415330, to: "40702810999900001234" }],
+          sample: 0.99,
+        },
+      },
+    });
+    const d = opa.json?.result?.effects?.[0];
+    line(
+      !payLike.length && d?.decision === "deny",
+      "no-payment-effect",
+      `маршрутов платежа ${payLike.length}; bank.payment → ${d?.decision} (${d?.why})`,
+    );
+
+    // 4. New requisites in a letter go to a person, and the agent stops writing.
+    const id = "ob-selftest";
+    const at = "2026-10-05T10:00:00Z";
+    const detected = { type: "Detected", id, at, data: { side: "ap", inn: "1", number: "selftest", amount: 1000 } };
+    const letter = "У нас сменились банковские реквизиты, оплачивайте на новый счёт";
+    const r1 = decide(fold(id, [detected]), { type: "Response", id, text: letter }, at);
+    const r2 = decide(fold(id, [detected, ...r1.events]), { type: "RequestDocument", id, via: "edo" }, at);
+    line(
+      r1.events.some((e) => e.type === "ExceptionRaised" && e.data.kind === "реквизиты") &&
+        /реквизит/.test(r2.refused ?? ""),
+      "requisites-to-person",
+      `письмо о новых реквизитах → исключение; следующий запрос → ${r2.refused ?? "ушёл"}`,
+    );
+
+    // 5. The same request twice is one request.
+    const key = `selftest:${randomBytes(3).toString("hex")}`;
+    const tok = (await readFile("/etc/contour/effects-token", "utf8")).trim();
+    const h = { "x-effects-token": tok, "idempotency-key": key };
+    const one = await (
+      await post("/edo/request", { inn: supplier.inn, basis: "selftest", text: "Самопроверка стенда" }, h)
+    ).json();
+    const two = await (
+      await post("/edo/request", { inn: supplier.inn, basis: "selftest", text: "Самопроверка стенда" }, h)
+    ).json();
+    line(
+      one.id && one.id === two.id && two.repeated,
+      "edo-request-idempotent",
+      `два вызова → ${one.id}${two.repeated ? ", повтор" : ""}`,
+    );
+
+    // 6. The journal refuses a second letter within three days before the gateway.
+    const name = `selftest-${randomBytes(2).toString("hex")}`;
+    const file = journalOf({ journal: name });
+    const day = await today();
+    await apply(
+      [
+        {
+          type: "Detect",
+          id: "ob-П-9999",
+          side: "ap",
+          inn: supplier.inn,
+          name: supplier.name,
+          number: "П-9999",
+          amount: 1000,
+          due: "2026-09-01",
+        },
+        { type: "RequestDocument", id: "ob-П-9999", via: "edo" },
+      ],
+      { at: `${day}T09:00:00Z`, file },
+    );
+    const veto = await beforeEffect(
+      { id: "selftest", params: { journal: name } },
+      { type: "edo.request", basis: "П-9999" },
+    );
+    line(/не чаще/.test(veto ?? ""), "ask-limit", `второй запрос в тот же день → ${veto ?? "пропущен"}`);
+    await rm(file, { force: true });
+
+    // 7. The firm's view rebuilt from its journal is the live one.
+    const live = JSON.parse(await readFile(projectionOf(JOURNAL), "utf8").catch(() => "null"));
+    if (!live) line(true, "rebuild", "журнал пуст: сверка ещё не запускалась");
+    else {
+      const again = await project(JOURNAL, live.asOf);
+      line(
+        JSON.stringify(again.tails) === JSON.stringify(live.tails),
+        "rebuild",
+        `из журнала (${again.events} событий) та же картина`,
+      );
+    }
+
+    // 8. The finance skills reach a sandbox only as admitted.
+    const { verifiedSkill } = await contour("catalog.mjs");
+    const skills = (await readdir(new URL("./catalog/skills/", import.meta.url))).sort();
+    const bad = [];
+    for (const sk of skills) await verifiedSkill(sk).catch((e) => bad.push(e.message));
+    line(!bad.length, "fin-skills-admitted", bad.length ? bad.join("; ") : `${skills.join(", ")} совпадают с допуском`);
+    process.exitCode = fail;
   },
 
   async advance(args) {
