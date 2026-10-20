@@ -6,13 +6,19 @@
 //   - one client pays two invoices with one order («по счетам № …, …»);
 //   - two suppliers number their invoices alike («№ 15»);
 //   - one supplier is on the simplified system and sends UPDs without VAT;
-//   - the ledger's lists carry names, not INNs; the counterparty list spells them out in full.
+//   - the ledger's lists carry names, not INNs; the counterparty list spells them out in full;
+//   - suppliers outside EDO send their UPDs by mail as the FNS XML, some with a
+//     printed PDF beside it; one sends only a scan, which an audit without a
+//     model cannot read — that invoice stays a tail, and the reference says so;
+//   - one supplier in EDO sends the same UPD by mail as well.
 // Generated data only: real exports never go to git.
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { VAT, clientBankExchange, cp1251, cp866, generate } from "./gen.mjs";
 import { writeXlsx } from "../imports/xlsx.mjs";
+import { writeMbox } from "../imports/mail.mjs";
+import { writeUpdXml } from "../imports/upd-xml.mjs";
 
 const money = (x) => Math.round(x * 100) / 100;
 const vatOf = (amount, rate = VAT) => money((amount * rate) / (100 + rate));
@@ -82,6 +88,54 @@ export function realistic(c) {
     for (const d of f.edo) if (d.inn === usn.inn) d.vat = 0;
     quirks.push(`${usn.name} на УСН: УПД без НДС`);
   }
+  // UPDs of suppliers outside EDO come by mail
+  const buyer = { inn: f.firm.inn, kpp: f.firm.kpp, name: f.firm.name };
+  const byInn = Object.fromEntries(f.counterparties.map((x) => [x.inn, x]));
+  const obOf = Object.fromEntries(f.obligations.map((o) => [o.number, o]));
+  const letter = (d, attachments) => ({
+    from: byInn[d.inn].email,
+    to: f.firm.email,
+    subject: `УПД по счёту ${d.basis}`,
+    date: d.date,
+    text: `Добрый день! Направляем УПД ${d.number} по счёту ${d.basis}. Оригинал отправим почтой России.`,
+    attachments,
+  });
+  const xmlOf = (d) => {
+    const cp = byInn[d.inn];
+    const x = writeUpdXml({ ...d, seller: { inn: cp.inn, kpp: cp.kpp, name: cp.name }, buyer });
+    return { name: x.name, type: "application/xml", bytes: x.bytes };
+  };
+  const pdf = (d) => ({
+    name: `УПД ${d.number}.pdf`,
+    type: "application/pdf",
+    bytes: Buffer.from(`%PDF-1.4\n% УПД ${d.number}\n`),
+  });
+  f.mail = [];
+  const byMail = f.edo.filter((d) => d.kind === "upd" && d.dir === "in" && !byInn[d.inn]?.edo);
+  // the scan: an invoice that closes on both lines otherwise
+  const scan = byMail.find((d) => !obOf[d.basis]?.tail);
+  let sent = 0;
+  byMail.forEach((d) => {
+    if (d === scan)
+      f.mail.push(
+        letter(d, [{ name: "скан УПД.jpg", type: "image/jpeg", bytes: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) }]),
+      );
+    else f.mail.push(letter(d, sent++ % 2 ? [xmlOf(d)] : [xmlOf(d), pdf(d)]));
+  });
+  f.upds = f.edo.filter((d) => d.kind === "upd"); // the ledger's receipts still name them
+  f.edo = f.edo.filter((d) => !byMail.includes(d));
+  if (scan) {
+    const o = obOf[scan.basis];
+    const cp = byId[o.cp];
+    f.expected.push([o.incoming ?? o.number, "ap", cp.name, cp.inn, "нет_упд", o.amount.toFixed(2)]);
+    f.expected.sort((a, b) => a[0].localeCompare(b[0]));
+  }
+  const both = f.edo.find((d) => d.kind === "upd" && d.dir === "in" && byInn[d.inn]?.edo && !obOf[d.basis]?.tail);
+  if (both) f.mail.push(letter(both, [xmlOf(both)]));
+  if (byMail.length)
+    quirks.push(
+      `УПД поставщиков без ЭДО пришли почтой: ${byMail.length}, из них один скан; один УПД пришёл и через ЭДО, и письмом`,
+    );
   return { firm: f, quirks };
 }
 
@@ -98,7 +152,7 @@ export async function writeExports(c, dir) {
   await mkdir(dir, { recursive: true });
   const cps = Object.fromEntries(c.counterparties.map((x) => [x.id, x]));
   const byOb = Object.fromEntries(c.obligations.map((o) => [o.number, o]));
-  const updOf = (number, dir) => c.edo.find((d) => d.kind === "upd" && d.basis === number && d.dir === dir);
+  const updOf = (number, dir) => (c.upds ?? c.edo).find((d) => d.kind === "upd" && d.basis === number && d.dir === dir);
   const files = {};
   const period = c.firm.period;
 
@@ -189,6 +243,8 @@ export async function writeExports(c, dir) {
           STATUS[d.status] ?? d.status,
         ]),
     ]);
+
+  if (c.mail?.length) files["Почта бухгалтерии.mbox"] = writeMbox(c.mail);
 
   for (const [name, bytes] of Object.entries(files)) await writeFile(join(dir, name), bytes);
   return Object.keys(files);
