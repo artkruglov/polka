@@ -14,6 +14,8 @@ import { realistic, writeExports } from "../company/exports.mjs";
 import { readExports, passportLines } from "../imports/audit.mjs";
 import { amount, date, nameKey } from "../imports/tables.mjs";
 import { readXlsx, writeXlsx } from "../imports/xlsx.mjs";
+import { readEml, readMbox, writeMbox } from "../imports/mail.mjs";
+import { readUpdXml, writeUpdXml } from "../imports/upd-xml.mjs";
 import { writeInputs } from "../inputs.mjs";
 import { apply, journal, tails } from "../obligations.mjs";
 import { reviewSheet, scoreReview } from "../review.mjs";
@@ -36,7 +38,7 @@ for (const seed of [41, 7, 13, 99, 2026]) {
     const work = mkdtempSync(join(tmpdir(), "fin-exports-"));
     try {
       const { firm, quirks } = realistic(generate({ seed }));
-      assert.equal(quirks.length, 3, quirks.join("; "));
+      assert.equal(quirks.length, 4, quirks.join("; "));
       await writeExports(firm, join(work, "exports"));
       const { inputs, passport } = await readExports(join(work, "exports"));
       assert.deepEqual(
@@ -64,6 +66,11 @@ for (const seed of [41, 7, 13, 99, 2026]) {
       assert.match(proposals, /"opId": "[^"]+\/ИСХ-\d+"/, "one order split between two invoices");
       assert.match(proposals, /"id": "ob-15@\d+"/, "the same number at two suppliers");
       assert.match(readFileSync(join(work, "out", "result.md"), "utf8"), /## Из чего собрано/);
+      // mail: UPDs from XML, the scan named and left a tail, the EDO duplicate counted once
+      assert.equal(passport.mail.unread.length, 1);
+      assert.equal(passport.mail.twice, 1);
+      assert.equal(passport.mail.upd - passport.mail.twice, passport.totals.fromMail);
+      assert.ok(passport.mail.copies > 0);
 
       // The journal, fed the skill's commands, shows the same tails.
       const file = join(work, "events.jsonl");
@@ -137,4 +144,68 @@ test("the bookkeeper's marks give precision and recall", () => {
   assert.deepEqual([r.confirmed, r.wrong, r.missed, r.unmarked], [2, 1, 1, 0]);
   assert.equal(r.precision, 2 / 3);
   assert.equal(r.recall, 2 / 3);
+});
+
+test("a UPD's FNS XML and the letters it comes in", () => {
+  const firm = { inn: "7712345678", kpp: "771201001", name: "ООО «Стеллаж-Про»" };
+  const ul = writeUpdXml({
+    number: "УПД-0012",
+    date: "2026-07-05",
+    seller: { inn: "7701234567", kpp: "770101001", name: "ООО «Альфа & Ко»" },
+    buyer: firm,
+    amount: 122000,
+    vat: 22000,
+    basis: "П-0101",
+  });
+  const u = readUpdXml(ul.bytes);
+  assert.deepEqual(
+    [u.number, u.date, u.seller.inn, u.seller.name, u.buyer.inn, u.amount, u.vat, u.basis],
+    ["УПД-0012", "2026-07-05", "7701234567", "ООО «Альфа & Ко»", firm.inn, 122000, 22000, "П-0101"],
+  );
+  const ip = readUpdXml(
+    writeUpdXml({
+      number: "15",
+      date: "2026-07-06",
+      seller: { inn: "205347329683", kpp: "", name: "ИП Ковалёв А. С." },
+      buyer: firm,
+      amount: 5000,
+      vat: 0,
+      basis: "15",
+    }).bytes,
+  );
+  assert.deepEqual([ip.seller.inn, ip.vat], ["205347329683", 0]);
+  assert.equal(readUpdXml(Buffer.from('<?xml version="1.0"?><Файл ИдФайл="ON_OTHER"><Документ/></Файл>')), null);
+
+  const box = writeMbox([
+    {
+      from: "buh@alfa.test",
+      to: "buh@stellazh-pro.test",
+      subject: "УПД по счёту П-0101",
+      date: "2026-07-05",
+      text: "From the start",
+      attachments: [{ name: ul.name, type: "application/xml", bytes: ul.bytes }],
+    },
+    { from: "a@b.test", to: "c@d.test", subject: "без вложений", date: "2026-07-06", text: "—" },
+  ]);
+  const letters = readMbox(box);
+  assert.deepEqual(
+    letters.map((l) => [l.subject, l.attachments.length]),
+    [
+      ["УПД по счёту П-0101", 1],
+      ["без вложений", 0],
+    ],
+  );
+  assert.equal(readUpdXml(letters[0].attachments[0].bytes).number, "УПД-0012");
+  assert.equal(letters[0].text, "From the start");
+
+  // what another mail program writes: windows-1251 quoted-printable, RFC 2231 file name
+  const raw = Buffer.from(
+    "From: x@y\r\nSubject: =?windows-1251?Q?=D1=F7=E5=F2?=\r\nContent-Type: multipart/mixed; boundary=AB\r\n\r\n--AB\r\nContent-Type: text/plain; charset=windows-1251\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n=D1=F7=E5=F2 =\r\n=E2=EE =E2=EB=EE=E6=E5=ED=E8=E8\r\n--AB\r\nContent-Type: application/xml\r\nContent-Disposition: attachment; filename*=utf-8''%D0%A3%D0%9F%D0%94%201.xml\r\nContent-Transfer-Encoding: base64\r\n\r\nPHg+PC94Pg==\r\n--AB--\r\n",
+    "latin1",
+  );
+  const e = readEml(raw);
+  assert.deepEqual(
+    [e.subject, e.text, e.attachments[0].name, e.attachments[0].bytes.toString()],
+    ["Счет", "Счет во вложении", "УПД 1.xml", "<x></x>"],
+  );
 });

@@ -5,12 +5,19 @@
 //   *.json   a T-API statement ({operations: [...]}) or a list of its operations
 //   *.xlsx / *.csv   1C lists (invoices to clients and from suppliers, receipts,
 //            sales, counterparties), EDO registries, the stand's own layouts
+//   *.mbox / *.eml   a mailbox export: the UPDs suppliers outside EDO attach to letters
+//   *.xml    a UPD in the FNS format, loose or from a letter
+//   *.pdf, scans     not guessed at without a model: the passport names them
 //   firm.json  {"inn", "name", "asOf"} — optional: the firm is read off the bank files
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { statementOf } from "../adapters/clientbank.mjs";
 import { normalize } from "../adapters/tbank.mjs";
+import { readEml, readMbox } from "./mail.mjs";
 import { amount, date, nameKey, readTable } from "./tables.mjs";
+import { readUpdXml } from "./upd-xml.mjs";
+
+const SCAN = /\.(pdf|jpe?g|png|tiff?|heic|bmp)$/i;
 
 const addDays = (d, n) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10);
 const cents = (x) => Math.round(x * 100);
@@ -34,6 +41,16 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
   const warn = (w) => passport.warnings.push(w);
   const tables = { contractors: [], invoices: [], receipts: [], sales: [], edo: [] };
   const operations = [];
+  const mail = { letters: 0, attachments: 0, upd: [], copies: 0, unread: [], skipped: [] };
+  // a document file, loose in the folder or attached to a letter
+  const take = (name, bytes, where) => {
+    if (/\.xml$/i.test(name)) {
+      const u = readUpdXml(bytes);
+      if (u) return void mail.upd.push({ ...u, where });
+      mail.skipped.push(`${where}: XML не УПД`);
+    } else if (SCAN.test(name)) mail.unread.push(where);
+    else mail.skipped.push(`${where}: ${name.split(".").pop() || "без расширения"} не беру`);
+  };
   let firm = null;
   const seen = new Set();
   let duplicates = 0;
@@ -133,6 +150,24 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
         else if (t.kind === "edo") tables.edo.push({ ...r, dir: r.dir || dirOfFile, file: n });
         else tables[t.kind].push(r);
       }
+    } else if (/\.(mbox|eml)$/i.test(n)) {
+      const letters = /\.eml$/i.test(n) ? [readEml(bytes)] : readMbox(bytes);
+      mail.letters += letters.length;
+      for (const l of letters) {
+        // a PDF beside a UPD's XML in one letter is its printed copy
+        const hasXml = l.attachments.some((a) => /\.xml$/i.test(a.name) && readUpdXml(a.bytes));
+        for (const a of l.attachments) {
+          mail.attachments++;
+          const where = `${n} · «${l.subject}» от ${l.from} · ${a.name}`;
+          if (hasXml && SCAN.test(a.name)) mail.copies++;
+          else take(a.name, a.bytes, where);
+        }
+      }
+      passport.files.push({ file: n, kind: "mail", how: "почта", rows: letters.length });
+    } else if (/\.xml$/i.test(n) || SCAN.test(n)) {
+      mail.attachments++;
+      take(n, bytes, n);
+      passport.files.push({ file: n, kind: "document", how: /\.xml$/i.test(n) ? "XML" : "скан", rows: 1 });
     } else passport.files.push({ file: n, kind: null, why: "формат не читаю: сохраните как .xlsx или .csv" });
   }
   if (duplicates)
@@ -232,6 +267,47 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
       status: edoStatus(d.status ?? ""),
     };
   });
+  // ---- UPDs from mail: the counterparty is the side that is not the firm;
+  // one that also came through EDO counts once
+  const inEdo = new Set(edo.map((d) => `${d.inn}|${d.number}`));
+  let twice = 0;
+  for (const u of mail.upd) {
+    const out = u.seller?.inn === firm.inn;
+    const other = out ? u.buyer : u.seller;
+    if (!other?.inn) continue;
+    if (inEdo.has(`${other.inn}|${u.number}`)) {
+      twice++;
+      continue;
+    }
+    inEdo.add(`${other.inn}|${u.number}`);
+    edo.push({
+      id: `mail-${edo.length + 1}`,
+      kind: "upd",
+      dir: out ? "out" : "in",
+      inn: other.inn,
+      counterparty: other.name,
+      number: u.number,
+      date: u.date,
+      amount: u.amount,
+      vat: u.vat,
+      basis: u.basis,
+      status: "signed",
+      source: u.where,
+    });
+  }
+  passport.mail = {
+    letters: mail.letters,
+    attachments: mail.attachments,
+    upd: mail.upd.length,
+    twice,
+    copies: mail.copies,
+    unread: mail.unread,
+    skipped: mail.skipped,
+  };
+  if (mail.unread.length)
+    warn(
+      `вложений без текста для разбора (PDF, сканы): ${mail.unread.length} — без модели не читаю, их счета остаются в хвостах: ${mail.unread.slice(0, 3).join("; ")}${mail.unread.length > 3 ? "…" : ""}`,
+    );
   if (guessedDir) warn(`у ${guessedDir} документов ЭДО нет направления — понял по контрагенту (поставщик — входящий)`);
   if (!edo.length)
     warn("нет реестра ЭДО: линия документов не проверяется, все оплаченные счета поставщиков будут «нет УПД»");
@@ -269,6 +345,7 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
     invoices: { ap: sides.ap.length, ar: sides.ar.length },
     edo: edo.length,
     primary: edo.filter((d) => d.kind === "upd").length,
+    fromMail: edo.filter((d) => d.source).length,
     receipts: tables.receipts.length,
     sales: tables.sales.length,
     counterparties: cps.size,
@@ -286,6 +363,8 @@ const KIND_RU = {
   receipts: "поступления",
   sales: "реализации",
   edo: "реестр ЭДО",
+  mail: "почта",
+  document: "документ",
 };
 
 /** The passport as lines for a terminal or a page. */
@@ -318,6 +397,15 @@ export function passportLines(p) {
     "",
     `Итого: операций ${t.operations}, счетов поставщиков ${t.invoices.ap}, покупателям ${t.invoices.ar}, документов ЭДО ${t.edo} (первичных ${t.primary}), поступлений ${t.receipts}, реализаций ${t.sales}, контрагентов ${t.counterparties}`,
   );
+  if (p.mail?.letters || p.mail?.attachments) {
+    const m = p.mail;
+    out.push(
+      "",
+      `Почта: писем ${m.letters}, вложений ${m.attachments}, УПД в XML ${m.upd} (уже были в ЭДО ${m.twice}, в сверку ${t.fromMail}), печатных форм рядом с XML ${m.copies}; без модели не прочитано ${m.unread.length}`,
+      ...m.unread.map((w) => `  ? ${w}`),
+      ...m.skipped.map((w) => `  · ${w}`),
+    );
+  }
   if (p.warnings.length) out.push("", "Внимание:", ...p.warnings.map((w) => `  ! ${w}`));
   return out;
 }
