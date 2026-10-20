@@ -24,6 +24,19 @@ const same = (given, want) => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
+// As a strict 1C publication reads a query: «+» is a plus, not a space.
+const strictParams = (search) =>
+  new Map(
+    search
+      .slice(1)
+      .split("&")
+      .filter(Boolean)
+      .map((kv) => {
+        const at = kv.indexOf("=");
+        return [decodeURIComponent(kv.slice(0, at)), decodeURIComponent(kv.slice(at + 1))];
+      }),
+  );
+
 /** The server for a firm (realistic(generate(...)).firm) and its secrets. */
 export function companyApis(firm, secrets) {
   const bankA = firm.bankA.map((o) => tapiOperation(o, firm.firm, firm.accounts.a));
@@ -59,7 +72,7 @@ export function companyApis(firm, secrets) {
           return send(404, { "odata.error": { code: "-1", message: { value: `Не найден ресурс ${entity}` } } });
         return send(200, {
           "odata.metadata": `${url.origin}/1c/odata/standard.odata/$metadata#${entity}`,
-          value: query(ledger[entity], url.searchParams),
+          value: query(ledger[entity], strictParams(url.search)),
         });
       }
       send(404, { error: "not found" });

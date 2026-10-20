@@ -260,8 +260,9 @@ const guid = (s) => {
 
 /** The firm's ledger as 1C's OData answers it: GUID keys, the supplier's
  *  numbers in НомерВходящегоДокумента, the same numbers the lists above
- *  carry. Two things a real base has and the lists do not: an invoice marked
- *  for deletion and a receipt saved but not posted; neither may count. */
+ *  carry. Things a real base has and the lists do not: an invoice marked for
+ *  deletion and a receipt saved but not posted, neither of which may count,
+ *  and a supplier marked for deletion whose invoices still do. */
 export function odataLedger(c) {
   const byOb = Object.fromEntries(c.obligations.map((o) => [o.number, o]));
   const updOf = (number, dir) => (c.upds ?? c.edo).find((d) => d.kind === "upd" && d.basis === number && d.dir === dir);
@@ -308,6 +309,11 @@ export function odataLedger(c) {
       doc("out", d, { Number: updOf(d.ДокументОснование, "out")?.number ?? d.Number, Posted: true }),
     ),
   };
+  // a supplier marked for deletion after its invoices of the period were entered
+  const gone = out.Catalog_Контрагенты.find((x) =>
+    out.Document_СчетНаОплатуПоставщика.some((d) => d.Контрагент_Key === x.Ref_Key),
+  );
+  if (gone) gone.DeletionMark = true;
   const ar = out.Document_СчетНаОплатуПокупателю[0];
   if (ar) out.Document_СчетНаОплатуПокупателю.push({ ...ar, Ref_Key: guid("deleted"), Number: `${ar.Number}-копия`, DeletionMark: true });
   const rc = out.Document_ПоступлениеТоваровУслуг[0];

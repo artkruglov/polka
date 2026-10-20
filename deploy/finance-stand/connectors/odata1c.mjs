@@ -2,7 +2,7 @@
 // only: a user of the base with the right to view, Basic over HTTPS. The
 // connector takes what the audit takes from 1C's lists — counterparties,
 // invoices both ways, receipts and sales of the period — and leaves out
-// what is marked for deletion and receipts and sales that were not posted.
+// documents marked for deletion and receipts and sales that were not posted.
 //
 // The entity and field names are those of «Бухгалтерия предприятия» 3.0;
 // they are checked against a real base at the first pilot. When a base
@@ -56,9 +56,17 @@ const EMPTY_DATE = /^0001-01-01/;
 
 const quote = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
+// Spaces as %20, never «+»: a 1C publication on IIS or Apache may take «+» literally.
+const queryOf = (params) =>
+  Object.entries(params)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join("&");
+
 async function list(base, entity, { auth, ca, from, to, top }) {
-  const conditions = ["DeletionMark eq false"];
-  if (entity.startsWith("Document_")) {
+  const doc = entity.startsWith("Document_");
+  // Counterparties marked for deletion stay: the period's documents still point to them.
+  const conditions = doc ? ["DeletionMark eq false"] : [];
+  if (doc) {
     conditions.push(`Date ge datetime${quote(`${from}T00:00:00`)}`);
     if (to) conditions.push(`Date lt datetime${quote(`${to}T00:00:00`)}`);
     if (POSTED.has(entity)) conditions.push("Posted eq true");
@@ -66,15 +74,15 @@ async function list(base, entity, { auth, ca, from, to, top }) {
   const rows = [];
   let select = true;
   for (let skip = 0; ; skip += top) {
-    const q = new URLSearchParams({
+    const q = {
       $format: "json",
-      $filter: conditions.join(" and "),
+      ...(conditions.length ? { $filter: conditions.join(" and ") } : {}),
       $orderby: "Ref_Key",
       $top: String(top),
       $skip: String(skip),
-    });
-    if (select) q.set("$select", ENTITIES[entity].join(","));
-    const r = await get(`${base}/${encodeURIComponent(entity)}?${q}`, {
+      ...(select ? { $select: ENTITIES[entity].join(",") } : {}),
+    };
+    const r = await get(`${base}/${encodeURIComponent(entity)}?${queryOf(q)}`, {
       headers: { authorization: auth, accept: "application/json" },
       ca,
     });
@@ -93,9 +101,11 @@ async function list(base, entity, { auth, ca, from, to, top }) {
   // The base filtered already; this holds even when a published base ignores $filter.
   return rows.filter(
     (d) =>
-      d.DeletionMark !== true &&
-      (!POSTED.has(entity) || d.Posted === true) &&
-      (!entity.startsWith("Document_") || (String(d.Date) >= from && (!to || String(d.Date) < to))),
+      !doc ||
+      (d.DeletionMark !== true &&
+        (!POSTED.has(entity) || d.Posted === true) &&
+        String(d.Date) >= from &&
+        (!to || String(d.Date) < to)),
   );
 }
 
