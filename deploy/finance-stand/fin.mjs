@@ -10,16 +10,17 @@
 //   fin.mjs match [--as petrova]                    reconcile the firm: a goal of fin.match with what the systems hold
 //   fin.mjs tails [--journal <name>]                the tails and the numbers, from the journal of obligations
 //   fin.mjs rebuild [--journal <name>]              the view rebuilt from the journal, compared with the live one
-//   fin.mjs score                                   the journal's tails against the bookkeeper's reference
+//   fin.mjs score [--journal <name> --review <file>]   tails against the reference, or against a bookkeeper's marks
 //   fin.mjs selftest                                the stand's boundaries (checks.sh, block 6)
-//   fin.mjs audit --dir <exports> [--as petrova]    the same reconciliation on a company's own exports, its own journal
+//   fin.mjs audit --dir <exports> [--check] [--as-of D] [--terms 10]   a company's own exports: the passport, then the reconciliation in its own journal
+//   fin.mjs review --journal <name> [--out <file>]  the audit's tails as a sheet for the bookkeeper to mark
 //   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
 //   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
 //   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
 //   fin.mjs sign --as <user>                        sign the reconciliation drafts in EDO (a signer only)
 import { execFile as execFileCb, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,7 +28,9 @@ import { write } from "./company/gen.mjs";
 import * as tbank from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
 import { CONTOUR, contour } from "./contour.mjs";
-import { fromExports, fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
+import { fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
+import { passportLines, readExports } from "./imports/audit.mjs";
+import { reviewSheet, scoreReview } from "./review.mjs";
 import { JOURNAL, apply, decide, fold, journal, metrics, tails } from "./obligations.mjs";
 import { beforeEffect, journalOf, project, projectionOf } from "./hooks.mjs";
 
@@ -220,15 +223,32 @@ const commands = {
   async audit(args) {
     const dir = opt(args, "--dir");
     if (!dir) throw new Error("--dir <папка с выгрузками компании>");
-    const inputs = await fromExports(dir);
+    const terms = Number(opt(args, "--terms", 10));
+    const { inputs, passport } = await readExports(dir, { asOf: opt(args, "--as-of"), terms });
+    const lines = passportLines(passport);
+    console.log(lines.join("\n"));
+    if (args.includes("--check")) return;
     const name = `audit-${inputs.firm.inn ?? "x"}-${stamp()}`;
-    console.log(`операций ${inputs.operations.length}, документов ЭДО ${inputs.edo.length}, журнал ${name}`);
-    await reconcile(inputs, {
+    console.log(`\nжурнал ${name}`);
+    // The passport goes with the inputs: the result on Полка says what it was built from.
+    await reconcile({ ...inputs, passport: lines }, {
       as: opt(args, "--as", "petrova"),
       title: `Аудит хвостов: ${inputs.firm.name ?? inputs.firm.inn} на ${inputs.firm.asOf}`,
       params: { journal: name, as_of: inputs.firm.asOf },
     });
-    console.log(`хвосты: fin.mjs tails --journal ${name}`);
+    console.log(`хвосты: fin.mjs tails --journal ${name}; разметка бухгалтером: fin.sh review ${name} <файл.csv>`);
+  },
+
+  async review(args) {
+    const name = opt(args, "--journal");
+    if (!name) throw new Error("--journal <имя журнала аудита>");
+    const file = journalOf({ journal: name });
+    const asOf = JSON.parse(await readFile(projectionOf(file), "utf8")).asOf;
+    await mkdir(join(DATA, "audit"), { recursive: true, mode: 0o700 });
+    const out = opt(args, "--out", join(DATA, "audit", `${name}.review.csv`));
+    const t = tails(await journal(file), asOf);
+    await writeFile(out, reviewSheet(t), { mode: 0o600 });
+    console.log(`${out}: хвостов ${t.length}. В колонке «верно» — да или нет; пропущенный хвост — новой строкой с «пропущено».`);
   },
 
   async tails(args) {
@@ -254,7 +274,19 @@ const commands = {
 
   // Precision and recall against expected/tails.csv: right after the first
   // reconciliation, before anyone has written to a counterparty.
-  async score() {
+  async score(args = []) {
+    if (opt(args, "--review")) {
+      const file = opt(args, "--review");
+      const r = scoreReview(file, await readFile(file));
+      const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
+      console.log(
+        `верно ${r.confirmed}, неверно ${r.wrong}, пропущено ${r.missed}, не размечено ${r.unmarked}: точность ${pct(r.precision)}, полнота ${pct(r.recall)}`,
+      );
+      for (const w of r.wrongRows) console.log(`  неверно: ${w}`);
+      for (const m of r.missedRows) console.log(`  пропущено: ${m}`);
+      process.exitCode = r.precision >= 0.95 && r.recall >= 0.95 ? 0 : 1;
+      return;
+    }
     const c = await company();
     const key = (n, k, sum) => `${n}|${k}|${Number(sum).toFixed(2)}`;
     const ref = (await readFile(join(DATA, "company", "expected", "tails.csv"), "utf8"))

@@ -8,6 +8,7 @@ W = Path(os.environ.get("WORK", "/work"))
 IN, OUT = W / "in", W / "out"
 OUT.mkdir(parents=True, exist_ok=True)
 VAT = 22
+RATES = (22, 10, 7, 5, 0)  # 2026: the general rate, the reduced one, VAT on the simplified system, none
 load = lambda name: json.loads((IN / name).read_text(encoding="utf-8"))
 ops = load("operations.json")
 edo = load("edo.json")
@@ -25,19 +26,28 @@ def vat_of(amount, rate=VAT):
     return round(amount * rate / (100 + rate), 2)
 
 
+def vat_ok(d):
+    return d.get("vat") is None or any(abs(d["vat"] - vat_of(d["amount"], r)) < 1 for r in RATES)
+
+
 def money(v):
     return f"{v:,.2f}".replace(",", " ").replace(".", ",")
 
 
+# Obligations: one per invoice. A supplier's invoice goes by the supplier's own
+# number (the one in our payment's purpose); numbers repeat across suppliers,
+# so an invoice is its side, its counterparty and its number.
 cps = {c["Ref_Key"]: c for c in ledger["Catalog_Контрагенты"]}
 invoices = {}
 for side, entity in (("ap", "Document_СчетНаОплатуПоставщика"), ("ar", "Document_СчетНаОплатуПокупателю")):
     for d in ledger[entity]:
-        cp = cps[d["Контрагент_Key"]]
-        invoices[d["Number"]] = {
-            "id": f"ob-{d['Number']}",
+        cp = cps.get(d.get("Контрагент_Key"))
+        if not cp:
+            continue
+        number = d.get("НомерВходящегоДокумента") or d["Number"]
+        invoices[(side, cp["ИНН"], number)] = {
             "side": side,
-            "number": d["Number"],
+            "number": number,
             "inn": cp["ИНН"],
             "name": cp["Description"],
             "amount": float(d["СуммаДокумента"]),
@@ -47,19 +57,33 @@ for side, entity in (("ap", "Document_СчетНаОплатуПоставщик
             "upd": [],
             "ledger": None,
         }
+count = {}
+for inv in invoices.values():
+    count[inv["number"]] = count.get(inv["number"], 0) + 1
+for inv in invoices.values():
+    inv["id"] = f"ob-{inv['number']}" if count[inv["number"]] == 1 else f"ob-{inv['number']}@{inv['inn']}"
 by_inn = {}
 for inv in invoices.values():
     by_inn.setdefault(inv["inn"], []).append(inv)
-digits = lambda number: int(re.sub(r"\D", "", number))
+digits = lambda number: int(re.sub(r"\D", "", number) or -1)
+remaining = lambda i: cents(i["amount"]) - sum(cents(p["amount"]) for p in i["payments"])
 
 # 1. Money: number in the purpose, then the amount, then the only open invoice.
 NUM = re.compile(r"(?:№|сч(?:ёт|ет)?\.?|счету|счёту)\s*(?:[А-ЯA-Z]+-)?0*(\d+)", re.I)
+# «по счетам № ИСХ-0514, ИСХ-0520 и 531»: every number of the list
+LIST = re.compile(r"сч(?:ё|е)там\s*(?:№\s*)?((?:[А-ЯA-Z]+-)?\d+(?:\s*(?:,|;|и)\s*(?:№\s*)?(?:[А-ЯA-Z]+-)?\d+)+)", re.I)
 unmatched = []
 for op in sorted(ops, key=lambda o: (o["date"], o["opId"])):
     side = "ap" if op["direction"] == "out" else "ar"
     pool = [i for i in by_inn.get(op["inn"], []) if i["side"] == side] if op["inn"] and op["inn"] != firm["inn"] else []
     if not pool:
         continue  # fees, taxes, salary, own transfers, cards: no obligation behind them
+    listed = [int(n) for m in LIST.finditer(op["purpose"]) for n in re.findall(r"\d+", m.group(1))]
+    several = [i for i in pool if digits(i["number"]) in listed]
+    if len(several) > 1 and sum(max(remaining(i), 0) for i in several) == cents(op["amount"]):
+        for i in several:  # one order, several invoices: each gets its remainder
+            i["payments"].append({**op, "opId": f"{op['opId']}/{i['number']}", "amount": remaining(i) / 100})
+        continue
     target = None
     for m in NUM.finditer(op["purpose"]):
         hit = [i for i in pool if digits(i["number"]) == int(m.group(1))]
@@ -70,7 +94,6 @@ for op in sorted(ops, key=lambda o: (o["date"], o["opId"])):
         # No number: the open invoice with exactly this remainder, else the
         # oldest open one (FIFO, as 1C allocates a payment by contract), else
         # an invoice already paid with exactly this amount — a second payment.
-        remaining = lambda i: cents(i["amount"]) - sum(cents(p["amount"]) for p in i["payments"])
         open_ = sorted((i for i in pool if remaining(i) > 0 and i["date"] <= op["date"]), key=lambda i: (i["date"], i["number"]))
         exact = [i for i in open_ if remaining(i) == cents(op["amount"])]
         fits = [i for i in open_ if remaining(i) >= cents(op["amount"])]
@@ -81,23 +104,48 @@ for op in sorted(ops, key=lambda o: (o["date"], o["opId"])):
     else:
         unmatched.append(op)
 
-# 2. Documents: UPD by basis; the ledger's receipt against the UPD.
-for d in edo:
-    if d["kind"] == "upd" and d.get("basis") in invoices and d.get("status") != "rejected":
-        invoices[d["basis"]]["upd"].append(d)
+# 2. Documents. A UPD names its invoice when the stand's EDO carries a basis;
+# a registry of an EDO operator does not, so then: the same counterparty and
+# amount, the latest invoice before the document.
+by_number = {}
+for inv in invoices.values():
+    by_number.setdefault(inv["number"], []).append(inv)
+loose = []
+for d in sorted(edo, key=lambda d: (d["date"], d["id"])):
+    if d["kind"] != "upd" or d.get("status") == "rejected":
+        continue
+    side = "ap" if d["dir"] == "in" else "ar"
+    named = [i for i in by_number.get(d.get("basis") or "", []) if i["side"] == side and i["inn"] in (d["inn"], "")]
+    if len(named) == 1:
+        named[0]["upd"].append(d)
+        continue
+    same = [i for i in by_inn.get(d["inn"], []) if i["side"] == side and cents(i["amount"]) == cents(d["amount"])]
+    free = sorted((i for i in same if i["date"] <= d["date"] and not i["upd"]), key=lambda i: i["date"])
+    target = free[-1] if free else None
+    if target:
+        target["upd"].append(d)
+    else:
+        loose.append(d)
+# The ledger's receipt or sale: by its basis, else by the UPD's number.
+upd_of = {(d["inn"], d["number"]): i for i in invoices.values() for d in i["upd"]}
 for d in ledger.get("Document_ПоступлениеТоваровУслуг", []) + ledger.get("Document_РеализацияТоваровУслуг", []):
-    if d.get("Posted") and d.get("ДокументОснование") in invoices:
-        invoices[d["ДокументОснование"]]["ledger"] = float(d["СуммаДокумента"])
+    if not d.get("Posted"):
+        continue
+    inn = cps.get(d.get("Контрагент_Key"), {}).get("ИНН", "")
+    named = [i for i in by_number.get(d.get("ДокументОснование") or "", []) if inn in (i["inn"], "")]
+    inv = named[0] if len(named) == 1 else upd_of.get((inn, d.get("НомерВходящегоДокумента") or d.get("Number")))
+    if inv:
+        inv["ledger"] = float(d["СуммаДокумента"])
 
 # 3. Tails, and the commands for the journal.
 proposals, tails = [], []
-for inv in sorted(invoices.values(), key=lambda i: i["number"]):
+for inv in sorted(invoices.values(), key=lambda i: (i["number"], i["inn"])):
     proposals.append({"type": "Detect", **{k: inv[k] for k in ("id", "side", "inn", "name", "number", "amount", "due", "date")}})
     for d in inv["upd"]:
         proposals.append({"type": "MatchDocument", "id": inv["id"], "docId": d["id"], "kind": "upd", "amount": d["amount"], "vat": d["vat"]})
     for p in inv["payments"]:
         proposals.append({"type": "MatchPayment", "id": inv["id"], "opId": p["opId"], "amount": p["amount"], "date": p["date"]})
-    upd_ok = [d for d in inv["upd"] if abs(d["vat"] - vat_of(d["amount"])) < 1 and abs(d["amount"] - inv["amount"]) < 0.01]
+    upd_ok = [d for d in inv["upd"] if vat_ok(d) and abs(d["amount"] - inv["amount"]) < 0.01]
     upd_bad = [d for d in inv["upd"] if d not in upd_ok]
     paid = sum(cents(p["amount"]) for p in inv["payments"])
     total = cents(inv["amount"])
@@ -111,7 +159,7 @@ for inv in sorted(invoices.values(), key=lambda i: i["number"]):
     elif paid > total:
         kind = "дубль_оплаты"
     elif upd_bad and not upd_ok:
-        kind, sum_ = "ошибка_ндс", abs(vat_of(upd_bad[0]["amount"]) - upd_bad[0]["vat"])
+        kind, sum_ = "ошибка_ндс", abs(vat_of(upd_bad[0]["amount"]) - (upd_bad[0]["vat"] or 0))
     elif 0 < paid < total:
         kind, sum_ = "частичная", (total - paid) / 100
     elif paid == 0 and inv["due"] < as_of:
@@ -152,6 +200,9 @@ lines = [
     "|---|---|---|---|",
     *[f"| {t[0]} | {t[2]} | {KIND[t[4]]} | {money(float(t[5]))} |" for t in tails],
     "",
-    f"Платежей без счёта у контрагентов из учёта: {len(unmatched)}.",
+    f"Платежей без счёта у контрагентов из учёта: {len(unmatched)}. Первичных документов без счёта: {len(loose)}.",
 ]
+# An audit of a company's exports: what the reconciliation was built from.
+if (IN / "passport.json").exists():
+    lines += ["", "## Из чего собрано", "", "```", *load("passport.json"), "```"]
 (OUT / "result.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

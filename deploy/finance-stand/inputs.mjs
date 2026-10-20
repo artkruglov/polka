@@ -3,11 +3,12 @@
 // firm. The coordinator builds it — from the stand's systems, from a
 // generated firm, or from a company's own exports — so the sandbox never
 // needs a bank token.
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { clientBankExchange, cp1251, tapiOperation } from "./company/gen.mjs";
 import { normalize } from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
+import { readExports } from "./imports/audit.mjs";
 import { states as obligationStates, tails as journalTails } from "./obligations.mjs";
 
 const LEDGER = [
@@ -44,81 +45,11 @@ export async function fromSystems({ fin, readBank, company }) {
   };
 }
 
-// ---- a company's own exports (fin.mjs audit): the formats the audit takes
-//   *.txt                1CClientBankExchange from any bank
-//   *.json               a T-API statement ({operations: [...]}) or a list of its operations
-//   edo.csv              номер;дата;инн;контрагент;вид;направление;сумма;ндс;основание;статус
-//   invoices.csv         номер;дата;инн;контрагент;сторона;сумма;срок
-//   receipts.csv         основание;сумма   (поступления и реализации из учёта, проведённые)
-//   firm.json            {"inn": "...", "name": "...", "asOf": "YYYY-MM-DD"}
-const csv = (text) => {
-  const [head, ...rows] = text.replace(/^﻿/, "").trim().split(/\r?\n/);
-  const keys = head.split(";").map((k) => k.trim());
-  return rows.filter(Boolean).map((r) => Object.fromEntries(r.split(";").map((v, i) => [keys[i], v.trim()])));
-};
-const num = (v) => Number(String(v).replace(/\s/g, "").replace(",", "."));
-const date = (v) => (/^\d{2}\.\d{2}\.\d{4}$/.test(v) ? v.split(".").reverse().join("-") : v.slice(0, 10));
-
-export async function fromExports(dir) {
-  const names = await readdir(dir);
-  const firm = JSON.parse(await readFile(join(dir, "firm.json"), "utf8"));
-  const operations = [];
-  for (const n of names) {
-    if (n.endsWith(".txt")) operations.push(...clientBank(await readFile(join(dir, n)), n.replace(/\.txt$/, "")));
-    if (n.endsWith(".json") && n !== "firm.json") {
-      const j = JSON.parse(await readFile(join(dir, n), "utf8"));
-      operations.push(
-        ...(Array.isArray(j) ? j : (j.operations ?? [])).map((o) => normalize(o, n.replace(/\.json$/, ""))),
-      );
-    }
-  }
-  const read = async (n) => (names.includes(n) ? csv(decodeText(await readFile(join(dir, n)))) : []);
-  const invoices = await read("invoices.csv");
-  const cps = new Map();
-  for (const i of invoices) cps.set(i.инн, { Ref_Key: `cp-${i.инн}`, Description: i.контрагент, ИНН: i.инн });
-  const doc = (i) => ({
-    Number: i.номер,
-    Date: date(i.дата),
-    Контрагент_Key: `cp-${i.инн}`,
-    СуммаДокумента: num(i.сумма),
-    СрокОплаты: date(i.срок || i.дата),
-    Posted: true,
-  });
-  const receipts = (await read("receipts.csv")).map((r) => ({
-    ДокументОснование: r.основание,
-    СуммаДокумента: num(r.сумма),
-    Posted: true,
-  }));
-  return {
-    operations,
-    edo: (await read("edo.csv")).map((d, k) => ({
-      id: `edo-${k + 1}`,
-      kind: /упд|upd/i.test(d.вид) ? "upd" : /сч/i.test(d.вид) ? "invoice" : d.вид,
-      dir: /вход|in/i.test(d.направление) ? "in" : "out",
-      inn: d.инн,
-      counterparty: d.контрагент,
-      number: d.номер,
-      date: date(d.дата),
-      amount: num(d.сумма),
-      vat: num(d.ндс),
-      basis: d.основание,
-      status: /отклон|reject/i.test(d.статус) ? "rejected" : /подпис|signed/i.test(d.статус) ? "signed" : "awaiting",
-    })),
-    ledger: {
-      Catalog_Контрагенты: [...cps.values()],
-      Document_СчетНаОплатуПоставщика: invoices.filter((i) => /ap|поставщ/i.test(i.сторона)).map(doc),
-      Document_СчетНаОплатуПокупателю: invoices.filter((i) => /ar|покуп/i.test(i.сторона)).map(doc),
-      Document_ПоступлениеТоваровУслуг: receipts,
-      Document_РеализацияТоваровУслуг: [],
-    },
-    firm,
-  };
+// ---- a company's own exports (fin.mjs audit): imports/audit.mjs reads them
+// and says in the export passport what it took each file for.
+export async function fromExports(dir, opts) {
+  return (await readExports(dir, opts)).inputs;
 }
-// A CSV saved by Excel in Russia is often windows-1251.
-const decodeText = (bytes) => {
-  const utf = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  return utf.includes("�") ? new TextDecoder("windows-1251").decode(bytes) : utf;
-};
 
 export async function writeInputs(dir, inputs) {
   await mkdir(dir, { recursive: true });
