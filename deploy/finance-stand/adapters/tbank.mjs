@@ -12,6 +12,7 @@
 // nothing else's trust.
 import { request } from "node:https";
 import { readFile } from "node:fs/promises";
+import { secureOnly } from "../connectors/net.mjs";
 
 export const SANDBOX = "https://business.tbank.ru/openapi/sandbox";
 export const MCP_SANDBOX = "https://mcp.tbank.ru/sandbox/b2b";
@@ -29,15 +30,22 @@ export const NEEDED = [
 
 export const ca = () => readFile(CA_FILE, "utf8").catch(() => null);
 
-/** GET or POST over HTTPS (with the bank's root) or plain HTTP (the stand). */
-export async function call(url, { method = "GET", headers = {}, body } = {}) {
-  const u = new URL(url);
+/** GET or POST over HTTPS (with the bank's root, or a company's own `ca`
+ *  file) or plain HTTP to this machine only (the stand): a token never goes
+ *  out in clear text. */
+export async function call(url, { method = "GET", headers = {}, body, ca: caFile } = {}) {
+  const u = secureOnly(url, "http:");
   if (u.protocol === "http:") {
-    const r = await fetch(u, { method, headers, body: body && JSON.stringify(body) });
+    const r = await fetch(u, {
+      method,
+      headers,
+      body: body && JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
     const text = await r.text();
     return { status: r.status, headers: Object.fromEntries(r.headers), text, json: parse(text) };
   }
-  const root = await ca();
+  const root = caFile ? await readFile(caFile, "utf8") : await ca();
   return new Promise((resolve, reject) => {
     const req = request(u, { method, headers, ...(root ? { ca: root } : {}), timeout: 20_000 }, (res) => {
       let text = "";
@@ -69,15 +77,15 @@ function parse(text) {
 
 const auth = (token) => ({ authorization: `Bearer ${token}`, accept: "application/json" });
 
-export async function accounts({ base, token }) {
-  const r = await call(`${base}/api/v4/bank-accounts`, { headers: auth(token) });
+export async function accounts({ base, token, ca }) {
+  const r = await call(`${base}/api/v4/bank-accounts`, { headers: auth(token), ca });
   if (r.status !== 200) throw new Error(`банк: счета → ${r.status} ${r.text.slice(0, 160)}`);
   return r.json;
 }
 
 /** Every operation of an account for a period. The sandbox returns the same
  *  page and cursor forever, so a repeated cursor ends the loop too. */
-export async function statement({ base, token, account, from, to, limit = 1000, maxPages = 50 }) {
+export async function statement({ base, token, ca, account, from, to, limit = 1000, maxPages = 50 }) {
   const out = [];
   const seen = new Set();
   let cursor;
@@ -85,7 +93,7 @@ export async function statement({ base, token, account, from, to, limit = 1000, 
     const q = new URLSearchParams({ accountNumber: account, from: `${from}T00:00:00Z`, limit: String(limit) });
     if (to) q.set("to", `${to}T00:00:00Z`);
     if (cursor) q.set("cursor", cursor);
-    const r = await call(`${base}/api/v1/statement?${q}`, { headers: auth(token) });
+    const r = await call(`${base}/api/v1/statement?${q}`, { headers: auth(token), ca });
     if (r.status !== 200) throw new Error(`банк: выписка → ${r.status} ${r.text.slice(0, 160)}`);
     const ops = r.json.operations ?? [];
     out.push(...ops);

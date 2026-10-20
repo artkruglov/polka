@@ -139,6 +139,15 @@ export async function bao(path) {
   if (r.status !== 200) throw new Error(`OpenBao: no secret contour/${path} (${r.status})`);
   return r.json.data.data;
 }
+export async function baoPut(path, data) {
+  const { root_token } = JSON.parse(await readFile("/etc/contour/bao-init.json", "utf8"));
+  const r = await http(`${BAO}/v1/contour/data/${path}`, {
+    method: "POST",
+    headers: { "x-vault-token": root_token },
+    body: { data },
+  });
+  if (r.status !== 200 && r.status !== 204) throw new Error(`OpenBao: could not write contour/${path} (${r.status})`);
+}
 const docker = (...args) => execFile("docker", args, { maxBuffer: 1 << 24 });
 // Written whole and renamed: swarm.mjs runs several tasks in one process,
 // and a reader must never see half a file.

@@ -175,3 +175,79 @@ test("a password goes over TLS only, except to this machine", async () => {
     server.close();
   }
 });
+
+test("what the review of M7 found: hand files beside connectors, lost files, two runs, a huge letter, a bank in clear text", async () => {
+  const work = mkdtempSync(join(tmpdir(), "fin-connect-review-"));
+  const { firm } = realistic(generate({ seed: 41 }));
+  const asOf = firm.firm.period.asOf;
+  const apis = companyApis(firm, SECRETS);
+  const letters = firm.mail.map((l, i) => ({ uid: 100 + i, bytes: writeEml(l, i + 1) }));
+  const { server: imap, box } = imapStub({ ...SECRETS.mail, uidvalidity: 7, letters });
+  try {
+    const [http, mail] = [await listen(apis), await listen(imap)];
+    await writeExports(firm, join(work, "hand"));
+    const byHand = await audit(join(work, "hand"), join(work, "a"), asOf);
+    const root = join(work, "company");
+    const exports = join(root, "exports");
+    mkdirSync(exports, { recursive: true });
+    // every hand-made file stays in the folder, next to what the connectors bring
+    for (const f of readdirSync(join(work, "hand"))) copyFileSync(join(work, "hand", f), join(exports, f));
+    const config = {
+      name: "stand",
+      from: firm.firm.period.from,
+      to: addDays(firm.firm.period.to, 1),
+      sources: [
+        { id: "tbank", kind: "tbank", base: `http://127.0.0.1:${http}/tbank` },
+        { id: "1c", kind: "odata1c", base: `http://127.0.0.1:${http}/1c/odata/standard.odata` },
+        { id: "mail", kind: "imap", url: `imap://127.0.0.1:${mail}`, name: "docs" },
+      ],
+    };
+    const secret = async (id) => SECRETS[id];
+    // two runs at once: one of them waits for nobody and is refused
+    const both = await Promise.allSettled([sync({ config, root, secret }), sync({ config, root, secret })]);
+    assert.deepEqual(both.map((r) => r.status).sort(), ["fulfilled", "rejected"]);
+    assert.match(both.find((r) => r.status === "rejected").reason.message, /уже идёт/);
+
+    // hand files and connector files of the same bank account and the same 1C: counted once
+    const mixed = await audit(exports, join(work, "b"), asOf);
+    assert.deepEqual(mixed.tails, byHand.tails);
+    assert.ok(
+      mixed.passport.warnings.some((w) => /есть и в Т-Банк/.test(w)),
+      mixed.passport.warnings.join("\n"),
+    );
+    assert.ok(mixed.passport.warnings.some((w) => /списки 1С .* не взяты/.test(w)));
+    // the hand mailbox export is a second copy of the same letters: one UPD counted once
+    assert.equal(mixed.passport.totals.fromMail, byHand.passport.totals.fromMail);
+
+    // a connector's file deleted: its source starts over, not from where it stopped
+    rmSync(join(exports, `Т-Банк ${firm.accounts.a.account}.json`));
+    rmSync(join(exports, "Почта docs.mbox"));
+    const again = await sync({ config, root, secret });
+    assert.equal(again.sources[0].new, firm.bankA.length);
+    assert.match(again.sources[0].note, /с начала периода/);
+    assert.equal(again.sources[2].new, letters.length);
+    assert.match(again.sources[2].note, /файла почты нет/);
+
+    // a letter over the limit is not downloaded, is named, and does not stop the box
+    box.letters.push({ uid: 950, bytes: Buffer.concat([writeEml(firm.mail[0], 950), Buffer.alloc(300_000, 65)]) });
+    box.letters.push({ uid: 951, bytes: writeEml({ ...firm.mail[1], subject: "после большого" }, 951) });
+    const small = {
+      ...config,
+      sources: config.sources.map((x) => (x.id === "mail" ? { ...x, maxLetter: 200_000 } : x)),
+    };
+    const big = await sync({ config: small, root, secret });
+    assert.equal(big.sources[2].new, 1);
+    assert.match(big.sources[2].note, /больше 196 КБ: UID 950/);
+    assert.ok(!box.fetched.includes(950));
+    assert.equal((await sync({ config: small, root, secret })).sources[2].new, 0);
+
+    // a bank address in clear text that is not this machine: refused before the token goes out
+    const clear = { ...config, sources: [{ id: "tbank", kind: "tbank", base: "http://bank.example/openapi" }] };
+    const refused = await sync({ config: clear, root, secret });
+    assert.match(refused.sources[0].error, /без TLS только на этот компьютер/);
+  } finally {
+    apis.close();
+    imap.close();
+    rmSync(work, { recursive: true, force: true });
+  }
+});

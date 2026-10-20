@@ -118,6 +118,7 @@ Description=Finance stand: sync and audit of company %i
 After=finance-systems.service
 [Service]
 Type=oneshot
+TimeoutStartSec=45min
 WorkingDirectory=/opt/contour/finance
 ExecStart=/usr/local/bin/node /opt/contour/finance/fin.mjs sync %i --audit
 UNIT

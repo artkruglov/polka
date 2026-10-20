@@ -60,6 +60,10 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
   let firm = null;
   const seen = new Set();
   let duplicates = 0;
+  // The banks' files, added after the loop: an account in a T-API file (the
+  // connector's, as a rule) is not taken a second time from a «Клиент-банк» file.
+  const bankSets = [];
+  let odata = null;
   const addOps = (ops) => {
     for (const op of ops) {
       // the same day exported twice, or two overlapping statements
@@ -83,7 +87,7 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
         passport.files.push({ file: n, kind: null, why: e.message });
         continue;
       }
-      addOps(s.operations);
+      bankSets.push({ file: n, tapi: false, ops: s.operations });
       passport.files.push({ file: n, kind: "bank", how: "1CClientBankExchange", rows: s.operations.length });
       for (const account of s.accounts) {
         const mine = s.operations.filter((o) => o.ourAccount === account);
@@ -119,10 +123,7 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
       const j = JSON.parse(bytes.toString("utf8"));
       if (j?.source === "1c-odata") {
         const t = tablesOf(j.entities);
-        for (const r of t.invoices) tables.invoices.push({ ...r, file: n });
-        tables.contractors.push(...t.contractors);
-        tables.receipts.push(...t.receipts);
-        tables.sales.push(...t.sales);
+        odata = { file: n, ...t, invoices: t.invoices.map((r) => ({ ...r, file: n })) };
         passport.files.push({
           file: n,
           kind: "ledger",
@@ -132,8 +133,11 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
         continue;
       }
       const raw = Array.isArray(j) ? j : (j.operations ?? []);
-      const ops = raw.map((o) => normalize(o, stem));
-      addOps(ops);
+      const ops = raw.map((o) => ({
+        ...normalize(o, stem),
+        ourAccount: (o.typeOfOperation === "Credit" ? o.receiver?.acct : o.payer?.acct) || undefined,
+      }));
+      bankSets.push({ file: n, tapi: true, ops });
       const dates = ops.map((o) => o.date).sort();
       passport.files.push({ file: n, kind: "bank", how: "T-API", rows: ops.length });
       passport.banks.push({
@@ -189,6 +193,24 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
       take(n, bytes, n);
       passport.files.push({ file: n, kind: "document", how: /\.xml$/i.test(n) ? "XML" : "скан", rows: 1 });
     } else passport.files.push({ file: n, kind: null, why: "формат не читаю: сохраните как .xlsx или .csv" });
+  }
+  const viaApi = new Map();
+  for (const b of bankSets.filter((x) => x.tapi)) for (const o of b.ops) if (o.ourAccount) viaApi.set(o.ourAccount, b.file);
+  for (const b of bankSets) {
+    const twice = b.tapi ? new Set() : new Set(b.ops.map((o) => o.ourAccount).filter((a) => viaApi.has(a)));
+    for (const a of twice)
+      warn(`${b.file}: счёт ${a} есть и в ${viaApi.get(a)} — операции по нему взяты оттуда, из этого файла не считаются`);
+    addOps(b.ops.filter((o) => !twice.has(o.ourAccount)));
+  }
+  // 1C's OData is the whole ledger: lists exported by hand beside it would count twice
+  if (odata) {
+    const hand = passport.files.filter((f) => ["invoices_ar", "invoices_ap", "invoices", "receipts", "sales"].includes(f.kind));
+    if (hand.length)
+      warn(`списки 1С ${hand.map((f) => f.file).join(", ")} не взяты: счета, поступления и реализации взяты из ${odata.file}`);
+    tables.invoices = odata.invoices;
+    tables.receipts = odata.receipts;
+    tables.sales = odata.sales;
+    tables.contractors.push(...odata.contractors);
   }
   if (duplicates)
     warn(`операций, выгруженных дважды (тот же счёт, дата, сумма, номер): ${duplicates} — посчитаны один раз`);

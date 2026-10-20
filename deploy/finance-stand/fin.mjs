@@ -42,15 +42,7 @@ const DATA = "/var/lib/finance";
 export const FIN = "http://127.0.0.1:7071";
 const effectsToken = () => readFile("/etc/contour/effects-token", "utf8").then((t) => t.trim());
 const bao = async (path) => (await contour("dispatcher.mjs")).bao(path);
-async function baoPut(path, data) {
-  const { root_token } = JSON.parse(await readFile("/etc/contour/bao-init.json", "utf8"));
-  const r = await fetch(`http://127.0.0.1:8200/v1/contour/data/${path}`, {
-    method: "POST",
-    headers: { "x-vault-token": root_token, "content-type": "application/json" },
-    body: JSON.stringify({ data }),
-  });
-  if (!r.ok) throw new Error(`OpenBao: не записал contour/${path} (${r.status})`);
-}
+const baoPut = async (path, data) => (await contour("dispatcher.mjs")).baoPut(path, data);
 const COMPANIES = "/etc/finance/companies";
 const companyConfig = async (name) => {
   if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(name ?? "")) throw new Error("имя компании: латиница, цифры и дефис");
@@ -589,8 +581,9 @@ const commands = {
     if (demo) {
       const bank = await fetch(`${demo.sources.find((x) => x.kind === "tbank").base}/api/v4/bank-accounts`).then((r) => r.status, () => 0);
       const odata = await fetch(`${demo.sources.find((x) => x.kind === "odata1c").base}/Catalog_Контрагенты`).then((r) => r.status, () => 0);
-      const secrets = await Promise.all(demo.sources.map((x) => bao(`finance/companies/demo/${x.id}`).catch(() => ({}))));
-      const values = secrets.flatMap((x) => [x.token, x.password]).filter(Boolean);
+      // no secret read means nothing to look for: that fails, it does not pass
+      const secrets = await Promise.all(demo.sources.map((x) => bao(`finance/companies/demo/${x.id}`).catch(() => null)));
+      const values = secrets.flatMap((x) => [x?.token, x?.password]).filter(Boolean);
       const folder = join(DATA, "companies", "demo");
       const files = (await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => [])).filter((e) => e.isFile());
       let leaked = 0;
@@ -599,9 +592,11 @@ const commands = {
         if (values.some((v) => text.includes(v))) leaked++;
       }
       line(
-        bank === 401 && odata === 401 && !leaked,
+        bank === 401 && odata === 401 && !leaked && secrets.every(Boolean) && files.length > 0,
         "connector-credentials",
-        `банк без токена → ${bank}, 1С без пароля → ${odata}; файлов компании с секретом: ${leaked} из ${files.length}`,
+        secrets.every(Boolean)
+          ? `банк без токена → ${bank}, 1С без пароля → ${odata}; файлов компании с секретом: ${leaked} из ${files.length}`
+          : `не прочитал секреты компании demo в OpenBao: ${demo.sources.filter((_, i) => !secrets[i]).map((x) => x.id).join(", ")}`,
       );
     }
 

@@ -22,7 +22,7 @@ case "${1:-}" in
     limactl copy -r . "$VM:/tmp/finance-src"
     limactl shell "$VM" -- sudo bash -c 'install -d -m 755 /opt/contour/finance && cp -r /tmp/finance-src/. /opt/contour/finance/ && rm -rf /tmp/finance-src && chmod 755 /opt/contour/finance/*.sh /opt/contour/finance/*.mjs'
     # The swarm imports the stand's hooks once: a running one would keep the old code.
-    limactl shell "$VM" -- sudo systemctl try-restart finance-systems.service contour-swarm.service
+    limactl shell "$VM" -- sudo systemctl try-restart finance-systems.service finance-company-apis.service contour-swarm.service
     ;;
   up)
     ./fin.sh sync

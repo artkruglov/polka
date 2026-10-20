@@ -1,11 +1,11 @@
 // An IMAP server for the specs: one folder, LOGIN, EXAMINE, UID SEARCH and
-// UID FETCH BODY.PEEK[] — what connectors/imap.mjs asks. It keeps every
+// UID FETCH RFC822.SIZE and BODY.PEEK[] — what connectors/imap.mjs asks. It keeps every
 // command it got, so a spec can see that nothing but reading was asked. In
 // the VM the connector meets a real server (dovecot, provision.sh connectors).
 import { createServer } from "node:net";
 
 export function imapStub({ user, password, uidvalidity = 1, letters = [] }) {
-  const box = { uidvalidity, letters: [...letters], commands: [] };
+  const box = { uidvalidity, letters: [...letters], commands: [], fetched: [] };
   const server = createServer((socket) => {
     let buf = "";
     let authed = false;
@@ -44,6 +44,9 @@ export function imapStub({ user, password, uidvalidity = 1, letters = [] }) {
           const want = rest.split(" ")[0].split(",").map(Number);
           box.letters.forEach((l, i) => {
             if (!want.includes(l.uid)) return;
+            if (/RFC822\.SIZE/.test(rest))
+              return socket.write(`* ${i + 1} FETCH (UID ${l.uid} RFC822.SIZE ${l.bytes.length})\r\n`);
+            box.fetched.push(l.uid);
             socket.write(`* ${i + 1} FETCH (UID ${l.uid} BODY[] {${l.bytes.length}}\r\n`);
             socket.write(l.bytes);
             socket.write(")\r\n");
