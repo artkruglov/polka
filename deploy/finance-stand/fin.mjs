@@ -14,6 +14,8 @@
 //   fin.mjs selftest                                the stand's boundaries (checks.sh, block 6)
 //   fin.mjs audit --dir <exports> [--check] [--as-of D] [--terms 10]   a company's own exports: the passport, then the reconciliation in its own journal
 //   fin.mjs review --journal <name> [--out <file>]  the audit's tails as a sheet for the bookkeeper to mark
+//   fin.mjs sync <company> [--audit] [--as-of D]   the company's direct connections (connectors/sync.mjs), then the audit of what they brought
+//   fin.mjs secret <company> <source>               a source's credentials, JSON on stdin, into OpenBao; never printed
 //   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
 //   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
 //   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
@@ -30,6 +32,7 @@ import { operations as clientBank } from "./adapters/clientbank.mjs";
 import { CONTOUR, contour } from "./contour.mjs";
 import { fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
 import { passportLines, readExports } from "./imports/audit.mjs";
+import { sync, syncLines } from "./connectors/sync.mjs";
 import { reviewSheet, scoreReview } from "./review.mjs";
 import { JOURNAL, apply, decide, fold, journal, metrics, tails } from "./obligations.mjs";
 import { beforeEffect, journalOf, project, projectionOf } from "./hooks.mjs";
@@ -39,6 +42,22 @@ const DATA = "/var/lib/finance";
 export const FIN = "http://127.0.0.1:7071";
 const effectsToken = () => readFile("/etc/contour/effects-token", "utf8").then((t) => t.trim());
 const bao = async (path) => (await contour("dispatcher.mjs")).bao(path);
+async function baoPut(path, data) {
+  const { root_token } = JSON.parse(await readFile("/etc/contour/bao-init.json", "utf8"));
+  const r = await fetch(`http://127.0.0.1:8200/v1/contour/data/${path}`, {
+    method: "POST",
+    headers: { "x-vault-token": root_token, "content-type": "application/json" },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) throw new Error(`OpenBao: не записал contour/${path} (${r.status})`);
+}
+const COMPANIES = "/etc/finance/companies";
+const companyConfig = async (name) => {
+  if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(name ?? "")) throw new Error("имя компании: латиница, цифры и дефис");
+  return JSON.parse(await readFile(join(COMPANIES, `${name}.json`), "utf8"));
+};
+// What each kind of source keeps in OpenBao.
+const SECRET_KEYS = { tbank: ["token"], odata1c: ["user", "password"], imap: ["user", "password"] };
 
 /** The firm's banks as the coordinator reads them: the token stays here. */
 export async function readBank(which, { from, to } = {}) {
@@ -102,12 +121,33 @@ async function reconcile(inputs, { as, title, params, process = "fin.match" }) {
   ]);
 }
 
+// The export passport, then fin.match in a journal of its own; `head`
+// (the connectors' run) goes on top of the passport.
+async function auditDir(dir, args, head = []) {
+  const terms = Number(opt(args, "--terms", 10));
+  const { inputs, passport } = await readExports(dir, { asOf: opt(args, "--as-of"), terms });
+  const lines = [...head, ...(head.length ? [""] : []), ...passportLines(passport)];
+  console.log(passportLines(passport).join("\n"));
+  if (args.includes("--check")) return;
+  const name = `audit-${inputs.firm.inn ?? "x"}-${stamp()}`;
+  console.log(`\nжурнал ${name}`);
+  // The passport goes with the inputs: the result on Полка says what it was built from.
+  await reconcile({ ...inputs, passport: lines }, {
+    as: opt(args, "--as", "petrova"),
+    title: `Аудит хвостов: ${inputs.firm.name ?? inputs.firm.inn} на ${inputs.firm.asOf}`,
+    params: { journal: name, as_of: inputs.firm.asOf },
+  });
+  console.log(`хвосты: fin.mjs tails --journal ${name}; разметка бухгалтером: fin.sh review ${name} <файл.csv>`);
+}
+
 const commands = {
   async reset(args) {
     const seed = Number(opt(args, "--seed", 41));
     const quarter = opt(args, "--quarter", "2026Q3");
     await execFile("systemctl", ["stop", "finance-systems"]);
-    await rm(DATA, { recursive: true, force: true });
+    // a new synthetic firm; companies' audits and connections stay
+    for (const e of await readdir(DATA).catch(() => []))
+      if (!["audit", "companies"].includes(e)) await rm(join(DATA, e), { recursive: true, force: true });
     const c = await write(join(DATA, "company"), { seed, quarter });
     await execFile("systemctl", ["start", "finance-systems"]);
     for (let i = 0; i < 20; i++) {
@@ -223,20 +263,38 @@ const commands = {
   async audit(args) {
     const dir = opt(args, "--dir");
     if (!dir) throw new Error("--dir <папка с выгрузками компании>");
-    const terms = Number(opt(args, "--terms", 10));
-    const { inputs, passport } = await readExports(dir, { asOf: opt(args, "--as-of"), terms });
-    const lines = passportLines(passport);
-    console.log(lines.join("\n"));
-    if (args.includes("--check")) return;
-    const name = `audit-${inputs.firm.inn ?? "x"}-${stamp()}`;
-    console.log(`\nжурнал ${name}`);
-    // The passport goes with the inputs: the result on Полка says what it was built from.
-    await reconcile({ ...inputs, passport: lines }, {
-      as: opt(args, "--as", "petrova"),
-      title: `Аудит хвостов: ${inputs.firm.name ?? inputs.firm.inn} на ${inputs.firm.asOf}`,
-      params: { journal: name, as_of: inputs.firm.asOf },
-    });
-    console.log(`хвосты: fin.mjs tails --journal ${name}; разметка бухгалтером: fin.sh review ${name} <файл.csv>`);
+    await auditDir(dir, args);
+  },
+
+  // A company's direct connections: what is new since the last run, laid
+  // into its folder beside the hand-made exports; --audit reconciles it all.
+  async sync(args) {
+    const [name] = args;
+    const config = await companyConfig(name);
+    const root = join(DATA, "companies", name);
+    const report = await sync({ config, root, secret: (id) => bao(`finance/companies/${name}/${id}`) });
+    const head = syncLines(report);
+    console.log(head.join("\n"));
+    if (args.includes("--audit"))
+      await auditDir(join(root, "exports"), [...args, ...(config.asOf && !args.includes("--as-of") ? ["--as-of", config.asOf] : [])], head);
+    process.exitCode = report.sources.every((x) => x.ok) ? process.exitCode : 1;
+  },
+
+  // Credentials come from whoever holds them, on stdin; they go to OpenBao
+  // and nowhere else, and are never printed.
+  async secret(args) {
+    const [name, id] = args;
+    const config = await companyConfig(name);
+    const src = config.sources.find((x) => x.id === id);
+    if (!src) throw new Error(`у ${name} нет источника ${id}: ${config.sources.map((x) => x.id).join(", ")}`);
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    const value = JSON.parse(raw);
+    const need = SECRET_KEYS[src.kind] ?? [];
+    const gaps = need.filter((k) => typeof value[k] !== "string" || !value[k]);
+    if (gaps.length) throw new Error(`нужны поля ${need.join(", ")}; нет: ${gaps.join(", ")}`);
+    await baoPut(`finance/companies/${name}/${id}`, Object.fromEntries(need.map((k) => [k, value[k]])));
+    console.log(`${name}/${id}: записано в OpenBao (${need.join(", ")})`);
   },
 
   async review(args) {
@@ -525,7 +583,29 @@ const commands = {
       );
     }
 
-    // 8. The finance skills reach a sandbox only as admitted.
+    // 8. A company's systems answer the connectors only with its credentials,
+    // and none of them lands in the company's folder.
+    const demo = await readFile(join(COMPANIES, "demo.json"), "utf8").then(JSON.parse, () => null);
+    if (demo) {
+      const bank = await fetch(`${demo.sources.find((x) => x.kind === "tbank").base}/api/v4/bank-accounts`).then((r) => r.status, () => 0);
+      const odata = await fetch(`${demo.sources.find((x) => x.kind === "odata1c").base}/Catalog_Контрагенты`).then((r) => r.status, () => 0);
+      const secrets = await Promise.all(demo.sources.map((x) => bao(`finance/companies/demo/${x.id}`).catch(() => ({}))));
+      const values = secrets.flatMap((x) => [x.token, x.password]).filter(Boolean);
+      const folder = join(DATA, "companies", "demo");
+      const files = (await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => [])).filter((e) => e.isFile());
+      let leaked = 0;
+      for (const e of files) {
+        const text = await readFile(join(e.parentPath, e.name), "utf8");
+        if (values.some((v) => text.includes(v))) leaked++;
+      }
+      line(
+        bank === 401 && odata === 401 && !leaked,
+        "connector-credentials",
+        `банк без токена → ${bank}, 1С без пароля → ${odata}; файлов компании с секретом: ${leaked} из ${files.length}`,
+      );
+    }
+
+    // 9. The finance skills reach a sandbox only as admitted.
     const { verifiedSkill } = await contour("catalog.mjs");
     const skills = (await readdir(new URL("./catalog/skills/", import.meta.url))).sort();
     const bad = [];

@@ -2,7 +2,8 @@
 // passport: what each file was taken for, what is missing, whether the banks'
 // own totals add up. The files are whatever the bookkeeper hands over:
 //   *.txt    1CClientBankExchange from any bank, Windows or DOS
-//   *.json   a T-API statement ({operations: [...]}) or a list of its operations
+//   *.json   a T-API statement ({operations: [...]}) or a list of its operations;
+//            «1С OData.json» — the ledger as the 1C connector took it (connectors/odata1c.mjs)
 //   *.xlsx / *.csv   1C lists (invoices to clients and from suppliers, receipts,
 //            sales, counterparties), EDO registries, the stand's own layouts
 //   *.mbox / *.eml   a mailbox export: the UPDs suppliers outside EDO attach to letters
@@ -13,6 +14,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { statementOf } from "../adapters/clientbank.mjs";
 import { normalize } from "../adapters/tbank.mjs";
+import { tablesOf } from "../connectors/odata1c.mjs";
 import { readEml, readMbox } from "./mail.mjs";
 import { amount, date, nameKey, readTable } from "./tables.mjs";
 import { readUpdXml } from "./upd-xml.mjs";
@@ -36,7 +38,11 @@ const edoStatus = (s) =>
   /отказ|отклон|аннулир|reject/i.test(s) ? "rejected" : /заверш|подписан|signed/i.test(s) ? "signed" : "awaiting";
 
 export async function readExports(dir, { asOf, terms = 10 } = {}) {
-  const names = (await readdir(dir)).sort();
+  // a connector's half-written file (.part) and anything hidden are not exports
+  const names = (await readdir(dir, { withFileTypes: true }))
+    .filter((e) => e.isFile() && !e.name.startsWith(".") && !e.name.endsWith(".part"))
+    .map((e) => e.name)
+    .sort();
   const passport = { files: [], banks: [], warnings: [], firm: null };
   const warn = (w) => passport.warnings.push(w);
   const tables = { contractors: [], invoices: [], receipts: [], sales: [], edo: [] };
@@ -111,6 +117,20 @@ export async function readExports(dir, { asOf, terms = 10 } = {}) {
       if (s.firm) firm ??= { ...s.firm, source: n };
     } else if (/\.json$/i.test(n)) {
       const j = JSON.parse(bytes.toString("utf8"));
+      if (j?.source === "1c-odata") {
+        const t = tablesOf(j.entities);
+        for (const r of t.invoices) tables.invoices.push({ ...r, file: n });
+        tables.contractors.push(...t.contractors);
+        tables.receipts.push(...t.receipts);
+        tables.sales.push(...t.sales);
+        passport.files.push({
+          file: n,
+          kind: "ledger",
+          how: `OData 1С на ${String(j.at).slice(0, 10)}: контрагентов ${t.contractors.length}, счетов ${t.invoices.length}, поступлений ${t.receipts.length}, реализаций ${t.sales.length}`,
+          rows: t.contractors.length + t.invoices.length + t.receipts.length + t.sales.length,
+        });
+        continue;
+      }
       const raw = Array.isArray(j) ? j : (j.operations ?? []);
       const ops = raw.map((o) => normalize(o, stem));
       addOps(ops);
@@ -363,6 +383,7 @@ const KIND_RU = {
   receipts: "поступления",
   sales: "реализации",
   edo: "реестр ЭДО",
+  ledger: "учёт 1С",
   mail: "почта",
   document: "документ",
 };

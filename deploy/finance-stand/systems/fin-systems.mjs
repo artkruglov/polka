@@ -15,6 +15,8 @@ import { readFileSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createSim } from "./sim.mjs";
+import { query } from "./odata.mjs";
+import { bankAccounts, statementPage } from "./tapi.mjs";
 
 const PORT = Number(process.env.FIN_PORT ?? 7071);
 const DIR = process.env.FIN_DATA ?? "/var/lib/finance";
@@ -70,57 +72,15 @@ async function once(req, make) {
   return [status, body];
 }
 
-// ---- ledger: a tiny OData $filter — «Field eq 'text'», numbers, true/false, joined by «and»
-function odata(rows, filter) {
-  if (!filter) return rows;
-  const terms = filter.split(/\s+and\s+/i).map((t) => {
-    const m = /^(\S+)\s+eq\s+(.+)$/i.exec(t.trim());
-    if (!m) throw new Error(`$filter: не понимаю «${t}»`);
-    const raw = m[2].trim();
-    const value = raw.startsWith("'")
-      ? raw.slice(1, -1)
-      : raw === "true"
-        ? true
-        : raw === "false"
-          ? false
-          : Number(raw);
-    return [m[1], value];
-  });
-  return rows.filter((r) => terms.every(([f, v]) => r[f] === v));
-}
 const ledgerSet = (name) => [...(base.ledger[name] ?? []), ...db.ledger.filter((d) => d.entity === name)];
 
 const routes = {
   "GET /health": () => [200, { ok: true, clock: db.clock }],
 
   // ---- bank a: the T-API statement schema (business.tbank.ru/openapi)
-  "GET /tbank/api/v4/bank-accounts": () => [
-    200,
-    [
-      {
-        accountNumber: company.accounts.a.account,
-        name: "Расчётный счёт",
-        status: "Active",
-        currency: "643",
-        bankBik: company.accounts.a.bik,
-        accountType: "Current",
-        mainFlag: "Y",
-      },
-    ],
-  ],
-  "GET /tbank/api/v1/statement": (_req, _b, url) => {
-    const p = url.searchParams;
-    if (p.get("accountNumber") !== company.accounts.a.account) return [404, { errorMessage: "счёт не найден" }];
-    if (!p.get("from")) return [400, { errorMessage: "from is required" }];
-    const from = p.get("from").slice(0, 10);
-    const to = (p.get("to") ?? "9999-12-31").slice(0, 10);
-    const all = [...base.bankA, ...db.ops].filter((o) => o.docDate >= from && o.docDate < to);
-    const limit = Math.min(Number(p.get("limit") ?? 1000), 5000);
-    const offset = Number(Buffer.from(p.get("cursor") ?? "MA==", "base64").toString() || 0);
-    const page = all.slice(offset, offset + limit);
-    const next = offset + limit < all.length ? Buffer.from(String(offset + limit)).toString("base64") : undefined;
-    return [200, { operations: page, ...(next ? { nextCursor: next } : {}) }];
-  },
+  "GET /tbank/api/v4/bank-accounts": () => [200, bankAccounts([company.accounts.a])],
+  "GET /tbank/api/v1/statement": (_req, _b, url) =>
+    statementPage([...base.bankA, ...db.ops], company.accounts.a.account, url.searchParams),
   // ---- bank b: the «Клиент-банк → 1С» export, windows-1251
   "GET /bankb/statement.txt": () => [200, base.bankB, "text/plain; charset=windows-1251"],
 
@@ -274,7 +234,7 @@ createServer(async (req, res) => {
         [status, body] = [401, { error: "writes go through the effect gateway" }];
       else if (route === "odata") {
         const entity = decodeURIComponent(url.pathname.slice("/ledger1c/odata/".length));
-        [status, body] = [200, { value: odata(ledgerSet(entity), url.searchParams.get("$filter")) }];
+        [status, body] = [200, { value: query(ledgerSet(entity), url.searchParams) }];
       } else [status, body, type = type] = await route(req, input, url);
     }
   } catch (error) {
