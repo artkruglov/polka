@@ -12,12 +12,13 @@
 //     model cannot read — that invoice stays a tail, and the reference says so;
 //   - one supplier in EDO sends the same UPD by mail as well.
 // Generated data only: real exports never go to git.
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { VAT, clientBankExchange, cp1251, cp866, generate } from "./gen.mjs";
 import { writeXlsx } from "../imports/xlsx.mjs";
-import { writeMbox } from "../imports/mail.mjs";
+import { writeEml, writeMbox } from "../imports/mail.mjs";
 import { writeUpdXml } from "../imports/upd-xml.mjs";
 
 const money = (x) => Math.round(x * 100) / 100;
@@ -250,17 +251,109 @@ export async function writeExports(c, dir) {
   return Object.keys(files);
 }
 
+// ---- the same base through 1C's standard OData interface (connectors/odata1c.mjs)
+
+const guid = (s) => {
+  const h = createHash("sha1").update(String(s)).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+};
+
+/** The firm's ledger as 1C's OData answers it: GUID keys, the supplier's
+ *  numbers in НомерВходящегоДокумента, the same numbers the lists above
+ *  carry. Two things a real base has and the lists do not: an invoice marked
+ *  for deletion and a receipt saved but not posted; neither may count. */
+export function odataLedger(c) {
+  const byOb = Object.fromEntries(c.obligations.map((o) => [o.number, o]));
+  const updOf = (number, dir) => (c.upds ?? c.edo).find((d) => d.kind === "upd" && d.basis === number && d.dir === dir);
+  const key = Object.fromEntries(c.counterparties.map((x) => [x.id, guid(`cp-${x.inn}`)]));
+  const doc = (set, d, fields) => ({
+    Ref_Key: guid(`${set}-${d.Ref_Key}`),
+    DataVersion: "AAAAAQAAAAA=",
+    DeletionMark: false,
+    Date: d.Date,
+    Контрагент_Key: key[d.Контрагент_Key],
+    СуммаДокумента: d.СуммаДокумента,
+    ...fields,
+  });
+  const L = c.ledger;
+  const out = {
+    Catalog_Контрагенты: c.counterparties.map((x) => ({
+      Ref_Key: key[x.id],
+      DeletionMark: false,
+      Description: x.name,
+      НаименованиеПолное: full(x.name),
+      ИНН: x.inn,
+      КПП: x.kpp,
+    })),
+    Document_СчетНаОплатуПоставщика: L.Document_СчетНаОплатуПоставщика.map((d, i) =>
+      doc("ap", d, {
+        Number: `0000-${String(i + 1).padStart(6, "0")}`,
+        НомерВходящегоДокумента: byOb[d.Number]?.incoming ?? d.Number,
+        ДатаВходящегоДокумента: d.Date,
+        Posted: false,
+      }),
+    ),
+    Document_СчетНаОплатуПокупателю: L.Document_СчетНаОплатуПокупателю.map((d) =>
+      doc("ar", d, { Number: d.Number, СрокОплаты: d.СрокОплаты, Posted: false }),
+    ),
+    Document_ПоступлениеТоваровУслуг: L.Document_ПоступлениеТоваровУслуг.map((d, i) =>
+      doc("in", d, {
+        Number: `0000-${String(i + 1).padStart(6, "0")}`,
+        НомерВходящегоДокумента: updOf(d.ДокументОснование, "in")?.number ?? "",
+        ДатаВходящегоДокумента: d.Date,
+        Posted: true,
+      }),
+    ),
+    Document_РеализацияТоваровУслуг: L.Document_РеализацияТоваровУслуг.map((d) =>
+      doc("out", d, { Number: updOf(d.ДокументОснование, "out")?.number ?? d.Number, Posted: true }),
+    ),
+  };
+  const ar = out.Document_СчетНаОплатуПокупателю[0];
+  if (ar) out.Document_СчетНаОплатуПокупателю.push({ ...ar, Ref_Key: guid("deleted"), Number: `${ar.Number}-копия`, DeletionMark: true });
+  const rc = out.Document_ПоступлениеТоваровУслуг[0];
+  if (rc)
+    out.Document_ПоступлениеТоваровУслуг.push({
+      ...rc,
+      Ref_Key: guid("unposted"),
+      Number: "0000-999999",
+      НомерВходящегоДокумента: "черновик",
+      Posted: false,
+    });
+  return out;
+}
+
+/** The letters as a Maildir an IMAP server reads (the VM's documents box). */
+export async function writeMaildir(c, dir) {
+  for (const sub of ["cur", "new", "tmp"]) await mkdir(join(dir, sub), { recursive: true });
+  await Promise.all(
+    (c.mail ?? []).map((l, i) => writeFile(join(dir, "cur", `${1700000000 + i}.stand${i + 1}.contour:2,`), writeEml(l, i + 1))),
+  );
+  return c.mail?.length ?? 0;
+}
+
 const main = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (main) {
   const args = process.argv.slice(2);
   const opt = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
   const out = opt("--out");
-  if (!out) {
-    console.log("usage: exports.mjs [--seed 41] --out <dir>   the synthetic firm as a bookkeeper's exports");
+  const maildir = opt("--maildir");
+  if (!out && !maildir) {
+    console.log(`usage: exports.mjs [--seed 41] --out <dir> [--connected]   the synthetic firm as a bookkeeper's exports;
+         --connected leaves out what the connectors bring (bank A, the 1C lists, the mail)
+       exports.mjs [--seed 41] --maildir <dir>   its letters as a Maildir`);
     process.exit(2);
   }
   const { firm, quirks } = realistic(generate({ seed: Number(opt("--seed", 41)) }));
-  const files = await writeExports(firm, out);
-  console.log(`${files.length} файлов в ${out}: ${files.join(", ")}`);
-  for (const q of quirks) console.log(`  · ${q}`);
+  if (maildir) console.log(`${await writeMaildir(firm, maildir)} писем в ${maildir}`);
+  if (out) {
+    let files = await writeExports(firm, out);
+    if (args.includes("--connected")) {
+      const covered = (f) =>
+        f.includes(firm.accounts.a.account) || /^(Контрагенты|Счета|Поступление|Реализация)/.test(f) || f.endsWith(".mbox");
+      for (const f of files.filter(covered)) await rm(join(out, f));
+      files = files.filter((f) => !covered(f));
+    }
+    console.log(`${files.length} файлов в ${out}: ${files.join(", ")}`);
+    for (const q of quirks) console.log(`  · ${q}`);
+  }
 }

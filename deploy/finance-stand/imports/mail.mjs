@@ -166,3 +166,12 @@ export function writeMbox(letters) {
     ),
   );
 }
+
+/** A letter as it came from a server, as one entry of an .mbox (mboxrd:
+ *  a body line «From …» gets one more «>», readMbox takes it off). */
+export function mboxEntry(bytes, { from = "connector", date = new Date() } = {}) {
+  const text = Buffer.from(bytes)
+    .toString("latin1")
+    .replace(/^(>*From )/gm, ">$1");
+  return Buffer.from(`From ${from} ${date.toUTCString()}\r\n${text}${text.endsWith("\n") ? "" : "\r\n"}\r\n`, "latin1");
+}

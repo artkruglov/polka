@@ -5,6 +5,9 @@
 #   deploy/finance-stand/fin.sh up          copy the stand into the VM and provision it (idempotent)
 #   deploy/finance-stand/fin.sh sync        copy edited files only
 #   deploy/finance-stand/fin.sh tbank-ca    trust the Russian Trusted Root CA for the bank adapter only
+#   deploy/finance-stand/fin.sh connectors  a demo company to connect to: T-API, 1C OData, an IMAP box (M7)
+#   deploy/finance-stand/fin.sh connect <company> [--audit]   its direct connections: what is new, then the audit
+#   deploy/finance-stand/fin.sh secret <company> <source> <file.json   a source's credentials into OpenBao
 #   deploy/finance-stand/fin.sh audit <dir> [--check]   a company's exports into the VM (never into git), then fin.mjs audit
 #   deploy/finance-stand/fin.sh review <journal> <file.csv>    the audit's tails out to the host, for the bookkeeper to mark
 #   deploy/finance-stand/fin.sh verdicts <journal> <file.csv>  the marked sheet back: precision and recall
@@ -31,6 +34,13 @@ case "${1:-}" in
     # printed to compare with the published one.
     curl -fsS https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt | in_vm bash /opt/contour/finance/provision.sh tbank-ca
     ;;
+  connectors)
+    in_vm bash /opt/contour/finance/provision.sh connectors
+    ;;
+  connect)
+    shift
+    in_vm node /opt/contour/finance/fin.mjs sync "$@"
+    ;;
   audit)
     # Real exports live in the VM only: /var/lib/finance/audit/<name>.
     src="${2:?usage: fin.sh audit <папка с выгрузками>}"
@@ -56,7 +66,7 @@ case "${1:-}" in
     in_vm node /opt/contour/finance/fin.mjs score --journal "$journal" --review "/var/lib/finance/audit/$journal.verdicts.$ext"
     ;;
   "" | -h | --help)
-    sed -n '2,12p' fin.sh
+    sed -n '2,15p' fin.sh
     ;;
   *)
     in_vm node /opt/contour/finance/fin.mjs "$@"
