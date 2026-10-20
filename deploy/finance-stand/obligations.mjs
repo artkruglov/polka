@@ -16,6 +16,11 @@ export const VAT = 22;
 export const ASK_EVERY_DAYS = 3;
 const cents = (x) => Math.round(Number(x) * 100);
 export const vatOf = (amount, rate = VAT) => cents((amount * rate) / (100 + rate)) / 100;
+// 2026: the general rate, the reduced one, VAT on the simplified system, none.
+// A registry that gives no VAT (null) is not a VAT error.
+export const RATES = [22, 10, 7, 5, 0];
+export const vatLegal = (amount, vat) =>
+  vat === null || vat === undefined || RATES.some((r) => Math.abs(Number(vat) - vatOf(amount, r)) < 1);
 const days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
 
 const empty = (id) => ({
@@ -163,7 +168,7 @@ export function decide(s, cmd, at) {
     case "MatchDocument": {
       if (!s.detected) return { refused: "обязательство не найдено" };
       if (s.docs.some((d) => d.docId === cmd.docId)) return { events: [] };
-      const vatOk = Math.abs(Number(cmd.vat) - vatOf(cmd.amount)) < 1;
+      const vatOk = vatLegal(cmd.amount, cmd.vat);
       const amountOk = Math.abs(Number(cmd.amount) - s.amount) < 0.01;
       out.push(
         ev("DocumentMatched", {
@@ -182,7 +187,7 @@ export function decide(s, cmd, at) {
         out.push(
           ev("ExceptionRaised", {
             kind: "ошибка_ндс",
-            why: `НДС ${cmd.vat}, по ставке ${VAT}% должно быть ${vatOf(cmd.amount)}`,
+            why: `НДС ${cmd.vat} не по законной ставке; по ${VAT}% должно быть ${vatOf(cmd.amount)}`,
           }),
         );
       else if (cmd.kind === "upd" && !amountOk)

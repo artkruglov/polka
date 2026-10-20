@@ -464,12 +464,13 @@ export function tapiOperation(op, firm, account) {
   };
 }
 
-export function clientBankExchange(ops, firm, account, period) {
+export function clientBankExchange(ops, firm, account, period, { encoding = "Windows", opening = 5000000 } = {}) {
+  const total = (dir) => money(ops.filter((o) => o.direction === dir).reduce((s, o) => s + o.amount, 0));
   const L = [
     "1CClientBankExchange",
     "ВерсияФормата=1.03",
-    "Кодировка=Windows",
-    "Отправитель=Банк Северный",
+    `Кодировка=${encoding}`,
+    `Отправитель=${account.bank.replace(/^АО «|»$/g, "")}`,
     "Получатель=Бухгалтерия предприятия",
     `ДатаСоздания=${ru(new Date(period.to))}`,
     `ДатаНачала=${ru(new Date(period.from))}`,
@@ -479,6 +480,10 @@ export function clientBankExchange(ops, firm, account, period) {
     `ДатаНачала=${ru(new Date(period.from))}`,
     `ДатаКонца=${ru(new Date(period.to))}`,
     `РасчСчет=${account.account}`,
+    `НачальныйОстаток=${opening.toFixed(2)}`,
+    `ВсегоПоступило=${total("in").toFixed(2)}`,
+    `ВсегоСписано=${total("out").toFixed(2)}`,
+    `КонечныйОстаток=${money(opening + total("in") - total("out")).toFixed(2)}`,
     "КонецРасчСчет",
   ];
   for (const op of ops) {
@@ -527,6 +532,23 @@ export function cp1251(text) {
     else if (c === 0x2116) out.push(0xb9);
     else if (c === 0xab) out.push(0xab);
     else if (c === 0xbb) out.push(0xbb);
+    else out.push(0x3f);
+  }
+  return Buffer.from(out);
+}
+
+// DOS (cp866), the other encoding a bank may export in.
+export function cp866(text) {
+  const out = [];
+  for (const ch of text) {
+    const c = ch.codePointAt(0);
+    if (c < 0x80) out.push(c);
+    else if (c >= 0x410 && c <= 0x43f) out.push(c - 0x410 + 0x80);
+    else if (c >= 0x440 && c <= 0x44f) out.push(c - 0x440 + 0xe0);
+    else if (c === 0x401) out.push(0xf0);
+    else if (c === 0x451) out.push(0xf1);
+    else if (c === 0x2116) out.push(0xfc);
+    else if (c === 0xab || c === 0xbb) out.push(0x22);
     else out.push(0x3f);
   }
   return Buffer.from(out);

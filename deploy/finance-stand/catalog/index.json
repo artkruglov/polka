@@ -13,10 +13,10 @@
       "admitted": "2026-10-19"
     },
     "fin-match": {
-      "version": "1.1.0",
+      "version": "1.2.0",
       "owner": "finance",
-      "sha256": "ce2afd2982247b65c71d017662d337e25b8faaa1b7c5650fcece2b95f1535fdc",
-      "admitted": "2026-10-19"
+      "sha256": "42818674da03281f3390d66cd526edc78ec441acd6e7f4ff826dcb2c67def944",
+      "admitted": "2026-10-20"
     },
     "fin-recon": {
       "version": "1.0.0",
