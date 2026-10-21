@@ -8,12 +8,12 @@ import { due, lastSlot, timedPacks } from "../schedule.mjs";
 const at = (s) => new Date(s);
 const names = (run) => run.map((p) => p.process);
 
-test("the stand's packs: inbox, match, chase, remind in a working day's order; recon stays manual", async () => {
+test("the stand's packs in a working day's order; recon stays manual", async () => {
   const packs = await timedPacks();
-  assert.deepEqual(names(packs), ["fin.inbox", "fin.match", "fin.chase", "fin.remind"]);
+  assert.deepEqual(names(packs), ["fin.inbox", "fin.match", "fin.exceptions", "fin.chase", "fin.remind"]);
   assert.deepEqual(
     packs.map((p) => p.timer),
-    ["every", "daily 09:00", "daily 09:30", "mon 10:00"],
+    ["every", "daily 09:00", "every", "daily 09:30", "mon 10:00"],
   );
 });
 
@@ -31,13 +31,14 @@ test("what ran in its slot waits for the next one; the inbox runs on every pass"
   const packs = await timedPacks();
   const now = at("2026-10-21T09:40:00");
   const first = due(packs, {}, now);
-  assert.deepEqual(names(first), ["fin.inbox", "fin.match", "fin.chase", "fin.remind"]);
+  assert.deepEqual(names(first), ["fin.inbox", "fin.match", "fin.exceptions", "fin.chase", "fin.remind"]);
   const last = Object.fromEntries(first.filter((p) => p.slot).map((p) => [p.process, p.slot.toISOString()]));
-  assert.deepEqual(names(due(packs, last, at("2026-10-21T09:45:00"))), ["fin.inbox"]);
-  assert.deepEqual(names(due(packs, last, at("2026-10-22T09:05:00"))), ["fin.inbox", "fin.match"]);
+  assert.deepEqual(names(due(packs, last, at("2026-10-21T09:45:00"))), ["fin.inbox", "fin.exceptions"]);
+  assert.deepEqual(names(due(packs, last, at("2026-10-22T09:05:00"))), ["fin.inbox", "fin.match", "fin.exceptions"]);
   assert.deepEqual(names(due(packs, last, at("2026-10-26T10:00:00"))), [
     "fin.inbox",
     "fin.match",
+    "fin.exceptions",
     "fin.chase",
     "fin.remind",
   ]);

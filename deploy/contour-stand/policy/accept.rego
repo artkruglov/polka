@@ -83,6 +83,8 @@ decide(e) := {"type": e.type, "decision": "deny", "why": "эффекта нет 
 	count(e.children) > data.base.effects["swarm.spawn"].max_children
 } else := {"type": e.type, "decision": "sign", "why": "юридически значимое действие: подписывает человек"} if {
 	e.type == "edo.queue"
+} else := {"type": e.type, "decision": "human", "why": "в границах ИБ решает только человек"} if {
+	bounds[e.type].human_only
 } else := {"type": e.type, "decision": "auto", "why": "в пределах ступени и лимита пакета"} if {
 	spec := input.process.effects[e.type]
 	input.process.autonomy >= spec.auto_from

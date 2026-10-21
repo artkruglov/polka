@@ -94,3 +94,34 @@ export function fromStates({ events, company, today }) {
     },
   };
 }
+
+/** Each open exception as the inputs of fin-decide, keyed so it goes to Полка once. */
+export function fromExceptions({ events, company, today }) {
+  const out = [];
+  for (const s of obligationStates(events))
+    for (const x of s.exceptions.filter((e) => e.open))
+      out.push({
+        key: `${s.id}|${x.kind}|${x.at}`,
+        number: s.number,
+        kind: x.kind,
+        inputs: {
+          exception: {
+            id: s.id,
+            number: s.number,
+            side: s.side,
+            name: s.name,
+            inn: s.inn,
+            amount: s.amount,
+            paid: s.paid,
+            kind: x.kind,
+            why: x.why,
+            at: x.at,
+            payments: s.payments,
+            docs: s.docs,
+            responses: s.responses,
+          },
+          firm: { name: company.firm.name, inn: company.firm.inn, today },
+        },
+      });
+  return out;
+}

@@ -1,0 +1,20 @@
+process: fin.exceptions
+version: 1
+title: Решения по исключениям
+department: finance
+owner: petrova
+autonomy: 1                     # решение всегда принимает человек
+trigger:
+  manual: true
+  timer: every          # новое исключение — на Полку на ближайшем проходе
+match: [исключени, решени, реквизит]
+work:
+  skill: fin-decide
+  executor: auto
+  pool: finance
+  hook: ../hooks.mjs            # принятое решение — событие журнала обязательств
+review:
+  reviewer_required: false
+effects:
+  fin.decision: { auto_from: 9 } # не автоматически ни на какой ступени
+budget_usd: 0.1

@@ -21,9 +21,9 @@ export async function timedPacks(dir = PROCESSES) {
     if (p.trigger?.timer)
       packs.push({ process: p.process, timer: String(p.trigger.timer), step: p.process.split(".")[1] });
   }
-  // Letters first (a УПД that came closes its tail), then the match, then
-  // what is still missing is asked for.
-  const order = ["inbox", "match", "chase", "remind"];
+  // Letters first (a УПД that came closes its tail), then the match, its
+  // exceptions to Полка, then what is still missing is asked for.
+  const order = ["inbox", "match", "exceptions", "chase", "remind"];
   return packs.sort((a, b) => order.indexOf(a.step) - order.indexOf(b.step));
 }
 

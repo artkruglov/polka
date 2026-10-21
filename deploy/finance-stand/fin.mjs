@@ -17,7 +17,8 @@
 //   fin.mjs sync <company> [--audit] [--as-of D]   the company's direct connections (connectors/sync.mjs), then the audit of what they brought
 //   fin.mjs secret <company> <source>               a source's credentials, JSON on stdin, into OpenBao; never printed
 //   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
-//   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
+//   fin.mjs exceptions [--number <счёт>]            each new open exception once on Полка: accepting it is the person's decision
+//   fin.mjs cycle [--as petrova]                    one working day: inbox, match, exceptions, chase, remind
 //   fin.mjs due [--at <ISO time>] [--dry]           the steps whose timer is due (schedule.mjs, finance-schedule.timer)
 //   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
 //   fin.mjs sign --as <user>                        sign the reconciliation drafts in EDO (a signer only)
@@ -31,7 +32,7 @@ import { write } from "./company/gen.mjs";
 import * as tbank from "./adapters/tbank.mjs";
 import { operations as clientBank } from "./adapters/clientbank.mjs";
 import { CONTOUR, contour } from "./contour.mjs";
-import { fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
+import { fromExceptions, fromInbox, fromJournal, fromStates, fromSystems, writeInputs } from "./inputs.mjs";
 import { passportLines, readExports } from "./imports/audit.mjs";
 import { sync, syncLines } from "./connectors/sync.mjs";
 import { reviewSheet, scoreReview } from "./review.mjs";
@@ -91,6 +92,7 @@ const KIND = {
   дубль_оплаты: "оплачено дважды",
   учёт_эдо: "учёт ≠ ЭДО",
   реквизиты: "смена реквизитов",
+  сумма: "сумма УПД ≠ счёт",
 };
 // A goal of the swarm, as a person would put it (swarm.mjs goal).
 function swarm(args) {
@@ -409,6 +411,29 @@ const commands = {
     });
   },
 
+  // Each open exception goes to Полка once (fin.exceptions): the page says
+  // what happened and the safe decision; accepting the version records it.
+  async exceptions(args) {
+    const file = join(DATA, "exceptions.json");
+    const sent = JSON.parse(await readFile(file, "utf8").catch(() => "{}"));
+    const day = await today();
+    const only = opt(args, "--number");
+    const fresh = fromExceptions({ events: await journal(), company: await company(), today: day }).filter(
+      (x) => !sent[x.key] && (!only || x.number === only),
+    );
+    if (!fresh.length) return console.log("новых исключений нет");
+    for (const x of fresh) {
+      await reconcile(x.inputs, {
+        as: opt(args, "--as", "petrova"),
+        title: `Исключение по ${x.number}: ${KIND[x.kind] ?? x.kind}`,
+        params: {},
+        process: "fin.exceptions",
+      });
+      sent[x.key] = day;
+      await writeFile(file, JSON.stringify(sent, null, 2));
+    }
+  },
+
   async recon(args) {
     const day = await today();
     await reconcile(fromStates({ events: await journal(), company: await company(), today: day }), {
@@ -420,7 +445,7 @@ const commands = {
   },
 
   async cycle(args) {
-    for (const step of ["inbox", "match", "chase", "remind"]) {
+    for (const step of ["inbox", "match", "exceptions", "chase", "remind"]) {
       console.log(`\n== ${step}`);
       await commands[step](args);
     }
@@ -529,6 +554,31 @@ const commands = {
       !payLike.length && d?.decision === "deny",
       "no-payment-effect",
       `маршрутов платежа ${payLike.length}; bank.payment → ${d?.decision} (${d?.why})`,
+    );
+
+    // 3a. A decision on an exception is a person's whatever the pack says.
+    const opa2 = await http("http://127.0.0.1:8181/v1/data/contour/accept/decision", {
+      method: "POST",
+      body: {
+        input: {
+          process: {
+            name: "fin.exceptions",
+            department: "finance",
+            autonomy: 3,
+            reviewer_required: false,
+            effects: { "fin.decision": { auto_from: 0 } },
+          },
+          result: { checks: { passed: [], failed: [] }, executor: { vendor: "skill-script" }, reviewer: null },
+          effects: [{ type: "fin.decision", basis: "selftest", kind: "реквизиты", decision: "Реквизиты не меняем" }],
+          sample: 0.99,
+        },
+      },
+    });
+    const d2 = opa2.json?.result?.effects?.[0];
+    line(
+      d2?.decision === "human",
+      "decision-by-person",
+      `fin.decision на ступени 3 с auto_from 0 → ${d2?.decision} (${d2?.why})`,
     );
 
     // 4. New requisites in a letter go to a person, and the agent stops writing.

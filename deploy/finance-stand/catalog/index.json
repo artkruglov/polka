@@ -6,6 +6,12 @@
       "sha256": "9829f51364b81a48f52e2e49d9428a9a93862fb0effcd2a69b8a38170fe52eb2",
       "admitted": "2026-10-19"
     },
+    "fin-decide": {
+      "version": "1.0.0",
+      "owner": "finance",
+      "sha256": "767ad8c7969e331063636cd53eec0f2acf676480983a653bdf4dc3144fad5fba",
+      "admitted": "2026-10-21"
+    },
     "fin-inbox": {
       "version": "1.0.0",
       "owner": "finance",
