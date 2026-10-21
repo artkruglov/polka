@@ -478,7 +478,9 @@ async function finishShadow(id, pack, skill) {
 // for signature, and every call carries an idempotency key.
 //
 // Plain effects are routes: a system, a path and the fields of the effect
-// that travel. Other stands add theirs in effects/*.json (extensions.json).
+// that travel. Other stands add theirs in effects/*.json (extensions.json);
+// a route with «hook» is the stand's own record, written by the pack's hook
+// (effect(g, e, key, ctx) → {status, json}) rather than sent to a system.
 const ROUTES = {
   "mail.send": { path: "/mail/send", fields: ["to", "subject", "body"] },
   "ledger.invoice": { path: "/ledger/invoices", fields: ["counterparty", "inn", "amount", "basis"] },
@@ -509,7 +511,11 @@ async function gateway(g, i) {
   const key = `${g.id}:${i}`;
   let r;
   const route = (await routes())[e.type];
-  if (route) {
+  if (route?.hook) {
+    const hook = await hookOf((await catalog())[g.process]);
+    if (!hook.effect) throw new Error(`шлюз: у пакета ${g.process} нет записи для ${e.type}`);
+    r = await hook.effect(g, e, key, hookContext(g));
+  } else if (route) {
     const body = Object.fromEntries(route.fields.filter((f) => e[f] !== undefined).map((f) => [f, e[f]]));
     r = await systems(route.method ?? "POST", route.path, { ...body, goal: g.id }, key, route.base ?? SYSTEMS);
   } else if (e.type === "edo.queue") {

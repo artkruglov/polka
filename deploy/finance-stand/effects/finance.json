@@ -6,5 +6,6 @@
     "path": "/edo/draft",
     "fields": ["inn", "kind", "basis", "amount", "text"]
   },
+  "fin.decision": { "hook": true, "fields": ["basis", "kind", "decision"] },
   "ledger.draft": { "base": "http://127.0.0.1:7071", "path": "/ledger1c/draft", "fields": ["entity", "fields"] }
 }

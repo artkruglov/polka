@@ -73,6 +73,13 @@ async function commandOf(g, e) {
 }
 
 export async function beforeEffect(g, e) {
+  // A decision about an exception that is gone (a corrected УПД came, or
+  // someone decided by command) has nothing left to decide.
+  if (e.type === "fin.decision") {
+    const s = fold(`ob-${e.basis}`, await journal(journalOf(g.params)));
+    const x = s.exceptions.findLast((y) => y.kind === e.kind);
+    return x && !x.open ? `исключение уже закрыто: ${x.decision ?? x.resolvedBy}` : null;
+  }
   const cmd = await commandOf(g, e);
   if (!cmd) return null;
   const r = decide(fold(cmd.id, await journal(journalOf(g.params))), cmd, `${await today()}T09:00:00Z`);
@@ -82,4 +89,19 @@ export async function beforeEffect(g, e) {
 export async function afterEffect(g, e, _response, ctx) {
   const cmd = await commandOf(g, e);
   if (cmd) await record(g, [cmd], ctx);
+}
+
+// fin.decision is the stand's own record (effects/finance.json, «hook»): the
+// decision a person accepted on Полка becomes HumanDecided in the journal.
+// Полка says a person accepted, not which one: the work names the decision.
+export async function effect(g, e, _key, ctx) {
+  const by = `человек на Полке, работа ${g.polka?.artifactId ?? "?"}`;
+  const file = journalOf(g.params);
+  const r = await record(g, [{ type: "Decide", id: `ob-${e.basis}`, kind: e.kind, decision: e.decision, by }], ctx);
+  if (!r.refused.length) return { status: 200, json: { id: `${e.basis}:${e.kind}` } };
+  // The same decision recorded before: a repeat of the gateway's call.
+  const done = fold(`ob-${e.basis}`, await journal(file)).exceptions.some((x) => x.kind === e.kind && x.by === by);
+  return done
+    ? { status: 200, json: { id: `${e.basis}:${e.kind}`, repeated: true } }
+    : { status: 409, json: { error: r.refused[0].why } };
 }

@@ -4,6 +4,7 @@
     "fin.mail": { "max_recipients": 1 },
     "edo.request": {},
     "edo.draft": {},
-    "ledger.draft": {}
+    "ledger.draft": {},
+    "fin.decision": { "human_only": true }
   }
 }
