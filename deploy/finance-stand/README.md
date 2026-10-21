@@ -334,6 +334,8 @@ deploy/finance-stand/fin.sh chase          # запросы первички п�
 deploy/finance-stand/fin.sh remind         # напоминания должникам
 deploy/finance-stand/fin.sh inbox          # разбор ответов в ящике finance
 deploy/finance-stand/fin.sh cycle          # рабочий день: inbox, match, chase, remind
+deploy/finance-stand/fin.sh schedule on    # шаги сами: сверка 09:00, запросы 09:30, напоминания пн 10:00, письма по приходу
+deploy/finance-stand/fin.sh schedule off   # обратно вручную; status — что сейчас пора
 deploy/finance-stand/fin.sh recon          # черновики актов сверки
 deploy/finance-stand/fin.sh decide П-0116 реквизиты "реквизиты прежние" --as petrova
 deploy/finance-stand/fin.sh sign --as director     # подпись актов сверки: только роль signer
@@ -373,4 +375,4 @@ node --test deploy/finance-stand/specs/*.spec.mjs    # на Mac, без ВМ
 - Подписи КЭП нет, вместо неё сверка sha256.
 - Без ключа модели шаги выполняют скрипты навыков.
 - Решение человека по исключению (`fin decide`) и подпись (`fin sign`) — команды в ВМ: имя проверяется в Keycloak (подпись — ещё и роль `signer`), но экрана на Полке для них нет.
-- У работы с хвостами нет расписания: рабочий день — команда `fin cycle`, календарь двигает `fin advance`. По расписанию идут только прямые подключения и аудит после них (`finance-sync@<компания>.timer`).
+- Расписание шагов (`fin.sh schedule on`) идёт по часам ВМ, а календарь контрагентов — по симулятору: его двигает только `fin advance`. Поэтому при включённом расписании запросы и сверка видят тот же «сегодня» симулятора, пока его не сдвинут.

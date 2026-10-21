@@ -1,11 +1,12 @@
 process: fin.chase
-version: 1
+version: 2
 title: Запросы первички у поставщиков
 department: finance
 owner: petrova
 autonomy: 1
 trigger:
   manual: true
+  timer: daily 09:30    # после сверки; агрегат сам не пускает запрос чаще раза в 3 дня
 match: [первичк, упд, поставщик]
 work:
   skill: fin-chase

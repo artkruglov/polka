@@ -1,11 +1,12 @@
 process: fin.inbox
-version: 1
+version: 2
 title: Разбор ответов контрагентов
 department: finance
 owner: petrova
 autonomy: 2
 trigger:
   manual: true
+  timer: every          # письма по мере прихода: каждый проход таймера
 match: [ответ, входящ, ящик]
 work:
   skill: fin-inbox

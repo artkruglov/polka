@@ -1,11 +1,12 @@
 process: fin.match
-version: 1
+version: 2
 title: Сверка денег и первички
 department: finance
 owner: petrova
 autonomy: 2
 trigger:
   manual: true
+  timer: daily 09:00    # каждое утро: что пришло за ночь в банк, ЭДО и учёт
 match: [сверк, хвост, первичк, закрыт]
 work:
   skill: fin-match

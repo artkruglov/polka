@@ -2,7 +2,7 @@
 # The finance stand inside the contour VM (deploy/finance-stand/README.md).
 # Run as root from /opt/contour/finance; fin.sh does it. Idempotent.
 #
-#   provision.sh             tokens, extensions, policy, the firm, the systems unit
+#   provision.sh             tokens, extensions, policy, the firm, the systems unit, the schedule timer (off)
 #   provision.sh tbank-ca    install the Russian Trusted Root CA (PEM on stdin) for the bank adapter only
 #   provision.sh connectors  a company «demo» to connect to (M7): its T-API bank and 1C OData on
 #                            127.0.0.1:7072, its documents box on a real IMAP server (dovecot,
@@ -190,6 +190,26 @@ ExecStart=/usr/local/bin/node /opt/contour/finance/systems/fin-systems.mjs
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
+UNIT
+# The packs' timers (schedule.mjs): off until fin.sh schedule on, so a show
+# and the checks run on a calendar nobody else moves.
+cat >/etc/systemd/system/finance-schedule.service <<'UNIT'
+[Unit]
+Description=Finance stand: the steps whose timer is due (fin.mjs due)
+After=finance-systems.service contour-swarm.service
+[Service]
+Type=oneshot
+TimeoutStartSec=30min
+WorkingDirectory=/opt/contour/finance
+ExecStart=/usr/local/bin/node /opt/contour/finance/fin.mjs due
+UNIT
+cat >/etc/systemd/system/finance-schedule.timer <<'UNIT'
+[Unit]
+Description=Finance stand: every 5 minutes, the steps whose timer is due
+[Timer]
+OnCalendar=*:0/5
+[Install]
+WantedBy=timers.target
 UNIT
 systemctl daemon-reload
 systemctl enable finance-systems.service >/dev/null 2>&1

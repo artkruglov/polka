@@ -11,6 +11,7 @@
 #   deploy/finance-stand/fin.sh audit <dir> [--check]   a company's exports into the VM (never into git), then fin.mjs audit
 #   deploy/finance-stand/fin.sh review <journal> <file.csv>    the audit's tails out to the host, for the bookkeeper to mark
 #   deploy/finance-stand/fin.sh verdicts <journal> <file.csv>  the marked sheet back: precision and recall
+#   deploy/finance-stand/fin.sh schedule on|off|status   the packs' timers: match 09:00, chase 09:30, remind mon 10:00, inbox as letters come
 #   deploy/finance-stand/fin.sh <command>   fin.mjs in the VM: reset | status | statement | contract | advance
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -65,8 +66,19 @@ case "${1:-}" in
     limactl shell "$VM" -- sudo bash -c "install -d -m 700 /var/lib/finance/audit && mv /tmp/verdicts.$ext /var/lib/finance/audit/$journal.verdicts.$ext"
     in_vm node /opt/contour/finance/fin.mjs score --journal "$journal" --review "/var/lib/finance/audit/$journal.verdicts.$ext"
     ;;
+  schedule)
+    case "${2:-status}" in
+      on) in_vm systemctl enable --now finance-schedule.timer ;;
+      off) in_vm systemctl disable --now finance-schedule.timer ;;
+      status) ;;
+      *) echo "usage: fin.sh schedule on|off|status" >&2; exit 2 ;;
+    esac
+    in_vm systemctl is-active finance-schedule.timer || true
+    echo "что сейчас пора:"
+    in_vm node /opt/contour/finance/fin.mjs due --dry
+    ;;
   "" | -h | --help)
-    sed -n '2,15p' fin.sh
+    sed -n '2,16p' fin.sh
     ;;
   *)
     in_vm node /opt/contour/finance/fin.mjs "$@"

@@ -1,11 +1,12 @@
 process: fin.remind
-version: 1
+version: 2
 title: Напоминания должникам
 department: finance
 owner: petrova
 autonomy: 1
 trigger:
   manual: true
+  timer: mon 10:00      # должникам — раз в неделю
 match: [напомин, должник, просроч]
 work:
   skill: fin-remind
