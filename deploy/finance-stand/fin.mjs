@@ -18,6 +18,7 @@
 //   fin.mjs secret <company> <source>               a source's credentials, JSON on stdin, into OpenBao; never printed
 //   fin.mjs chase | remind | inbox | recon [--as petrova]   the follow-up steps, each a goal of its pack
 //   fin.mjs cycle [--as petrova]                    one working day: inbox, match, chase, remind
+//   fin.mjs due [--at <ISO time>] [--dry]           the steps whose timer is due (schedule.mjs, finance-schedule.timer)
 //   fin.mjs decide <счёт> <исключение> "<решение>" --as <user>   a person closes an exception
 //   fin.mjs sign --as <user>                        sign the reconciliation drafts in EDO (a signer only)
 import { execFile as execFileCb, spawn } from "node:child_process";
@@ -36,6 +37,7 @@ import { sync, syncLines } from "./connectors/sync.mjs";
 import { reviewSheet, scoreReview } from "./review.mjs";
 import { JOURNAL, apply, decide, fold, journal, metrics, tails } from "./obligations.mjs";
 import { beforeEffect, journalOf, project, projectionOf } from "./hooks.mjs";
+import { due, timedPacks } from "./schedule.mjs";
 
 const execFile = promisify(execFileCb);
 const DATA = "/var/lib/finance";
@@ -422,6 +424,29 @@ const commands = {
       console.log(`\n== ${step}`);
       await commands[step](args);
     }
+  },
+
+  // The packs' timers: what is due runs in a working day's order; a slot
+  // counts as run only when its step went through.
+  async due(args) {
+    const at = opt(args, "--at") ? new Date(opt(args, "--at")) : new Date();
+    const file = join(DATA, "schedule.json");
+    const last = JSON.parse(await readFile(file, "utf8").catch(() => "{}"));
+    const run = due(await timedPacks(), last, at);
+    if (args.includes("--dry")) return run.forEach((p) => console.log(`${p.process}  ${p.timer}`));
+    let failed = 0;
+    for (const p of run) {
+      console.log(`\n== ${p.process} (${p.timer})`);
+      try {
+        await commands[p.step](args);
+        if (p.slot) last[p.process] = p.slot.toISOString();
+      } catch (error) {
+        failed++;
+        console.error(`${p.process}: ${error.message}`);
+      }
+    }
+    await writeFile(file, JSON.stringify(last, null, 2));
+    process.exitCode = failed ? 1 : 0;
   },
 
   // An exception is closed by a person, named and checked by Keycloak.

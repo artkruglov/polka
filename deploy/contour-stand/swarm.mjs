@@ -1124,7 +1124,9 @@ async function read(command, args, who) {
         ? `по расписанию ${p.trigger.schedule}`
         : p.trigger?.inbox
           ? `ящик ${p.trigger.inbox}`
-          : "по запросу";
+          : p.trigger?.timer // a stand's own timer (finance-stand/schedule.mjs)
+            ? `таймер стенда ${p.trigger.timer}`
+            : "по запросу";
       console.log(
         `${pad(p.process, 22)} ступень ${p.autonomy} · ${pad(p.owner, 8)} · ${pad(trig, 26)} · навык ${p.work.skill} · целей ${s.total}`,
       );
